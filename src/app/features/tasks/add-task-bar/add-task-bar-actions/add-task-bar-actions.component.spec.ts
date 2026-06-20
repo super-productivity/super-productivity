@@ -21,6 +21,11 @@ import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
 import { TaskReminderOptionId } from '../../task.model';
 import { INBOX_PROJECT } from '../../../project/project.const';
+import {
+  ADD_TASK_BAR_DATA_FACADE,
+  AddTaskBarDataFacade,
+} from '../add-task-bar-data-facade.token';
+import { DEFAULT_GLOBAL_CONFIG } from '../../../config/default-global-config.const';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -40,6 +45,7 @@ describe('AddTaskBarActionsComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let mockDateService: jasmine.SpyObj<DateService>;
   let mockProjectsSignal: WritableSignal<Project[]>;
+  let mockDataFacade: AddTaskBarDataFacade;
 
   const mockProject: Project = {
     id: '1',
@@ -172,6 +178,34 @@ describe('AddTaskBarActionsComponent', () => {
     mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
     mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
     mockDateService.getLogicalTodayDate.and.callFake(() => new Date());
+    mockDataFacade = {
+      isSubmitDelegated: false,
+      projects: mockProjectsSignal,
+      projects$: of([mockProject]),
+      tags$: of([mockTag]),
+      tagsNoMyDayAndNoListSorted$: of([mockTag]),
+      tagsNoMyDayAndNoListInTreeOrder: signal([earlierTreeTag, mockTag]),
+      activeWorkContext$: of(null),
+      tasksConfig$: of(DEFAULT_GLOBAL_CONFIG.tasks),
+      shortSyntax$: of(DEFAULT_GLOBAL_CONFIG.shortSyntax),
+      mentionConfig$: of({ mentions: [], triggerChar: undefined }),
+      projectFolderMap: signal(new Map<string, string>()),
+      tagFolderMap: signal(new Map<string, string>()),
+      defaultTaskRemindOption: () =>
+        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+      todayStr: () => mockDateService.todayStr(),
+      getLogicalTodayDate: () => mockDateService.getLogicalTodayDate(),
+      currentLocale: () => mockDateTimeFormatService.currentLocale(),
+      formatTime: (timestamp: number) => mockDateTimeFormatService.formatTime(timestamp),
+      submitTask: async () => 'task-1',
+      createNewTags: async () => [],
+      isMarkdownTaskList: () => false,
+      handleMarkdownPaste: async () => undefined,
+      getIssueIcon: () => undefined,
+      getFilteredIssueSuggestions$: () => of([]),
+      handleSuggestionSelected: async () => null,
+      onHudOpened: () => () => undefined,
+    };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -191,6 +225,7 @@ describe('AddTaskBarActionsComponent', () => {
         { provide: Store, useValue: mockStore },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
+        { provide: ADD_TASK_BAR_DATA_FACADE, useValue: mockDataFacade },
         { provide: MatDialog, useValue: mockMatDialog },
         TranslateService,
         TranslateStore,
@@ -507,6 +542,7 @@ describe('AddTaskBarActionsComponent', () => {
           { provide: AddTaskBarParserService, useValue: mockParserService },
           { provide: ProjectService, useValue: mockProjectService },
           { provide: TagService, useValue: mockTagService },
+          { provide: ADD_TASK_BAR_DATA_FACADE, useValue: mockDataFacade },
           { provide: MatDialog, useValue: mockMatDialog },
           TranslateService,
           TranslateStore,
@@ -566,7 +602,7 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Schedule Dialog', () => {
-    it('should open schedule dialog with correct data', () => {
+    it('should open schedule dialog with correct data', async () => {
       const testDateStr = '2024-01-15';
       const stateWithDate = {
         ...mockState,
@@ -576,7 +612,7 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(stateWithDate);
       fixture.detectChanges();
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
@@ -587,8 +623,8 @@ describe('AddTaskBarActionsComponent', () => {
       });
     });
 
-    it('should open schedule dialog without targetDay when no date', () => {
-      component.openScheduleDialog();
+    it('should open schedule dialog without targetDay when no date', async () => {
+      await component.openScheduleDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
@@ -599,13 +635,13 @@ describe('AddTaskBarActionsComponent', () => {
       });
     });
 
-    it('should handle dialog result with date and time', () => {
+    it('should handle dialog result with date and time', async () => {
       const resultDate = new Date('2024-01-15');
       const resultTime = '14:30';
       const mockResult = { date: resultDate, time: resultTime };
       mockDialogRef.afterClosed.and.returnValue(of(mockResult));
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockStateService.updateDate).toHaveBeenCalledWith(
         getDbDateStr(resultDate),
@@ -613,7 +649,7 @@ describe('AddTaskBarActionsComponent', () => {
       );
     });
 
-    it('should handle dialog cancellation', () => {
+    it('should handle dialog cancellation', async () => {
       mockDialogRef.afterClosed.and.returnValue(of(false));
       const currentState = {
         ...mockState,
@@ -623,13 +659,13 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(currentState);
       fixture.detectChanges();
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockStateService.updateDate).not.toHaveBeenCalled();
       expect(component.refocus.emit).toHaveBeenCalled();
     });
 
-    it('should handle dialog result without proper data', () => {
+    it('should handle dialog result without proper data', async () => {
       mockDialogRef.afterClosed.and.returnValue(of('invalid'));
       const currentState = {
         ...mockState,
@@ -639,13 +675,13 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(currentState);
       fixture.detectChanges();
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockStateService.updateDate).not.toHaveBeenCalled();
       expect(component.refocus.emit).toHaveBeenCalled();
     });
 
-    it('should pass time to dialog even when no date is selected', () => {
+    it('should pass time to dialog even when no date is selected', async () => {
       const stateWithTimeOnly = {
         ...mockState,
         date: null,
@@ -654,7 +690,7 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(stateWithTimeOnly);
       fixture.detectChanges();
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
@@ -665,7 +701,7 @@ describe('AddTaskBarActionsComponent', () => {
       });
     });
 
-    it('should always set isSelectDueOnly to true', () => {
+    it('should always set isSelectDueOnly to true', async () => {
       // Test with various states to ensure isSelectDueOnly is always true
       const states = [
         { ...mockState },
@@ -674,11 +710,11 @@ describe('AddTaskBarActionsComponent', () => {
         { ...mockState, date: '2024-01-15', time: '10:00' },
       ];
 
-      states.forEach((state) => {
+      for (const state of states) {
         (mockStateService as any)._mockStateSignal.set(state);
         fixture.detectChanges();
-        component.openScheduleDialog();
-      });
+        await component.openScheduleDialog();
+      }
 
       // All calls should have isSelectDueOnly: true
       expect(mockMatDialog.open).toHaveBeenCalledTimes(states.length);
@@ -690,10 +726,9 @@ describe('AddTaskBarActionsComponent', () => {
 
     it('should emit dialog open state changes', async () => {
       const emitSpy = spyOn(component.scheduleDialogOpenChange, 'emit');
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(emitSpy).toHaveBeenCalledWith(true);
-
       await new Promise((resolve) => setTimeout(resolve));
       expect(emitSpy).toHaveBeenCalledWith(false);
     });
@@ -1095,7 +1130,7 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Schedule Dialog Timezone Handling', () => {
-    it('should pass the existing deadline reminder option when opening deadline dialog', () => {
+    it('should pass the existing deadline reminder option when opening deadline dialog', async () => {
       const stateWithDeadline = {
         ...mockState,
         deadlineDate: '2025-07-20',
@@ -1105,7 +1140,7 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(stateWithDeadline);
       fixture.detectChanges();
 
-      component.openDeadlineDialog();
+      await component.openDeadlineDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
         data: {
@@ -1117,7 +1152,7 @@ describe('AddTaskBarActionsComponent', () => {
       });
     });
 
-    it('should handle dialog results with dates from different timezones', () => {
+    it('should handle dialog results with dates from different timezones', async () => {
       // Simulate a dialog result with a Date object that might come from a date picker
       const selectedDate = new Date(2025, 2, 15, 10, 30, 0); // March 15, 2025 at 10:30 AM
       const mockResult = {
@@ -1126,7 +1161,7 @@ describe('AddTaskBarActionsComponent', () => {
       };
       mockDialogRef.afterClosed.and.returnValue(of(mockResult));
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       // Should convert the Date to string format for consistency
       expect(mockStateService.updateDate).toHaveBeenCalledWith(
@@ -1135,7 +1170,7 @@ describe('AddTaskBarActionsComponent', () => {
       );
     });
 
-    it('should preserve date consistency when opening dialog with existing date', () => {
+    it('should preserve date consistency when opening dialog with existing date', async () => {
       // Set a date in the state
       const existingDate = '2025-07-20';
       const existingTime = '09:15';
@@ -1148,7 +1183,7 @@ describe('AddTaskBarActionsComponent', () => {
       (mockStateService as any)._mockStateSignal.set(stateWithDate);
       fixture.detectChanges();
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       // Dialog should be opened with the string date, not converted to Date object
       expect(mockMatDialog.open).toHaveBeenCalledWith(
@@ -1163,14 +1198,14 @@ describe('AddTaskBarActionsComponent', () => {
       );
     });
 
-    it('should handle midnight times correctly in dialog', () => {
+    it('should handle midnight times correctly in dialog', async () => {
       const midnightResult = {
         date: new Date(2025, 0, 1, 0, 0, 0), // Jan 1, 2025 at midnight
         time: '00:00',
       };
       mockDialogRef.afterClosed.and.returnValue(of(midnightResult));
 
-      component.openScheduleDialog();
+      await component.openScheduleDialog();
 
       expect(mockStateService.updateDate).toHaveBeenCalledWith('2025-01-01', '00:00');
     });

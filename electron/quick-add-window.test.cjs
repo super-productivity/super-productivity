@@ -189,6 +189,12 @@ const loadModule = () => {
   return loadedMod;
 };
 
+const markBridgeReady = () => {
+  listeners.get(IPC.QUICK_ADD_BRIDGE_READY)({
+    sender: mainWin.webContents,
+  });
+};
+
 test.beforeEach(() => {
   listeners = new Map();
   handlers = new Map();
@@ -217,17 +223,21 @@ test('showQuickAddWindow does not create HUD before the main app is ready', () =
   assert.deepEqual(showOrFocusCalls, [mainWin]);
 });
 
-test('quick-add window uses compact transparent bounds and the full app preload', () => {
+test('quick-add window uses compact transparent bounds and the minimal preload', () => {
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
+  markBridgeReady();
 
   mod.showQuickAddWindow();
 
   const quickAddWin = createdWindows[0];
   assert.equal(quickAddWin.options.transparent, true);
   assert.equal(quickAddWin.options.webPreferences.devTools, false);
-  assert.equal(path.basename(quickAddWin.options.webPreferences.preload), 'preload.js');
+  assert.equal(
+    path.basename(quickAddWin.options.webPreferences.preload),
+    'quick-add-preload.js',
+  );
   assert.equal(quickAddWin.url, 'http://localhost:4200/?quickAdd=1#/quick-add');
   assert.equal(quickAddWin.options.width, 768);
   assert.equal(quickAddWin.options.height, 420);
@@ -238,6 +248,7 @@ test('quick-add close IPC is accepted only from the quick-add window sender', ()
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
+  markBridgeReady();
   mod.showQuickAddWindow();
 
   const quickAddWin = createdWindows[0];
@@ -258,6 +269,7 @@ test('quick-add show IPC opens the Quick Add HUD', () => {
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
+  markBridgeReady();
 
   listeners.get(IPC.QUICK_ADD_SHOW)({
     sender: mainWin.webContents,
@@ -285,25 +297,7 @@ test('quick-add task submit fails fast before the main bridge is ready', async (
   isAppReady = true;
   mod.showQuickAddWindow();
 
-  const quickAddWin = createdWindows[0];
-
-  await assert.rejects(
-    () =>
-      handlers.get(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST)(
-        {
-          sender: quickAddWin.webContents,
-        },
-        {
-          title: 'HUD task',
-          taskData: { projectId: 'INBOX_PROJECT' },
-          isAddToBacklog: false,
-          isAddToBottom: false,
-          remindOption: 'DoNotRemind',
-          repeatQuickSetting: null,
-        },
-      ),
-    /Quick Add task bridge is not ready/,
-  );
+  assert.equal(createdWindows.length, 0);
   assert.equal(mainWin.webContents.sent.length, 0);
 });
 
@@ -311,9 +305,6 @@ test('quick-add task submit bridge readiness is accepted only from main window',
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
-  mod.showQuickAddWindow();
-
-  const quickAddWin = createdWindows[0];
   const payload = {
     title: 'HUD task',
     taskData: { projectId: 'INBOX_PROJECT' },
@@ -323,25 +314,19 @@ test('quick-add task submit bridge readiness is accepted only from main window',
     repeatQuickSetting: null,
   };
 
-  listeners.get(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY)({
+  listeners.get(IPC.QUICK_ADD_BRIDGE_READY)({
     sender: { owner: { id: 'other-window' } },
   });
+  mod.showQuickAddWindow();
 
-  await assert.rejects(
-    () =>
-      handlers.get(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST)(
-        {
-          sender: quickAddWin.webContents,
-        },
-        payload,
-      ),
-    /Quick Add task bridge is not ready/,
-  );
+  assert.equal(createdWindows.length, 0);
 
-  listeners.get(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY)({
+  listeners.get(IPC.QUICK_ADD_BRIDGE_READY)({
     sender: mainWin.webContents,
   });
+  mod.showQuickAddWindow();
 
+  const quickAddWin = createdWindows[0];
   const submitPromise = handlers.get(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST)(
     {
       sender: quickAddWin.webContents,
@@ -366,10 +351,8 @@ test('quick-add task submit is forwarded to the main window and resolves from ma
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
+  markBridgeReady();
   mod.showQuickAddWindow();
-  listeners.get(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY)({
-    sender: mainWin.webContents,
-  });
 
   const quickAddWin = createdWindows[0];
   const payload = {
@@ -405,10 +388,55 @@ test('quick-add task submit is forwarded to the main window and resolves from ma
   assert.deepEqual(await submitPromise, { ok: true, taskId: 'task-1' });
 });
 
+test('quick-add snapshot request is forwarded to the main window and resolves from main response', async () => {
+  const mod = loadModule();
+  mod.initQuickAddWindow(true, 'http://localhost:4200');
+  isAppReady = true;
+  markBridgeReady();
+  mod.showQuickAddWindow();
+
+  const quickAddWin = createdWindows[0];
+  const snapshotPromise = handlers.get(IPC.QUICK_ADD_SNAPSHOT_REQUEST)({
+    sender: quickAddWin.webContents,
+  });
+
+  const forwarded = mainWin.webContents.sent[0];
+  assert.equal(forwarded.channel, IPC.QUICK_ADD_SNAPSHOT_REQUEST);
+
+  listeners.get(IPC.QUICK_ADD_SNAPSHOT_RESPONSE)(
+    {
+      sender: mainWin.webContents,
+    },
+    {
+      requestId: forwarded.payload.requestId,
+      payload: { ok: false, error: 'not ready' },
+    },
+  );
+
+  assert.deepEqual(await snapshotPromise, { ok: false, error: 'not ready' });
+});
+
+test('quick-add snapshot request rejects non-HUD senders', async () => {
+  const mod = loadModule();
+  mod.initQuickAddWindow(true, 'http://localhost:4200');
+  isAppReady = true;
+  markBridgeReady();
+  mod.showQuickAddWindow();
+
+  await assert.rejects(
+    () =>
+      handlers.get(IPC.QUICK_ADD_SNAPSHOT_REQUEST)({
+        sender: { owner: { id: 'other-window' } },
+      }),
+    /Unauthorized quick-add IPC sender/,
+  );
+});
+
 test('quick-add task submit rejects non-HUD senders', async () => {
   const mod = loadModule();
   mod.initQuickAddWindow(true, 'http://localhost:4200');
   isAppReady = true;
+  markBridgeReady();
   mod.showQuickAddWindow();
 
   await assert.rejects(

@@ -23,6 +23,7 @@ import type {
   AddTaskPayload,
   AddTaskSubmitResult,
 } from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
+import type { QuickAddSnapshotResult } from '../src/app/features/tasks/add-task-bar/quick-add-hud.model';
 
 export interface PluginNodeExecutionElectronApi {
   requestGrant(pluginId: string): Promise<{ token: string } | null>;
@@ -216,6 +217,8 @@ export interface ElectronAPI {
 
   informAboutAppReady(): void;
 
+  informQuickAddBridgeReady(): void;
+
   informQuickAddTaskSubmitBridgeReady(): void;
 
   showQuickAdd(): void;
@@ -223,6 +226,8 @@ export interface ElectronAPI {
   closeQuickAdd(): void;
 
   submitQuickAddTask(payload: AddTaskPayload): Promise<AddTaskSubmitResult>;
+
+  requestQuickAddSnapshot(): Promise<QuickAddSnapshotResult>;
 
   scheduleRegisterBeforeClose(id: string): void;
 
@@ -284,6 +289,10 @@ export interface ElectronAPI {
   ): () => void;
 
   sendQuickAddTaskSubmitResponse(requestId: string, result: AddTaskSubmitResult): void;
+
+  onQuickAddSnapshotRequest(listener: (requestId: string) => void): () => void;
+
+  sendQuickAddSnapshotResponse(requestId: string, result: QuickAddSnapshotResult): void;
 
   exec(command: string): void;
 

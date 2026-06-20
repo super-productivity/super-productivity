@@ -37,7 +37,6 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
-import { isQuickAddWindowMode } from '../../../util/is-quick-add-window-mode';
 
 const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
 
@@ -52,7 +51,6 @@ export class GlobalConfigEffects {
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _isElectron = inject(IS_ELECTRON_TOKEN);
   private _isMac = inject(IS_MAC_TOKEN);
-  private _isQuickAddWindowMode = isQuickAddWindowMode();
 
   snackUpdate$ = createEffect(
     () =>
@@ -79,10 +77,7 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(
-          ({ sectionKey }) =>
-            this._isElectron && !this._isQuickAddWindowMode && sectionKey === 'keyboard',
-        ),
+        filter(({ sectionKey }) => this._isElectron && sectionKey === 'keyboard'),
         tap(({ sectionKey, sectionCfg }) => {
           let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
           if (this._isMac) {
@@ -101,7 +96,7 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
-        filter(() => this._isElectron && !this._isQuickAddWindowMode),
+        filter(() => this._isElectron),
         concatMap(async (action) => {
           const appDataComplete = action.appDataComplete;
           const keyboardCfg: KeyboardConfig = (
@@ -227,7 +222,7 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(() => this._isElectron && !this._isQuickAddWindowMode),
+        filter(() => this._isElectron),
         withLatestFrom(this._store.select(selectConfigFeatureState)),
         tap(([action, globalConfig]) => {
           // Send the entire settings object to electron for overlay initialization
@@ -241,7 +236,7 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
-        filter(() => this._isElectron && !this._isQuickAddWindowMode),
+        filter(() => this._isElectron),
         tap(({ appDataComplete }) => {
           const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
           // Send initial settings to electron for overlay initialization

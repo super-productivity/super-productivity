@@ -16,7 +16,6 @@ import { IS_ELECTRON } from '../../app.constants';
 import { TagService } from '../tag/tag.service';
 import { unique } from '../../util/unique';
 import type { AddTaskPayload } from './add-task-bar/add-task-payload-builder';
-import { isQuickAddWindowMode } from '../../util/is-quick-add-window-mode';
 
 @Injectable({
   providedIn: 'root',
@@ -29,10 +28,6 @@ export class TaskBuilderService {
   private readonly _snackService = inject(SnackService);
 
   addTask(payload: AddTaskPayload): string | Promise<string> {
-    if (IS_ELECTRON && isQuickAddWindowMode()) {
-      return this._addTaskViaMainWindow(payload);
-    }
-
     return this._addTaskLocally(payload);
   }
 
@@ -79,19 +74,6 @@ export class TaskBuilderService {
     }
 
     return taskId;
-  }
-
-  private async _addTaskViaMainWindow(payload: AddTaskPayload): Promise<string> {
-    const result = await window.ea.submitQuickAddTask(payload);
-    if (result.ok) {
-      return result.taskId;
-    }
-
-    this._snackService.open({
-      type: 'ERROR',
-      msg: result.error,
-    });
-    throw new Error(result.error);
   }
 
   private _createNewTagsAndMergeTaskData(

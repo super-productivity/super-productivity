@@ -93,6 +93,8 @@ import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapt
 import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
 import { suspendAudioContext, unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
+import { ADD_TASK_BAR_DATA_FACADE } from './app/features/tasks/add-task-bar/add-task-bar-data-facade.token';
+import { FullAddTaskBarDataFacadeService } from './app/features/tasks/add-task-bar/add-task-bar-data-facade.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -203,6 +205,10 @@ bootstrapApplication(AppComponent, {
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,
+    {
+      provide: ADD_TASK_BAR_DATA_FACADE,
+      useExisting: FullAddTaskBarDataFacadeService,
+    },
     { provide: DateAdapter, useClass: CustomDateAdapter },
     { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
     {

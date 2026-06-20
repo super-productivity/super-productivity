@@ -1,4 +1,4 @@
-@if (!isQuickAddWindowMode && resolvedBgImage(); as bgImage) {
+@if (resolvedBgImage(); as bgImage) {
   <div
     [style.background]="'url(' + bgImage + ')'"
     [style.filter]="bgImageBlurFilter()"
@@ -20,7 +20,7 @@
     class="global"
   ></add-task-bar>
 }
-@if (layoutService.isShowAddTaskBar() && !isQuickAddWindowMode) {
+@if (layoutService.isShowAddTaskBar()) {
   <div
     (click)="onAddTaskBarClosed()"
     @fade
@@ -28,8 +28,7 @@
   ></div>
 }
 <!-- -->
-@if (isQuickAddWindowMode) {
-} @else if (isShowFocusOverlay()) {
+@if (isShowFocusOverlay()) {
   @defer (on immediate) {
     <focus-mode-overlay @warp></focus-mode-overlay>
   }
@@ -81,19 +80,19 @@
 }
 <!-- -->
 
-@if (isShowOnboardingPresets() && !isQuickAddWindowMode) {
+@if (isShowOnboardingPresets()) {
   <onboarding-preset-selection
     (presetSelected)="onPresetSelected()"
     (dismissed)="onOnboardingDismissed()"
   ></onboarding-preset-selection>
 }
 
-@if (onboardingHintService.currentStep() && !isQuickAddWindowMode) {
+@if (onboardingHintService.currentStep()) {
   <onboarding-hint></onboarding-hint>
 }
 
 <!-- Background context menu -->
-@if (routeWrapper && !isQuickAddWindowMode) {
+@if (routeWrapper) {
   <context-menu
     [contextMenu]="backgroundContextMenu"
     [rightClickTriggerEl]="routeWrapper.nativeElement"

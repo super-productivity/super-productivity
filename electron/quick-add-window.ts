@@ -10,6 +10,7 @@ import type {
   AddTaskPayload,
   AddTaskSubmitResult,
 } from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
+import type { QuickAddSnapshotResult } from '../src/app/features/tasks/add-task-bar/quick-add-hud.model';
 
 let quickAddWin: BrowserWindow | null = null;
 let loadUrl: string | undefined;
@@ -17,7 +18,7 @@ let wasMainWinFocused = false;
 let mainWinWasVisible = false;
 let isHidingProgrammatically = false;
 let isQuickAddOpenedQueued = false;
-let isQuickAddTaskSubmitBridgeReady = false;
+let isQuickAddBridgeReady = false;
 let requestCounter = 0;
 
 const QUICK_ADD_WINDOW_WIDTH = 800;
@@ -32,6 +33,7 @@ type PendingRequest<T> = Readonly<{
 }>;
 
 const pendingTaskSubmitRequests = new Map<string, PendingRequest<AddTaskSubmitResult>>();
+const pendingSnapshotRequests = new Map<string, PendingRequest<QuickAddSnapshotResult>>();
 
 export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): void => {
   loadUrl =
@@ -56,12 +58,21 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
   ipcMain.handle(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, (event, payload: AddTaskPayload) =>
     _forwardQuickAddTaskSubmit(event, payload),
   );
+  ipcMain.handle(IPC.QUICK_ADD_SNAPSHOT_REQUEST, (event) =>
+    _forwardQuickAddSnapshotRequest(event),
+  );
 
+  ipcMain.on(IPC.QUICK_ADD_BRIDGE_READY, (event) => {
+    if (!_isMainWindowSender(event.sender)) {
+      return;
+    }
+    isQuickAddBridgeReady = true;
+  });
   ipcMain.on(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY, (event) => {
     if (!_isMainWindowSender(event.sender)) {
       return;
     }
-    isQuickAddTaskSubmitBridgeReady = true;
+    isQuickAddBridgeReady = true;
   });
 
   ipcMain.on(IPC.QUICK_ADD_TASK_SUBMIT_RESPONSE, (event, response) => {
@@ -70,17 +81,26 @@ export const initQuickAddWindow = (isDev: boolean, appUrl: string | undefined): 
     }
     _resolvePending(pendingTaskSubmitRequests, response);
   });
+  ipcMain.on(IPC.QUICK_ADD_SNAPSHOT_RESPONSE, (event, response) => {
+    if (!_isMainWindowSender(event.sender)) {
+      return;
+    }
+    _resolvePending(pendingSnapshotRequests, response);
+  });
 };
 
 export const destroyQuickAddWindow = (): void => {
   ipcMain.removeAllListeners(IPC.QUICK_ADD_CLOSE);
   ipcMain.removeAllListeners(IPC.QUICK_ADD_SHOW);
   ipcMain.removeHandler(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST);
+  ipcMain.removeHandler(IPC.QUICK_ADD_SNAPSHOT_REQUEST);
+  ipcMain.removeAllListeners(IPC.QUICK_ADD_BRIDGE_READY);
   ipcMain.removeAllListeners(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY);
   ipcMain.removeAllListeners(IPC.QUICK_ADD_TASK_SUBMIT_RESPONSE);
+  ipcMain.removeAllListeners(IPC.QUICK_ADD_SNAPSHOT_RESPONSE);
   _rejectAllPending(new Error('Quick Add window destroyed'));
   isQuickAddOpenedQueued = false;
-  isQuickAddTaskSubmitBridgeReady = false;
+  isQuickAddBridgeReady = false;
 
   if (quickAddWin && !quickAddWin.isDestroyed()) {
     try {
@@ -98,6 +118,9 @@ export const showQuickAddWindow = (): void => {
     if (mainWin && !mainWin.isDestroyed()) {
       showOrFocus(mainWin);
     }
+    return;
+  }
+  if (!isQuickAddBridgeReady) {
     return;
   }
 
@@ -185,7 +208,7 @@ const createQuickAddWindow = (): void => {
       scrollBounce: false,
       backgroundThrottling: false,
       webSecurity: true,
-      preload: join(__dirname, 'preload.js'),
+      preload: join(__dirname, 'quick-add-preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
@@ -307,8 +330,8 @@ const _forwardQuickAddTaskSubmit = async (
   if (!mainWin || mainWin.isDestroyed() || !getIsAppReady()) {
     throw new Error('Main window is not ready');
   }
-  if (!isQuickAddTaskSubmitBridgeReady) {
-    throw new Error('Quick Add task bridge is not ready');
+  if (!isQuickAddBridgeReady) {
+    throw new Error('Quick Add bridge is not ready');
   }
 
   const requestId = `quick-add-task-${++requestCounter}`;
@@ -321,6 +344,34 @@ const _forwardQuickAddTaskSubmit = async (
     mainWin.webContents.send(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, {
       requestId,
       payload,
+    });
+  });
+};
+
+const _forwardQuickAddSnapshotRequest = async (
+  event: IpcMainInvokeEvent,
+): Promise<QuickAddSnapshotResult> => {
+  if (BrowserWindow.fromWebContents(event.sender) !== quickAddWin) {
+    throw new Error('Unauthorized quick-add IPC sender');
+  }
+
+  const mainWin = getWinSafe();
+  if (!mainWin || mainWin.isDestroyed() || !getIsAppReady()) {
+    throw new Error('Main window is not ready');
+  }
+  if (!isQuickAddBridgeReady) {
+    throw new Error('Quick Add bridge is not ready');
+  }
+
+  const requestId = `quick-add-snapshot-${++requestCounter}`;
+  return new Promise<QuickAddSnapshotResult>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingSnapshotRequests.delete(requestId);
+      reject(new Error('Quick Add snapshot request timed out'));
+    }, 5000);
+    pendingSnapshotRequests.set(requestId, { resolve, reject, timer });
+    mainWin.webContents.send(IPC.QUICK_ADD_SNAPSHOT_REQUEST, {
+      requestId,
     });
   });
 };
@@ -356,4 +407,9 @@ const _rejectAllPending = (reason: unknown): void => {
     request.reject(reason);
   });
   pendingTaskSubmitRequests.clear();
+  pendingSnapshotRequests.forEach((request) => {
+    clearTimeout(request.timer);
+    request.reject(reason);
+  });
+  pendingSnapshotRequests.clear();
 };

@@ -467,21 +467,6 @@ describe('GlobalConfigEffects', () => {
         );
         expect(registerGlobalShortcutsSpy).not.toHaveBeenCalled();
       });
-
-      it('should NOT register shortcuts in quick-add window mode', () => {
-        document.body.classList.add('isQuickAddHud');
-        setup(true, false);
-        effects.updateGlobalShortcut$.subscribe();
-
-        actions$.next(
-          updateGlobalConfigSection({
-            sectionKey: 'keyboard',
-            sectionCfg: DEFAULT_GLOBAL_CONFIG.keyboard,
-          }),
-        );
-
-        expect(registerGlobalShortcutsSpy).not.toHaveBeenCalled();
-      });
     });
 
     describe('registerGlobalShortcutInitially$', () => {
@@ -548,23 +533,6 @@ describe('GlobalConfigEffects', () => {
             ]),
           );
         });
-      });
-
-      it('should NOT register shortcuts initially in quick-add window mode', () => {
-        document.documentElement.classList.add('isQuickAddHud');
-        setup(true, false);
-
-        effects.registerGlobalShortcutInitially$.subscribe();
-
-        actions$.next(
-          loadAllData({
-            appDataComplete: {
-              globalConfig: DEFAULT_GLOBAL_CONFIG,
-            } as any,
-          }),
-        );
-
-        expect(registerGlobalShortcutsSpy).not.toHaveBeenCalled();
       });
     });
   });

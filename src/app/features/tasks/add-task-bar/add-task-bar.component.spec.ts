@@ -26,6 +26,10 @@ import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
+import { ADD_TASK_BAR_DATA_FACADE } from './add-task-bar-data-facade.token';
+import { FullAddTaskBarDataFacadeService } from './add-task-bar-data-facade.service';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -236,6 +240,23 @@ describe('AddTaskBarComponent', () => {
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: SnackService, useValue: mockSnackService },
         {
+          provide: MenuTreeService,
+          useValue: {
+            projectFolderMap: signal(new Map<string, string>()),
+            tagFolderMap: signal(new Map<string, string>()),
+          },
+        },
+        {
+          provide: PluginIssueProviderRegistryService,
+          useValue: {
+            hasProvider: () => false,
+          },
+        },
+        {
+          provide: ADD_TASK_BAR_DATA_FACADE,
+          useClass: FullAddTaskBarDataFacadeService,
+        },
+        {
           provide: AddTaskBarIssueSearchService,
           useValue: mockAddTaskBarIssueSearchService,
         },
@@ -436,21 +457,6 @@ describe('AddTaskBarComponent', () => {
       const taskData = mockTaskService.add.calls.mostRecent()
         .args[2] as Partial<TaskCopy>;
       expect(taskData.notes).toBeUndefined();
-    });
-
-    it('should collapse the note panel after adding a task in quick-add mode', async () => {
-      document.body.classList.add('isQuickAddHud');
-      mockTaskService.add.and.returnValue('task-1');
-
-      component.stateService.updateInputTxt('Buy milk');
-      component.stateService.updateCleanText('Buy milk');
-      component.stateService.isNoteExpanded.set(true);
-      component.stateService.noteTxt.set('remember the oat milk');
-
-      await component.addTask();
-
-      expect(component.stateService.noteTxt()).toBe('');
-      expect(component.stateService.isNoteExpanded()).toBe(false);
     });
   });
 
@@ -739,6 +745,23 @@ describe('AddTaskBarComponent', () => {
           { provide: Store, useValue: mockStore },
           { provide: MatDialog, useValue: mockMatDialog },
           { provide: SnackService, useValue: mockSnackService },
+          {
+            provide: MenuTreeService,
+            useValue: {
+              projectFolderMap: signal(new Map<string, string>()),
+              tagFolderMap: signal(new Map<string, string>()),
+            },
+          },
+          {
+            provide: PluginIssueProviderRegistryService,
+            useValue: {
+              hasProvider: () => false,
+            },
+          },
+          {
+            provide: ADD_TASK_BAR_DATA_FACADE,
+            useClass: FullAddTaskBarDataFacadeService,
+          },
           {
             provide: AddTaskBarIssueSearchService,
             useValue: mockAddTaskBarIssueSearchService,

@@ -25,6 +25,7 @@ import type {
   AddTaskPayload,
   AddTaskSubmitResult,
 } from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
+import type { QuickAddSnapshotResult } from '../src/app/features/tasks/add-task-bar/quick-add-hud.model';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -176,12 +177,15 @@ const ea: ElectronAPI = {
   showEmojiPanel: () => _send('SHOW_EMOJI_PANEL'),
   openSystemKeyboardSettings: () => _send(IPC.OPEN_SYSTEM_KEYBOARD_SETTINGS),
   informAboutAppReady: () => _send('APP_READY'),
+  informQuickAddBridgeReady: () => _send(IPC.QUICK_ADD_BRIDGE_READY),
   informQuickAddTaskSubmitBridgeReady: () =>
     _send(IPC.QUICK_ADD_TASK_SUBMIT_BRIDGE_READY),
   showQuickAdd: () => _send(IPC.QUICK_ADD_SHOW),
   closeQuickAdd: () => _send(IPC.QUICK_ADD_CLOSE),
   submitQuickAddTask: (payload: AddTaskPayload) =>
     _invoke(IPC.QUICK_ADD_TASK_SUBMIT_REQUEST, payload) as Promise<AddTaskSubmitResult>,
+  requestQuickAddSnapshot: () =>
+    _invoke(IPC.QUICK_ADD_SNAPSHOT_REQUEST) as Promise<QuickAddSnapshotResult>,
 
   openPath: (path: string) => _send('OPEN_PATH', path),
   openExternalUrl: (url: string) => _send('OPEN_EXTERNAL', url),
@@ -268,6 +272,16 @@ const ea: ElectronAPI = {
 
   sendQuickAddTaskSubmitResponse: (requestId: string, result: AddTaskSubmitResult) =>
     _send(IPC.QUICK_ADD_TASK_SUBMIT_RESPONSE, { requestId, payload: result }),
+
+  onQuickAddSnapshotRequest: (listener: (requestId: string) => void) => {
+    const ipcListener = (_: unknown, request: { requestId: string }): void =>
+      listener(request.requestId);
+    ipcRenderer.on(IPC.QUICK_ADD_SNAPSHOT_REQUEST, ipcListener);
+    return () => ipcRenderer.off(IPC.QUICK_ADD_SNAPSHOT_REQUEST, ipcListener);
+  },
+
+  sendQuickAddSnapshotResponse: (requestId: string, result: QuickAddSnapshotResult) =>
+    _send(IPC.QUICK_ADD_SNAPSHOT_RESPONSE, { requestId, payload: result }),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {

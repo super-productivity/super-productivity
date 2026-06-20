@@ -145,7 +145,7 @@
   ) {
     <mat-option [value]="item">
       @if (item.issueType) {
-        <mat-icon [svgIcon]="item.issueType | issueIcon"></mat-icon>
+        <mat-icon [svgIcon]="getIssueIcon(item.issueType)"></mat-icon>
       } @else if (item.taskId && item.isArchivedTask) {
         <mat-icon>archive</mat-icon>
       } @else if (item.taskId) {
