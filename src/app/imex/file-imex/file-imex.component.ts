@@ -22,7 +22,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { privacyExport } from './privacy-export';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton } from '@angular/material/button';
-import { MatCheckbox } from '@angular/material/checkbox';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
@@ -51,7 +51,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
   templateUrl: './file-imex.component.html',
   styleUrls: ['./file-imex.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon, MatButton, MatCheckbox, MatTooltip, TranslatePipe],
+  imports: [MatIcon, MatButton, MatSlideToggleModule, MatTooltip, TranslatePipe],
 })
 export class FileImexComponent implements OnInit {
   private _snackService = inject(SnackService);
