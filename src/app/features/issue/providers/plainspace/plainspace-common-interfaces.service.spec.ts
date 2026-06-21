@@ -97,6 +97,24 @@ describe('PlainspaceCommonInterfacesService', () => {
       expect(res?.taskChanges.dueWithTime).toBeUndefined();
     });
 
+    // Plainspace → SP completion sync: when a task is completed in Plainspace, the
+    // poll must carry isDone:true into the task changes so SP marks it done.
+    it('pulls isDone:true when the remote task was completed', async () => {
+      setRemote(issue(null, true));
+      stubCfg();
+      const task = { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 } as Task;
+      const res = await service.getFreshDataForIssueTask(task);
+      expect(res?.taskChanges.isDone).toBe(true);
+    });
+
+    it('pulls isDone:false when the remote task was reopened', async () => {
+      setRemote(issue(null, false));
+      stubCfg();
+      const task = { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 } as Task;
+      const res = await service.getFreshDataForIssueTask(task);
+      expect(res?.taskChanges.isDone).toBe(false);
+    });
+
     it('returns null when the remote task is unchanged', async () => {
       setRemote(issue('2026-01-02T09:00:00.000Z'));
       stubCfg();
@@ -146,6 +164,22 @@ describe('PlainspaceCommonInterfacesService', () => {
       ] as Task[];
       const updates = await service.getFreshDataForIssueTasks(tasks);
       expect(updates.map((u) => u.task.issueId)).toEqual(['t1']);
+    });
+
+    // Plainspace → SP completion sync via the bulk poll path (the one the
+    // auto-poll actually uses): a remotely-completed task must carry isDone:true.
+    it('carries isDone:true for a task completed remotely', async () => {
+      spyOn(
+        service as unknown as { _getCfgOnce$: (id: string) => unknown },
+        '_getCfgOnce$',
+      ).and.returnValue(of({}));
+      (api as unknown as { getMyTasks$: unknown }).getMyTasks$ = () =>
+        of([{ ...issue(null, true), id: 't1' }]);
+      const tasks = [
+        { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 },
+      ] as Task[];
+      const updates = await service.getFreshDataForIssueTasks(tasks);
+      expect(updates[0]?.taskChanges.isDone).toBe(true);
     });
   });
 });
