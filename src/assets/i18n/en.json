@@ -1750,6 +1750,22 @@
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
         "OK": "Delete"
       },
+      "D_CONFIRM_UPDATE_SUBTASK_DUE_DATE": {
+        "MSG": "Do you want to also change the due date of all subtasks?",
+        "OK": "Change subtasks due date"
+      },
+      "D_CONFIRM_REMOVE_SUBTASK_DUE_DATE": {
+        "MSG": "Do you want to also remove the due date of all subtasks?",
+        "OK": "Remove subtasks due date"
+      },
+      "D_CONFIRM_UPDATE_SUBTASK_DEADLINE": {
+        "MSG": "Do you want to also change the deadline of all subtasks?",
+        "OK": "Change subtasks deadline"
+      },
+      "D_CONFIRM_REMOVE_SUBTASK_DEADLINE": {
+        "MSG": "Do you want to also remove the deadline of all subtasks?",
+        "OK": "Remove subtasks deadline"
+      },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Do you want to create the new tag {{tagsTxt}}?",
         "OK": "Create tag"
@@ -2569,6 +2585,9 @@
       "IS_AUTO_MARK_PARENT_AS_DONE": "Automatically mark parent task as completed when all subtasks are completed",
       "IS_CONFIRM_BEFORE_DELETE": "Confirm before deleting tasks",
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
+      "IS_PASS_PARENT_DATES_TO_SUB_TASKS": "Automatically pass parent dates to newly created subtasks",
+      "IS_PASS_PARENT_DUE_DATE_TO_SUB_TASKS": "Automatically pass parent due date to newly created subtasks",
+      "IS_PASS_PARENT_DEADLINE_TO_SUB_TASKS": "Automatically pass parent deadline to newly created subtasks",
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
       "TITLE": "Tasks"

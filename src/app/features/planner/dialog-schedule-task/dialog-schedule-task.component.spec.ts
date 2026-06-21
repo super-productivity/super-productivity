@@ -272,6 +272,7 @@ describe('DialogScheduleTaskComponent', () => {
         expectedDate.getTime(),
         TaskReminderOptionId.AtStart,
         false,
+        true,
       );
     });
 
@@ -388,6 +389,7 @@ describe('DialogScheduleTaskComponent', () => {
           task: mockTask,
           day: getDbDateStr(today),
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
       expect(dialogRefSpy.close).toHaveBeenCalledWith(true);

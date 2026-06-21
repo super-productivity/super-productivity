@@ -73,6 +73,7 @@ export const PlannerActions = createActionGroup({
       day: string;
       isAddToTop?: boolean;
       isShowSnack?: boolean;
+      isSkipSubTaskDateUpdatePrompt?: boolean;
     }) => ({
       ...plannerProps,
       meta: {

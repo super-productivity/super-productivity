@@ -146,6 +146,7 @@ export const TaskSharedActions = createActionGroup({
       remindAt?: number;
       isMoveToBacklog: boolean;
       isSkipAutoRemoveFromToday?: boolean;
+      isSkipSubTaskDateUpdatePrompt?: boolean;
     }) => ({
       ...taskProps,
       meta: {
@@ -162,6 +163,7 @@ export const TaskSharedActions = createActionGroup({
       remindAt?: number;
       isMoveToBacklog: boolean;
       isSkipAutoRemoveFromToday?: boolean;
+      isSkipSubTaskDateUpdatePrompt?: boolean;
     }) => ({
       ...taskProps,
       meta: {
@@ -176,6 +178,7 @@ export const TaskSharedActions = createActionGroup({
       id: string;
       isSkipToast?: boolean;
       isLeaveInToday?: boolean;
+      isSkipSubTaskDateUpdatePrompt?: boolean;
     }) => ({
       ...taskProps,
       meta: {

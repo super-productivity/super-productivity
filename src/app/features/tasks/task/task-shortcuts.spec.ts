@@ -434,6 +434,7 @@ describe('TaskComponent shortcut handling', () => {
           task: component.task() as any,
           day: '2026-06-02',
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     });
@@ -447,6 +448,7 @@ describe('TaskComponent shortcut handling', () => {
           task: component.task() as any,
           day: '2026-06-08',
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     });
@@ -462,6 +464,7 @@ describe('TaskComponent shortcut handling', () => {
           task: component.task() as any,
           day: '2026-06-08',
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     });
@@ -478,6 +481,7 @@ describe('TaskComponent shortcut handling', () => {
           task: component.task() as any,
           day: '2026-06-14',
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     });
@@ -490,6 +494,7 @@ describe('TaskComponent shortcut handling', () => {
           task: component.task() as any,
           day: '2026-07-01',
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     });
@@ -510,6 +515,7 @@ describe('TaskComponent shortcut handling', () => {
         new Date('2026-06-02T10:00:00').getTime(),
         jasmine.any(String),
         false,
+        true,
       );
       expect(TestBed.inject(SnackService).open).toHaveBeenCalled();
       expect(storeSpy.dispatch).not.toHaveBeenCalledWith(

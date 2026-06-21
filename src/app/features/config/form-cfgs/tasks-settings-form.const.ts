@@ -41,6 +41,61 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
+      key: 'isPassParentDatesToSubTasks',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.TASKS.IS_PASS_PARENT_DATES_TO_SUB_TASKS,
+      },
+      hooks: {
+        onInit: (field: any) => {
+          const form = field.form;
+          if (!form) return;
+          const parentCtrl = field.formControl;
+          const dueCtrl = form.get('isPassParentDueDateToSubTasks');
+          const deadlineCtrl = form.get('isPassParentDeadlineToSubTasks');
+
+          if (parentCtrl && dueCtrl && deadlineCtrl) {
+            parentCtrl.valueChanges.subscribe((val: boolean) => {
+              if (val && !dueCtrl.value && !deadlineCtrl.value) {
+                dueCtrl.setValue(true);
+                deadlineCtrl.setValue(true);
+              }
+            });
+
+            dueCtrl.valueChanges.subscribe((val: boolean) => {
+              if (!val && !deadlineCtrl.value && parentCtrl.value) {
+                parentCtrl.setValue(false);
+              }
+            });
+
+            deadlineCtrl.valueChanges.subscribe((val: boolean) => {
+              if (!val && !dueCtrl.value && parentCtrl.value) {
+                parentCtrl.setValue(false);
+              }
+            });
+          }
+        },
+      },
+    },
+    {
+      key: 'isPassParentDueDateToSubTasks',
+      type: 'checkbox',
+      className: 'indented-setting',
+      templateOptions: {
+        label: T.GCF.TASKS.IS_PASS_PARENT_DUE_DATE_TO_SUB_TASKS,
+      },
+      hideExpression: '!model.isPassParentDatesToSubTasks',
+    },
+    {
+      key: 'isPassParentDeadlineToSubTasks',
+      type: 'checkbox',
+      className: 'indented-setting',
+      templateOptions: {
+        label: T.GCF.TASKS.IS_PASS_PARENT_DEADLINE_TO_SUB_TASKS,
+      },
+      hideExpression: '!model.isPassParentDatesToSubTasks',
+    },
+    {
       key: 'defaultProjectId',
       type: 'project-select',
       templateOptions: {

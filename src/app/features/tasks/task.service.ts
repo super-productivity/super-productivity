@@ -762,9 +762,54 @@ export class TaskService {
   }
 
   addSubTaskTo(parentId: string, additional: Partial<Task> = {}): string {
+    const parentTask = this._taskEntities()[parentId];
+    const tasksCfg = this._globalConfigService.cfg()?.tasks;
+    const isPassParentDates = tasksCfg?.isPassParentDatesToSubTasks !== false;
+    const isPassDueDate = tasksCfg?.isPassParentDueDateToSubTasks !== false;
+    const isPassDeadline = tasksCfg?.isPassParentDeadlineToSubTasks !== false;
+
+    const dateFields: {
+      dueDay?: string | null;
+      dueWithTime?: number | null;
+      remindAt?: number;
+      deadlineDay?: string | null;
+      deadlineWithTime?: number | null;
+      deadlineRemindAt?: number;
+    } = {
+      dueDay:
+        parentTask && isPassParentDates && isPassDueDate
+          ? parentTask.dueDay || undefined
+          : undefined,
+      dueWithTime:
+        parentTask && isPassParentDates && isPassDueDate
+          ? parentTask.dueWithTime || undefined
+          : undefined,
+      remindAt:
+        parentTask && isPassParentDates && isPassDueDate
+          ? parentTask.remindAt || undefined
+          : undefined,
+      deadlineDay:
+        parentTask && isPassParentDates && isPassDeadline
+          ? parentTask.deadlineDay || undefined
+          : undefined,
+      deadlineWithTime:
+        parentTask && isPassParentDates && isPassDeadline
+          ? parentTask.deadlineWithTime || undefined
+          : undefined,
+      deadlineRemindAt:
+        parentTask && isPassParentDates && isPassDeadline
+          ? parentTask.deadlineRemindAt || undefined
+          : undefined,
+    };
+
     const task = this.createNewTaskWithDefaults({
       title: additional.title || '',
-      additional: { dueDay: additional.dueDay || undefined, ...additional },
+      additional: {
+        parentId,
+        dueDay: additional.dueDay || undefined,
+        ...dateFields,
+        ...additional,
+      },
     });
     TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
 
@@ -1043,6 +1088,7 @@ export class TaskService {
     due: number,
     remindCfg: TaskReminderOptionId,
     isMoveToBacklog: boolean = false,
+    isSkipSubTaskDateUpdatePrompt: boolean = false,
   ): void {
     this._store.dispatch(
       TaskSharedActions.scheduleTaskWithTime({
@@ -1050,6 +1096,7 @@ export class TaskService {
         dueWithTime: due,
         remindAt: remindOptionToMilliseconds(due, remindCfg),
         isMoveToBacklog,
+        isSkipSubTaskDateUpdatePrompt,
       }),
     );
   }

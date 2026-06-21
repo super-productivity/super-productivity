@@ -48,6 +48,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultProjectId: INBOX_PROJECT.id,
     isMarkdownFormattingInNotesEnabled: true,
     notesTemplate: defaultTaskNotesTemplate,
+    isPassParentDatesToSubTasks: true,
+    isPassParentDueDateToSubTasks: true,
+    isPassParentDeadlineToSubTasks: true,
   },
   misc: {
     isConfirmBeforeExit: false,

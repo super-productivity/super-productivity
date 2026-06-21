@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -19,6 +20,7 @@ import {
   TaskReminderOption,
   TaskReminderOptionId,
 } from '../../tasks/task.model';
+import { Update } from '@ngrx/entity';
 import { T } from 'src/app/t.const';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../store/planner.actions';
@@ -32,7 +34,6 @@ import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
-import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
@@ -44,11 +45,17 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksWithDueTimeSorted,
+  selectTaskFeatureState,
+} from '../../tasks/store/task.selectors';
 import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
 import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { firstValueFrom } from 'rxjs';
 import { DateTimePickerComponent } from '../../../ui/datetime-picker/datetime-picker.component';
+import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 
 @Component({
   selector: 'dialog-schedule-task',
@@ -81,10 +88,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _snackService = inject(SnackService);
   private _datePipe = inject(LocaleDatePipe);
   private _taskService = inject(TaskService);
-  private _reminderService = inject(ReminderService);
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
+  private _matDialog = inject(MatDialog);
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _tasksWithDueTimeSorted = this._store.selectSignal(
     selectAllTasksWithDueTimeSorted,
@@ -254,17 +261,24 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     this.selectedDate = new Date(newDate);
   }
 
-  remove(): void {
+  async remove(): Promise<void> {
     // Only handle remove if task is provided
     if (!this.data.task) {
       this.close(false);
       return;
     }
 
+    await this._askToUpdateSubTaskDueDatesBeforeParentChange({
+      dueDay: null,
+      dueWithTime: null,
+      remindAt: undefined,
+    });
+
     if (this.data.task.remindAt) {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     } else if (this.plannedDayForTask === this._dateService.todayStr()) {
@@ -273,6 +287,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
           isSkipToast: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
 
@@ -286,6 +301,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
           isSkipToast: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
 
@@ -329,7 +345,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const hasValidTime = !!normalizedTime && isValidSplitTime(normalizedTime);
 
     if (hasValidTime) {
-      this._scheduleWithTime();
+      await this._scheduleWithTime();
     } else if (
       this.data.task &&
       this.data.task.dueDay === newDay &&
@@ -372,7 +388,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     }
   }
 
-  private _scheduleWithTime(): void {
+  private async _scheduleWithTime(): Promise<void> {
     // Only schedule if task is provided and time is valid (submit() pre-validates;
     // belt-and-braces guard against direct callers / malformed paste — see #7802).
     const normalizedTime = this._normalizedTime();
@@ -384,11 +400,21 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const newDate = new Date(
       getDateTimeFromClockString(normalizedTime, this.selectedDate as Date),
     );
+    const dueWithTime = newDate.getTime();
+    const remindAt = remindOptionToMilliseconds(dueWithTime, this.selectedReminderCfgId);
+
+    await this._askToUpdateSubTaskDueDatesBeforeParentChange({
+      dueDay: null,
+      dueWithTime,
+      remindAt,
+    });
+
     this._taskService.scheduleTask(
       task,
-      newDate.getTime(),
+      dueWithTime,
       this.selectedReminderCfgId,
       false,
+      true,
     );
     // TODO if we want this, we should add it as an effect
     // const isTodayI = isToday(newDate);
@@ -403,13 +429,73 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       return;
     }
 
+    const task = this.data.task;
+
+    await this._askToUpdateSubTaskDueDatesBeforeParentChange({
+      dueDay: newDay,
+      dueWithTime: null,
+      remindAt: undefined,
+    });
+
     this._store.dispatch(
       PlannerActions.planTaskForDay({
-        task: this.data.task,
+        task,
         day: newDay,
         isShowSnack: true,
+        isSkipSubTaskDateUpdatePrompt: true,
       }),
     );
+  }
+
+  private async _askToUpdateSubTaskDueDatesBeforeParentChange(
+    changes: Pick<TaskCopy, 'dueDay' | 'dueWithTime'> &
+      Pick<Partial<TaskCopy>, 'remindAt'>,
+  ): Promise<void> {
+    const task = this.data.task;
+    if (!task?.subTaskIds.length) {
+      return;
+    }
+
+    const taskState = await firstValueFrom(this._store.select(selectTaskFeatureState));
+    const isDifferentDueDate = task.subTaskIds.some((subTaskId) => {
+      const subTask = taskState.entities[subTaskId];
+      return (
+        !!subTask &&
+        (subTask.dueDay !== changes.dueDay ||
+          subTask.dueWithTime !== changes.dueWithTime ||
+          subTask.remindAt !== changes.remindAt)
+      );
+    });
+
+    if (!isDifferentDueDate) {
+      return;
+    }
+
+    const isRemoval = !changes.dueDay && !changes.dueWithTime;
+    const isConfirm = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            message: isRemoval
+              ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.MSG
+              : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.MSG,
+            okTxt: isRemoval
+              ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.OK
+              : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.OK,
+          },
+        })
+        .afterClosed(),
+    );
+
+    if (!isConfirm) {
+      return;
+    }
+
+    const subTaskUpdates: Update<Task>[] = task.subTaskIds.map((subTaskId) => ({
+      id: subTaskId,
+      changes,
+    }));
+    this._store.dispatch(TaskSharedActions.updateTasks({ tasks: subTaskUpdates }));
   }
 
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {

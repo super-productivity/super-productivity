@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 import { TaskInternalEffects } from './task-internal.effects';
+import { MatDialog } from '@angular/material/dialog';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { setCurrentTask, toggleStart, unsetCurrentTask } from './task.actions';
 import { selectTaskFeatureState } from './task.selectors';
@@ -25,6 +26,7 @@ describe('TaskInternalEffects', () => {
   let store: MockStore;
   let mainListTaskIds$: BehaviorSubject<string[]>;
   let dateService: jasmine.SpyObj<DateService>;
+  let matDialogMock: jasmine.SpyObj<MatDialog>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -89,6 +91,8 @@ describe('TaskInternalEffects', () => {
     dateService.todayStr.and.returnValue('2026-01-05');
     dateService.getStartOfNextDayDiffMs.and.returnValue(0);
 
+    matDialogMock = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+
     const workContextServiceMock = {
       mainListTaskIds$,
     };
@@ -111,6 +115,7 @@ describe('TaskInternalEffects', () => {
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
         { provide: DateService, useValue: dateService },
+        { provide: MatDialog, useValue: matDialogMock },
       ],
     });
 
@@ -513,6 +518,236 @@ describe('TaskInternalEffects', () => {
           task: { id: 'task1', changes: { isDone: true } },
         }),
       );
+    });
+  });
+
+  describe('confirmAndUpdateSubtaskDates$', () => {
+    let dialogRefSpy: jasmine.SpyObj<any>;
+
+    beforeEach(() => {
+      dialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['afterClosed']);
+      matDialogMock.open.and.returnValue(dialogRefSpy);
+    });
+
+    it('should prompt to change subtask due dates when parent due date is changed and user confirms', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        dueDay: '2026-06-25',
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        dueDay: '2026-06-20',
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask]),
+      );
+      store.refreshState();
+
+      dialogRefSpy.afterClosed.and.returnValue(of(true));
+
+      effects.confirmAndUpdateSubtaskDates$.subscribe((action) => {
+        expect(matDialogMock.open).toHaveBeenCalledWith(jasmine.any(Function), {
+          data: {
+            message: 'F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.MSG',
+            okTxt: 'F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.OK',
+          },
+        });
+        expect(action.type).toBe(TaskSharedActions.updateTasks.type);
+        expect((action as any).tasks).toEqual([
+          {
+            id: 'sub1',
+            changes: {
+              dueDay: '2026-06-25',
+              dueWithTime: null,
+              remindAt: undefined,
+            },
+          },
+        ]);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'parent', changes: { dueDay: '2026-06-25' } },
+        }),
+      );
+    });
+
+    it('should prompt to remove subtask due dates when parent due date is removed and user confirms', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        dueDay: undefined,
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        dueDay: '2026-06-20',
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask]),
+      );
+      store.refreshState();
+
+      dialogRefSpy.afterClosed.and.returnValue(of(true));
+
+      effects.confirmAndUpdateSubtaskDates$.subscribe((action) => {
+        expect(matDialogMock.open).toHaveBeenCalledWith(jasmine.any(Function), {
+          data: {
+            message: 'F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.MSG',
+            okTxt: 'F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.OK',
+          },
+        });
+        expect(action.type).toBe(TaskSharedActions.updateTasks.type);
+        expect((action as any).tasks).toEqual([
+          {
+            id: 'sub1',
+            changes: {
+              dueDay: null,
+              dueWithTime: null,
+              remindAt: undefined,
+            },
+          },
+        ]);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'parent', changes: { dueDay: null } },
+        }),
+      );
+    });
+
+    it('should prompt to change/remove subtask deadlines when parent deadline is changed and user confirms', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        deadlineDay: '2026-06-30',
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        deadlineDay: '2026-06-20',
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask]),
+      );
+      store.refreshState();
+
+      dialogRefSpy.afterClosed.and.returnValue(of(true));
+
+      effects.confirmAndUpdateSubtaskDates$.subscribe((action) => {
+        expect(matDialogMock.open).toHaveBeenCalledWith(jasmine.any(Function), {
+          data: {
+            message: 'F.TASK.D_CONFIRM_UPDATE_SUBTASK_DEADLINE.MSG',
+            okTxt: 'F.TASK.D_CONFIRM_UPDATE_SUBTASK_DEADLINE.OK',
+          },
+        });
+        expect(action.type).toBe(TaskSharedActions.updateTasks.type);
+        expect((action as any).tasks).toEqual([
+          {
+            id: 'sub1',
+            changes: {
+              deadlineDay: '2026-06-30',
+              deadlineWithTime: null,
+              deadlineRemindAt: null,
+            },
+          },
+        ]);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.setDeadline({
+          taskId: 'parent',
+          deadlineDay: '2026-06-30',
+        }),
+      );
+    });
+
+    it('should prompt to remove subtask deadlines when parent deadline is removed and user confirms', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        deadlineDay: undefined,
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        deadlineDay: '2026-06-20',
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask]),
+      );
+      store.refreshState();
+
+      dialogRefSpy.afterClosed.and.returnValue(of(true));
+
+      effects.confirmAndUpdateSubtaskDates$.subscribe((action) => {
+        expect(matDialogMock.open).toHaveBeenCalledWith(jasmine.any(Function), {
+          data: {
+            message: 'F.TASK.D_CONFIRM_REMOVE_SUBTASK_DEADLINE.MSG',
+            okTxt: 'F.TASK.D_CONFIRM_REMOVE_SUBTASK_DEADLINE.OK',
+          },
+        });
+        expect(action.type).toBe(TaskSharedActions.updateTasks.type);
+        expect((action as any).tasks).toEqual([
+          {
+            id: 'sub1',
+            changes: {
+              deadlineDay: null,
+              deadlineWithTime: null,
+              deadlineRemindAt: null,
+            },
+          },
+        ]);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.removeDeadline({
+          taskId: 'parent',
+        }),
+      );
+    });
+
+    it('should NOT dispatch updateTasks when user denies confirmation', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        dueDay: '2026-06-25',
+      });
+      const subTask = createTask('sub1', {
+        parentId: 'parent',
+        dueDay: '2026-06-20',
+      });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask]),
+      );
+      store.refreshState();
+
+      dialogRefSpy.afterClosed.and.returnValue(of(false));
+
+      let emitted = false;
+      effects.confirmAndUpdateSubtaskDates$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'parent', changes: { dueDay: '2026-06-25' } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(matDialogMock.open).toHaveBeenCalled();
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
     });
   });
 });

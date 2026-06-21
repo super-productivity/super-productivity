@@ -9,13 +9,16 @@ import {
 } from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { select, Store } from '@ngrx/store';
-import { filter, map, mergeMap, withLatestFrom } from 'rxjs/operators';
+import { filter, map, mergeMap, withLatestFrom, concatMap } from 'rxjs/operators';
 import { selectTaskFeatureState } from './task.selectors';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { T } from '../../../t.const';
 import {
   selectConfigFeatureState,
   selectTasksConfig,
 } from '../../config/store/global-config.reducer';
-import { Task, TaskState } from '../task.model';
+import { Task, TaskCopy, TaskState } from '../task.model';
 import { EMPTY, of } from 'rxjs';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
@@ -23,6 +26,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
 } from '../../project/store/project.actions';
+import { PlannerActions } from '../../planner/store/planner.actions';
 import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
@@ -31,6 +35,7 @@ export class TaskInternalEffects {
   private _store$ = inject(Store);
   private _workContextSession = inject(WorkContextService);
   private _dateService = inject(DateService);
+  private _matDialog = inject(MatDialog);
 
   onAllSubTasksDone$ = createEffect(() =>
     this._actions$.pipe(
@@ -65,6 +70,209 @@ export class TaskInternalEffects {
           },
         }),
       ),
+    ),
+  );
+
+  confirmAndUpdateSubtaskDates$ = createEffect(() =>
+    this._actions$.pipe(
+      ofType(
+        TaskSharedActions.updateTask,
+        TaskSharedActions.updateTasks,
+        TaskSharedActions.scheduleTaskWithTime,
+        TaskSharedActions.reScheduleTaskWithTime,
+        TaskSharedActions.unscheduleTask,
+        PlannerActions.planTaskForDay,
+        TaskSharedActions.planTasksForToday,
+        TaskSharedActions.setDeadline,
+        TaskSharedActions.removeDeadline,
+      ),
+      filter(
+        (action) =>
+          !(action as { isSkipSubTaskDateUpdatePrompt?: boolean })
+            .isSkipSubTaskDateUpdatePrompt,
+      ),
+      filter((action) => {
+        if (action.type === TaskSharedActions.updateTask.type) {
+          const changes = (action as any).task.changes;
+          return (
+            'dueDay' in changes ||
+            'dueWithTime' in changes ||
+            'remindAt' in changes ||
+            'deadlineDay' in changes ||
+            'deadlineWithTime' in changes ||
+            'deadlineRemindAt' in changes
+          );
+        }
+        if (action.type === TaskSharedActions.updateTasks.type) {
+          return (action as any).tasks.some(
+            (t: any) =>
+              'dueDay' in t.changes ||
+              'dueWithTime' in t.changes ||
+              'remindAt' in t.changes ||
+              'deadlineDay' in t.changes ||
+              'deadlineWithTime' in t.changes ||
+              'deadlineRemindAt' in t.changes,
+          );
+        }
+        return true;
+      }),
+      withLatestFrom(this._store$.pipe(select(selectTaskFeatureState))),
+      map(([action, state]) => {
+        let taskIds: string[] = [];
+        if (action.type === TaskSharedActions.updateTask.type) {
+          taskIds = [(action as any).task.id];
+        } else if (action.type === TaskSharedActions.updateTasks.type) {
+          taskIds = (action as any).tasks.map((t: any) => t.id);
+        } else if (
+          action.type === TaskSharedActions.scheduleTaskWithTime.type ||
+          action.type === TaskSharedActions.reScheduleTaskWithTime.type ||
+          action.type === PlannerActions.planTaskForDay.type
+        ) {
+          taskIds = [(action as any).task.id];
+        } else if (action.type === TaskSharedActions.unscheduleTask.type) {
+          taskIds = [(action as any).id];
+        } else if (action.type === TaskSharedActions.planTasksForToday.type) {
+          taskIds = (action as any).taskIds;
+        } else if (
+          action.type === TaskSharedActions.setDeadline.type ||
+          action.type === TaskSharedActions.removeDeadline.type
+        ) {
+          taskIds = [(action as any).taskId];
+        }
+
+        const isDueDateAction =
+          (action.type === TaskSharedActions.updateTask.type &&
+            ('dueDay' in (action as any).task.changes ||
+              'dueWithTime' in (action as any).task.changes ||
+              'remindAt' in (action as any).task.changes)) ||
+          (action.type === TaskSharedActions.updateTasks.type &&
+            (action as any).tasks.some(
+              (t: any) =>
+                'dueDay' in t.changes ||
+                'dueWithTime' in t.changes ||
+                'remindAt' in t.changes,
+            )) ||
+          action.type === TaskSharedActions.scheduleTaskWithTime.type ||
+          action.type === TaskSharedActions.reScheduleTaskWithTime.type ||
+          action.type === TaskSharedActions.unscheduleTask.type ||
+          action.type === PlannerActions.planTaskForDay.type ||
+          action.type === TaskSharedActions.planTasksForToday.type;
+
+        const isDeadlineAction =
+          (action.type === TaskSharedActions.updateTask.type &&
+            ('deadlineDay' in (action as any).task.changes ||
+              'deadlineWithTime' in (action as any).task.changes ||
+              'deadlineRemindAt' in (action as any).task.changes)) ||
+          (action.type === TaskSharedActions.updateTasks.type &&
+            (action as any).tasks.some(
+              (t: any) =>
+                'deadlineDay' in t.changes ||
+                'deadlineWithTime' in t.changes ||
+                'deadlineRemindAt' in t.changes,
+            )) ||
+          action.type === TaskSharedActions.setDeadline.type ||
+          action.type === TaskSharedActions.removeDeadline.type;
+
+        const promptRequests: {
+          subTaskIds: string[];
+          message: string;
+          okTxt: string;
+          changes: Partial<TaskCopy>;
+        }[] = [];
+
+        for (const id of taskIds) {
+          const parent = state.entities[id];
+          if (parent && parent.subTaskIds && parent.subTaskIds.length > 0) {
+            if (isDueDateAction) {
+              const hasDifferentDueDate = parent.subTaskIds.some((subId) => {
+                const subtask = state.entities[subId];
+                if (!subtask) return false;
+                return (
+                  subtask.dueDay !== parent.dueDay ||
+                  subtask.dueWithTime !== parent.dueWithTime ||
+                  subtask.remindAt !== parent.remindAt
+                );
+              });
+              if (hasDifferentDueDate) {
+                const isRemoval = !parent.dueDay && !parent.dueWithTime;
+                promptRequests.push({
+                  subTaskIds: parent.subTaskIds,
+                  message: isRemoval
+                    ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.MSG
+                    : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.MSG,
+                  okTxt: isRemoval
+                    ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.OK
+                    : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.OK,
+                  changes: {
+                    dueDay: parent.dueDay || null,
+                    dueWithTime: parent.dueWithTime || null,
+                    remindAt: parent.remindAt || undefined,
+                  },
+                });
+              }
+            }
+            if (isDeadlineAction) {
+              const hasDifferentDeadline = parent.subTaskIds.some((subId) => {
+                const subtask = state.entities[subId];
+                if (!subtask) return false;
+                return (
+                  subtask.deadlineDay !== parent.deadlineDay ||
+                  subtask.deadlineWithTime !== parent.deadlineWithTime ||
+                  subtask.deadlineRemindAt !== parent.deadlineRemindAt
+                );
+              });
+              if (hasDifferentDeadline) {
+                const isRemoval = !parent.deadlineDay && !parent.deadlineWithTime;
+                promptRequests.push({
+                  subTaskIds: parent.subTaskIds,
+                  message: isRemoval
+                    ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DEADLINE.MSG
+                    : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DEADLINE.MSG,
+                  okTxt: isRemoval
+                    ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DEADLINE.OK
+                    : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DEADLINE.OK,
+                  changes: {
+                    deadlineDay: parent.deadlineDay || null,
+                    deadlineWithTime: parent.deadlineWithTime || null,
+                    deadlineRemindAt: parent.deadlineRemindAt || null,
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        return promptRequests.length > 0 ? promptRequests : null;
+      }),
+      filter((requests): requests is NonNullable<typeof requests> => requests !== null),
+      concatMap((requests) => {
+        return of(...requests).pipe(
+          concatMap((req) => {
+            return this._matDialog
+              .open(DialogConfirmComponent, {
+                data: {
+                  message: req.message,
+                  okTxt: req.okTxt,
+                },
+              })
+              .afterClosed()
+              .pipe(
+                map((isConfirm) => ({
+                  isConfirm,
+                  req,
+                })),
+              );
+          }),
+        );
+      }),
+      filter(({ isConfirm }) => !!isConfirm),
+      map(({ req }) => {
+        const updates = req.subTaskIds.map((subTaskId) => ({
+          id: subTaskId,
+          changes: req.changes,
+        }));
+        return TaskSharedActions.updateTasks({ tasks: updates });
+      }),
     ),
   );
 

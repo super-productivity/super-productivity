@@ -16,7 +16,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
-import { EMPTY, forkJoin, Subscription } from 'rxjs';
+import { EMPTY, firstValueFrom, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
   SubmitTrigger,
@@ -97,6 +97,7 @@ import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { selectTaskFeatureState } from '../store/task.selectors';
 import { environment } from '../../../../environments/environment';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -104,7 +105,10 @@ import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { MatTooltip } from '@angular/material/tooltip';
-import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
+import {
+  millisecondsDiffToRemindOption,
+  remindOptionToMilliseconds,
+} from '../util/remind-option-to-milliseconds';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -597,8 +601,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         ? millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt)
         : (this._configService.cfg()?.reminder.defaultTaskRemindOption ??
           DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!);
+      const dueWithTime = newDate.getTime();
+      const remindAt = remindOptionToMilliseconds(dueWithTime, remindCfg);
 
-      this._taskService.scheduleTask(task, newDate.getTime(), remindCfg, false);
+      if (task.subTaskIds && task.subTaskIds.length > 0) {
+        await this._askToUpdateSubTaskDueDatesBeforeParentChange({
+          dueDay: null,
+          dueWithTime,
+          remindAt,
+        });
+      }
+
+      this._taskService.scheduleTask(task, dueWithTime, remindCfg, false, true);
       this._snackService.open({
         type: 'SUCCESS',
         msg: T.F.PLANNER.S.TASK_PLANNED_FOR,
@@ -611,15 +625,75 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         },
       });
     } else {
+      if (task.subTaskIds && task.subTaskIds.length > 0) {
+        await this._askToUpdateSubTaskDueDatesBeforeParentChange({
+          dueDay: day,
+          dueWithTime: null,
+          remindAt: undefined,
+        });
+      }
+
       this._store.dispatch(
         PlannerActions.planTaskForDay({
           task: task as TaskCopy,
           day,
           isShowSnack: true,
+          isSkipSubTaskDateUpdatePrompt: true,
         }),
       );
     }
     this.focusSelfOrNextIfNotPossible();
+  }
+
+  private async _askToUpdateSubTaskDueDatesBeforeParentChange(
+    changes: Pick<TaskCopy, 'dueDay' | 'dueWithTime'> &
+      Pick<Partial<TaskCopy>, 'remindAt'>,
+  ): Promise<void> {
+    const task = this.task();
+    if (!task.subTaskIds.length) {
+      return;
+    }
+
+    const taskState = await firstValueFrom(this._store.select(selectTaskFeatureState));
+    const isDifferentDueDate = task.subTaskIds.some((subTaskId) => {
+      const subTask = taskState.entities[subTaskId];
+      return (
+        !!subTask &&
+        (subTask.dueDay !== changes.dueDay ||
+          subTask.dueWithTime !== changes.dueWithTime ||
+          subTask.remindAt !== changes.remindAt)
+      );
+    });
+
+    if (!isDifferentDueDate) {
+      return;
+    }
+
+    const isRemoval = !changes.dueDay && !changes.dueWithTime;
+    const isConfirm = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            message: isRemoval
+              ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.MSG
+              : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.MSG,
+            okTxt: isRemoval
+              ? T.F.TASK.D_CONFIRM_REMOVE_SUBTASK_DUE_DATE.OK
+              : T.F.TASK.D_CONFIRM_UPDATE_SUBTASK_DUE_DATE.OK,
+          },
+        })
+        .afterClosed(),
+    );
+
+    if (!isConfirm) {
+      return;
+    }
+
+    const subTaskUpdates: Update<TaskCopy>[] = task.subTaskIds.map((subTaskId) => ({
+      id: subTaskId,
+      changes,
+    }));
+    this._store.dispatch(TaskSharedActions.updateTasks({ tasks: subTaskUpdates }));
   }
 
   async editTaskRepeatCfg(): Promise<void> {

@@ -138,6 +138,15 @@ describe('TaskService', () => {
               entities: {
                 ['task-1']: createMockTask('task-1'),
                 ['task-2']: createMockTask('task-2'),
+                ['parent-1']: createMockTask('parent-1'),
+                ['parent-with-dates']: createMockTask('parent-with-dates', {
+                  dueDay: '2026-06-25',
+                  dueWithTime: 1771891200000,
+                  remindAt: 1771891200000,
+                  deadlineDay: '2026-06-30',
+                  deadlineWithTime: undefined,
+                  deadlineRemindAt: 1771977600000,
+                }),
               },
               currentTaskId: null,
               selectedTaskId: null,
@@ -453,6 +462,125 @@ describe('TaskService', () => {
       const id = service.addSubTaskTo('parent-1');
 
       expect(service.focusTaskById).toHaveBeenCalledWith(id, true);
+    });
+
+    it('should pass parent dates to the new subtask when isPassParentDatesToSubTasks is enabled', () => {
+      service.addSubTaskTo('parent-with-dates', { title: 'Subtask' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-with-dates',
+          task: jasmine.objectContaining({
+            dueDay: '2026-06-25',
+            dueWithTime: 1771891200000,
+            remindAt: 1771891200000,
+            deadlineDay: '2026-06-30',
+            deadlineWithTime: undefined,
+            deadlineRemindAt: 1771977600000,
+          }),
+        }),
+      );
+    });
+
+    it('should NOT pass parent dates to the new subtask when isPassParentDatesToSubTasks is disabled', () => {
+      const globalConfigService = TestBed.inject(GlobalConfigService) as any;
+      const originalCfg = globalConfigService.cfg();
+      globalConfigService.cfg.set({
+        ...originalCfg,
+        tasks: {
+          ...originalCfg.tasks,
+          isPassParentDatesToSubTasks: false,
+        },
+      });
+
+      service.addSubTaskTo('parent-with-dates', { title: 'Subtask' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-with-dates',
+          task: jasmine.objectContaining({
+            dueDay: undefined,
+            dueWithTime: undefined,
+            remindAt: undefined,
+            deadlineDay: undefined,
+            deadlineWithTime: undefined,
+            deadlineRemindAt: undefined,
+          }),
+        }),
+      );
+
+      // Restore original config
+      globalConfigService.cfg.set(originalCfg);
+    });
+
+    it('should pass parent due dates but NOT deadlines when isPassParentDeadlineToSubTasks is disabled', () => {
+      const globalConfigService = TestBed.inject(GlobalConfigService) as any;
+      const originalCfg = globalConfigService.cfg();
+      globalConfigService.cfg.set({
+        ...originalCfg,
+        tasks: {
+          ...originalCfg.tasks,
+          isPassParentDatesToSubTasks: true,
+          isPassParentDueDateToSubTasks: true,
+          isPassParentDeadlineToSubTasks: false,
+        },
+      });
+
+      service.addSubTaskTo('parent-with-dates', { title: 'Subtask' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-with-dates',
+          task: jasmine.objectContaining({
+            dueDay: '2026-06-25',
+            dueWithTime: 1771891200000,
+            remindAt: 1771891200000,
+            deadlineDay: undefined,
+            deadlineWithTime: undefined,
+            deadlineRemindAt: undefined,
+          }),
+        }),
+      );
+
+      // Restore original config
+      globalConfigService.cfg.set(originalCfg);
+    });
+
+    it('should pass parent deadlines but NOT due dates when isPassParentDueDateToSubTasks is disabled', () => {
+      const globalConfigService = TestBed.inject(GlobalConfigService) as any;
+      const originalCfg = globalConfigService.cfg();
+      globalConfigService.cfg.set({
+        ...originalCfg,
+        tasks: {
+          ...originalCfg.tasks,
+          isPassParentDatesToSubTasks: true,
+          isPassParentDueDateToSubTasks: false,
+          isPassParentDeadlineToSubTasks: true,
+        },
+      });
+
+      service.addSubTaskTo('parent-with-dates', { title: 'Subtask' });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-with-dates',
+          task: jasmine.objectContaining({
+            dueDay: undefined,
+            dueWithTime: undefined,
+            remindAt: undefined,
+            deadlineDay: '2026-06-30',
+            deadlineWithTime: undefined,
+            deadlineRemindAt: 1771977600000,
+          }),
+        }),
+      );
+
+      // Restore original config
+      globalConfigService.cfg.set(originalCfg);
     });
   });
 

@@ -73,6 +73,10 @@ $this-panel-padding-left-right: 12px;
   margin-top: var(--s4);
 }
 
+:host ::ng-deep .indented-setting {
+  margin-left: 24px;
+}
+
 :host ::ng-deep .footer {
   margin: auto;
   margin-top: var(--s2);
