@@ -52,8 +52,6 @@ export const SYNC_ERROR_CODES = {
   // Conflict errors (409)
   CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
   CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
-  /** @deprecated Use CONFLICT_SUPERSEDED. Keep for backward compat with older clients. */
-  CONFLICT_STALE: 'CONFLICT_STALE',
   DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
 
   // Rate limiting (429)
