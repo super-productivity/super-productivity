@@ -222,6 +222,14 @@
   }
 }
 
+:host-context(.sub-tasks):focus .inner-wrapper > .box {
+  @include noTouchOnly() {
+    border-color: var(--palette-primary-400) !important;
+    border-style: solid !important;
+    border-width: 1px !important;
+  }
+}
+
 :host-context(.isDarkTheme) ::ng-deep .isDone.isDone .box {
   background: var(--sub-task-c-bg-done);
 }
