@@ -109,10 +109,11 @@ bar sits just above the keyboard (no behind-keyboard regression).**
 
 ## #8508 follow-up — SDK 28 (Android 9): add-task bar sits BEHIND the keyboard
 
-**Status: confirmed-by-report, NOT yet fixed.** After 18.12.0 (patch removed) a
-user on **Android 9 / API 28** reports the global add-task bar sits _below /
-behind_ the soft keyboard. This is the realization of open item #4 above, and
-the device class it predicted.
+**Status: fix implemented (`CapacitorMainActivity.adjustWebViewForKeyboardBelowApi30`),
+PENDING ON-DEVICE VALIDATION across the matrix below.** After 18.12.0 (patch
+removed) a user on **Android 9 / API 28** reports the global add-task bar sits
+_below / behind_ the soft keyboard. This is the realization of open item #4
+above, and the device class it predicted.
 
 **Why API 28 specifically.** The bar is positioned _only_ from
 `--keyboard-height`, which `GlobalThemeService._initVisualViewportKeyboardTracking()`
@@ -143,23 +144,34 @@ reverted #8295 formula in "What NOT to do" below**. On a device that _does_
 resize, that double-counts and floats the bar mid-screen. The web layer lacks
 the signal to disambiguate; native has it unambiguously.
 
-**Correct fix (native, resize-detecting — do on a device).** In the native
-layer that already has the real geometry:
+**Implemented fix (native, resize-detecting) —
+`CapacitorMainActivity.adjustWebViewForKeyboardBelowApi30`.** In the native
+layer that already has the real geometry, driven from the existing keyboard
+`OnGlobalLayoutListener`:
 
 - height source: `getWindowVisibleDisplayFrame` (works on API 28, unlike
   `Type.ime()`), not the plugin's `imeInsets.bottom`.
 - resize detection: compare the WebView's current bottom on screen against the
   visible-frame bottom (`rect.bottom`). If the WebView already ends above the
-  keyboard (system resized / margin applied), do **nothing**. Only when the
-  WebView extends _behind_ the keyboard, lift it by exactly the overlap.
-- apply only while the IME is up; restore on hide.
+  keyboard (system resized / margin applied), `delta <= threshold` → do
+  **nothing**. Only when the WebView extends _behind_ the keyboard is it lifted
+  by exactly the overlap (via `bottomMargin`, matching the plugin), tracked so it
+  self-corrects as the keyboard height changes and restores the captured margin
+  on hide.
+- gated `Build.VERSION.SDK_INT < 30` so it is a strict no-op on every device
+  18.12.0 verified — it cannot perturb the behavior that was just fixed there.
 
-This keeps it a strict no-op on every device 18.12.0 already verified (they
-resize), and only acts on the API-28-style "edge-to-edge + no resize + no
-`Type.ime()`" class. Gate it narrowly (e.g. `Build.VERSION.SDK_INT < 30`, or
-key off "WebView bottom is behind the visible frame") so it can't perturb
-API 30+ behavior. **Must be validated across the device matrix below before
-release** — this area has silently regressed at #8295 and twice at #8508.
+**Why not the web side:** see the paragraph above — `obscured` cannot
+distinguish "window resized" from "nothing resized", so a web fallback is the
+reverted #8295 formula. Native has the unambiguous geometry.
+
+**Still REQUIRED before release:** validate across the device matrix below — this
+area has silently regressed at #8295 and twice at #8508. Confirm on a real
+API < 30 device that the bar lifts above the keyboard, and on an API >= 30
+device that nothing changed. Watch for: a one-frame settle as the inset
+converges; the plugin overwriting the margin (self-heals next layout pass); and
+that the WebView background fills the lifted area (it does — `WebHelper`
+paints it).
 
 ## What NOT to do
 

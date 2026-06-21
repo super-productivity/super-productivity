@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -45,6 +46,15 @@ class CapacitorMainActivity : BridgeActivity() {
     private var pendingShareIntent: JSONObject? = null
     private var isFrontendReady = false
     private var startupOverlayManager: StartupOverlayManager? = null
+
+    // SDK < 30 fallback for the add-task bar sitting behind the soft keyboard
+    // (#8508 follow-up, reported on Android 9 / API 28). See
+    // adjustWebViewForKeyboardBelowApi30. The pre-keyboard WebView bottom margin
+    // is captured so it can be restored exactly on hide; the applied inset is
+    // tracked separately so it self-corrects as the keyboard height changes.
+    private var isWebViewKeyboardInsetApplied = false
+    private var webViewOriginalBottomMargin = 0
+    private var appliedKeyboardInsetPx = 0
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
 
@@ -182,13 +192,13 @@ class CapacitorMainActivity : BridgeActivity() {
             val screenHeight = rootView.rootView.height
 
             val keypadHeight = screenHeight - rect.bottom
-            if (keypadHeight > screenHeight * 0.15) {
-                // keyboard is opened
-                callJSInterfaceFunctionIfExists("next", "isKeyboardShown$", "true")
-            } else {
-                // keyboard is closed
-                callJSInterfaceFunctionIfExists("next", "isKeyboardShown$", "false")
-            }
+            val isKeyboardOpen = keypadHeight > screenHeight * 0.15
+            callJSInterfaceFunctionIfExists(
+                "next",
+                "isKeyboardShown$",
+                if (isKeyboardOpen) "true" else "false"
+            )
+            adjustWebViewForKeyboardBelowApi30(rect, isKeyboardOpen)
         }
 
         // Register broadcast receiver for focus mode timer completion
@@ -435,6 +445,66 @@ class CapacitorMainActivity : BridgeActivity() {
         callJSInterfaceFunctionIfExists("next", "onResume$")
     }
 
+    /**
+     * SDK < 30 fallback for the add-task bar sitting behind the soft keyboard
+     * (#8508 follow-up, reported on Android 9 / API 28).
+     *
+     * On API < 30 under enforced edge-to-edge (targetSdk 36) the system does not
+     * resize the window for the IME and `WindowInsetsCompat.Type.ime()` is
+     * unreliable, so the edge-to-edge plugin never insets the WebView and neither
+     * the window nor the VisualViewport shrinks. `--keyboard-height` then stays 0
+     * and the `position: fixed` bar sits behind the keyboard.
+     * `getWindowVisibleDisplayFrame` (the same measurement used above for
+     * visibility) is reliable on every API level, so we lift the WebView by the
+     * exact overlap between its on-screen bottom and the visible-frame bottom
+     * (the keyboard top). Shrinking the WebView from the bottom shortens its
+     * layout viewport, so the existing CSS positions the bar above the keyboard
+     * with no web-side keyboard-height math (avoiding the reverted #8295
+     * fallback). See docs/android-edge-to-edge-keyboard.md.
+     *
+     * Resize-detecting and a strict no-op everywhere it isn't needed:
+     *  - API >= 30 (every device #8508/18.12.0 verified) is excluded entirely, so
+     *    this cannot perturb the behavior that was just fixed there.
+     *  - if the WebView already ends at/above the keyboard (system resized, or the
+     *    plugin inset it), the overlap is ~0 and nothing changes.
+     *
+     * Uses bottomMargin to match how the edge-to-edge plugin insets the WebView.
+     * On API < 30 the plugin's inset listener does not fire for the IME (that is
+     * the root cause), so capturing and restoring the pre-keyboard margin here
+     * does not fight it; if it ever does overwrite the margin, the next layout
+     * pass re-detects the overlap and re-applies.
+     */
+    private fun adjustWebViewForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
+        if (android.os.Build.VERSION.SDK_INT >= 30) return
+        val webView = bridge?.webView ?: return
+        val params = webView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+
+        if (isKeyboardOpen) {
+            val loc = IntArray(2)
+            webView.getLocationOnScreen(loc)
+            // Positive delta => the WebView still extends below the keyboard top.
+            val delta = (loc[1] + webView.height) - rect.bottom
+            if (!isWebViewKeyboardInsetApplied) {
+                // Nothing to do until the WebView actually sits behind the keyboard
+                // (i.e. the system/plugin did not already handle the IME).
+                if (delta <= KEYBOARD_INSET_THRESHOLD_PX) return
+                webViewOriginalBottomMargin = params.bottomMargin
+                appliedKeyboardInsetPx = 0
+                isWebViewKeyboardInsetApplied = true
+            }
+            if (kotlin.math.abs(delta) > KEYBOARD_INSET_THRESHOLD_PX) {
+                appliedKeyboardInsetPx = (appliedKeyboardInsetPx + delta).coerceAtLeast(0)
+                params.bottomMargin = webViewOriginalBottomMargin + appliedKeyboardInsetPx
+                webView.layoutParams = params
+            }
+        } else if (isWebViewKeyboardInsetApplied) {
+            params.bottomMargin = webViewOriginalBottomMargin
+            webView.layoutParams = params
+            isWebViewKeyboardInsetApplied = false
+            appliedKeyboardInsetPx = 0
+        }
+    }
+
     private fun callJSInterfaceFunctionIfExists(
         fnName: String,
         objectPath: String,
@@ -470,5 +540,9 @@ class CapacitorMainActivity : BridgeActivity() {
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
+
+        // Dead-band (px) for the SDK < 30 keyboard inset so it settles in a
+        // couple of layout passes instead of jittering on sub-pixel overlap.
+        private const val KEYBOARD_INSET_THRESHOLD_PX = 16
     }
 }
