@@ -5,6 +5,7 @@ import {
   BrowserWindowConstructorOptions,
   ipcMain,
   Menu,
+  MenuItem,
   MenuItemConstructorOptions,
   nativeTheme,
   shell,
@@ -382,6 +383,33 @@ export const createWindow = async ({
     if (input.type === 'keyDown' && input.key === 'F11') {
       event.preventDefault();
       mainWin.setFullScreen(!mainWin.isFullScreen());
+    }
+  });
+
+  // Enable right-click context menu (Cut, Copy, Paste, Select All)
+  mainWin.webContents.on('context-menu', (_event, params) => {
+    const { editFlags, selectionText } = params;
+    const menu = new Menu();
+
+    if (editFlags.canCut) {
+      menu.append(new MenuItem({ label: 'Cut', role: 'cut' }));
+    }
+
+    if (selectionText && selectionText.trim() !== '') {
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy' }));
+    }
+
+    if (editFlags.canPaste) {
+      menu.append(new MenuItem({ label: 'Paste', role: 'paste' }));
+    }
+
+    if (editFlags.canSelectAll) {
+      menu.append(new MenuItem({ type: 'separator' }));
+      menu.append(new MenuItem({ label: 'Select All', role: 'selectAll' }));
+    }
+
+    if (menu.items.length > 0) {
+      menu.popup({ window: mainWin });
     }
   });
 

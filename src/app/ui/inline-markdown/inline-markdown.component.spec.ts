@@ -614,6 +614,90 @@ describe('InlineMarkdownComponent', () => {
       expect(component['_toggleShowEdit']).toHaveBeenCalled();
       expect(component.changed.emit).not.toHaveBeenCalled();
     });
+
+    it('should NOT enter edit mode if selection exists on click', () => {
+      // Arrange
+      component.model = 'Some regular text';
+      fixture.detectChanges();
+
+      const paragraph = document.createElement('p');
+      paragraph.textContent = 'Some regular text';
+      mockPreviewEl.element.nativeElement.appendChild(paragraph);
+
+      spyOn<any>(component, '_toggleShowEdit');
+      spyOn(window, 'getSelection').and.returnValue({
+        toString: () => 'Some',
+      } as any);
+
+      // Act
+      const mockEvent = {
+        target: paragraph,
+        clientX: 10,
+        clientY: 10,
+      } as unknown as MouseEvent;
+      component.clickPreview(mockEvent);
+
+      // Assert
+      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
+    });
+
+    it('should NOT enter edit mode if it was a drag (drag distance > 5)', () => {
+      // Arrange
+      component.model = 'Some regular text';
+      fixture.detectChanges();
+
+      const paragraph = document.createElement('p');
+      paragraph.textContent = 'Some regular text';
+      mockPreviewEl.element.nativeElement.appendChild(paragraph);
+
+      spyOn<any>(component, '_toggleShowEdit');
+      spyOn(window, 'getSelection').and.returnValue({
+        toString: () => '',
+      } as any);
+
+      // Act - simulate mousedown then click-drag
+      component.previewMousedown({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+
+      const mockEvent = {
+        target: paragraph,
+        clientX: 20,
+        clientY: 20,
+      } as unknown as MouseEvent;
+      component.clickPreview(mockEvent);
+
+      // Assert
+      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
+    });
+
+    it('should NOT enter edit mode if there was an active selection on mousedown', () => {
+      // Arrange
+      component.model = 'Some regular text';
+      fixture.detectChanges();
+
+      const paragraph = document.createElement('p');
+      paragraph.textContent = 'Some regular text';
+      mockPreviewEl.element.nativeElement.appendChild(paragraph);
+
+      spyOn<any>(component, '_toggleShowEdit');
+      const getSelectionSpy = spyOn(window, 'getSelection');
+
+      // Selection exists on mousedown, but is cleared on mouseup/click
+      getSelectionSpy.and.returnValue({ toString: () => 'Some' } as any);
+      component.previewMousedown({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+
+      getSelectionSpy.and.returnValue({ toString: () => '' } as any);
+
+      // Act
+      const mockEvent = {
+        target: paragraph,
+        clientX: 10,
+        clientY: 10,
+      } as unknown as MouseEvent;
+      component.clickPreview(mockEvent);
+
+      // Assert
+      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
+    });
   });
 
   describe('toggleChecklistMode', () => {

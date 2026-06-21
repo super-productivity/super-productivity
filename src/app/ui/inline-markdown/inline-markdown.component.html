@@ -25,6 +25,7 @@
   @if (!isTurnOffMarkdownParsing()) {
     <markdown
       #previewEl
+      (mousedown)="previewMousedown($event)"
       (click)="clickPreview($event)"
       [data]="resolvedMarkdownData"
       [class.preview-while-editing]="isShowEdit()"

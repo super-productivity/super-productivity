@@ -48,6 +48,13 @@
   cursor: text;
 }
 
+:host ::ng-deep .markdown-parsed,
+:host ::ng-deep .markdown-parsed * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
 .markdown-unparsed {
   white-space: pre-wrap;
 }
