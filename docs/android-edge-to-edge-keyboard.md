@@ -107,6 +107,60 @@ bar sits just above the keyboard (no behind-keyboard regression).**
    On the web side, `chrome://inspect` →
    `{innerH: innerHeight, vvH: visualViewport.height, kb: getComputedStyle(document.documentElement).getPropertyValue('--keyboard-height')}`.
 
+## #8508 follow-up — SDK 28 (Android 9): add-task bar sits BEHIND the keyboard
+
+**Status: confirmed-by-report, NOT yet fixed.** After 18.12.0 (patch removed) a
+user on **Android 9 / API 28** reports the global add-task bar sits _below /
+behind_ the soft keyboard. This is the realization of open item #4 above, and
+the device class it predicted.
+
+**Why API 28 specifically.** The bar is positioned _only_ from
+`--keyboard-height`, which `GlobalThemeService._initVisualViewportKeyboardTracking()`
+derives from `obscured = window.innerHeight - visualViewport.height`. It is
+correct iff **either** the window resized for the IME **or** the VisualViewport
+shrank. On API 28 _neither_ does:
+
+1. `targetSdk 36` + the `@capawesome` edge-to-edge plugin call
+   `setDecorFitsSystemWindows(window, false)` on **all** API levels → the window
+   goes edge-to-edge → the system stops resizing for the IME.
+2. With the patch gone the plugin sets WebView `bottomMargin = 0` while the
+   keyboard is up, _relying on the system resizing_. But `WindowInsetsCompat.Type.ime()`
+   is unreliable below **API 30**, so on API 28 the plugin neither detects the
+   IME nor insets the WebView.
+3. The old WebView's VisualViewport doesn't report the obscured area either →
+   `obscured ≈ 0` → `--keyboard-height = 0` → the `position: fixed` bar sits
+   behind the keyboard.
+
+**Do NOT "fix" this on the web side.** It is tempting to feed `--keyboard-height`
+from a native height fallback (the activity already measures the IME on every
+layout pass — `CapacitorMainActivity` `OnGlobalLayoutListener`:
+`keypadHeight = screenHeight - rect.bottom`, reliable on every API level). The
+trap: `obscured` is `≈0` in **both** the working case (window resized 732→141)
+and this broken case (nothing resized), so the web side cannot tell them apart
+without tracking a baseline `innerHeight` and computing
+`max(obscured, nativeKbHeight - layoutShrink)` — which is **precisely the
+reverted #8295 formula in "What NOT to do" below**. On a device that _does_
+resize, that double-counts and floats the bar mid-screen. The web layer lacks
+the signal to disambiguate; native has it unambiguously.
+
+**Correct fix (native, resize-detecting — do on a device).** In the native
+layer that already has the real geometry:
+
+- height source: `getWindowVisibleDisplayFrame` (works on API 28, unlike
+  `Type.ime()`), not the plugin's `imeInsets.bottom`.
+- resize detection: compare the WebView's current bottom on screen against the
+  visible-frame bottom (`rect.bottom`). If the WebView already ends above the
+  keyboard (system resized / margin applied), do **nothing**. Only when the
+  WebView extends _behind_ the keyboard, lift it by exactly the overlap.
+- apply only while the IME is up; restore on hide.
+
+This keeps it a strict no-op on every device 18.12.0 already verified (they
+resize), and only acts on the API-28-style "edge-to-edge + no resize + no
+`Type.ime()`" class. Gate it narrowly (e.g. `Build.VERSION.SDK_INT < 30`, or
+key off "WebView bottom is behind the visible frame") so it can't perturb
+API 30+ behavior. **Must be validated across the device matrix below before
+release** — this area has silently regressed at #8295 and twice at #8508.
+
 ## What NOT to do
 
 Do not stack a second/third keyboard-height source on top of the VisualViewport
