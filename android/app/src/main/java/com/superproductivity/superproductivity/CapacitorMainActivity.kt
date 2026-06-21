@@ -198,7 +198,7 @@ class CapacitorMainActivity : BridgeActivity() {
                 "isKeyboardShown$",
                 if (isKeyboardOpen) "true" else "false"
             )
-            adjustWebViewForKeyboardBelowApi30(rect, isKeyboardOpen)
+            adjustWebViewForKeyboardBelowApi30(rect, keypadHeight, isKeyboardOpen)
         }
 
         // Register broadcast receiver for focus mode timer completion
@@ -474,34 +474,57 @@ class CapacitorMainActivity : BridgeActivity() {
      * does not fight it; if it ever does overwrite the margin, the next layout
      * pass re-detects the overlap and re-applies.
      */
-    private fun adjustWebViewForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
+    private fun adjustWebViewForKeyboardBelowApi30(
+        rect: Rect,
+        keypadHeight: Int,
+        isKeyboardOpen: Boolean
+    ) {
         if (android.os.Build.VERSION.SDK_INT >= 30) return
         val webView = bridge?.webView ?: return
         val params = webView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
 
-        if (isKeyboardOpen) {
-            val loc = IntArray(2)
-            webView.getLocationOnScreen(loc)
-            // Positive delta => the WebView still extends below the keyboard top.
-            val delta = (loc[1] + webView.height) - rect.bottom
-            if (!isWebViewKeyboardInsetApplied) {
-                // Nothing to do until the WebView actually sits behind the keyboard
-                // (i.e. the system/plugin did not already handle the IME).
-                if (delta <= KEYBOARD_INSET_THRESHOLD_PX) return
-                webViewOriginalBottomMargin = params.bottomMargin
+        if (!isKeyboardOpen) {
+            if (isWebViewKeyboardInsetApplied) {
+                if (params.bottomMargin != webViewOriginalBottomMargin) {
+                    params.bottomMargin = webViewOriginalBottomMargin
+                    webView.layoutParams = params
+                }
+                isWebViewKeyboardInsetApplied = false
                 appliedKeyboardInsetPx = 0
-                isWebViewKeyboardInsetApplied = true
             }
-            if (kotlin.math.abs(delta) > KEYBOARD_INSET_THRESHOLD_PX) {
-                appliedKeyboardInsetPx = (appliedKeyboardInsetPx + delta).coerceAtLeast(0)
-                params.bottomMargin = webViewOriginalBottomMargin + appliedKeyboardInsetPx
+            return
+        }
+
+        // Keyboard is open. Ignore stale/pre-layout geometry so an already-applied
+        // inset is not yanked to 0 for a frame on a transient zero-height pass.
+        if (webView.height == 0) return
+
+        val loc = IntArray(2)
+        webView.getLocationOnScreen(loc)
+        // Positive delta => the WebView still extends below the keyboard top.
+        val delta = (loc[1] + webView.height) - rect.bottom
+        val thresholdPx = (KEYBOARD_INSET_THRESHOLD_DP * resources.displayMetrics.density).toInt()
+
+        if (!isWebViewKeyboardInsetApplied) {
+            // Nothing to do until the WebView actually sits behind the keyboard
+            // (i.e. the system/plugin did not already handle the IME).
+            if (delta <= thresholdPx) return
+            webViewOriginalBottomMargin = params.bottomMargin
+            appliedKeyboardInsetPx = 0
+            isWebViewKeyboardInsetApplied = true
+        }
+        if (kotlin.math.abs(delta) > thresholdPx) {
+            // The lift never needs to exceed the keyboard height; clamping bounds
+            // the feedback loop even if the WebView height does not shrink by the
+            // margin (e.g. the edge-to-edge plugin rewriting it on the same pass).
+            appliedKeyboardInsetPx = (appliedKeyboardInsetPx + delta).coerceIn(0, keypadHeight)
+            val newBottomMargin = webViewOriginalBottomMargin + appliedKeyboardInsetPx
+            // Skip redundant writes so a non-responsive height can't drive an
+            // endless requestLayout loop, and to avoid needless relayout churn.
+            if (newBottomMargin != params.bottomMargin) {
+                params.bottomMargin = newBottomMargin
                 webView.layoutParams = params
             }
-        } else if (isWebViewKeyboardInsetApplied) {
-            params.bottomMargin = webViewOriginalBottomMargin
-            webView.layoutParams = params
-            isWebViewKeyboardInsetApplied = false
-            appliedKeyboardInsetPx = 0
         }
     }
 
@@ -541,8 +564,9 @@ class CapacitorMainActivity : BridgeActivity() {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
 
-        // Dead-band (px) for the SDK < 30 keyboard inset so it settles in a
+        // Dead-band (dp) for the SDK < 30 keyboard inset so it settles in a
         // couple of layout passes instead of jittering on sub-pixel overlap.
-        private const val KEYBOARD_INSET_THRESHOLD_PX = 16
+        // dp (not px) keeps the band visually constant across densities.
+        private const val KEYBOARD_INSET_THRESHOLD_DP = 8
     }
 }
