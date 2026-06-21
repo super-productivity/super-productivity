@@ -120,7 +120,6 @@ export interface OpDownloadResponseBase {
   ops: ServerSyncOperation[];
   hasMore: boolean;
   latestSeq: number;
-  latestSnapshotSeq?: number;
   gapDetected?: boolean;
   snapshotVectorClock?: VectorClock;
   serverTime?: number;

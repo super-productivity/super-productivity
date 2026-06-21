@@ -133,19 +133,4 @@ describe('SuperSync HTTP contract schemas', () => {
       }),
     ).toThrow();
   });
-
-  it('validates download responses with latestSnapshotSeq and preserves future fields', () => {
-    const parsed = SuperSyncDownloadOpsResponseSchema.parse({
-      ops: [],
-      hasMore: false,
-      latestSeq: 20,
-      latestSnapshotSeq: 10,
-      snapshotVectorClock: { client_1: 10 },
-      serverTime: 1234567890,
-      futureServerField: 'kept',
-    });
-
-    expect(parsed.latestSnapshotSeq).toBe(10);
-    expect((parsed as { futureServerField?: string }).futureServerField).toBe('kept');
-  });
 });

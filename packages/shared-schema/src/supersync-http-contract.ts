@@ -137,7 +137,6 @@ export const SuperSyncDownloadOpsResponseSchema = z
     hasMore: z.boolean(),
     latestSeq: z.number(),
     gapDetected: z.boolean().optional(),
-    latestSnapshotSeq: z.number().optional(),
     snapshotVectorClock: SuperSyncVectorClockSchema.optional(),
     serverTime: z.number().optional(),
   })

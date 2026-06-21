@@ -47,7 +47,7 @@ export interface DownloadResultBase {
   allOpClocks?: VectorClock[];
   /**
    * Aggregated vector clock from all ops before and including the snapshot.
-   * Only set when snapshot optimization is used (sinceSeq < latestSnapshotSeq).
+   * Only set when snapshot optimization is used.
    * Clients need this to create merged updates that dominate all known clocks.
    */
   snapshotVectorClock?: VectorClock;

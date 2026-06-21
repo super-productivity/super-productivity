@@ -123,7 +123,6 @@ describe('Snapshot Skip Optimization Integration', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json() as DownloadOpsResponse;
-      expect(body.latestSnapshotSeq).toBe(syncImportSeq);
       expect(body.latestSeq).toBe(11);
       expect(body.ops.length).toBe(2);
     });
@@ -200,7 +199,6 @@ describe('Snapshot Skip Optimization Integration', () => {
       expect(body.ops.length).toBe(2);
       expect(body.ops[0].serverSeq).toBe(100);
       expect(body.ops[0].op.opType).toBe('SYNC_IMPORT');
-      expect(body.latestSnapshotSeq).toBe(100);
     });
 
     it('should NOT skip ops when sinceSeq is after SYNC_IMPORT', async () => {
@@ -256,7 +254,6 @@ describe('Snapshot Skip Optimization Integration', () => {
       // Should return ops after sinceSeq=50
       expect(body.ops.length).toBe(1);
       expect(body.ops[0].serverSeq).toBe(51);
-      expect(body.latestSnapshotSeq).toBe(10);
     });
 
     it('should not include latestSnapshotSeq when no full-state ops exist', async () => {
@@ -300,8 +297,6 @@ describe('Snapshot Skip Optimization Integration', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json() as DownloadOpsResponse;
 
-      // latestSnapshotSeq should be undefined/not present
-      expect(body.latestSnapshotSeq).toBeUndefined();
       expect(body.ops.length).toBe(1);
     });
 
@@ -359,7 +354,6 @@ describe('Snapshot Skip Optimization Integration', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json() as DownloadOpsResponse;
 
-      expect(body.latestSnapshotSeq).toBe(50);
       expect(body.ops.length).toBe(1);
       expect(body.ops[0].serverSeq).toBe(50);
     });

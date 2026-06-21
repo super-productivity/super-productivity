@@ -97,12 +97,11 @@ describe('response-validators', () => {
         hasMore: true,
         latestSeq: 150,
         gapDetected: false,
-        latestSnapshotSeq: 120,
         snapshotVectorClock: { client1: 10 },
         serverTime: 1234567890,
       };
       const validated = validateOpDownloadResponse(response);
-      expect(validated.latestSnapshotSeq).toBe(120);
+      expect(validated.gapDetected).toBe(false);
     });
 
     it('should strip file-based snapshotState from passthrough fields', () => {

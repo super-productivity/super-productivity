@@ -322,14 +322,8 @@ export interface DownloadOpsResponse {
    */
   gapDetected?: boolean;
   /**
-   * Server sequence of the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
-   * Fresh clients (sinceSeq=0) can use this to understand where the effective state starts.
-   * Operations before this seq are superseded by the full-state operation.
-   */
-  latestSnapshotSeq?: number;
-  /**
    * Aggregated vector clock from all ops before and including the snapshot.
-   * Only set when snapshot optimization is used (sinceSeq < latestSnapshotSeq).
+   * Only set when snapshot optimization is used.
    * Clients need this to create merged updates that dominate all known clocks.
    */
   snapshotVectorClock?: VectorClock;
