@@ -62,7 +62,7 @@ describe('Snapshot Skip Optimization Integration', () => {
   });
 
   describe('GET /api/sync/ops', () => {
-    it('should include latestSnapshotSeq in response when SYNC_IMPORT exists', async () => {
+    it('should perform snapshot optimization when SYNC_IMPORT exists', async () => {
       const syncImportSeq = 10;
 
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
@@ -256,7 +256,7 @@ describe('Snapshot Skip Optimization Integration', () => {
       expect(body.ops[0].serverSeq).toBe(51);
     });
 
-    it('should not include latestSnapshotSeq when no full-state ops exist', async () => {
+    it('should return ops directly when no full-state ops exist', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {
           operation: {
