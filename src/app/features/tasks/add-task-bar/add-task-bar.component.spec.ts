@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
@@ -271,6 +271,7 @@ describe('AddTaskBarComponent', () => {
           ADD_TASK_BAR: {
             PLACEHOLDER_SEARCH: 'Search tasks...',
             PLACEHOLDER_CREATE: 'Add task...',
+            SUCCESS_ADDED: 'Task "{{taskTitle}}" successfully added.',
             TOOLTIP_ADD_TASK: 'Add task',
             TOOLTIP_ADD_TO_TOP: 'Add to top',
             TOOLTIP_ADD_TO_BOTTOM: 'Add to bottom',
@@ -458,6 +459,56 @@ describe('AddTaskBarComponent', () => {
         .args[2] as Partial<TaskCopy>;
       expect(taskData.notes).toBeUndefined();
     });
+  });
+
+  describe('success placeholder feedback', () => {
+    it('should show a temporary success placeholder after adding a task', fakeAsync(async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      await component.addTask();
+
+      expect(component.successPlaceholderMsg()).toBe(
+        'Task "Buy milk" successfully added.',
+      );
+      expect(component.inputPlaceholder()).toBe('Task "Buy milk" successfully added.');
+
+      tick(1500);
+
+      expect(component.successPlaceholderMsg()).toBeNull();
+      expect(component.inputPlaceholder()).toBe('Add task...');
+    }));
+
+    it('should truncate long task titles in the success placeholder', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const longTitle = 'A'.repeat(50);
+
+      component.stateService.updateInputTxt(longTitle);
+      component.stateService.updateCleanText(longTitle);
+      await component.addTask();
+
+      expect(component.successPlaceholderMsg()).toBe(
+        `Task "${'A'.repeat(35)}…" successfully added.`,
+      );
+    });
+
+    it('should clear the success placeholder when the user starts typing', fakeAsync(async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      await component.addTask();
+
+      expect(component.successPlaceholderMsg()).not.toBeNull();
+
+      component.onInputChange({ target: { value: 'Next task' } } as unknown as Event);
+      fixture.detectChanges();
+
+      expect(component.successPlaceholderMsg()).toBeNull();
+
+      tick(1500);
+    }));
   });
 
   describe('note panel', () => {

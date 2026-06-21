@@ -136,6 +136,7 @@ export class QuickAddTaskSubmitService {
           : null,
         todayStr: this._dateService.todayStr(),
         dateTimeLocale: this._dateTimeFormatService.currentLocale(),
+        lng: this._globalConfigService.cfg()?.localization?.lng ?? 'en',
         folderPaths: {
           projects: _mapToRecord(this._menuTreeService.projectFolderMap()),
           tags: _mapToRecord(this._menuTreeService.tagFolderMap()),

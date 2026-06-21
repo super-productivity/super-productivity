@@ -233,6 +233,7 @@ test('quick-add window uses compact transparent bounds and the minimal preload',
 
   const quickAddWin = createdWindows[0];
   assert.equal(quickAddWin.options.transparent, true);
+  assert.equal(quickAddWin.options.hasShadow, false);
   assert.equal(quickAddWin.options.webPreferences.devTools, false);
   assert.equal(
     path.basename(quickAddWin.options.webPreferences.preload),

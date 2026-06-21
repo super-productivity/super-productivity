@@ -40,6 +40,7 @@ export interface QuickAddHudSnapshot {
   activeWorkContext: QuickAddHudWorkContext | null;
   todayStr: string;
   dateTimeLocale: string;
+  lng: string;
   folderPaths: {
     projects: Record<string, string>;
     tags: Record<string, string>;

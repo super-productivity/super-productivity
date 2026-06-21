@@ -1668,6 +1668,7 @@
       "ADD_TASK_BAR": {
         "ADDED": "Added",
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
+        "SUCCESS_ADDED": "Task \"{{taskTitle}}\" successfully added.",
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",

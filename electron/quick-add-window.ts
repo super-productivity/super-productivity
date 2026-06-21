@@ -195,6 +195,7 @@ const createQuickAddWindow = (): void => {
     title: 'Super Productivity Quick Add',
     frame: false,
     transparent: true,
+    hasShadow: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,

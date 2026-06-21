@@ -125,6 +125,19 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedSuggestion$ = new BehaviorSubject<AddTaskSuggestion | null>(null);
   isMentionListShown = signal(false);
   isScheduleDialogOpen = signal(false);
+  successPlaceholderMsg = signal<string | null>(null);
+
+  inputPlaceholder = computed(() => {
+    const successMsg = this.successPlaceholderMsg();
+    if (successMsg) {
+      return successMsg;
+    }
+    return this.isSearchMode()
+      ? this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH)
+      : this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE);
+  });
+
+  private _successPlaceholderTimeout: number | undefined;
 
   // Computed signals for projects and tags
   projects = this._dataFacade.projects;
@@ -269,6 +282,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   ngOnDestroy(): void {
     window.clearTimeout(this._focusTimeout);
     window.clearTimeout(this._autocompleteTimeout);
+    window.clearTimeout(this._successPlaceholderTimeout);
     document.body.classList.remove(BodyClass.isAddTaskBarOpen);
   }
 
@@ -436,6 +450,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       );
 
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
+      this._showSuccessPlaceholder(title);
       this._resetAfterAdd();
     } finally {
       this._isAddingTask = false;
@@ -485,6 +500,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     const value = target.value;
     this.stateService.updateInputTxt(value);
+    if (value && this.successPlaceholderMsg()) {
+      this._clearSuccessPlaceholder();
+    }
   }
 
   onPaste(event: ClipboardEvent): void {
@@ -620,6 +638,27 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     // Reset parser state but don't reset project/date/estimate
     this._parserService.resetPreviousResult();
+  }
+
+  private _showSuccessPlaceholder(taskTitle: string): void {
+    const MAX_TITLE_LENGTH = 35;
+    const trimmedTitle =
+      taskTitle.length > MAX_TITLE_LENGTH
+        ? taskTitle.slice(0, MAX_TITLE_LENGTH) + '…'
+        : taskTitle;
+    const msg = this._translateService.instant(T.F.TASK.ADD_TASK_BAR.SUCCESS_ADDED, {
+      taskTitle: trimmedTitle,
+    });
+    this.successPlaceholderMsg.set(msg);
+    window.clearTimeout(this._successPlaceholderTimeout);
+    this._successPlaceholderTimeout = window.setTimeout(() => {
+      this.successPlaceholderMsg.set(null);
+    }, 1500);
+  }
+
+  private _clearSuccessPlaceholder(): void {
+    window.clearTimeout(this._successPlaceholderTimeout);
+    this.successPlaceholderMsg.set(null);
   }
 
   private _getDefaultTagIdsForWorkContext(

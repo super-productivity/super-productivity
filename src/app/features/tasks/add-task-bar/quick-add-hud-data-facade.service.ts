@@ -1,5 +1,6 @@
-import { computed, Injectable, WritableSignal, signal } from '@angular/core';
+import { computed, Injectable, WritableSignal, signal, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
+import { TranslateService } from '@ngx-translate/core';
 import type { Project } from '../../project/project.model';
 import type { Tag } from '../../tag/tag.model';
 import type { WorkContext } from '../../work-context/work-context.model';
@@ -64,6 +65,7 @@ export class QuickAddHudDataFacadeService implements AddTaskBarDataFacade {
   private readonly _bodyClasses = new Set<string>();
   private readonly _htmlCssVars = new Map<string, string>();
   private readonly _bodyCssVars = new Map<string, string>();
+  private readonly _translateService = inject(TranslateService);
 
   readonly projects = computed<Project[]>(() =>
     (this._snapshot()?.projects ?? []).map(_toProject),
@@ -172,6 +174,7 @@ export class QuickAddHudDataFacadeService implements AddTaskBarDataFacade {
     }
     const snapshot = result.snapshot;
     this._snapshot.set(snapshot);
+    void this._translateService.use(snapshot.lng);
     this._activeWorkContext$.next(_toWorkContext(snapshot.activeWorkContext));
     this._tasksConfig$.next({
       ...EMPTY_TASKS_CONFIG,
