@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Action, ActionReducer } from '@ngrx/store';
+import { Action, ActionReducer, Store } from '@ngrx/store';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Observable, of } from 'rxjs';
 import { bulkOperationsMetaReducer } from '../../apply/bulk-hydration.meta-reducer';
@@ -128,6 +128,7 @@ describe('done task operation replay', () => {
       'SuperSyncStatusService',
       ['updatePendingOpsStatus'],
     );
+    const mockStore = jasmine.createSpyObj<Store>('Store', ['dispatch']);
 
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
       fn(),
@@ -155,6 +156,7 @@ describe('done task operation replay', () => {
         { provide: ClientIdService, useValue: mockClientIdService },
         { provide: OperationCaptureService, useValue: mockOperationCaptureService },
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
+        { provide: Store, useValue: mockStore },
       ],
     });
 

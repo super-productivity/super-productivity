@@ -23,6 +23,7 @@ import {
   moveProjectTaskToBacklogList,
   moveProjectTaskToBacklogListAuto,
 } from '../../project/store/project.actions';
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
 import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
@@ -35,6 +36,7 @@ export class TaskInternalEffects {
   onAllSubTasksDone$ = createEffect(() =>
     this._actions$.pipe(
       ofType(TaskSharedActions.updateTask),
+      filterNonCompensatingAction(),
       withLatestFrom(
         this._store$.pipe(select(selectTasksConfig)),
         this._store$.pipe(select(selectTaskFeatureState)),
@@ -71,6 +73,7 @@ export class TaskInternalEffects {
   setDefaultEstimateIfNonGiven$ = createEffect(() =>
     this._actions$.pipe(
       ofType(TaskSharedActions.addTask, addSubTask),
+      filterNonCompensatingAction(),
       filter(({ task }) => !task.timeEstimate),
       withLatestFrom(this._store$.pipe(select(selectConfigFeatureState))),
       map(([action, cfg]) => ({
@@ -139,6 +142,7 @@ export class TaskInternalEffects {
         moveProjectTaskToBacklogList.type,
         moveProjectTaskToBacklogListAuto.type,
       ),
+      filterNonCompensatingAction(),
       withLatestFrom(
         this._store$.pipe(select(selectConfigFeatureState)),
         this._store$.pipe(select(selectTaskFeatureState)),

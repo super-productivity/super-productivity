@@ -17,6 +17,7 @@ import {
 import { androidInterface } from '../../android/android-interface';
 import { generateNotificationId } from '../../android/android-notification-id.util';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
 import { TaskLog } from '../../../core/log';
 
 @Injectable()
@@ -86,6 +87,7 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.updateTask),
+        filterNonCompensatingAction(),
         filter(({ task }) => !!task.changes.isDone),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         tap((task) => {

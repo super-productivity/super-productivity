@@ -12,8 +12,7 @@ export interface SnackParams {
   svgIco?: string;
   actionStr?: string;
   actionId?: string;
-  // eslint-disable-next-line
-  actionFn?: Function;
+  actionFn?: (() => void) | null;
   actionPayload?: unknown;
   config?: MatSnackBarConfig;
   isSpinner?: boolean;

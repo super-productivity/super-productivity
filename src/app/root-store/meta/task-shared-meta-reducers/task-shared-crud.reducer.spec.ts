@@ -1897,6 +1897,27 @@ describe('taskSharedCrudMetaReducer', () => {
       expect(resultState.planner.days[newDay]).toContain('task1');
     });
 
+    it('should delete requested fields instead of leaving them as undefined', () => {
+      const day = '2099-12-20';
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = day;
+      (testState as any).planner = {
+        days: { [day]: ['task1'] },
+        addPlannedTasksDialogLastShown: undefined,
+      };
+
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task1', changes: { title: 'Updated title' } },
+        deleteFieldKeys: ['dueDay'],
+      });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      const updatedTask = resultState[TASK_FEATURE_NAME].entities['task1'] as Task;
+      expect(Object.prototype.hasOwnProperty.call(updatedTask, 'dueDay')).toBe(false);
+      expect(resultState.planner.days[day] || []).not.toContain('task1');
+    });
+
     it('should not update planner when dueDay does not change', () => {
       const day = '2099-12-20';
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);

@@ -31,6 +31,14 @@ import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
+import { DateService } from '../../core/date/date.service';
+import { Store } from '@ngrx/store';
+import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
+import {
+  clearUndoPayloadForAction,
+  getUndoPayloadForAction,
+} from '../../root-store/meta/undo-operation-payload.meta-reducer';
+import { CompensatingOperationsRegistry } from '../../root-store/undo-redo/compensating-operations-registry.service';
 
 interface WriteOperationOptions {
   callerHoldsOperationLogLock?: boolean;
@@ -79,6 +87,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private operationCaptureService = inject(OperationCaptureService);
   private immediateUploadService = inject(ImmediateUploadService);
   private superSyncStatusService = inject(SuperSyncStatusService);
+  private dateService = inject(DateService);
+  private store = inject(Store);
+  private compensatingOperationsRegistry = inject(CompensatingOperationsRegistry);
 
   /**
    * Effect that persists local user actions to the operation log.
@@ -159,8 +170,6 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     isDeferredWrite = false,
     options: WriteOperationOptions = {},
   ): Promise<void> {
-    const operationTimestamp = Date.now();
-
     // Validate that at least one entity identifier exists for non-bulk operations
     // Bulk operations with entityType 'ALL' don't need specific entity IDs
     // This catches programming errors early - all persistent actions must have entity identifiers
@@ -229,6 +238,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           ? []
           : this.operationCaptureService.extractEntityChanges(action);
 
+        const operationTimestamp = Date.now();
+        const undoPayload = getUndoPayloadForAction(action);
         const actionPayload = this.addReplayDateFieldsToActionPayload(
           action,
           rawActionPayload,
@@ -309,6 +320,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // reducing disk I/O by ~50% on mobile devices.
         // The op.vectorClock already contains the incremented clock (from newClock above).
         await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        // Keep undo payloads until persistence succeeds, so retry paths can rebuild
+        // the same operation payload after quota/lock/transient write failures.
+        clearUndoPayloadForAction(action);
 
         // Mark that we have pending ops (not yet uploaded) for UI indicator
         this.superSyncStatusService.updatePendingOpsStatus(true);
@@ -316,13 +330,36 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // Track write count for high-volume debugging
         this.writeCount++;
         if (this.writeCount % 50 === 0) {
-          OpLog.normal(
+          OpLog.verbose(
             `OperationLogEffects: Wrote ${this.writeCount} operations to IndexedDB`,
           );
         }
 
         // 1b. Trigger immediate upload to SuperSync (async, non-blocking)
         this.immediateUploadService.trigger();
+
+        // ALSO: Dispatch undoable persisted Operations if they aren't already compensating
+        // Operations into the Undo/Redo history.
+        // Undo/Redo now reads the canonical op-log operation directly and
+        // extracts actionPayload when needed.
+        if (
+          !action.meta.isCompensating &&
+          this.compensatingOperationsRegistry.isUndoableActionType(op.actionType)
+        ) {
+          try {
+            this.store.dispatch(
+              UndoRedoActions.addToUndoStack({
+                operation: op,
+                undoPayload,
+              }),
+            );
+          } catch (e) {
+            OpLog.err(
+              '[OperationLogEffects] Failed to dispatch persisted operation to UndoRedo',
+              e,
+            );
+          }
+        }
 
         // 2. Check if compaction is needed
         // PERF: Use in-memory counter instead of IndexedDB transaction on every operation.

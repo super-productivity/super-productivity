@@ -14,4 +14,5 @@ module.exports = {
   'require-entity-registry': require('./rules/require-entity-registry'),
   'no-actions-in-effects': require('./rules/no-actions-in-effects'),
   'no-multi-entity-effect': require('./rules/no-multi-entity-effect'),
+  'require-non-compensating-action-filter': require('./rules/require-non-compensating-action-filter'),
 };

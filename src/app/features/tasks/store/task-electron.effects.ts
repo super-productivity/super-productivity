@@ -31,6 +31,7 @@ import { ipcAddTaskFromAppUri$ } from '../../../core/ipc-events';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
 import { TaskLog } from '../../../core/log';
 
 // TODO send message to electron when current task changes here
@@ -166,6 +167,7 @@ export class TaskElectronEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
+        filterNonCompensatingAction(),
         tap(({ task }) => {
           if (task.changes.isDone) {
             window.ea.setProgressBar({

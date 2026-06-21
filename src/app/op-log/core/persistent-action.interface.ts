@@ -16,6 +16,7 @@ export interface PersistentActionMeta {
   // don't clobber the device's own settings while replaying its own ops.
   isApplyingFromOtherClient?: boolean;
   isBulk?: boolean; // TRUE for batch operations
+  isCompensating?: boolean; //TRUE if is an Undo/Redo
 }
 
 export interface PersistentAction extends Action {
@@ -26,6 +27,11 @@ export interface PersistentAction extends Action {
   // casts (as unknown as SpecificType) throughout the codebase without type safety benefit.
   [key: string]: any; // Dynamic payload properties (NgRx action payloads)
 }
+
+export const isCompensatingAction = (action: Action): boolean => {
+  const actionWithMeta = action as Action & { meta?: Partial<PersistentActionMeta> };
+  return !!actionWithMeta.meta?.isCompensating;
+};
 
 // Helper type guard - only actions with explicit isPersistent: true are persisted
 export const isPersistentAction = (action: Action): action is PersistentAction => {

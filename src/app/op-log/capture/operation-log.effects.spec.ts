@@ -10,7 +10,12 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
-import { ActionType, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  MultiEntityPayload,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { COMPACTION_THRESHOLD } from '../core/operation-log.const';
 import {
@@ -21,6 +26,14 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { UndoRedoActions } from '../../root-store/undo-redo/undo-redo.actions';
+import { CompensatingOperationsRegistry } from '../../root-store/undo-redo/compensating-operations-registry.service';
+import {
+  UNDO_OPERATION_PAYLOAD_KEY,
+  undoOperationPayloadMetaReducer,
+} from '../../root-store/meta/undo-operation-payload.meta-reducer';
+import { RootState } from '../../root-store/root-state';
+import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
 import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
 
 describe('OperationLogEffects', () => {
@@ -35,6 +48,7 @@ describe('OperationLogEffects', () => {
   let mockImmediateUploadService: jasmine.SpyObj<ImmediateUploadService>;
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
   let mockOperationCaptureService: jasmine.SpyObj<OperationCaptureService>;
+  let mockCompensatingOperationsRegistry: jasmine.SpyObj<CompensatingOperationsRegistry>;
 
   const createPersistentAction = (
     type: string,
@@ -79,6 +93,10 @@ describe('OperationLogEffects', () => {
       'extractEntityChanges',
       'decrementPending',
     ]);
+    mockCompensatingOperationsRegistry = jasmine.createSpyObj(
+      'CompensatingOperationsRegistry',
+      ['isUndoableActionType'],
+    );
 
     // Default mock implementations
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
@@ -92,11 +110,12 @@ describe('OperationLogEffects', () => {
     );
     mockCompactionService.compact.and.returnValue(Promise.resolve());
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
-    mockStore.select.and.returnValue(of({})); // Return empty state observable
+    mockStore.select.and.returnValue(of(false));
     mockClientIdService.getOrGenerateClientId.and.returnValue(
       Promise.resolve('testClient'),
     );
     mockOperationCaptureService.extractEntityChanges.and.returnValue([]);
+    mockCompensatingOperationsRegistry.isUndoableActionType.and.returnValue(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -111,6 +130,10 @@ describe('OperationLogEffects', () => {
         { provide: ImmediateUploadService, useValue: mockImmediateUploadService },
         { provide: ClientIdService, useValue: mockClientIdService },
         { provide: OperationCaptureService, useValue: mockOperationCaptureService },
+        {
+          provide: CompensatingOperationsRegistry,
+          useValue: mockCompensatingOperationsRegistry,
+        },
       ],
     });
 
@@ -324,6 +347,124 @@ describe('OperationLogEffects', () => {
             actionPayload: { title: 'Updated Title', done: true },
             entityChanges: jasmine.any(Array),
           });
+          done();
+        },
+      });
+    });
+
+    it('should persist compensating actions without adding them to the undo stack', (done) => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_DELETE);
+      action.meta.isCompensating = true;
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              actionType: ActionType.TASK_SHARED_DELETE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+            }),
+            'local',
+          );
+          expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              type: UndoRedoActions.addToUndoStack.type,
+            }),
+          );
+          done();
+        },
+      });
+    });
+
+    it('should persist non-undoable operations without adding them to the undo stack', (done) => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_PLAN_FOR_TODAY);
+      mockCompensatingOperationsRegistry.isUndoableActionType.and.returnValue(false);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+            }),
+            'local',
+          );
+          expect(
+            mockCompensatingOperationsRegistry.isUndoableActionType,
+          ).toHaveBeenCalledWith(ActionType.TASK_SHARED_PLAN_FOR_TODAY);
+          expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              type: UndoRedoActions.addToUndoStack.type,
+            }),
+          );
+          done();
+        },
+      });
+    });
+
+    it('should keep undo snapshots out of operation payloads while adding them to undo state', (done) => {
+      const action = TaskSharedActions.updateTask({
+        task: {
+          id: 'task-1',
+          changes: {
+            title: 'New title',
+          },
+        },
+      });
+      const seedUndoPayload = undoOperationPayloadMetaReducer(
+        (state: RootState | undefined) => state as RootState,
+      );
+      seedUndoPayload(
+        {
+          [TASK_FEATURE_NAME]: {
+            entities: Object.fromEntries([
+              [
+                'task-1',
+                {
+                  id: 'task-1',
+                  title: 'Old title',
+                },
+              ],
+            ]),
+          },
+        } as unknown as RootState,
+        action,
+      );
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          const persistedOperation =
+            mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent()
+              .args[0] as Operation;
+          const persistedPayload = persistedOperation.payload as MultiEntityPayload;
+          expect(
+            persistedPayload.actionPayload[UNDO_OPERATION_PAYLOAD_KEY],
+          ).toBeUndefined();
+
+          const dispatchCalls =
+            mockStore.dispatch.calls.allArgs() as unknown as ReadonlyArray<
+              readonly [Action]
+            >;
+          const undoStackAction = dispatchCalls
+            .map(([dispatchedAction]) => dispatchedAction)
+            .find(
+              (dispatchedAction) =>
+                dispatchedAction.type === UndoRedoActions.addToUndoStack.type,
+            ) as ReturnType<typeof UndoRedoActions.addToUndoStack> | undefined;
+
+          expect(undoStackAction).toBeDefined();
+          const undoStackPayload = undoStackAction?.operation
+            .payload as MultiEntityPayload;
+          expect(
+            undoStackPayload.actionPayload[UNDO_OPERATION_PAYLOAD_KEY],
+          ).toBeUndefined();
+          expect(undoStackAction?.undoPayload).toEqual(
+            jasmine.objectContaining({
+              type: 'TASK_UPDATE',
+            }),
+          );
           done();
         },
       });

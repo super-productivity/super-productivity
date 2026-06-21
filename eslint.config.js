@@ -222,6 +222,7 @@ module.exports = tseslint.config(
       'local-rules/require-entity-registry': 'warn',
       'local-rules/no-actions-in-effects': 'error',
       'local-rules/no-multi-entity-effect': 'warn',
+      'local-rules/require-non-compensating-action-filter': 'error',
     },
   },
   // App code must route logging through Log/SyncLog/OpLog/... helpers.
@@ -230,11 +231,7 @@ module.exports = tseslint.config(
   // (which intentionally dump timing numbers to stdout) are exempt.
   {
     files: ['src/app/**/*.ts'],
-    ignores: [
-      'src/app/**/*.spec.ts',
-      'src/app/**/*.benchmark.ts',
-      'src/app/core/log.ts',
-    ],
+    ignores: ['src/app/**/*.spec.ts', 'src/app/**/*.benchmark.ts', 'src/app/core/log.ts'],
     rules: {
       'no-console': 'error',
     },
