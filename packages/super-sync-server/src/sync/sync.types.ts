@@ -1,7 +1,6 @@
 import { Logger } from '../logger';
 import { Prisma } from '@prisma/client';
 import {
-  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   SUPER_SYNC_OP_TYPES,
   SUPER_SYNC_SNAPSHOT_OP_TYPES,
   type SuperSyncOpType,
@@ -464,11 +463,8 @@ export const validatePayload = (
 
 // Configuration
 export interface SyncConfig {
-  maxOpsPerUpload: number;
   maxPayloadSizeBytes: number;
-  downloadLimit: number;
   uploadRateLimit: { max: number; windowMs: number };
-  downloadRateLimit: { max: number; windowMs: number };
   retentionMs: number; // Unified retention period for ops, devices, and validation
   maxClockDriftMs: number;
   batchUpload: boolean;
@@ -487,11 +483,8 @@ export const RETENTION_MS = RETENTION_DAYS * MS_PER_DAY;
 export const ONLINE_DEVICE_THRESHOLD_MS = 5 * MS_PER_MINUTE; // 5 minutes
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
-  maxOpsPerUpload: SUPER_SYNC_MAX_OPS_PER_UPLOAD,
   maxPayloadSizeBytes: 20 * 1024 * 1024, // 20MB - needed for large imports
-  downloadLimit: 1000,
   uploadRateLimit: { max: 100, windowMs: MS_PER_MINUTE },
-  downloadRateLimit: { max: 200, windowMs: MS_PER_MINUTE },
   retentionMs: RETENTION_MS, // 45 days - used for ops, devices, and validation
   maxClockDriftMs: MS_PER_MINUTE, // 60 seconds
   batchUpload: false,
