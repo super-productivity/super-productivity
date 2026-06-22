@@ -4,7 +4,6 @@ import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { ThemePalette } from '@angular/material/core';
 
 /**
  * Joined "split button": a primary default action plus an adjacent, compact
@@ -23,8 +22,6 @@ import { ThemePalette } from '@angular/material/core';
 export class SplitButtonComponent {
   readonly menu = input.required<MatMenu>();
   readonly disabled = input<boolean>(false);
-  readonly color = input<ThemePalette>('primary');
-  readonly triggerIcon = input<string>('more_vert');
   // Translation key used for the trigger's tooltip and aria-label.
   readonly triggerLabel = input<string>('');
 

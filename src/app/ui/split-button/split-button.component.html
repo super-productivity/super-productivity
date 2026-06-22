@@ -2,8 +2,8 @@
   <button
     class="split-btn-main"
     (click)="mainClick.emit($event)"
-    [color]="color()"
     [disabled]="disabled()"
+    color="primary"
     mat-stroked-button
     type="button"
   >
@@ -12,14 +12,14 @@
   <button
     class="split-btn-trigger"
     [matMenuTriggerFor]="menu()"
-    [color]="color()"
     [disabled]="disabled()"
     [matTooltip]="triggerLabel() ? (triggerLabel() | translate) : ''"
     [attr.aria-label]="triggerLabel() ? (triggerLabel() | translate) : null"
+    color="primary"
     matTooltipShowDelay="0"
     mat-stroked-button
     type="button"
   >
-    <mat-icon>{{ triggerIcon() }}</mat-icon>
+    <mat-icon>more_vert</mat-icon>
   </button>
 </div>
