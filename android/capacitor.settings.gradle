@@ -26,8 +26,5 @@ project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/sh
 include ':capawesome-capacitor-android-dark-mode-support'
 project(':capawesome-capacitor-android-dark-mode-support').projectDir = new File('../node_modules/@capawesome/capacitor-android-dark-mode-support/android')
 
-include ':capawesome-capacitor-android-edge-to-edge-support'
-project(':capawesome-capacitor-android-edge-to-edge-support').projectDir = new File('../node_modules/@capawesome/capacitor-android-edge-to-edge-support/android')
-
 include ':capawesome-capacitor-background-task'
 project(':capawesome-capacitor-background-task').projectDir = new File('../node_modules/@capawesome/capacitor-background-task/android')

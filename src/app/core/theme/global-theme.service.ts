@@ -41,7 +41,6 @@ import { CapacitorPlatformService } from '../platform/capacitor-platform.service
 import { Keyboard, KeyboardInfo } from '@capacitor/keyboard';
 import { PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
@@ -759,49 +758,23 @@ export class GlobalThemeService {
       root.style.setProperty(CSS_VAR_SAFE_AREA_RIGHT, `${insets.right}px`);
     };
 
-    // On Android (targetSdk 35+, edge-to-edge enforced) the
-    // @capawesome/capacitor-android-edge-to-edge-support plugin already insets
-    // the WebView below the status bar and above the navigation bar via native
-    // margins. capacitor-plugin-safe-area reports the decorView's full
-    // system-bar insets regardless, so applying them as CSS padding on top of
-    // the native margin double-counts the inset (visible as excessive padding
-    // above the top bar). The WebView interior is fully safe there, so keep the
-    // bottom/side safe-area CSS vars at 0; only iOS (contentInset: 'never')
-    // needs the WebView to pad itself. A few styles read env(safe-area-inset-
-    // bottom) directly (e.g. mobile-bottom-nav) rather than these vars; inside
-    // the natively-inset WebView that env value is expected to be ~0, keeping
-    // them consistent with the pinned vars here.
-    //
-    // The TOP is the exception. On Android < 15 the WebView is forced
-    // edge-to-edge by @capacitor/status-bar's legacy `overlaysWebView`
-    // fullscreen flag (a no-op on Android 15+), and the plugin's native top
-    // margin is not reliably applied on every OS/ROM — the header then draws
-    // behind the status bar (#8283, seen on Android 14). Pinning the top var to
-    // 0 leaves no fallback. Instead defer the top to the WebView's own
-    // env(safe-area-inset-top): with viewport-fit=cover it equals the status-bar
-    // height exactly when the WebView extends under it, and resolves to 0 once
-    // the WebView is already inset (Android 15+ / native margin applied) — so it
-    // self-corrects across OS versions without ever double-counting.
-    if (this._platformService.isAndroid()) {
-      applyInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-      // Override only the top with the env() fallback (see above). NOTE: this
-      // self-corrects only for *CSS* consumers — `padding-top: var(--safe-area-top)`
-      // resolves the nested env() at use-time, so the header padding is right. JS
-      // readers that parse this custom property via getComputedStyle (e.g.
-      // _patchCdkViewportForSafeArea, the context menus) get the *unresolved*
-      // "env(...)" token string back — env()/var() are only substituted when the
-      // property is actually used, not when a custom property's own value is read —
-      // so parseInt() yields 0, the same top inset those readers already used on
-      // Android before this change. Connected overlays are therefore not pushed
-      // below the status bar; only the header padding is. That is the scope of
-      // #8283 (the header was the reported regression). If overlay top-insets ever
-      // matter on Android, register the var via @property or read a probe element's
-      // resolved padding-top instead of the raw custom property.
-      this.document.documentElement.style.setProperty(
-        CSS_VAR_SAFE_AREA_TOP,
-        'env(safe-area-inset-top, 0px)',
-      );
-    } else {
+    // On Android the WebView now draws edge-to-edge (the @capawesome plugin that
+    // used to inset it via native margins was removed in favour of Capacitor's
+    // built-in SystemBars). SystemBars owns the --safe-area-inset-* vars:
+    //   - WebView >= 140 (passthrough) or API >= 35: SystemBars injects the real
+    //     px insets into these same vars on every inset dispatch. We must NOT
+    //     also write them from JS — two writers on the same documentElement
+    //     inline style race (last-writer-wins, OS/timing dependent). So leave
+    //     them to SystemBars on Android.
+    //   - WebView < 140 / API < 35 tail: SystemBars injects nothing, so the vars
+    //     stay unset and the SCSS fallback `var(--safe-area-inset-*, env(...))`
+    //     in _css-variables.scss resolves them from env(). With viewport-fit=
+    //     cover env(safe-area-inset-top) equals the status-bar height when the
+    //     WebView extends under it — this is exactly the #8283 top fallback,
+    //     preserved automatically by not pinning the var here.
+    // Only iOS (contentInset: 'never') still needs JS-fed insets from
+    // capacitor-plugin-safe-area; SystemBars insetsHandling is Android-only.
+    if (!this._platformService.isAndroid()) {
       SafeArea.getSafeAreaInsets().then(({ insets }) => applyInsets(insets));
       SafeArea.addListener('safeAreaChanged', ({ insets }) => applyInsets(insets));
     }
@@ -853,29 +826,27 @@ export class GlobalThemeService {
       });
       if (this._platformService.isAndroid()) {
         const bgColor = isDark ? '#131314' : '#f8f8f7';
-        // Under enforced edge-to-edge (targetSdk 35+) Window.setStatusBarColor /
-        // setNavigationBarColor are no-ops; the edge-to-edge support plugin owns
-        // the bar backgrounds via its own overlay views. Color them through it
-        // so the status bar and the bottom navigation/gesture area match the
-        // theme background.
-        EdgeToEdge.setStatusBarColor({ color: bgColor }).catch((err) => {
-          Log.warn('Failed to set status bar color', err);
-        });
-        EdgeToEdge.setNavigationBarColor({ color: bgColor }).catch((err) => {
-          Log.warn('Failed to set navigation bar color', err);
-        });
-        // The custom NavigationBar plugin still drives the nav bar icon/pill
-        // appearance (light vs dark) via setSystemBarsAppearance, which remains
-        // effective on Android 15+; the window.navigationBarColor it also sets
-        // is a harmless no-op there.
+        // The @capawesome edge-to-edge plugin (which painted opaque bar overlays
+        // via EdgeToEdge.set{Status,Navigation}BarColor) was removed in favour of
+        // Capacitor's built-in SystemBars. SystemBars has NO bar-color API — the
+        // edge-to-edge model is transparent bars with the web content drawn
+        // behind them. The bar backgrounds are therefore painted by:
+        //   - setWebViewBackgroundColor below (window decor + WebView surface),
+        //     which shows through the transparent bars (the color backstop on
+        //     API 35+ where window.*BarColor is a no-op), and
+        //   - NavigationBar.setColor's window.navigationBarColor, still effective
+        //     on API < 35, plus its setSystemBarsAppearance which drives the nav
+        //     bar icon light/dark on all versions.
+        // Status-bar icon light/dark is set via StatusBar.setStyle above.
         NavigationBar.setColor({
           color: bgColor,
           style: isDark ? 'DARK' : 'LIGHT',
         }).catch((err) => {
           Log.warn('Failed to set navigation bar appearance', err);
         });
-        // Keep the native WebView surface matched to the theme so the
-        // adjustResize keyboard animation can't flash white between frames.
+        // Paint the WebView surface and window decor with the theme background so
+        // the transparent system bars show the theme color behind them and the
+        // keyboard animation can't flash white between frames.
         NavigationBar.setWebViewBackgroundColor({ color: bgColor }).catch((err) => {
           Log.warn('Failed to set web view background color', err);
         });

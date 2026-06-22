@@ -17,7 +17,6 @@ dependencies {
     implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-share')
     implementation project(':capawesome-capacitor-android-dark-mode-support')
-    implementation project(':capawesome-capacitor-android-edge-to-edge-support')
     implementation project(':capawesome-capacitor-background-task')
 
 }

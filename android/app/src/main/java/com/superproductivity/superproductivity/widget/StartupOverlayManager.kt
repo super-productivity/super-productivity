@@ -19,8 +19,9 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
-import com.getcapacitor.BridgeActivity
 import com.superproductivity.superproductivity.R
 
 /**
@@ -38,11 +39,12 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
     private var insetLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var taskCount = 0
     private var isBarVisible = false
-    // How far the WebView's bottom sits above the overlay's bottom (px) = the
-    // bottom inset the edge-to-edge plugin applied to the WebView. This is what
-    // the web UI's safe area actually is on this device — measured directly from
-    // the WebView's geometry rather than guessed from navigationBars(), which
-    // does not match the applied inset on gesture-nav devices. -1 = not measured.
+    // The bottom system-bar inset (nav/gesture bar height, px) that the web
+    // add-task bar pads itself above via the safe-area inset. The FAB/input bar
+    // are lifted by the same amount so they line up with the web bar we hand off
+    // to. Under Capacitor's built-in SystemBars the WebView draws edge-to-edge
+    // (no bottom margin), so this is read from the root window insets rather than
+    // measured from the WebView's geometry. -1 = not measured.
     private var webViewBottomInset = -1
 
     private val isDarkMode: Boolean
@@ -96,35 +98,30 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
     }
 
     /**
-     * Measure how far the WebView's bottom sits above the overlay's bottom (the
-     * inset the edge-to-edge plugin applied) and lift the FAB / input bar by it
-     * so they align with the web add-task button/bar. Mirroring the WebView's
-     * real geometry is device-independent: it works regardless of gesture vs
-     * 3-button navigation, where navigationBars() would not match the applied
-     * inset. No-op until the views are laid out and when the inset is unchanged.
+     * Lift the FAB / input bar above the navigation bar by the bottom system-bar
+     * inset, so they align with the web add-task button/bar (which pads itself by
+     * the same safe-area inset under SystemBars). Reads the root window insets
+     * directly — device-independent across gesture vs 3-button navigation. No-op
+     * until the insets are available and when the inset is unchanged.
      */
     private fun updateOverlayInsets() {
         val overlay = overlayView ?: return
-        // Freeze the inset once the bar is expanded. The edge-to-edge plugin sets
-        // the WebView's bottom margin to 0 while the IME is visible (EdgeToEdge.java:
-        // "system already resizes the window for the keyboard"), so re-measuring
-        // during the keyboard phase would read ~0 and drop the bar behind the
-        // keyboard. The FAB-phase value (keyboard down) is the one the keyboard
-        // listener needs. This also stops dead work once the FAB is gone.
-        //
-        // This early-return is also what keeps us off CapacitorMainActivity's
-        // adjustWebViewHeightForKeyboardBelowApi30, which shrinks `webView.height`
-        // while the IME is up (API < 30): we only read the height in the keyboard-
-        // down FAB phase, never while it is being shrunk. Keep this guard.
+        // Freeze the inset once the bar is expanded: from then on the keyboard
+        // listener in expandToInputBar owns the bar's margin (it adds the IME
+        // height on top of this resting inset). This also stops dead work once
+        // the FAB is gone.
         if (isBarVisible) return
-        val webView = (activity as? BridgeActivity)?.bridge?.webView ?: return
-        if (overlay.height == 0 || webView.height == 0) return
+        if (overlay.height == 0) return
 
-        val overlayLoc = IntArray(2)
-        val webViewLoc = IntArray(2)
-        overlay.getLocationInWindow(overlayLoc)
-        webView.getLocationInWindow(webViewLoc)
-        val inset = ((overlayLoc[1] + overlay.height) - (webViewLoc[1] + webView.height))
+        // Read the bottom system-bar inset (nav/gesture bar) directly. Under
+        // SystemBars the WebView draws edge-to-edge with no bottom margin, so the
+        // old (overlayBottom − webViewBottom) measurement reads ~0; the web bar
+        // pads itself by this same safe-area inset, so mirroring it here keeps the
+        // native overlay aligned with the web bar across gesture and 3-button nav.
+        val rootInsets = ViewCompat.getRootWindowInsets(overlay) ?: return
+        val inset = rootInsets
+            .getInsets(WindowInsetsCompat.Type.systemBars())
+            .bottom
             .coerceAtLeast(0)
         if (inset == webViewBottomInset) return
         webViewBottomInset = inset

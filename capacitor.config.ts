@@ -17,8 +17,8 @@ const config: CapacitorConfig = {
       // and uses JavaScriptInterface for keyboard visibility instead.
       // 'native' resizes the WKWebView so 100vh fits above the keyboard.
       resize: 'native',
-      // false is required when paired with @capawesome/capacitor-android-edge-
-      // to-edge-support; ignored on iOS where this key has no effect.
+      // iOS-only; ignored on Android (plugin excluded). Kept false so the
+      // WKWebView is not force-resized in fullscreen.
       resizeOnFullScreen: false,
     },
     StatusBar: {
@@ -27,20 +27,17 @@ const config: CapacitorConfig = {
       overlaysWebView: true,
     },
     SystemBars: {
-      // Disable Capacitor's built-in inset handling so the edge-to-edge plugin
-      // can own it. With targetSdk 36 (Android 16) edge-to-edge is mandatory,
-      // and the two layers both applying insets fight each other — visible
-      // as fixed-position elements scrolling with content when the IME is up.
-      insetsHandling: 'disable',
-    },
-    EdgeToEdge: {
-      // Initial status/navigation bar background color, shown before the theme
-      // service boots and calls EdgeToEdge.set{Status,Navigation}BarColor.
-      // Without this the plugin's overlay views default to transparent, so the
-      // bottom navigation/gesture area shows the bare window background. Dark to
-      // match the most common mobile theme (cf. the ios backgroundColor below).
-      statusBarColor: '#131314',
-      navigationBarColor: '#131314',
+      // Let Capacitor's built-in SystemBars own edge-to-edge inset handling on
+      // Android (replaces the @capawesome edge-to-edge plugin). 'css' injects
+      // --safe-area-inset-* CSS vars the web layer pads itself with. NOTE:
+      // SystemBars only acts on WebView >= 140 (passthrough) or API >= 35; the
+      // WebView <140 / API <35 tail falls back to env() + the native keyboard
+      // shim in CapacitorMainActivity. See
+      // docs/plans/2026-06-22-android-systembars-migration-corrected.md.
+      insetsHandling: 'css',
+      // Initial bar icon style before the theme service boots; runtime updates
+      // go through StatusBar.setStyle / NavigationBar (global-theme.service.ts).
+      style: 'DARK',
     },
   },
   android: {
@@ -56,7 +53,6 @@ const config: CapacitorConfig = {
       '@capacitor/local-notifications',
       '@capacitor/share',
       '@capawesome/capacitor-android-dark-mode-support',
-      '@capawesome/capacitor-android-edge-to-edge-support',
       '@capawesome/capacitor-background-task',
     ],
   },

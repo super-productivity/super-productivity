@@ -452,45 +452,40 @@ class CapacitorMainActivity : BridgeActivity() {
     }
 
     /**
-     * SDK < 30 soft-keyboard workaround for the add-task bar sitting behind the
+     * SDK < 30 soft-keyboard fallback for the add-task bar sitting behind the
      * keyboard (#8508 follow-up, Android 9 / API 28).
      *
-     * Root cause: the `@capawesome` edge-to-edge plugin sets the WebView
-     * `bottomMargin = 0` whenever the IME is visible (`EdgeToEdge.applyInsetsInternal`:
-     * "the system already resizes the window for the keyboard"), but under enforced
-     * edge-to-edge (targetSdk 36) the window does NOT resize on API < 30, so the
-     * WebView keeps its full height and the `position: fixed` bar sits behind the
-     * keyboard.
+     * Context: Android edge-to-edge inset handling is owned by Capacitor's
+     * built-in SystemBars now (the `@capawesome` edge-to-edge plugin was removed).
+     * SystemBars only pads the WebView for the IME on **WebView >= 140**
+     * (passthrough) or **API >= 35**; below that band it is a no-op, and under
+     * enforced edge-to-edge the window does NOT resize for the IME on API < 30,
+     * so the `position: fixed` add-task bar sits behind the keyboard. This shim
+     * covers exactly that WebView < 140 / API < 30 tail and is **gated to
+     * WebView < 140** so it never double-counts against SystemBars' own padding.
      *
-     * We must NOT correct this via `bottomMargin`: the plugin owns that property and
-     * rewrites it on every inset dispatch, so a second writer just flickers
-     * (confirmed on an API 28 device — the margin alternated `0 ↔ lift`). WebView
-     * *padding* does not move the web layout viewport either.
-     *
-     * Instead, while the keyboard is up we set an explicit WebView **layout height**
-     * (to the keyboard top), and restore the resting height ([webViewLayoutHeightDefault],
-     * e.g. MATCH_PARENT) on hide. Height is a different property than the margin the
-     * plugin manages, and for an explicit-height view the bottom margin does not
-     * change the view's size — so the two never fight, and the plugin keeps doing
-     * everything else (system-bar insets AND its color overlays, so no white navbar
-     * gap). Shrinking the view shrinks the web layout viewport, so the existing CSS
-     * resolves the bar above the keyboard with no web-side keyboard-height math
-     * (avoiding the reverted #8295 fallback). The target (`rect.bottom − webViewTop`)
-     * is read from `getWindowVisibleDisplayFrame` (reliable on API 28) and does not
+     * We must NOT correct this via `bottomMargin` or `padding` (a margin writer
+     * fights whatever owns the insets, and WebView padding does not move the web
+     * layout viewport). Instead, while the keyboard is up we set an explicit
+     * WebView **layout height** (to the keyboard top) and restore the resting
+     * height ([webViewLayoutHeightDefault], e.g. MATCH_PARENT) on hide. Shrinking
+     * the view shrinks the web layout viewport, so the existing CSS resolves the
+     * bar above the keyboard with no web-side keyboard-height math (avoiding the
+     * reverted #8295 fallback). The target (`rect.bottom − webViewTop`) is read
+     * from `getWindowVisibleDisplayFrame` (reliable on API 28) and does not
      * depend on the WebView's own height, so it is stable across passes — no
-     * feedback loop. See docs/android-edge-to-edge-keyboard.md.
+     * feedback loop. See docs/android-edge-to-edge-keyboard.md and
+     * docs/plans/2026-06-22-android-systembars-migration-corrected.md.
      *
-     * API >= 30 is a strict no-op — the plugin stays fully in charge, so the
-     * behavior verified in 18.12.0 is unchanged.
-     *
-     * NOTE: [StartupOverlayManager.updateOverlayInsets] also reads the WebView's
-     * geometry (`webView.height`) to align the native startup overlay. It only
-     * stays correct because it early-returns once its input bar is visible (the
-     * keyboard phase) — i.e. it never reads the height while this method is
-     * shrinking it. Keep that guard if you touch either side.
+     * API >= 30 and WebView >= 140 are strict no-ops.
      */
     private fun adjustWebViewHeightForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
         if (android.os.Build.VERSION.SDK_INT >= 30) return
+        // Skip when SystemBars already handles the IME inset (WebView >= 140
+        // passthrough pads the WebView parent itself). Unknown version (null) ->
+        // run the shim, the safe default on API < 30.
+        val wvMajor = webViewCompatibility?.majorVersion
+        if (wvMajor != null && wvMajor >= 140) return
         val webView = bridge?.webView ?: return
         val params = webView.layoutParams ?: return
         // Ignore stale/pre-layout geometry so the height is not set from a bad frame.

@@ -4,6 +4,18 @@ How the global add-task bar is positioned over the keyboard, and the full #8508
 saga. **Read this before touching anything keyboard/IME-related on Android — this
 area has regressed repeatedly (#8295, then #8508).**
 
+> **Update (2026-06-22): migrated off `@capawesome/...edge-to-edge-support` to
+> Capacitor's built-in `SystemBars`** (`insetsHandling: 'css'`). Edge-to-edge
+> insets + IME padding are now handled by SystemBars on **WebView ≥ 140** (or
+> API ≥ 35); the **WebView < 140 / API < 35** tail is covered by env() + a native
+> keyboard shim (`adjustWebViewHeightForKeyboardBelowApi30`, now gated to
+> WebView < 140 so it never fights SystemBars). Bar backgrounds are no longer
+> painted by a plugin (SystemBars has no color API) — the bars are transparent
+> and the theme color shows through via `NavigationBarPlugin.setWebViewBackgroundColor`
+> (window decor + WebView surface). The #8508 sections below describe the *former*
+> `@capawesome` mechanics and are kept as history. Full rationale + device matrix:
+> [`docs/plans/2026-06-22-android-systembars-migration-corrected.md`](plans/2026-06-22-android-systembars-migration-corrected.md).
+
 > **⚠️ Do NOT inset the WebView for the IME based on an assumption that the
 > system "doesn't resize on Android 15/16."** Real devices (incl. a Pixel-class
 > Android 16 phone) still resize the window for the keyboard. Insetting on top of
