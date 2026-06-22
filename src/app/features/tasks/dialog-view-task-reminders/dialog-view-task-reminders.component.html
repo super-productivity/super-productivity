@@ -68,9 +68,9 @@
           >
             <mat-icon>wb_sunny</mat-icon>
             {{
-              (isMultiple
-                ? T.F.TASK.D_REMINDER_VIEW.SCHEDULE_FOR_TODAY
-                : T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY
+              (isAllDeadline
+                ? T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY
+                : T.G.TODAY_TAG_TITLE
               ) | translate
             }}
           </button>
