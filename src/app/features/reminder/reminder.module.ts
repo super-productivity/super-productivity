@@ -188,7 +188,9 @@ export class ReminderModule {
         } else {
           this._matDialog.open(DialogViewTaskRemindersComponent, {
             restoreFocus: true,
-            disableClose: true,
+            // Backdrop click / Escape closes the dialog. Deadline reminders are
+            // cleared on destroy; scheduled reminders stay active and the worker
+            // re-shows them until the user acts on them.
             data: {
               reminders,
             },

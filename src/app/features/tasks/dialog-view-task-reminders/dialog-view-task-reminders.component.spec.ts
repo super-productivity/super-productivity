@@ -11,7 +11,7 @@ import { Actions } from '@ngrx/effects';
 import { ScannedActionsSubject } from '@ngrx/store';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
-import { BehaviorSubject, EMPTY, Observable, of, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
 import { DateService } from '../../../core/date/date.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -639,14 +639,7 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
       .map((a) => a.taskId);
 
   beforeEach(async () => {
-    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', [
-      'close',
-      'getState',
-      'backdropClick',
-      'keydownEvents',
-    ]);
-    matDialogRefSpy.backdropClick.and.returnValue(EMPTY);
-    matDialogRefSpy.keydownEvents.and.returnValue(EMPTY);
+    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close', 'getState']);
     taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'getByIdsLive$',
       'setDone',
@@ -811,64 +804,6 @@ describe('DialogViewTaskRemindersComponent destroy clears unhandled deadline rem
 
     expect(dispatchedClearIds()).toEqual([]);
   });
-
-  const dispatchedDismissReminderOnlyIds = (): string[] =>
-    dispatchSpy.calls
-      .allArgs()
-      .map(([action]) => action)
-      .filter((a) => a.type === TaskSharedActions.dismissReminderOnly.type)
-      .map((a) => a.id);
-
-  it('dismisses reminders (keep in today) and closes when the backdrop is clicked', async () => {
-    const backdrop$ = new Subject<MouseEvent>();
-    matDialogRefSpy.backdropClick.and.returnValue(backdrop$);
-    matDialogRefSpy.getState.and.returnValue(MatDialogState.OPEN);
-    const reminder = buildReminder('task-1', { isDeadline: false });
-    const component = createComponent([reminder], [buildTask('task-1')]);
-
-    backdrop$.next({} as MouseEvent);
-    // dismissAllRemindersOnly resolves tasks$ via a microtask before dispatching
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(dispatchedDismissReminderOnlyIds()).toContain('task-1');
-    expect(matDialogRefSpy.close).toHaveBeenCalled();
-    expect(component).toBeTruthy();
-  });
-
-  it('clears the reminder and closes when Escape is pressed', async () => {
-    const keydown$ = new Subject<KeyboardEvent>();
-    matDialogRefSpy.keydownEvents.and.returnValue(keydown$);
-    matDialogRefSpy.getState.and.returnValue(MatDialogState.OPEN);
-    const reminder = buildReminder('task-1', {
-      isDeadline: true,
-      deadlineDay: '2026-04-25',
-    });
-    createComponent(
-      [reminder],
-      [buildTask('task-1', { deadlineDay: '2026-04-25', deadlineRemindAt: Date.now() })],
-    );
-
-    keydown$.next(new KeyboardEvent('keydown', { key: 'Escape' }));
-    await new Promise((resolve) => setTimeout(resolve));
-
-    // Deadline reminders are cleared (keeping the deadline date) on dismiss.
-    expect(dispatchedClearIds()).toContain('task-1');
-    expect(matDialogRefSpy.close).toHaveBeenCalled();
-  });
-
-  it('ignores non-Escape keydown events', async () => {
-    const keydown$ = new Subject<KeyboardEvent>();
-    matDialogRefSpy.keydownEvents.and.returnValue(keydown$);
-    matDialogRefSpy.getState.and.returnValue(MatDialogState.OPEN);
-    const reminder = buildReminder('task-1', { isDeadline: false });
-    createComponent([reminder], [buildTask('task-1')]);
-
-    keydown$.next(new KeyboardEvent('keydown', { key: 'Enter' }));
-    await new Promise((resolve) => setTimeout(resolve));
-
-    expect(dispatchedDismissReminderOnlyIds()).toEqual([]);
-    expect(matDialogRefSpy.close).not.toHaveBeenCalled();
-  });
 });
 
 /**
@@ -923,12 +858,7 @@ describe('DialogViewTaskRemindersComponent accessibility', () => {
         }),
         {
           provide: MatDialogRef,
-          useValue: {
-            close: jasmine.createSpy('close'),
-            getState: () => 0,
-            backdropClick: () => EMPTY,
-            keydownEvents: () => EMPTY,
-          },
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
         },
         {
           provide: MAT_DIALOG_DATA,
@@ -1041,12 +971,7 @@ describe('DialogViewTaskRemindersComponent navigation and focus', () => {
         provideMockStore({ initialState: {} }),
         {
           provide: MatDialogRef,
-          useValue: {
-            close: jasmine.createSpy('close'),
-            getState: () => 0,
-            backdropClick: () => EMPTY,
-            keydownEvents: () => EMPTY,
-          },
+          useValue: { close: jasmine.createSpy('close'), getState: () => 0 },
         },
         {
           provide: MAT_DIALOG_DATA,
@@ -1269,15 +1194,8 @@ describe('DialogViewTaskRemindersComponent reconciles vanished reminders (sync)'
   };
 
   beforeEach(async () => {
-    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', [
-      'close',
-      'getState',
-      'backdropClick',
-      'keydownEvents',
-    ]);
+    matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close', 'getState']);
     matDialogRefSpy.getState.and.returnValue(MatDialogState.OPEN);
-    matDialogRefSpy.backdropClick.and.returnValue(EMPTY);
-    matDialogRefSpy.keydownEvents.and.returnValue(EMPTY);
     taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'getByIdsLive$',
       'setDone',

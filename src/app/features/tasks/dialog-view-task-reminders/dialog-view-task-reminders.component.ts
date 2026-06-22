@@ -18,23 +18,9 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskWithReminderData } from '../task.model';
 import { TaskService } from '../task.service';
-import {
-  BehaviorSubject,
-  combineLatest,
-  merge,
-  Observable,
-  of,
-  Subscription,
-} from 'rxjs';
+import { BehaviorSubject, combineLatest, Observable, of, Subscription } from 'rxjs';
 import { ReminderService } from '../../reminder/reminder.service';
-import {
-  distinctUntilChanged,
-  filter,
-  first,
-  map,
-  switchMap,
-  takeWhile,
-} from 'rxjs/operators';
+import { distinctUntilChanged, first, map, switchMap, takeWhile } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { getTomorrow } from '../../../util/get-tomorrow';
@@ -232,22 +218,6 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
     this._subs.add(
       this.isMultiple$.subscribe((isMultiple) => (this.isMultiple = isMultiple)),
-    );
-
-    // Allow dismissing via backdrop click or Escape. The dialog is opened with
-    // disableClose so Material does not auto-close (which would leave the
-    // reminders active and let the worker re-open the dialog seconds later).
-    // We handle these events ourselves and dismiss the reminders — clearing the
-    // reminder while keeping the task scheduled — so the dialog stays closed.
-    this._subs.add(
-      merge(
-        this._matDialogRef.backdropClick(),
-        this._matDialogRef.keydownEvents().pipe(filter((ev) => ev.key === 'Escape')),
-      ).subscribe(() => {
-        if (!this.isDisableControls) {
-          this.dismissAllRemindersOnly();
-        }
-      }),
     );
   }
 
