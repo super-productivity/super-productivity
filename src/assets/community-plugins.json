@@ -110,5 +110,13 @@
     "author": "giba0",
     "authorUrl": "https://github.com/giba0",
     "stars": 2
+  },
+  {
+    "name": "YouTrack Importer for SuperProductivity",
+    "shortDescription": "Bring YouTrack issues into SuperProductivity, either as a one-off CSV import or as a live, repeatable sync directly against the YouTrack REST API.",
+    "url": "https://github.com/coissay/superProductivity-YoutrackPlugin",
+    "author": "coissay",
+    "authorUrl": "https://github.com/coissay",
+    "stars": 0
   }
 ]
