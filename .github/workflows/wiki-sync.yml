@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -82,7 +82,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository }}
           path: ${{ env.CODE_ROOT }}
@@ -92,7 +92,7 @@ jobs:
         # includeIf matcher, which intermittently leaves the wiki push without
         # credentials on github-hosted runners (run 26335467138). v5 uses the
         # path-independent extraheader and is stable for this second checkout.
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository }}.wiki
           path: ${{ env.WIKI_ROOT }}
