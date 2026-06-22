@@ -46,6 +46,10 @@ import { handleListKeydown } from './markdown-toolbar.util';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
+// A pointer that moves more than this between mousedown and click is treated as
+// a drag-select rather than a click, so it must not flip the note into edit mode.
+const DRAG_THRESHOLD_PX = 5;
+
 @Component({
   selector: 'inline-markdown',
   templateUrl: './inline-markdown.component.html',
@@ -333,16 +337,12 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const clientX = $event.clientX ?? 0;
-    const clientY = $event.clientY ?? 0;
-    const dx = clientX - this._mousedownX;
-    const dy = clientY - this._mousedownY;
-    const dxSq = dx * dx;
-    const dySq = dy * dy;
-    const dragDistance = Math.sqrt(dxSq + dySq);
+    const dx = ($event.clientX ?? 0) - this._mousedownX;
+    const dy = ($event.clientY ?? 0) - this._mousedownY;
+    const isDrag = Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
     const hasCurrentSelection = !!window.getSelection()?.toString();
 
-    if (this._hasSelectionOnMousedown || hasCurrentSelection || dragDistance > 5) {
+    if (this._hasSelectionOnMousedown || hasCurrentSelection || isDrag) {
       return;
     }
 
