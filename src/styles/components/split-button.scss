@@ -14,13 +14,20 @@
     border-bottom-right-radius: 0;
   }
 
+  // Overlap the shared edge so there is no visible gap or double border.
+  // Angular Material spaces adjacent dialog-action buttons with
+  // `.mat-mdc-dialog-actions .mat-mdc-button-base + .mat-mdc-button-base
+  // { margin-left: 8px }` (specificity 0,3,0); match its hooks here so the
+  // negative margin wins and the two halves stay flush inside dialogs too.
+  > button.mat-mdc-button-base + button.mat-mdc-button-base {
+    margin-left: -1px;
+  }
+
   // Dropdown trigger: a compact square that sits flush against the default
   // action, sharing its 1px border so the two read as a single control.
   > button:last-of-type {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    // Overlap the shared edge so there is no visible gap or double border.
-    margin-left: -1px;
     min-width: 0;
     width: 36px;
     padding: 0;

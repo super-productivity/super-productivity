@@ -87,7 +87,7 @@ describe('ReminderModule dialog opening', () => {
     });
   });
 
-  it('opens task reminder dialog without passive close paths', fakeAsync(() => {
+  it('opens task reminder dialog as dismissable (no disableClose)', fakeAsync(() => {
     TestBed.inject(ReminderModule);
 
     syncDone$.next();
@@ -96,7 +96,6 @@ describe('ReminderModule dialog opening', () => {
 
     expect(matDialogSpy.open).toHaveBeenCalledOnceWith(DialogViewTaskRemindersComponent, {
       restoreFocus: true,
-      disableClose: true,
       data: {
         reminders: [reminder],
       },
