@@ -67,10 +67,11 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
 
         // Edge-to-edge (Capacitor 8, targetSdk 36): this overlay lives on the
         // full-window android.R.id.content, behind the system navigation bar,
-        // while the web UI lives in a WebView that the edge-to-edge plugin insets
-        // above the nav bar. Lift the FAB/input bar by that same inset so they
-        // line up with the web add-task button/bar we hand off to. Re-measured on
-        // each layout so it catches the inset being applied late and on rotation.
+        // while the web UI draws edge-to-edge and pads its add-task bar above the
+        // nav bar by the bottom system-bar (safe-area) inset. Lift the FAB/input
+        // bar by that same inset so they line up with the web bar we hand off to.
+        // Re-measured on each layout so it catches the inset being applied late
+        // and on rotation. See updateOverlayInsets.
         insetLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { updateOverlayInsets() }
         rootView.viewTreeObserver.addOnGlobalLayoutListener(insetLayoutListener)
         updateOverlayInsets()

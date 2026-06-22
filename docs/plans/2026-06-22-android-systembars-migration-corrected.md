@@ -188,6 +188,39 @@ overlays to the test matrix.
 
 ---
 
+## Multi-review findings to confirm on device (implementation, 2026-06-22)
+
+A 3-agent review of the implementation diff found the merge resolution correct and
+the migration mechanically clean (no leftovers, deps/gradle consistent, iOS
+untouched). The residual risks are all device-matrix items — listed here so they
+are explicitly checked, NOT blind-fixed (a blind fix risks re-creating #8508):
+
+1. **API ≥ 35 + WebView < 140 double-count (narrow band).** In SystemBars'
+   non-passthrough branch (API ≥ 35) it `setPadding`s the WebView parent *and*
+   injects `--safe-area-inset-*`; if the web also pads via `var(--safe-area-*)`
+   that double-counts. The common API 36 case is WebView ≥ 140 = passthrough (no
+   static parent padding → no double-count), so this is the stale-WebView corner.
+   Verify on an API 35/36 device with an old WebView; if real, gate the web
+   padding off on that band rather than removing it globally.
+2. **`env(safe-area-inset-bottom)` vs `var(--safe-area-bottom)` consumers diverge
+   on API ≥ 35.** Some SCSS (e.g. `mobile-bottom-nav`, `app.component`) reads raw
+   `env()`; others read `var(--safe-area-*)`. On API ≥ 35 SystemBars can zero the
+   passed-through insets while injecting real px into the vars, so the two
+   families disagree. Confirm the bottom-nav / add-task-bar spacing on API 35/36;
+   reconcile to one source per band if it's wrong.
+3. **API 30–34 + WebView < 140 IME owner.** The native shim is gated `SDK_INT < 30`
+   (deliberate — newer APIs were observed to resize the window for the IME, and
+   insetting on top of that re-creates the #8508 squash). Under SystemBars,
+   WebView < 140 gets no IME padding below API 35. Verify whether the window still
+   resizes on API 30–34: if it does, no gap; if it does NOT, extend the shim to
+   `< 35 && WebView < 140` — but only after confirming on a device, never blind.
+4. **CDK overlay / context-menu top position shifts on API ≥ 35.** `--safe-area-
+   inset-top` now resolves to real px there (was 0 on Android), so connected
+   overlays clamp below the status bar. Likely more correct; re-test the overlay
+   matrix.
+
+---
+
 ## Blast radius / rollback
 
 - **Native (NOT remotely hotfixable):** plugin removal, `StartupOverlayManager.kt`,

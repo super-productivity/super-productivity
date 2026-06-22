@@ -28,12 +28,12 @@ const config: CapacitorConfig = {
     },
     SystemBars: {
       // Let Capacitor's built-in SystemBars own edge-to-edge inset handling on
-      // Android (replaces the @capawesome edge-to-edge plugin). 'css' injects
-      // --safe-area-inset-* CSS vars the web layer pads itself with. NOTE:
-      // SystemBars only acts on WebView >= 140 (passthrough) or API >= 35; the
-      // WebView <140 / API <35 tail falls back to env() + the native keyboard
-      // shim in CapacitorMainActivity. See
-      // docs/plans/2026-06-22-android-systembars-migration-corrected.md.
+      // Android (replaces the @capawesome edge-to-edge plugin). 'css' enables
+      // SystemBars' Android inset handling: it *injects* --safe-area-inset-* CSS
+      // vars on API >= 35, and passes native env(safe-area-inset-*) through on
+      // WebView >= 140. The WebView <140 / API <35 tail gets neither and falls
+      // back to env() (plus the native keyboard shim in CapacitorMainActivity).
+      // See docs/plans/2026-06-22-android-systembars-migration-corrected.md.
       insetsHandling: 'css',
       // Initial bar icon style before the theme service boots; runtime updates
       // go through StatusBar.setStyle / NavigationBar (global-theme.service.ts).

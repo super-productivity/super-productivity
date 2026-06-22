@@ -760,18 +760,20 @@ export class GlobalThemeService {
 
     // On Android the WebView now draws edge-to-edge (the @capawesome plugin that
     // used to inset it via native margins was removed in favour of Capacitor's
-    // built-in SystemBars). SystemBars owns the --safe-area-inset-* vars:
-    //   - WebView >= 140 (passthrough) or API >= 35: SystemBars injects the real
-    //     px insets into these same vars on every inset dispatch. We must NOT
-    //     also write them from JS — two writers on the same documentElement
-    //     inline style race (last-writer-wins, OS/timing dependent). So leave
-    //     them to SystemBars on Android.
-    //   - WebView < 140 / API < 35 tail: SystemBars injects nothing, so the vars
-    //     stay unset and the SCSS fallback `var(--safe-area-inset-*, env(...))`
-    //     in _css-variables.scss resolves them from env(). With viewport-fit=
-    //     cover env(safe-area-inset-top) equals the status-bar height when the
-    //     WebView extends under it — this is exactly the #8283 top fallback,
-    //     preserved automatically by not pinning the var here.
+    // built-in SystemBars). The --safe-area-inset-* vars are no longer written
+    // from JS on Android — that would race SystemBars on the same documentElement
+    // inline style (last-writer-wins, OS/timing dependent). Each band resolves
+    // them on its own (verified against the bundled SystemBars.java):
+    //   - API >= 35: SystemBars *injects* the real px into --safe-area-inset-*.
+    //   - WebView >= 140 (any API): SystemBars passes the native insets through,
+    //     so the WebView's own env(safe-area-inset-*) is correct (no injection
+    //     below API 35).
+    //   - WebView < 140 / API < 35 tail: SystemBars does nothing here.
+    // In every case the SCSS fallback `var(--safe-area-inset-*, env(...))` in
+    // _css-variables.scss resolves to the injected px when present, else to
+    // env(). With viewport-fit=cover env(safe-area-inset-top) equals the
+    // status-bar height when the WebView extends under it — exactly the #8283 top
+    // fallback, preserved automatically by not pinning the var here.
     // Only iOS (contentInset: 'never') still needs JS-fed insets from
     // capacitor-plugin-safe-area; SystemBars insetsHandling is Android-only.
     if (!this._platformService.isAndroid()) {
