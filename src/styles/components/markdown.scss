@@ -111,6 +111,8 @@
     padding-right: var(--s);
     position: relative;
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
 
     &:after {
       content: '';
