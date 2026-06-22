@@ -229,11 +229,14 @@ device, or the squashed sliver on the buggy v18.11.0 WebView.
 
 **Fix (`dialog-fullscreen-markdown.component.scss`).** Use the same
 resize-detecting `--keyboard-height` the add-task bar uses for the
-Android / mobile-web case; keep the iOS `--keyboard-overlay-offset` path as a
-second, source-order-later rule (equal specificity → wins on iOS):
+Android / mobile-web case; keep the iOS `--keyboard-overlay-offset` path in a
+separate rule. iOS carries **both** `isNativeMobile` and `isIOS` (and sets
+`--keyboard-height` non-zero), so the Android rule excludes iOS with
+`:not(.isIOS)` — the two rules are mutually exclusive and order-independent
+(rather than relying on equal-specificity source order):
 
 ```scss
-:host-context(body.isNativeMobile.isKeyboardVisible) {
+:host-context(body.isNativeMobile:not(.isIOS).isKeyboardVisible) {
   height: calc(100% - var(--keyboard-height, 0px));
 }
 :host-context(body.isIOS.isKeyboardVisible) {
@@ -316,6 +319,12 @@ SystemBars on `--safe-area-inset-*`:
 - Known small gap: an **API 30–34** device on an **old WebView < 140** also has
   env()==0 but is excluded by the SDK < 30 gate; rare (WebView auto-updates above
   API 30) — broaden the gate to WebView-only if it ever surfaces.
+- The var lives only as an inline style on the document, so a web-side reload
+  (`window.location.reload()` — language change, PWA update, sync-conflict
+  recovery) wipes it. The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
+  `flushPendingShareIntent()` (runs on every frontend (re)load) so the next layout
+  pass re-publishes it; without the reset the unchanged value would be skipped and
+  the overlap would regress after a reload.
 
 ## What NOT to do
 

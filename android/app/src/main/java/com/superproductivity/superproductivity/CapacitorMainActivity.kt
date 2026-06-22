@@ -325,6 +325,14 @@ class CapacitorMainActivity : BridgeActivity() {
 
     fun flushPendingShareIntent() {
         isFrontendReady = true
+        // A web-side reload (e.g. language change, PWA update, sync-conflict
+        // recovery — all do window.location.reload()) re-runs the bundle and
+        // re-enters here, but it also wipes the inline --android-status-bar-overlap
+        // off the fresh document. Re-arm the dedupe so the next layout pass
+        // re-publishes it; otherwise the unchanged value is skipped and the
+        // header overlaps the status bar again on the WebView < 140 / API < 30
+        // tail. See pushStatusBarOverlapBelowApi30.
+        lastStatusBarOverlapCssPx = -1
         pendingShareIntent?.let {
             Log.d("SP_SHARE", "Flushing pending share intent: $it")
             callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", it.toString())

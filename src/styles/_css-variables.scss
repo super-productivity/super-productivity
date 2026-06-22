@@ -54,6 +54,9 @@
   // — #8508 / #8283 (Android 9 / API 28). It is 0 once the WebView is inset, so
   // max() never double-counts; on API >= 35 / WebView >= 140 the injected
   // --safe-area-inset-top wins via var() precedence and this fallback is ignored.
+  // Declared 0px so the token is always defined (it is only ever overridden by
+  // the native inline write on the affected tail).
+  --android-status-bar-overlap: 0px;
   --safe-area-top: var(
     --safe-area-inset-top,
     max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
