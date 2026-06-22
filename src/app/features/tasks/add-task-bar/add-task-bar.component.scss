@@ -50,6 +50,10 @@
 
   &.isGlobalBarVariant {
     box-shadow: none;
+    // Ensure the HUD surface is fully opaque on macOS. The window itself may
+    // use a transparent background, so the content must provide the solid color.
+    background-color: var(--bg-lighter);
+    opacity: 1;
   }
 }
 

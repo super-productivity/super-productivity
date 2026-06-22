@@ -217,6 +217,13 @@ body.isQuickAddHud {
   &:before {
     display: none !important;
   }
+
+  // Keep the HUD content surface opaque even though the window background is
+  // transparent. This prevents the semi-transparent backdrop artifact on macOS.
+  add-task-bar .add-task-container.isGlobalBarVariant {
+    background-color: var(--bg-lighter);
+    opacity: 1;
+  }
 }
 
 .page-wrapper {

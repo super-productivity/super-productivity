@@ -25,6 +25,7 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
+import { preloadQuickAddWindow } from './quick-add-window';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -387,6 +388,13 @@ export const createWindow = async ({
     markGpuStartupSuccess();
   });
 
+  ipcMain.on(IPC.QUICK_ADD_BRIDGE_READY, () => {
+    // Preload the hidden Quick Add HUD window as soon as the main renderer
+    // announces it can service snapshot/submit requests. This eliminates the
+    // first-open bootup screen the user otherwise sees while Angular loads.
+    preloadQuickAddWindow();
+  });
+
   // Register F11 key handler for fullscreen toggle
   mainWin.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown' && input.key === 'F11') {
@@ -659,8 +667,8 @@ const appCloseHandler = (app: App): void => {
     setIsQuitRequested(false);
 
     // Dereference the window object
-    mainWin = null;
-    mainWinModule.win = null;
+    mainWin = null as unknown as BrowserWindow;
+    mainWinModule.win = undefined;
   });
 
   mainWin.webContents.on('render-process-gone', (event, detailed) => {

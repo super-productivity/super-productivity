@@ -72,7 +72,7 @@ describe('QuickAddHudDataFacadeService', () => {
     expect(translateService.use).toHaveBeenCalledWith('de');
   });
 
-  it('should pass the snapshot lng to TranslateService even when empty', async () => {
+  it('should fall back to English when snapshot lng is empty', async () => {
     (window.ea.requestQuickAddSnapshot as jasmine.Spy).and.resolveTo({
       ok: true,
       snapshot: { ...createSnapshot('de'), lng: '' },
@@ -80,6 +80,20 @@ describe('QuickAddHudDataFacadeService', () => {
 
     await service.refreshSnapshot();
 
-    expect(translateService.use).toHaveBeenCalledWith('');
+    expect(translateService.use).toHaveBeenCalledWith('en');
+  });
+
+  it('should switch language when a new snapshot has a different lng', async () => {
+    await service.refreshSnapshot();
+    expect(translateService.use).toHaveBeenCalledWith('de');
+
+    (window.ea.requestQuickAddSnapshot as jasmine.Spy).and.resolveTo({
+      ok: true,
+      snapshot: createSnapshot('fr'),
+    });
+
+    await service.refreshSnapshot();
+
+    expect(translateService.use).toHaveBeenCalledWith('fr');
   });
 });

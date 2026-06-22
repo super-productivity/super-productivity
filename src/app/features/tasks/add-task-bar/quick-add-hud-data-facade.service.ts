@@ -1,6 +1,7 @@
 import { computed, Injectable, WritableSignal, signal, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { TranslateService } from '@ngx-translate/core';
+import { DEFAULT_LANGUAGE } from '../../../core/locale.constants';
 import type { Project } from '../../project/project.model';
 import type { Tag } from '../../tag/tag.model';
 import type { WorkContext } from '../../work-context/work-context.model';
@@ -174,7 +175,8 @@ export class QuickAddHudDataFacadeService implements AddTaskBarDataFacade {
     }
     const snapshot = result.snapshot;
     this._snapshot.set(snapshot);
-    void this._translateService.use(snapshot.lng);
+    const lng = snapshot.lng || DEFAULT_LANGUAGE;
+    void this._translateService.use(lng);
     this._activeWorkContext$.next(_toWorkContext(snapshot.activeWorkContext));
     this._tasksConfig$.next({
       ...EMPTY_TASKS_CONFIG,

@@ -112,6 +112,19 @@ export const destroyQuickAddWindow = (): void => {
   quickAddWin = null;
 };
 
+export const preloadQuickAddWindow = (): void => {
+  if (!loadUrl) {
+    error('Cannot preload Quick Add window: loadUrl is not set');
+    return;
+  }
+  if (!getIsAppReady() || !isQuickAddBridgeReady) {
+    return;
+  }
+  if (!quickAddWin || quickAddWin.isDestroyed()) {
+    createQuickAddWindow();
+  }
+};
+
 export const showQuickAddWindow = (): void => {
   const mainWin = getWinSafe();
   if (!getIsAppReady()) {
@@ -146,6 +159,9 @@ export const showQuickAddWindow = (): void => {
     const { x, y, width, height } = _getQuickAddWindowBounds();
     quickAddWin.setBounds({ width, height, x, y });
     quickAddWin.show();
+    if (IS_MAC) {
+      quickAddWin.setOpacity(1);
+    }
     quickAddWin.focus();
     _sendQuickAddOpened();
   }
@@ -194,8 +210,9 @@ const createQuickAddWindow = (): void => {
     y,
     title: 'Super Productivity Quick Add',
     frame: false,
-    transparent: true,
+    transparent: !IS_MAC,
     hasShadow: false,
+    roundedCorners: IS_MAC,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -399,7 +416,7 @@ const _resolvePending = <T>(
     request.reject(new Error('Quick Add IPC response is missing payload'));
     return;
   }
-  request.resolve(response.payload);
+  request.resolve(response.payload as T);
 };
 
 const _rejectAllPending = (reason: unknown): void => {

@@ -18,6 +18,7 @@ let mainWin;
 let isAppReady;
 let showOrFocusCalls;
 let loadedMod;
+let commonIsMac = false;
 
 class FakeWebContents {
   constructor(owner) {
@@ -66,6 +67,7 @@ class FakeBrowserWindow {
     this.options = options;
     this._destroyed = false;
     this._visible = false;
+    this._opacity = 1;
     this.webContents = new FakeWebContents(this);
     this._listeners = new Map();
     createdWindows.push(this);
@@ -97,6 +99,10 @@ class FakeBrowserWindow {
 
   hide() {
     this._visible = false;
+  }
+
+  setOpacity(opacity) {
+    this._opacity = opacity;
   }
 
   destroy() {
@@ -169,7 +175,7 @@ const installMocks = () => {
       };
     }
     if (request.endsWith('common.const')) {
-      return { IS_MAC: false };
+      return { IS_MAC: commonIsMac };
     }
     if (request.endsWith('various-shared')) {
       return {
@@ -203,6 +209,7 @@ test.beforeEach(() => {
   isAppReady = false;
   showOrFocusCalls = [];
   loadedMod = undefined;
+  commonIsMac = false;
   installMocks();
 });
 
@@ -243,6 +250,35 @@ test('quick-add window uses compact transparent bounds and the minimal preload',
   assert.equal(quickAddWin.options.width, 768);
   assert.equal(quickAddWin.options.height, 420);
   assert.deepEqual(quickAddWin.bounds, { width: 768, height: 420, x: 16, y: 96 });
+});
+
+test('quick-add window is opaque and rounded on macOS', () => {
+  commonIsMac = true;
+  const mod = loadModule();
+  mod.initQuickAddWindow(true, 'http://localhost:4200');
+  isAppReady = true;
+  markBridgeReady();
+
+  mod.showQuickAddWindow();
+
+  const quickAddWin = createdWindows[0];
+  assert.equal(quickAddWin.options.transparent, false);
+  assert.equal(quickAddWin.options.roundedCorners, true);
+  assert.equal(quickAddWin.options.hasShadow, false);
+});
+
+test('preloadQuickAddWindow creates the window hidden before first show', () => {
+  const mod = loadModule();
+  mod.initQuickAddWindow(true, 'http://localhost:4200');
+  isAppReady = true;
+  markBridgeReady();
+
+  mod.preloadQuickAddWindow();
+
+  assert.equal(createdWindows.length, 1);
+  const quickAddWin = createdWindows[0];
+  assert.equal(quickAddWin.isVisible(), false);
+  assert.equal(quickAddWin.url, 'http://localhost:4200/?quickAdd=1#/quick-add');
 });
 
 test('quick-add close IPC is accepted only from the quick-add window sender', () => {
