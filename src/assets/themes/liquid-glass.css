@@ -863,8 +863,10 @@ schedule-event {
 /* The single-edge separator above sets border-color: transparent !important,
  * which also erases the base keyboard focus ring on subtasks
  * (:host:focus … .box uses a non-!important border). Restore it so a focused
- * subtask matches a focused parent task (both use --palette-primary-400 here). */
-.sub-tasks task:focus .box {
+ * subtask matches a focused parent task (both use --palette-primary-400 here).
+ * Scoped to .isNoTouchOnly to mirror the base ring, which is noTouchOnly-guarded
+ * (_task-base.scss:111) — no focus border on touch-only devices. */
+.isNoTouchOnly .sub-tasks task:focus .box {
   border-color: var(--palette-primary-400) !important;
 }
 
