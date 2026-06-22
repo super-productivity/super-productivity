@@ -23,6 +23,13 @@ const valuesEqual = (a: unknown, b: unknown): boolean => {
   return a === b;
 };
 
+/**
+ * Shallow equality for issue-field values (booleans, strings, numbers, or
+ * string arrays like tagIds). Exported so the two-way-sync effect can detect
+ * un-pulled remote changes with the exact same semantics used here.
+ */
+export const issueValuesEqual = valuesEqual;
+
 export const computePushDecisions = (
   changedTaskFields: Record<string, unknown>,
   fieldMappings: FieldMapping[],

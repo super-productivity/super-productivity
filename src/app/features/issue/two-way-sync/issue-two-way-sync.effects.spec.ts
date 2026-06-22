@@ -109,6 +109,14 @@ describe('IssueTwoWaySyncEffects', () => {
     toTaskValue: (val: unknown) => val,
   };
 
+  const titleFieldMapping: FieldMapping = {
+    taskField: 'title',
+    issueField: 'summary',
+    defaultDirection: 'both',
+    toIssueValue: (val: unknown) => val,
+    toTaskValue: (val: unknown) => val,
+  };
+
   beforeEach(() => {
     actions$ = new Subject<any>();
 
@@ -357,6 +365,127 @@ describe('IssueTwoWaySyncEffects', () => {
         dtstart: '2026-03-19',
       });
       expect('issueLastUpdated' in updateChanges).toBeFalse();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('keeps issueLastUpdated stale when an unrelated mapped field changed remotely (completed in Plainspace while renaming in SP)', fakeAsync(() => {
+      // The user renamed the task in SP (pushable) but had already completed it in
+      // Plainspace. `fetchIssue` (called before our write) reflects that completion
+      // (status COMPLETED) in a field we are NOT pushing this cycle. Advancing
+      // issueLastUpdated past it would make the poll skip it forever — the
+      // completion would never reach SP. So the marker must stay stale.
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([titleFieldMapping, isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ summary: 'Old title', status: 'COMPLETED' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: { summary: unknown; status: unknown }) => ({
+            summary: issue.summary,
+            status: issue.status,
+          })),
+        getIssueLastUpdated: jasmine
+          .createSpy('getIssueLastUpdated')
+          .and.returnValue(999),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        title: 'New title',
+        isDone: false,
+        issueLastSyncedValues: { summary: 'Old title', status: 'NEEDS-ACTION' },
+        issueLastUpdated: 123,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New title' } },
+        }),
+      );
+
+      tick();
+
+      // The rename is still pushed...
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { summary: 'New title' },
+        jasmine.any(Object),
+      );
+      const updateChanges = taskServiceSpy.update.calls.mostRecent()
+        .args[1] as Partial<Task>;
+      // ...the title baseline advances, the remote completion is left untouched...
+      expect(updateChanges.issueLastSyncedValues).toEqual({
+        summary: 'New title',
+        status: 'NEEDS-ACTION',
+      });
+      // ...and issueLastUpdated is NOT advanced, so the next poll still pulls done.
+      expect('issueLastUpdated' in updateChanges).toBeFalse();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('advances issueLastUpdated after a clean push with no un-pulled remote changes', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([titleFieldMapping, isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ summary: 'Old title', status: 'NEEDS-ACTION' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: { summary: unknown; status: unknown }) => ({
+            summary: issue.summary,
+            status: issue.status,
+          })),
+        getIssueLastUpdated: jasmine
+          .createSpy('getIssueLastUpdated')
+          .and.returnValue(999),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        title: 'New title',
+        isDone: false,
+        issueLastSyncedValues: { summary: 'Old title', status: 'NEEDS-ACTION' },
+        issueLastUpdated: 123,
+      });
+
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New title' } },
+        }),
+      );
+
+      tick();
+
+      const updateChanges = taskServiceSpy.update.calls.mostRecent()
+        .args[1] as Partial<Task>;
+      expect(updateChanges.issueLastUpdated).toBe(999);
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));

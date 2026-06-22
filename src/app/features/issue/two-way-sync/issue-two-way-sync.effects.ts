@@ -10,7 +10,7 @@ import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
-import { computePushDecisions } from './compute-push-decisions';
+import { computePushDecisions, issueValuesEqual } from './compute-push-decisions';
 import { FieldMapping, FieldSyncConfig } from './issue-sync.model';
 import { IssueSyncAdapter } from './issue-sync-adapter.interface';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
@@ -581,11 +581,34 @@ export class IssueTwoWaySyncEffects {
         }
 
         const pushedDecisions = decisions.filter((d) => d.action === 'push');
+        const pushedIssueFields = new Set(pushedDecisions.map((d) => d.field));
         const hasProviderOwnedSkip = decisions.some(
           (d) =>
             d.action === 'skip' &&
             (d.reasonCode === 'provider-changed' || d.reasonCode === 'no-baseline'),
         );
+
+        // Detect remote changes in mapped fields we did NOT push this cycle — e.g.
+        // the task was completed in Plainspace (isDone flipped) while the user was
+        // pushing an unrelated rename/reschedule from SP. `freshIssue` was fetched
+        // before our write, so `freshValues` still carries that un-pulled change.
+        // Advancing issueLastUpdated past it would make the poll's "updatedAt
+        // unchanged" guard treat it as already-seen and never pull it — silently
+        // dropping the remote completion. Keep the old marker so the next poll
+        // reconciles it. (hasProviderOwnedSkip already covers the changed fields.)
+        const hasUnpulledRemoteChange = fieldMappings.some((m) => {
+          if (pushedIssueFields.has(m.issueField)) {
+            return false;
+          }
+          if (!(m.issueField in lastSyncedValues)) {
+            return false;
+          }
+          return !issueValuesEqual(
+            freshValues[m.issueField],
+            lastSyncedValues[m.issueField],
+          );
+        });
+        const keepIssueLastUpdatedStale = hasProviderOwnedSkip || hasUnpulledRemoteChange;
 
         // Only advance baselines for fields we actually wrote. Fresh provider
         // values for skipped or unrelated fields still need the polling path to
@@ -599,19 +622,20 @@ export class IssueTwoWaySyncEffects {
         // (e.g. CalDAV etag changes on write). Fall back to Date.now() for
         // providers that don't implement getIssueLastUpdated.
         let issueLastUpdated = Date.now();
-        if (didPush && !hasProviderOwnedSkip && adapter.getIssueLastUpdated) {
+        if (didPush && !keepIssueLastUpdatedStale && adapter.getIssueLastUpdated) {
           const postPushIssue = await adapter.fetchIssue(issueId, cfg);
           issueLastUpdated = adapter.getIssueLastUpdated(postPushIssue);
         }
 
         // Update sync values and issueLastUpdated to prevent poll from
         // treating our own push as an external update. If any changed field was
-        // provider-owned, keep the old issueLastUpdated so polling can pull it.
+        // provider-owned, or the remote has an un-pulled change in another mapped
+        // field, keep the old issueLastUpdated so polling can pull it.
         this._trackSyncOriginatedTask(task.id);
         try {
           this._taskService.update(task.id, {
             issueLastSyncedValues: updatedSyncValues,
-            ...(hasProviderOwnedSkip ? {} : { issueLastUpdated }),
+            ...(keepIssueLastUpdatedStale ? {} : { issueLastUpdated }),
           });
         } catch (e) {
           this._syncOriginatedTaskIds.delete(task.id);
