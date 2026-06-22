@@ -28,18 +28,25 @@
 }
 
 // Keyboard open: shrink the dialog above the IME, or its textarea + Close/Save
-// get squashed/hidden behind the keyboard. The amount to subtract is "resize-
-// detecting" and differs per platform (full rationale + device matrix in
-// docs/android-edge-to-edge-keyboard.md, #8508):
-//   Android/web: `--keyboard-height` is the resize-detecting value (0 once the
-//                system resized the window), same signal as the add-task bar.
-//   iOS:         `--keyboard-height` there is the FULL height (would double-
-//                count), so use the iOS resize-detecting `--keyboard-overlay-
-//                offset`. Equal specificity → this rule must stay last to win.
+// get squashed/hidden behind the keyboard. Subtract only the keyboard amount —
+// `:host` is border-box (global `* { box-sizing: border-box }`) so the
+// padding-top/bottom safe areas above are ALREADY inside `height`; subtracting
+// `--safe-area-top` again would double-remove the top inset and leave a
+// safe-area-top-sized gap between the controls and the keyboard (#8508 API 28
+// follow-up — invisible until --safe-area-top became non-zero on API < 30).
+// `--keyboard-height` is the resize-detecting value (0 once the system/native
+// shrank the window, the obscured amount otherwise), same signal as the
+// add-task bar. Full rationale + device matrix in
+// docs/android-edge-to-edge-keyboard.md (#8508).
 :host-context(body.isNativeMobile.isKeyboardVisible) {
-  height: calc(100% - var(--keyboard-height, 0px) - var(--safe-area-top));
+  height: calc(100% - var(--keyboard-height, 0px));
 }
 
+// iOS keeps its own override (different keyboard runtime: the WebView does not
+// resize, so it uses `--keyboard-overlay-offset`). Left as-is — the
+// `- --safe-area-top` term here is unverified on an iOS device and out of scope
+// for the API 28 fix; check it separately if an iOS bottom gap shows up. Equal
+// specificity → this rule stays last so it wins on iOS.
 :host-context(body.isIOS.isKeyboardVisible) {
   height: calc(100% - var(--keyboard-overlay-offset, 0px) - var(--safe-area-top));
 }

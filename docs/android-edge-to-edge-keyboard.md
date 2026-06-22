@@ -228,13 +228,13 @@ height `100%` resolved to: full (content behind the keyboard) on a non-resizing
 device, or the squashed sliver on the buggy v18.11.0 WebView.
 
 **Fix (`dialog-fullscreen-markdown.component.scss`).** Use the same
-resize-detecting `--keyboard-height` the add-task bar uses, for the
+resize-detecting `--keyboard-height` the add-task bar uses for the
 Android / mobile-web case; keep the iOS `--keyboard-overlay-offset` path as a
 second, source-order-later rule (equal specificity → wins on iOS):
 
 ```scss
 :host-context(body.isNativeMobile.isKeyboardVisible) {
-  height: calc(100% - var(--keyboard-height, 0px) - var(--safe-area-top));
+  height: calc(100% - var(--keyboard-height, 0px));
 }
 :host-context(body.isIOS.isKeyboardVisible) {
   height: calc(100% - var(--keyboard-overlay-offset, 0px) - var(--safe-area-top));
@@ -247,13 +247,24 @@ device classes this doc tracks:
 
 - **API < 30** — the SDK 28 native fix shrinks the WebView layout height, so
   `100%` is already above the keyboard and `--keyboard-height == 0`; the rule is
-  `100% - 0 - safe-top` (same as before there). Works.
+  `100% - 0`. Works.
 - **API >= 30, window resizes** (verified 18.12.0) — `--keyboard-height == 0`,
-  identical to the old rule. Works; never worse than before.
+  so `100% - 0`. Works.
 - **API >= 30, no resize but VisualViewport shrinks** (open item #4) —
-  `--keyboard-height > 0` lifts the dialog above the keyboard. This is the case
-  the old iOS-only rule got wrong and the new rule fixes, bringing the dialog to
-  parity with the add-task bar.
+  `--keyboard-height > 0` lifts the dialog above the keyboard, on par with the
+  add-task bar.
+
+**Do NOT also subtract `--safe-area-top` here.** An earlier version of this fix
+did (`100% - --keyboard-height - --safe-area-top`). That is a double-count:
+`:host` is `border-box` (global `* { box-sizing: border-box }`) and already has
+`padding-top: var(--safe-area-top)`, so the top inset is _inside_ `height: 100%`.
+Subtracting it again left a `--safe-area-top`-sized gap between the Close/Save
+controls and the keyboard. It was invisible while `--safe-area-top` was 0 on
+API < 30, then surfaced the moment the status-bar fix above made it non-zero
+(also latent on API >= 30, where env() already gave a non-zero `--safe-area-top`).
+The iOS rule keeps its `- --safe-area-top` term for now — its keyboard runtime
+differs (the WebView does not resize) and it is unverified on an iOS device; if
+an iOS bottom gap appears, drop the term there too.
 
 ## #8508 follow-up — SDK 28 (Android 9): header draws BEHIND the status bar
 
