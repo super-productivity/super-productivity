@@ -179,13 +179,13 @@ Driven from the existing keyboard `OnGlobalLayoutListener`:
 > is visible (`EdgeToEdge.applyInsetsInternal`, because it expects the system to
 > resize — which enforced edge-to-edge prevents on API < 30). Correcting the margin
 > from a second writer made the bar **flicker constantly** (on-device logcat showed
-> the margin alternating `0 ↔ lift` every frame); WebView bottom *padding* doesn't
+> the margin alternating `0 ↔ lift` every frame); WebView bottom _padding_ doesn't
 > move the web layout viewport; and fully replacing the plugin's listener fixed the
 > flicker but stopped the plugin re-sizing its status/nav **color overlays**, so the
 > navbar showed a **white gap**. Setting an explicit `layout_height` is the way out:
 > it is a different property than the margin the plugin manages, and for an
 > explicit-height view the bottom margin does not change the view's size — so the two
-> never fight, and the plugin keeps doing *everything else* (insets + color overlays,
+> never fight, and the plugin keeps doing _everything else_ (insets + color overlays,
 > no white gap). The target is read from the visible frame and does not depend on the
 > WebView's own height, so it is stable pass-to-pass (no feedback loop).
 
@@ -212,6 +212,48 @@ flicker) and that the status/nav-bar layout is unchanged with the keyboard down,
 and on an API >= 30 device that nothing changed at all. A debug-only
 `Log.d("SUPKeyboard", "webView height …")` reports each height write — in steady
 state expect one per show/hide, not a stream. Remove that log before merge.
+
+## #8508 follow-up — fullscreen markdown / notes editor squashed
+
+**Status: CSS fix implemented, PENDING ON-DEVICE VALIDATION.** Reported on #8508:
+editing a project (or task) note on Android with the keyboard up, the
+`DialogFullscreenMarkdownComponent` toolbar + textarea + Close/Save controls were
+squashed into the top of the screen with a large blank gap down to the keyboard.
+
+**Why.** The bar is not the only `position: fixed` surface that must clear the
+keyboard — this dialog is `position: fixed; height: 100%` too. Its keyboard rule
+subtracted `--keyboard-overlay-offset`, which is set **only on iOS**, so on
+Android it was a no-op. With the keyboard up the dialog therefore kept whatever
+height `100%` resolved to: full (content behind the keyboard) on a non-resizing
+device, or the squashed sliver on the buggy v18.11.0 WebView.
+
+**Fix (`dialog-fullscreen-markdown.component.scss`).** Use the same
+resize-detecting `--keyboard-height` the add-task bar uses, for the
+Android / mobile-web case; keep the iOS `--keyboard-overlay-offset` path as a
+second, source-order-later rule (equal specificity → wins on iOS):
+
+```scss
+:host-context(body.isNativeMobile.isKeyboardVisible) {
+  height: calc(100% - var(--keyboard-height, 0px) - var(--safe-area-top));
+}
+:host-context(body.isIOS.isKeyboardVisible) {
+  height: calc(100% - var(--keyboard-overlay-offset, 0px) - var(--safe-area-top));
+}
+```
+
+This is **not** the reverted-#8295 trap above: it reads the pure VisualViewport
+`--keyboard-height`, never augments it with native data. Coverage across the
+device classes this doc tracks:
+
+- **API < 30** — the SDK 28 native fix shrinks the WebView layout height, so
+  `100%` is already above the keyboard and `--keyboard-height == 0`; the rule is
+  `100% - 0 - safe-top` (same as before there). Works.
+- **API >= 30, window resizes** (verified 18.12.0) — `--keyboard-height == 0`,
+  identical to the old rule. Works; never worse than before.
+- **API >= 30, no resize but VisualViewport shrinks** (open item #4) —
+  `--keyboard-height > 0` lifts the dialog above the keyboard. This is the case
+  the old iOS-only rule got wrong and the new rule fixes, bringing the dialog to
+  parity with the add-task bar.
 
 ## What NOT to do
 

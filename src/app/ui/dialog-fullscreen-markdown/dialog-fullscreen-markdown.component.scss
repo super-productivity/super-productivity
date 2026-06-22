@@ -27,10 +27,20 @@
   padding-right: var(--safe-area-right);
 }
 
-// On iOS, the virtual keyboard overlaps position:fixed elements since the CDK
-// overlay container does not shrink with Capacitor's resize:'native' mode.
-// Subtract only the keyboard overlap not already handled by viewport resizing.
+// Keyboard open: shrink the dialog above the IME, or its textarea + Close/Save
+// get squashed/hidden behind the keyboard. The amount to subtract is "resize-
+// detecting" and differs per platform (full rationale + device matrix in
+// docs/android-edge-to-edge-keyboard.md, #8508):
+//   Android/web: `--keyboard-height` is the resize-detecting value (0 once the
+//                system resized the window), same signal as the add-task bar.
+//   iOS:         `--keyboard-height` there is the FULL height (would double-
+//                count), so use the iOS resize-detecting `--keyboard-overlay-
+//                offset`. Equal specificity → this rule must stay last to win.
 :host-context(body.isNativeMobile.isKeyboardVisible) {
+  height: calc(100% - var(--keyboard-height, 0px) - var(--safe-area-top));
+}
+
+:host-context(body.isIOS.isKeyboardVisible) {
   height: calc(100% - var(--keyboard-overlay-offset, 0px) - var(--safe-area-top));
 }
 
