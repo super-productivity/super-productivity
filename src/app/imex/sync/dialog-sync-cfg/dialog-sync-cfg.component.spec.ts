@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { FormControl, FormGroup } from '@angular/forms';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
@@ -264,6 +265,99 @@ describe('DialogSyncCfgComponent', () => {
       );
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL }),
+      );
+    });
+  });
+
+  describe('Nextcloud detect user ID (#7617)', () => {
+    it('asks for the login/password before calling the server', async () => {
+      await (component as any)._detectNextcloudUserId({
+        serverUrl: '',
+        loginName: '',
+        userName: '',
+        password: '',
+      });
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.FORM.NEXTCLOUD.S_DETECT_USER_ID_NEED_LOGIN,
+        }),
+      );
+    });
+
+    const buildNextcloudForm = (userName: string, loginName: string): void => {
+      component.form = new FormGroup({
+        nextcloud: new FormGroup({
+          userName: new FormControl(userName),
+          loginName: new FormControl(loginName),
+        }),
+      }) as any;
+    };
+    const valueOf = (key: string): unknown =>
+      (component.form.get(`nextcloud.${key}`) as FormControl | null)?.value;
+
+    it('fills the Username field with the detected user ID and confirms', () => {
+      buildNextcloudForm('janedoe', 'jane@example.com');
+
+      (component as any)._applyDetectedUserIdResult({ success: true, userId: 'janedoe' });
+
+      expect(valueOf('userName')).toBe('janedoe');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'SUCCESS',
+          msg: T.F.SYNC.FORM.NEXTCLOUD.S_DETECT_USER_ID_SUCCESS,
+          translateParams: { userId: 'janedoe' },
+        }),
+      );
+    });
+
+    it('preserves the typed login: moves it to Login name when Login name was empty', () => {
+      // User put their email in "Username" (which authenticated) and left
+      // "Login name" empty — keep the email as login so auth still works.
+      buildNextcloudForm('jane@example.com', '');
+
+      (component as any)._applyDetectedUserIdResult({ success: true, userId: 'janedoe' });
+
+      expect(valueOf('userName')).toBe('janedoe');
+      expect(valueOf('loginName')).toBe('jane@example.com');
+    });
+
+    it('does not overwrite an existing Login name', () => {
+      buildNextcloudForm('', 'jane@example.com');
+
+      (component as any)._applyDetectedUserIdResult({ success: true, userId: 'janedoe' });
+
+      expect(valueOf('userName')).toBe('janedoe');
+      expect(valueOf('loginName')).toBe('jane@example.com');
+    });
+
+    it('leaves Login name empty when Username already equals the detected ID', () => {
+      buildNextcloudForm('janedoe', '');
+
+      (component as any)._applyDetectedUserIdResult({ success: true, userId: 'janedoe' });
+
+      expect(valueOf('userName')).toBe('janedoe');
+      expect(valueOf('loginName')).toBe('');
+    });
+
+    it('surfaces the failure message (e.g. a 401) without touching the form', () => {
+      component.form = new FormGroup({
+        nextcloud: new FormGroup({ userName: new FormControl('keep-me') }),
+      }) as any;
+
+      (component as any)._applyDetectedUserIdResult({
+        success: false,
+        error: 'Authentication failed (HTTP 401).',
+      });
+
+      expect(
+        (component.form.get('nextcloud.userName') as FormControl | null)?.value,
+      ).toBe('keep-me');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.FORM.NEXTCLOUD.S_DETECT_USER_ID_FAIL,
+          translateParams: { error: 'Authentication failed (HTTP 401).' },
+        }),
       );
     });
   });

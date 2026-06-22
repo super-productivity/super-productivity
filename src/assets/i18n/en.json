@@ -1453,6 +1453,10 @@
           "SERVER_URL_DESCRIPTION": "e.g. https://cloud.example.com or https://example.com/nextcloud",
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one",
+          "L_DETECT_USER_ID": "Detect user ID",
+          "S_DETECT_USER_ID_NEED_LOGIN": "Enter your Server URL, your login (Username or Login name / email), and your App Password first.",
+          "S_DETECT_USER_ID_SUCCESS": "Found your Nextcloud user ID: {{userId}}. It has been filled into the Username field.",
+          "S_DETECT_USER_ID_FAIL": "Could not detect your user ID: {{error}}",
           "S_TEST_FAIL_USER_NOT_FOUND": "Connection test failed: user folder not found (404). Your login works, but \"Username\" must be your Nextcloud user ID — not your email or display name. To find it, open Files in Nextcloud, click the settings gear (bottom-left corner), and copy the <user-id> from the WebDAV URL shown there (.../remote.php/dav/files/<user-id>/). Target URL: {{url}}"
         },
         "ONEDRIVE": {

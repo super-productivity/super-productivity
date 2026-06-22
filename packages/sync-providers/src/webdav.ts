@@ -13,3 +13,8 @@ export {
   testWebdavConnection,
   type TestWebdavConnectionDeps,
 } from './file-based/webdav/test-connection';
+export {
+  discoverNextcloudUserId,
+  type DiscoverNextcloudUserIdDeps,
+  type DiscoverNextcloudUserIdResult,
+} from './file-based/webdav/discover-nextcloud-user-id';
