@@ -111,6 +111,11 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         // during the keyboard phase would read ~0 and drop the bar behind the
         // keyboard. The FAB-phase value (keyboard down) is the one the keyboard
         // listener needs. This also stops dead work once the FAB is gone.
+        //
+        // This early-return is also what keeps us off CapacitorMainActivity's
+        // adjustWebViewHeightForKeyboardBelowApi30, which shrinks `webView.height`
+        // while the IME is up (API < 30): we only read the height in the keyboard-
+        // down FAB phase, never while it is being shrunk. Keep this guard.
         if (isBarVisible) return
         val webView = (activity as? BridgeActivity)?.bridge?.webView ?: return
         if (overlay.height == 0 || webView.height == 0) return

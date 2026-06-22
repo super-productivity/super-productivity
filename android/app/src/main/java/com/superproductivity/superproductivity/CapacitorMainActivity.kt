@@ -52,6 +52,10 @@ class CapacitorMainActivity : BridgeActivity() {
     // See adjustWebViewHeightForKeyboardBelowApi30.
     private var webViewLayoutHeightDefault: Int? = null
 
+    // Reused scratch for getLocationOnScreen in the keyboard layout listener (hot
+    // path) to avoid allocating an IntArray on every pass while the IME is up.
+    private val webViewLocationOnScreen = IntArray(2)
+
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
 
@@ -478,6 +482,12 @@ class CapacitorMainActivity : BridgeActivity() {
      *
      * API >= 30 is a strict no-op — the plugin stays fully in charge, so the
      * behavior verified in 18.12.0 is unchanged.
+     *
+     * NOTE: [StartupOverlayManager.updateOverlayInsets] also reads the WebView's
+     * geometry (`webView.height`) to align the native startup overlay. It only
+     * stays correct because it early-returns once its input bar is visible (the
+     * keyboard phase) — i.e. it never reads the height while this method is
+     * shrinking it. Keep that guard if you touch either side.
      */
     private fun adjustWebViewHeightForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
         if (android.os.Build.VERSION.SDK_INT >= 30) return
@@ -486,12 +496,17 @@ class CapacitorMainActivity : BridgeActivity() {
         // Ignore stale/pre-layout geometry so the height is not set from a bad frame.
         if (isKeyboardOpen && webView.height == 0) return
 
-        val targetHeight = if (isKeyboardOpen) {
-            val loc = IntArray(2)
-            webView.getLocationOnScreen(loc)
-            (rect.bottom - loc[1]).coerceAtLeast(0)
+        val targetHeight: Int
+        if (isKeyboardOpen) {
+            webView.getLocationOnScreen(webViewLocationOnScreen)
+            val heightToKeyboardTop = rect.bottom - webViewLocationOnScreen[1]
+            // Guard against a degenerate/transient measurement collapsing the
+            // WebView to 0 — the height==0 check above would then latch and stop
+            // recomputing. Keep the current height until a sane value appears.
+            if (heightToKeyboardTop <= 0) return
+            targetHeight = heightToKeyboardTop
         } else {
-            webViewLayoutHeightDefault ?: ViewGroup.LayoutParams.MATCH_PARENT
+            targetHeight = webViewLayoutHeightDefault ?: ViewGroup.LayoutParams.MATCH_PARENT
         }
 
         if (params.height == targetHeight) return
