@@ -124,11 +124,14 @@ shrank. On API 28 _neither_ does:
 1. `targetSdk 36` + the `@capawesome` edge-to-edge plugin call
    `setDecorFitsSystemWindows(window, false)` on **all** API levels → the window
    goes edge-to-edge → the system stops resizing for the IME.
-2. With the patch gone the plugin sets WebView `bottomMargin = 0` while the
-   keyboard is up, _relying on the system resizing_. But `WindowInsetsCompat.Type.ime()`
-   is unreliable below **API 30**, so on API 28 the plugin neither detects the
-   IME nor insets the WebView.
-3. The old WebView's VisualViewport doesn't report the obscured area either →
+2. The plugin _does_ detect the IME on this device
+   (`WindowInsetsCompat.Type.ime()` reports visible) and sets WebView
+   `bottomMargin = 0` while the keyboard is up — `EdgeToEdge.applyInsetsInternal`:
+   "the system already resizes the window for the keyboard". But it does **not**
+   resize (point 1), so the WebView keeps its full height and the bar stays put.
+   _(An on-device logcat confirmed `keyboardVisible == true` here; the earlier
+   guess that `Type.ime()` is simply unreliable < 30 was wrong for this device.)_
+3. The WebView's VisualViewport doesn't shrink either →
    `obscured ≈ 0` → `--keyboard-height = 0` → the `position: fixed` bar sits
    behind the keyboard.
 
@@ -144,34 +147,59 @@ reverted #8295 formula in "What NOT to do" below**. On a device that _does_
 resize, that double-counts and floats the bar mid-screen. The web layer lacks
 the signal to disambiguate; native has it unambiguously.
 
-**Implemented fix (native, resize-detecting) —
-`CapacitorMainActivity.adjustWebViewForKeyboardBelowApi30`.** In the native
-layer that already has the real geometry, driven from the existing keyboard
-`OnGlobalLayoutListener`:
+**Implemented fix (native, explicit WebView height while the IME is up, scoped to
+API < 30) — `CapacitorMainActivity.adjustWebViewHeightForKeyboardBelowApi30`.**
+Driven from the existing keyboard `OnGlobalLayoutListener`:
 
-- height source: `getWindowVisibleDisplayFrame` (works on API 28, unlike
-  `Type.ime()`), not the plugin's `imeInsets.bottom`.
-- resize detection: compare the WebView's current bottom on screen against the
-  visible-frame bottom (`rect.bottom`). If the WebView already ends above the
-  keyboard (system resized / margin applied), `delta <= threshold` → do
-  **nothing**. Only when the WebView extends _behind_ the keyboard is it lifted
-  by exactly the overlap (via `bottomMargin`, matching the plugin), tracked so it
-  self-corrects as the keyboard height changes and restores the captured margin
-  on hide.
-- gated `Build.VERSION.SDK_INT < 30` so it is a strict no-op on every device
-  18.12.0 verified — it cannot perturb the behavior that was just fixed there.
+- while the keyboard is up: set an explicit WebView **layout height** to the
+  keyboard top, `height = rect.bottom − webViewTopOnScreen`
+  (`getWindowVisibleDisplayFrame`, reliable on API 28). Shrinking the view shrinks
+  the web layout viewport, so the existing CSS resolves the bar above the keyboard
+  with no web-side keyboard-height math.
+- while the keyboard is down: restore the resting height
+  (`webViewLayoutHeightDefault`, captured at startup, e.g. `MATCH_PARENT`), so the
+  plugin's normal margin-based layout applies unchanged.
+- gated `Build.VERSION.SDK_INT < 30`, so on API >= 30 it is a strict no-op and the
+  behavior verified in 18.12.0 is **untouched**.
 
-**Why not the web side:** see the paragraph above — `obscured` cannot
-distinguish "window resized" from "nothing resized", so a web fallback is the
-reverted #8295 formula. Native has the unambiguous geometry.
+> **Why height, not `bottomMargin` and not the plugin's listener.** The plugin owns
+> `webView.bottomMargin` and rewrites it to 0 on every inset dispatch while the IME
+> is visible (`EdgeToEdge.applyInsetsInternal`, because it expects the system to
+> resize — which enforced edge-to-edge prevents on API < 30). Correcting the margin
+> from a second writer made the bar **flicker constantly** (on-device logcat showed
+> the margin alternating `0 ↔ lift` every frame); WebView bottom *padding* doesn't
+> move the web layout viewport; and fully replacing the plugin's listener fixed the
+> flicker but stopped the plugin re-sizing its status/nav **color overlays**, so the
+> navbar showed a **white gap**. Setting an explicit `layout_height` is the way out:
+> it is a different property than the margin the plugin manages, and for an
+> explicit-height view the bottom margin does not change the view's size — so the two
+> never fight, and the plugin keeps doing *everything else* (insets + color overlays,
+> no white gap). The target is read from the visible frame and does not depend on the
+> WebView's own height, so it is stable pass-to-pass (no feedback loop).
+
+**Upstream status (why a local workaround at all).** This is a known, repeatedly
+regressed area in `@capawesome/capacitor-android-edge-to-edge-support` (pinned
+8.0.8): see `capawesome-team/capacitor-plugins` #845/#490/#596/#725/#819 (closed)
+and #847 (open). The buggy `keyboardVisible ? 0 : max(ime, navbar)` ternary in
+`EdgeToEdge.applyInsetsInternal` is acknowledged — the maintainer redirects to
+Capacitor core `ionic-team/capacitor#8466` (fixed for the **built-in** `SystemBars`
+by core PR #8481, merged), and plugin PR #848 ("correct WebView margin
+calculation") would fix the ternary but is **still open/unreleased**. So there is no
+shipped fix on the plugin path we use; this native workaround is independent of that
+timeline. Longer term, migrating to Capacitor 8's built-in `SystemBars`
+(`insetsHandling`) + dropping the plugin is the maintainer's implied direction.
+
+**Why not the web side:** `obscured` cannot distinguish "window resized" from
+"nothing resized", so a web `--keyboard-height` fallback is the reverted #8295
+formula. Native has the unambiguous geometry.
 
 **Still REQUIRED before release:** validate across the device matrix below — this
 area has silently regressed at #8295 and twice at #8508. Confirm on a real
-API < 30 device that the bar lifts above the keyboard, and on an API >= 30
-device that nothing changed. Watch for: a one-frame settle as the inset
-converges; the plugin overwriting the margin (self-heals next layout pass); and
-that the WebView background fills the lifted area (it does — `WebHelper`
-paints it).
+API < 30 device that the bar lands flush on the keyboard top (no white gap, no
+flicker) and that the status/nav-bar layout is unchanged with the keyboard down,
+and on an API >= 30 device that nothing changed at all. A debug-only
+`Log.d("SUPKeyboard", "webView height …")` reports each height write — in steady
+state expect one per show/hide, not a stream. Remove that log before merge.
 
 ## What NOT to do
 

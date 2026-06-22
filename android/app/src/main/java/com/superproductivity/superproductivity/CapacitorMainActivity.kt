@@ -47,14 +47,11 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isFrontendReady = false
     private var startupOverlayManager: StartupOverlayManager? = null
 
-    // SDK < 30 fallback for the add-task bar sitting behind the soft keyboard
-    // (#8508 follow-up, reported on Android 9 / API 28). See
-    // adjustWebViewForKeyboardBelowApi30. The pre-keyboard WebView bottom margin
-    // is captured so it can be restored exactly on hide; the applied inset is
-    // tracked separately so it self-corrects as the keyboard height changes.
-    private var isWebViewKeyboardInsetApplied = false
-    private var webViewOriginalBottomMargin = 0
-    private var appliedKeyboardInsetPx = 0
+    // SDK < 30 soft-keyboard workaround: the WebView's resting layout height
+    // (e.g. MATCH_PARENT), captured so it can be restored when the keyboard hides.
+    // See adjustWebViewHeightForKeyboardBelowApi30.
+    private var webViewLayoutHeightDefault: Int? = null
+
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
 
@@ -184,6 +181,11 @@ class CapacitorMainActivity : BridgeActivity() {
         WebViewCompatibilityChecker.recordSuccessfulLoad(this, webViewCompatibility?.majorVersion)
 
 
+        // Remember the WebView's resting layout height (e.g. MATCH_PARENT) so the
+        // SDK < 30 keyboard workaround can restore it on hide. See
+        // adjustWebViewHeightForKeyboardBelowApi30.
+        webViewLayoutHeightDefault = bridge?.webView?.layoutParams?.height
+
         // Handle keyboard visibility changes
         val rootView = findViewById<View>(android.R.id.content)
         rootView.viewTreeObserver.addOnGlobalLayoutListener {
@@ -198,7 +200,7 @@ class CapacitorMainActivity : BridgeActivity() {
                 "isKeyboardShown$",
                 if (isKeyboardOpen) "true" else "false"
             )
-            adjustWebViewForKeyboardBelowApi30(rect, keypadHeight, isKeyboardOpen)
+            adjustWebViewHeightForKeyboardBelowApi30(rect, isKeyboardOpen)
         }
 
         // Register broadcast receiver for focus mode timer completion
@@ -446,85 +448,60 @@ class CapacitorMainActivity : BridgeActivity() {
     }
 
     /**
-     * SDK < 30 fallback for the add-task bar sitting behind the soft keyboard
-     * (#8508 follow-up, reported on Android 9 / API 28).
+     * SDK < 30 soft-keyboard workaround for the add-task bar sitting behind the
+     * keyboard (#8508 follow-up, Android 9 / API 28).
      *
-     * On API < 30 under enforced edge-to-edge (targetSdk 36) the system does not
-     * resize the window for the IME and `WindowInsetsCompat.Type.ime()` is
-     * unreliable, so the edge-to-edge plugin never insets the WebView and neither
-     * the window nor the VisualViewport shrinks. `--keyboard-height` then stays 0
-     * and the `position: fixed` bar sits behind the keyboard.
-     * `getWindowVisibleDisplayFrame` (the same measurement used above for
-     * visibility) is reliable on every API level, so we lift the WebView by the
-     * exact overlap between its on-screen bottom and the visible-frame bottom
-     * (the keyboard top). Shrinking the WebView from the bottom shortens its
-     * layout viewport, so the existing CSS positions the bar above the keyboard
-     * with no web-side keyboard-height math (avoiding the reverted #8295
-     * fallback). See docs/android-edge-to-edge-keyboard.md.
+     * Root cause: the `@capawesome` edge-to-edge plugin sets the WebView
+     * `bottomMargin = 0` whenever the IME is visible (`EdgeToEdge.applyInsetsInternal`:
+     * "the system already resizes the window for the keyboard"), but under enforced
+     * edge-to-edge (targetSdk 36) the window does NOT resize on API < 30, so the
+     * WebView keeps its full height and the `position: fixed` bar sits behind the
+     * keyboard.
      *
-     * Resize-detecting and a strict no-op everywhere it isn't needed:
-     *  - API >= 30 (every device #8508/18.12.0 verified) is excluded entirely, so
-     *    this cannot perturb the behavior that was just fixed there.
-     *  - if the WebView already ends at/above the keyboard (system resized, or the
-     *    plugin inset it), the overlap is ~0 and nothing changes.
+     * We must NOT correct this via `bottomMargin`: the plugin owns that property and
+     * rewrites it on every inset dispatch, so a second writer just flickers
+     * (confirmed on an API 28 device — the margin alternated `0 ↔ lift`). WebView
+     * *padding* does not move the web layout viewport either.
      *
-     * Uses bottomMargin to match how the edge-to-edge plugin insets the WebView.
-     * On API < 30 the plugin's inset listener does not fire for the IME (that is
-     * the root cause), so capturing and restoring the pre-keyboard margin here
-     * does not fight it; if it ever does overwrite the margin, the next layout
-     * pass re-detects the overlap and re-applies.
+     * Instead, while the keyboard is up we set an explicit WebView **layout height**
+     * (to the keyboard top), and restore the resting height ([webViewLayoutHeightDefault],
+     * e.g. MATCH_PARENT) on hide. Height is a different property than the margin the
+     * plugin manages, and for an explicit-height view the bottom margin does not
+     * change the view's size — so the two never fight, and the plugin keeps doing
+     * everything else (system-bar insets AND its color overlays, so no white navbar
+     * gap). Shrinking the view shrinks the web layout viewport, so the existing CSS
+     * resolves the bar above the keyboard with no web-side keyboard-height math
+     * (avoiding the reverted #8295 fallback). The target (`rect.bottom − webViewTop`)
+     * is read from `getWindowVisibleDisplayFrame` (reliable on API 28) and does not
+     * depend on the WebView's own height, so it is stable across passes — no
+     * feedback loop. See docs/android-edge-to-edge-keyboard.md.
+     *
+     * API >= 30 is a strict no-op — the plugin stays fully in charge, so the
+     * behavior verified in 18.12.0 is unchanged.
      */
-    private fun adjustWebViewForKeyboardBelowApi30(
-        rect: Rect,
-        keypadHeight: Int,
-        isKeyboardOpen: Boolean
-    ) {
+    private fun adjustWebViewHeightForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
         if (android.os.Build.VERSION.SDK_INT >= 30) return
         val webView = bridge?.webView ?: return
-        val params = webView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        val params = webView.layoutParams ?: return
+        // Ignore stale/pre-layout geometry so the height is not set from a bad frame.
+        if (isKeyboardOpen && webView.height == 0) return
 
-        if (!isKeyboardOpen) {
-            if (isWebViewKeyboardInsetApplied) {
-                if (params.bottomMargin != webViewOriginalBottomMargin) {
-                    params.bottomMargin = webViewOriginalBottomMargin
-                    webView.layoutParams = params
-                }
-                isWebViewKeyboardInsetApplied = false
-                appliedKeyboardInsetPx = 0
-            }
-            return
+        val targetHeight = if (isKeyboardOpen) {
+            val loc = IntArray(2)
+            webView.getLocationOnScreen(loc)
+            (rect.bottom - loc[1]).coerceAtLeast(0)
+        } else {
+            webViewLayoutHeightDefault ?: ViewGroup.LayoutParams.MATCH_PARENT
         }
 
-        // Keyboard is open. Ignore stale/pre-layout geometry so an already-applied
-        // inset is not yanked to 0 for a frame on a transient zero-height pass.
-        if (webView.height == 0) return
-
-        val loc = IntArray(2)
-        webView.getLocationOnScreen(loc)
-        // Positive delta => the WebView still extends below the keyboard top.
-        val delta = (loc[1] + webView.height) - rect.bottom
-        val thresholdPx = (KEYBOARD_INSET_THRESHOLD_DP * resources.displayMetrics.density).toInt()
-
-        if (!isWebViewKeyboardInsetApplied) {
-            // Nothing to do until the WebView actually sits behind the keyboard
-            // (i.e. the system/plugin did not already handle the IME).
-            if (delta <= thresholdPx) return
-            webViewOriginalBottomMargin = params.bottomMargin
-            appliedKeyboardInsetPx = 0
-            isWebViewKeyboardInsetApplied = true
-        }
-        if (kotlin.math.abs(delta) > thresholdPx) {
-            // The lift never needs to exceed the keyboard height; clamping bounds
-            // the feedback loop even if the WebView height does not shrink by the
-            // margin (e.g. the edge-to-edge plugin rewriting it on the same pass).
-            appliedKeyboardInsetPx = (appliedKeyboardInsetPx + delta).coerceIn(0, keypadHeight)
-            val newBottomMargin = webViewOriginalBottomMargin + appliedKeyboardInsetPx
-            // Skip redundant writes so a non-responsive height can't drive an
-            // endless requestLayout loop, and to avoid needless relayout churn.
-            if (newBottomMargin != params.bottomMargin) {
-                params.bottomMargin = newBottomMargin
-                webView.layoutParams = params
-            }
+        if (params.height == targetHeight) return
+        params.height = targetHeight
+        webView.layoutParams = params
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "SUPKeyboard",
+                "webView height -> $targetHeight (kbOpen=$isKeyboardOpen rectB=${rect.bottom})"
+            )
         }
     }
 
@@ -563,10 +540,5 @@ class CapacitorMainActivity : BridgeActivity() {
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
-
-        // Dead-band (dp) for the SDK < 30 keyboard inset so it settles in a
-        // couple of layout passes instead of jittering on sub-pixel overlap.
-        // dp (not px) keeps the band visually constant across densities.
-        private const val KEYBOARD_INSET_THRESHOLD_DP = 8
     }
 }
