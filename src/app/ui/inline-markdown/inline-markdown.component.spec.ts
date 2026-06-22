@@ -140,6 +140,37 @@ describe('InlineMarkdownComponent', () => {
     }));
   });
 
+  describe('checklist glyph selectability', () => {
+    it('keeps the checkbox glyph unselectable while its label stays copyable', fakeAsync(() => {
+      component.model = 'placeholder';
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      tick();
+
+      const preview = fixture.nativeElement.querySelector(
+        'markdown.markdown-parsed',
+      ) as HTMLElement;
+      expect(preview).toBeTruthy();
+
+      // The custom checklist renderer (marked-options-factory) emits a Material
+      // Icons ligature span whose textContent is the glyph name. The unit-test
+      // module doesn't wire that renderer, so emulate its output to verify the
+      // stylesheet keeps the glyph out of the clipboard while the label is kept
+      // selectable.
+      preview.innerHTML =
+        '<li class="checkbox-wrapper undone">' +
+        '<span class="checkbox material-icons">check_box_outline_blank</span> ' +
+        '<span class="checkbox-label">buy milk</span></li>';
+      fixture.detectChanges();
+
+      const glyph = preview.querySelector('.checkbox') as HTMLElement;
+      const label = preview.querySelector('.checkbox-label') as HTMLElement;
+      expect(window.getComputedStyle(glyph).userSelect).toBe('none');
+      expect(window.getComputedStyle(label).userSelect).toBe('text');
+    }));
+  });
+
   describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
     it('should not render an executable event handler from a malicious note', fakeAsync(() => {
       component.model = '<img src=x onerror="alert(document.domain)">';

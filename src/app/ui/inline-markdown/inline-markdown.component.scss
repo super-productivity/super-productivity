@@ -55,6 +55,15 @@
   -webkit-touch-callout: default !important;
 }
 
+// The checkbox is a Material Icons ligature, so its textContent is the literal
+// glyph name (e.g. `check_box_outline_blank`). With selection enabled above, a
+// drag across a checklist would otherwise drop that name into the clipboard, so
+// keep the glyph itself unselectable while its label stays copyable.
+:host ::ng-deep .markdown-parsed .checkbox {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .markdown-unparsed {
   white-space: pre-wrap;
 }
