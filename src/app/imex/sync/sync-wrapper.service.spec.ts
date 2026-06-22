@@ -30,6 +30,7 @@ import {
 import {
   SyncAlreadyInProgressError,
   LocalDataConflictError,
+  LockAcquisitionTimeoutError,
   MissingRefreshTokenAPIError,
   JsonParseError,
   SyncDataCorruptedError,
@@ -1146,6 +1147,35 @@ describe('SyncWrapperService', () => {
       // ERROR snack, so a future refactor that re-classifies 504 is caught.
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new Error('HTTP 504 Gateway Timeout')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should surface a lock-acquisition timeout for user-triggered syncs', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new LockAcquisitionTimeoutError('sp_op_log', 30000)),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.LOCK_TIMEOUT_ERROR,
+        }),
+      );
+    });
+
+    it('should silence a lock-acquisition timeout for automatic syncs', async () => {
+      // #7562: a lock timeout is self-healing (the next cycle retries once the
+      // holder frees) and since #8306 it no longer wedges the write queue, so an
+      // automatic resume/interval sync should not flash the "try again" snack.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new LockAcquisitionTimeoutError('sp_op_log', 30000)),
       );
 
       const result = await service.sync();

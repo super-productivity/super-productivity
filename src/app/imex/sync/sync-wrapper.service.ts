@@ -791,10 +791,18 @@ export class SyncWrapperService {
         SyncLog.err(
           `Lock acquisition timed out for "${error.lockName}" after ${error.timeoutMs}ms`,
         );
-        this._snackService.open({
-          msg: T.F.SYNC.S.LOCK_TIMEOUT_ERROR,
-          type: 'ERROR',
-        });
+        // Self-healing like the network/timeout branches below: the lock is held
+        // by another in-flight op-log operation (compaction, a prior cycle, a
+        // queued write) and the next sync cycle retries once it frees. Since
+        // #8306 a lock timeout no longer wedges the write queue, so for automatic
+        // syncs (resume/focus/interval) the snack would just flash and vanish on
+        // its own — only surface it when the user explicitly asked to sync.
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.LOCK_TIMEOUT_ERROR,
+            type: 'ERROR',
+          });
+        }
         return 'HANDLED_ERROR';
       } else if (error instanceof LocalDataConflictError) {
         // File-based sync: Local data exists and remote snapshot would overwrite it
