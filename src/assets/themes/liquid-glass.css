@@ -860,6 +860,14 @@ schedule-event {
   border-top-color: rgba(var(--ink-on-channel), 0.06) !important;
 }
 
+/* The single-edge separator above sets border-color: transparent !important,
+ * which also erases the base keyboard focus ring on subtasks
+ * (:host:focus … .box uses a non-!important border). Restore it so a focused
+ * subtask matches a focused parent task (both use --palette-primary-400 here). */
+.sub-tasks task:focus .box {
+  border-color: var(--palette-primary-400) !important;
+}
+
 /* Current task fill — applied in both modes. _task-base.scss only
  * sets a background for the current task in dark mode (light mode
  * gets only a dashed accent border), but with `position: sticky`
