@@ -47,7 +47,17 @@
   // Safe Areas (iOS notch, home indicator)
   // Uses env() for native iOS safe areas
   // -----------------------------
-  --safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  // `--android-status-bar-overlap` is fed natively (CapacitorMainActivity
+  // .pushStatusBarOverlapBelowApi30) on the WebView < 140 tail, where
+  // env(safe-area-inset-top) wrongly resolves to 0 under edge-to-edge (old
+  // WebViews map only display cutouts into safe-area insets, not the status bar)
+  // — #8508 / #8283 (Android 9 / API 28). It is 0 once the WebView is inset, so
+  // max() never double-counts; on API >= 35 / WebView >= 140 the injected
+  // --safe-area-inset-top wins via var() precedence and this fallback is ignored.
+  --safe-area-top: var(
+    --safe-area-inset-top,
+    max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
+  );
   --safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));

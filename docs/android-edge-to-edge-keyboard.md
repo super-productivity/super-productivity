@@ -12,7 +12,7 @@ area has regressed repeatedly (#8295, then #8508).**
 > WebView < 140 so it never fights SystemBars). Bar backgrounds are no longer
 > painted by a plugin (SystemBars has no color API) — the bars are transparent
 > and the theme color shows through via `NavigationBarPlugin.setWebViewBackgroundColor`
-> (window decor + WebView surface). The #8508 sections below describe the *former*
+> (window decor + WebView surface). The #8508 sections below describe the _former_
 > `@capawesome` mechanics and are kept as history. Full rationale + device matrix:
 > [`docs/plans/2026-06-22-android-systembars-migration-corrected.md`](plans/2026-06-22-android-systembars-migration-corrected.md).
 
@@ -254,6 +254,57 @@ device classes this doc tracks:
   `--keyboard-height > 0` lifts the dialog above the keyboard. This is the case
   the old iOS-only rule got wrong and the new rule fixes, bringing the dialog to
   parity with the add-task bar.
+
+## #8508 follow-up — SDK 28 (Android 9): header draws BEHIND the status bar
+
+**Status: fix implemented (`CapacitorMainActivity.pushStatusBarOverlapBelowApi30`),
+PENDING ON-DEVICE VALIDATION.** Separate from the keyboard — on API 28 the web
+header overlaps the **status bar** (no top gap), reported on #8508.
+
+**Root cause.** Post the SystemBars migration, Android no longer writes
+`--safe-area-inset-*` from JS; `--safe-area-top` resolves via the SCSS fallback
+`var(--safe-area-inset-top, env(safe-area-inset-top, 0px))` (`_css-variables.scss`).
+On **API >= 35** SystemBars injects `--safe-area-inset-top`, and on **WebView >= 140**
+the WebView's own `env(safe-area-inset-top)` is correct — but on the
+**WebView < 140 tail** under enforced edge-to-edge the WebView extends under the
+status bar while `env(safe-area-inset-top)` resolves to **0** (old WebViews map
+only display _cutouts_ into safe-area insets, not the status bar). So
+`--safe-area-top == 0` and content draws under the status bar (Android 9 / API 28).
+
+**Why not a pure web-side fallback.** The web side cannot tell "WebView is
+edge-to-edge under the status bar" from "WebView is already inset below it" —
+`env()` is 0 in both, and adding the status-bar height blindly would double-count
+in the inset case. Native has the geometry.
+
+**Fix (native overlap → SCSS fallback) — `pushStatusBarOverlapBelowApi30`.** From
+the existing keyboard `OnGlobalLayoutListener`, measure the overlap
+`max(0, rect.top − webViewTopOnScreen)` — `rect.top` is the visible-frame top
+(= status-bar height, reliable on API 28; the same frame the keyboard path reads)
+and `getLocationOnScreen` is the WebView's top (0 edge-to-edge, == status-bar
+height once inset). Publish it (physical px → CSS px, deduped) as the
+`--android-status-bar-overlap` CSS var, gated **SDK < 30 AND WebView < 140**
+(mirrors the keyboard shim, never fights SystemBars). The var is folded into the
+SCSS fallback (`_css-variables.scss`) — NOT written from JS, so it never races
+SystemBars on `--safe-area-inset-*`:
+
+```scss
+--safe-area-top: var(
+  --safe-area-inset-top,
+  max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
+);
+```
+
+- `max()`, not a sum, so it never double-counts: WebView < 140 edge-to-edge →
+  env 0, overlap = status bar → status bar; once inset → env 0, overlap 0 → 0.
+- On **API >= 35 / WebView >= 140** `--safe-area-inset-top` is set (SystemBars) or
+  env() is correct, so `var()` precedence / `max()` ignore the overlap entirely —
+  verified behavior untouched.
+- JS readers (`_patchCdkViewportForSafeArea`) still parse the `var(max(...))`
+  token to 0, so overlay positioning is unchanged — preserving #8283 scoping
+  (only the header padding is affected).
+- Known small gap: an **API 30–34** device on an **old WebView < 140** also has
+  env()==0 but is excluded by the SDK < 30 gate; rare (WebView auto-updates above
+  API 30) — broaden the gate to WebView-only if it ever surfaces.
 
 ## What NOT to do
 
