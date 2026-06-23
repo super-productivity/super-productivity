@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { getLastDeletePayload } from '../../../root-store/meta/undo-task-delete.meta-reducer';
 import { select, Store } from '@ngrx/store';
 import {
   delay,
@@ -43,6 +42,8 @@ import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
+import { UndoRedoService } from '../../../root-store/undo-redo/undo-redo.service';
 
 @Injectable()
 export class TaskUiEffects {
@@ -58,11 +59,13 @@ export class TaskUiEffects {
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _layoutService = inject(LayoutService);
   private _dateService = inject(DateService);
+  private _undoRedoService = inject(UndoRedoService);
 
   taskCreatedSnack$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.addTask),
+        filterNonCompensatingAction(),
         // Skip the created snack for accidentally created tasks with no title
         filter(({ task }) => !!task.title.trim()),
         withLatestFrom(this._workContextService.mainListTaskIds$),
@@ -119,6 +122,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
+        filterNonCompensatingAction(),
         // Skip the undo snack for accidentally created blank tasks
         filter(({ task }) => !isBlankTask(task)),
         tap(({ task }) => {
@@ -130,10 +134,7 @@ export class TaskUiEffects {
             config: { duration: 5000 },
             actionStr: T.G.UNDO,
             actionFn: () => {
-              const payload = getLastDeletePayload();
-              if (payload) {
-                this._store$.dispatch(TaskSharedActions.restoreDeletedTask(payload));
-              }
+              void this._undoRedoService.undo();
             },
           });
         }),
@@ -205,6 +206,7 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
+        filterNonCompensatingAction(),
         filter(({ task: { changes } }) => !!changes.isDone),
         withLatestFrom(
           this._workContextService.flatDoneTodayNr$,

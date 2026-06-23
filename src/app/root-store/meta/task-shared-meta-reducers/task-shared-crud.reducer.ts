@@ -651,7 +651,11 @@ const removeInProgressTagOnCompletion = (
   };
 };
 
-const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
+const handleUpdateTask = (
+  state: RootState,
+  taskUpdate: Update<Task>,
+  deleteFieldKeys: (keyof Task)[] = [],
+): RootState => {
   const taskId = taskUpdate.id as string;
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
 
@@ -698,6 +702,24 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     },
     taskState,
   );
+  if (deleteFieldKeys.length > 0) {
+    const updatedTask = taskState.entities[taskId] as Task | undefined;
+    if (updatedTask) {
+      const taskWithDeletedFields = { ...updatedTask } as Record<string, unknown>;
+      deleteFieldKeys.forEach((key) => {
+        if (key !== 'id') {
+          delete taskWithDeletedFields[key];
+        }
+      });
+      taskState = {
+        ...taskState,
+        entities: {
+          ...taskState.entities,
+          [taskId]: taskWithDeletedFields as Task,
+        },
+      };
+    }
+  }
 
   updatedState = {
     ...updatedState,
@@ -723,16 +745,17 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
   // When dueDay changes (e.g. from two-way sync pull), update planner days
   // and TODAY_TAG.taskIds to keep them consistent with the task's dueDay.
   const taskAfterUpdate = taskState.entities[taskId] as Task;
-  const hasDueDayChange = Object.prototype.hasOwnProperty.call(
-    cleanedTaskUpdate.changes,
-    'dueDay',
-  );
+  const hasDueDayChange =
+    Object.prototype.hasOwnProperty.call(cleanedTaskUpdate.changes, 'dueDay') ||
+    deleteFieldKeys.includes('dueDay');
   const newDueDay = hasDueDayChange
     ? cleanedTaskUpdate.changes.dueDay
     : isToDone && taskAfterUpdate?.dueDay !== currentTask.dueDay
       ? taskAfterUpdate?.dueDay
       : undefined;
-  if (newDueDay !== undefined && newDueDay !== currentTask.dueDay) {
+  const needsDueDaySideEffects =
+    hasDueDayChange || (isToDone && taskAfterUpdate?.dueDay !== currentTask.dueDay);
+  if (needsDueDaySideEffects && newDueDay !== currentTask.dueDay) {
     const oldDueDay = currentTask.dueDay;
 
     // Remove from old planner day
@@ -867,8 +890,10 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const { task } = action as ReturnType<typeof TaskSharedActions.updateTask>;
-    return handleUpdateTask(state, task);
+    const { task, deleteFieldKeys } = action as ReturnType<
+      typeof TaskSharedActions.updateTask
+    >;
+    return handleUpdateTask(state, task, deleteFieldKeys);
   },
 });
 

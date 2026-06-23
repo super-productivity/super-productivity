@@ -1,5 +1,6 @@
 import { filter, OperatorFunction } from 'rxjs';
 import { Action } from '@ngrx/store';
+import { isCompensatingAction } from '../op-log/core/persistent-action.interface';
 
 /**
  * RxJS operator that filters out remote actions from sync.
@@ -40,3 +41,12 @@ export const filterLocalAction = <T extends Action>(): OperatorFunction<T, T> =>
  */
 export const filterRemoteAction = <T extends Action>(): OperatorFunction<T, T> =>
   filter((action: T) => !!(action as any).meta?.isRemote);
+
+/**
+ * RxJS operator that filters out undo/redo compensating actions.
+ *
+ * Use this in effects that listen to persistent task actions but should not run
+ * again when UndoRedoService dispatches the inverse action.
+ */
+export const filterNonCompensatingAction = <T extends Action>(): OperatorFunction<T, T> =>
+  filter((action: T) => !isCompensatingAction(action));

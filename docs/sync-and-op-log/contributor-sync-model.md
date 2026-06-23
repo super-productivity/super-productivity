@@ -40,6 +40,15 @@ only sees genuine local user intent.
 wrong; the linter rejects `inject(Actions)` / `Actions` imports in
 `*.effects.ts`.
 
+**Undo compensations are also local actions.** A dispatching effect listening
+to a persistent `TaskSharedActions` task action must use
+`filterNonCompensatingAction()` immediately after `ofType()`. Otherwise the
+inverse action can emit a follow-up persistent operation that was never a user
+intent. Effects declared with `{ dispatch: false }` are exempt: UI, plugin, or
+calendar listeners need to observe the compensation as the real state change
+it is. This is enforced by
+`local-rules/require-non-compensating-action-filter`.
+
 ## Boundary 2 — The selector boundary
 
 **Selector-driven effects must guard with `skipDuringSyncWindow()`.**
@@ -83,12 +92,13 @@ blessed pattern is a `task-shared-meta-reducers/` reducer.
 
 ## Decision table — "I'm writing an effect"
 
-| Question                                              | Answer                                                    | Linter                               |
-| ----------------------------------------------------- | --------------------------------------------------------- | ------------------------------------ |
-| Does it inject the actions stream?                    | Use `LOCAL_ACTIONS` (not `Actions`)                       | ✅ `no-actions-in-effects` (error)   |
-| Does it react to a **selector** instead of an action? | Add `skipDuringSyncWindow()`                              | ✅ `require-hydration-guard` (error) |
-| Does one user intent change **>1 entity**?            | Make it a meta-reducer, not an effect                     | ⚠️ `no-multi-entity-effect` (warn)   |
-| Does it dispatch in a **loop of 50+**?                | `await new Promise(r => setTimeout(r, 0))` after the loop | — (convention)                       |
+| Question                                                                     | Answer                                                    | Linter                                              |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| Does it inject the actions stream?                                           | Use `LOCAL_ACTIONS` (not `Actions`)                       | ✅ `no-actions-in-effects` (error)                  |
+| Does a dispatching effect listen to a persistent `TaskSharedActions` action? | Add `filterNonCompensatingAction()` after `ofType()`      | ✅ `require-non-compensating-action-filter` (error) |
+| Does it react to a **selector** instead of an action?                        | Add `skipDuringSyncWindow()`                              | ✅ `require-hydration-guard` (error)                |
+| Does one user intent change **>1 entity**?                                   | Make it a meta-reducer, not an effect                     | ⚠️ `no-multi-entity-effect` (warn)                  |
+| Does it dispatch in a **loop of 50+**?                                       | `await new Promise(r => setTimeout(r, 0))` after the loop | — (convention)                                      |
 
 Two of the three are mechanically enforced — you do not need to memorize them,
 only understand _why_ (the invariant at the top).

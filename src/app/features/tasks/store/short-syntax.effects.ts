@@ -33,7 +33,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { DateService } from '../../../core/date/date.service';
-
+import { filterNonCompensatingAction } from '../../../util/filter-local-action';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { devError } from '../../../util/dev-error';
 import { TaskLog } from '../../../core/log';
@@ -54,6 +54,7 @@ export class ShortSyntaxEffects {
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
       ofType(TaskSharedActions.addTask, TaskSharedActions.updateTask),
+      filterNonCompensatingAction(),
       filter((action): boolean => {
         if (action.isIgnoreShortSyntax) {
           return false;
