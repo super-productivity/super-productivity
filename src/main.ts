@@ -326,6 +326,21 @@ bootstrapApplication(AppComponent, {
     });
   }
 
+  // Expose the dev-only op-log backend benchmark (SQLite vs IndexedDB) as
+  // window.__benchOpLog() so it can be run from the chrome://inspect DevTools
+  // console on a device. The dynamic import keeps the benchmark — and the SQLite
+  // plugin it pulls in — out of the eager bundle, and the env guard strips it
+  // from production/stage builds entirely (mirrors __e2eTestHelpers above).
+  // See docs/plans/2026-06-23-oplog-sqlite-benchmark-handover.md.
+  if (!environment.production && !environment.stage) {
+    (
+      window as unknown as { __benchOpLog?: (opts?: unknown) => Promise<unknown> }
+    ).__benchOpLog = (opts?: unknown) =>
+      import('./app/op-log/persistence/op-log-backend.benchmark').then((m) =>
+        m.benchOpLog(opts as Parameters<typeof m.benchOpLog>[0]),
+      );
+  }
+
   // Dismiss native startup overlay after all data is loaded (Android only)
   if (IS_ANDROID_WEB_VIEW) {
     appRef.injector.get(DataInitStateService).isAllDataLoadedInitially$.subscribe(() => {

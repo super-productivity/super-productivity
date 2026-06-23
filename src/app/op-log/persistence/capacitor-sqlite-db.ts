@@ -157,6 +157,28 @@ export class CapacitorSqliteDb implements SqliteDb {
     }
   }
 
+  /**
+   * Delete the underlying SQLite database file (drops every table and removes it
+   * from disk), then drop the cached handle so a later op reopens/recreates
+   * cleanly. NOT part of the normal op-log lifecycle — the authoritative
+   * `SUP_OPS` file is never deleted at runtime. This exists for the dev-only
+   * op-log backend benchmark to tear down its throwaway bench DB, and is kept
+   * here so all `@capacitor-community/sqlite` access stays in this one file.
+   */
+  async deleteDatabase(): Promise<void> {
+    const conn = await this._ensureOpen();
+    try {
+      // delete() requires an open connection; it closes the connection natively
+      // and removes the file. Bounded like every other native call so a wedged
+      // teardown can't hang the benchmark indefinitely.
+      await withTimeout(conn.delete(), this._statementTimeoutMs, 'SQLite delete');
+    } finally {
+      this._conn = undefined;
+      this._openPromise = undefined;
+      this._sqlite = undefined;
+    }
+  }
+
   private _ensureOpen(): Promise<SQLiteDBConnection> {
     if (this._conn) {
       return Promise.resolve(this._conn);
