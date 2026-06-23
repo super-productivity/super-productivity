@@ -236,8 +236,10 @@ export class CapacitorSqliteDb implements SqliteDb {
    *   `append()` avoids the rollback-journal fsync dance — the append hot path.
    *   Persisted in the DB file, but harmless to re-assert each open.
    * - `synchronous=NORMAL`: the documented-safe WAL pairing — durable across an
-   *   app crash, risking only the last transaction on an OS/power loss, which an
-   *   op-log re-syncs/replays. Per-connection, so it MUST be set each open.
+   *   app crash, risking only the last transaction on an OS-level power loss (not
+   *   an app crash). A synced client re-syncs it; an unsynced client loses at most
+   *   that one last append — still strictly more durable than the IndexedDB store
+   *   this replaces. Per-connection, so it MUST be set each open.
    * WAL is incompatible with a transaction, so this runs with `transaction:false`.
    */
   private async _applyPerfPragmas(conn: SQLiteDBConnection): Promise<void> {
@@ -313,9 +315,16 @@ export class CapacitorSqliteDb implements SqliteDb {
   ): Promise<void> {
     const conn = await this._ensureOpen();
     // transaction:false — like run(), the SqliteOpLogAdapter drives the single
-    // BEGIN/COMMIT/ROLLBACK in force, so executeSet must NOT wrap its own. The
-    // whole set crosses the bridge once instead of once per statement, which is
-    // the win for the one-time migration's bulk insert.
+    // BEGIN/COMMIT/ROLLBACK in force, so executeSet must NOT wrap its own (the
+    // plugin gates its internal begin/rollback on this flag; verified in the
+    // bundled Android source). The whole set crosses the bridge once instead of
+    // once per statement — the win for the one-time migration's bulk insert.
+    //
+    // Locked-in plugin contract: a failed statement mid-set must surface as a
+    // throw (so the adapter's enclosing ROLLBACK fires), not a silently-swallowed
+    // partial apply. It does today. The migration does NOT rely on this alone —
+    // its verify-before-commit re-counts rows + seq + vector clock and rolls back
+    // on any mismatch, so a hypothetical future plugin regression here is caught.
     await withTimeout(
       conn.executeSet([...set], false),
       this._statementTimeoutMs,

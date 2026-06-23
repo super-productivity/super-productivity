@@ -460,10 +460,16 @@ const sqlPutBatch = async (
     }
     return;
   }
-  const set = entries.map(({ value, key }) => buildPutStatement(plan, value, key));
   try {
-    for (let i = 0; i < set.length; i += PUT_BATCH_CHUNK) {
-      await db.runSet(set.slice(i, i + PUT_BATCH_CHUNK));
+    // Build AND ship one chunk at a time, so at most PUT_BATCH_CHUNK statements are
+    // ever resident. Mapping the whole `entries` array up front would double the
+    // store's peak memory and defeat the migration's one-store-at-a-time bound on
+    // large accounts / low-end devices.
+    for (let i = 0; i < entries.length; i += PUT_BATCH_CHUNK) {
+      const chunk = entries
+        .slice(i, i + PUT_BATCH_CHUNK)
+        .map(({ value, key }) => buildPutStatement(plan, value, key));
+      await db.runSet(chunk);
     }
   } catch (e) {
     mapSqliteError(e);
