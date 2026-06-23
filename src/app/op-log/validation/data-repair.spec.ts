@@ -1127,6 +1127,83 @@ describe('dataRepair()', () => {
     });
   });
 
+  // #8540 residual: the orphan-reconciliation loops in
+  // _moveArchivedSubTasksToUnarchivedParents / _moveUnArchivedSubTasksToArchivedParents
+  // used per-orphan `ids.includes()` + per-orphan `ids.filter()` rebuilds, so a
+  // corruption that orphans many subtasks (the exact shape this restore path
+  // handles) was O(orphans*n) even after #8542 made orphan *detection* O(n).
+  // These tests pin both the behavior at scale and the O(n) runtime.
+  describe('large orphan reconciliation stays O(n) (#8540)', () => {
+    const buildArchivedOrphansWithActiveParents = (n: number): AppDataComplete => {
+      const activeTasks: Partial<Task>[] = [];
+      const archivedSubs: Partial<Task>[] = [];
+      for (let i = 0; i < n; i++) {
+        // distinct parent per orphan so par.subTaskIds stays length 1 — this
+        // isolates the reconciliation residual under test from unrelated costs
+        activeTasks.push({
+          ...DEFAULT_TASK,
+          id: 'parent' + i,
+          title: 'parent' + i,
+          parentId: undefined,
+          subTaskIds: [],
+          projectId: FAKE_PROJECT_ID,
+        });
+        archivedSubs.push({
+          ...DEFAULT_TASK,
+          id: 'archSub' + i,
+          title: 'archSub' + i,
+          // parent lives in the active list, not in either archive -> orphan
+          parentId: 'parent' + i,
+          projectId: FAKE_PROJECT_ID,
+        });
+      }
+      return {
+        ...mock,
+        task: {
+          ...mock.task,
+          ...fakeEntityStateFromArray<Task>(activeTasks),
+        } as any,
+        archiveYoung: {
+          lastTimeTrackingFlush: 0,
+          timeTracking: mock.archiveYoung.timeTracking,
+          task: {
+            ...mock.archiveYoung.task,
+            ...fakeEntityStateFromArray<Task>(archivedSubs),
+          } as any,
+        },
+      };
+    };
+
+    // Behavior-at-scale: a wall-clock budget can't reliably guard the quadratic
+    // here (the N needed to make O(n^2) blow a budget also strains the Karma
+    // headless browser on the O(n) baseline, which would flake CI), so this pins
+    // correctness across many orphans instead. It exercises all three reconciled
+    // sites at once: orphan detection, the deferred archive-id removal in the
+    // move pass, and the grouped project-list append in _addOrphanedTasksToProjectLists.
+    // The per-orphan-loop O(n) rationale lives in data-repair.ts comments.
+    it('relocates many archived orphan subtasks to their active parents', () => {
+      const n = 2000;
+      const result = dataRepair(buildArchivedOrphansWithActiveParents(n)).data;
+
+      // every archived orphan moved into the active store and out of the archive
+      expect(result.archiveYoung.task.ids.length).toBe(0);
+      for (let i = 0; i < n; i++) {
+        const subId = 'archSub' + i;
+        const parentId = 'parent' + i;
+        expect(result.task.entities[subId]).toBeDefined();
+        expect(result.archiveYoung.task.entities[subId]).toBeUndefined();
+        expect((result.task.entities[parentId] as Task).subTaskIds).toContain(subId);
+      }
+      // n parents + n relocated subtasks all present in the active store
+      expect(result.task.ids.length).toBe(2 * n);
+      // all n orphan parents were appended to their project list exactly once
+      const fakeProjectTaskIds = (result.project.entities[FAKE_PROJECT_ID] as Project)
+        .taskIds;
+      expect(fakeProjectTaskIds.length).toBe(n);
+      expect(new Set(fakeProjectTaskIds).size).toBe(n);
+    });
+  });
+
   it('should assign task projectId according to parent', () => {
     const project = {
       ...mock.project,
