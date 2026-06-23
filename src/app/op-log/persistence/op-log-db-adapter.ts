@@ -85,6 +85,16 @@ export interface DbIterateOptions {
    * {@link OpLogTx.iterate}, where the enclosing transaction's mode governs.
    */
   mode?: DbTxMode;
+  /**
+   * Stop the scan after at most this many entries. A correctness-neutral bound
+   * that lets a backend avoid materialising/transferring rows the visitor will
+   * never see: `getLastSeq` walks `prev` and stops at the first row, so
+   * `limit: 1` keeps the SQLite backend from shipping the whole `ops` table
+   * across the native bridge just to read the max key. IndexedDB already stops on
+   * the visitor's `stop`, so for it this is only a defensive cap; both backends
+   * honor it for parity.
+   */
+  limit?: number;
 }
 
 /**

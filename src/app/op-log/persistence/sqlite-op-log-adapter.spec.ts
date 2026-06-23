@@ -111,8 +111,9 @@ class FakeSqliteDb implements SqliteDb {
     if (/SELECT COUNT\(\*\)/i.test(s)) {
       return [{ n: rows.length }];
     }
-    if (/LIMIT 1/i.test(s)) {
-      rows = rows.slice(0, 1);
+    const limitMatch = /LIMIT (\d+)/i.exec(s);
+    if (limitMatch) {
+      rows = rows.slice(0, Number(limitMatch[1]));
     }
     // Project selected columns (value, seq AS k / __pk, key, etc.).
     return rows.map((r) => this.project(r, s));
@@ -191,6 +192,11 @@ class FakeSqliteDb implements SqliteDb {
     let pi = 0;
     const test = (r: Row): boolean =>
       conds.every((cond) => {
+        // `col IS NOT NULL` — the index-scan NULL filter (no bound param).
+        const notNull = /^(\w+) IS NOT NULL$/i.exec(cond);
+        if (notNull) {
+          return r[notNull[1]] != null;
+        }
         const mm = /(\w+) (>=|<=|>|<|=) \?/.exec(cond)!;
         const [, col, op] = mm;
         const val = params[pi++] as string | number | null;
@@ -385,7 +391,71 @@ const defineBehavioralContract = (
       ).toBe(2);
     });
 
+    // ── index NULL-key parity with IndexedDB ───────────────────────────────────
+    //
+    // IDB omits a record from an index when its index key path is `undefined`.
+    // Local ops store `syncedAt: undefined`, so they are absent from IDB's
+    // `bySyncedAt` index; the SQLite scan must match (else `hasSyncedOps` would
+    // count an unsynced op as synced).
+
+    it('iterate over an index skips rows whose index key is NULL (bySyncedAt)', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local1', 'local')); // syncedAt undefined
+      await adapter.add(
+        STORE_NAMES.OPS,
+        makeOpEntry('synced1', 'remote', 'applied', 500),
+      );
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local2', 'local'));
+      await adapter.add(
+        STORE_NAMES.OPS,
+        makeOpEntry('synced2', 'remote', 'applied', 900),
+      );
+
+      const seen: string[] = [];
+      await adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly' },
+        (v) => {
+          seen.push(v.op.id);
+          return 'continue';
+        },
+      );
+      expect(seen.sort()).toEqual(['synced1', 'synced2']);
+    });
+
+    it('getAllFromIndex / countFromIndex exclude NULL-key (unsynced) rows', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local', 'local'));
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('synced', 'remote', 'applied', 700));
+
+      const all = await adapter.getAllFromIndex<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        OPS_INDEXES.BY_SYNCED_AT,
+      );
+      expect(all.map((r) => r.op.id)).toEqual(['synced']);
+      expect(
+        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SYNCED_AT),
+      ).toBe(1);
+    });
+
     // ── cursor iteration ───────────────────────────────────────────────────────
+
+    it('iterate honors limit, bounding the scan independently of the visitor', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('b', 'local'));
+      const s3 = await adapter.add(STORE_NAMES.OPS, makeOpEntry('c', 'local'));
+
+      const seen: number[] = [];
+      await adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        // direction prev + limit 1 = "read the max seq only" (the getLastSeq path).
+        // The visitor returns 'continue', so only the LIMIT bounds the scan.
+        { direction: 'prev', mode: 'readonly', limit: 1 },
+        (_v, key) => {
+          seen.push(key as number);
+          return 'continue';
+        },
+      );
+      expect(seen).toEqual([s3]);
+    });
 
     it('iterate(prev) walks descending and exposes the primary key', async () => {
       const s1 = await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
@@ -717,6 +787,23 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     expect(insert.params).toContain('remote'); // source
     expect(insert.params).toContain('pending'); // application_status
     expect(insert.params).toContain(1234); // synced_at
+  });
+
+  // ── index NULL filter + LIMIT emission ─────────────────────────────────────
+
+  it('an index scan emits an IS NOT NULL filter (IDB index parity)', async () => {
+    db.log.length = 0;
+    await adapter.getAllFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SYNCED_AT);
+    const sel = db.log.find((e) => /SELECT .+ FROM ops/i.test(e.sql))!;
+    expect(sel.sql).toContain('synced_at IS NOT NULL');
+  });
+
+  it('iterate passes LIMIT through to the SELECT', async () => {
+    await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+    db.log.length = 0;
+    await adapter.iterate(STORE_NAMES.OPS, { mode: 'readonly', limit: 1 }, () => 'stop');
+    const sel = db.log.find((e) => /SELECT .+ FROM ops/i.test(e.sql))!;
+    expect(sel.sql).toContain('LIMIT 1');
   });
 
   // ── transaction SQL emission (BEGIN/COMMIT/ROLLBACK) ───────────────────────

@@ -100,13 +100,20 @@ const walkCursor = async <T>(
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
   const query = options.query !== undefined ? (options.query as IDBValidKey) : null;
+  const limit = options.limit;
+  let visited = 0;
   let cursor = await source.openCursor(query, options.direction ?? 'next');
   while (cursor) {
     const action = visit(cursor.value as T, cursor.primaryKey as DbKey);
     if (action === 'delete' || action === 'delete-stop') {
       await cursor.delete();
     }
-    if (action === 'stop' || action === 'delete-stop') {
+    visited++;
+    if (
+      action === 'stop' ||
+      action === 'delete-stop' ||
+      (limit !== undefined && visited >= limit)
+    ) {
       return;
     }
     cursor = await cursor.continue();

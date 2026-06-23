@@ -346,6 +346,27 @@ const whereRange = (
 
 const whereClause = (clause: string): string => (clause ? ` WHERE ${clause}` : '');
 
+/** AND together the non-empty WHERE fragments. */
+const andClauses = (...parts: string[]): string => parts.filter(Boolean).join(' AND ');
+
+/**
+ * IndexedDB omits a record from an index when its index key path evaluates to
+ * `undefined`. Reproduce that in SQL: an index scan must only see rows whose
+ * index column(s) are non-NULL. Local ops store `syncedAt: undefined`, so they
+ * are absent from IDB's `bySyncedAt` index; without this filter the SQLite scan
+ * would visit them and diverge — e.g. `hasSyncedOps` would report an unsynced op
+ * as synced. Exact-match index lookups (`whereExact`, `= ?`) already exclude
+ * NULLs, so this matters for the unbounded / open-range index scans.
+ */
+const indexNotNull = (columns: string[]): string =>
+  columns.map((c) => `${c} IS NOT NULL`).join(' AND ');
+
+/** `LIMIT n` for a positive integer `n`, else empty. Bound never carries data. */
+const limitClause = (limit?: number): string =>
+  typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+    ? ` LIMIT ${Math.floor(limit)}`
+    : '';
+
 // ── SQL operations (shared by the adapter and its transaction) ───────────────
 //
 // Every method takes a SqliteDb so the same code serves both the adapter
@@ -484,13 +505,12 @@ const sqlGetAllFromIndex = async <T>(
   range?: DbKeyRange,
 ): Promise<T[]> => {
   const idx = indexPlan(plan, indexName);
-  const { clause, params } = whereRange(
-    idx.columns.map((c) => c.column),
-    range,
-  );
-  const order = idx.columns.map((c) => c.column).join(', ');
+  const cols = idx.columns.map((c) => c.column);
+  const { clause, params } = whereRange(cols, range);
+  const fullClause = andClauses(clause, indexNotNull(cols));
+  const order = cols.join(', ');
   const rows = await db.query(
-    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${order} ASC`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(fullClause)} ORDER BY ${order} ASC`,
     params,
   );
   return rows.map((r) => decodeRow<T>(plan, r));
@@ -508,9 +528,10 @@ const sqlIterate = async <T>(
   options: DbIterateOptions,
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
-  const orderCols = options.index
+  const indexCols = options.index
     ? indexPlan(plan, options.index).columns.map((c) => c.column)
-    : [plan.pkColumn];
+    : null;
+  const orderCols = indexCols ?? [plan.pkColumn];
   const dir = options.direction === 'prev' ? 'DESC' : 'ASC';
 
   let clause = '';
@@ -520,10 +541,15 @@ const sqlIterate = async <T>(
     clause = ex.clause;
     params = ex.params;
   }
+  // Match IDB: an index scan never visits rows whose index key is NULL.
+  if (indexCols) {
+    clause = andClauses(clause, indexNotNull(indexCols));
+  }
 
   const rows = await db.query(
     `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}` +
-      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}`,
+      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}` +
+      limitClause(options.limit),
     params,
   );
 
@@ -713,17 +739,18 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   countFromIndex(store: string, index: string, range?: DbKeyRange): Promise<number> {
-    const plan = this._plan(store);
-    const idx = indexPlan(plan, index);
-    const { clause, params } = whereRange(
-      idx.columns.map((c) => c.column),
-      range,
-    );
-    return this._serialize(() =>
-      this._db
-        .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
-        .then((rows) => Number(rows[0]?.['n'] ?? 0)),
-    );
+    return this._serialize(async () => {
+      const plan = this._plan(store);
+      const idx = indexPlan(plan, index);
+      const cols = idx.columns.map((c) => c.column);
+      const { clause, params } = whereRange(cols, range);
+      const fullClause = andClauses(clause, indexNotNull(cols));
+      const rows = await this._db.query(
+        `SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(fullClause)}`,
+        params,
+      );
+      return Number(rows[0]?.['n'] ?? 0);
+    });
   }
 
   async iterate<T>(

@@ -1177,7 +1177,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // so it takes no exclusive write lock. On IndexedDB it runs concurrently
       // with appends; on the single-connection SQLite backend it queues in the
       // shared serializer but holds it only for one SELECT (no BEGIN…COMMIT).
-      { direction: 'prev', mode: 'readonly' },
+      // `limit: 1` so the SQLite backend reads only the highest-seq row instead
+      // of shipping the whole `ops` table across the native bridge to read one key.
+      { direction: 'prev', mode: 'readonly', limit: 1 },
       (_value, key) => {
         lastSeq = key as number;
         return 'stop';
