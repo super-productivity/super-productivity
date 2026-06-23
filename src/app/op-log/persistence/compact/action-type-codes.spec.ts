@@ -39,6 +39,7 @@ describe('action-type-codes', () => {
   describe('encodeActionType', () => {
     it('should encode known action types', () => {
       expect(encodeActionType('[Task Shared] addTask')).toBe('HA');
+      expect(encodeActionType('[Task Shared] unscheduleTasks')).toBe('HUT');
       expect(encodeActionType('[Tag] Add Tag')).toBe('GA');
       expect(encodeActionType('[Project] Add Project')).toBe('PA');
       expect(encodeActionType('[Project] Complete Project')).toBe('PCO');
@@ -53,6 +54,7 @@ describe('action-type-codes', () => {
   describe('decodeActionType', () => {
     it('should decode known codes', () => {
       expect(decodeActionType('HA')).toBe('[Task Shared] addTask');
+      expect(decodeActionType('HUT')).toBe('[Task Shared] unscheduleTasks');
       expect(decodeActionType('GA')).toBe('[Tag] Add Tag');
       expect(decodeActionType('PA')).toBe('[Project] Add Project');
       expect(decodeActionType('PCO')).toBe('[Project] Complete Project');

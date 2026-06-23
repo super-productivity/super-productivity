@@ -186,6 +186,17 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    unscheduleTasks: (taskProps: { taskIds: string[] }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityIds: taskProps.taskIds,
+        opType: OpType.Update,
+        isBulk: true,
+      } satisfies PersistentActionMeta,
+    }),
+
     dismissReminderOnly: (taskProps: { id: string }) => ({
       ...taskProps,
       meta: {

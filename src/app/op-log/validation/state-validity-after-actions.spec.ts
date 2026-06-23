@@ -390,6 +390,45 @@ describe('State Validity After Actions', () => {
       });
     });
 
+    describe('unscheduleTasks', () => {
+      it('should produce valid state when bulk unscheduling tasks', () => {
+        const baseData = createAppDataWithTask('task1', 'INBOX');
+        const appData = {
+          ...baseData,
+          task: {
+            ...baseData.task,
+            entities: {
+              ...baseData.task.entities,
+              task1: {
+                ...baseData.task.entities['task1']!,
+                dueDay: getDbDateStr(),
+              },
+            },
+          },
+          tag: {
+            ...baseData.tag,
+            entities: {
+              ...baseData.tag.entities,
+              TODAY: {
+                ...baseData.tag.entities['TODAY']!,
+                taskIds: ['task1'],
+              },
+            },
+          },
+        };
+
+        const action = TaskSharedActions.unscheduleTasks({
+          taskIds: ['task1'],
+        });
+
+        const { validationResult } = applyActionAndValidate(appData, action);
+        expect(validationResult.isValid).toBe(true);
+        if (!validationResult.isValid) {
+          fail(`unscheduleTasks produced invalid state: ${validationResult.error}`);
+        }
+      });
+    });
+
     describe('removeTasksFromTodayTag', () => {
       it('should produce valid state when removing task from today', () => {
         // First create state with task in TODAY tag

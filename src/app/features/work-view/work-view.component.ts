@@ -35,7 +35,7 @@ import {
   zip,
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
-import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
+import { delay, filter, map, observeOn, switchMap, take } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
@@ -137,6 +137,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
 export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
+  private static readonly _UNSCHEDULE_OVERDUE_CONFIRM_THRESHOLD = 5;
 
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
@@ -528,6 +529,38 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
       }),
     );
+  }
+
+  unscheduleAllOverdue(): void {
+    const taskIds = this.overdueTasks().map((task) => task.id);
+    if (taskIds.length === 0) {
+      return;
+    }
+
+    if (taskIds.length > WorkViewComponent._UNSCHEDULE_OVERDUE_CONFIRM_THRESHOLD) {
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            message: T.CONFIRM.UNSCHEDULE_OVERDUE_TASKS,
+            translateParams: {
+              nr: taskIds.length,
+            },
+          },
+        })
+        .afterClosed()
+        .pipe(
+          take(1),
+          filter((isConfirm) => isConfirm === true),
+        )
+        .subscribe(() => this._dispatchUnscheduleTasks(taskIds));
+      return;
+    }
+
+    this._dispatchUnscheduleTasks(taskIds);
+  }
+
+  private _dispatchUnscheduleTasks(taskIds: string[]): void {
+    this._store.dispatch(TaskSharedActions.unscheduleTasks({ taskIds }));
   }
 
   // Reject task drags into the section-reorder list (cdkDropListGroup
