@@ -387,6 +387,17 @@ class IdbOpLogTx implements OpLogTx {
     await storeOf(this._tx, store).put(value, key as IDBValidKey | undefined);
   }
 
+  async putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void> {
+    // No bridge to amortize — just loop the same per-row puts (within this tx).
+    const objectStore = storeOf(this._tx, store);
+    for (const { value, key } of entries) {
+      await objectStore.put(value, key as IDBValidKey | undefined);
+    }
+  }
+
   async get<T>(store: string, key: DbKey): Promise<T | undefined> {
     return (await storeOf(this._tx, store).get(key as IDBValidKey)) as T | undefined;
   }

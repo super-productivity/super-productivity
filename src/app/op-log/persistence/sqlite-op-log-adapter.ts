@@ -97,6 +97,17 @@ export interface SqliteDb {
   /** Run a query, returning rows as plain objects. */
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
   /**
+   * Optional batched write: run many parameterized statements in ONE native
+   * round-trip (the plugin's `executeSet`), within the caller's *current*
+   * transaction (no implicit BEGIN/COMMIT of its own — the adapter's enclosing
+   * transaction governs). This collapses the per-row JS↔native bridge crossings
+   * that dominate the one-time IDB→SQLite migration (N rows = N crossings → a few
+   * crossings). Backends without a bridge may omit it (the sql.js test stand-in
+   * implements it by looping `run`, which still exercises the adapter's batch
+   * path); when absent {@link SqliteOpLogAdapter} falls back to per-row `run`.
+   */
+  runSet?(set: ReadonlyArray<{ statement: string; values: unknown[] }>): Promise<void>;
+  /**
    * Optional connection-level serializer. A single SQLite connection has exactly
    * ONE transaction context, so when two services share one connection (the
    * native backend: OperationLogStoreService + ArchiveStoreService over one
@@ -395,24 +406,71 @@ const sqlAdd = async (
   }
 };
 
-const sqlPut = async (
-  db: SqliteDb,
+/** Max rows per `executeSet` batch — bounds one native call's payload + duration. */
+const PUT_BATCH_CHUNK = 500;
+
+/**
+ * The upsert statement + bound params for putting `value` (the single source of
+ * truth shared by single {@link sqlPut} and batched {@link sqlPutBatch}, so they
+ * can never diverge).
+ */
+const buildPutStatement = (
   plan: SqlTablePlan,
   value: unknown,
   key?: DbKey,
-): Promise<void> => {
+): { statement: string; values: (string | number | null)[] } => {
   const { columns, params } = buildInsert(plan, value, key);
   // Never overwrite the primary-key column on conflict (it is the match key).
   const updateCols = columns.filter((c) => c !== plan.pkColumn);
-  const sql =
+  const statement =
     `INSERT INTO ${plan.table} (${columns.join(', ')}) VALUES (${columns
       .map(() => '?')
       .join(', ')}) ` +
     `ON CONFLICT(${plan.pkColumn}) DO UPDATE SET ${updateCols
       .map((c) => `${c} = excluded.${c}`)
       .join(', ')}`;
+  return { statement, values: params };
+};
+
+const sqlPut = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  value: unknown,
+  key?: DbKey,
+): Promise<void> => {
+  const { statement, values } = buildPutStatement(plan, value, key);
   try {
-    await db.run(sql, params);
+    await db.run(statement, values);
+  } catch (e) {
+    mapSqliteError(e);
+  }
+};
+
+/**
+ * Batched {@link sqlPut}: same upsert semantics, but the whole set crosses the
+ * native bridge in one `runSet` (chunked) instead of one crossing per row. When
+ * the backend exposes no `runSet`, falls back to per-row `sqlPut` — identical
+ * result, no batching win. Caller is responsible for the enclosing transaction.
+ */
+const sqlPutBatch = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+): Promise<void> => {
+  if (!entries.length) {
+    return;
+  }
+  if (!db.runSet) {
+    for (const { value, key } of entries) {
+      await sqlPut(db, plan, value, key);
+    }
+    return;
+  }
+  const set = entries.map(({ value, key }) => buildPutStatement(plan, value, key));
+  try {
+    for (let i = 0; i < set.length; i += PUT_BATCH_CHUNK) {
+      await db.runSet(set.slice(i, i + PUT_BATCH_CHUNK));
+    }
   } catch (e) {
     mapSqliteError(e);
   }
@@ -819,6 +877,15 @@ class SqliteOpLogTx implements OpLogTx {
 
   put(store: string, value: unknown, key?: DbKey): Promise<void> {
     return sqlPut(this._db, this._plan(store), value, key);
+  }
+
+  putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void> {
+    // Already inside the enclosing BEGIN/COMMIT — sqlPutBatch issues directly on
+    // _db (one executeSet per chunk), so the whole batch shares this atomic unit.
+    return sqlPutBatch(this._db, this._plan(store), entries);
   }
 
   get<T>(store: string, key: DbKey): Promise<T | undefined> {

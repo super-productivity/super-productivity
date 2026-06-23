@@ -109,6 +109,18 @@ export interface OpLogTx {
   add(store: string, value: unknown): Promise<number>;
   /** Insert/replace a value, optionally at an explicit key (for keyless stores). */
   put(store: string, value: unknown, key?: DbKey): Promise<void>;
+  /**
+   * Insert/replace many values in one shot, with the same upsert semantics as
+   * {@link put}. Exists so a bulk write (the one-time IDB→SQLite migration; a
+   * future batched op append) can collapse to a single native round-trip on the
+   * SQLite backend instead of one bridge crossing per row — the dominant cost of
+   * the migration. IndexedDB has no bridge, so it just loops; the result is
+   * identical, only the SQLite wall-clock differs.
+   */
+  putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void>;
   get<T>(store: string, key: DbKey): Promise<T | undefined>;
   /** Get all values, optionally restricted to a primary-key range. */
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]>;
