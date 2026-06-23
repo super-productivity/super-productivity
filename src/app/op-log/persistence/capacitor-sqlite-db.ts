@@ -224,7 +224,32 @@ export class CapacitorSqliteDb implements SqliteDb {
     if (!(await conn.isDBOpen()).result) {
       await conn.open();
     }
+    await this._applyPerfPragmas(conn);
     return conn;
+  }
+
+  /**
+   * Best-effort performance pragmas, applied on every open. NON-FATAL — the
+   * op-log is fully correct without them (default rollback journal + FULL sync),
+   * just slower; a failure here must never block the boot-critical open.
+   * - `journal_mode=WAL`: readers don't block the writer and each autocommit
+   *   `append()` avoids the rollback-journal fsync dance — the append hot path.
+   *   Persisted in the DB file, but harmless to re-assert each open.
+   * - `synchronous=NORMAL`: the documented-safe WAL pairing — durable across an
+   *   app crash, risking only the last transaction on an OS/power loss, which an
+   *   op-log re-syncs/replays. Per-connection, so it MUST be set each open.
+   * WAL is incompatible with a transaction, so this runs with `transaction:false`.
+   */
+  private async _applyPerfPragmas(conn: SQLiteDBConnection): Promise<void> {
+    try {
+      await withTimeout(
+        conn.execute('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;', false),
+        this._statementTimeoutMs,
+        'SQLite pragmas',
+      );
+    } catch {
+      // Pure optimization — fall through to the engine defaults on any failure.
+    }
   }
 
   /**
