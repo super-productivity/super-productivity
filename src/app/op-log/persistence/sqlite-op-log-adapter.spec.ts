@@ -349,6 +349,24 @@ const defineBehavioralContract = (
       expect(vc?.clock['a']).toBe(9);
     });
 
+    it('round-trips a large state_cache value through the compression codec', async () => {
+      // Over the codec's compress threshold, so the value column is gzipped at
+      // rest — exercised end to end through the real SQLite read/write path.
+      const state = {
+        tasks: Array.from({ length: 2000 }, (_, i) => ({
+          id: `t${i}`,
+          title: `task ${i}`,
+        })),
+      };
+      await adapter.put(STORE_NAMES.STATE_CACHE, { id: 'current', state });
+      const got = await adapter.get<{ state: typeof state }>(
+        STORE_NAMES.STATE_CACHE,
+        'current',
+      );
+      expect(got?.state).toEqual(state);
+      expect(got?.state.tasks.length).toBe(2000);
+    });
+
     it('enforces the unique byId index, surfacing a ConstraintError', async () => {
       await adapter.add(STORE_NAMES.OPS, makeOpEntry('dup', 'local'));
       await expectAsync(

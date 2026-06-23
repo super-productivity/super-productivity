@@ -44,6 +44,7 @@ import {
 } from './op-log-db-adapter';
 import { DbStoreSchema, OP_LOG_DB_SCHEMA, OpLogDbSchema } from './op-log-db-schema';
 import { OPS_INDEXES } from './db-keys.const';
+import { decodeValue, encodeValue } from './value-codec';
 
 /** Column carrying the JSON-encoded stored object. */
 export const VALUE_COLUMN = 'value';
@@ -287,7 +288,7 @@ const buildInsert = (
     }
   }
   columns.push(VALUE_COLUMN);
-  params.push(JSON.stringify(value));
+  params.push(encodeValue(value));
   for (const ic of plan.indexColumns) {
     columns.push(ic.column);
     params.push(toSqlValue(extractPath(value, ic.jsonPath)));
@@ -296,7 +297,7 @@ const buildInsert = (
 };
 
 const decodeRow = <T>(plan: SqlTablePlan, row: Record<string, unknown>): T => {
-  const value = JSON.parse(row[VALUE_COLUMN] as string) as Record<string, unknown>;
+  const value = decodeValue(row[VALUE_COLUMN] as string) as Record<string, unknown>;
   // The autoinc PK (`seq`) lives in its own column, never the JSON `value` blob
   // — inject it back (from the `__pk` alias every read selects) so callers see
   // `.seq`, exactly like IDB's keyPath+autoIncrement store. keyPath stores keep
