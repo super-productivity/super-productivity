@@ -97,12 +97,13 @@ export const migrateOpLogBackend = async (
         rows.push({ value, key: key as number | string });
         return 'continue';
       });
-      for (const { value, key } of rows) {
-        // `put` preserves the ops `seq` (the value carries it via ON CONFLICT)
-        // and writes singletons at their out-of-line key — uniform across all
-        // store kinds, so no per-store special-casing is needed.
-        await tx.put(store, value, key);
-      }
+      // `putBatch` preserves the ops `seq` (the value carries it via ON CONFLICT)
+      // and writes singletons at their out-of-line key — uniform across all store
+      // kinds, no per-store special-casing. On SQLite the whole store's rows cross
+      // the native bridge in a few `executeSet` calls instead of one per row (the
+      // dominant migration cost); on IndexedDB it just loops. Atomic either way:
+      // it runs inside this single `dest.transaction`.
+      await tx.putBatch(store, rows);
       copiedCounts[store] = rows.length;
       if (store === STORE_NAMES.OPS) {
         srcLastSeq = maxSeq(rows.map((r) => r.value as { seq?: number }));

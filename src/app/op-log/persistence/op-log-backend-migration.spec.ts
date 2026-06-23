@@ -34,12 +34,16 @@ const makeLossyDest = (
   let dropped = false;
   const wrapTx = (tx: OpLogTx): OpLogTx => ({
     add: (s, v) => tx.add(s, v),
-    put: (s, v, k) => {
+    put: (s, v, k) => tx.put(s, v, k),
+    putBatch: (s, entries) => {
+      // Simulate a partial copy: drop the first entry written to dropStore once,
+      // so the dest row count comes up short and verify-before-commit rolls back.
       if (s === dropStore && !dropped) {
         dropped = true;
-        return Promise.resolve();
+        const rest = entries.slice(1);
+        return rest.length ? tx.putBatch(s, rest) : Promise.resolve();
       }
-      return tx.put(s, v, k);
+      return tx.putBatch(s, entries);
     },
     get: (s, k) => tx.get(s, k),
     getAll: (s, r) => tx.getAll(s, r),
@@ -137,6 +141,40 @@ describe('migrateOpLogBackend (IndexedDB -> SQLite, C1)', () => {
       data: { foo: 1 },
       lastModified: 5,
     });
+  });
+
+  it('copies a large ops table correctly across executeSet/runSet chunk boundaries', async () => {
+    // > 2 * PUT_BATCH_CHUNK (500) so the batched write spans multiple runSet
+    // calls — guards the chunking loop against dropping/duplicating rows.
+    const N = 1100;
+    await src.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (let i = 0; i < N; i++) {
+        await tx.add(STORE_NAMES.OPS, makeOpEntry(`op-${i}`));
+      }
+    });
+
+    const result = await migrateOpLogBackend(src, dest);
+
+    expect(result.copiedCounts[STORE_NAMES.OPS]).toBe(N);
+    expect(await dest.count(STORE_NAMES.OPS)).toBe(N);
+    // No deletes → seqs are the contiguous run 1..N, fully preserved.
+    expect(result.lastSeq).toBe(N);
+    const destOps = await dest.getAll<{ op: { id: string }; seq: number }>(
+      STORE_NAMES.OPS,
+    );
+    expect(destOps.length).toBe(N);
+    expect(new Set(destOps.map((o) => o.seq)).size).toBe(N);
+    expect(new Set(destOps.map((o) => o.op.id)).size).toBe(N);
+    // a row from the last chunk resolves through the rebuilt unique byId index.
+    expect(
+      (
+        await dest.getFromIndex<{ seq: number }>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          `op-${N - 1}`,
+        )
+      )?.seq,
+    ).toBe(N);
   });
 
   it('a new local op after migration continues past the copied high-water seq', async () => {

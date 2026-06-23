@@ -319,6 +319,41 @@ const defineBehavioralContract = (
       expect(await adapter.count(STORE_NAMES.VECTOR_CLOCK)).toBe(1);
     });
 
+    it('putBatch() inserts many ops (explicit seq) and upserts in place like put()', async () => {
+      // Mirrors the migration: ops carry an explicit seq, written via ON CONFLICT.
+      await adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.putBatch(STORE_NAMES.OPS, [
+          { value: { ...makeOpEntry('b1', 'local'), seq: 1 } },
+          { value: { ...makeOpEntry('b2', 'local'), seq: 2 } },
+          { value: { ...makeOpEntry('b3', 'local'), seq: 3 } },
+        ]),
+      );
+      expect(await adapter.count(STORE_NAMES.OPS)).toBe(3);
+      expect(
+        (
+          await adapter.getFromIndex<{ seq: number }>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            'b2',
+          )
+        )?.seq,
+      ).toBe(2);
+
+      // Same keyless key twice in one batch → last write wins, count stays 1.
+      await adapter.transaction([STORE_NAMES.VECTOR_CLOCK], 'readwrite', (tx) =>
+        tx.putBatch(STORE_NAMES.VECTOR_CLOCK, [
+          { value: { clock: { a: 1 } }, key: 'current' },
+          { value: { clock: { a: 9 } }, key: 'current' },
+        ]),
+      );
+      expect(await adapter.count(STORE_NAMES.VECTOR_CLOCK)).toBe(1);
+      const vc = await adapter.get<{ clock: Record<string, number> }>(
+        STORE_NAMES.VECTOR_CLOCK,
+        'current',
+      );
+      expect(vc?.clock['a']).toBe(9);
+    });
+
     it('enforces the unique byId index, surfacing a ConstraintError', async () => {
       await adapter.add(STORE_NAMES.OPS, makeOpEntry('dup', 'local'));
       await expectAsync(

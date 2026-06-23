@@ -282,4 +282,19 @@ export class CapacitorSqliteDb implements SqliteDb {
     );
     return (res.values ?? []) as Record<string, unknown>[];
   }
+
+  async runSet(
+    set: ReadonlyArray<{ statement: string; values: unknown[] }>,
+  ): Promise<void> {
+    const conn = await this._ensureOpen();
+    // transaction:false — like run(), the SqliteOpLogAdapter drives the single
+    // BEGIN/COMMIT/ROLLBACK in force, so executeSet must NOT wrap its own. The
+    // whole set crosses the bridge once instead of once per statement, which is
+    // the win for the one-time migration's bulk insert.
+    await withTimeout(
+      conn.executeSet([...set], false),
+      this._statementTimeoutMs,
+      'SQLite executeSet',
+    );
+  }
 }
