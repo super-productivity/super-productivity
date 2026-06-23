@@ -46,18 +46,29 @@ const _createTextBookmark = (text: string): null | DropPasteInput => {
 };
 
 const _createFileBookmark = (dataTransfer: DataTransfer): null | DropPasteInput => {
-  const path =
-    dataTransfer.files[0] &&
-    ((dataTransfer.files[0] as any).path || dataTransfer.files[0].name);
-  if (path) {
-    return {
-      title: _baseName(path),
-      path,
-      type: 'FILE',
-      icon: DropPasteIcons.FILE,
-    };
+  const file = dataTransfer.files[0];
+  if (!file) {
+    return null;
   }
-  return null;
+
+  // Electron 32+ removed the non-standard File.path property. Without the
+  // absolute path the attachment only stores the bare file name, so "open"
+  // silently fails (shell.openPath can't resolve a relative path). Recover it
+  // via webUtils.getPathForFile (exposed on window.ea, Electron-only). See
+  // issue #8553.
+  const path = window.ea?.getPathForFile?.(file) || file.name;
+  if (!path) {
+    return null;
+  }
+
+  // Keep the title clean (file.name is already the bare name) so it isn't the
+  // full OS path once `path` resolves to an absolute Windows/Unix path.
+  return {
+    title: _baseName(file.name || path),
+    path,
+    type: 'FILE',
+    icon: DropPasteIcons.FILE,
+  };
 };
 
 const _baseName = (passedStr: string): string => {
