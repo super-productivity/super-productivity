@@ -22,10 +22,10 @@ Companions: [`sqlite-migration.md`](./sqlite-migration.md) (architecture),
 2. **The op-log read/write cost is acceptable; the one real per-boot cost is the
    state-cache blob read.** That blob is a _rebuildable cache_, so it doesn't need
    the slow durable path — this is where the optimization budget goes.
-3. **Stage 0 no-regret fixes — all ✅ done:** batched the one-time migration with
-   `executeSet`, set WAL pragmas, and excluded the unencrypted op-log DB from
-   Android Auto Backup (§4). The remaining blob fix is **compression**, not moving
-   the snapshot to IDB — gated on the Stage 1 size measurement.
+3. **Stages 0 + 2 — ✅ done:** batched the migration with `executeSet`, set WAL
+   pragmas, excluded the op-log DB from Android Auto Backup (§4), and added
+   self-gating blob **compression** (not snapshot-in-IDB). Remaining is on-device
+   validation + the (now non-blocking) Stage 1 size measurement.
 
 ---
 
@@ -182,21 +182,30 @@ durable slow path.
      (non-fatal; native-only, validate on-device). Faster autocommit appends +
      non-blocking reads.
   3. ✅ **Android Auto Backup exclusion** — done (§4).
-- **Stage 1 — measure:** the shipped hydrator breadcrumbs
-  (`hydrationLoadStateCacheMs`, `…TailReadMs`, `…FullReplayReadMs`) report real
-  `loadStateCache` size/time from actual boots. Get p50/p95/p99 before optimizing
-  the blob.
-- **Stage 2 — blob fix = compression (preferred), _not_ snapshot-in-IDB:**
-  **Compress** the blob at rest (pako/LZ-string, per-store flag for blob stores
-  only). Stays in SQLite, keeps durability + atomic rotation, ~50-100 LOC,
-  reversible (an encoding detail). ~3-5×; great for the typical < 2 MB user,
-  ~1-1.5 s at the 30 MB tail. **Snapshot-in-IDB is deliberately shelved:** it
-  reads sub-second even at 30 MB, but it splits the atomic snapshot/ops/clock
-  rotation across two backends — a new failure surface in the most sensitive part
-  of the system, and a hard-to-reverse data-layout choice — to shave ~1 s off a
-  _rare_ huge-account boot. Reconsider only if Stage 1 shows a large population
-  with multi-10 MB snapshots **and** compression proves insufficient **and**
-  lazy-loading (Stage 3) is off the table.
+- **Stage 1 — measure (still pending, needs a device):** the shipped hydrator
+  breadcrumbs (`hydrationLoadStateCacheMs`, `…TailReadMs`, `…FullReplayReadMs`)
+  report real `loadStateCache` size/time from actual boots. Get p50/p95/p99 to
+  confirm where on the curve real installs sit. No longer a prerequisite for the
+  blob fix — Stage 2 is self-gating (below).
+- **Stage 2 — blob compression: ✅ done.** `value-codec.ts` gzips (fflate) the
+  SQLite `value` column at rest, base64'd behind a `~gz1:` marker, wired into
+  `buildInsert`/`decodeRow`. **Self-gating by size** (`COMPRESS_THRESHOLD_BYTES`
+  = 2 KB): only large values compress, so ops + small snapshots stay plain JSON
+  with zero overhead — which is why it ships safely _without_ the Stage 1 data
+  (it can only help the large-blob case, never hurt the small one). Purely a
+  **local storage-at-rest** encoding — the adapter decodes back to objects before
+  anything above it (sync/hydration) sees them, so it is not a cross-client/sync
+  format and carries no compat obligation. Reversible (stop compressing → new
+  writes are plain → reads still handle both via the marker). ~3-5× on the blob;
+  great for the typical < 2 MB user, ~1-1.5 s at the 30 MB tail. Covered by
+  `value-codec.spec.ts` + an end-to-end large-value round-trip on both engines.
+  **Snapshot-in-IDB stays deliberately shelved:** it reads sub-second even at
+  30 MB, but it splits the atomic snapshot/ops/clock rotation across two backends
+  — a new failure surface in the most sensitive part of the system, and a
+  hard-to-reverse data-layout choice — to shave ~1 s off a _rare_ huge-account
+  boot. Reconsider only if real data shows a large population with multi-10 MB
+  snapshots **and** compression proves insufficient **and** lazy-loading (Stage 3)
+  is off the table.
 - **Stage 3 — long-term, only if needed:** incremental / lazy state load. A 30 MB
   single-blob snapshot is expensive to read+deserialize+load in _any_ store; this
   is the only thing that makes huge accounts boot cheaply (and the real answer for
