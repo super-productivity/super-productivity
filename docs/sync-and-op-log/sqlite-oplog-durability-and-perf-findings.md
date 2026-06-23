@@ -23,8 +23,9 @@ Companions: [`sqlite-migration.md`](./sqlite-migration.md) (architecture),
    state-cache blob read.** That blob is a _rebuildable cache_, so it doesn't need
    the slow durable path — this is where the optimization budget goes.
 3. **Two no-regret fixes ship regardless of the blob strategy:** batch the
-   one-time migration with `executeSet`, and exclude the unencrypted
-   `databases/SUP_OPS` from Android Auto Backup (an open data-loss footgun).
+   one-time migration with `executeSet` (✅ done — see Stage 0), and exclude the
+   unencrypted `databases/SUP_OPS` from Android Auto Backup (open data-loss
+   footgun). The blob fix is **compression**, not moving the snapshot to IDB.
 
 ---
 
@@ -165,32 +166,39 @@ durable slow path.
 ### Recommended path (staged, data-gated)
 
 - **Stage 0 — no-regret, ship now (independent of the blob decision):**
-  1. `executeSet`-batch the migration (collapse N crossings → 1; ~10-30× → ~3-8 s
-     at 50k). Mandatory before broad default-on. See
-     [`sqlite-migration-followup.md`](./sqlite-migration-followup.md) B1 perf note.
+  1. ✅ **`executeSet`-batch the migration** — done. The per-row `tx.put` loop is
+     now `tx.putBatch`, which on SQLite collapses a store's rows into a few
+     `executeSet` calls (`PUT_BATCH_CHUNK = 500`) instead of one bridge crossing
+     per row (`op-log-backend-migration.ts`, `sqlite-op-log-adapter.ts`
+     `sqlPutBatch` / `SqliteDb.runSet`, `capacitor-sqlite-db.ts`). IndexedDB just
+     loops. Covered by sql.js specs (chunk-boundary + upsert parity); the native
+     one-crossing win is the plugin's contract, **validate on-device**.
   2. `PRAGMA journal_mode=WAL; synchronous=NORMAL` (faster appends/commit; cheap).
   3. Android Auto Backup exclusion (§4).
 - **Stage 1 — measure:** the shipped hydrator breadcrumbs
   (`hydrationLoadStateCacheMs`, `…TailReadMs`, `…FullReplayReadMs`) report real
   `loadStateCache` size/time from actual boots. Get p50/p95/p99 before optimizing
   the blob.
-- **Stage 2 — blob (pick by data):**
-  - If real p99 snapshot is modest (≲ 3 MB) → **compress** the blob at rest
-    (pako/LZ-string, per-store flag for blob stores only). Stays in SQLite,
-    keeps durability + atomic rotation. ~3-5×; ~1-1.5 s at 30 MB.
-  - If p99 is genuinely 10-30 MB → also **keep the rebuildable snapshot in
-    IndexedDB** (ops stay in SQLite). Sub-second structured-clone read; a lost
-    snapshot just triggers the existing full replay. Costs cross-store atomicity,
-    recovered by ordering (write+confirm snapshot, _then_ prune compacted ops).
+- **Stage 2 — blob fix = compression (preferred), _not_ snapshot-in-IDB:**
+  **Compress** the blob at rest (pako/LZ-string, per-store flag for blob stores
+  only). Stays in SQLite, keeps durability + atomic rotation, ~50-100 LOC,
+  reversible (an encoding detail). ~3-5×; great for the typical < 2 MB user,
+  ~1-1.5 s at the 30 MB tail. **Snapshot-in-IDB is deliberately shelved:** it
+  reads sub-second even at 30 MB, but it splits the atomic snapshot/ops/clock
+  rotation across two backends — a new failure surface in the most sensitive part
+  of the system, and a hard-to-reverse data-layout choice — to shave ~1 s off a
+  _rare_ huge-account boot. Reconsider only if Stage 1 shows a large population
+  with multi-10 MB snapshots **and** compression proves insufficient **and**
+  lazy-loading (Stage 3) is off the table.
 - **Stage 3 — long-term, only if needed:** incremental / lazy state load. A 30 MB
   single-blob snapshot is expensive to read+deserialize+load in _any_ store; this
-  is the only thing that makes huge accounts boot cheaply, but it's a real
-  rearchitecture.
+  is the only thing that makes huge accounts boot cheaply (and the real answer for
+  the 10-30 MB tail), but it's a real rearchitecture.
 
 **Floor to be honest about:** at 30 MB, compression cannot beat IndexedDB — the
 inner `JSON.parse` of a 30 MB object (~0.5-0.8 s) is intrinsic to the
-JSON-in-a-cell model; only structured clone (Stage 2 IDB) or lazy loading
-(Stage 3) avoids it.
+JSON-in-a-cell model; only structured clone (the shelved IDB-snapshot option) or
+lazy loading (Stage 3) avoids it. That's why Stage 3 is the real fix for the tail.
 
 ---
 
