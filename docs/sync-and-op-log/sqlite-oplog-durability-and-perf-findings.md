@@ -22,10 +22,10 @@ Companions: [`sqlite-migration.md`](./sqlite-migration.md) (architecture),
 2. **The op-log read/write cost is acceptable; the one real per-boot cost is the
    state-cache blob read.** That blob is a _rebuildable cache_, so it doesn't need
    the slow durable path — this is where the optimization budget goes.
-3. **Two no-regret fixes ship regardless of the blob strategy:** batch the
-   one-time migration with `executeSet` (✅ done — see Stage 0), and exclude the
-   unencrypted `databases/SUP_OPS` from Android Auto Backup (open data-loss
-   footgun). The blob fix is **compression**, not moving the snapshot to IDB.
+3. **Stage 0 no-regret fixes — all ✅ done:** batched the one-time migration with
+   `executeSet`, set WAL pragmas, and excluded the unencrypted op-log DB from
+   Android Auto Backup (§4). The remaining blob fix is **compression**, not moving
+   the snapshot to IDB — gated on the Stage 1 size measurement.
 
 ---
 
@@ -109,15 +109,19 @@ files_).
 Native SQLite is the explicit ecosystem consensus for must-not-lose Capacitor
 data (Capacitor docs, RxDB, Ionic all treat WebView IndexedDB as untrustworthy).
 
-## 4. Open footgun — Android Auto Backup (independent of perf)
+## 4. Android Auto Backup — ✅ addressed (independent of perf)
 
 `allowBackup=true` includes `databases/` by default, and a restore runs **after
-install, before first launch** — so a stale cloud/device-transfer backup can seed
-an old `SUP_OPS` before the hydrator runs (resurrecting old state, or tripping
-sync reconciliation). `@capacitor-community/sqlite` does **not** auto-exclude its
-DB. **Action:** add `android:dataExtractionRules` excluding the `database` domain
-(or make a deliberate, documented include decision). This matters more than the
-blob read perf and is currently unaddressed.
+install, before first launch** — so a stale cloud/device-transfer backup could
+seed an old `SUP_OPS` before the hydrator runs (resurrecting old state, or
+tripping sync reconciliation). `@capacitor-community/sqlite` does **not**
+auto-exclude its DB. **Fix:** both `res/xml/data_extraction_rules.xml` (API 31+)
+and `res/xml/backup_rules.xml` (pre-31) now `<exclude domain="database">` the
+op-log files (`SUP_OPSSQLite.db` + `-wal`/`-shm`) from both `cloud-backup` and
+`device-transfer`. Deliberately **scoped to the op-log only** — the KeyValStore
+(`SupKeyValStore`) disaster-recovery backup stays included as the intended,
+guarded restore path, so no-sync users still recover on a new device while the
+authoritative op-log is never auto-restored under the hydrator.
 
 > "Clear storage" and uninstall still wipe everything — only sync protects
 > against those. SQLite removes the _eviction_ failure mode, not all of them.
@@ -173,8 +177,11 @@ durable slow path.
      `sqlPutBatch` / `SqliteDb.runSet`, `capacitor-sqlite-db.ts`). IndexedDB just
      loops. Covered by sql.js specs (chunk-boundary + upsert parity); the native
      one-crossing win is the plugin's contract, **validate on-device**.
-  2. `PRAGMA journal_mode=WAL; synchronous=NORMAL` (faster appends/commit; cheap).
-  3. Android Auto Backup exclusion (§4).
+  2. ✅ **WAL pragmas** — done. `CapacitorSqliteDb._applyPerfPragmas` runs
+     `PRAGMA journal_mode=WAL; synchronous=NORMAL` best-effort on every open
+     (non-fatal; native-only, validate on-device). Faster autocommit appends +
+     non-blocking reads.
+  3. ✅ **Android Auto Backup exclusion** — done (§4).
 - **Stage 1 — measure:** the shipped hydrator breadcrumbs
   (`hydrationLoadStateCacheMs`, `…TailReadMs`, `…FullReplayReadMs`) report real
   `loadStateCache` size/time from actual boots. Get p50/p95/p99 before optimizing
