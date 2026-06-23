@@ -42,7 +42,10 @@
 >   `@capacitor-community/sqlite` plugin and the `CapacitorSqliteDb` wrapper (with
 >   the lastId-from-run and `transaction:false` bridge-perf mitigations + a native
 >   open timeout and a `databaseExists` probe); the `OP_LOG_DB_ADAPTER_FACTORY`
->   override (`native-sqlite-backend.ts`) gated on `IS_ANDROID_NATIVE`; the one-time
+>   override (`native-sqlite-backend.ts`) gated on a real Capacitor Android bridge
+>   (`getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`, NOT
+>   `IS_ANDROID_NATIVE` — which would also fire in the bridgeless online-mode
+>   WebView and brick it); the one-time
 >   C1 migration (first-launch IDB→SQLite copy with verify-before-commit and a
 >   run-once durable marker); and an **in-session fallback** to IndexedDB on a
 >   recoverable pre-migration bootstrap failure (fails loudly post-migration so a
@@ -178,7 +181,9 @@ data-loss class.
 1. **Phase A** → merge behind no flag (IDB still the only backend). Gate: all
    unit + 38 integration specs green.
 2. **Phase B + C** → originally merged behind a native feature flag (default
-   off). Now the SQLite backend is the **Android default** (`IS_ANDROID_NATIVE`,
+   off). Now the SQLite backend is the **Android default** (real Capacitor
+   Android bridge only — `getPlatform() === 'android'` +
+   `isPluginAvailable('CapacitorSQLite')`, not the bridgeless online-mode WebView;
    no opt-in flag), made safe by the in-session IndexedDB fallback + durable
    marker + bounded native calls. Rollout is ramped via **Play Console staged
    rollout** (no in-app kill-switch); iOS stays on IndexedDB.

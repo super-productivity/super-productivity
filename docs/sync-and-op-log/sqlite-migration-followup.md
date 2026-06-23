@@ -45,7 +45,8 @@ ordered so each item is independently shippable and reviewable.
   plugin (`@capacitor-community/sqlite`) + `CapacitorSqliteDb` wrapper, the DI token
   flip (`native-sqlite-backend.ts`), and the one-time first-launch IDB→SQLite
   migration bootstrap are all wired. On **Android** the SQLite backend is the
-  default (`shouldUseNativeSqliteOpLogBackend()` → `IS_ANDROID_NATIVE`); iOS and
+  default (`shouldUseNativeSqliteOpLogBackend()` → real Capacitor Android bridge:
+  `getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`); iOS and
   web/PWA/Electron stay on IndexedDB. There is **no opt-in flag** — rollout is
   ramped at the store level (Play Console staged rollout), and the backend falls
   back to IndexedDB **in-session** if SQLite bootstrap fails recoverably (see C1).
@@ -115,7 +116,8 @@ captured on the next tick.
   plugin is pulled in via a **dynamic `import()`** so its web WASM build never
   enters the eager bundle; only a `import type` reaches the web build.
 - ✅ **Web-eviction gotcha respected:** construction is gated behind
-  `shouldUseNativeSqliteOpLogBackend()` (**Android only**, `IS_ANDROID_NATIVE`).
+  `shouldUseNativeSqliteOpLogBackend()` (real Capacitor Android bridge only:
+  `getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`).
   The plugin's **web** build is WASM-SQLite persisted into IndexedDB — never bound
   on web/PWA/Electron, and iOS keeps IndexedDB too.
 - ✅ **Perf mitigation 1 baked in:** `run` returns the plugin's own `lastId` from
@@ -222,7 +224,9 @@ captured on the next tick.
   concurrent one).
 - ✅ **Token flip landed — Android default-on, no flag.** `OP_LOG_DB_ADAPTER_FACTORY`
   returns the native SQLite factory when `shouldUseNativeSqliteOpLogBackend()`
-  (`native-sqlite-backend.ts`) → `IS_ANDROID_NATIVE`; iOS and web/PWA/Electron keep
+  (`native-sqlite-backend.ts`) → real Capacitor Android bridge
+  (`getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`); iOS and
+  web/PWA/Electron keep
   the IndexedDB default. `createNativeSqliteOpLogAdapterFactory()` closes over ONE
   `CapacitorSqliteDb` and vends every service a `NativeOpLogAdapter` over a single
   shared backend decision (bootstrap + fallback choice run once regardless of how
@@ -331,8 +335,12 @@ backend, remove the IDB fallback and the `adoptConnection` bridge (Track D).
 4. **D** (tidy up once SQLite is the native default) — tracked in #7931.
 
 > **Enabling on a native build:** SQLite is the default on Android — no flag.
-> Requires `npx cap sync android` first so the native plugin is built in. To force
-> IndexedDB for debugging, the gate is `IS_ANDROID_NATIVE`; there is no runtime
+> Requires `npx cap sync android` first so the native plugin is built in. The gate
+> is a real Capacitor Android bridge (`getPlatform() === 'android'` +
+> `isPluginAvailable('CapacitorSQLite')`), deliberately NOT `IS_ANDROID_NATIVE` —
+> that folds in `IS_ANDROID_WEB_VIEW` (`window.SUPAndroid`), which the bridgeless
+> legacy online-mode `FullscreenActivity` WebView also sets, so gating on it there
+> would pick SQLite, find no native plugin, and brick boot. There is no runtime
 > opt-out (rollout is ramped via Play Console).
 
 Tracks A and B/C/D are independent — A shipped while B/C/D moves at its own

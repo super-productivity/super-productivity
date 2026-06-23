@@ -8,11 +8,13 @@
  * AUTHORITATIVE store — it is read during boot hydration — so this wiring must
  * never brick startup and never silently serve stale data:
  *
- * - {@link shouldUseNativeSqliteOpLogBackend} gates on Android only. iOS keeps
- *   IndexedDB (different WebView storage semantics; not validated here), and
- *   web/PWA/Electron never reach this (the plugin's web build is WASM-on-IndexedDB,
- *   which would reintroduce the eviction risk). No opt-in flag — Android is on by
- *   default, ramped via Play Console staged rollout.
+ * - {@link shouldUseNativeSqliteOpLogBackend} gates on a real Capacitor Android
+ *   container with the native plugin registered — NOT the legacy online-mode
+ *   WebView (which has no SQLite bridge) and not iOS (different WebView storage
+ *   semantics; not validated here). web/PWA/Electron never reach this (the
+ *   plugin's web build is WASM-on-IndexedDB, which would reintroduce the eviction
+ *   risk). No opt-in flag — qualifying Android is on by default, ramped via Play
+ *   Console staged rollout.
  * - The factory's `init()` bootstraps SQLite (schema + one-time migration) and,
  *   if that fails in a way we can prove is PRE-migration, transparently falls back
  *   to a self-opening IndexedDB adapter FOR THIS SESSION so the app still boots.
@@ -30,27 +32,51 @@ import { CapacitorSqliteDb } from './capacitor-sqlite-db';
 import { NativeOpLogAdapter } from './native-op-log-adapter';
 import { migrateOpLogBackend } from './op-log-backend-migration';
 import { DB_NAME, STORE_NAMES } from './db-keys.const';
-import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
+import { Capacitor } from '@capacitor/core';
 import { Log } from '../../core/log';
 
+/** Plugin name `@capacitor-community/sqlite` registers under the Capacitor bridge. */
+const SQLITE_PLUGIN_NAME = 'CapacitorSQLite';
+
 /**
- * Whether to bind the op-log persistence backend to SQLite. ANDROID ONLY:
+ * True only inside a REAL Capacitor Android native container that actually has
+ * the SQLite plugin registered.
+ *
+ * Deliberately NOT `IS_ANDROID_NATIVE`: that folds in `IS_ANDROID_WEB_VIEW`
+ * (`!!window.SUPAndroid`), which the legacy online-mode `FullscreenActivity` —
+ * a plain WebView with no Capacitor bridge, loading the app from the remote URL —
+ * also injects. There `getPlatform()` is `'web'`, so this stays `false` and the
+ * op-log keeps IndexedDB. `getPlatform()` is `'android'` only in the Capacitor
+ * `CapacitorMainActivity`. `isPluginAvailable` is the positive proof the native
+ * plugin is wired in, so a build that ever forgets `includePlugins` falls back to
+ * IndexedDB instead of bricking boot (the op-log is read during hydration).
+ */
+const isNativeSqliteAvailable = (): boolean =>
+  Capacitor.getPlatform() === 'android' &&
+  Capacitor.isPluginAvailable(SQLITE_PLUGIN_NAME);
+
+/**
+ * Whether to bind the op-log persistence backend to SQLite. Requires a real
+ * Capacitor Android native container with the plugin registered
+ * ({@link isNativeSqliteAvailable}):
  * - iOS keeps IndexedDB — its WKWebView storage has different eviction semantics
  *   and the SQLite path is not validated there yet.
- * - web/PWA/Electron never qualify (`@capacitor-community/sqlite`'s web build is
- *   WASM persisted into IndexedDB, reintroducing the eviction risk this escapes).
+ * - The legacy online-mode WebView (`FullscreenActivity`) and web/PWA/Electron
+ *   never qualify: there is no native SQLite bridge there, and the plugin's web
+ *   build is WASM persisted into IndexedDB, reintroducing the eviction risk this
+ *   escapes.
  *
- * Default-on for Android (no opt-in flag); the rollout is ramped at the store
- * level (Play Console staged rollout), and `createNativeSqliteOpLogAdapterFactory`
+ * Default-on for qualifying Android (no opt-in flag); the rollout is ramped at the
+ * store level (Play Console staged rollout), and `createNativeSqliteOpLogAdapterFactory`
  * falls back to IndexedDB in-session if SQLite bootstrap fails recoverably.
  *
- * @param isAndroid test seam — defaults to the real platform constant. Karma runs
- * in a browser (`IS_ANDROID_NATIVE === false`), so the native branch is only
+ * @param isAvailable test seam — defaults to the real platform check. Karma runs
+ * in a browser (`getPlatform() === 'web'`), so the native branch is only
  * reachable in tests by passing `true`.
  */
 export const shouldUseNativeSqliteOpLogBackend = (
-  isAndroid: boolean = IS_ANDROID_NATIVE,
-): boolean => isAndroid;
+  isAvailable: boolean = isNativeSqliteAvailable(),
+): boolean => isAvailable;
 
 // ── C1: one-time IDB → SQLite migration bootstrap ────────────────────────────
 
