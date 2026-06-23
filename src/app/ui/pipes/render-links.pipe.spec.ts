@@ -245,7 +245,7 @@ describe('RenderLinksPipe', () => {
         'webexteams://im?space=ff135070-68f8-11f1-9229-c7e6cca7a7cd&message=f4f13440-6b50-11f1-8868-03e71232fa87';
       const result = html(pipe.transform(`Open ${uri}`));
 
-      expect(result).toContain(`href="${uri.replace('&', '&amp;')}"`);
+      expect(result).toContain(`href="${uri.replace(/&/g, '&amp;')}"`);
       expect(result).toContain(
         '>webexteams://im?space=ff135070-68f8-11f1-9229-c7e6cca7a7cd&amp;message=f4f13440-6b50-11f1-8868-03e71232fa87</a>',
       );

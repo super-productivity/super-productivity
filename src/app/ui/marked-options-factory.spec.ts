@@ -397,7 +397,7 @@ describe('markedOptionsFactory', () => {
             title: '',
             tokens: [{ type: 'text', raw: 'L', text: 'L' }],
           } as any);
-          expect(result).toContain(`href="${href}"`);
+          expect(result).toContain(`href="${escapeHtmlAttr(href)}"`);
         });
       });
 
@@ -421,7 +421,7 @@ describe('markedOptionsFactory', () => {
         'webexteams://im?space=ff135070-68f8-11f1-9229-c7e6cca7a7cd&message=f4f13440-6b50-11f1-8868-03e71232fa87';
       const result = parseWithFactory(`Open ${uri}`);
 
-      expect(result).toContain(`href="${uri.replace('&', '&amp;')}"`);
+      expect(result).toContain(`href="${uri.replace(/&/g, '&amp;')}"`);
       expect(result).toContain(
         'webexteams://im?space=ff135070-68f8-11f1-9229-c7e6cca7a7cd&amp;message=f4f13440-6b50-11f1-8868-03e71232fa87',
       );
