@@ -32,51 +32,11 @@ import { CapacitorSqliteDb } from './capacitor-sqlite-db';
 import { NativeOpLogAdapter } from './native-op-log-adapter';
 import { migrateOpLogBackend } from './op-log-backend-migration';
 import { DB_NAME, STORE_NAMES } from './db-keys.const';
-import { Capacitor } from '@capacitor/core';
 import { Log } from '../../core/log';
-
-/** Plugin name `@capacitor-community/sqlite` registers under the Capacitor bridge. */
-const SQLITE_PLUGIN_NAME = 'CapacitorSQLite';
-
-/**
- * True only inside a REAL Capacitor Android native container that actually has
- * the SQLite plugin registered.
- *
- * Deliberately NOT `IS_ANDROID_NATIVE`: that folds in `IS_ANDROID_WEB_VIEW`
- * (`!!window.SUPAndroid`), which the legacy online-mode `FullscreenActivity` —
- * a plain WebView with no Capacitor bridge, loading the app from the remote URL —
- * also injects. There `getPlatform()` is `'web'`, so this stays `false` and the
- * op-log keeps IndexedDB. `getPlatform()` is `'android'` only in the Capacitor
- * `CapacitorMainActivity`. `isPluginAvailable` is the positive proof the native
- * plugin is wired in, so a build that ever forgets `includePlugins` falls back to
- * IndexedDB instead of bricking boot (the op-log is read during hydration).
- */
-const isNativeSqliteAvailable = (): boolean =>
-  Capacitor.getPlatform() === 'android' &&
-  Capacitor.isPluginAvailable(SQLITE_PLUGIN_NAME);
-
-/**
- * Whether to bind the op-log persistence backend to SQLite. Requires a real
- * Capacitor Android native container with the plugin registered
- * ({@link isNativeSqliteAvailable}):
- * - iOS keeps IndexedDB — its WKWebView storage has different eviction semantics
- *   and the SQLite path is not validated there yet.
- * - The legacy online-mode WebView (`FullscreenActivity`) and web/PWA/Electron
- *   never qualify: there is no native SQLite bridge there, and the plugin's web
- *   build is WASM persisted into IndexedDB, reintroducing the eviction risk this
- *   escapes.
- *
- * Default-on for qualifying Android (no opt-in flag); the rollout is ramped at the
- * store level (Play Console staged rollout), and `createNativeSqliteOpLogAdapterFactory`
- * falls back to IndexedDB in-session if SQLite bootstrap fails recoverably.
- *
- * @param isAvailable test seam — defaults to the real platform check. Karma runs
- * in a browser (`getPlatform() === 'web'`), so the native branch is only
- * reachable in tests by passing `true`.
- */
-export const shouldUseNativeSqliteOpLogBackend = (
-  isAvailable: boolean = isNativeSqliteAvailable(),
-): boolean => isAvailable;
+// Re-exported so the spec and the dev-only benchmark keep importing the gate from
+// here; the DI token imports it from './native-sqlite-gate' directly so it can
+// decide synchronously without pulling this heavy module into the eager bundle.
+export { shouldUseNativeSqliteOpLogBackend } from './native-sqlite-gate';
 
 // ── C1: one-time IDB → SQLite migration bootstrap ────────────────────────────
 
@@ -244,20 +204,21 @@ export interface NativeSqliteOpLogFactoryOptions {
 }
 
 /**
- * Build the native `OpLogDbAdapterFactory`. The returned factory hands every
- * caller (OperationLogStoreService, ArchiveStoreService) a {@link NativeOpLogAdapter}
- * over ONE shared backend decision: the bootstrap (schema + C1 migration) and the
- * fallback choice run exactly once regardless of how many adapters init.
+ * Build the ONE shared backend resolver: a memoized `() => Promise<OpLogDbAdapter>`
+ * that runs the SQLite bootstrap (schema + C1 migration) and the fallback choice
+ * exactly once, then hands the same resolved adapter to every caller. The DI token
+ * dynamic-imports this (so the heavy SQLite graph stays out of the web/PWA/Electron
+ * bundle) and shares the returned resolver across both stores.
  */
-export const createNativeSqliteOpLogAdapterFactory = (
+export const createSharedNativeBackendResolver = (
   options: NativeSqliteOpLogFactoryOptions = {},
-): OpLogDbAdapterFactory => {
+): (() => Promise<OpLogDbAdapter>) => {
   const dbFactory = options.dbFactory ?? (() => new CapacitorSqliteDb(DB_NAME));
   const idbFactory = options.idbFactory ?? (() => new IndexedDbOpLogAdapter());
   const db = dbFactory();
 
   let backend: Promise<OpLogDbAdapter> | undefined;
-  const resolveBackend = (): Promise<OpLogDbAdapter> => {
+  return (): Promise<OpLogDbAdapter> => {
     if (!backend) {
       backend = bootstrapNativeOpLogBackend(db)
         .then((): OpLogDbAdapter => new SqliteOpLogAdapter(db))
@@ -282,6 +243,17 @@ export const createNativeSqliteOpLogAdapterFactory = (
     }
     return backend;
   };
+};
 
+/**
+ * Build the native `OpLogDbAdapterFactory`. The returned factory hands every
+ * caller (OperationLogStoreService, ArchiveStoreService) a {@link NativeOpLogAdapter}
+ * over ONE shared backend decision: the bootstrap (schema + C1 migration) and the
+ * fallback choice run exactly once regardless of how many adapters init.
+ */
+export const createNativeSqliteOpLogAdapterFactory = (
+  options: NativeSqliteOpLogFactoryOptions = {},
+): OpLogDbAdapterFactory => {
+  const resolveBackend = createSharedNativeBackendResolver(options);
   return (): OpLogDbAdapter => new NativeOpLogAdapter(resolveBackend);
 };
