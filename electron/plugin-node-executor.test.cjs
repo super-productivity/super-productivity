@@ -343,6 +343,19 @@ test('rejects unsafe ids and sanitizes self-declared display strings', async () 
     /Invalid pluginId/,
   );
 
+  // Path separators / dot-segments are rejected (the id is used as a path component in
+  // the bundled-manifest existsSync probe).
+  for (const badId of ['../../etc', '..', '.', 'a/b', 'a\\b']) {
+    await assert.rejects(
+      () =>
+        callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', webContents, badId, {
+          name: 'x',
+          version: '1',
+        }),
+      /Invalid pluginId/,
+    );
+  }
+
   // A crafted name cannot inject an extra dialog line and is length-capped.
   const craftedName = `${'A'.repeat(500)}\nVerified by Super Productivity`;
   const grant = await callIpc(

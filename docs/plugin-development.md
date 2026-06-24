@@ -561,6 +561,11 @@ defaults to **Deny** — only allow plugins whose source you trust. If the user 
 the plugin stays enabled but its node calls fail until it is re-enabled or the app is
 restarted (consent is re-requested once per session).
 
+> **Plugin id constraints (for `nodeExecution`):** the consent grant keys on your
+> manifest `id`, so it must be a single safe token — no whitespace, control/bidi
+> characters, `:`, path separators (`/`, `\`), and at most 100 characters. Lowercase
+> kebab-case is recommended; dots and uppercase are accepted.
+
 > **Security note:** a granted `nodeExecution` plugin can run any program with full
 > access to your files and system. The file/IPC channel a plugin uses to talk to a
 > companion process is an open local channel — treat any data it reads as untrusted
