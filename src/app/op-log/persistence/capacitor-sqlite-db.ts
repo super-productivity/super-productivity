@@ -25,6 +25,8 @@
 import type { SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { SqliteDb } from './sqlite-op-log-adapter';
 import { createConnectionSerializer } from './connection-serializer';
+import { Log } from '../../core/log';
+import { environment } from '../../../environments/environment';
 
 /**
  * No-encryption mode string the plugin expects for `createConnection`.
@@ -265,6 +267,23 @@ export class CapacitorSqliteDb implements SqliteDb {
       );
     } catch {
       // Pure optimization — fall through to the engine defaults on any failure.
+    }
+    // Dev-only readback so the applied pragmas are confirmable on-device (logcat /
+    // chrome://inspect) — `synchronous` is a per-connection runtime setting not
+    // stored in the file, so this is the only way to verify it took. Gated to
+    // non-production so it never adds bridge round-trips to the boot-critical open
+    // in shipped builds. Pragma values are not user content (sync rule #9 safe).
+    if (!environment.production) {
+      try {
+        const jm = await conn.query('PRAGMA journal_mode;');
+        const sy = await conn.query('PRAGMA synchronous;');
+        Log.log('[opLog] SQLite pragmas applied', {
+          journalMode: (jm.values?.[0] as { journal_mode?: string })?.journal_mode,
+          synchronous: (sy.values?.[0] as { synchronous?: number })?.synchronous,
+        });
+      } catch {
+        // Diagnostic only — never fail the open over a readback.
+      }
     }
   }
 
