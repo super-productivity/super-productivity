@@ -198,7 +198,9 @@ const getIcalPropParams = (lines: string[], name: string): string => {
  *          20260320 (date-only, VALUE=DATE).
  */
 const parseIcalDateTime = (value: string, params: string): Date | null => {
-  if (!value) return null;
+  // Defensive: callers occasionally pass epoch-ms numbers (PluginSearchResult
+  // shape) instead of iCal strings; never call .slice() on a non-string. See #8564.
+  if (typeof value !== 'string' || !value) return null;
   // Date-only: YYYYMMDD
   if (value.length === 8) {
     const y = parseInt(value.slice(0, 4), 10);
@@ -297,6 +299,10 @@ const toIcalDate = (date: Date): string => {
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
 };
+
+/** Convert a compact iCal date (YYYYMMDD) to an ISO calendar date (YYYY-MM-DD) */
+const ymdToIsoDate = (ymd: string): string =>
+  `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
 
 /** Format a timestamp as UTC ISO 8601 */
 const toUTCISO = (timestamp: number): string => new Date(timestamp).toISOString();
@@ -1479,34 +1485,51 @@ PluginAPI.registerIssueProvider({
 
   extractSyncValues(issue: PluginIssue): Record<string, unknown> {
     const raw = issue as Record<string, unknown>;
-    const startRaw = raw.start as string | undefined;
-    const endRaw = raw.end as string | undefined;
-    const startParams = (raw.startParams as string) || '';
-    const durationRaw = raw.duration as string | undefined;
+    const startRaw = raw.start;
+    const durationRaw = raw.duration;
 
     let startDateTime: string | undefined;
     let startDate: string | undefined;
     let durationMs = 0;
 
-    if (startRaw) {
+    if (typeof startRaw === 'number' && Number.isFinite(startRaw)) {
+      // Panel / backlog / search shape (PluginSearchResult): epoch-ms `start`,
+      // numeric `duration`, explicit `isAllDay`. This is what the "+ add to
+      // schedule" flow feeds, so it must be handled here too — not only the
+      // iCal-string shape that getById returns. Calling parseIcalDateTime on a
+      // number used to throw `n.slice is not a function`. See #8564.
+      // The Number.isFinite guard keeps a NaN/Infinity start from throwing in
+      // toISOString or seeding a corrupt write-back baseline (it falls through
+      // to the empty result instead).
+      if (raw.isAllDay) {
+        // All-day occurrences are stamped at local midnight, so local getters
+        // (via toIcalDate) yield the correct calendar date.
+        startDate = ymdToIsoDate(toIcalDate(new Date(startRaw)));
+      } else {
+        startDateTime = new Date(startRaw).toISOString();
+      }
+      durationMs = typeof durationRaw === 'number' ? durationRaw : 0;
+    } else if (typeof startRaw === 'string' && startRaw) {
+      // getById shape: raw iCal DTSTART string + params.
+      const startParams = (raw.startParams as string) || '';
       const parsed = parseIcalDateTime(startRaw, startParams);
       if (parsed) {
         if (isDateOnly(startRaw, startParams)) {
-          // Convert YYYYMMDD to YYYY-MM-DD
-          startDate = `${startRaw.slice(0, 4)}-${startRaw.slice(4, 6)}-${startRaw.slice(6, 8)}`;
+          startDate = ymdToIsoDate(startRaw);
         } else {
           startDateTime = parsed.toISOString();
         }
       }
-    }
 
-    if (durationRaw) {
-      durationMs = parseDuration(durationRaw);
-    } else if (startDateTime && endRaw) {
-      const endParams = (raw.endParams as string) || '';
-      const endParsed = parseIcalDateTime(endRaw, endParams);
-      if (endParsed) {
-        durationMs = endParsed.getTime() - new Date(startDateTime).getTime();
+      const endRaw = raw.end as string | undefined;
+      if (typeof durationRaw === 'string' && durationRaw) {
+        durationMs = parseDuration(durationRaw);
+      } else if (startDateTime && endRaw) {
+        const endParams = (raw.endParams as string) || '';
+        const endParsed = parseIcalDateTime(endRaw, endParams);
+        if (endParsed) {
+          durationMs = endParsed.getTime() - new Date(startDateTime).getTime();
+        }
       }
     }
 

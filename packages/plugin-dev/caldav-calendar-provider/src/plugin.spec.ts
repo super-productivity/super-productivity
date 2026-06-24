@@ -190,6 +190,59 @@ describe('CalDAV Calendar Plugin', () => {
       expect(result.start_dateTime).toBe('2026-03-20T10:00:00.000Z');
       expect(result.duration_ms).toBe(2 * 60 * 60 * 1000 + 30 * 60 * 1000);
     });
+
+    // Regression for #8564: the "+ add to schedule" flow passes the
+    // PluginSearchResult shape (epoch-ms `start`/`duration`, `isAllDay` flag),
+    // not the iCal-string shape getById returns. This used to throw
+    // `n.slice is not a function` inside parseIcalDateTime.
+    it('should handle numeric (PluginSearchResult) timed event without throwing', () => {
+      const startMs = Date.UTC(2026, 2, 20, 12, 0, 0);
+      const issue = {
+        id: 'e1',
+        title: 'Meeting',
+        body: 'notes',
+        start: startMs,
+        dueWithTime: startMs,
+        duration: 30 * 60 * 1000,
+        isAllDay: false,
+      };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_dateTime).toBe('2026-03-20T12:00:00.000Z');
+      expect(result.start_date).toBeUndefined();
+      expect(result.duration_ms).toBe(30 * 60 * 1000);
+      expect(result.summary).toBe('Meeting');
+    });
+
+    it('should handle numeric (PluginSearchResult) all-day event', () => {
+      // All-day occurrences are stamped at local midnight.
+      const startMs = new Date(2026, 2, 20, 0, 0, 0).getTime();
+      const issue = {
+        id: 'e1',
+        title: 'Holiday',
+        body: '',
+        start: startMs,
+        duration: 0,
+        isAllDay: true,
+      };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_date).toBe('2026-03-20');
+      expect(result.start_dateTime).toBeUndefined();
+      expect(result.duration_ms).toBe(0);
+    });
+
+    it('should not throw or seed a corrupt baseline on a non-finite numeric start', () => {
+      const issue = { id: 'e1', title: 'Broken', body: '', start: NaN, isAllDay: false };
+
+      const result = definition.extractSyncValues!(issue as any);
+
+      expect(result.start_dateTime).toBeUndefined();
+      expect(result.start_date).toBeUndefined();
+      expect(result.duration_ms).toBe(0);
+    });
   });
 
   describe('updateIssue', () => {
