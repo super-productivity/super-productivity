@@ -827,12 +827,12 @@ export class PluginBridgeService implements OnDestroy {
 
     let createdTask: Task;
     if (taskData.parentId) {
-      // For subtasks, we need to use the addSubTask action to properly update parent.
-      // Short-syntax (e.g. "15m") is normally applied by ShortSyntaxEffects, but that
-      // effect only listens to `addTask`/`updateTask` — not `addSubTask`. So the
-      // bridge has to parse subtask titles itself, mirroring MarkdownPasteService.
-      // Tags/projects are intentionally not parsed: subtasks always inherit them
-      // from the parent (see addSubTask reducer).
+      // For subtasks, we use the addSubTask action to properly update the parent.
+      // ShortSyntaxEffects now also parses addSubTask, but we opt this path out via
+      // `isIgnoreShortSyntax` and parse only time here (mirroring MarkdownPasteService):
+      // subtasks created via the plugin API intentionally inherit tags/project from
+      // the parent and must not have them reassigned from the title (see addSubTask
+      // reducer).
       const subTaskTitleProps = this._parseSubTaskTitleTimeProps(taskData.title);
       const newTask = this._taskService.createNewTaskWithDefaults({
         title: subTaskTitleProps.title,
@@ -851,6 +851,7 @@ export class PluginBridgeService implements OnDestroy {
         addSubTask({
           task: newTask,
           parentId: taskData.parentId,
+          isIgnoreShortSyntax: true,
         }),
       );
       createdTask = newTask;
@@ -1598,8 +1599,9 @@ export class PluginBridgeService implements OnDestroy {
    */
   // Mirrors MarkdownPasteService._parseTimeProps: respects the user's
   // shortSyntax.isEnableDue config, returns the cleaned title and any parsed
-  // time fields. Used for subtasks because `addSubTask` doesn't trigger the
-  // ShortSyntaxEffects pipeline.
+  // time fields. Used for subtasks created via the plugin API, which opt out of
+  // the ShortSyntaxEffects pipeline (isIgnoreShortSyntax) to parse time only and
+  // keep tags/project inherited from the parent.
   private _parseSubTaskTitleTimeProps(originalTitle: string): {
     title: string;
     timeProps: Partial<TaskCopy>;
