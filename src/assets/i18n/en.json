@@ -1461,7 +1461,7 @@
         },
         "ONEDRIVE": {
           "CLIENT_ID_DESCRIPTION": "Application (client) ID from your Microsoft Entra app registration",
-          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill client and tenant first, then authenticate.",
+          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill in client and tenant first, then authenticate. <strong>Using your own Entra app registration?</strong> On desktop, register the redirect URI <code>superproductivity://oauth-callback/onedrive</code> under \"Mobile and desktop applications\", enable \"Allow public client flows\", and grant the <code>Files.ReadWrite.AppFolder</code> delegated permission. See the <a href=\"https://github.com/super-productivity/super-productivity/wiki/2.09-Configure-Sync-Backend\" target=\"_blank\" rel=\"noopener\">OneDrive setup guide</a>.",
           "L_CLIENT_ID": "Application (Client) ID",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
           "L_TENANT_ID": "Tenant ID",
@@ -1540,6 +1540,7 @@
         "NETWORK_ERROR": "Sync request failed because of a temporary network problem. Your changes remain local and sync will retry.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
         "OAUTH_STATE_INVALID": "OAuth state mismatch — the callback URL did not match this device's request. Please try authenticating again.",
+        "ONEDRIVE_AUTH_FAILED": "OneDrive sign-in failed at the token step ({{error}}). This usually means your Microsoft Entra app registration isn't set up as a public client. See the OneDrive setup guide in the wiki.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",

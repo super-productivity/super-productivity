@@ -570,25 +570,30 @@ export class OneDrive implements FileSyncProvider<
 
     if (!response.ok) {
       const body = await response.text();
-      if (response.status === 400) {
-        let parsed: { error?: string } | null = null;
-        try {
-          parsed = JSON.parse(body) as { error?: string };
-        } catch {
-          /* not JSON */
-        }
-        if (parsed?.error === 'invalid_grant') {
-          if (req.grantType === 'refresh_token') {
-            this._deps.logger.warn(
-              '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
-            );
-            await this._clearIfConfigMatches({
-              refreshToken: req.refreshToken,
-              clientId: cfg.clientId,
-              tenantId: cfg.tenantId,
-            });
-            throw new MissingRefreshTokenAPIError();
-          }
+      const { error, errorDescription } = this._parseOAuthTokenError(body);
+
+      // The OAuth token endpoint's error body carries only protocol/config
+      // diagnostics (the standard `error` code plus an AADSTS message), never
+      // user content — so the short `error` identity is safe to log. The
+      // longer human-readable `errorDescription` is routed to the UI via
+      // HttpNotOkAPIError.detail, not the structured log.
+      this._deps.logger.warn('[OneDrive] OAuth token request failed', {
+        status: response.status,
+        grantType: req.grantType,
+        error,
+      });
+
+      if (response.status === 400 && error === 'invalid_grant') {
+        if (req.grantType === 'refresh_token') {
+          this._deps.logger.warn(
+            '[OneDrive] Refresh token revoked (invalid_grant), clearing credentials',
+          );
+          await this._clearIfConfigMatches({
+            refreshToken: req.refreshToken,
+            clientId: cfg.clientId,
+            tenantId: cfg.tenantId,
+          });
+          throw new MissingRefreshTokenAPIError();
         }
       }
       if (response.status === 401 && req.grantType === 'refresh_token') {
@@ -603,7 +608,16 @@ export class OneDrive implements FileSyncProvider<
         throw new MissingRefreshTokenAPIError();
       }
       const redactedBody = this._redactTokenBody(body);
-      throw new HttpNotOkAPIError(response, redactedBody);
+      const tokenError = new HttpNotOkAPIError(response, redactedBody);
+      // Surface the Azure error_description (e.g. "AADSTS7000218: ...") to the
+      // UI so a misconfigured Entra app registration is self-diagnosable. This
+      // is the common authorization_code failure mode: the authorize step
+      // succeeds, then token redemption 400s because the app isn't a public
+      // client.
+      if (errorDescription) {
+        tokenError.detail = errorDescription.slice(0, 300);
+      }
+      throw tokenError;
     }
 
     return (await response.json()) as OneDriveTokenResponse;
@@ -720,6 +734,35 @@ export class OneDrive implements FileSyncProvider<
       return {
         code: parsed.error?.code,
         message: parsed.error?.message,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Parse the standard OAuth 2.0 error fields from a token-endpoint failure
+   * body. Azure returns `{ error, error_description, error_codes, ... }`; we
+   * keep only the two safe diagnostic fields. `error` is a short standard
+   * code (e.g. `invalid_grant`, `unauthorized_client`); `error_description`
+   * holds the human-readable `AADSTSxxxxx` message.
+   *
+   * Not redundant with `HttpNotOkAPIError._extractErrorFromBody`: that returns
+   * `error` (the short code), whereas we need `error_description` for the UI,
+   * and we also need `error` before any error is constructed — to drive the
+   * structured log and the `invalid_grant` credential-clearing branch.
+   */
+  private _parseOAuthTokenError(body: string): {
+    error?: string;
+    errorDescription?: string;
+  } {
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      const error = typeof parsed.error === 'string' ? parsed.error : undefined;
+      const desc = parsed['error_description'];
+      return {
+        error,
+        errorDescription: typeof desc === 'string' ? desc : undefined,
       };
     } catch {
       return {};

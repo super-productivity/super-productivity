@@ -404,6 +404,68 @@ describe('OneDrive', () => {
     expect(clearCalls.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('should surface the Azure error_description and log the OAuth error code on auth-code 400', async () => {
+    // The common misconfigured-public-client failure: the authorize step
+    // succeeds, then the authorization_code token exchange 400s. The Azure
+    // error_description (AADSTSxxxxx) must reach the UI via `.detail`, while
+    // only the short `error` code goes to the structured log.
+    const warnSpy = jasmine.createSpy('warn');
+    const deps: OneDriveDeps = {
+      ...mockDeps,
+      logger: { ...mockDeps.logger, warn: warnSpy },
+      credentialStore: cfgStoreSpy as unknown as OneDriveDeps['credentialStore'],
+      isElectron: true,
+    };
+    const electronProvider = new PackageOneDrive({}, deps);
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+
+    const aadstsDescription =
+      "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'.";
+    fetchSpy.and.callFake(async (url: string) => {
+      if (url.includes('/oauth2/v2.0/token')) {
+        return {
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: async () =>
+            JSON.stringify({
+              error: 'unauthorized_client',
+              error_description: aadstsDescription,
+            }),
+        } as Response;
+      }
+      return { ok: true, status: 200, text: async () => '' } as Response;
+    });
+
+    const authHelper = await electronProvider.getAuthHelper();
+    if (!authHelper.verifyCodeChallenge) {
+      fail('expected verifyCodeChallenge helper');
+      return;
+    }
+
+    let thrown: { name?: string; detail?: string; response?: Response } | undefined;
+    try {
+      await authHelper.verifyCodeChallenge('auth-code-123');
+      fail('should have thrown');
+    } catch (e) {
+      thrown = e as typeof thrown;
+    }
+
+    expect(thrown?.name).toBe('HttpNotOkAPIError');
+    expect(thrown?.response?.status).toBe(400);
+    // AADSTS message surfaced to the UI for self-diagnosis.
+    expect(thrown?.detail).toContain('AADSTS7000218');
+    // Short, safe OAuth error code logged...
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[OneDrive] OAuth token request failed',
+      jasmine.objectContaining({ status: 400, error: 'unauthorized_client' }),
+    );
+    // ...but the verbose description is NOT placed in the exportable log.
+    expect(JSON.stringify(warnSpy.calls.mostRecent().args[1])).not.toContain(
+      'AADSTS7000218',
+    );
+  });
+
   it('should map 412 responses to UploadRevToMatchMismatchAPIError', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
 

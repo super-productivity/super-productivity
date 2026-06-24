@@ -53,6 +53,10 @@ const formatDomObjectLabel = (value: { constructor?: { name?: string } }): strin
 
 const serializeErrorMessage = (error: Error): string => truncateSerialized(String(error));
 
+// Privacy invariant: serialize ONLY name/message/stack. Logs are exportable,
+// and some error types (e.g. HttpNotOkAPIError) carry a `.detail`/`.body` with
+// provider-response content — Nextcloud filenames, Azure AADSTS text — that is
+// sanctioned for UI display only. Never spread additional own-properties here.
 const serializeErrorArg = (error: Error): Record<string, unknown> => {
   const result: Record<string, unknown> = {
     name: error.name,

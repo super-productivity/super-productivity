@@ -47,6 +47,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { T } from '../../t.const';
 import { getSyncErrorStr } from './get-sync-error-str';
+import { getErrorTxt } from '../../util/get-error-text';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
 import { DialogConflictResolutionResult } from './sync.model';
 import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
@@ -1029,12 +1030,27 @@ export class SyncWrapperService {
       }
     } catch (error) {
       SyncLog.err(`Failed to configure auth for provider ${providerId}:`, error);
-      const isTokenExchangeError =
-        error instanceof HttpNotOkAPIError && error.response?.status === 400;
+      const httpErr = error instanceof HttpNotOkAPIError ? error : null;
+      const isTokenExchangeError = httpErr?.response?.status === 400;
+      // A OneDrive token-exchange 400 is almost always a misconfigured
+      // Microsoft Entra app registration (typically "Allow public client
+      // flows" disabled), not a mistyped/expired code — the authorize step
+      // already succeeded. Point the user at the registration fix and surface
+      // the Azure error detail (AADSTSxxxxx, carried on the UI-only `.detail`)
+      // so it is self-diagnosable.
+      let msg: string;
+      let translateParams: { [key: string]: string } | undefined;
+      if (isTokenExchangeError && providerId === SyncProviderId.OneDrive) {
+        msg = T.F.SYNC.S.ONEDRIVE_AUTH_FAILED;
+        translateParams = { error: httpErr?.detail || getErrorTxt(error) };
+      } else if (isTokenExchangeError) {
+        msg = T.F.SYNC.S.INVALID_AUTH_CODE;
+      } else {
+        msg = T.F.SYNC.S.AUTH_SETUP_FAILED;
+      }
       this._snackService.open({
-        msg: isTokenExchangeError
-          ? T.F.SYNC.S.INVALID_AUTH_CODE
-          : T.F.SYNC.S.AUTH_SETUP_FAILED,
+        msg,
+        translateParams,
         type: 'ERROR',
         config: { duration: 0 },
       });
