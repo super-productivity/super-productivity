@@ -110,5 +110,13 @@
     "author": "giba0",
     "authorUrl": "https://github.com/giba0",
     "stars": 2
+  },
+  {
+    "name": "Invoice Ninja Export",
+    "shortDescription": "Exports completed tasks to Invoice Ninja as billable Client Tasks, grouped by SP project (matched by name to an Invoice Ninja Client).",
+    "url": "https://github.com/clinkin-lawyer/sp-invoice-ninja-export",
+    "author": "clinkin-lawyer",
+    "authorUrl": "https://github.com/clinkin-lawyer",
+    "stars": 0
   }
 ]
