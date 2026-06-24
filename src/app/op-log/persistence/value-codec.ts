@@ -64,7 +64,13 @@ export const encodeValue = (value: unknown): string => {
   if (json.length <= COMPRESS_THRESHOLD_BYTES) {
     return json;
   }
-  return MARKER + u8ToBase64(gzipSync(strToU8(json)));
+  const compressed = MARKER + u8ToBase64(gzipSync(strToU8(json)));
+  // Monotonic: poorly-compressible content (random IDs, embedded base64, encrypted
+  // sub-blobs) can gzip to nearly its original size, and base64's ~33% inflation
+  // then makes the encoded form LARGER than plain JSON. Keep whichever is smaller so
+  // this can never grow a row (or the bytes crossing the bridge) — `decodeValue`
+  // dispatches on the marker, so the plain fallback reads back fine.
+  return compressed.length < json.length ? compressed : json;
 };
 
 /** Inverse of {@link encodeValue}; transparently handles plain (unmarked) rows. */
