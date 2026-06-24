@@ -44,6 +44,11 @@ android {
     // Configure the build types (Debug and Release)
     buildTypes {
         debug {
+            // Distinct package so a debug/test build installs SIDE-BY-SIDE with a
+            // release-signed install (Play/F-Droid) instead of failing with a
+            // signature mismatch — lets you sideload a test build onto a real
+            // device without uninstalling the production app (and its data).
+            applicationIdSuffix ".debug"
             // Define each field in BuildConfig for the Debug build
             debugConfigFields.each { key, value ->
                 buildConfigField "String", key, value.toString()
