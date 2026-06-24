@@ -4,7 +4,7 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { ShortSyntaxEffects } from './short-syntax.effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { addNewTagsFromShortSyntax } from './task.actions';
+import { addNewTagsFromShortSyntax, addSubTask } from './task.actions';
 import { TaskService } from '../task.service';
 import { TagService } from '../../tag/tag.service';
 import { ProjectService } from '../../project/project.service';
@@ -182,6 +182,46 @@ describe('ShortSyntaxEffects', () => {
       // The effect should emit an applyShortSyntax action
       expect(emittedAction).toBeDefined();
       expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+    }));
+
+    it('should parse short syntax for sub-tasks added via addSubTask (#8568)', fakeAsync(() => {
+      const task = createTask('sub-1', {
+        title: 'Buy milk 15m',
+        parentId: 'parent-1',
+      });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emittedAction: any = null;
+      effects.shortSyntax$.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(addSubTask({ task, parentId: 'parent-1' }));
+
+      tick(100);
+
+      expect(emittedAction).toBeDefined();
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges.timeEstimate).toBe(15 * 60 * 1000);
+      expect(emittedAction.taskChanges.title).toBe('Buy milk');
+    }));
+
+    it('should NOT parse short syntax for addSubTask when isIgnoreShortSyntax is true', fakeAsync(() => {
+      const task = createTask('sub-1', {
+        title: 'Buy milk 15m',
+        parentId: 'parent-1',
+      });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emitted = false;
+      effects.shortSyntax$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(addSubTask({ task, parentId: 'parent-1', isIgnoreShortSyntax: true }));
+
+      tick(100);
+      expect(emitted).toBe(false);
     }));
 
     it('should NOT process update actions that do not change title', fakeAsync(() => {

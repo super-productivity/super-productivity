@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { Action } from '@ngrx/store';
-import { addNewTagsFromShortSyntax } from './task.actions';
+import { addNewTagsFromShortSyntax, addSubTask } from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import {
   catchError,
@@ -53,11 +53,13 @@ export class ShortSyntaxEffects {
 
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
-      ofType(TaskSharedActions.addTask, TaskSharedActions.updateTask),
+      ofType(TaskSharedActions.addTask, TaskSharedActions.updateTask, addSubTask),
       filter((action): boolean => {
         if (action.isIgnoreShortSyntax) {
           return false;
         }
+        // addTask and addSubTask always carry a full title to parse; only
+        // updateTask is gated to title-only changes below.
         if (action.type !== TaskSharedActions.updateTask.type) {
           return true;
         }
