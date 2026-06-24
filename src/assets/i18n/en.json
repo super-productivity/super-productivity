@@ -1791,6 +1791,7 @@
         "DROP_TIME_KEEP_TODAY": "Drop time, keep in Today",
         "DEADLINE_REMINDER": "Deadline Reminder",
         "DEADLINE_SECTION": "Deadlines",
+        "DELETE": "Delete task",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)",
         "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Today)",
         "DONE": "Done",

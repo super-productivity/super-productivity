@@ -193,6 +193,17 @@
         ) | translate
       }}
     </button>
+    @if (!isMultiple) {
+      <mat-divider></mat-divider>
+      <button
+        (click)="deleteTask(tasks[0])"
+        [disabled]="isDisableControls"
+        mat-menu-item
+      >
+        <mat-icon>delete</mat-icon>
+        {{ T.F.TASK.D_REMINDER_VIEW.DELETE | translate }}
+      </button>
+    }
   </mat-menu>
 
   <ng-template

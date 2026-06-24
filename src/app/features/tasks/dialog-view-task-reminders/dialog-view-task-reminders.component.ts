@@ -43,6 +43,8 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
 import { MatTooltip } from '@angular/material/tooltip';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -97,6 +99,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _store = inject(Store);
   private _reminderService = inject(ReminderService);
   private _dateService = inject(DateService);
+  private _globalConfigService = inject(GlobalConfigService);
   private _elementRef = inject(ElementRef);
   data = inject<{
     reminders: TaskWithReminderData[];
@@ -152,6 +155,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   overdueThreshold = Date.now() - 30 * 60 * 1000; // 30 minutes
 
   private _subs: Subscription = new Subscription();
+  // Latches once a delete has been confirmed so a second trigger is a no-op.
+  private _isDeleteTriggered = false;
   // Track dismissed reminder IDs to prevent stale data from worker re-triggering them
   private _dismissedReminderIds = new Set<string>();
   // Reminders we have observed as still-valid in the store at least once. We only
@@ -378,6 +383,53 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
             this._close();
           }
         }),
+    );
+  }
+
+  deleteTask(task: TaskWithReminderData): void {
+    // Guard against deleting the same task twice (mirrors the task context menu).
+    if (this._isDeleteTriggered) {
+      return;
+    }
+    const isConfirmBeforeDelete =
+      this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
+    if (isConfirmBeforeDelete) {
+      this._subs.add(
+        this._matDialog
+          .open(DialogConfirmComponent, {
+            data: {
+              okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
+              message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+              translateParams: { title: task.title },
+            },
+          })
+          .afterClosed()
+          .subscribe((isConfirm) => {
+            if (isConfirm) {
+              this._deleteTask(task);
+            }
+          }),
+      );
+    } else {
+      this._deleteTask(task);
+    }
+  }
+
+  private _deleteTask(task: TaskWithReminderData): void {
+    this._isDeleteTriggered = true;
+    // The reminder list only holds reminder data, so resolve the full task with
+    // its subtasks first — deleting a parent must also remove its subtasks.
+    this._subs.add(
+      this._taskService.getByIdWithSubTaskData$(task.id).subscribe((taskWithSubTasks) => {
+        // The task may have vanished from the store between confirm and resolve
+        // (e.g. synced away); a stale snapshot has no id, so skip — the store
+        // reconcile sub already handles closing the dialog in that case.
+        if (!taskWithSubTasks?.id) {
+          return;
+        }
+        this._taskService.remove(taskWithSubTasks);
+        this._removeTaskFromList(task.id);
+      }),
     );
   }
 
