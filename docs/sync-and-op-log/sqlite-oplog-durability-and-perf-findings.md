@@ -296,6 +296,39 @@ inner `JSON.parse` of a 30 MB object (~0.5-0.8 s) is intrinsic to the
 JSON-in-a-cell model; only structured clone (the shelved IDB-snapshot option) or
 lazy loading (Stage 3) avoids it. That's why Stage 3 is the real fix for the tail.
 
+### Migration blocks boot (behind the splash) — safe, but a UX follow-up for huge accounts
+
+The IDB→SQLite migration runs on the **boot-critical path**: `DataInitService`
+`await`s `hydrateStore()` → `loadStateCache()` → `NativeOpLogAdapter.init()` →
+`bootstrapNativeOpLogBackend()` → `await migrateOpLogBackend()`
+(`native-sqlite-backend.ts:158-204`). State can't hydrate until it finishes, so the
+~27 s (real-device, 50k ops) migration is ~27 s before the app has data.
+
+This is **safe, not a silent hang**: the static `.app-loading` splash (`index.html`,
+logo + spinner) shows throughout — not a frozen/black screen — and the copy is one
+atomic transaction with **verify-before-commit**, with the "done" marker written
+only _after_ commit. A force-quit mid-migration rolls back cleanly and retries next
+launch; no partial/corrupt state.
+
+The only soft spot: there is **no migration-specific progress** ("Migrating your
+data…"), so a huge-account user _could_ impatiently force-quit a long spinner
+repeatedly and never get past it. **Follow-up (YAGNI-gated):** add a migration
+progress/explainer to the splash — but only build it if staged-rollout telemetry
+shows real users hitting long migrations; most accounts are far under 50k ops
+(1k≈0.3 s, 10k≈2.4 s).
+
+### Rollout gate (the real validation of real-data migration)
+
+Everything tested so far used **synthetic throwaway data** — a _real populated_
+IDB→SQLite migration has not run on hardware (the side-by-side `.debug` install
+starts empty by design). The intended instrument for that is the staged Play
+Console rollout: ramp **1 % → up**, holding while the `opLogSqliteMigrationFailed`
+and `opLogSqliteFellBackToIdb` breadcrumbs stay quiet. The fail-loud + in-session
+IDB fallback + durable marker exist precisely so a bad migration surfaces in
+telemetry instead of silently losing data. Do **not** ship to 100 % on synthetic
+validation alone; the rollout _is_ the real-data test (and yields the Stage 1
+snapshot-size distribution as a bonus).
+
 ---
 
 ## Sources
