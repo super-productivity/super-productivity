@@ -174,8 +174,18 @@ const makeBlob = (targetBytes: number): { items: unknown[] } => {
   const items: { id: string; v: number; s: string }[] = [];
   let size = 12; // approx the {"items":[]} wrapper overhead
   let i = 0;
+  // Deterministic LCG (no Math.random → reproducible device runs) giving each
+  // record a varied token, so the blob is only ~3-4× compressible like a real
+  // state-cache (uuids/titles/timestamps), NOT ~15× like a constant string —
+  // otherwise gzip would flatter the SQLite blob-read number unrealistically.
+  let seed = targetBytes;
   while (size < targetBytes) {
-    const rec = { id: `e${i}`, v: i, s: 'synthetic-state-cache-field-payload' };
+    seed = ((seed * 1103515245) % 0x7fffffff) + 12345;
+    const rec = {
+      id: `e${i}`,
+      v: i,
+      s: `state-field-${seed.toString(36)}-${(seed >>> 7).toString(36)}`,
+    };
     items.push(rec);
     size += JSON.stringify(rec).length + 1;
     i++;
@@ -186,16 +196,22 @@ const makeBlob = (targetBytes: number): { items: unknown[] } => {
 // ── adapter helpers ──────────────────────────────────────────────────────────
 
 /**
- * Seed `n` ops in ONE transaction (BEGIN/COMMIT) — mirrors migrateOpLogBackend,
- * so the elapsed time is the honest one-time migration cost (n bridge crossings
- * within a single transaction) and the same rows back the read measurements.
+ * Seed `n` ops in ONE transaction via `putBatch` — the EXACT mechanism
+ * {@link migrateOpLogBackend} uses, so the elapsed time is the honest one-time
+ * migration cost and the same rows back the read measurements. Critically: on
+ * SQLite `putBatch` collapses the rows into a few `executeSet` calls (the batching
+ * optimization under test), whereas a per-row `tx.add` loop would measure the OLD
+ * unbatched path and understate the win. Each value carries its own `seq` like a
+ * migrated op, so the `ON CONFLICT(seq)` bind path runs exactly as in the
+ * migration. Rows are built outside the timed section.
  */
 const seedOps = async (adapter: OpLogDbAdapter, n: number): Promise<number> => {
+  const rows = Array.from({ length: n }, (_, i) => ({
+    value: { ...(makeEntry(i) as Record<string, unknown>), seq: i + 1 },
+  }));
   const start = performance.now();
   await adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
-    for (let i = 0; i < n; i++) {
-      await tx.add(STORE_NAMES.OPS, makeEntry(i));
-    }
+    await tx.putBatch(STORE_NAMES.OPS, rows);
   });
   return performance.now() - start;
 };
