@@ -110,9 +110,11 @@ export class PluginService implements OnDestroy {
   private _pluginIframeGenerations: Map<string, number> = new Map();
   private _pluginIconsSignal = signal<Map<string, string>>(new Map());
   // Plugin ids the user denied nodeExecution for this app session. In-memory only —
-  // never persisted or synced (consent is session-scoped). Prevents re-prompting from
-  // the multiple grant call-sites of a single enable flow, and keeps a denial sticky
-  // until the user explicitly re-enables the plugin. Cleared in checkNodeExecutionPermission.
+  // never persisted or synced (consent is session-scoped). Makes a denial sticky so a
+  // later non-interactive grant attempt (e.g. startup re-activation via _fireOnReady,
+  // which doesn't pass through checkNodeExecutionPermission) doesn't re-open the native
+  // prompt. Added on deny in _ensureNodeExecutionGrant; cleared only on an explicit
+  // user-initiated enable in checkNodeExecutionPermission (so re-enable always re-asks).
   private readonly _nodeExecutionDeniedThisSession = new Set<string>();
 
   // Lazy loading state management

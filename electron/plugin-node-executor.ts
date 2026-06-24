@@ -40,6 +40,17 @@ const assertSafePluginId = (pluginId: unknown): string => {
   if (UNSAFE_ID_CHARS_RE.test(pluginId)) {
     throw new Error('Invalid pluginId');
   }
+  // The id is used as a path segment in getBuiltInManifestPath() (existsSync probe),
+  // so reject path separators and dot-segments — otherwise an id like '..' could probe
+  // outside the bundled-plugins dir and render misleadingly in the dialog.
+  if (
+    pluginId.includes('/') ||
+    pluginId.includes('\\') ||
+    pluginId === '.' ||
+    pluginId === '..'
+  ) {
+    throw new Error('Invalid pluginId');
+  }
   return pluginId;
 };
 
@@ -49,6 +60,18 @@ const sanitizeDialogString = (value: unknown, maxLength: number): string => {
   }
   const cleaned = value.replace(UNSAFE_DISPLAY_CHARS_RE, '').replace(/\s+/g, ' ').trim();
   return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength)}…` : cleaned;
+};
+
+// Shared shell for both nodeExecution consent dialogs: a warning with Allow/Deny where
+// Deny is the default + cancel action, so a reflexive Enter/Escape denies.
+const NODE_CONSENT_DIALOG_BASE: Pick<
+  Electron.MessageBoxOptions,
+  'type' | 'buttons' | 'defaultId' | 'cancelId'
+> = {
+  type: 'warning',
+  buttons: ['Allow', 'Deny'],
+  defaultId: 1,
+  cancelId: 1,
 };
 
 interface NodeExecutionGrant {
@@ -261,10 +284,7 @@ class PluginNodeExecutor {
   private describeVerifiedBuiltInDialog(pluginId: string): Electron.MessageBoxOptions {
     const manifest = this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
     return {
-      type: 'warning',
-      buttons: ['Allow', 'Deny'],
-      defaultId: 1,
-      cancelId: 1,
+      ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow plugin Node.js execution?',
       message: `Allow "${manifest.name}" to run Node.js scripts?`,
       detail: [
@@ -288,10 +308,7 @@ class PluginNodeExecutor {
     const name = sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)';
     const version = sanitizeDialogString(displayInfo?.version, 32) || '(unknown)';
     return {
-      type: 'warning',
-      buttons: ['Allow', 'Deny'],
-      defaultId: 1,
-      cancelId: 1,
+      ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow this plugin to run code on your machine?',
       message: `Plugin "${pluginId}" wants to run Node.js code`,
       detail: [
