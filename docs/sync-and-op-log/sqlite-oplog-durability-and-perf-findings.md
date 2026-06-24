@@ -146,6 +146,43 @@ Append/op: SQLite **2.76 ms** vs IndexedDB **0.51 ms**. Reads (median ms):
 Blob read scales ~linearly (~180 ms/MB), so the **30 MB worst case extrapolates
 to ~5 s on every boot** (typical < 2 MB ≈ ~360 ms).
 
+### Measured AFTER Stage 0 + Stage 2 (2026-06-24, API 36 emulator)
+
+Re-run with the optimizations live (migration batching, WAL pragmas, gzip
+compression) and the harness fixed to exercise them (`putBatch` seeding +
+realistically-compressible blob). Append/op: SQLite **3.5 ms** vs IndexedDB
+**0.59 ms**.
+
+| Metric (N / blob)       | SQLite (before → after) | IndexedDB | After vs IDB       |
+| ----------------------- | ----------------------- | --------- | ------------------ |
+| migration, 50k ops      | 98,688 → **11,732**     | 13,125    | **0.89× (faster)** |
+| getAll full, 50k        | 3,712 → 2,161           | 367       | 5.9×               |
+| getOpsAfterSeq tail,50k | 9.3 → 4.4               | 1.2       | 3.7×               |
+| state-cache blob, 1 MB  | 187 → 38                | 8.5       | 4.5×               |
+| state-cache blob, 5 MB  | 897 → **189**           | 50        | 3.8×               |
+
+**Both headline optimizations validated.** Trust anchor: IDB's 5 MB read is 48 ms
+(original) vs 50 ms (this run) → the two environments are comparable for reads, so
+the SQLite deltas are real, not device artifacts.
+
+- **Migration: ~8× faster and now scales _better_ than IDB** (1.33× slower at 1k →
+  0.89× = faster at 50k). `executeSet` batching amortizes the bridge cost while
+  IDB's per-row `put` overhead grows. The original ~99 s pain is gone.
+- **Blob read: ~4.7× faster** (897→189 ms @ 5 MB), gap to IDB cut from 18.7× to
+  3.8× — and this is the _realistic_ (~3-4× compressible) blob, so it's honest.
+  Scales ~38 ms/MB now → **~1.1 s at 30 MB** (was ~5 s), matching the "~1-1.5 s"
+  Stage 2 estimate. Stage 3 only warranted if ~1 s is still too slow for the rare
+  huge account.
+- **Still slower, acceptable:** append 6× but absolute-tiny (matters only in rapid
+  bursts, e.g. a 50-op bulk dispatch ≈ +150 ms); `getAll` full 5.9× but that's the
+  snapshot-_miss_ replay path, not the hot boot (snapshot + 4.4 ms tail).
+
+**Caveats:** emulator host disk understates the `synchronous=NORMAL` append win
+(cheap host fsync) — get honest append/write numbers on a real device (UFS flash).
+WAL is verifiable via the `-wal`/`-shm` sidecar files; `synchronous` is a
+per-connection runtime setting (not in the file), so it needs an in-app readback to
+confirm.
+
 ### Why SQLite is slower — three taxes of the JS↔native bridge
 
 The bridge serializes results to a JSON string natively, ships it across, and
