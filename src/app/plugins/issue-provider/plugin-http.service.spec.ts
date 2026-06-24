@@ -4,7 +4,12 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { PluginHttpService } from './plugin-http.service';
+import type { NativeHttpResponse } from '@sp/sync-providers/http';
+import {
+  PluginHttpService,
+  PLUGIN_HTTP_IS_NATIVE,
+  PLUGIN_HTTP_NATIVE_EXECUTOR,
+} from './plugin-http.service';
 
 describe('PluginHttpService', () => {
   let service: PluginHttpService;
@@ -182,5 +187,100 @@ describe('PluginHttpService', () => {
       req.flush({ ok: true });
       await expectAsync(promise).toBeResolved();
     });
+  });
+});
+
+describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () => {
+  let service: PluginHttpService;
+  let httpMock: HttpTestingController;
+  let nativeHttp: jasmine.Spy<(c: unknown) => Promise<NativeHttpResponse>>;
+
+  const okResponse = (over: Partial<NativeHttpResponse> = {}): NativeHttpResponse => ({
+    status: 207,
+    headers: {},
+    data: '<multistatus/>',
+    url: 'https://caldav.icloud.com/',
+    ...over,
+  });
+
+  beforeEach(() => {
+    nativeHttp = jasmine
+      .createSpy('nativeHttp')
+      .and.resolveTo(okResponse() as NativeHttpResponse);
+    TestBed.configureTestingModule({
+      providers: [
+        PluginHttpService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PLUGIN_HTTP_IS_NATIVE, useValue: true },
+        { provide: PLUGIN_HTTP_NATIVE_EXECUTOR, useValue: nativeHttp },
+      ],
+    });
+    service = TestBed.inject(PluginHttpService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  const authHeaders = (): Record<string, string> => ({ Authorization: 'Basic abc' });
+
+  it('routes PROPFIND through the native executor (not HttpClient)', async () => {
+    const http = service.createHttpHelper(authHeaders);
+    const result = await http.request<string>(
+      'PROPFIND',
+      'https://caldav.icloud.com/',
+      '<propfind/>',
+      { responseType: 'text', headers: { Depth: '0' } },
+    );
+    expect(nativeHttp).toHaveBeenCalledTimes(1);
+    const cfg = nativeHttp.calls.mostRecent().args[0] as Record<string, unknown>;
+    expect(cfg['method']).toBe('PROPFIND');
+    expect(cfg['data']).toBe('<propfind/>');
+    expect((cfg['headers'] as Record<string, string>)['Authorization']).toBe('Basic abc');
+    expect((cfg['headers'] as Record<string, string>)['Depth']).toBe('0');
+    expect(result).toBe('<multistatus/>');
+    httpMock.expectNone(() => true);
+  });
+
+  it('routes REPORT through the native executor', async () => {
+    const http = service.createHttpHelper(authHeaders);
+    await http.request('REPORT', 'https://caldav.icloud.com/cal/', '<query/>', {
+      responseType: 'text',
+    });
+    expect(nativeHttp).toHaveBeenCalledTimes(1);
+    expect((nativeHttp.calls.mostRecent().args[0] as { method: string }).method).toBe(
+      'REPORT',
+    );
+  });
+
+  it('rejects with an error carrying .status on a non-2xx native response', async () => {
+    nativeHttp.and.resolveTo(okResponse({ status: 404, data: '' }));
+    const http = service.createHttpHelper(authHeaders);
+    await expectAsync(
+      http.request('PROPFIND', 'https://caldav.icloud.com/', '<propfind/>', {
+        responseType: 'text',
+      }),
+    ).toBeRejectedWith(jasmine.objectContaining({ status: 404 }));
+  });
+
+  it('parses JSON when responseType is not text', async () => {
+    nativeHttp.and.resolveTo(okResponse({ status: 200, data: '{"ok":true}' }));
+    const http = service.createHttpHelper(authHeaders);
+    const result = await http.request<{ ok: boolean }>(
+      'PROPFIND',
+      'https://caldav.icloud.com/',
+      '<propfind/>',
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('does NOT reroute standard verbs — GET still uses HttpClient', async () => {
+    const http = service.createHttpHelper(authHeaders);
+    const promise = http.get('https://caldav.icloud.com/');
+    await new Promise((r) => setTimeout(r, 0));
+    const req = httpMock.expectOne('https://caldav.icloud.com/');
+    req.flush({ ok: true });
+    await expectAsync(promise).toBeResolved();
+    expect(nativeHttp).not.toHaveBeenCalled();
   });
 });
