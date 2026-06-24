@@ -2,7 +2,11 @@ import { inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { OAuthFlowConfig, OAuthTokenResult } from '@super-productivity/plugin-api';
 import { PluginOAuthService } from './plugin-oauth.service';
-import * as pluginOAuthTokenStore from './plugin-oauth-token-store';
+import {
+  saveOAuthTokens,
+  loadOAuthTokens,
+  deleteOAuthTokens,
+} from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
 import {
   IS_NATIVE_PLATFORM,
@@ -37,7 +41,7 @@ export class PluginOAuthBridgeService {
     config: OAuthFlowConfig,
   ): Promise<OAuthTokenResult> {
     // Validate URLs before starting the loopback server. On Electron,
-    // getRedirectUri() starts a server — avoid leaking it if config is invalid.
+    // prepareRedirectUri() starts a server — avoid leaking it if config is invalid.
     this._pluginOAuthService.validateOAuthConfig(config);
 
     // Pick the platform-specific client. The default `clientId` is the desktop
@@ -48,9 +52,19 @@ export class PluginOAuthBridgeService {
     // so it lands in the Android branch (correct) and never reaches the web branch.
     const effectiveConfig = ((): OAuthFlowConfig => {
       if (IS_ANDROID_NATIVE && config.mobileClientId) {
+        if (config.clientSecret) {
+          PluginLog.warn(
+            'OAuth: a client secret is not used on Android; the platform client id is used instead.',
+          );
+        }
         return { ...config, clientId: config.mobileClientId, clientSecret: undefined };
       }
       if (IS_IOS_NATIVE && config.iosClientId) {
+        if (config.clientSecret) {
+          PluginLog.warn(
+            'OAuth: a client secret is not used on iOS; the platform client id is used instead.',
+          );
+        }
         return { ...config, clientId: config.iosClientId, clientSecret: undefined };
       }
       if (!IS_ELECTRON && !IS_NATIVE_PLATFORM) {
@@ -58,6 +72,11 @@ export class PluginOAuthBridgeService {
         if (!webClientId) {
           throw new Error(
             'OAuth: this plugin is not available in the web build. Connect from the desktop or mobile app instead.',
+          );
+        }
+        if (config.clientSecret) {
+          PluginLog.warn(
+            'OAuth: a client secret is not used in the web build; the public web client id is used instead.',
           );
         }
         return {
@@ -164,10 +183,7 @@ export class PluginOAuthBridgeService {
     const serialized = this._pluginOAuthService.serializeTokens(pluginId);
     if (serialized) {
       try {
-        await pluginOAuthTokenStore.saveOAuthTokens(
-          this._oauthPersistenceKey(pluginId),
-          serialized,
-        );
+        await saveOAuthTokens(this._oauthPersistenceKey(pluginId), serialized);
       } catch (error) {
         PluginLog.err('PluginOAuthBridge: Failed to persist OAuth tokens:', error);
       }
@@ -176,9 +192,7 @@ export class PluginOAuthBridgeService {
 
   private async _restoreOAuthTokens(pluginId: string): Promise<void> {
     try {
-      const serialized = await pluginOAuthTokenStore.loadOAuthTokens(
-        this._oauthPersistenceKey(pluginId),
-      );
+      const serialized = await loadOAuthTokens(this._oauthPersistenceKey(pluginId));
       if (serialized) {
         this._pluginOAuthService.restoreTokens(pluginId, serialized);
       }
@@ -189,7 +203,7 @@ export class PluginOAuthBridgeService {
 
   private async _clearPersistedOAuthTokens(pluginId: string): Promise<void> {
     try {
-      await pluginOAuthTokenStore.deleteOAuthTokens(this._oauthPersistenceKey(pluginId));
+      await deleteOAuthTokens(this._oauthPersistenceKey(pluginId));
     } catch (error) {
       PluginLog.err('PluginOAuthBridge: Failed to clear persisted OAuth tokens:', error);
     }

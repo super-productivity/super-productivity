@@ -42,6 +42,23 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
       return new Promise<{ port: number }>((resolve, reject) => {
         let handled = false;
 
+        let port = 0;
+        if (requestedPort !== undefined) {
+          if (
+            !Number.isInteger(requestedPort) ||
+            requestedPort < 1024 ||
+            requestedPort > 65535
+          ) {
+            reject(
+              new Error(
+                `Invalid OAuth loopback port ${requestedPort}; must be an integer in [1024, 65535].`,
+              ),
+            );
+            return;
+          }
+          port = requestedPort;
+        }
+
         const server = createServer((req, res) => {
           if (handled) {
             // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -71,12 +88,18 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
           cleanupServer();
         });
 
-        const port =
-          typeof requestedPort === 'number' &&
-          Number.isInteger(requestedPort) &&
-          requestedPort > 0
-            ? requestedPort
-            : 0;
+        server.on('error', (err) => {
+          server.close();
+          if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+            reject(
+              new Error(
+                `OAuth loopback port ${port} is already in use. Close the app using it and try again.`,
+              ),
+            );
+          } else {
+            reject(err);
+          }
+        });
 
         server.listen(port, LOOPBACK_HOST, () => {
           const addr = server.address();
@@ -91,18 +114,6 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
           } else {
             server.close();
             reject(new Error('Failed to start OAuth loopback server'));
-          }
-        });
-
-        server.on('error', (err) => {
-          if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-            reject(
-              new Error(
-                `OAuth loopback port ${port} is already in use. Close the app using it and try again.`,
-              ),
-            );
-          } else {
-            reject(err);
           }
         });
       });

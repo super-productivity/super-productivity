@@ -95,4 +95,31 @@ describe('issue-provider-model-merge.util', () => {
       accountId: '1',
     });
   });
+
+  it('recursively merges nested objects in pluginConfig other than twoWaySync', () => {
+    const result = mergeIssueProviderModelUpdates(
+      {
+        pluginConfig: {
+          nestedSettings: {
+            option1: 'value1',
+            option2: 'value2',
+          },
+        },
+      } as any,
+      {
+        pluginConfig: {
+          nestedSettings: {
+            option1: 'updated1',
+          },
+        },
+      } as any,
+    );
+
+    expect((result as { pluginConfig?: Record<string, unknown> }).pluginConfig).toEqual({
+      nestedSettings: {
+        option1: 'updated1',
+        option2: 'value2',
+      },
+    });
+  });
 });

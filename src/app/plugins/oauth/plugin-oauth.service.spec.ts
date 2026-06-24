@@ -416,6 +416,27 @@ describe('PluginOAuthService', () => {
     });
   });
 
+  describe('prepareRedirectUri validation', () => {
+    it('should reject a malformed redirectUri', async () => {
+      await expectAsync(
+        service.prepareRedirectUri('not-a-valid-url'),
+      ).toBeRejectedWithError(/Invalid OAuth redirectUri/);
+    });
+
+    it('should reject a same-origin violation on web', async () => {
+      await expectAsync(
+        service.prepareRedirectUri('https://evil.example.com/callback'),
+      ).toBeRejectedWithError(/same-origin/);
+    });
+
+    it('should accept a valid same-origin redirectUri on web', async () => {
+      const result = await service.prepareRedirectUri(
+        `${window.location.origin}/callback`,
+      );
+      expect(result).toBe(`${window.location.origin}/callback`);
+    });
+  });
+
   describe('redirect code handling', () => {
     it('should resolve when handleRedirectCode is called with matching state', async () => {
       const promise = service.waitForRedirectCode('plugin-1', 'test-state');

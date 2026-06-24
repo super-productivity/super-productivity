@@ -1,5 +1,8 @@
 import { IssueProvider } from '../issue.model';
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
 const mergePluginConfig = (
   current: Record<string, unknown> | undefined,
   update: Record<string, unknown> | undefined,
@@ -11,22 +14,13 @@ const mergePluginConfig = (
     return current;
   }
 
-  const merged = { ...current, ...update };
-  const currentTwoWaySync = current['twoWaySync'];
-  const updateTwoWaySync = update['twoWaySync'];
-
-  if (
-    currentTwoWaySync &&
-    updateTwoWaySync &&
-    typeof currentTwoWaySync === 'object' &&
-    typeof updateTwoWaySync === 'object' &&
-    !Array.isArray(currentTwoWaySync) &&
-    !Array.isArray(updateTwoWaySync)
-  ) {
-    merged['twoWaySync'] = {
-      ...(currentTwoWaySync as Record<string, unknown>),
-      ...(updateTwoWaySync as Record<string, unknown>),
-    };
+  const merged = { ...current };
+  for (const [key, updateValue] of Object.entries(update)) {
+    if (isPlainObject(current[key]) && isPlainObject(updateValue)) {
+      merged[key] = mergePluginConfig(current[key], updateValue);
+    } else {
+      merged[key] = updateValue;
+    }
   }
 
   return merged;

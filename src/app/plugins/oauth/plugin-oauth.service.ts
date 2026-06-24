@@ -38,6 +38,10 @@ export class PluginOAuthService {
   tokenInvalidated$ = new Subject<string>();
 
   async prepareRedirectUri(redirectUri?: string): Promise<string> {
+    if (redirectUri) {
+      this._validateRedirectUri(redirectUri);
+    }
+
     if (IS_ELECTRON) {
       const loopbackPort = this._getElectronLoopbackPort(redirectUri);
       const { port } = await window.ea.pluginOAuthPrepare(loopbackPort);
@@ -100,6 +104,42 @@ export class PluginOAuthService {
     this._validateHttpsUrl(config.tokenUrl, 'tokenUrl');
   }
 
+  private _validateRedirectUri(redirectUri: string): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(redirectUri);
+    } catch {
+      throw new Error(`Invalid OAuth redirectUri: ${redirectUri}`);
+    }
+
+    if (IS_ELECTRON) {
+      if (
+        parsed.protocol !== 'http:' ||
+        parsed.hostname !== '127.0.0.1' ||
+        !parsed.port
+      ) {
+        throw new Error(
+          `OAuth redirectUri on desktop must be a loopback URI like http://127.0.0.1:<port>/...; got ${redirectUri}`,
+        );
+      }
+      return;
+    }
+    if (IS_NATIVE_PLATFORM) {
+      if (['http:', 'https:', 'javascript:', 'file:'].includes(parsed.protocol)) {
+        throw new Error(
+          `OAuth redirectUri on native must use the app custom scheme; got ${redirectUri}`,
+        );
+      }
+      return;
+    }
+    // web
+    if (parsed.origin !== window.location.origin) {
+      throw new Error(
+        `OAuth redirectUri on web must be same-origin (${window.location.origin}); got ${redirectUri}`,
+      );
+    }
+  }
+
   private _getElectronLoopbackPort(redirectUri?: string): number | undefined {
     if (!redirectUri) {
       return undefined;
@@ -107,8 +147,7 @@ export class PluginOAuthService {
 
     try {
       const parsed = new URL(redirectUri);
-      const isLoopbackHost =
-        parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+      const isLoopbackHost = parsed.hostname === '127.0.0.1';
       if (parsed.protocol !== 'http:' || !isLoopbackHost || !parsed.port) {
         return undefined;
       }

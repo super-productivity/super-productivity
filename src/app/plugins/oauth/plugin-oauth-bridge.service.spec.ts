@@ -4,6 +4,7 @@ import type { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
 import { deleteOAuthTokens, loadOAuthTokens } from './plugin-oauth-token-store';
 import { PluginOAuthService } from './plugin-oauth.service';
+import { PluginLog } from '../../core/log';
 
 describe('PluginOAuthBridgeService', () => {
   let service: PluginOAuthBridgeService;
@@ -158,6 +159,34 @@ describe('PluginOAuthBridgeService', () => {
         clientSecret: undefined,
       }),
     );
+  });
+
+  it('warns that a client secret is not used in the web build', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    const warnSpy = spyOn(PluginLog, 'warn');
+    oauthService.prepareRedirectUri.and.resolveTo(
+      'https://app.super-productivity.com/assets/oauth-callback.html',
+    );
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue(null);
+
+    // baseConfig carries a clientSecret, which the web build cannot use.
+    await service.startOAuthFlow('pkce-web-provider', {
+      ...baseConfig,
+      webClientId: 'web-client-id',
+    });
+
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   it('clears stale browser tokens for providers that are unavailable on web', async () => {
