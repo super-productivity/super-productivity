@@ -218,7 +218,9 @@ describe('ShortSyntaxEffects', () => {
         emitted = true;
       });
 
-      actions$.next(addSubTask({ task, parentId: 'parent-1', isIgnoreShortSyntax: true }));
+      actions$.next(
+        addSubTask({ task, parentId: 'parent-1', isIgnoreShortSyntax: true }),
+      );
 
       tick(100);
       expect(emitted).toBe(false);
