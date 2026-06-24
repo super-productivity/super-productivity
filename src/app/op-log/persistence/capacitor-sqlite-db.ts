@@ -233,21 +233,35 @@ export class CapacitorSqliteDb implements SqliteDb {
    * op-log is fully correct without them (default rollback journal + FULL sync),
    * just slower; a failure here must never block the boot-critical open.
    * - `journal_mode=WAL`: readers don't block the writer and each autocommit
-   *   `append()` avoids the rollback-journal fsync dance — the append hot path.
-   *   Persisted in the DB file, but harmless to re-assert each open.
-   * - `synchronous=NORMAL`: the documented-safe WAL pairing — durable across an
-   *   app crash, risking only the last transaction on an OS-level power loss (not
-   *   an app crash). A synced client re-syncs it; an unsynced client loses at most
-   *   that one last append — still strictly more durable than the IndexedDB store
-   *   this replaces. Per-connection, so it MUST be set each open.
-   * WAL is incompatible with a transaction, so this runs with `transaction:false`.
+   *   `append()` avoids the rollback-journal fsync dance. Persisted in the DB
+   *   file, but harmless to re-assert each open.
+   * - `synchronous=NORMAL`: the real append-speed win — drops the per-commit fsync
+   *   that FULL forces on every autocommit `append()` (the WAL "readers don't block
+   *   writers" benefit is mostly moot here: a single connection serialized by
+   *   `runExclusive` never has concurrent read/write contention to relieve). The
+   *   documented-safe WAL pairing — durable across an app crash, risking only the
+   *   last transaction on an OS-level power loss (not an app crash). A synced client
+   *   re-syncs it; an unsynced client loses at most that one last append — still
+   *   strictly more durable than the IndexedDB store this replaces. Per-connection,
+   *   so it MUST be set each open.
+   *
+   * Each pragma is its OWN `execute()` call ON PURPOSE: the plugin only splits a
+   * multi-statement string on `";\n"` (semicolon+newline) — a `"; "`-joined string
+   * reaches Android `execSQL()` as one statement, which runs only the FIRST, so a
+   * combined `'…WAL; …NORMAL;'` silently drops `synchronous`. WAL is incompatible
+   * with a transaction, so both run with `transaction:false`.
    */
   private async _applyPerfPragmas(conn: SQLiteDBConnection): Promise<void> {
     try {
       await withTimeout(
-        conn.execute('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;', false),
+        conn.execute('PRAGMA journal_mode=WAL;', false),
         this._statementTimeoutMs,
-        'SQLite pragmas',
+        'SQLite WAL pragma',
+      );
+      await withTimeout(
+        conn.execute('PRAGMA synchronous=NORMAL;', false),
+        this._statementTimeoutMs,
+        'SQLite synchronous pragma',
       );
     } catch {
       // Pure optimization — fall through to the engine defaults on any failure.
