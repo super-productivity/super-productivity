@@ -26,6 +26,13 @@
  * writes are plain → reads still handle both). The marker starts with `~`, which
  * `JSON.stringify` output never does (it begins with `{ [ " -` digit / t / f / n),
  * so it can never collide with a plain value.
+ *
+ * WHY base64-in-TEXT and NOT a binary BLOB column (do not "optimize" this away):
+ * the @capacitor-community/sqlite bridge JSON-serializes every result, and it
+ * encodes a BLOB as ONE JSON INTEGER PER BYTE (`UtilsSQLite.ByteArrayToJSArray`).
+ * A 300 KB blob would cross as a ~300k-element JSON number array — far worse than
+ * base64's ~33 % text inflation, which gzip more than offsets. There is no
+ * efficient binary path across this bridge; base64 text is the correct choice.
  */
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
 
