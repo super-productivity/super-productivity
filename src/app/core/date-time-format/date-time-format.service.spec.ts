@@ -296,4 +296,82 @@ describe('DateTimeFormatService', () => {
       expect(service.currentLocale()).toBe('fr');
     });
   });
+
+  describe('explicit dateTimeLocale override (#8565)', () => {
+    const TIME_FORMAT: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
+      minute: 'numeric',
+    };
+    // 14:00 — renders "14:00" in 24h locales, "2:00 PM" in 12h (en-US) locales.
+    // The adapter time path (matTimepicker) uses the adapter's setLocale value,
+    // which is what the bug clobbered with the UI language.
+    const testDate = new Date(2000, 11, 31, 14, 0, 0);
+
+    const setup = (
+      dateTimeLocale: string | null,
+      currentLang: string,
+    ): DateTimeFormatService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: { currentLang, defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: {
+                  ...DEFAULT_GLOBAL_CONFIG.localization,
+                  lng: currentLang,
+                  dateTimeLocale,
+                },
+              },
+            },
+          }),
+        ],
+      });
+      dateAdapter = TestBed.inject(DateAdapter);
+      return TestBed.inject(DateTimeFormatService);
+    };
+
+    it('renders adapter time in 24h when dateTimeLocale is 24h but UI language is en', () => {
+      service = setup(DateTimeLocales.ja_jp, 'en');
+      TestBed.flushEffects();
+
+      expect(service.currentLocale()).toBe(DateTimeLocales.ja_jp);
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+
+    it('does not let UI-language application clobber the dateTimeLocale override', () => {
+      service = setup(DateTimeLocales.ja_jp, 'en');
+      TestBed.flushEffects();
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+
+      // Applying the UI language must NOT synchronously touch the adapter locale
+      // (DateTimeFormatService is the single owner). Before the fix this called
+      // setDateAdapterLocale('en') → 12h, and in the real-app startup race that
+      // clobbering write was the last one, so it stuck (#8565). Assert without
+      // flushing effects to capture exactly that window.
+      service.setUiLanguage('en');
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+
+      // Re-running the owning effect keeps the override applied.
+      TestBed.flushEffects();
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+
+    it('uses the UI language only as a fallback when no override is set', () => {
+      service = setup(null, 'en');
+      service.setUiLanguage('en');
+      TestBed.flushEffects();
+
+      // en (US) → 12h AM/PM
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('2:00 PM');
+    });
+  });
 });
