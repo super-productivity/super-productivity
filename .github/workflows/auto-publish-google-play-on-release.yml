@@ -3,13 +3,19 @@ name: Auto Publish to Google Play on Release
 on:
   release:
     types: [published]
+  # Manual trigger for Android-only releases: promote the build already on the
+  # internal track (uploaded by build-android.yml on the v* tag push) straight to
+  # production, without publishing a GitHub release that would fan out to the
+  # desktop/web channels (AUR, Docker, snap, web).
+  workflow_dispatch:
+    inputs: {}
 
 jobs:
   auto-publish-google-play:
     runs-on: ubuntu-latest
 
-    # Only run for actual releases, not pre-releases
-    if: '!github.event.release.prerelease'
+    # Run on manual dispatch, or for actual (non-pre-) releases.
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
 
     steps:
       - name: Harden Runner
