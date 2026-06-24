@@ -177,16 +177,41 @@ durable slow path.
      `sqlPutBatch` / `SqliteDb.runSet`, `capacitor-sqlite-db.ts`). IndexedDB just
      loops. Covered by sql.js specs (chunk-boundary + upsert parity); the native
      one-crossing win is the plugin's contract, **validate on-device**.
+     **Known ceiling (intentional):** we send each chunk as flat per-row `values`
+     entries, so the plugin takes its `oneRowStatement` path and still
+     **recompiles each statement** inside the native loop — the win is "1 crossing
+     - 1 transaction per chunk," _not_ SQLite's multi-row `VALUES` fast path. That
+       fast path (`multipleRowsStatement`) is deliberately left unused: it builds the
+       INSERT by **string-concatenating** escaped values instead of binding them, and
+       can't fan out our `ON CONFLICT … DO UPDATE SET col = excluded.col` upsert. For
+       a one-time migration of _authoritative_ data, keeping parameter binding is the
+       right call (correctness > shaving the one-time migration time); revisit only if
+       on-device migration time proves unacceptable, and then only via plain `INSERT`
+       into the empty destination table (no upsert), never string-concat for blobs.
   2. ✅ **WAL pragmas** — done. `CapacitorSqliteDb._applyPerfPragmas` runs
-     `PRAGMA journal_mode=WAL; synchronous=NORMAL` best-effort on every open
-     (non-fatal; native-only, validate on-device). Faster autocommit appends +
-     non-blocking reads.
+     `journal_mode=WAL` then `synchronous=NORMAL` best-effort on every open
+     (non-fatal; native-only, validate on-device). The real win is the
+     `synchronous=NORMAL` fsync drop on each autocommit append — WAL's
+     "readers don't block the writer" is mostly moot here (one connection,
+     serialized by `runExclusive`, never has read/write contention). **Caveat
+     baked in:** the two pragmas are deliberately **separate `execute()` calls** —
+     the plugin only splits a multi-statement string on `";\n"` (semicolon+
+     newline), so a `"; "`-joined `'…WAL; …NORMAL;'` reaches Android `execSQL()`
+     as one statement and runs only the FIRST, silently dropping `synchronous`
+     (caught by the strategy double-check; verified against the bundled plugin's
+     `UtilsSQLite.getStatementsArray`). Still **validate on-device** that
+     `PRAGMA synchronous;` reports `1` (NORMAL) and `journal_mode;` reports `wal`.
   3. ✅ **Android Auto Backup exclusion** — done (§4).
-- **Stage 1 — measure (still pending, needs a device):** the shipped hydrator
-  breadcrumbs (`hydrationLoadStateCacheMs`, `…TailReadMs`, `…FullReplayReadMs`)
-  report real `loadStateCache` size/time from actual boots. Get p50/p95/p99 to
-  confirm where on the curve real installs sit. No longer a prerequisite for the
-  blob fix — Stage 2 is self-gating (below).
+- **Stage 1 — measure (the decision gate for Stage 3; needs a device):** the
+  shipped hydrator breadcrumbs (`hydrationLoadStateCacheMs`, `…TailReadMs`,
+  `…FullReplayReadMs`) report real `loadStateCache` size/time from actual boots.
+  Get p50/p95/p99 to confirm where on the curve real installs sit. No longer a
+  prerequisite for the _blob fix_ (Stage 2 is self-gating, below) — but it **is**
+  the explicit go/no-go for Stage 3: the entire deferral of the only real tail fix
+  rests on the unverified assumption that the population is small, and an op-log
+  grows over time (the same "after ~a year" dynamic that caused the original
+  CursorWindow data loss). If p95/p99 shows a real multi-10 MB tail, Stage 3 starts
+  — it is not a "long-term maybe," it is _the_ fix that's merely been deferred.
 - **Stage 2 — blob compression: ✅ done.** `value-codec.ts` gzips (fflate) the
   SQLite `value` column at rest, base64'd behind a `~gz1:` marker, wired into
   `buildInsert`/`decodeRow`. **Self-gating by size** (`COMPRESS_THRESHOLD_BYTES`
@@ -196,16 +221,34 @@ durable slow path.
   **local storage-at-rest** encoding — the adapter decodes back to objects before
   anything above it (sync/hydration) sees them, so it is not a cross-client/sync
   format and carries no compat obligation. Reversible (stop compressing → new
-  writes are plain → reads still handle both via the marker). ~3-5× on the blob;
-  great for the typical < 2 MB user, ~1-1.5 s at the 30 MB tail. Covered by
-  `value-codec.spec.ts` + an end-to-end large-value round-trip on both engines.
-  **Snapshot-in-IDB stays deliberately shelved:** it reads sub-second even at
-  30 MB, but it splits the atomic snapshot/ops/clock rotation across two backends
-  — a new failure surface in the most sensitive part of the system, and a
-  hard-to-reverse data-layout choice — to shave ~1 s off a _rare_ huge-account
-  boot. Reconsider only if real data shows a large population with multi-10 MB
-  snapshots **and** compression proves insufficient **and** lazy-loading (Stage 3)
-  is off the table.
+  writes are plain → reads still handle both via the marker). **Monotonic:** the
+  encoder keeps the _smaller_ of compressed-vs-plain, so a poorly-compressible value
+  just over the threshold (random IDs, embedded base64, encrypted sub-blobs) can
+  never grow the row — gzip's near-zero gain there would otherwise be swamped by
+  base64's ~33 % inflation. ~3-5× on the typical (compressible) blob; great for the
+  typical < 2 MB user, ~1-1.5 s at the 30 MB tail. Note this is a constant-factor
+  shave on the _bridge transfer_ that also adds a synchronous `gunzip`+`JSON.parse`
+  on the boot thread for the common large snapshot; it does **not** touch the
+  intrinsic `JSON.parse` floor (see below). It also has a real **correctness**
+  upside on the largest accounts: it shrinks the single `value` cell well under
+  Android's ~2 MB CursorWindow read limit (the same limit behind the original
+  native-KV data loss), keeping the snapshot readable where an uncompressed
+  multi-10 MB cell could trip `SQLiteBlobTooBigException`. Covered by
+  `value-codec.spec.ts` (incl. the monotonic guard) + an end-to-end large-value
+  round-trip on both engines.
+  **Snapshot-in-IDB stays deliberately shelved** — for the right reasons. (The
+  earlier rationale "it breaks the atomic snapshot/ops/clock rotation" is _wrong_:
+  that rotation is **already non-atomic and crash-tolerant by design** — compaction
+  writes the snapshot, then prunes ops in a separate step, and a crash between them
+  is safe because the op-log stays the source of truth and the snapshot is a
+  self-describing rebuildable cache.) The real reasons to shelve: (a) it
+  re-introduces the **eviction surface** we just paid to remove, for the snapshot;
+  (b) it permanently splits storage across two backends (a hard-to-reverse layout +
+  a doubled bootstrap/migration/failure-mode matrix in the most sensitive
+  subsystem); (c) the win (~1 s) only matters for a _rare_ huge account and is zero
+  for the typical < 2 MB user. Reconsider only if real data shows a large population
+  with multi-10 MB snapshots **and** compression proves insufficient **and**
+  lazy-loading (Stage 3) is off the table.
 - **Stage 3 — long-term, only if needed:** incremental / lazy state load. A 30 MB
   single-blob snapshot is expensive to read+deserialize+load in _any_ store; this
   is the only thing that makes huge accounts boot cheaply (and the real answer for
