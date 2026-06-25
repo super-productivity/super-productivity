@@ -23,12 +23,14 @@ describe('issueProviderSharedMetaReducer', () => {
         issueId: 'issue-1',
         issueProviderId: 'provider-1',
         issueType: 'GITHUB' as any,
+        issueLastSyncedValues: { status: 'open' },
       };
       testState[TASK_FEATURE_NAME].entities.task2 = {
         ...testState[TASK_FEATURE_NAME].entities.task2!,
         issueId: 'issue-2',
         issueProviderId: 'provider-1',
         issueType: 'GITHUB' as any,
+        issueLastSyncedValues: { status: 'closed' },
       };
 
       const action = TaskSharedActions.deleteIssueProvider({
@@ -45,11 +47,13 @@ describe('issueProviderSharedMetaReducer', () => {
                 issueId: undefined,
                 issueProviderId: undefined,
                 issueType: undefined,
+                issueLastSyncedValues: undefined,
               }),
               task2: jasmine.objectContaining({
                 issueId: undefined,
                 issueProviderId: undefined,
                 issueType: undefined,
+                issueLastSyncedValues: undefined,
               }),
             }),
           }),
@@ -112,6 +116,48 @@ describe('issueProviderSharedMetaReducer', () => {
         testState,
       );
     });
+
+    it('should unlink tasks matching the deleted provider even when action task ids are incomplete', () => {
+      const testState = createStateWithExistingTasks(['task1', 'task2'], [], []);
+
+      testState[TASK_FEATURE_NAME].entities.task1 = {
+        ...testState[TASK_FEATURE_NAME].entities.task1!,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueType: 'GITHUB',
+        issueLastSyncedValues: { title: 'Old title' },
+      };
+      testState[TASK_FEATURE_NAME].entities.task2 = {
+        ...testState[TASK_FEATURE_NAME].entities.task2!,
+        issueId: 'issue-2',
+        issueProviderId: 'provider-2',
+        issueType: 'GITHUB',
+      };
+
+      const action = TaskSharedActions.deleteIssueProvider({
+        issueProviderId: 'provider-1',
+        taskIdsToUnlink: [],
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1).toEqual(
+        jasmine.objectContaining({
+          issueId: undefined,
+          issueProviderId: undefined,
+          issueType: undefined,
+          issueLastSyncedValues: undefined,
+        }),
+      );
+      expect(updatedState[TASK_FEATURE_NAME].entities.task2).toEqual(
+        jasmine.objectContaining({
+          issueId: 'issue-2',
+          issueProviderId: 'provider-2',
+          issueType: 'GITHUB',
+        }),
+      );
+    });
   });
 
   describe('deleteIssueProviders action', () => {
@@ -123,6 +169,7 @@ describe('issueProviderSharedMetaReducer', () => {
         issueId: 'issue-1',
         issueProviderId: 'provider-1',
         issueType: 'JIRA' as any,
+        issueLastSyncedValues: { status: 'open' },
       };
 
       const action = TaskSharedActions.deleteIssueProviders({
@@ -139,6 +186,7 @@ describe('issueProviderSharedMetaReducer', () => {
                 issueId: undefined,
                 issueProviderId: undefined,
                 issueType: undefined,
+                issueLastSyncedValues: undefined,
               }),
             }),
           }),
@@ -146,6 +194,48 @@ describe('issueProviderSharedMetaReducer', () => {
         action,
         mockReducer,
         testState,
+      );
+    });
+
+    it('should unlink tasks matching any deleted provider even when action task ids are incomplete', () => {
+      const testState = createStateWithExistingTasks(['task1', 'task2'], [], []);
+
+      testState[TASK_FEATURE_NAME].entities.task1 = {
+        ...testState[TASK_FEATURE_NAME].entities.task1!,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueType: 'JIRA',
+        issueLastSyncedValues: { status: 'open' },
+      };
+      testState[TASK_FEATURE_NAME].entities.task2 = {
+        ...testState[TASK_FEATURE_NAME].entities.task2!,
+        issueId: 'issue-2',
+        issueProviderId: 'provider-3',
+        issueType: 'JIRA',
+      };
+
+      const action = TaskSharedActions.deleteIssueProviders({
+        ids: ['provider-1', 'provider-2'],
+        taskIdsToUnlink: [],
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1).toEqual(
+        jasmine.objectContaining({
+          issueId: undefined,
+          issueProviderId: undefined,
+          issueType: undefined,
+          issueLastSyncedValues: undefined,
+        }),
+      );
+      expect(updatedState[TASK_FEATURE_NAME].entities.task2).toEqual(
+        jasmine.objectContaining({
+          issueId: 'issue-2',
+          issueProviderId: 'provider-3',
+          issueType: 'JIRA',
+        }),
       );
     });
   });

@@ -1380,6 +1380,74 @@ describe('dataRepair()', () => {
     });
   });
 
+  it('should clear non-existent issue provider ids from active tasks', () => {
+    const taskState = {
+      ...mock.task,
+      ...fakeEntityStateFromArray<Task>([
+        {
+          ...DEFAULT_TASK,
+          id: 't1',
+          projectId: INBOX_PROJECT.id,
+          issueId: 'ISSUE-1',
+          issueProviderId: 'NON_EXISTENT_PROVIDER',
+          issueType: 'JIRA',
+          issueWasUpdated: true,
+          issueLastUpdated: 123,
+          issueAttachmentNr: 1,
+          issueTimeTracked: { ['2026-06-08']: 456 },
+          issuePoints: 3,
+          issueLastSyncedValues: { status: 'open' },
+        },
+        {
+          ...DEFAULT_TASK,
+          id: 't2',
+          projectId: INBOX_PROJECT.id,
+          issueId: 'ISSUE-2',
+          issueProviderId: 'VALID_PROVIDER',
+          issueType: 'JIRA',
+        },
+      ]),
+    } as any;
+    const issueProviderState = {
+      ...mock.issueProvider,
+      ...fakeEntityStateFromArray<IssueProvider>([
+        {
+          id: 'VALID_PROVIDER',
+          issueProviderKey: 'JIRA',
+          isEnabled: true,
+        } as IssueProvider,
+      ]),
+    } as any;
+
+    const result = dataRepair({
+      ...mock,
+      task: taskState,
+      issueProvider: issueProviderState,
+    } as any);
+
+    expect(result.data.task.entities.t1).toEqual(
+      jasmine.objectContaining({
+        issueId: undefined,
+        issueProviderId: undefined,
+        issueType: undefined,
+        issueWasUpdated: undefined,
+        issueLastUpdated: undefined,
+        issueAttachmentNr: undefined,
+        issueTimeTracked: undefined,
+        issuePoints: undefined,
+        issueLastSyncedValues: undefined,
+      }),
+    );
+    expect(result.data.task.entities.t2).toEqual(
+      jasmine.objectContaining({
+        issueId: 'ISSUE-2',
+        issueProviderId: 'VALID_PROVIDER',
+        issueType: 'JIRA',
+      }),
+    );
+    expect(result.repairSummary.invalidReferencesRemoved).toBe(1);
+  });
+
   it('should delete non-existent project ids for taskRepeatCfgCfgs', () => {
     const taskRepeatCfgState = {
       ...mock.taskRepeatCfg,

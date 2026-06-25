@@ -112,6 +112,7 @@ export const dataRepair = (
   dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut, summary);
   dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentIssueProviderIdsFromTasks(dataOut, summary);
   dataOut = _addOrphanedTasksToProjectLists(dataOut, summary);
   dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut, summary);
   dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut, summary);
@@ -1140,6 +1141,48 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
 
   if (removedCount > 0) {
     OpLog.log(`Total non-existent repeatCfgIds cleared from tasks: ${removedCount}`);
+    summary.invalidReferencesRemoved += removedCount;
+  }
+
+  return data;
+};
+
+const _clearIssueProviderData = (task: TaskCopy): void => {
+  task.issueId = undefined;
+  task.issueProviderId = undefined;
+  task.issueType = undefined;
+  task.issueWasUpdated = undefined;
+  task.issueLastUpdated = undefined;
+  task.issueAttachmentNr = undefined;
+  task.issueTimeTracked = undefined;
+  task.issuePoints = undefined;
+  task.issueLastSyncedValues = undefined;
+};
+
+const _removeNonExistentIssueProviderIdsFromTasks = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const { task, issueProvider } = data;
+  if (!task?.ids || !issueProvider?.ids) return data;
+
+  const issueProviderIds = new Set<string>(issueProvider.ids as string[]);
+  let removedCount = 0;
+
+  // Active tasks only. Archive tasks are cleaned by ArchiveOperationHandler on
+  // provider deletion and stale archive references do not affect active selectors.
+  for (const id of task.ids as string[]) {
+    const t = task.entities[id] as TaskCopy;
+    if (t?.issueProviderId && !issueProviderIds.has(t.issueProviderId)) {
+      _clearIssueProviderData(t);
+      removedCount++;
+    }
+  }
+
+  if (removedCount > 0) {
+    OpLog.log(
+      `[data-repair] Cleared ${removedCount} stale issue provider reference(s) from active tasks`,
+    );
     summary.invalidReferencesRemoved += removedCount;
   }
 
