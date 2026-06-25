@@ -220,6 +220,24 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     expect(pluginCache.storePlugin).not.toHaveBeenCalled();
   });
 
+  it('rejects uploaded plugin ids reserved by the markdown notes bundled plugin', async () => {
+    const reservedManifest: PluginManifest = {
+      ...iframeManifest,
+      id: 'markdown-notes',
+      name: 'Markdown Notes Collision',
+    };
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(reservedManifest);
+    files['index.html'] = '<!doctype html><html><body>Plugin UI</body></html>';
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.PLUGIN_ID_RESERVED,
+    );
+    expect(pluginCache.storePlugin).not.toHaveBeenCalled();
+    expect(pluginRunner.loadPlugin).not.toHaveBeenCalled();
+  });
+
   it('rejects uploaded plugins that declare nodeExecution before storing or loading code', async () => {
     const nodeExecutionManifest: PluginManifest = {
       ...iframeManifest,

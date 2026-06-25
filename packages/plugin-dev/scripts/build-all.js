@@ -393,6 +393,29 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  {
+    name: 'markdown-notes',
+    path: 'markdown-notes',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/markdown-notes',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distFiles = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
 ];
 
 async function buildPlugin(plugin) {

@@ -422,6 +422,20 @@ describe('handlePluginMessage()', () => {
       // script is injected inside the body, before its closing tag
       expect(html.indexOf('window.PluginAPI')).toBeLessThan(html.indexOf('</body>'));
     });
+
+    it('injects PluginAPI before plugin scripts execute', () => {
+      const html = buildPluginIframeHtml({
+        ...createConfig(pluginBridge),
+        indexHtml:
+          '<!doctype html><html><head></head><body><script>window.pluginSawApi = !!window.PluginAPI;</script></body></html>',
+      });
+
+      expect(html.indexOf('window.PluginAPI =')).toBeGreaterThan(-1);
+      expect(html.indexOf('window.pluginSawApi')).toBeGreaterThan(-1);
+      expect(html.indexOf('window.PluginAPI =')).toBeLessThan(
+        html.indexOf('window.pluginSawApi'),
+      );
+    });
   });
 
   it('rejects raw iframe calls to bridge methods outside the iframe API allowlist', async () => {

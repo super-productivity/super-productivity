@@ -117,6 +117,7 @@ import {
 } from '../features/simple-counter/store/simple-counter.actions';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 
 interface PluginNodeExecutionElectronApi {
   requestGrant(pluginId: string): Promise<{ token: string } | null>;
@@ -165,6 +166,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginHttpService = inject(PluginHttpService);
   private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
   private _dataInitService = inject(DataInitService);
+  private _menuTreeService = inject(MenuTreeService);
   private _globalConfigService = inject(GlobalConfigService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
@@ -716,6 +718,7 @@ export class PluginBridgeService implements OnDestroy {
       };
     });
 
+    const projectFolderMap = this._menuTreeService.projectFolderMap();
     const projects: Record<string, ProjectCopy> = {};
     const rawProjects = (projectState?.entities ?? {}) as Record<
       string,
@@ -726,6 +729,7 @@ export class PluginBridgeService implements OnDestroy {
       if (!p) continue;
       const safe = { ...p };
       delete (safe as { issueIntegrationCfgs?: unknown }).issueIntegrationCfgs;
+      safe.folderPath = projectFolderMap.get(id) ?? null;
       projects[id] = safe as ProjectCopy;
     }
 
@@ -922,7 +926,11 @@ export class PluginBridgeService implements OnDestroy {
    */
   async getAllProjects(): Promise<ProjectCopy[]> {
     const projects = await this._projectService.list$.pipe(first()).toPromise();
-    return projects || [];
+    const projectFolderMap = this._menuTreeService.projectFolderMap();
+    return (projects || []).map((project) => ({
+      ...project,
+      folderPath: projectFolderMap.get(project.id) ?? null,
+    }));
   }
 
   /**

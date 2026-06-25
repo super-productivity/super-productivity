@@ -578,13 +578,18 @@ export const buildPluginIframeHtml = (config: PluginIframeConfig): string => {
     html = fullCssInjection + html;
   }
 
-  // Inject API script before closing body tag
-  const bodyEnd = html.toLowerCase().lastIndexOf('</body>');
-
-  if (bodyEnd !== -1) {
-    html = html.slice(0, bodyEnd) + apiScript + html.slice(bodyEnd);
+  // The PluginAPI must exist before any plugin-owned script runs.
+  // Bundled iframe plugins often inline their app bundle in index.html.
+  const firstScript = html.match(/<script\b/i);
+  if (firstScript?.index !== undefined) {
+    html = html.slice(0, firstScript.index) + apiScript + html.slice(firstScript.index);
   } else {
-    html = html + apiScript;
+    const bodyEnd = html.toLowerCase().lastIndexOf('</body>');
+    if (bodyEnd !== -1) {
+      html = html.slice(0, bodyEnd) + apiScript + html.slice(bodyEnd);
+    } else {
+      html = html + apiScript;
+    }
   }
 
   return html;

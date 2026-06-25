@@ -9,15 +9,12 @@ require('ts-node/register/transpile-only');
 
 const { resolveSyncPath } = require(path.resolve(__dirname, 'sync-path-resolver.ts'));
 
-const mkSync = async () => fsModule.realpathSync.native(
-  await fs.mkdtemp(path.join(os.tmpdir(), 'sp-sync-')),
-);
-const mkOutside = async () => fsModule.realpathSync.native(
-  await fs.mkdtemp(path.join(os.tmpdir(), 'sp-out-')),
-);
-const mkUserData = async () => fsModule.realpathSync.native(
-  await fs.mkdtemp(path.join(os.tmpdir(), 'sp-userdata-')),
-);
+const mkSync = async () =>
+  fsModule.realpathSync.native(await fs.mkdtemp(path.join(os.tmpdir(), 'sp-sync-')));
+const mkOutside = async () =>
+  fsModule.realpathSync.native(await fs.mkdtemp(path.join(os.tmpdir(), 'sp-out-')));
+const mkUserData = async () =>
+  fsModule.realpathSync.native(await fs.mkdtemp(path.join(os.tmpdir(), 'sp-userdata-')));
 
 test('resolves a relative file path inside the sync root', async () => {
   const syncDir = await mkSync();
@@ -95,7 +92,10 @@ test('accepts a path that needs normalization but stays inside', async () => {
 test('rejects when syncFolderPath is missing or empty', async () => {
   const userData = await mkUserData();
   try {
-    assert.throws(() => resolveSyncPath(undefined, 'main.json', userData), /Path not allowed/);
+    assert.throws(
+      () => resolveSyncPath(undefined, 'main.json', userData),
+      /Path not allowed/,
+    );
     assert.throws(() => resolveSyncPath('', 'main.json', userData), /Path not allowed/);
   } finally {
     await fs.rm(userData, { recursive: true, force: true });
@@ -239,10 +239,19 @@ test('rejects non-string inputs (fail-closed)', async () => {
   const syncDir = await mkSync();
   const userData = await mkUserData();
   try {
-    assert.throws(() => resolveSyncPath(syncDir, undefined, userData), /Path not allowed/);
+    assert.throws(
+      () => resolveSyncPath(syncDir, undefined, userData),
+      /Path not allowed/,
+    );
     assert.throws(() => resolveSyncPath(syncDir, 42, userData), /Path not allowed/);
-    assert.throws(() => resolveSyncPath(syncDir, ['main.json'], userData), /Path not allowed/);
-    assert.throws(() => resolveSyncPath(syncDir, 'main.json', undefined), /Path not allowed/);
+    assert.throws(
+      () => resolveSyncPath(syncDir, ['main.json'], userData),
+      /Path not allowed/,
+    );
+    assert.throws(
+      () => resolveSyncPath(syncDir, 'main.json', undefined),
+      /Path not allowed/,
+    );
   } finally {
     await fs.rm(syncDir, { recursive: true, force: true });
     await fs.rm(userData, { recursive: true, force: true });

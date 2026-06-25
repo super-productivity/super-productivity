@@ -60,6 +60,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
   'assets/bundled-plugins/doc-mode',
+  'assets/bundled-plugins/markdown-notes',
 ] as const;
 
 const BUNDLED_PLUGIN_IDS = new Set<string>([
@@ -72,6 +73,7 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'doc-mode',
   'github-issue-provider',
   'google-calendar-provider',
+  'markdown-notes',
   'procrastination-buster',
   'sync-md',
   'voice-reminder',

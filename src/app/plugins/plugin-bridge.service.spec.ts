@@ -39,8 +39,21 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { T } from '../t.const';
+import { PluginOAuthBridgeService } from './oauth/plugin-oauth-bridge.service';
+import { GlobalConfigService } from '../features/config/global-config.service';
+
+const commonPluginBridgeProviders = [
+  {
+    provide: TaskFocusService,
+    useValue: { focusedTaskId: signal<string | null>(null) },
+  },
+  { provide: MenuTreeService, useValue: { projectFolderMap: () => new Map() } },
+  { provide: PluginOAuthBridgeService, useValue: {} },
+  { provide: GlobalConfigService, useValue: {} },
+];
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -104,6 +117,7 @@ describe('PluginBridgeService - Counter Methods', () => {
         },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: dataInitServiceSpy },
+        ...commonPluginBridgeProviders,
       ],
     });
 
@@ -315,6 +329,7 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: {} },
+        ...commonPluginBridgeProviders,
       ],
     });
 
@@ -387,6 +402,7 @@ describe('PluginBridgeService - iframe task selection methods', () => {
         { provide: MatDialog, useValue: {} },
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: taskService },
+        ...commonPluginBridgeProviders,
         {
           provide: TaskFocusService,
           useValue: {
@@ -467,6 +483,7 @@ describe('PluginBridgeService - openDialog', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: {} },
+        ...commonPluginBridgeProviders,
       ],
     });
 
@@ -558,6 +575,7 @@ describe('PluginBridgeService - nodeExecution grant tokens', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: {} },
+        ...commonPluginBridgeProviders,
       ],
     });
 
@@ -641,7 +659,22 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: {} },
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
-        { provide: ProjectService, useValue: {} },
+        {
+          provide: ProjectService,
+          useValue: {
+            list$: of([
+              {
+                id: 'p-1',
+                title: 'Work',
+                theme: {},
+                taskIds: [],
+                backlogTaskIds: [],
+                noteIds: [],
+                advancedCfg: {},
+              },
+            ]),
+          },
+        },
         { provide: TagService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
@@ -654,11 +687,22 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: {} },
+        ...commonPluginBridgeProviders,
+        {
+          provide: MenuTreeService,
+          useValue: { projectFolderMap: () => new Map([['p-1', 'Folder 1']]) },
+        },
       ],
     });
 
     service = TestBed.inject(PluginBridgeService);
     store = TestBed.inject(MockStore);
+  });
+
+  it('adds folderPath to getAllProjects results', async () => {
+    const projects = await service.getAllProjects();
+
+    expect(projects[0].folderPath).toBe('Folder 1');
   });
 
   it('drops sync, misc.unsplashApiKey, and project.issueIntegrationCfgs', async () => {
@@ -710,6 +754,7 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
 
     // Non-sensitive data still flows through.
     expect(snapshot.projects['p-1'].title).toBe('Work');
+    expect(snapshot.projects['p-1'].folderPath).toBe('Folder 1');
     expect((snapshot.globalConfig.misc as Record<string, unknown>).isDarkMode).toBe(
       false,
     );

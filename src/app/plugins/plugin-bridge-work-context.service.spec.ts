@@ -29,6 +29,7 @@ import {
 } from '../features/work-context/work-context.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { PluginManifest, PluginHooks } from './plugin-api.model';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 
 // Covers the work-context plugin extension points introduced in commit
 // e3ce1fcdd9: registerWorkContextHeaderButton (validation, filtering, cleanup)
@@ -158,6 +159,7 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: { reInit: () => Promise.resolve() } },
         { provide: GlobalConfigService, useValue: globalConfigSpy },
+        { provide: MenuTreeService, useValue: { projectFolderMap: () => new Map() } },
       ],
     });
 

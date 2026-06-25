@@ -312,6 +312,11 @@ export interface Project {
   isEnableBacklog?: boolean;
   isHiddenFromMenu?: boolean;
   folderId?: string | null;
+  /**
+   * Read-only project-tree folder display path when available.
+   * Primarily provided to disambiguate duplicate project names.
+   */
+  folderPath?: string | null;
 
   // Advanced config (internal) - must be any to match WorkContextCommon
   advancedCfg: unknown;

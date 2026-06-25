@@ -31,6 +31,7 @@ import { DataInitService } from '../core/data-init/data-init.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -114,6 +115,7 @@ describe('PluginBridgeService.setCounter()', () => {
           provide: GlobalConfigService,
           useValue: { cfg: signal(DEFAULT_GLOBAL_CONFIG) },
         },
+        { provide: MenuTreeService, useValue: { projectFolderMap: () => new Map() } },
       ],
     });
 

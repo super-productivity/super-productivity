@@ -26,6 +26,7 @@ import { GlobalConfigService } from '../features/config/global-config.service';
 import { addSubTask } from '../features/tasks/store/task.actions';
 import { Task } from '../features/tasks/task.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
+import { MenuTreeService } from '../features/menu-tree/menu-tree.service';
 
 // Regression test for issue #7437 — Brain Dump (and any plugin using
 // PluginAPI.addTask with a parentId) used to drop short-syntax time estimates
@@ -115,6 +116,7 @@ describe('PluginBridgeService.addTask() — subtask short-syntax (issue #7437)',
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: { reInit: () => Promise.resolve() } },
         { provide: GlobalConfigService, useValue: globalConfigSpy },
+        { provide: MenuTreeService, useValue: { projectFolderMap: () => new Map() } },
       ],
     });
 
