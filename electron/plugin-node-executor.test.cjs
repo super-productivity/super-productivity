@@ -561,12 +561,10 @@ test('denying an uploaded plugin does not persist consent', async () => {
 test('clearConsent drops the grant + persisted consent so the next request re-prompts', async () => {
   loadModule();
   const wc1 = new FakeWebContents(23);
-  const grant = await callIpc(
-    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
-    wc1,
-    'clear-me',
-    { name: 'Clear', version: '1.0.0' },
-  );
+  const grant = await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'clear-me', {
+    name: 'Clear',
+    version: '1.0.0',
+  });
   assert.equal(dialogCalls.length, 1);
   assert.ok(consentStore.__records.has('clear-me'));
 
@@ -589,6 +587,28 @@ test('clearConsent drops the grant + persisted consent so the next request re-pr
     version: '1.0.0',
   });
   assert.equal(dialogCalls.length, 2);
+});
+
+test('rejects prototype-pollution ids before any consent lookup or mint', async () => {
+  // SECURITY regression: 'constructor'/'prototype' pass the id allowlist regex and would,
+  // against a plain-object consent map, resolve to an Object.prototype member and mint a
+  // grant with no dialog. They must be rejected outright. ('__proto__' fails the regex.)
+  loadModule();
+  const webContents = new FakeWebContents(27);
+
+  for (const badId of ['constructor', 'prototype', '__proto__']) {
+    await assert.rejects(
+      () =>
+        callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', webContents, badId, {
+          name: 'x',
+          version: '1',
+        }),
+      /Invalid pluginId/,
+      `expected ${badId} to be rejected`,
+    );
+  }
+  assert.equal(dialogCalls.length, 0);
+  assert.equal(consentStore.__records.has('constructor'), false);
 });
 
 test('built-in plugin consent is never persisted (stays per-session, regression)', async () => {

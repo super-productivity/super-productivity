@@ -106,6 +106,41 @@ test('ignores an on-disk blob with an unknown future version (forward-safe)', as
   assert.equal(await store.getNodeExecutionConsent('x'), null);
 });
 
+test('never treats a prototype-member id as a stored consent', async () => {
+  // SECURITY regression: the consents map is keyed on an attacker-controlled pluginId.
+  // A plain object would resolve e.g. consents['constructor'] to Object.prototype.constructor
+  // (a truthy function), which the executor would mistake for a prior grant and mint a
+  // token with NO dialog. The null-prototype map + own-property reads must return null.
+  const store = loadConsentStore();
+  const protoIds = ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'];
+
+  for (const id of protoIds) {
+    assert.equal(await store.getNodeExecutionConsent(id), null, `fresh store: ${id}`);
+  }
+
+  // Persisting a real plugin must not make prototype-member ids start resolving either.
+  await store.setNodeExecutionConsent('real-plugin', {
+    name: 'Real',
+    version: '1',
+    grantedAt: 1,
+  });
+  for (const id of protoIds) {
+    assert.equal(
+      await store.getNodeExecutionConsent(id),
+      null,
+      `after a real set: ${id}`,
+    );
+  }
+
+  // Clearing a prototype-member id is a safe no-op that does not corrupt real entries.
+  await store.clearNodeExecutionConsent('constructor');
+  assert.deepEqual(await store.getNodeExecutionConsent('real-plugin'), {
+    name: 'Real',
+    version: '1',
+    grantedAt: 1,
+  });
+});
+
 test('keeps other consents when one is cleared', async () => {
   const store = loadConsentStore();
   await store.setNodeExecutionConsent('a', { name: 'A', version: '1', grantedAt: 1 });

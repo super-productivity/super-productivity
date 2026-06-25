@@ -32,6 +32,11 @@ const BUILT_IN_PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // with no Unicode range to keep updated as new code points are assigned.
 const MAX_UPLOADED_PLUGIN_ID_LENGTH = 100;
 const SAFE_UPLOADED_PLUGIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+// The id is used as a key into the persisted-consent map. That store uses null-prototype
+// objects + own-property reads so an `Object.prototype` member name can't masquerade as a
+// stored grant, but reject the classic pollution keys at this boundary too as defense in
+// depth (`__proto__` is already excluded by the leading-char allowlist; the others pass it).
+const FORBIDDEN_PLUGIN_IDS = new Set(['__proto__', 'prototype', 'constructor']);
 // Self-declared name/version are display-only. Strip every Unicode control (Cc) and
 // format (Cf) character — this covers C0/C1 controls, all zero-width characters, the BOM,
 // and every bidi control (incl. U+061C ALM, the word-joiner range, and the isolate marks)
@@ -51,6 +56,9 @@ const assertSafePluginId = (pluginId: unknown): string => {
   // can neither escape the bundled-plugins dir in getBuiltInManifestPath() nor spoof the
   // consent dialog's trust anchor.
   if (!SAFE_UPLOADED_PLUGIN_ID_RE.test(pluginId)) {
+    throw new Error('Invalid pluginId');
+  }
+  if (FORBIDDEN_PLUGIN_IDS.has(pluginId)) {
     throw new Error('Invalid pluginId');
   }
   return pluginId;
@@ -125,6 +133,9 @@ class PluginNodeExecutor {
         const safeId = assertSafePluginId(pluginId);
 
         const webContentsId = event.sender.id;
+        // Captured before any await so both the ask-once and dialog paths can detect a
+        // navigation that happened while we were resolving consent.
+        const requestUrl = event.sender.getURL();
         const existingGrant = this.grants.get(safeId);
         if (existingGrant) {
           if (existingGrant.webContentsId === webContentsId) {
@@ -151,7 +162,9 @@ class PluginNodeExecutor {
         if (!builtInManifest) {
           const persistedConsent = await getNodeExecutionConsent(safeId);
           if (persistedConsent) {
-            if (event.sender.isDestroyed()) {
+            // Don't mint for a sender that was destroyed or navigated away while the
+            // consent was being read (parity with the post-dialog checks below).
+            if (event.sender.isDestroyed() || event.sender.getURL() !== requestUrl) {
               return null;
             }
             this.registerGrantCleanup(event.sender);
@@ -163,7 +176,6 @@ class PluginNodeExecutor {
           ? this.buildVerifiedBuiltInDialog(safeId, builtInManifest)
           : this.describeUnverifiedUploadedDialog(safeId, displayInfo);
 
-        const requestUrl = event.sender.getURL();
         this.registerGrantCleanup(event.sender);
 
         let result: Electron.MessageBoxReturnValue;

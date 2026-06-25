@@ -40,9 +40,20 @@ interface NodeExecutionConsentBlob {
   consents: { [pluginId: string]: PersistedNodeExecutionConsent };
 }
 
+const hasOwn = (obj: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, key);
+
+// SECURITY: the consents map is keyed on an attacker-controlled pluginId. Use a
+// null-prototype object so an id that names an `Object.prototype` member
+// (`constructor`, `toString`, `valueOf`, `hasOwnProperty`, …) cannot resolve to an
+// inherited function and be mistaken for a stored grant. All reads additionally go
+// through an own-property guard (`hasOwn`) as belt-and-suspenders.
+const emptyConsents = (): { [pluginId: string]: PersistedNodeExecutionConsent } =>
+  Object.create(null);
+
 const emptyBlob = (): NodeExecutionConsentBlob => ({
   version: NODE_EXECUTION_CONSENT_STORE_VERSION,
-  consents: {},
+  consents: emptyConsents(),
 });
 
 const loadBlob = async (): Promise<NodeExecutionConsentBlob> => {
@@ -61,14 +72,19 @@ const loadBlob = async (): Promise<NodeExecutionConsentBlob> => {
   ) {
     return emptyBlob();
   }
+  // Copy onto a null-prototype map (JSON.parse produces a normal object), so the
+  // prototype-key footgun cannot survive a round-trip through disk either.
   return {
     version: NODE_EXECUTION_CONSENT_STORE_VERSION,
-    consents: { ...blob.consents },
+    consents: Object.assign(emptyConsents(), blob.consents),
   };
 };
 
 // Serialize read-modify-write mutations so two concurrent grants/clears can't clobber
-// each other (load-load-write-write). Reads (getNodeExecutionConsent) need no lock.
+// each other (load-load-write-write). This is NOT redundant with simple-store's own save
+// queue: `loadBlob()` happens *outside* `saveSimpleStore`, so without this lock two
+// interleaved mutations could both read the same blob before either writes. Reads
+// (getNodeExecutionConsent) are point-in-time and need no lock.
 let _mutationQueue: Promise<unknown> = Promise.resolve();
 
 const mutate = (apply: (blob: NodeExecutionConsentBlob) => boolean): Promise<void> => {
@@ -86,7 +102,14 @@ export const getNodeExecutionConsent = async (
   pluginId: string,
 ): Promise<PersistedNodeExecutionConsent | null> => {
   const blob = await loadBlob();
-  return blob.consents[pluginId] ?? null;
+  if (!hasOwn(blob.consents, pluginId)) {
+    return null;
+  }
+  const consent = blob.consents[pluginId];
+  // Only a well-formed object counts as consent — never a truthy non-object (a corrupt
+  // or tampered entry) and, with the null-prototype map + own-property guard above,
+  // never an inherited prototype member.
+  return consent && typeof consent === 'object' ? consent : null;
 };
 
 export const setNodeExecutionConsent = async (
@@ -104,7 +127,7 @@ export const setNodeExecutionConsent = async (
 
 export const clearNodeExecutionConsent = async (pluginId: string): Promise<void> =>
   mutate((blob) => {
-    if (!blob.consents[pluginId]) {
+    if (!hasOwn(blob.consents, pluginId)) {
       return false;
     }
     delete blob.consents[pluginId];
