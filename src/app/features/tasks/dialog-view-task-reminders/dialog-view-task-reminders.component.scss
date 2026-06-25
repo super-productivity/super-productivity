@@ -97,7 +97,7 @@
 .wrap-buttons {
   justify-content: center;
   flex-wrap: wrap;
-  gap: var(--s-half);
+  gap: var(--s);
 
   // Spacing in this row is owned by the flex `gap` above. Material also adds
   // `margin-left: 8px` between adjacent dialog-action buttons, but that only
