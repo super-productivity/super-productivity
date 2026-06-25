@@ -1775,6 +1775,22 @@ describe('OperationLogStoreService', () => {
       expect(unsynced2[0].op.id).toBe(op2.id);
     });
 
+    it('should invalidate cache when markFailed terminally rejects an op', async () => {
+      const op1 = createTestOperation({ entityId: 'task1' });
+      const op2 = createTestOperation({ entityId: 'task2' });
+      await service.append(op1);
+      await service.append(op2);
+
+      const unsynced1 = await service.getUnsynced();
+      expect(unsynced1.length).toBe(2);
+
+      await service.markFailed([op1.id], 1);
+
+      const unsynced2 = await service.getUnsynced();
+      expect(unsynced2.length).toBe(1);
+      expect(unsynced2[0].op.id).toBe(op2.id);
+    });
+
     it('should not include already synced ops when incrementally updating', async () => {
       // Add initial ops
       const op1 = createTestOperation({ entityId: 'task1' });
