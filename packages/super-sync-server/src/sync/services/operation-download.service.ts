@@ -107,32 +107,6 @@ const parsePersistedVectorClock = (value: unknown): VectorClock | undefined => {
 
 export class OperationDownloadService {
   /**
-   * Get operations since a given sequence number.
-   * Simple version without gap detection.
-   */
-  async getOpsSince(
-    userId: number,
-    sinceSeq: number,
-    excludeClient?: string,
-    limit: number = 500,
-  ): Promise<ServerOperation[]> {
-    const ops = await prisma.operation.findMany({
-      where: {
-        userId,
-        serverSeq: { gt: sinceSeq },
-        ...(excludeClient ? { clientId: { not: excludeClient } } : {}),
-      },
-      orderBy: {
-        serverSeq: 'asc',
-      },
-      take: limit,
-      select: OPERATION_DOWNLOAD_SELECT,
-    });
-
-    return ops.map(mapOperationRow);
-  }
-
-  /**
    * Get operations and latest sequence atomically with gap detection.
    *
    * OPTIMIZATION: When sinceSeq is before the latest full-state operation (SYNC_IMPORT,

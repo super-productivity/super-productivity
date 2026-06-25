@@ -1617,7 +1617,7 @@ describe('SyncService', () => {
       expect(results[0].accepted).toBe(true);
 
       // Verify round-trip
-      const ops = await operationDownloadService.getOpsSince(userId, 0);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
       expect(ops[0].op.entityId).toBe('task-日本語-émoji-🎉');
     });
 
@@ -1663,7 +1663,7 @@ describe('SyncService', () => {
         await service.uploadOps(userId, clientId, [op]);
       }
 
-      const ops = await operationDownloadService.getOpsSince(userId, 2);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 2)).ops;
 
       expect(ops).toHaveLength(3);
       expect(ops[0].serverSeq).toBe(3);
@@ -1708,7 +1708,8 @@ describe('SyncService', () => {
         },
       ]);
 
-      const ops = await operationDownloadService.getOpsSince(userId, 0, client1);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0, client1))
+        .ops;
 
       expect(ops).toHaveLength(1);
       expect(ops[0].op.entityId).toBe('task-2');
@@ -1735,13 +1736,15 @@ describe('SyncService', () => {
         ]);
       }
 
-      const ops = await operationDownloadService.getOpsSince(userId, 0, undefined, 3);
+      const ops = (
+        await operationDownloadService.getOpsSinceWithSeq(userId, 0, undefined, 3)
+      ).ops;
 
       expect(ops).toHaveLength(3);
     });
 
     it('should return empty array when no operations exist', async () => {
-      const ops = await operationDownloadService.getOpsSince(userId, 0);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
 
       expect(ops).toHaveLength(0);
     });
@@ -2031,7 +2034,8 @@ describe('SyncService', () => {
       expect(totalDeleted).toBe(2);
       expect(affectedUserIds).toContain(userId);
 
-      const remaining = await operationDownloadService.getOpsSince(userId, 0);
+      const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+        .ops;
       expect(remaining).toHaveLength(3);
     });
 
@@ -2285,8 +2289,12 @@ describe('SyncService', () => {
       expect(affectedUserIds).toContain(userId);
       expect(affectedUserIds).toContain(user2Id);
 
-      expect((await operationDownloadService.getOpsSince(userId, 0)).length).toBe(0);
-      expect((await operationDownloadService.getOpsSince(user2Id, 0)).length).toBe(0);
+      expect(
+        (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops.length,
+      ).toBe(0);
+      expect(
+        (await operationDownloadService.getOpsSinceWithSeq(user2Id, 0)).ops.length,
+      ).toBe(0);
     });
 
     it('should delete stale devices', async () => {
@@ -2351,7 +2359,9 @@ describe('SyncService', () => {
 
       expect(totalDeleted).toBe(0);
       expect(affectedUserIds).toHaveLength(0);
-      expect((await operationDownloadService.getOpsSince(userId, 0)).length).toBe(3);
+      expect(
+        (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops.length,
+      ).toBe(3);
     });
 
     it('should not delete recent devices', async () => {
@@ -2980,14 +2990,15 @@ describe('SyncService', () => {
       ]);
 
       // Verify operations exist
-      const opsBefore = await operationDownloadService.getOpsSince(userId, 0);
+      const opsBefore = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+        .ops;
       expect(opsBefore.length).toBe(2);
 
       // Delete all user data
       await service.deleteAllUserData(userId);
 
       // Verify operations are gone
-      const opsAfter = await operationDownloadService.getOpsSince(userId, 0);
+      const opsAfter = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
       expect(opsAfter.length).toBe(0);
     });
 
@@ -3032,7 +3043,7 @@ describe('SyncService', () => {
       expect(results[0].accepted).toBe(true);
 
       // Verify only new operation exists
-      const ops = await operationDownloadService.getOpsSince(userId, 0);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
       expect(ops.length).toBe(1);
       expect(ops[0].op.entityId).toBe('t2');
     });
@@ -3084,11 +3095,12 @@ describe('SyncService', () => {
       await service.deleteAllUserData(userId);
 
       // Verify user 1's data is gone
-      const user1Ops = await operationDownloadService.getOpsSince(userId, 0);
+      const user1Ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
       expect(user1Ops.length).toBe(0);
 
       // Verify user 2's data still exists
-      const user2Ops = await operationDownloadService.getOpsSince(otherUserId, 0);
+      const user2Ops = (await operationDownloadService.getOpsSinceWithSeq(otherUserId, 0))
+        .ops;
       expect(user2Ops.length).toBe(1);
       expect(user2Ops[0].op.entityId).toBe('t2');
     });

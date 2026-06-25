@@ -816,8 +816,9 @@ describe('TIME_TRACKING Operations', () => {
 
       await service.uploadOps(userId, clientId, [op]);
 
-      // Another client downloads - getOpsSince returns { op: Operation, serverSeq }[]
-      const downloadedOps = await operationDownloadService.getOpsSince(userId, 0);
+      // Another client downloads - getOpsSinceWithSeq returns { op: Operation, serverSeq }[]
+      const downloadedOps = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+        .ops;
 
       expect(downloadedOps).toHaveLength(1);
       expect(downloadedOps[0].op.entityType).toBe('TIME_TRACKING');
@@ -836,7 +837,8 @@ describe('TIME_TRACKING Operations', () => {
 
       await service.uploadOps(userId, clientId, [op]);
 
-      const downloadedOps = await operationDownloadService.getOpsSince(userId, 0);
+      const downloadedOps = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+        .ops;
 
       expect(downloadedOps[0].op.payload).toEqual({
         contextType: 'PROJECT',
