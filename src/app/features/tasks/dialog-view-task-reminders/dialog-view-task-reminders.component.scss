@@ -100,6 +100,20 @@
   gap: var(--s-half);
 }
 
+// Compact, outlined square so the lone "done" icon reads as a peer of the
+// (also outlined) snooze split-button rather than a stray borderless icon.
+// Material's button defaults assume an icon + text label, so collapse the
+// min-width and icon spacing to truly center the lone icon.
+.done-btn {
+  min-width: 0;
+  width: 36px;
+  padding: 0;
+
+  mat-icon {
+    margin: 0;
+  }
+}
+
 .bulk-actions-header {
   display: flex;
   align-items: center;

@@ -59,6 +59,7 @@
           {{ T.F.TASK.D_REMINDER_VIEW.SNOOZE_FOR | translate: { m: 10 } }}
         </split-button>
         <button
+          class="done-btn"
           (click)="isMultiple ? markAllAsDone() : markSingleAsDone()"
           [disabled]="isDisableControls"
           [matTooltip]="
@@ -74,7 +75,7 @@
             ) | translate
           "
           color="primary"
-          mat-icon-button
+          mat-stroked-button
           matTooltipShowDelay="0"
           type="button"
         >
