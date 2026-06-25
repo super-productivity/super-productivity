@@ -947,6 +947,7 @@ describe('Sync Operations', () => {
       const now = Date.now();
       testState.userSyncStates.set(userId, {
         userId,
+        lastSeq: 2,
         lastSnapshotSeq: 2,
         snapshotAt: BigInt(now),
         opCount: 2,
@@ -969,7 +970,7 @@ describe('Sync Operations', () => {
       expect(result.affectedUserIds).toContain(userId);
 
       // Verify correct operation was deleted
-      const ops = await operationDownloadService.getOpsSince(userId, 0);
+      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
       expect(ops.length).toBe(1);
       expect(ops[0].serverSeq).toBe(2);
     });
