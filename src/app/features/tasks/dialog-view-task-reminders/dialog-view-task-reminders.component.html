@@ -58,29 +58,21 @@
           <mat-icon>snooze</mat-icon>
           {{ T.F.TASK.D_REMINDER_VIEW.SNOOZE_FOR | translate: { m: 10 } }}
         </split-button>
-        <button
-          class="done-btn"
-          (click)="isMultiple ? markAllAsDone() : markSingleAsDone()"
-          [disabled]="isDisableControls"
-          [matTooltip]="
-            (isMultiple
-              ? T.F.TASK.D_REMINDER_VIEW.COMPLETE
-              : T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE
-            ) | translate
-          "
-          [attr.aria-label]="
-            (isMultiple
-              ? T.F.TASK.D_REMINDER_VIEW.COMPLETE
-              : T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE
-            ) | translate
-          "
-          color="primary"
-          mat-stroked-button
-          matTooltipShowDelay="0"
-          type="button"
-        >
-          <mat-icon>{{ isMultiple ? 'done_all' : 'check' }}</mat-icon>
-        </button>
+        @if (!isMultiple) {
+          <button
+            class="done-btn"
+            (click)="markSingleAsDone()"
+            [disabled]="isDisableControls"
+            [matTooltip]="T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE | translate"
+            [attr.aria-label]="T.F.TASK.D_REMINDER_VIEW.MARK_AS_DONE | translate"
+            color="primary"
+            mat-stroked-button
+            matTooltipShowDelay="0"
+            type="button"
+          >
+            <mat-icon>check</mat-icon>
+          </button>
+        }
         @if (isMultiple || isAllDeadline) {
           <button
             (click)="addAllToToday()"
@@ -147,7 +139,16 @@
       </button>
     }
     <mat-divider></mat-divider>
-    @if (!isMultiple && isAllDeadline) {
+    @if (isMultiple) {
+      <button
+        (click)="markAllAsDone()"
+        [disabled]="isDisableControls"
+        mat-menu-item
+      >
+        <mat-icon>done_all</mat-icon>
+        {{ T.F.TASK.D_REMINDER_VIEW.COMPLETE | translate }}
+      </button>
+    } @else if (isAllDeadline) {
       <button
         (click)="play()"
         [disabled]="isDisableControls"
