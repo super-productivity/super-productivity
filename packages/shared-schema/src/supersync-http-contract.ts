@@ -33,6 +33,32 @@ export const SUPER_SYNC_SNAPSHOT_OP_TYPES = [
   'REPAIR',
 ] as const;
 
+export const SUPER_SYNC_ERROR_CODES = {
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  INVALID_OP_ID: 'INVALID_OP_ID',
+  INVALID_OP_TYPE: 'INVALID_OP_TYPE',
+  INVALID_ENTITY_TYPE: 'INVALID_ENTITY_TYPE',
+  INVALID_ENTITY_ID: 'INVALID_ENTITY_ID',
+  INVALID_PAYLOAD: 'INVALID_PAYLOAD',
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  INVALID_VECTOR_CLOCK: 'INVALID_VECTOR_CLOCK',
+  INVALID_TIMESTAMP: 'INVALID_TIMESTAMP',
+  MISSING_ENTITY_ID: 'MISSING_ENTITY_ID',
+  INVALID_SCHEMA_VERSION: 'INVALID_SCHEMA_VERSION',
+  INVALID_CLIENT_ID: 'INVALID_CLIENT_ID',
+  CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
+  CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
+  DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
+  RATE_LIMITED: 'RATE_LIMITED',
+  STORAGE_QUOTA_EXCEEDED: 'STORAGE_QUOTA_EXCEEDED',
+  ENCRYPTED_OPS_NOT_SUPPORTED: 'ENCRYPTED_OPS_NOT_SUPPORTED',
+  SYNC_IMPORT_EXISTS: 'SYNC_IMPORT_EXISTS',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type SuperSyncErrorCode =
+  (typeof SUPER_SYNC_ERROR_CODES)[keyof typeof SUPER_SYNC_ERROR_CODES];
+
 /**
  * Constrains client-generated dedup keys to URL-safe chars so they can be
  * embedded in log lines without escape risk and trivially compared on the
@@ -43,6 +69,10 @@ export const SUPER_SYNC_SNAPSHOT_OP_TYPES = [
 const SUPER_SYNC_REQUEST_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 
 const SuperSyncRequestIdSchema = z.string().regex(SUPER_SYNC_REQUEST_ID_REGEX);
+
+export const SuperSyncErrorCodeSchema = z.enum(
+  Object.values(SUPER_SYNC_ERROR_CODES) as [SuperSyncErrorCode, ...SuperSyncErrorCode[]],
+);
 
 export const SuperSyncVectorClockSchema = z.record(z.string(), z.number());
 
@@ -128,6 +158,7 @@ export const SuperSyncUploadOpsResponseSchema = z
     newOps: z.array(SuperSyncServerOperationSchema).optional(),
     latestSeq: z.number(),
     hasMorePiggyback: z.boolean().optional(),
+    deduplicated: z.boolean().optional(),
   })
   .passthrough();
 
@@ -155,6 +186,7 @@ export const SuperSyncSnapshotUploadResponseSchema = z
     accepted: z.boolean(),
     serverSeq: z.number().optional(),
     error: z.string().optional(),
+    errorCode: SuperSyncErrorCodeSchema.optional(),
   })
   .passthrough();
 

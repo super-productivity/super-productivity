@@ -114,6 +114,7 @@ export interface OpUploadResponse {
   newOps?: ServerSyncOperation[];
   latestSeq: number;
   hasMorePiggyback?: boolean;
+  deduplicated?: boolean;
 }
 
 export interface OpDownloadResponseBase {
@@ -146,6 +147,7 @@ export interface SnapshotUploadResponse {
   accepted: boolean;
   serverSeq?: number;
   error?: string;
+  errorCode?: string;
 }
 
 export interface OperationSyncCapable<
