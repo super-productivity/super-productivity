@@ -1795,7 +1795,6 @@
         "DELETE": "Delete task",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)",
         "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Today)",
-        "DONE": "Done",
         "KEEP_IN_TODAY": "Keep in Today",
         "DUE_SECTION": "Planned",
         "DUE_TASK": "Planned task reminder",

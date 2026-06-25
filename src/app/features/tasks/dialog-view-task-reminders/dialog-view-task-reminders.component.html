@@ -147,34 +147,15 @@
       </button>
     }
     <mat-divider></mat-divider>
-    @if (isMultiple) {
+    @if (!isMultiple && isAllDeadline) {
       <button
-        (click)="markAllAsDone()"
+        (click)="play()"
         [disabled]="isDisableControls"
         mat-menu-item
       >
-        <mat-icon>done_all</mat-icon>
-        {{ T.F.TASK.D_REMINDER_VIEW.COMPLETE | translate }}
+        <mat-icon>play_arrow</mat-icon>
+        {{ T.F.TASK.D_REMINDER_VIEW.START | translate }}
       </button>
-    } @else {
-      <button
-        (click)="markSingleAsDone()"
-        [disabled]="isDisableControls"
-        mat-menu-item
-      >
-        <mat-icon>check</mat-icon>
-        {{ T.F.TASK.D_REMINDER_VIEW.DONE | translate }}
-      </button>
-      @if (isAllDeadline) {
-        <button
-          (click)="play()"
-          [disabled]="isDisableControls"
-          mat-menu-item
-        >
-          <mat-icon>play_arrow</mat-icon>
-          {{ T.F.TASK.D_REMINDER_VIEW.START | translate }}
-        </button>
-      }
     }
     @if (!isMultiple && !isAllDeadline && !(isSingleOnToday$ | async)) {
       <button

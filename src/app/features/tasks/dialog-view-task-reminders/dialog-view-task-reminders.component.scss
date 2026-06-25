@@ -98,6 +98,15 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: var(--s-half);
+
+  // Spacing in this row is owned by the flex `gap` above. Material also adds
+  // `margin-left: 8px` between adjacent dialog-action buttons, but that only
+  // lands on siblings that are themselves buttons — the split-button host is
+  // not, so the done button ends up with 8px on its left and gap+8px on its
+  // right. Cancel Material's margin so left/right spacing stays equal.
+  .mat-mdc-button-base + .mat-mdc-button-base {
+    margin-left: 0;
+  }
 }
 
 // Compact, outlined square so the lone "done" icon reads as a peer of the
