@@ -2,6 +2,7 @@ import {
   adjustDateToBoardTimeframe,
   matchesBoardDateTimeframe,
   resolveBoardDateTimeframeRange,
+  sanitizeBoardDateTimeframeCfg,
 } from './board-date-filter.util';
 import { BoardDateTimeframeCfg } from './boards.model';
 
@@ -147,6 +148,59 @@ describe('board date timeframe filtering', () => {
         todayStr,
       }),
     ).toBeNull();
+  });
+
+  it('sanitizes valid custom range timeframe values', () => {
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+        customStart: '2026-04-01',
+      }),
+    ).toEqual({
+      type: 'customRange',
+      customStart: '2026-04-01',
+    });
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+        customEnd: '2026-04-30',
+      }),
+    ).toEqual({
+      type: 'customRange',
+      customEnd: '2026-04-30',
+    });
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+        customStart: '2026-04-01',
+        customEnd: '2026-04-30',
+      }),
+    ).toEqual({
+      type: 'customRange',
+      customStart: '2026-04-01',
+      customEnd: '2026-04-30',
+    });
+  });
+
+  it('drops invalid custom range timeframe values', () => {
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+        customStart: '2026-02-31',
+      }),
+    ).toBeUndefined();
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+      }),
+    ).toBeUndefined();
+    expect(
+      sanitizeBoardDateTimeframeCfg({
+        type: 'customRange',
+        customStart: '2026-04-30',
+        customEnd: '2026-04-01',
+      }),
+    ).toBeUndefined();
   });
 
   it('adjusts dates to the nearest valid timeframe date', () => {
