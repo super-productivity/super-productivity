@@ -130,7 +130,7 @@ import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.s
     '[class.isSelected]': 'isSelected()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
-    '[class.hasTimeConflict]': 'hasTimeConflict()',
+    '[class.isOverdue]': 'isOverdue()',
     '(contextmenu)': 'onHostContextMenu($event)',
   },
   imports: [

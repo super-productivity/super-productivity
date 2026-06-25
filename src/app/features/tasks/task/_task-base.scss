@@ -151,18 +151,9 @@
     }
   }
 
-  :host.hasTimeConflict .inner-wrapper > & {
-    border-color: color-mix(
-      in srgb,
-      var(--text-color-muted) 36%,
-      var(--extra-border-color)
-    );
-    border-width: 1px;
-    border-style: solid;
-    box-shadow:
-      inset 3px 0 0 color-mix(in srgb, var(--text-color-muted) 55%, transparent),
-      var(--task-shadow);
-  }
+  // Time conflict no longer draws a border/bar on the task box — it's surfaced as
+  // a danger "!" icon next to the schedule control instead (see .time-conflict-ico
+  // in _task-controls.scss and the template).
   :host:first-child .inner-wrapper > & {
     border-top-left-radius: var(--task-border-radius);
     border-top-right-radius: var(--task-border-radius);

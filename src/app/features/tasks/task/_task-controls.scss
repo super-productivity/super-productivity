@@ -395,18 +395,28 @@ done-toggle {
 
 .schedule-btn {
   position: relative;
-
-  &.mat-warn mat-icon {
-    color: var(--c-warn) !important;
-  }
 }
 
-:host.hasTimeConflict {
-  .schedule-btn mat-icon,
-  .schedule-btn .time-badge {
-    color: var(--text-color-muted);
-    border-color: color-mix(in srgb, var(--text-color-muted) 45%, transparent);
-  }
+// Overdue indicator = the schedule icon itself, in the danger color. Driven by
+// the semantic :host.isOverdue host state rather than Material's `color="warn"`
+// modifier class, so the cue is decoupled from Material's theming internals and
+// reads the same across light/dark/custom themes. !important wins over the
+// Material icon-color token.
+:host.isOverdue .schedule-btn mat-icon {
+  color: var(--c-warn) !important;
+}
+
+// Time conflict indicator: a danger "!" shown next to the schedule control,
+// replacing the former task-box border. It's a bare <mat-icon> dropped into the
+// stretch-aligned controls row, so it needs explicit centering and sizing.
+.time-conflict-ico {
+  align-self: center;
+  color: var(--c-warn);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  // tuck it close to the schedule button on its left, which it annotates
+  margin-left: calc(-1 * var(--s-quarter));
 }
 
 .deadline-btn {
