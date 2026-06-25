@@ -72,9 +72,11 @@ describe('PluginService', () => {
       'setNodeExecutionGrantToken',
       'revokeNodeExecutionGrantToken',
       'revokeNodeExecutionGrant',
+      'clearNodeExecutionConsent',
     ]);
     pluginBridge.hasNodeExecutionGrantToken.and.returnValue(false);
     pluginBridge.requestNodeExecutionGrant.and.resolveTo(null);
+    pluginBridge.clearNodeExecutionConsent.and.resolveTo(undefined);
     pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
       'loadPlugin',
       'unloadPlugin',
@@ -317,6 +319,27 @@ describe('PluginService', () => {
       manifest.id,
       'token-1',
     );
+  });
+
+  it('clearNodeExecutionConsent drops the session denial and asks the bridge to clear consent', async () => {
+    const pluginId = 'node-plugin';
+    const deniedSet = (
+      service as unknown as { _nodeExecutionDeniedThisSession: Set<string> }
+    )._nodeExecutionDeniedThisSession;
+    deniedSet.add(pluginId);
+
+    await service.clearNodeExecutionConsent(pluginId);
+
+    expect(deniedSet.has(pluginId)).toBe(false);
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledOnceWith(pluginId);
+  });
+
+  it('removeUploadedPlugin clears persisted nodeExecution consent (Phase 2)', async () => {
+    const pluginId = 'uploaded-node-plugin';
+
+    await service.removeUploadedPlugin(pluginId);
+
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith(pluginId);
   });
 
   it('treats runner loaded:false activation results as failures', async () => {

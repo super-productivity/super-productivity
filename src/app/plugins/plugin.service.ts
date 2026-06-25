@@ -1340,6 +1340,10 @@ export class PluginService implements OnDestroy {
       const existingState = this._getPluginState(manifest.id);
       if (existingState) {
         this._teardownPluginRuntime(manifest.id);
+        // Re-uploading replaces the code under this id, so any prior persisted consent no
+        // longer applies — clear it (in addition to the session grant teardown handles)
+        // so the new code must be consented to afresh (issue #8512 Phase 2).
+        await this.clearNodeExecutionConsent(manifest.id);
         // Clear stale assets from previous version
         this._pluginIndexHtml.delete(manifest.id);
         this._pluginIcons.delete(manifest.id);
@@ -1579,9 +1583,10 @@ export class PluginService implements OnDestroy {
     this._pluginIcons.delete(pluginId);
     this._pluginIconsSignal.set(new Map(this._pluginIcons));
 
-    // Drop any session nodeExecution denial so a fresh re-upload of this id is prompted
-    // again rather than silently failing closed against the removed plugin's decision.
-    this._nodeExecutionDeniedThisSession.delete(pluginId);
+    // Clear the session denial AND the main-owned persisted consent, so a fresh upload
+    // of this id later starts from a clean prompt and a *different* plugin reusing the id
+    // can never inherit the removed plugin's consent (issue #8512 Phase 2).
+    await this.clearNodeExecutionConsent(pluginId);
 
     // Remove from plugin states
     this._deletePluginState(pluginId);
@@ -1853,6 +1858,19 @@ export class PluginService implements OnDestroy {
     // holds the token (main revokes by pluginId + webContents), so a re-upload under
     // the same id can never inherit a live session grant.
     await this._pluginBridge.revokeNodeExecutionGrant(pluginId, grantToken ?? '');
+  }
+
+  /**
+   * Revoke a plugin's nodeExecution consent: clears the in-session grant token, the
+   * session "denied" marker, and the main-owned PERSISTED consent (issue #8512 Phase 2),
+   * so the next node call re-prompts. Called on disable, uninstall, and re-upload — the
+   * three explicit, user-driven lifecycle edges. Deliberately NOT called from generic
+   * teardown (`_teardownPluginRuntime`), which also fires on app shutdown/navigation and
+   * must preserve "ask once across sessions".
+   */
+  async clearNodeExecutionConsent(pluginId: string): Promise<void> {
+    this._nodeExecutionDeniedThisSession.delete(pluginId);
+    await this._pluginBridge.clearNodeExecutionConsent(pluginId);
   }
 
   /**

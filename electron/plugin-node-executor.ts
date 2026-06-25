@@ -11,6 +11,11 @@ import {
   PluginNodeScriptResult,
   PluginManifest,
 } from '../packages/plugin-api/src/types';
+import {
+  clearNodeExecutionConsent,
+  getNodeExecutionConsent,
+  setNodeExecutionConsent,
+} from './plugin-node-consent-store';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_TIMEOUT = 300000; // 5 minutes
@@ -135,9 +140,28 @@ class PluginNodeExecutor {
         // (id mismatch, missing nodeExecution permission, unreadable manifest) returns
         // null and falls back to the unverified dialog, so uploaded code can never borrow
         // a built-in plugin's trusted name even if its id collides with a bundled dir.
-        const dialogOptions =
-          this.describeVerifiedBuiltInDialog(safeId) ??
-          this.describeUnverifiedUploadedDialog(safeId, displayInfo);
+        const builtInManifest = this.tryGetVerifiedBuiltInManifest(safeId);
+
+        // Phase 2 (issue #8512): persisted, ask-once consent is scoped to UPLOADED
+        // (community) plugins only. Built-in plugins keep the per-session verified prompt
+        // — no behaviour change, so `sync-md` etc. are regression-safe. Only a prior
+        // native Allow can have written this entry (no renderer write path), and the
+        // renderer clears it on disable/uninstall/re-upload, so a re-uploaded (changed)
+        // plugin reusing the id never silently inherits it.
+        if (!builtInManifest) {
+          const persistedConsent = await getNodeExecutionConsent(safeId);
+          if (persistedConsent) {
+            if (event.sender.isDestroyed()) {
+              return null;
+            }
+            this.registerGrantCleanup(event.sender);
+            return this.mintGrant(safeId, webContentsId);
+          }
+        }
+
+        const dialogOptions = builtInManifest
+          ? this.buildVerifiedBuiltInDialog(safeId, builtInManifest)
+          : this.describeUnverifiedUploadedDialog(safeId, displayInfo);
 
         const requestUrl = event.sender.getURL();
         this.registerGrantCleanup(event.sender);
@@ -166,12 +190,47 @@ class PluginNodeExecutor {
           return null;
         }
 
-        const token = randomBytes(32).toString('base64url');
-        this.grants.set(safeId, {
-          token,
-          webContentsId,
-        });
-        return { token };
+        // Allow → for uploaded plugins, remember the decision so later sessions don't
+        // re-prompt (ask-once). Persisting is best-effort: a write failure only costs a
+        // re-prompt next session, never a grant the user just approved.
+        if (!builtInManifest) {
+          try {
+            await setNodeExecutionConsent(safeId, {
+              name: sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)',
+              version: sanitizeDialogString(displayInfo?.version, 32) || '(unknown)',
+              grantedAt: Date.now(),
+            });
+          } catch (error) {
+            console.error(
+              `Failed to persist nodeExecution consent for ${safeId}:`,
+              error,
+            );
+          }
+        }
+        return this.mintGrant(safeId, webContentsId);
+      },
+    );
+
+    ipcMain.handle(
+      IPC.PLUGIN_CLEAR_NODE_EXECUTION_CONSENT,
+      // Explicit revoke from the trusted renderer that owns the plugin lifecycle
+      // (disable / uninstall / re-upload). Drops the live session grant for this id AND
+      // the persisted consent, so the next node call re-prompts. A delete is fail-safe:
+      // the worst a hostile renderer can do by calling this is force a prompt, never a
+      // silent grant.
+      async (_event, pluginId: string) => {
+        let safeId: string;
+        try {
+          safeId = assertSafePluginId(pluginId);
+        } catch {
+          return;
+        }
+        const grant = this.grants.get(safeId);
+        if (grant) {
+          this.grants.delete(safeId);
+          this.releaseGrantCleanupIfUnused(grant.webContentsId);
+        }
+        await clearNodeExecutionConsent(safeId);
       },
     );
 
@@ -297,23 +356,36 @@ class PluginNodeExecutor {
     this.unregisterGrantCleanup(webContentsId);
   }
 
+  private mintGrant(pluginId: string, webContentsId: number): { token: string } {
+    const token = randomBytes(32).toString('base64url');
+    this.grants.set(pluginId, { token, webContentsId });
+    return { token };
+  }
+
   /**
-   * Consent dialog for a verified built-in plugin (name/version read from disk).
-   * Returns null when the id does not resolve to a cleanly-verified built-in
-   * nodeExecution manifest (no on-disk match, id mismatch, missing permission, or
-   * unreadable/invalid manifest), so the caller falls back to the unverified-uploaded
-   * dialog — a partial or colliding match must never *upgrade* trust to the built-in
-   * dialog.
+   * Resolve the cleanly-verified built-in nodeExecution manifest for an id, or null
+   * when the id does not resolve to one (no on-disk match, id mismatch, missing
+   * permission, or unreadable/invalid manifest). A partial or colliding match must
+   * never *upgrade* trust to the built-in dialog, so callers fall back to the
+   * unverified-uploaded path on null.
    */
-  private describeVerifiedBuiltInDialog(
-    pluginId: string,
-  ): Electron.MessageBoxOptions | null {
-    let manifest: PluginManifest;
+  private tryGetVerifiedBuiltInManifest(pluginId: string): PluginManifest | null {
     try {
-      manifest = this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
+      return this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Consent dialog for a verified built-in plugin (name/version read from disk).
+   * Built-in plugins are NOT persisted (Phase 2 ask-once is uploaded-only), so the copy
+   * keeps the per-session wording.
+   */
+  private buildVerifiedBuiltInDialog(
+    pluginId: string,
+    manifest: PluginManifest,
+  ): Electron.MessageBoxOptions {
     return {
       ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow plugin Node.js execution?',

@@ -27,6 +27,9 @@ let ipcHandlers;
 let dialogCalls;
 let nextDialogResult;
 let nextDialogPromise;
+// In-memory stand-in for the main-owned persisted consent store (plugin-node-consent-store.ts),
+// so the executor's Phase 2 ask-once logic can be tested without touching the filesystem.
+let consentStore;
 
 class FakeWebContents extends EventEmitter {
   constructor(id, url = 'app://index.html') {
@@ -96,6 +99,16 @@ const installMocks = () => {
       };
     }
 
+    // Stub the persisted-consent store so Phase 2 ask-once logic is exercised in-memory.
+    if (
+      request === './plugin-node-consent-store' &&
+      parent &&
+      typeof parent.filename === 'string' &&
+      parent.filename.endsWith('plugin-node-executor.ts')
+    ) {
+      return consentStore;
+    }
+
     if (request === 'electron') {
       return {
         app: {
@@ -141,6 +154,17 @@ test.beforeEach(() => {
   dialogCalls = [];
   nextDialogResult = { response: 0 };
   nextDialogPromise = undefined;
+  const records = new Map();
+  consentStore = {
+    __records: records,
+    getNodeExecutionConsent: async (pluginId) => records.get(pluginId) ?? null,
+    setNodeExecutionConsent: async (pluginId, consent) => {
+      records.set(pluginId, consent);
+    },
+    clearNodeExecutionConsent: async (pluginId) => {
+      records.delete(pluginId);
+    },
+  };
   installMocks();
 });
 
@@ -477,4 +501,106 @@ test('never upgrades trust: an on-disk match that does not cleanly verify uses t
   } finally {
     BUILT_IN_PLUGIN_MANIFEST.permissions = originalPermissions;
   }
+});
+
+// --- Phase 2: persisted, per-plugin consent (#8512) ---
+
+test('uploaded plugin with persisted consent is granted without a dialog (ask-once)', async () => {
+  loadModule();
+  // Simulate a grant remembered from a previous app session.
+  consentStore.__records.set('uploaded-node-plugin', {
+    name: 'Uploaded',
+    version: '1.0.0',
+    grantedAt: 1,
+  });
+  const webContents = new FakeWebContents(20);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'uploaded-node-plugin',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  assert.equal(dialogCalls.length, 0);
+});
+
+test('granting an uploaded plugin persists consent for the next session', async () => {
+  loadModule();
+  const webContents = new FakeWebContents(21);
+
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', webContents, 'persist-me', {
+    name: 'Persist Me',
+    version: '2.0.0',
+  });
+
+  assert.equal(dialogCalls.length, 1);
+  const persisted = consentStore.__records.get('persist-me');
+  assert.equal(persisted.name, 'Persist Me');
+  assert.equal(persisted.version, '2.0.0');
+  assert.equal(typeof persisted.grantedAt, 'number');
+});
+
+test('denying an uploaded plugin does not persist consent', async () => {
+  loadModule();
+  nextDialogResult = { response: 1 };
+  const webContents = new FakeWebContents(22);
+
+  const denied = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'deny-me',
+    { name: 'Deny', version: '1.0.0' },
+  );
+
+  assert.equal(denied, null);
+  assert.equal(consentStore.__records.has('deny-me'), false);
+});
+
+test('clearConsent drops the grant + persisted consent so the next request re-prompts', async () => {
+  loadModule();
+  const wc1 = new FakeWebContents(23);
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    wc1,
+    'clear-me',
+    { name: 'Clear', version: '1.0.0' },
+  );
+  assert.equal(dialogCalls.length, 1);
+  assert.ok(consentStore.__records.has('clear-me'));
+
+  await callIpc('PLUGIN_CLEAR_NODE_EXECUTION_CONSENT', wc1, 'clear-me');
+  assert.equal(consentStore.__records.has('clear-me'), false);
+
+  // The live session grant is gone too: exec is now unauthorized.
+  await assert.rejects(
+    () =>
+      callIpc('PLUGIN_EXEC_NODE_SCRIPT', wc1, 'clear-me', grant.token, {
+        script: 'return true;',
+      }),
+    /not authorized/,
+  );
+
+  // A fresh request re-prompts because no persisted consent remains.
+  const wc2 = new FakeWebContents(24);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'clear-me', {
+    name: 'Clear',
+    version: '1.0.0',
+  });
+  assert.equal(dialogCalls.length, 2);
+});
+
+test('built-in plugin consent is never persisted (stays per-session, regression)', async () => {
+  loadModule();
+  const wc1 = new FakeWebContents(25);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'sync-md');
+  assert.equal(dialogCalls.length, 1);
+  // Built-in plugins keep the verified per-session prompt — nothing is written to the
+  // persisted store, so a new session prompts again.
+  assert.equal(consentStore.__records.has('sync-md'), false);
+
+  const wc2 = new FakeWebContents(26);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'sync-md');
+  assert.equal(dialogCalls.length, 2);
 });

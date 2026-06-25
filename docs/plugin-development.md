@@ -553,13 +553,22 @@ Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the E
 desktop app after the user allows the desktop permission prompt.
 
 Both built-in and uploaded (community) plugins may request `nodeExecution`. The grant is
-issued by the Electron **main** process after a native consent dialog, and is bound to
-the plugin id for the current app session (it is never persisted or synced). For uploaded
-plugins the app cannot verify the manifest, so the dialog flags the plugin as unverified
-third-party code with full machine access that Super Productivity cannot sandbox, and
-defaults to **Deny** — only allow plugins whose source you trust. If the user denies,
-the plugin stays enabled but its node calls fail until it is re-enabled or the app is
-restarted (consent is re-requested once per session).
+issued by the Electron **main** process after a native consent dialog and is bound to the
+plugin id. For uploaded plugins the app cannot verify the manifest, so the dialog flags
+the plugin as unverified third-party code with full machine access that Super Productivity
+cannot sandbox, and defaults to **Deny** — only allow plugins whose source you trust. If
+the user denies, the plugin stays enabled but its node calls fail until it is re-enabled.
+
+Consent handling differs by plugin type:
+
+- **Uploaded (community) plugins:** consent is remembered **once per plugin** in a
+  main-owned, local-only store (`Allow` is not asked again on the next launch). The
+  consent is **never synced** — granting on one device does not auto-grant on another;
+  the other device prompts afresh on first node use. Consent is automatically cleared
+  (forcing a fresh prompt) when you **disable**, **uninstall**, or **re-upload** the
+  plugin, so replacing a plugin's code under the same id always re-asks. To revoke access
+  without removing the plugin, simply disable it.
+- **Built-in plugins** (e.g. `sync-md`) keep the per-session prompt and are not persisted.
 
 > **Plugin id constraints (for `nodeExecution`):** the consent grant keys on your
 > manifest `id`, so it must be a single safe token — no whitespace, control/bidi
