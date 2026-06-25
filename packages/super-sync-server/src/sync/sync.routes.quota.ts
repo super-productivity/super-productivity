@@ -110,6 +110,10 @@ type ExistingSyncImport = {
   serverSeq: number;
 };
 
+export type EnforceStorageQuotaOptions = {
+  allowCleanup?: boolean;
+};
+
 /**
  * Look up an existing full-state op for the user.
  *
@@ -196,7 +200,9 @@ export async function enforceStorageQuota(
   userId: number,
   storageDeltaBytes: number,
   reply: FastifyReply,
+  options: EnforceStorageQuotaOptions = {},
 ): Promise<boolean> {
+  const { allowCleanup = true } = options;
   const syncService = getSyncService();
   let quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
   if (quotaCheck.allowed) return true;
@@ -207,7 +213,8 @@ export async function enforceStorageQuota(
   // upload success, not on quota misses. Also guards against pre-deploy stale
   // counters where the old code's pg_column_size SUM left an inflated value.
   Logger.info(
-    `[user:${userId}] Quota cache miss (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Reconciling before cleanup...`,
+    `[user:${userId}] Quota cache miss (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). ` +
+      `Reconciling before ${allowCleanup ? 'cleanup' : 'rejecting'}...`,
   );
   try {
     await syncService.updateStorageUsage(userId);
@@ -220,8 +227,22 @@ export async function enforceStorageQuota(
     }
   } catch (err) {
     Logger.warn(
-      `[user:${userId}] Reconcile failed, proceeding with cleanup: ${errorMessage(err)}`,
+      `[user:${userId}] Reconcile failed, ${
+        allowCleanup ? 'proceeding with cleanup' : 'rejecting without cleanup'
+      }: ${errorMessage(err)}`,
     );
+  }
+
+  if (!allowCleanup) {
+    Logger.warn(
+      `[user:${userId}] Storage quota exceeded: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Cleanup disabled for this route.`,
+    );
+    sendQuotaExceededReply(reply, {
+      storageUsedBytes: quotaCheck.currentUsage,
+      storageQuotaBytes: quotaCheck.quota,
+      autoCleanupAttempted: false,
+    });
+    return false;
   }
 
   Logger.warn(
