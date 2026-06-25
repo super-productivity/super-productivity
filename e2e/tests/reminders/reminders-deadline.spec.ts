@@ -83,12 +83,8 @@ test.describe('Deadline Reminders', () => {
     const dueForText = await dueForEl.textContent();
     expect(dueForText!.trim().length).toBeGreaterThan(0);
 
-    // Dismiss by marking the task as done (in the overflow "More actions" menu)
-    await page
-      .locator(REMINDER_DIALOG)
-      .locator('button[aria-label="More actions"]')
-      .click();
-    await page.getByRole('menuitem', { name: 'Done' }).click();
+    // Dismiss by marking the task as done via the dedicated done button
+    await page.locator(REMINDER_DIALOG).locator('button.done-btn').click();
 
     // Wait for the reminder dialog to close
     await page.locator(REMINDER_DIALOG).waitFor({ state: 'hidden', timeout: 10000 });
