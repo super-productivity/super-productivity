@@ -214,23 +214,27 @@ export const sanitizeBoardDateTimeframeCfg = (
     case 'customRange': {
       const customStart = cfg.customStart;
       const customEnd = cfg.customEnd;
-      if (customStart !== undefined && !isValidDbDateStr(customStart)) {
+
+      const out: BoardDateTimeframeCfg = { type };
+      if (customStart !== undefined) {
+        if (!isValidDbDateStr(customStart)) {
+          return undefined;
+        }
+        out.customStart = customStart;
+      }
+      if (customEnd !== undefined) {
+        if (!isValidDbDateStr(customEnd)) {
+          return undefined;
+        }
+        out.customEnd = customEnd;
+      }
+      if (!out.customStart && !out.customEnd) {
         return undefined;
       }
-      if (customEnd !== undefined && !isValidDbDateStr(customEnd)) {
+      if (out.customStart && out.customEnd && out.customStart > out.customEnd) {
         return undefined;
       }
-      if (!customStart && !customEnd) {
-        return undefined;
-      }
-      if (customStart && customEnd && customStart > customEnd) {
-        return undefined;
-      }
-      return {
-        type,
-        ...(customStart ? { customStart } : {}),
-        ...(customEnd ? { customEnd } : {}),
-      };
+      return out;
     }
     default:
       return { type };
