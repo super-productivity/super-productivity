@@ -295,6 +295,40 @@ npm run clear-data -- --all
 
 ## API Details
 
+### Endpoint Summary
+
+Authentication and account:
+
+- `POST /api/register`
+- `POST /api/login`
+- `POST /api/verify-email`
+- `POST /api/replace-token`
+- `DELETE /api/account`
+
+Passkey and magic-link auth:
+
+- `POST /api/register/passkey/options`
+- `POST /api/register/passkey/verify`
+- `POST /api/login/passkey/options`
+- `POST /api/login/passkey/verify`
+- `POST /api/recover/passkey`
+- `POST /api/recover/passkey/options`
+- `POST /api/recover/passkey/complete`
+- `POST /api/register/magic-link`
+- `POST /api/login/magic-link`
+- `POST /api/login/magic-link/verify`
+
+Sync:
+
+- `POST /api/sync/ops`
+- `GET /api/sync/ops`
+- `POST /api/sync/snapshot`
+- `GET /api/sync/status` (diagnostic)
+- `DELETE /api/sync/data`
+- `GET /api/sync/restore-points`
+- `GET /api/sync/restore/:serverSeq`
+- `GET /api/sync/ws` (WebSocket notifications; query `token` and `clientId`)
+
 ### Upload Operations (`POST /api/sync/ops`)
 
 Request body:
@@ -304,17 +338,19 @@ Request body:
   "ops": [
     {
       "id": "uuid-v7",
+      "clientId": "clientA",
+      "actionType": "[Task] Update Task",
       "opType": "UPD",
       "entityType": "TASK",
       "entityId": "task-123",
       "payload": { "changes": { "title": "New title" } },
       "vectorClock": { "clientA": 5 },
       "timestamp": 1701234567890,
-      "schemaVersion": 1
+      "schemaVersion": 2
     }
   ],
   "clientId": "clientA",
-  "lastKnownSeq": 100
+  "lastKnownServerSeq": 100
 }
 ```
 
@@ -347,9 +383,11 @@ Used for full-state operations (BackupImport, SyncImport, Repair):
   "clientId": "clientA",
   "reason": "initial",
   "vectorClock": { "clientA": 10 },
-  "schemaVersion": 1
+  "schemaVersion": 2
 }
 ```
+
+Optional fields include `requestId` for deduplication, `syncImportReason`, `opId`, `isCleanSlate`, `snapshotOpType`, and `isPayloadEncrypted`.
 
 ## Security Features
 
