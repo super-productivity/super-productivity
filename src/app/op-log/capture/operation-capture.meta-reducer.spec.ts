@@ -2,7 +2,6 @@
 import {
   operationCaptureMetaReducer,
   setOperationCaptureService,
-  getOperationCaptureService,
   setIsApplyingRemoteOps,
   bufferDeferredAction,
   getDeferredActions,
@@ -70,24 +69,6 @@ describe('operationCaptureMetaReducer', () => {
     // Ensure sync state and deferred buffer are reset after each test
     setIsApplyingRemoteOps(false);
     clearDeferredActions();
-  });
-
-  describe('setOperationCaptureService', () => {
-    it('should set the capture service instance', () => {
-      const newCaptureService = jasmine.createSpyObj('OperationCaptureService', [
-        'incrementPending',
-      ]);
-
-      setOperationCaptureService(newCaptureService);
-
-      expect(getOperationCaptureService()).toBe(newCaptureService);
-    });
-  });
-
-  describe('getOperationCaptureService', () => {
-    it('should return the current capture service instance', () => {
-      expect(getOperationCaptureService()).toBe(mockCaptureService);
-    });
   });
 
   describe('meta-reducer behavior', () => {

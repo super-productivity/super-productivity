@@ -178,27 +178,6 @@ describe('WrappedProviderService', () => {
     });
   });
 
-  describe('clearCache', () => {
-    it('should clear cached adapters', async () => {
-      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
-      const mockAdapter1 = createMockSyncCapableAdapter();
-      const mockAdapter2 = createMockSyncCapableAdapter();
-      mockFileBasedAdapter.createAdapter.and.returnValues(mockAdapter1, mockAdapter2);
-
-      // First call - creates adapter1
-      const result1 = await service.getOperationSyncCapable(dropboxProvider);
-      expect(result1).toBe(mockAdapter1);
-
-      // Clear cache
-      service.clearCache();
-
-      // Next call should create a new adapter
-      const result2 = await service.getOperationSyncCapable(dropboxProvider);
-      expect(result2).toBe(mockAdapter2);
-      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);
-    });
-  });
-
   describe('auto-invalidation on config change', () => {
     it('should auto-clear cache when providerConfigChanged$ emits', async () => {
       const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);

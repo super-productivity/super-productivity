@@ -82,33 +82,6 @@ export class VectorClockService {
   }
 
   /**
-   * Gets a full vector clock by merging ALL ops in IndexedDB from seq 0.
-   *
-   * Use this as a fallback when normal clock computation fails due to
-   * snapshot corruption or incomplete compaction. This is more expensive
-   * than getCurrentVectorClock() but guarantees we include all known clocks.
-   *
-   * @returns The merged vector clock from all stored operations
-   */
-  async getFullVectorClock(): Promise<VectorClock> {
-    // Start with snapshot clock (if exists)
-    const snapshot = await this.opLogStore.loadStateCache();
-    let clock = snapshot ? { ...snapshot.vectorClock } : {};
-
-    // Get ALL ops from seq 0, not just after snapshot
-    // This ensures we catch any clock entries that might have been
-    // missed if the snapshot's vectorClock was incomplete
-    const allOps = await this.opLogStore.getOpsAfterSeq(0);
-
-    // Merge all op clocks
-    for (const entry of allOps) {
-      clock = mergeVectorClocks(clock, entry.op.vectorClock);
-    }
-
-    return clock;
-  }
-
-  /**
    * Gets the snapshot's vector clock, which serves as a baseline for entities
    * that haven't been modified since compaction.
    *

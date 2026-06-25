@@ -108,13 +108,6 @@ export const setOperationCaptureService = (service: OperationCaptureService): vo
 };
 
 /**
- * Gets the current OperationCaptureService instance.
- */
-export const getOperationCaptureService = (): OperationCaptureService | null => {
-  return operationCaptureService;
-};
-
-/**
  * Sets the flag indicating whether remote operations are being applied.
  * Called by HydrationStateService.startApplyingRemoteOps() and endApplyingRemoteOps().
  *
