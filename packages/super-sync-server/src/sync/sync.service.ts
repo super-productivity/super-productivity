@@ -98,6 +98,10 @@ export class SyncService {
     );
   }
 
+  getMaxClockDriftMs(): number {
+    return this.config.maxClockDriftMs;
+  }
+
   // === Upload Operations ===
 
   async uploadOps(

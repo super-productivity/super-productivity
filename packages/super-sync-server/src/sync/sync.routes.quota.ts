@@ -3,7 +3,13 @@ import { prisma } from '../db';
 import { Logger } from '../logger';
 import { getSyncService } from './sync.service';
 import { computeOpStorageBytes } from './sync.const';
-import { SYNC_ERROR_CODES } from './sync.types';
+import {
+  DUPLICATE_OP_SELECT,
+  Operation,
+  SYNC_ERROR_CODES,
+  type DuplicateOperationCandidate,
+} from './sync.types';
+import { isSameDuplicateOperation } from './conflict';
 import { errorMessage, MAX_OPS_PER_BATCH } from './sync.routes.payload';
 
 /**
@@ -24,6 +30,36 @@ export const computeOpsStorageBytes = (
   let bytes = 0;
   let fallback = 0;
   for (const op of ops) {
+    const sized = computeOpStorageBytes(op);
+    bytes += sized.bytes;
+    if (sized.fallback) fallback += 1;
+  }
+  return { bytes, fallback };
+};
+
+export const computeOpsStorageBytesExcludingKnownDuplicates = async (
+  userId: number,
+  ops: Operation[],
+  maxClockDriftMs: number,
+): Promise<{ bytes: number; fallback: number }> => {
+  if (ops.length === 0) return { bytes: 0, fallback: 0 };
+
+  const existingOps = await prisma.operation.findMany({
+    where: { id: { in: Array.from(new Set(ops.map((op) => op.id))) } },
+    select: DUPLICATE_OP_SELECT,
+  });
+  const existingOpById = new Map<string, DuplicateOperationCandidate>(
+    existingOps.map((existingOp) => [existingOp.id, existingOp]),
+  );
+
+  let bytes = 0;
+  let fallback = 0;
+  for (const op of ops) {
+    const existingOp = existingOpById.get(op.id);
+    if (existingOp && isSameDuplicateOperation(existingOp, userId, op, maxClockDriftMs)) {
+      continue;
+    }
+
     const sized = computeOpStorageBytes(op);
     bytes += sized.bytes;
     if (sized.fallback) fallback += 1;

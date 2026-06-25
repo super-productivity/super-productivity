@@ -26,11 +26,13 @@ const mocks = vi.hoisted(() => {
     getStorageInfo: vi.fn(),
     getCachedSnapshotBytes: vi.fn(),
     markStorageNeedsReconcile: vi.fn(),
+    getMaxClockDriftMs: vi.fn(),
   };
   const prisma = {
     operation: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
   };
 
@@ -65,6 +67,7 @@ vi.mock('../src/db', () => ({
 
 import { syncRoutes } from '../src/sync/sync.routes';
 import { SYNC_ERROR_CODES } from '../src/sync/sync.types';
+import { computeOpStorageBytes } from '../src/sync/sync.const';
 import { SUPER_SYNC_MAX_OPS_PER_UPLOAD } from '@sp/shared-schema';
 
 const gzipAsync = promisify(zlib.gzip);
@@ -82,6 +85,23 @@ const createOp = (clientId: string) => ({
   schemaVersion: 1,
 });
 
+const createStoredDuplicateOp = (op: ReturnType<typeof createOp>) => ({
+  id: op.id,
+  userId: 1,
+  clientId: op.clientId,
+  actionType: op.actionType,
+  opType: op.opType,
+  entityType: op.entityType,
+  entityId: op.entityId,
+  payload: op.payload,
+  vectorClock: op.vectorClock,
+  schemaVersion: op.schemaVersion,
+  clientTimestamp: BigInt(op.timestamp),
+  receivedAt: BigInt(op.timestamp),
+  isPayloadEncrypted: false,
+  syncImportReason: null,
+});
+
 const MiB = 1024 * 1024;
 
 describe('Sync compressed body routes', () => {
@@ -93,6 +113,7 @@ describe('Sync compressed body routes', () => {
     mocks.syncService.isRateLimited.mockReturnValue(false);
     mocks.syncService.checkOpsRequestDedup.mockReturnValue(null);
     mocks.syncService.checkSnapshotRequestDedup.mockReturnValue(null);
+    mocks.syncService.getMaxClockDriftMs.mockReturnValue(60_000);
     mocks.syncService.checkStorageQuota.mockResolvedValue({
       allowed: true,
       currentUsage: 0,
@@ -145,6 +166,7 @@ describe('Sync compressed body routes', () => {
     });
     mocks.syncService.getCachedSnapshotBytes.mockResolvedValue(0);
     mocks.prisma.operation.findFirst.mockResolvedValue(null);
+    mocks.prisma.operation.findMany.mockResolvedValue([]);
 
     app = Fastify();
     await app.register(syncRoutes, { prefix: '/api/sync' });
@@ -187,6 +209,144 @@ describe('Sync compressed body routes', () => {
     expect(typeof quotaCall[1]).toBe('number');
     expect(quotaCall[1]).toBeGreaterThan(0);
     expect(quotaCall[1]).toBeLessThan(payloadSize);
+  });
+
+  it('should subtract exact already-stored duplicate ops from the ops quota gate', async () => {
+    const clientId = 'known-duplicate-quota-client';
+    const duplicateOp = {
+      ...createOp(clientId),
+      id: 'known-duplicate-op',
+      entityId: 'task-known-duplicate',
+      payload: { title: 'Already accepted task' },
+    };
+    const newOp = {
+      ...createOp(clientId),
+      id: 'new-op',
+      entityId: 'task-new',
+      payload: { title: 'New task' },
+    };
+    mocks.prisma.operation.findMany.mockResolvedValueOnce([
+      createStoredDuplicateOp(duplicateOp),
+    ]);
+    mocks.syncService.uploadOps.mockResolvedValueOnce([
+      {
+        opId: duplicateOp.id,
+        accepted: false,
+        error: 'Duplicate operation ID',
+        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+      },
+      { opId: newOp.id, accepted: true, serverSeq: 2 },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/ops',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        ops: [duplicateOp, newOp],
+        clientId,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.prisma.operation.findMany).toHaveBeenCalledOnce();
+    expect(mocks.syncService.checkStorageQuota).toHaveBeenCalledWith(
+      1,
+      computeOpStorageBytes(newOp).bytes,
+    );
+    expect(mocks.syncService.uploadOps).toHaveBeenCalledWith(1, clientId, [
+      duplicateOp,
+      newOp,
+    ]);
+  });
+
+  it('should keep same-id different-content ops charged in the ops quota gate', async () => {
+    const clientId = 'id-collision-quota-client';
+    const incomingOp = {
+      ...createOp(clientId),
+      id: 'colliding-op-id',
+      entityId: 'task-collision',
+      payload: { title: 'Incoming content' },
+    };
+    const storedDifferentOp = createStoredDuplicateOp({
+      ...incomingOp,
+      payload: { title: 'Stored different content' },
+    });
+    mocks.prisma.operation.findMany.mockResolvedValueOnce([storedDifferentOp]);
+    mocks.syncService.uploadOps.mockResolvedValueOnce([
+      {
+        opId: incomingOp.id,
+        accepted: false,
+        error: 'Operation ID already belongs to a different operation',
+        errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/ops',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        ops: [incomingOp],
+        clientId,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.checkStorageQuota).toHaveBeenCalledWith(
+      1,
+      computeOpStorageBytes(incomingOp).bytes,
+    );
+  });
+
+  it('should not trigger cleanup for duplicate-only ops uploads near quota', async () => {
+    const clientId = 'duplicate-only-quota-client';
+    const duplicateOp = {
+      ...createOp(clientId),
+      id: 'duplicate-only-op',
+      entityId: 'task-duplicate-only',
+    };
+    mocks.prisma.operation.findMany.mockResolvedValueOnce([
+      createStoredDuplicateOp(duplicateOp),
+    ]);
+    mocks.syncService.checkStorageQuota.mockImplementation(
+      async (_userId: number, storageDeltaBytes: number) => ({
+        allowed: storageDeltaBytes === 0,
+        currentUsage: 100,
+        quota: 100,
+      }),
+    );
+    mocks.syncService.uploadOps.mockResolvedValueOnce([
+      {
+        opId: duplicateOp.id,
+        accepted: false,
+        error: 'Duplicate operation ID',
+        errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/ops',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        ops: [duplicateOp],
+        clientId,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.checkStorageQuota).toHaveBeenCalledWith(1, 0);
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
   });
 
   it('should reject oversized op batches before schema validation', async () => {

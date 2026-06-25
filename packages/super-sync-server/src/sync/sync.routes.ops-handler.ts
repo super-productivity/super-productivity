@@ -25,7 +25,7 @@ import {
   sendCompressedBodyParseFailure,
 } from './sync.routes.payload';
 import {
-  computeOpsStorageBytes,
+  computeOpsStorageBytesExcludingKnownDuplicates,
   enforceStorageQuota,
   getRawOpsCount,
   sendOpsBatchTooLargeReply,
@@ -168,10 +168,16 @@ export const uploadOpsHandler = async (
         // Check storage quota before processing (after dedup to allow retries).
         // Account using the same per-op payload+vectorClock measure that the
         // post-accept counter increment uses, so the gate and the increment
-        // cannot disagree on what "size" means.
+        // cannot disagree on what "size" means. Already-stored exact
+        // duplicates are rejected by uploadOps and never written, so don't make
+        // quota cleanup reserve space for them.
         const typedOpsForGate = ops as unknown as Operation[];
         const { bytes: estimatedDelta, fallback: gateFallback } =
-          computeOpsStorageBytes(typedOpsForGate);
+          await computeOpsStorageBytesExcludingKnownDuplicates(
+            userId,
+            typedOpsForGate,
+            syncService.getMaxClockDriftMs(),
+          );
         if (gateFallback > 0) {
           Logger.warn(
             `computeOpsStorageBytes: ${gateFallback}/${typedOpsForGate.length} unserializable op(s) ` +

@@ -13,12 +13,18 @@ const mocks = vi.hoisted(() => {
     runWithStorageUsageLock: vi.fn(),
     getLatestSeq: vi.fn(),
     getOpsSinceWithSeq: vi.fn(),
+    getMaxClockDriftMs: vi.fn(),
   };
 
   return {
     syncService,
     uploadCountsByUser,
     notifyNewOps: vi.fn(),
+    prisma: {
+      operation: {
+        findMany: vi.fn(),
+      },
+    },
     verifyToken: vi.fn(),
   };
 });
@@ -35,6 +41,10 @@ vi.mock('../src/sync/services/websocket-connection.service', () => ({
   getWsConnectionService: () => ({
     notifyNewOps: mocks.notifyNewOps,
   }),
+}));
+
+vi.mock('../src/db', () => ({
+  prisma: mocks.prisma,
 }));
 
 import { syncRoutes } from '../src/sync/sync.routes';
@@ -95,6 +105,8 @@ describe('Sync upload route rate limiting', () => {
       ops: [],
       latestSeq: 1,
     });
+    mocks.syncService.getMaxClockDriftMs.mockReturnValue(60_000);
+    mocks.prisma.operation.findMany.mockResolvedValue([]);
 
     app = Fastify();
     await app.register(rateLimit, {

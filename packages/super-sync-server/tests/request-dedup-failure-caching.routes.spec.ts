@@ -36,11 +36,13 @@ const mocks = vi.hoisted(() => {
     getOpsSinceWithSeq: vi.fn(),
     getStorageInfo: vi.fn(),
     getCachedSnapshotBytes: vi.fn(),
+    getMaxClockDriftMs: vi.fn(),
   };
   const prisma = {
     operation: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
   };
   return { syncService, prisma, notifyNewOps: vi.fn() };
@@ -116,6 +118,7 @@ describe('Request dedup — transaction-failure results are not cached (#8332)',
       storageQuotaBytes: QUOTA,
     });
     mocks.syncService.getCachedSnapshotBytes.mockResolvedValue(0);
+    mocks.syncService.getMaxClockDriftMs.mockReturnValue(60_000);
     mocks.syncService.cacheSnapshotIfReplayable.mockResolvedValue({ deltaBytes: 0 });
     mocks.syncService.prepareSnapshotCache.mockResolvedValue({
       stateBytes: 0,
@@ -123,6 +126,7 @@ describe('Request dedup — transaction-failure results are not cached (#8332)',
       cacheable: true,
     });
     mocks.prisma.operation.findFirst.mockResolvedValue(null);
+    mocks.prisma.operation.findMany.mockResolvedValue([]);
 
     app = Fastify();
     await app.register(syncRoutes, { prefix: '/api/sync' });
@@ -277,6 +281,8 @@ describe('Request dedup round-trip with the real cache (#8332)', () => {
     });
     mocks.syncService.getLatestSeq.mockResolvedValue(1);
     mocks.syncService.getOpsSinceWithSeq.mockResolvedValue({ ops: [], latestSeq: 1 });
+    mocks.syncService.getMaxClockDriftMs.mockReturnValue(60_000);
+    mocks.prisma.operation.findMany.mockResolvedValue([]);
 
     app = Fastify();
     await app.register(syncRoutes, { prefix: '/api/sync' });
