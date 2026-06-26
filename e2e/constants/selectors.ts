@@ -121,8 +121,11 @@ export const cssSelectors = {
   // DATE/TIME SELECTORS
   // ============================================================================
   EDIT_DATE_INFO: '.edit-date-info',
-  TIME_INPUT: 'input[type="time"]',
-  MAT_TIME_INPUT: 'mat-form-field input[type="time"]',
+  // The datetime-picker uses a native <input type="time"> on touch and a
+  // mat-timepicker text input on desktop; both carry data-test-id="time-input".
+  // Keep the native fallback for other plain time inputs (e.g. settings).
+  TIME_INPUT: '[data-test-id="time-input"], input[type="time"]',
+  MAT_TIME_INPUT: '[data-test-id="time-input"]',
 
   // ============================================================================
   // TASK DETAIL PANEL SELECTORS

@@ -24,6 +24,11 @@ import {
   MatSuffix,
 } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
+import {
+  MatTimepicker,
+  MatTimepickerInput,
+  MatTimepickerToggle,
+} from '@angular/material/timepicker';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -40,6 +45,9 @@ import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
+import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
+import { clockStrToDate, dateToClockStr } from '../../util/clock-str-and-date';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const DEFAULT_TIME = '09:00';
 
@@ -56,6 +64,9 @@ const DEFAULT_TIME = '09:00';
     MatPrefix,
     MatSuffix,
     MatInput,
+    MatTimepicker,
+    MatTimepickerInput,
+    MatTimepickerToggle,
     MatSelect,
     MatOption,
     MatTooltip,
@@ -70,6 +81,7 @@ const DEFAULT_TIME = '09:00';
 })
 export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
+  private _dateTimeFormat = inject(DateTimeFormatService);
   private _globalConfigService = inject(GlobalConfigService);
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
@@ -94,16 +106,33 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   // Template variables
   T: typeof T = T;
+  // On touch-only devices the OS-native time wheel (`<input type="time">`) is
+  // the better experience and already follows the device locale. On desktop the
+  // native control ignores the in-app `dateTimeLocale` (its 12h/24h is fixed by
+  // the browser/OS locale — see #8565), so use `<mat-timepicker>`, which formats
+  // via the Material DateAdapter that DateTimeFormatService drives from the
+  // user's setting.
+  readonly useMatTimepicker = !IS_TOUCH_ONLY;
   isInitValOnTimeFocus = true;
   isShowEnterMsg = false;
   @HostBinding('class.sp-hide-cursor') isKeyboardNavigating = false;
   @HostBinding('class.sp-initial-focus') isInitialFocus = true;
 
   readonly calendar = viewChild(MatCalendar);
+  // Only present on the desktop (mat-timepicker) path; used to flush its
+  // blur-committed value before an Enter submit.
+  readonly timeInputEl = viewChild<ElementRef<HTMLInputElement>>('timeInputEl');
 
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
   );
+
+  // `<mat-timepicker>` binds to a Date; bridge it to/from the canonical `HH:mm`
+  // string contract so the component's inputs/outputs stay unchanged. The
+  // timepicker only reads hours/minutes, so the date portion is irrelevant —
+  // we intentionally do NOT depend on selectedDate() to avoid recomputing (and
+  // re-writing the bound Date) on every calendar-day click.
+  readonly timeAsDate = computed(() => clockStrToDate(this.selectedTime()));
 
   private _lastView: MatCalendarView | null = null;
   private _viewChangeEffect = effect((onCleanup) => {
@@ -208,6 +237,18 @@ export class DateTimePickerComponent implements AfterViewInit {
         this.dateSelected.emit(targetDate);
       }
       this.timeChanged.emit(targetTime);
+
+      // mat-timepicker only writes its formatted value to the input when the
+      // input is NOT focused, so an autofill-on-focus would leave the field
+      // looking empty. Paint the value ourselves (same locale format the
+      // adapter uses) so the focused field shows the autofilled time.
+      if (this.useMatTimepicker) {
+        const el = this.timeInputEl()?.nativeElement;
+        const date = clockStrToDate(targetTime);
+        if (el && date) {
+          el.value = this._dateTimeFormat.formatTime(date.getTime());
+        }
+      }
     }
   }
 
@@ -215,20 +256,36 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.timeChanged.emit(newTime);
   }
 
+  onTimeDateChange(date: Date | null): void {
+    this.timeChanged.emit(dateToClockStr(date));
+  }
+
   onReminderChange(newReminder: TaskReminderOptionId): void {
     this.reminderChanged.emit(newReminder);
   }
 
   onTimeKeyDown(ev: KeyboardEvent): void {
-    if (ev.key === 'Enter') {
-      this.isShowEnterMsg = true;
-      if (this._timeCheckVal === this.selectedTime()) {
-        this.enterSubmit.emit();
-      }
-      this._timeCheckVal = this.selectedTime();
-    } else {
+    if (ev.key !== 'Enter') {
       this.isShowEnterMsg = false;
+      return;
     }
+
+    if (this.useMatTimepicker) {
+      // mat-timepicker commits its value on blur (updateOn: 'blur'). Flush the
+      // typed value first — blur() propagates it synchronously to the parent via
+      // timeChanged — so the submit acts on what the user just typed, not the
+      // stale previous value. A single Enter commits and submits.
+      this.timeInputEl()?.nativeElement.blur();
+      this.enterSubmit.emit();
+      return;
+    }
+
+    // Native path: confirm-on-double-Enter (value updates live as you type).
+    this.isShowEnterMsg = true;
+    if (this._timeCheckVal === this.selectedTime()) {
+      this.enterSubmit.emit();
+    }
+    this._timeCheckVal = this.selectedTime();
   }
 
   onTimeClear(ev: MouseEvent): void {
