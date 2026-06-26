@@ -646,6 +646,59 @@ export class ClipboardImageService {
   }
 
   // ===========================================================================
+  // Backup export / import
+  // ===========================================================================
+
+  async collectImagesForExport(): Promise<
+    Record<string, { base64: string; mimeType: string }>
+  > {
+    const images = await this.listImages();
+    const result: Record<string, { base64: string; mimeType: string }> = {};
+
+    for (const meta of images) {
+      const blob = await this.getImage(meta.id);
+      if (!blob) continue;
+      const arrayBuffer = await blob.arrayBuffer();
+      result[meta.id] = {
+        base64: this._arrayBufferToBase64(arrayBuffer),
+        mimeType: meta.mimeType,
+      };
+    }
+
+    return result;
+  }
+
+  async importImagesFromBackup(
+    attachments: Record<string, { base64: string; mimeType: string }>,
+  ): Promise<number> {
+    let count = 0;
+
+    for (const [id, { base64, mimeType }] of Object.entries(attachments)) {
+      try {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeType });
+        const ext = this._getExtensionFromMimeType(mimeType);
+
+        if (IS_ELECTRON) {
+          const basePath = await this._getElectronImagePath();
+          await window.ea.saveClipboardImage(basePath, `${id}${ext}`, base64, mimeType);
+        } else {
+          await this._saveImageWeb(id, blob, mimeType);
+        }
+        count++;
+      } catch (e) {
+        Log.err(`Failed to import image ${id}:`, e);
+      }
+    }
+
+    return count;
+  }
+
+  // ===========================================================================
   // Utility methods
   // ===========================================================================
 

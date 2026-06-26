@@ -22,6 +22,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { privacyExport } from './privacy-export';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton } from '@angular/material/button';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
@@ -43,13 +44,14 @@ import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
 import { DataValidationFailedError } from '../../op-log/core/errors/sync-errors';
 import { alertDialog } from '../../util/native-dialogs';
+import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 
 @Component({
   selector: 'file-imex',
   templateUrl: './file-imex.component.html',
   styleUrls: ['./file-imex.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon, MatButton, MatTooltip, TranslatePipe],
+  imports: [MatIcon, MatButton, MatSlideToggleModule, MatTooltip, TranslatePipe],
 })
 export class FileImexComponent implements OnInit {
   private _snackService = inject(SnackService);
@@ -60,8 +62,11 @@ export class FileImexComponent implements OnInit {
   private _http = inject(HttpClient);
   private _importEncryptionHandler = inject(ImportEncryptionHandlerService);
 
+  private _clipboardImageService = inject(ClipboardImageService);
+
   readonly fileInputRef = viewChild<ElementRef>('fileInput');
   T: typeof T = T;
+  includeImages = false;
 
   ngOnInit(): void {
     this._activatedRoute.queryParams.pipe(first()).subscribe((params) => {
@@ -185,6 +190,28 @@ export class FileImexComponent implements OnInit {
       return; // Exit if data is falsy
     }
 
+    // Restore embedded image attachments if the backup includes them
+    const backupWithImages = oldData as {
+      imageAttachments?: Record<string, { base64: string; mimeType: string }>;
+    };
+    if (
+      backupWithImages.imageAttachments &&
+      typeof backupWithImages.imageAttachments === 'object'
+    ) {
+      try {
+        const count = await this._clipboardImageService.importImagesFromBackup(
+          backupWithImages.imageAttachments,
+        );
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.FILE_IMEX.S_IMAGES_IMPORTED,
+          translateParams: { count },
+        });
+      } catch (e) {
+        Log.err('Failed to restore image attachments from backup:', e);
+      }
+    }
+
     // V1 data check (as in original handleFileInput)
     // TODO: consider if this check is still relevant or can be removed/updated
     const v1Data = oldData as { config?: unknown; tasks?: unknown };
@@ -264,9 +291,16 @@ export class FileImexComponent implements OnInit {
   }
 
   async downloadBackup(): Promise<void> {
-    const data = await this._backupService.loadCompleteBackup(true);
+    const backup = await this._backupService.loadCompleteBackup(true);
+    let exportObj: unknown = backup;
+
+    if (this.includeImages) {
+      const imageAttachments = await this._clipboardImageService.collectImagesForExport();
+      exportObj = { ...backup, imageAttachments };
+    }
+
     const fileName = `${BACKUP_FILENAME_PREFIX}_${getBackupTimestamp()}.json`;
-    const result = await download(fileName, JSON.stringify(data));
+    const result = await download(fileName, JSON.stringify(exportObj));
     if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
         type: 'SUCCESS',

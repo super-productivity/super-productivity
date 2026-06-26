@@ -18,6 +18,7 @@ import { ConfirmUrlImportDialogComponent } from '../dialog-confirm-url-import/di
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
+import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -56,6 +57,13 @@ describe('FileImexComponent', () => {
       Promise.resolve(null),
     );
 
+    const clipboardImageServiceSpy = jasmine.createSpyObj('ClipboardImageService', [
+      'collectImagesForExport',
+      'importImagesFromBackup',
+    ]);
+    clipboardImageServiceSpy.collectImagesForExport.and.returnValue(Promise.resolve({}));
+    clipboardImageServiceSpy.importImagesFromBackup.and.returnValue(Promise.resolve(0));
+
     mockActivatedRoute = {
       queryParams: of({}),
     };
@@ -77,6 +85,7 @@ describe('FileImexComponent', () => {
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: ImportEncryptionHandlerService, useValue: importEncryptionHandlerSpy },
+        { provide: ClipboardImageService, useValue: clipboardImageServiceSpy },
       ],
     }).compileComponents();
 

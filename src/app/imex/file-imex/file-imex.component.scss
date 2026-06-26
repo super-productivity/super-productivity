@@ -6,12 +6,21 @@
   margin-bottom: var(--s);
 }
 
-a,
-button {
-  margin-bottom: var(--s);
-  margin-right: var(--s);
+.export-section,
+.import-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
 }
 
-section {
+.import-section {
   margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--divider-color);
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s);
 }
