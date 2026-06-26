@@ -7,6 +7,7 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { SyncSessionValidationService } from '../sync/sync-session-validation.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ActionType, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
@@ -22,6 +23,7 @@ describe('SyncHydrationService', () => {
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
+  let mockSessionValidation: jasmine.SpyObj<SyncSessionValidationService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
 
   // Default local sync config for tests
@@ -63,7 +65,10 @@ describe('SyncHydrationService', () => {
       'getCurrentVectorClock',
     ]);
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
-      'validateAndRepair',
+      'validateState',
+    ]);
+    mockSessionValidation = jasmine.createSpyObj('SyncSessionValidationService', [
+      'setFailed',
     ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
@@ -76,6 +81,7 @@ describe('SyncHydrationService', () => {
         { provide: ClientIdService, useValue: mockClientIdService },
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
+        { provide: SyncSessionValidationService, useValue: mockSessionValidation },
         { provide: SnackService, useValue: mockSnackService },
       ],
     });
@@ -90,9 +96,9 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
-    mockValidateStateService.validateAndRepair.and.resolveTo({
+    mockValidateStateService.validateState.and.resolveTo({
       isValid: true,
-      wasRepaired: false,
+      typiaErrors: [],
     });
   };
 
@@ -339,38 +345,42 @@ describe('SyncHydrationService', () => {
       );
     });
 
-    it('should use repaired state when validation detects issues', async () => {
+    // #8279: snapshot hydration is a sync-receive path — it must NOT auto-repair
+    // (which can rewrite valid refs across the fleet) nor block with a modal.
+    // On invalid data it detects-only: loads the snapshot as-is and flags the
+    // session-validation latch so the wrapper refuses IN_SYNC.
+    it('loads the snapshot as-is and flags the session when validation fails (defer)', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
-      const repairedState = { task: { ids: ['t1'], repaired: true } } as any;
-      mockValidateStateService.validateAndRepair.and.resolveTo({
-        isValid: true,
-        wasRepaired: true,
-        repairedState,
+      mockValidateStateService.validateState.and.resolveTo({
+        isValid: false,
+        typiaErrors: [],
+        crossModelError: 'tagId from task not existing',
       });
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      expect(mockStore.dispatch).toHaveBeenCalledWith(
-        loadAllData({
-          appDataComplete: repairedState as any,
-        }),
-      );
-      // State cache should also use repaired state
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      expect(saveCacheCall.args[0].state).toBe(repairedState);
+      // No repair: the original downloaded data is loaded, not a repaired copy.
+      const dispatchedLoad = (mockStore.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .find((a) => a?.type === loadAllData.type);
+      expect(dispatchedLoad.appDataComplete.task.ids).toEqual(['t1']);
+      // And the latch is flagged.
+      expect(mockSessionValidation.setFailed).toHaveBeenCalled();
     });
 
-    it('should use original data when no repair needed', async () => {
+    it('should use original data when validation passes', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
-      mockValidateStateService.validateAndRepair.and.resolveTo({
+      mockValidateStateService.validateState.and.resolveTo({
         isValid: true,
-        wasRepaired: false,
+        typiaErrors: [],
       });
 
       await service.hydrateFromRemoteSync(downloadedData);
 
       // Should dispatch with the original (merged, stripped) data, not null
       expect(mockStore.dispatch).toHaveBeenCalled();
+      expect(mockSessionValidation.setFailed).not.toHaveBeenCalled();
     });
 
     it('should normalize invalid startOfNextDay config before validation and persistence', async () => {
@@ -387,7 +397,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const validatedData = mockValidateStateService.validateAndRepair.calls.mostRecent()
+      const validatedData = mockValidateStateService.validateState.calls.mostRecent()
         .args[0] as any;
       expect(validatedData.globalConfig.misc.startOfNextDay).toBe(4);
       expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('04:00');
@@ -504,21 +514,16 @@ describe('SyncHydrationService', () => {
         );
       });
 
-      it('should still validate and repair when createSyncImportOp is false', async () => {
-        const repairedState = { task: { repaired: true } } as any;
-        mockValidateStateService.validateAndRepair.and.resolveTo({
+      it('should still validate when createSyncImportOp is false', async () => {
+        mockValidateStateService.validateState.and.resolveTo({
           isValid: true,
-          wasRepaired: true,
-          repairedState,
+          typiaErrors: [],
         });
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: { ids: [] } }, undefined, false);
 
-        expect(mockStore.dispatch).toHaveBeenCalledWith(
-          loadAllData({
-            appDataComplete: repairedState,
-          }),
-        );
+        expect(mockValidateStateService.validateState).toHaveBeenCalled();
+        expect(mockStore.dispatch).toHaveBeenCalled();
       });
     });
   });

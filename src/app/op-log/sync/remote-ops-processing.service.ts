@@ -66,6 +66,13 @@ export class RemoteOpsProcessingService {
   private lockService = inject(LockService);
   private compactionService = inject(OperationLogCompactionService);
   private syncImportFilterService = inject(SyncImportFilterService);
+
+  // #8279: post-sync validation can keep failing on every receive when the
+  // merged state has a benign latent inconsistency. The data is applied and
+  // usable, so surface the (non-blocking) warning at most once per app load
+  // rather than nagging on each sync. The session-validation latch + logs still
+  // record every failure.
+  private _didShowValidationFailureSnack = false;
   private writeFlushService = inject(OperationWriteFlushService);
   private injector = inject(Injector);
 
@@ -681,7 +688,8 @@ export class RemoteOpsProcessingService {
     if (!isValid) {
       OpLog.err(errorMessage);
       this.sessionValidation.setFailed();
-      if (snackMessage) {
+      if (snackMessage && !this._didShowValidationFailureSnack) {
+        this._didShowValidationFailureSnack = true;
         this.snackService.open({
           type: 'ERROR',
           msg: snackMessage,
