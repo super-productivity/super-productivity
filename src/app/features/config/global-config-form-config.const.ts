@@ -12,6 +12,8 @@ import { IS_ELECTRON } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { SCHEDULE_FORM_CFG } from './form-cfgs/schedule-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
+import { FOCUS_MODE_LOCAL_FORM_CFG } from './form-cfgs/focus-mode-local-form.const';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
 import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
@@ -55,6 +57,7 @@ export const GLOBAL_IMEX_FORM_CONFIG: ConfigFormConfig = [
 
 export const GLOBAL_PRODUCTIVITY_FORM_CONFIG: ConfigFormConfig = [
   FOCUS_MODE_FORM_CFG,
+  ...(IS_NATIVE_PLATFORM ? [] : [FOCUS_MODE_LOCAL_FORM_CFG]),
   TAKE_A_BREAK_FORM_CFG,
   EVALUATION_SETTINGS_FORM_CFG,
 ].filter(filterGlobalConfigForm);
