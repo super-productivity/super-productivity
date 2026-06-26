@@ -33,7 +33,7 @@
       </div>
 
       <!-- Desktop: Secondary action group -->
-      @if (showDesktopButtons()) {
+      @if (showDesktopButtons() && !isAllTasksRoute()) {
         <button
           (click)="layoutService.showAddTaskBar()"
           matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{

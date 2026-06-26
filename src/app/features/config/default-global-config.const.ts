@@ -23,6 +23,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isTimeTrackingEnabled: true,
     isFocusModeEnabled: true,
     isSchedulerEnabled: true,
+    isAllTasksEnabled: true,
     isPlannerEnabled: true,
     isBoardsEnabled: true,
     isScheduleDayPanelEnabled: true,

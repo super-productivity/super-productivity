@@ -86,6 +86,7 @@ export class TaskViewCustomizerService {
     Record<string, CustomizerContextState>
   >(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, {});
   private _currentContextKey: string | null = null;
+  private _contextKeyOverride: string | null = null;
 
   constructor() {
     this._initProjects();
@@ -96,6 +97,7 @@ export class TaskViewCustomizerService {
     this._workContextService.activeWorkContextTypeAndId$
       .pipe(takeUntilDestroyed())
       .subscribe(({ activeId, activeType }) => {
+        if (this._contextKeyOverride) return;
         this._currentContextKey = `${activeType}:${activeId}`;
         const stored = this._stateByContext[this._currentContextKey];
         this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
@@ -116,6 +118,30 @@ export class TaskViewCustomizerService {
       };
       lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, this._stateByContext);
     });
+  }
+
+  /** Override the context key for pages like All Tasks that aren't tied to a work context. */
+  setContextKeyOverride(key: string | null): void {
+    this._contextKeyOverride = key;
+    if (key) {
+      this._currentContextKey = key;
+      const stored = this._stateByContext[key];
+      this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+      this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, null));
+      this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+      this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
+    } else {
+      const activeType = this._workContextService.activeWorkContextType;
+      const activeId = this._workContextService.activeWorkContextId;
+      if (activeType && activeId) {
+        this._currentContextKey = `${activeType}:${activeId}`;
+        const stored = this._stateByContext[this._currentContextKey];
+        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
+      }
+    }
   }
 
   toggleGroupExpansion(groupId: string): void {
@@ -157,7 +183,7 @@ export class TaskViewCustomizerService {
 
   private _sanitizeGroupForContext(
     stored: GroupOption | undefined,
-    activeType: WorkContextType,
+    activeType: WorkContextType | null,
   ): GroupOption {
     if (!stored) return DEFAULT_OPTIONS.group;
     if (
@@ -252,6 +278,18 @@ export class TaskViewCustomizerService {
         if (!tag) return [];
         return tasks.filter((task) => task.tagIds?.includes(tag.id));
       case FILTER_OPTION_TYPE.project:
+        // Try parsing as JSON array of project IDs (checkbox format)
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed) && parsed.length) {
+            return tasks.filter(
+              (task) => task.projectId && parsed.includes(task.projectId),
+            );
+          }
+        } catch {
+          /* not JSON — treat as title search */
+        }
+        // Fallback: match by project title
         const project = this._allProjects.find((p) =>
           p.title.toLowerCase().includes(value.toLowerCase().trim()),
         );
