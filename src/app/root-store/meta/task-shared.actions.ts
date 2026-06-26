@@ -204,6 +204,7 @@ export const TaskSharedActions = createActionGroup({
       deadlineRemindAt?: number;
       autoPlanToday?: string;
       autoPlanStartOfNextDayDiffMs?: number;
+      isSkipToast?: boolean;
     }) => ({
       ...taskProps,
       meta: {

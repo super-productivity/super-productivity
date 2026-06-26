@@ -230,6 +230,30 @@ describe('DialogScheduleTaskComponent', () => {
     });
   });
 
+  describe('date-only picker options', () => {
+    it('hides time and reminder controls when configured for date-only selection', () => {
+      component.data = {
+        ...component.data,
+        showTime: false,
+        showReminder: false,
+      };
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('input[type=time]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.reminder-form-field')).toBeNull();
+    });
+
+    it('clamps quick-access selections to maxDate', () => {
+      const maxDate = new Date();
+      maxDate.setDate(maxDate.getDate() - 1);
+      component.maxDate = maxDate;
+
+      component.onQuickAccessClick('today');
+
+      expect((component.selectedDate as Date).getTime()).toBe(maxDate.getTime());
+    });
+  });
+
   describe('submit()', () => {
     it('should call taskService.scheduleTask with correct parameters when submit is called', async () => {
       const testDate = new Date(2023, 5, 1);

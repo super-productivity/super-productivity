@@ -1,12 +1,24 @@
-import { BoardPanelCfg, BoardSortField } from './boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
+  BoardSortField,
+} from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+import { sanitizeBoardDateTimeframeCfg } from './board-date-filter.util';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
   'created',
   'title',
   'timeEstimate',
+]);
+
+const VALID_DEADLINE_STATES: ReadonlySet<BoardPanelCfgDeadlineState> = new Set([
+  BoardPanelCfgDeadlineState.All,
+  BoardPanelCfgDeadlineState.HasDeadline,
+  BoardPanelCfgDeadlineState.NoDeadline,
 ]);
 
 // Absent `projectIds` (legacy data that hasn't been sanitized yet) means
@@ -78,6 +90,27 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   }
   if (out.excludedTagsMatch == null) {
     delete (out as Partial<BoardPanelCfg>).excludedTagsMatch;
+  }
+
+  if (out.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
+    out.scheduledTimeframe = sanitizeBoardDateTimeframeCfg(out.scheduledTimeframe);
+    if (!out.scheduledTimeframe) {
+      delete (out as Partial<BoardPanelCfg>).scheduledTimeframe;
+    }
+  } else {
+    delete (out as Partial<BoardPanelCfg>).scheduledTimeframe;
+  }
+
+  if (out.deadlineState == null || !VALID_DEADLINE_STATES.has(out.deadlineState)) {
+    delete (out as Partial<BoardPanelCfg>).deadlineState;
+    delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
+  } else if (out.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+    out.deadlineTimeframe = sanitizeBoardDateTimeframeCfg(out.deadlineTimeframe);
+    if (!out.deadlineTimeframe) {
+      delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
+    }
+  } else {
+    delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
   }
 
   return out;

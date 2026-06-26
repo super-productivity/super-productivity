@@ -1,0 +1,33 @@
+:host {
+  display: block;
+  margin-bottom: var(--s2);
+}
+
+.date-btn-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  width: 100%;
+}
+
+.date-btn {
+  flex-grow: 1;
+
+  .label {
+    font-weight: 500;
+  }
+
+  .value {
+    font-weight: normal;
+    margin-left: var(--s-half);
+
+    &--empty {
+      opacity: var(--muted-alpha);
+      font-style: italic;
+    }
+  }
+}
+
+.clear-btn {
+  flex-shrink: 0;
+}

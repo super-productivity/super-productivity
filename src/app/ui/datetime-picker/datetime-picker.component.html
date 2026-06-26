@@ -41,6 +41,7 @@
     (keydown)="onKeyDownOnCalendar($event)"
     [selected]="selectedDate()"
     [minDate]="minDate()"
+    [maxDate]="maxDate()"
     (selectedChange)="dateSelected.emit($event)"
   ></mat-calendar>
 }
@@ -54,49 +55,51 @@
   </div>
 }
 
-<div class="form-ctrl-wrapper">
-  <mat-form-field class="time-form-field">
-    <mat-label>{{ timeLabel() }}</mat-label>
-    <mat-icon matPrefix>schedule</mat-icon>
-    <input
-      type="time"
-      spTimeStep
-      (focus)="onTimeFocus()"
-      [ngModel]="selectedTime()"
-      (ngModelChange)="onTimeChange($event)"
-      step="60"
-      matInput
-      (keydown)="onTimeKeyDown($event)"
-    />
-    @if (selectedTime()) {
-      <mat-icon
-        class="time-clear-btn"
-        matSuffix
-        (click)="onTimeClear($event)"
-        >close
-      </mat-icon>
-    }
-  </mat-form-field>
-
-  @if (selectedTime()) {
-    <mat-form-field
-      [@expandFade]
-      class="reminder-form-field"
-    >
-      <mat-icon matPrefix>alarm</mat-icon>
-      <mat-label>{{ reminderLabel() | translate }}</mat-label>
-      <mat-select
-        [ngModel]="selectedReminderCfgId()"
-        (ngModelChange)="onReminderChange($event)"
-        name="type"
-        required="true"
-      >
-        @for (remindOption of reminderOptions(); track remindOption.value) {
-          <mat-option [value]="remindOption.value">
-            {{ remindOption.label | translate }}
-          </mat-option>
-        }
-      </mat-select>
+@if (showTime()) {
+  <div class="form-ctrl-wrapper">
+    <mat-form-field class="time-form-field">
+      <mat-label>{{ timeLabel() }}</mat-label>
+      <mat-icon matPrefix>schedule</mat-icon>
+      <input
+        type="time"
+        spTimeStep
+        (focus)="onTimeFocus()"
+        [ngModel]="selectedTime()"
+        (ngModelChange)="onTimeChange($event)"
+        step="60"
+        matInput
+        (keydown)="onTimeKeyDown($event)"
+      />
+      @if (selectedTime()) {
+        <mat-icon
+          class="time-clear-btn"
+          matSuffix
+          (click)="onTimeClear($event)"
+          >close
+        </mat-icon>
+      }
     </mat-form-field>
-  }
-</div>
+
+    @if (showReminder() && selectedTime()) {
+      <mat-form-field
+        [@expandFade]
+        class="reminder-form-field"
+      >
+        <mat-icon matPrefix>alarm</mat-icon>
+        <mat-label>{{ reminderLabel() | translate }}</mat-label>
+        <mat-select
+          [ngModel]="selectedReminderCfgId()"
+          (ngModelChange)="onReminderChange($event)"
+          name="type"
+          required="true"
+        >
+          @for (remindOption of reminderOptions(); track remindOption.value) {
+            <mat-option [value]="remindOption.value">
+              {{ remindOption.label | translate }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+  </div>
+}

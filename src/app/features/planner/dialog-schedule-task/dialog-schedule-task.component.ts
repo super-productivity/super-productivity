@@ -73,7 +73,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     isSelectDueOnly?: boolean;
     showQuickAccess?: boolean;
     minDate?: Date | null;
+    maxDate?: Date | null;
     isSubmitOnQuickAccess?: boolean;
+    showTime?: boolean;
+    showReminder?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
   private _cd = inject(ChangeDetectorRef);
@@ -99,6 +102,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   T: typeof T = T;
   minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
+  maxDate = this.data.maxDate === undefined ? null : this.data.maxDate;
 
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
@@ -415,33 +419,51 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
     const tDate = new Date();
     tDate.setMinutes(0, 0, 0);
+    let targetDate = new Date(tDate);
 
     switch (option) {
       case 'today':
-        this.selectedDate = tDate;
+        targetDate = new Date(tDate);
         break;
       case 'tomorrow':
-        const tomorrow = tDate;
+        const tomorrow = new Date(tDate);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        this.selectedDate = tomorrow;
+        targetDate = tomorrow;
         break;
       case 'nextWeek':
-        const nextFirstDayOfWeek = tDate;
+        const nextFirstDayOfWeek = new Date(tDate);
         const dayOffset =
           (this._dateAdapter.getFirstDayOfWeek() -
             this._dateAdapter.getDayOfWeek(nextFirstDayOfWeek) +
             7) %
             7 || 7;
         nextFirstDayOfWeek.setDate(nextFirstDayOfWeek.getDate() + dayOffset);
-        this.selectedDate = nextFirstDayOfWeek;
+        targetDate = nextFirstDayOfWeek;
         break;
       case 'nextMonth':
-        const nextMonth = tDate;
+        const nextMonth = new Date(tDate);
         nextMonth.setDate(1);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
-        this.selectedDate = nextMonth;
+        targetDate = nextMonth;
         break;
     }
+
+    const targetDay = new Date(targetDate);
+    targetDay.setHours(0, 0, 0, 0);
+    const minDate = this.minDate;
+    const maxDate = this.maxDate;
+    const minDay = minDate ? new Date(minDate) : null;
+    minDay?.setHours(0, 0, 0, 0);
+    const maxDay = maxDate ? new Date(maxDate) : null;
+    maxDay?.setHours(0, 0, 0, 0);
+
+    if (minDay && minDate && targetDay < minDay) {
+      targetDate = new Date(minDate);
+    }
+    if (maxDay && maxDate && targetDay > maxDay) {
+      targetDate = new Date(maxDate);
+    }
+    this.selectedDate = targetDate;
 
     if (this.data.isSubmitOnQuickAccess !== false) {
       this.submit();
