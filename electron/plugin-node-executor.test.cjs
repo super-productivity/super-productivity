@@ -302,6 +302,10 @@ test('issues a grant to an uploaded (non-bundled) plugin and labels it unverifie
   // and defaults to Deny.
   assert.match(opts.detail, /Plugin ID: uploaded-node-plugin/);
   assert.match(opts.detail, /self-declared, unverified/);
+  // The Allow is persisted (ask-once), so the prompt must disclose that the choice is
+  // remembered rather than claiming it is only valid "for this app session".
+  assert.match(opts.detail, /remembered on this device/);
+  assert.equal(opts.detail.includes('for this app session'), false);
   assert.equal(opts.defaultId, 1);
 });
 

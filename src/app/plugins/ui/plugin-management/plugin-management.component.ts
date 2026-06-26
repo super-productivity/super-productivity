@@ -330,7 +330,9 @@ export class PluginManagementComponent {
       this.uploadError.set(null);
 
       await this._pluginCacheService.clearCache();
-      this._pluginService.clearUploadedPluginsFromMemory();
+      // Awaited so persisted nodeExecution consent is cleared for every wiped uploaded
+      // plugin before the method returns (issue #8512 Phase 2 — see the service method).
+      await this._pluginService.clearUploadedPluginsFromMemory();
 
       PluginLog.log('Plugin cache cleared successfully');
     } catch (error) {

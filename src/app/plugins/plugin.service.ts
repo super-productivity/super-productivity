@@ -1595,10 +1595,18 @@ export class PluginService implements OnDestroy {
   }
 
   /**
-   * Clear all uploaded plugins from memory. Called when IndexedDB cache is cleared
+   * Clear all uploaded plugins from memory. Called when the IndexedDB cache is cleared
    * so that in-memory state matches the empty cache.
+   *
+   * Also clears each uploaded plugin's main-owned PERSISTED nodeExecution consent
+   * (issue #8512 Phase 2). The cache wipe removes the plugin code, but the consent lives
+   * in the main process, so without this a later re-upload of the same id — potentially
+   * *different* code — would be silently granted node execution with no prompt: the
+   * post-clear upload has no `existingState`, so the re-upload clear in `loadPluginFromZip`
+   * never fires. Mirrors `removeUploadedPlugin`, keeping "replacing code under an id always
+   * re-asks" true on every removal path.
    */
-  clearUploadedPluginsFromMemory(): void {
+  async clearUploadedPluginsFromMemory(): Promise<void> {
     const states = this._pluginStates();
     const uploadedIds: string[] = [];
     for (const [pluginId, state] of states.entries()) {
@@ -1621,6 +1629,12 @@ export class PluginService implements OnDestroy {
       return updated;
     });
     this._pluginIconsSignal.set(new Map(this._pluginIcons));
+    // Drop persisted consent after teardown has released the live grants. Each clear is
+    // fail-safe (worst case: a re-prompt) and idempotent, so a single failure can't leave
+    // a different id's consent behind.
+    await Promise.all(
+      uploadedIds.map((pluginId) => this.clearNodeExecutionConsent(pluginId)),
+    );
   }
 
   /**

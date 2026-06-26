@@ -342,6 +342,36 @@ describe('PluginService', () => {
     expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith(pluginId);
   });
 
+  it('clearUploadedPluginsFromMemory clears persisted nodeExecution consent for uploaded plugins only (Phase 2)', async () => {
+    const setState = (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState.bind(service);
+    setState('uploaded-1', {
+      manifest: { ...mockManifest, id: 'uploaded-1', permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'uploaded://uploaded-1',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+    setState('builtin-1', {
+      manifest: { ...mockManifest, id: 'builtin-1', permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/builtin-1',
+      type: 'built-in',
+      isEnabled: true,
+    });
+
+    await service.clearUploadedPluginsFromMemory();
+
+    // Without this, a same-id re-upload after a cache clear (no `existingState`) would be
+    // silently re-granted node execution with no prompt — the bug this guards against.
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith('uploaded-1');
+    // Built-in plugins never persist consent, so they are not cleared here.
+    expect(pluginBridge.clearNodeExecutionConsent).not.toHaveBeenCalledWith('builtin-1');
+  });
+
   it('treats runner loaded:false activation results as failures', async () => {
     const manifest: PluginManifest = {
       ...mockManifest,
