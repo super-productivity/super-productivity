@@ -230,9 +230,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return 'chat';
   });
 
-  isTaskOnTodayList = computed(() =>
-    this._taskService.todayListSet().has(this.task().id),
-  );
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
@@ -1335,18 +1332,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   moveToBacklog(): void {
     const t = this.task();
     if (t.projectId && !t.parentId) {
+      // Moving to the backlog is a list-position change only; it must not
+      // alter the task's schedule (#8592).
       this._projectService.moveTaskToBacklog(t.id, t.projectId);
-      if (this.isTaskOnTodayList()) {
-        this.unschedule();
-      }
     }
   }
 
   moveToToday(): void {
     const t = this.task();
     if (t.projectId) {
+      // Moving to the regular list is a list-position change only; it must not
+      // schedule the task for today (#8592).
       this._projectService.moveTaskToTodayList(t.id, t.projectId);
-      this.addToMyDay();
     }
   }
 

@@ -18,6 +18,8 @@ import { DateAdapter } from '@angular/material/core';
 import { of } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { addSubTask } from '../../store/task.actions';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
+import { DateService } from '../../../../core/date/date.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
@@ -89,6 +91,8 @@ describe('TaskContextMenuInnerComponent', () => {
                 projectInTreeOrder('project-a', 'Project A'),
               ]),
             getByIdOnce$: () => of({}),
+            moveTaskToTodayList: () => {},
+            moveTaskToBacklog: () => {},
           },
         },
         {
@@ -337,6 +341,53 @@ describe('TaskContextMenuInnerComponent', () => {
       component.addSubTask();
 
       expect(addSubtaskInputService.requestOpen).toHaveBeenCalledWith('PARENT_ID');
+    });
+  });
+
+  // Moving a task between the backlog and the regular list is a list-position
+  // change only; it must not touch the task's schedule (issue #8592).
+  describe('moveToToday() / moveToBacklog() schedule preservation (#8592)', () => {
+    let projectService: ProjectService;
+
+    beforeEach(() => {
+      projectService = TestBed.inject(ProjectService);
+    });
+
+    it('moveToToday() moves to the regular list without scheduling for today', () => {
+      const moveSpy = spyOn(projectService, 'moveTaskToTodayList');
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 'task-1',
+        projectId: 'project-current',
+      } as Task;
+
+      component.moveToToday();
+
+      expect(moveSpy).toHaveBeenCalledWith('task-1', 'project-current');
+      const dispatchedTypes = dispatchSpy.calls
+        .allArgs()
+        .map((args) => (args[0] as unknown as { type: string }).type);
+      expect(dispatchedTypes).not.toContain(TaskSharedActions.planTasksForToday.type);
+    });
+
+    it('moveToBacklog() moves to the backlog without clearing a schedule set for today', () => {
+      const moveSpy = spyOn(projectService, 'moveTaskToBacklog');
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 'task-1',
+        projectId: 'project-current',
+        dueDay: TestBed.inject(DateService).todayStr(),
+      } as Task;
+
+      component.moveToBacklog();
+
+      expect(moveSpy).toHaveBeenCalledWith('task-1', 'project-current');
+      const dispatchedTypes = dispatchSpy.calls
+        .allArgs()
+        .map((args) => (args[0] as unknown as { type: string }).type);
+      expect(dispatchedTypes).not.toContain(TaskSharedActions.unscheduleTask.type);
     });
   });
 });

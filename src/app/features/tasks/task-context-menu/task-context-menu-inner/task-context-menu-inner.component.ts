@@ -674,20 +674,17 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   moveToBacklog(): void {
     if (this.task.projectId && !this.task.parentId) {
+      // Moving to the backlog is a list-position change only; it must not
+      // alter the task's schedule (#8592).
       this._projectService.moveTaskToBacklog(this.task.id, this.task.projectId);
-      if (
-        this.task.dueDay === this._dateService.todayStr() ||
-        (this.task.dueWithTime && this._dateService.isToday(this.task.dueWithTime))
-      ) {
-        this.unschedule();
-      }
     }
   }
 
   moveToToday(): void {
     if (this.task.projectId && !this.task.parentId) {
+      // Moving to the regular list is a list-position change only; it must not
+      // schedule the task for today (#8592).
       this._projectService.moveTaskToTodayList(this.task.id, this.task.projectId);
-      this.addToMyDay();
     }
   }
 
