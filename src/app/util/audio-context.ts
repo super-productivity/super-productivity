@@ -60,6 +60,28 @@ export const getAudioBuffer = async (filePath: string): Promise<AudioBuffer> => 
 };
 
 /**
+ * Decodes a raw ArrayBuffer and returns a cached AudioBuffer, keyed by `cacheKey`.
+ * Uses `slice(0)` before decoding because `decodeAudioData` detaches the source buffer.
+ *
+ * @param cacheKey - Unique key used for the buffer cache (e.g. `custom:<id>`)
+ * @param arrayBuffer - Raw audio data
+ */
+export const getAudioBufferFromRaw = async (
+  cacheKey: string,
+  arrayBuffer: ArrayBuffer,
+): Promise<AudioBuffer> => {
+  const cached = audioBufferCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const ctx = getAudioContext();
+  // slice(0) creates a copy so the caller's ArrayBuffer is not detached
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  audioBufferCache.set(cacheKey, audioBuffer);
+  return audioBuffer;
+};
+
+/**
  * Plays a decoded audio buffer at the given volume with optional source configuration.
  * Handles gain routing and node cleanup after playback.
  *
