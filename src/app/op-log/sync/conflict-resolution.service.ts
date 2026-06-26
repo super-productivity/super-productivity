@@ -5,7 +5,6 @@ import {
   convertLocalDeleteRemoteUpdatesToLww,
   deepEqual,
   extractEntityFromPayload as extractEntityFromPayloadCore,
-  extractUpdateChanges as extractUpdateChangesCore,
   getEntityConfig as getEntityConfigFromRegistry,
   getPayloadKey as getPayloadKeyFromRegistry,
   isAdapterEntity,
@@ -783,18 +782,6 @@ export class ConflictResolutionService {
     entityType: EntityType,
   ): Record<string, unknown> | undefined {
     return extractEntityFromPayloadCore(payload, this._resolvePayloadKey(entityType));
-  }
-
-  /**
-   * Extracts the changed fields from an UPDATE operation payload.
-   * Handles NgRx entity adapter format: { task: { id, changes: {...} } }
-   * and flat format: { task: { id, field: value } }
-   */
-  private _extractUpdateChanges(
-    payload: unknown,
-    entityType: EntityType,
-  ): Record<string, unknown> {
-    return extractUpdateChangesCore(payload, this._resolvePayloadKey(entityType));
   }
 
   /**

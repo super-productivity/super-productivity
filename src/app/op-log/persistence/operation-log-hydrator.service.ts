@@ -13,7 +13,11 @@ import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
 import { OpLog } from '../../core/log';
 import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot.service';
-import { Operation, OpType, RepairPayload } from '../core/operation.types';
+import {
+  isFullStateOpType,
+  normalizeFullStatePayload,
+  Operation,
+} from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -72,11 +76,9 @@ export class OperationLogHydratorService {
     try {
       // PERF: Parallel startup operations - all access different IndexedDB stores
       // and don't depend on each other's results, so they can run concurrently.
-      const [, , hasBackup] = await Promise.all([
+      const [, hasBackup] = await Promise.all([
         // Check for pending remote ops from crashed sync (touches 'ops' store)
         this.recoveryService.recoverPendingRemoteOps(),
-        // Legacy migration placeholder - kept for future DB migrations if needed
-        this._runLegacyMigrationIfNeeded(),
         // A.7.12: Check for interrupted migration (touches 'state_cache' store)
         this.opLogStore.hasStateCacheBackup(),
       ]);
@@ -213,7 +215,9 @@ export class OperationLogHydratorService {
         if (tailOps.length > 0) {
           // Optimization: If last op is SyncImport or Repair, skip replay and load directly
           const lastOp = tailOps[tailOps.length - 1].op;
-          const appData = this._extractFullStateFromOp(lastOp);
+          const appData = isFullStateOpType(lastOp.opType)
+            ? normalizeFullStatePayload(lastOp.payload, 'unwrapped')
+            : undefined;
           if (appData) {
             OpLog.normal(
               `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
@@ -251,7 +255,7 @@ export class OperationLogHydratorService {
             );
             // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
             // This reduces 500 dispatches to 1, dramatically improving startup performance.
-            // The bulkHydrationMetaReducer iterates through ops and applies each action.
+            // The bulkOperationsMetaReducer iterates through ops and applies each action.
             // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
             // startup. A null clientId leaves the bulk-apply flag unset, which
             // defaults to own-op semantics (apply faithfully) — the safe
@@ -306,7 +310,9 @@ export class OperationLogHydratorService {
 
         // Optimization: If last op is SyncImport or Repair, skip replay and load directly
         const lastOp = allOps[allOps.length - 1].op;
-        const appData = this._extractFullStateFromOp(lastOp);
+        const appData = isFullStateOpType(lastOp.opType)
+          ? normalizeFullStatePayload(lastOp.payload, 'unwrapped')
+          : undefined;
         if (appData) {
           OpLog.normal(
             `OperationLogHydratorService: Last of ${allOps.length} ops is ${lastOp.opType}, loading directly`,
@@ -337,7 +343,7 @@ export class OperationLogHydratorService {
           );
           // PERF: Use bulk dispatch to apply all operations in a single NgRx update.
           // This reduces 500 dispatches to 1, dramatically improving startup performance.
-          // The bulkHydrationMetaReducer iterates through ops and applies each action.
+          // The bulkOperationsMetaReducer iterates through ops and applies each action.
           // Lenient (no throw) so a cold-boot IndexedDB hiccup can't block
           // startup. A null clientId leaves the bulk-apply flag unset, which
           // defaults to own-op semantics (apply faithfully) — the safe direction
@@ -370,9 +376,6 @@ export class OperationLogHydratorService {
 
         OpLog.normal('OperationLogHydratorService: Full replay complete.');
       }
-
-      // Legacy cleanup placeholder - kept for future maintenance operations if needed
-      await this._runLegacyCleanupIfNeeded();
 
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
@@ -413,47 +416,6 @@ export class OperationLogHydratorService {
         throw recoveryErr;
       }
     }
-  }
-
-  /**
-   * Extracts full application state from operations that contain complete state.
-   * Returns undefined for operations that don't contain full state (normal CRUD ops).
-   *
-   * Operations that contain full state:
-   * - OpType.SyncImport: Full state from remote sync
-   * - OpType.Repair: Full repaired state from auto-repair
-   * - OpType.BackupImport: Full state from backup file restore
-   */
-  private _extractFullStateFromOp(op: Operation): unknown | undefined {
-    if (!op.payload) {
-      return undefined;
-    }
-
-    // Handle full state operations
-    if (
-      op.opType === OpType.SyncImport ||
-      op.opType === OpType.BackupImport ||
-      op.opType === OpType.Repair
-    ) {
-      const payload = op.payload as
-        | { appDataComplete?: unknown }
-        | RepairPayload
-        | unknown;
-
-      // Check if payload has appDataComplete wrapper
-      if (
-        typeof payload === 'object' &&
-        payload !== null &&
-        'appDataComplete' in payload
-      ) {
-        return (payload as { appDataComplete: unknown }).appDataComplete;
-      }
-
-      // Legacy format: payload IS the appDataComplete
-      return payload;
-    }
-
-    return undefined;
   }
 
   // ============================================================
@@ -545,14 +507,6 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * Legacy cleanup placeholder.
-   * Kept for future maintenance operations if needed.
-   */
-  private async _runLegacyCleanupIfNeeded(): Promise<void> {
-    // No-op: placeholder for future cleanup operations
-  }
-
-  /**
    * Retries failed remote operations from previous conflict resolution attempts.
    * Called after hydration to give failed ops another chance to apply now that
    * more state might be available (e.g., dependencies resolved by sync).
@@ -614,14 +568,6 @@ export class OperationLogHydratorService {
         `OperationLogHydratorService: ${stillFailedOpIds.length} ops still failing after retry`,
       );
     }
-  }
-
-  /**
-   * Legacy migration placeholder.
-   * Kept for future DB migrations if needed.
-   */
-  private async _runLegacyMigrationIfNeeded(): Promise<void> {
-    // No-op: placeholder for future migrations
   }
 
   /**

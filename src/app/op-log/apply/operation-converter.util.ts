@@ -2,6 +2,7 @@ import {
   ActionType,
   extractActionPayload,
   FULL_STATE_OP_TYPES,
+  normalizeFullStatePayload,
   Operation,
   OpType,
 } from '../core/operation.types';
@@ -23,25 +24,6 @@ import { getDbDateStr } from '../../util/get-db-date-str';
  */
 export const ACTION_TYPE_ALIASES: Record<string, string> = {
   // Example: '[Task] Update Task': '[Task] Update',
-};
-
-/**
- * Extracts the action payload for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair).
- * These operations contain the complete application state and need to be wrapped in
- * `appDataComplete` to match what the loadAllData action expects.
- *
- * Handles both:
- * - New format: payload is { appDataComplete: {...} }
- * - Legacy format: payload IS the appDataComplete directly
- */
-const extractFullStatePayload = (payload: unknown): Record<string, unknown> => {
-  // Check if payload already has appDataComplete wrapper
-  if (typeof payload === 'object' && payload !== null && 'appDataComplete' in payload) {
-    // Already wrapped - return as-is
-    return payload as Record<string, unknown>;
-  }
-  // Legacy format: payload is the appDataComplete directly, wrap it
-  return { appDataComplete: payload };
 };
 
 const addLegacyPlanForTodayDate = (
@@ -164,7 +146,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // These need their payload wrapped in appDataComplete for the loadAllData action
   const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
   let actionPayload: Record<string, unknown> = isFullStateOp
-    ? extractFullStatePayload(op.payload)
+    ? normalizeFullStatePayload(op.payload, 'wrapped')
     : (extractActionPayload(op.payload) as Record<string, unknown>);
 
   actionPayload = addLegacyPlanForTodayDate(actionType, actionPayload, op);

@@ -6,8 +6,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import {
   ConflictResult,
   EntityConflict,
-  extractFullStateFromPayload,
-  isWrappedFullStatePayload,
+  normalizeFullStatePayload,
   Operation,
   OpType,
   VectorClock,
@@ -497,7 +496,8 @@ export class RemoteOpsProcessingService {
         return op;
       }
 
-      const fullState = extractFullStateFromPayload(op.payload);
+      const fullState = normalizeFullStatePayload(op.payload, 'unwrapped');
+      const wasWrapped = op.payload === normalizeFullStatePayload(op.payload, 'wrapped');
       const localReplayPayload = applyLocalOnlySyncSettingsToAppData(
         fullState,
         localOnlySettings,
@@ -508,8 +508,11 @@ export class RemoteOpsProcessingService {
 
       return {
         ...op,
-        payload: isWrappedFullStatePayload(op.payload)
-          ? { ...op.payload, appDataComplete: localReplayPayload }
+        payload: wasWrapped
+          ? {
+              ...(op.payload as Record<string, unknown>),
+              appDataComplete: localReplayPayload,
+            }
           : localReplayPayload,
       };
     });
