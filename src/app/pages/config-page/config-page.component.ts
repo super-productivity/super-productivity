@@ -10,7 +10,11 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
-import { TaskWidgetConfig } from '../../features/config/global-config.model';
+import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
+import {
+  FocusModeLocalConfig,
+  TaskWidgetConfig,
+} from '../../features/config/global-config.model';
 import {
   GLOBAL_GENERAL_FORM_CONFIG,
   GLOBAL_IMEX_FORM_CONFIG,
@@ -99,6 +103,7 @@ export class ConfigPageComponent implements OnInit {
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
   readonly taskWidgetSettingsService = inject(TaskWidgetSettingsService);
+  readonly focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
 
   T: typeof T = T;
 
@@ -326,6 +331,12 @@ export class ConfigPageComponent implements OnInit {
       return;
     }
 
+    // focusModeLocal is per-instance (not synced) — handled by a dedicated service
+    if (formSectionKey === 'focusModeLocal') {
+      this.focusModeLocalSettingsService.update(config as Partial<FocusModeLocalConfig>);
+      return;
+    }
+
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
@@ -409,6 +420,9 @@ export class ConfigPageComponent implements OnInit {
   ): GlobalSectionConfig {
     if (sectionKey === 'taskWidget') {
       return this.taskWidgetSettingsService.settings() as GlobalSectionConfig;
+    }
+    if (sectionKey === 'focusModeLocal') {
+      return this.focusModeLocalSettingsService.settings() as GlobalSectionConfig;
     }
     return (this.globalCfg as unknown as Record<string, GlobalSectionConfig>)[sectionKey];
   }
