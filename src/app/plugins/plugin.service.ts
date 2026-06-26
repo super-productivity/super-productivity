@@ -1888,6 +1888,21 @@ export class PluginService implements OnDestroy {
   }
 
   /**
+   * Disable an installed plugin: persist `isEnabled=false`, tear down its runtime, and
+   * revoke its nodeExecution consent (session grant + persisted), so re-enabling re-prompts
+   * (issue #8512 Phase 2). Routing every disable through here keeps "disable revokes
+   * consent" a structural invariant — a future disable path cannot silently skip the revoke
+   * — which is why the revoke lives here rather than in `unloadPlugin` /
+   * `_teardownPluginRuntime` (those also run on app shutdown/navigation, where consent must
+   * survive). `clearNodeExecutionConsent` is a safe no-op for non-node plugins.
+   */
+  async disablePlugin(pluginId: string): Promise<void> {
+    await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, false);
+    this.unloadPlugin(pluginId);
+    await this.clearNodeExecutionConsent(pluginId);
+  }
+
+  /**
    * Check if a plugin requires and has consent for Node.js execution
    */
   async checkNodeExecutionPermission(manifest: PluginManifest): Promise<boolean> {

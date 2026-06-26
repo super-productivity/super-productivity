@@ -230,23 +230,11 @@ export class PluginManagementComponent {
     }
 
     try {
-      // Set plugin as disabled in persistence
-      await this._pluginMetaPersistenceService.setPluginEnabled(
-        plugin.manifest.id,
-        false,
-      );
-
-      // Unload the plugin (this will unregister hooks and remove from loaded plugins)
-      this._pluginService.unloadPlugin(plugin.manifest.id);
-
-      // Disabling a node plugin revokes its nodeExecution access — it drops the live
-      // session grant and, for uploaded plugins, the persisted consent — so re-enabling
-      // re-prompts (issue #8512 Phase 2: "consent is revocable" via the existing toggle,
-      // no separate UI). Built-in plugins have no persisted consent, so this only clears
-      // their session grant.
-      if (this.requiresNodeExecution(plugin)) {
-        await this._pluginService.clearNodeExecutionConsent(plugin.manifest.id);
-      }
+      // Persist isEnabled=false, tear down the runtime, and revoke nodeExecution consent
+      // (session grant + persisted) in one place so re-enabling re-prompts — issue #8512
+      // Phase 2: "consent is revocable" via the existing toggle, no separate UI. See
+      // PluginService.disablePlugin for why the revoke is funnelled there.
+      await this._pluginService.disablePlugin(plugin.manifest.id);
 
       // Reload plugins to get the updated state from the service
     } catch (error) {

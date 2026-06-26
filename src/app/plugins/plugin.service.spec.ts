@@ -372,6 +372,31 @@ describe('PluginService', () => {
     expect(pluginBridge.clearNodeExecutionConsent).not.toHaveBeenCalledWith('builtin-1');
   });
 
+  it('disablePlugin persists isEnabled=false and revokes nodeExecution consent (Phase 2)', async () => {
+    const pluginId = 'uploaded-node-plugin';
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(pluginId, {
+      manifest: { ...mockManifest, id: pluginId, permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'uploaded://uploaded-node-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+
+    await service.disablePlugin(pluginId);
+
+    expect(pluginMetaPersistenceService.setPluginEnabled).toHaveBeenCalledWith(
+      pluginId,
+      false,
+    );
+    // Disable must revoke consent so re-enabling re-prompts — the invariant that previously
+    // lived only in the UI handler where a future disable path could forget it.
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith(pluginId);
+  });
+
   it('treats runner loaded:false activation results as failures', async () => {
     const manifest: PluginManifest = {
       ...mockManifest,

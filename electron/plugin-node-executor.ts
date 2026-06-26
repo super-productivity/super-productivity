@@ -208,9 +208,9 @@ class PluginNodeExecutor {
         // re-prompt next session, never a grant the user just approved.
         if (!builtInManifest) {
           try {
+            // Persist exactly the name/version the user saw in the dialog.
             await setNodeExecutionConsent(safeId, {
-              name: sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)',
-              version: sanitizeDialogString(displayInfo?.version, 32) || '(unknown)',
+              ...this.sanitizedUploadedDisplay(displayInfo),
               grantedAt: Date.now(),
             });
           } catch (error) {
@@ -412,6 +412,21 @@ class PluginNodeExecutor {
   }
 
   /**
+   * The self-declared name/version exactly as shown in the uploaded-plugin consent dialog.
+   * Single source of truth for the sanitize lengths and fallbacks, so the persisted record
+   * (setNodeExecutionConsent) always matches what the user actually saw and approved.
+   */
+  private sanitizedUploadedDisplay(displayInfo?: NodeExecutionGrantDisplayInfo): {
+    name: string;
+    version: string;
+  } {
+    return {
+      name: sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)',
+      version: sanitizeDialogString(displayInfo?.version, 32) || '(unknown)',
+    };
+  }
+
+  /**
    * Consent dialog for an uploaded (community) plugin. The app cannot verify an
    * uploaded plugin's identity, so the dialog anchors on the validated id and marks
    * the renderer-supplied name/version as self-declared/unverified. Default = Deny.
@@ -420,8 +435,7 @@ class PluginNodeExecutor {
     pluginId: string,
     displayInfo?: NodeExecutionGrantDisplayInfo,
   ): Electron.MessageBoxOptions {
-    const name = sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)';
-    const version = sanitizeDialogString(displayInfo?.version, 32) || '(unknown)';
+    const { name, version } = this.sanitizedUploadedDisplay(displayInfo);
     return {
       ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow this plugin to run code on your machine?',
