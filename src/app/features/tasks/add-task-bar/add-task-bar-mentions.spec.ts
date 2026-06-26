@@ -23,6 +23,8 @@ import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_TAG_COLOR,
 } from '../../work-context/work-context.const';
+import { ADD_TASK_BAR_DATA_FACADE } from './add-task-bar-data-facade.token';
+import { CHRONO_SUGGESTIONS } from './add-task-bar.const';
 
 @Component({
   template: `<add-task-bar></add-task-bar>`,
@@ -138,6 +140,72 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
       setLocale: () => {},
     });
+    const mentionConfigSubject = new BehaviorSubject({
+      triggerChar: undefined,
+      mentions: [
+        {
+          triggerChar: '#',
+          labelKey: 'title',
+          items: validTags.map((tag) => ({
+            title: tag.title,
+            id: tag.id,
+            icon: tag.icon || 'label',
+            color: tag.color || tag.theme?.primary || DEFAULT_TAG_COLOR,
+            isEmoji:
+              !!tag.icon && /^(?:\p{Emoji}|\p{Extended_Pictographic})$/u.test(tag.icon),
+          })),
+        },
+        {
+          triggerChar: '@',
+          labelKey: 'title',
+          items: CHRONO_SUGGESTIONS.map((title) => ({
+            title,
+            icon: 'schedule',
+          })),
+        },
+        {
+          triggerChar: '!',
+          labelKey: 'title',
+          items: CHRONO_SUGGESTIONS.map((title) => ({
+            title,
+            icon: 'schedule',
+          })),
+        },
+        {
+          triggerChar: '+',
+          labelKey: 'title',
+          items: validProjects.map((project) => ({
+            title: project.title,
+            id: project.id,
+            icon: project.icon || DEFAULT_PROJECT_ICON,
+            color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
+          })),
+        },
+      ],
+    });
+    tagsSubject.subscribe((tags: any[]) => {
+      mentionConfigSubject.next({
+        ...mentionConfigSubject.value,
+        mentions: mentionConfigSubject.value.mentions.map((mention: any) => {
+          if (mention.triggerChar !== '#') {
+            return mention;
+          }
+          const validTagList = tags || [];
+          return {
+            ...mention,
+            items: (validTagList as any[]).map((tag: any) => ({
+              title: tag?.title,
+              id: tag?.id,
+              icon: tag?.icon || 'label',
+              color: tag?.color || tag?.theme?.primary || DEFAULT_TAG_COLOR,
+              isEmoji:
+                !!tag?.icon &&
+                /^(?:\p{Emoji}|\p{Extended_Pictographic})$/u.test(tag.icon),
+            })),
+          };
+        }),
+      });
+    });
 
     await TestBed.configureTestingModule({
       imports: [
@@ -161,6 +229,41 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: Store, useValue: storeSpy },
         { provide: DateTimeFormatService, useValue: dateTimeFormatServiceSpy },
+        {
+          provide: ADD_TASK_BAR_DATA_FACADE,
+          useValue: {
+            isSubmitDelegated: false,
+            projects: () => validProjects,
+            projects$: of(validProjects),
+            tags$: tagsSubject.asObservable(),
+            tagsNoMyDayAndNoListSorted$: tagsSubject.asObservable(),
+            tagsNoMyDayAndNoListInTreeOrder: signal(validTags),
+            activeWorkContext$: of(null),
+            tasksConfig$: of({ defaultProjectId: null }),
+            shortSyntax$: of({
+              isEnableTag: true,
+              isEnableDue: true,
+              isEnableProject: true,
+            }),
+            mentionConfig$: mentionConfigSubject.asObservable(),
+            projectFolderMap: signal(new Map()),
+            tagFolderMap: signal(new Map()),
+            defaultTaskRemindOption: () => 'none',
+            todayStr: () => '2026-06-20',
+            getLogicalTodayDate: () => new Date('2026-06-20T00:00:00.000Z'),
+            currentLocale: () => DEFAULT_LOCALE,
+            formatTime: (timestamp: number) =>
+              new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE),
+            submitTask: async () => 'task-id',
+            createNewTags: async () => [],
+            isMarkdownTaskList: () => false,
+            handleMarkdownPaste: async () => undefined,
+            getIssueIcon: () => undefined,
+            getFilteredIssueSuggestions$: () => of([]),
+            handleSuggestionSelected: async () => null,
+            onHudOpened: () => () => undefined,
+          } as any,
+        },
       ],
     }).compileComponents();
 

@@ -83,6 +83,7 @@ import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.c
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { QuickAddTaskSubmitService } from './features/tasks/quick-add-task-submit.service';
 
 const ONBOARDING_PRESET_EXIT_DELAY = 1000;
 const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
@@ -175,6 +176,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
   private _browserTitleService = inject(BrowserTitleService);
+  private _quickAddTaskSubmitService = inject(QuickAddTaskSubmitService);
   private _hasShownLegacyFileBgSnack = false;
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
@@ -235,6 +237,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    this._quickAddTaskSubmitService.init();
     void this._materialIconsLoaderService.ensureFontReady();
 
     // Skip onboarding for existing users with data
@@ -441,6 +444,14 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.layoutService.scrollToNewTask(taskId);
   }
 
+  onAddTaskBarClosed(): void {
+    this._hideAddTaskBar();
+  }
+
+  onAddTaskBarDone(): void {
+    this._hideAddTaskBar();
+  }
+
   readonly bgOverlayOpacity = computed((): number => {
     return getBackgroundOverlayOpacity(this._activeWorkContext());
   });
@@ -544,6 +555,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
+  }
+
+  private _hideAddTaskBar(): void {
+    this.layoutService.hideAddTaskBar();
   }
 
   /**

@@ -402,6 +402,8 @@ describe('GlobalConfigEffects', () => {
     });
 
     afterEach(() => {
+      document.body.classList.remove('isQuickAddHud');
+      document.documentElement.classList.remove('isQuickAddHud');
       delete (window as any).ea;
     });
 

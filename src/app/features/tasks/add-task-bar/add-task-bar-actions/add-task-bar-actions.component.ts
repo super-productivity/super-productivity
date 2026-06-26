@@ -14,11 +14,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { first } from 'rxjs/operators';
-import { ProjectService } from '../../../project/project.service';
-import { TagService } from '../../../tag/tag.service';
-import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
-import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
+import { MatDialog } from '@angular/material/dialog';
 import { AddTaskBarStateService } from '../add-task-bar-state.service';
 import { AddTaskBarParserService } from '../add-task-bar-parser.service';
 import { ESTIMATE_OPTIONS } from '../add-task-bar.const';
@@ -34,14 +30,19 @@ import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isSingleEmoji } from '../../../../util/extract-first-emoji';
 import { DEFAULT_PROJECT_ICON, INBOX_PROJECT } from '../../../project/project.const';
 import { Project } from '../../../project/project.model';
-import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { TaskReminderOptionId } from '../../task.model';
 import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
-import { DateService } from '../../../../core/date/date.service';
-import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
+import { ADD_TASK_BAR_DATA_FACADE } from '../add-task-bar-data-facade.token';
 
 type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
+
+interface ScheduleDialogResult {
+  date?: Date | null;
+  time?: string | null;
+  remindOption?: TaskReminderOptionId | null;
+}
 
 @Component({
   selector: 'add-task-bar-actions',
@@ -62,14 +63,10 @@ type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
 })
 export class AddTaskBarActionsComponent {
   private _destroyRef = inject(DestroyRef);
-  private _projectService = inject(ProjectService);
-  private _tagService = inject(TagService);
   private _matDialog = inject(MatDialog);
   private _parserService = inject(AddTaskBarParserService);
-  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
-  private _dateService = inject(DateService);
-  private _menuTreeService = inject(MenuTreeService);
+  private _dataFacade = inject(ADD_TASK_BAR_DATA_FACADE);
   stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -96,13 +93,13 @@ export class AddTaskBarActionsComponent {
   isAutoDetected = computed(() => this.stateService.isAutoDetected());
 
   // Signals for projects and tags
-  allProjects = this._projectService.listInTreeOrderForUI;
-  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
+  allProjects = this._dataFacade.projects;
+  projectFolderMap = this._dataFacade.projectFolderMap;
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),
   );
-  allTags = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
-  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
+  allTags = this._dataFacade.tagsNoMyDayAndNoListInTreeOrder;
+  tagFolderMap = this._dataFacade.tagFolderMap;
   selectedTags = computed(() =>
     this.allTags().filter(
       (t) =>
@@ -126,7 +123,7 @@ export class AddTaskBarActionsComponent {
   dateDisplay = computed(() => {
     const state = this.state();
     if (!state.date) return null;
-    const today = this._dateService.getLogicalTodayDate();
+    const today = this._dataFacade.getLogicalTodayDate();
     const date = dateStrToUtcDate(state.date);
     const timeStr = state.time ? this._formatTimeForDisplay(state.time) : null;
     if (this.isSameDate(date, today)) {
@@ -137,7 +134,7 @@ export class AddTaskBarActionsComponent {
     if (!state.time && this.isSameDate(date, tomorrow)) {
       return this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
     }
-    const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
+    const dateStr = date.toLocaleDateString(this._dataFacade.currentLocale(), {
       month: 'short',
       day: 'numeric',
     });
@@ -147,7 +144,7 @@ export class AddTaskBarActionsComponent {
   deadlineDateDisplay = computed(() => {
     const state = this.state();
     if (!state.deadlineDate) return null;
-    const today = this._dateService.getLogicalTodayDate();
+    const today = this._dataFacade.getLogicalTodayDate();
     const date = dateStrToUtcDate(state.deadlineDate);
     const timeStr = state.deadlineTime
       ? this._formatTimeForDisplay(state.deadlineTime)
@@ -160,7 +157,7 @@ export class AddTaskBarActionsComponent {
     if (!state.deadlineTime && this.isSameDate(date, tomorrow)) {
       return this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
     }
-    const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
+    const dateStr = date.toLocaleDateString(this._dataFacade.currentLocale(), {
       month: 'short',
       day: 'numeric',
     });
@@ -175,7 +172,7 @@ export class AddTaskBarActionsComponent {
     if (!isValidSplitTime(normalized)) {
       return timeStr;
     }
-    return this._dateTimeFormatService.formatTime(
+    return this._dataFacade.formatTime(
       getDateTimeFromClockString(normalized, new Date()),
     );
   }
@@ -190,7 +187,7 @@ export class AddTaskBarActionsComponent {
     const refDate = dateStr ? dateStrToUtcDate(dateStr) : new Date();
     return buildRepeatQuickSettingOptions(
       refDate,
-      this._dateTimeFormatService.currentLocale(),
+      this._dataFacade.currentLocale(),
       this._translateService,
     );
   });
@@ -212,44 +209,53 @@ export class AddTaskBarActionsComponent {
     return project?.id === INBOX_PROJECT.id && project.title === INBOX_PROJECT.title;
   }
 
-  openScheduleDialog(): void {
+  async openScheduleDialog(): Promise<void> {
+    if (this._dataFacade.isSubmitDelegated) {
+      this.refocus.emit();
+      return;
+    }
     const state = this.state();
     this.scheduleDialogOpenChange.emit(true);
-    let dialogRef!: MatDialogRef<DialogScheduleTaskComponent>;
     try {
-      dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
+      const { DialogScheduleTaskComponent } =
+        await import('../../../planner/dialog-schedule-task/dialog-schedule-task.component');
+      const dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
         data: {
           targetDay: state.date || undefined,
           targetTime: state.time || undefined,
           isSelectDueOnly: true,
         },
       });
+      dialogRef.afterClosed().subscribe((result: ScheduleDialogResult | undefined) => {
+        if (result && typeof result === 'object' && result.date) {
+          this.stateService.updateDate(getDbDateStr(result.date), result.time);
+          // No UI access to reminder without a time being set
+          this.stateService.updateRemindOption(result.remindOption ?? null);
+        }
+        this.refocus.emit();
+        window.setTimeout(() => {
+          if (!this._destroyRef.destroyed) {
+            this.scheduleDialogOpenChange.emit(false);
+          }
+        });
+      });
     } catch (err) {
       this.scheduleDialogOpenChange.emit(false);
       throw err;
     }
-
-    dialogRef.afterClosed().subscribe((result) => {
-      if (result && typeof result === 'object' && result.date) {
-        this.stateService.updateDate(getDbDateStr(result.date), result.time);
-        // No UI access to reminder without a time being set
-        this.stateService.updateRemindOption(result.remindOption);
-      }
-      this.refocus.emit();
-      window.setTimeout(() => {
-        if (!this._destroyRef.destroyed) {
-          this.scheduleDialogOpenChange.emit(false);
-        }
-      });
-    });
   }
 
-  openDeadlineDialog(): void {
+  async openDeadlineDialog(): Promise<void> {
+    if (this._dataFacade.isSubmitDelegated) {
+      this.refocus.emit();
+      return;
+    }
     const state = this.state();
     this.scheduleDialogOpenChange.emit(true);
-    let dialogRef!: MatDialogRef<DialogDeadlineComponent>;
     try {
-      dialogRef = this._matDialog.open(DialogDeadlineComponent, {
+      const { DialogDeadlineComponent } =
+        await import('../../dialog-deadline/dialog-deadline.component');
+      const dialogRef = this._matDialog.open(DialogDeadlineComponent, {
         data: {
           targetDeadlineDay: state.deadlineDate || undefined,
           targetDeadlineTime: state.deadlineTime || undefined,
@@ -257,27 +263,26 @@ export class AddTaskBarActionsComponent {
           isSelectDeadlineOnly: true,
         },
       });
+      dialogRef.afterClosed().subscribe((result: ScheduleDialogResult | undefined) => {
+        if (result && typeof result === 'object') {
+          if (result.date) {
+            this.stateService.updateDeadline(getDbDateStr(result.date), result.time);
+            this.stateService.updateDeadlineRemindOption(result.remindOption ?? null);
+          } else if (result.date === null) {
+            this.stateService.clearDeadline();
+          }
+        }
+        this.refocus.emit();
+        window.setTimeout(() => {
+          if (!this._destroyRef.destroyed) {
+            this.scheduleDialogOpenChange.emit(false);
+          }
+        });
+      });
     } catch (err) {
       this.scheduleDialogOpenChange.emit(false);
       throw err;
     }
-
-    dialogRef.afterClosed().subscribe((result) => {
-      if (result && typeof result === 'object') {
-        if (result.date) {
-          this.stateService.updateDeadline(getDbDateStr(result.date), result.time);
-          this.stateService.updateDeadlineRemindOption(result.remindOption);
-        } else if (result.date === null) {
-          this.stateService.clearDeadline();
-        }
-      }
-      this.refocus.emit();
-      window.setTimeout(() => {
-        if (!this._destroyRef.destroyed) {
-          this.scheduleDialogOpenChange.emit(false);
-        }
-      });
-    });
   }
 
   hasSelectedTag(tagId: string): boolean {

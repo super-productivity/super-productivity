@@ -2,6 +2,7 @@ import { ConfigFormSection, LimitedFormlyFieldConfig } from '../global-config.mo
 import { T } from '../../../t.const';
 import { IS_ELECTRON } from '../../../app.constants';
 import { KeyboardConfig } from '@sp/keyboard-config';
+import { createWaylandQuickAddShortcutHelperItems } from './wayland-quick-add-shortcut-helper';
 
 /** Builds a single keyboard-shortcut form field (the dominant, repeated shape). */
 const kbField = (
@@ -40,6 +41,8 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
           kbField('globalToggleTaskStart', T.GCF.KEYBOARD.GLOBAL_TOGGLE_TASK_START),
           kbField('globalAddNote', T.GCF.KEYBOARD.GLOBAL_ADD_NOTE),
           kbField('globalAddTask', T.GCF.KEYBOARD.GLOBAL_ADD_TASK),
+          kbField('globalTaskQuickAdd', T.GCF.KEYBOARD.GLOBAL_TASK_QUICK_ADD),
+          ...createWaylandQuickAddShortcutHelperItems(),
           kbField('globalToggleTaskWidget', T.GCF.KEYBOARD.GLOBAL_TOGGLE_TASK_WIDGET),
         ]
       : []),

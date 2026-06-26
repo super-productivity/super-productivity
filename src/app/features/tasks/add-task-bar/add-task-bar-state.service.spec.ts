@@ -693,6 +693,16 @@ describe('AddTaskBarStateService', () => {
       // Expanded state is intentionally preserved for consecutive note-tasks
       expect(service.isNoteExpanded()).toBe(true);
     });
+
+    it('should collapse the note panel when requested', () => {
+      service.isNoteExpanded.set(true);
+      service.noteTxt.set('Some note');
+
+      service.resetAfterAdd({ isCollapseNote: true });
+
+      expect(service.noteTxt()).toBe('');
+      expect(service.isNoteExpanded()).toBe(false);
+    });
   });
 
   describe('note', () => {

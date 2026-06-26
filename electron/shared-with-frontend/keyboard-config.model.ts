@@ -2,6 +2,7 @@ export type KeyboardConfig = Readonly<{
   globalShowHide?: string | null;
   globalAddNote?: string | null;
   globalAddTask?: string | null;
+  globalTaskQuickAdd?: string | null;
   globalToggleTaskWidget?: string | null;
   toggleBacklog?: string | null;
   goToFocusMode?: string | null;
@@ -64,5 +65,6 @@ export const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
   'globalToggleTaskStart',
   'globalAddNote',
   'globalAddTask',
+  'globalTaskQuickAdd',
   'globalToggleTaskWidget',
 ];
