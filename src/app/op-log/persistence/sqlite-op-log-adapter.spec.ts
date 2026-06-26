@@ -7,6 +7,7 @@ import {
 import { OpLogDbAdapter } from './op-log-db-adapter';
 import { STORE_NAMES, OPS_INDEXES } from './db-keys.const';
 import { createSqlJsDb } from './sql-js-db.test-helper';
+import { createConnectionSerializer } from './connection-serializer';
 
 /**
  * Two engines validate this adapter:
@@ -105,8 +106,9 @@ class FakeSqliteDb implements SqliteDb {
     if (/SELECT COUNT\(\*\)/i.test(s)) {
       return [{ n: rows.length }];
     }
-    if (/LIMIT 1/i.test(s)) {
-      rows = rows.slice(0, 1);
+    const limitMatch = /LIMIT (\d+)/i.exec(s);
+    if (limitMatch) {
+      rows = rows.slice(0, Number(limitMatch[1]));
     }
     // Project selected columns (value, seq AS k / __pk, key, etc.).
     return rows.map((r) => this.project(r, s));
@@ -185,6 +187,11 @@ class FakeSqliteDb implements SqliteDb {
     let pi = 0;
     const test = (r: Row): boolean =>
       conds.every((cond) => {
+        // `col IS NOT NULL` — the index-scan NULL filter (no bound param).
+        const notNull = /^(\w+) IS NOT NULL$/i.exec(cond);
+        if (notNull) {
+          return r[notNull[1]] != null;
+        }
         const mm = /(\w+) (>=|<=|>|<|=) \?/.exec(cond)!;
         const [, col, op] = mm;
         const val = params[pi++] as string | number | null;
@@ -307,6 +314,59 @@ const defineBehavioralContract = (
       expect(await adapter.count(STORE_NAMES.VECTOR_CLOCK)).toBe(1);
     });
 
+    it('putBatch() inserts many ops (explicit seq) and upserts in place like put()', async () => {
+      // Mirrors the migration: ops carry an explicit seq, written via ON CONFLICT.
+      await adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.putBatch(STORE_NAMES.OPS, [
+          { value: { ...makeOpEntry('b1', 'local'), seq: 1 } },
+          { value: { ...makeOpEntry('b2', 'local'), seq: 2 } },
+          { value: { ...makeOpEntry('b3', 'local'), seq: 3 } },
+        ]),
+      );
+      expect(await adapter.count(STORE_NAMES.OPS)).toBe(3);
+      expect(
+        (
+          await adapter.getFromIndex<{ seq: number }>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            'b2',
+          )
+        )?.seq,
+      ).toBe(2);
+
+      // Same keyless key twice in one batch → last write wins, count stays 1.
+      await adapter.transaction([STORE_NAMES.VECTOR_CLOCK], 'readwrite', (tx) =>
+        tx.putBatch(STORE_NAMES.VECTOR_CLOCK, [
+          { value: { clock: { a: 1 } }, key: 'current' },
+          { value: { clock: { a: 9 } }, key: 'current' },
+        ]),
+      );
+      expect(await adapter.count(STORE_NAMES.VECTOR_CLOCK)).toBe(1);
+      const vc = await adapter.get<{ clock: Record<string, number> }>(
+        STORE_NAMES.VECTOR_CLOCK,
+        'current',
+      );
+      expect(vc?.clock['a']).toBe(9);
+    });
+
+    it('round-trips a large state_cache value through the compression codec', async () => {
+      // Over the codec's compress threshold, so the value column is gzipped at
+      // rest — exercised end to end through the real SQLite read/write path.
+      const state = {
+        tasks: Array.from({ length: 2000 }, (_, i) => ({
+          id: `t${i}`,
+          title: `task ${i}`,
+        })),
+      };
+      await adapter.put(STORE_NAMES.STATE_CACHE, { id: 'current', state });
+      const got = await adapter.get<{ state: typeof state }>(
+        STORE_NAMES.STATE_CACHE,
+        'current',
+      );
+      expect(got?.state).toEqual(state);
+      expect(got?.state.tasks.length).toBe(2000);
+    });
+
     it('enforces the unique byId index, surfacing a ConstraintError', async () => {
       await adapter.add(STORE_NAMES.OPS, makeOpEntry('dup', 'local'));
       await expectAsync(
@@ -379,7 +439,71 @@ const defineBehavioralContract = (
       ).toBe(2);
     });
 
+    // ── index NULL-key parity with IndexedDB ───────────────────────────────────
+    //
+    // IDB omits a record from an index when its index key path is `undefined`.
+    // Local ops store `syncedAt: undefined`, so they are absent from IDB's
+    // `bySyncedAt` index; the SQLite scan must match (else `hasSyncedOps` would
+    // count an unsynced op as synced).
+
+    it('iterate over an index skips rows whose index key is NULL (bySyncedAt)', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local1', 'local')); // syncedAt undefined
+      await adapter.add(
+        STORE_NAMES.OPS,
+        makeOpEntry('synced1', 'remote', 'applied', 500),
+      );
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local2', 'local'));
+      await adapter.add(
+        STORE_NAMES.OPS,
+        makeOpEntry('synced2', 'remote', 'applied', 900),
+      );
+
+      const seen: string[] = [];
+      await adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly' },
+        (v) => {
+          seen.push(v.op.id);
+          return 'continue';
+        },
+      );
+      expect(seen.sort()).toEqual(['synced1', 'synced2']);
+    });
+
+    it('getAllFromIndex / countFromIndex exclude NULL-key (unsynced) rows', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local', 'local'));
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('synced', 'remote', 'applied', 700));
+
+      const all = await adapter.getAllFromIndex<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        OPS_INDEXES.BY_SYNCED_AT,
+      );
+      expect(all.map((r) => r.op.id)).toEqual(['synced']);
+      expect(
+        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SYNCED_AT),
+      ).toBe(1);
+    });
+
     // ── cursor iteration ───────────────────────────────────────────────────────
+
+    it('iterate honors limit, bounding the scan independently of the visitor', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('b', 'local'));
+      const s3 = await adapter.add(STORE_NAMES.OPS, makeOpEntry('c', 'local'));
+
+      const seen: number[] = [];
+      await adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        // direction prev + limit 1 = "read the max seq only" (the getLastSeq path).
+        // The visitor returns 'continue', so only the LIMIT bounds the scan.
+        { direction: 'prev', mode: 'readonly', limit: 1 },
+        (_v, key) => {
+          seen.push(key as number);
+          return 'continue';
+        },
+      );
+      expect(seen).toEqual([s3]);
+    });
 
     it('iterate(prev) walks descending and exposes the primary key', async () => {
       const s1 = await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
@@ -649,6 +773,23 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     expect(insert.params).toContain(1234); // synced_at
   });
 
+  // ── index NULL filter + LIMIT emission ─────────────────────────────────────
+
+  it('an index scan emits an IS NOT NULL filter (IDB index parity)', async () => {
+    db.log.length = 0;
+    await adapter.getAllFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SYNCED_AT);
+    const sel = db.log.find((e) => /SELECT .+ FROM ops/i.test(e.sql))!;
+    expect(sel.sql).toContain('synced_at IS NOT NULL');
+  });
+
+  it('iterate passes LIMIT through to the SELECT', async () => {
+    await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+    db.log.length = 0;
+    await adapter.iterate(STORE_NAMES.OPS, { mode: 'readonly', limit: 1 }, () => 'stop');
+    const sel = db.log.find((e) => /SELECT .+ FROM ops/i.test(e.sql))!;
+    expect(sel.sql).toContain('LIMIT 1');
+  });
+
   // ── transaction SQL emission (BEGIN/COMMIT/ROLLBACK) ───────────────────────
 
   it('readonly iterate does not open a transaction', async () => {
@@ -696,5 +837,139 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
 
   it('does not implement adoptConnection (SQLite self-manages its handle)', () => {
     expect((adapter as OpLogDbAdapter).adoptConnection).toBeUndefined();
+  });
+});
+
+/**
+ * Connection-level serialization (runExclusive). A single SQLite connection has
+ * ONE transaction context, so when two adapters share one connection (the native
+ * backend) their transactions must not interleave. These run against REAL sql.js
+ * so the nested-BEGIN failure is genuine, not modelled.
+ */
+describe('SqliteOpLogAdapter — shared-connection serialization (sql.js)', () => {
+  /** Add the real production serializer to a SqliteDb (what CapacitorSqliteDb does). */
+  const withMutex = (db: SqliteDb): SqliteDb => ({
+    run: (sql, params) => db.run(sql, params),
+    query: (sql, params) => db.query(sql, params),
+    runExclusive: createConnectionSerializer(),
+  });
+
+  const makeOp = (id: string): Record<string, unknown> => ({
+    op: { id },
+    appliedAt: 1,
+    source: 'local',
+    syncedAt: undefined,
+    applicationStatus: undefined,
+  });
+
+  it('without a serializer, two concurrent transactions collide (nested BEGIN)', async () => {
+    // Proves the hazard the serializer exists to prevent.
+    const adapter = new SqliteOpLogAdapter(await createSqlJsDb());
+    await adapter.init();
+    await expectAsync(
+      Promise.all([
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOp('a')),
+        ),
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOp('b')),
+        ),
+      ]),
+    ).toBeRejected();
+  });
+
+  it('with the serializer, concurrent transactions + standalone ops all succeed', async () => {
+    const adapter = new SqliteOpLogAdapter(withMutex(await createSqlJsDb()));
+    await adapter.init();
+
+    await Promise.all([
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.add(STORE_NAMES.OPS, makeOp('a')),
+      ),
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+        tx.add(STORE_NAMES.OPS, makeOp('b')),
+      ),
+      adapter.add(STORE_NAMES.OPS, makeOp('c')),
+    ]);
+
+    expect(await adapter.count(STORE_NAMES.OPS)).toBe(3);
+  });
+});
+
+/**
+ * Transaction-failure recovery. A `COMMIT` can fail (e.g. SQLITE_BUSY); the
+ * adapter rolls back. If `ROLLBACK` *also* fails the connection may still hold
+ * the open transaction, which would wedge every later `BEGIN` — so the adapter
+ * resets the connection (when the backend offers {@link SqliteDb.reset}).
+ */
+describe('SqliteOpLogAdapter — transaction failure recovery', () => {
+  /** A fake whose BEGIN/COMMIT/ROLLBACK reject as configured, tracking reset() calls. */
+  const makeFlakyDb = (
+    failing: { begin?: boolean; commit?: boolean; rollback?: boolean } = {},
+  ): { db: SqliteDb; calls: string[]; resetCount: () => number } => {
+    const calls: string[] = [];
+    let resetCalls = 0;
+    const db: SqliteDb = {
+      run: (sql: string) => {
+        calls.push(sql);
+        if (/^BEGIN/.test(sql) && failing.begin) {
+          return Promise.reject(new Error('begin failed'));
+        }
+        if (sql === 'COMMIT' && failing.commit) {
+          return Promise.reject(new Error('commit failed'));
+        }
+        if (sql === 'ROLLBACK' && failing.rollback) {
+          return Promise.reject(new Error('rollback failed'));
+        }
+        return Promise.resolve({ changes: 0 });
+      },
+      query: () => Promise.resolve([]),
+      reset: () => {
+        resetCalls++;
+        return Promise.resolve();
+      },
+    };
+    return { db, calls, resetCount: () => resetCalls };
+  };
+
+  it('resets the connection when COMMIT and ROLLBACK both fail', async () => {
+    const { db, calls, resetCount } = makeFlakyDb({ commit: true, rollback: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(calls).toContain('BEGIN IMMEDIATE');
+    expect(calls).toContain('COMMIT');
+    expect(calls).toContain('ROLLBACK');
+    expect(resetCount()).toBe(1);
+  });
+
+  it('does NOT reset when the fallback ROLLBACK succeeds', async () => {
+    const { db, resetCount } = makeFlakyDb({ commit: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(resetCount()).toBe(0);
+  });
+
+  it('resets the connection when BEGIN itself fails (leaked/wedged transaction)', async () => {
+    // A failing BEGIN means the connection already holds an open transaction; left
+    // alone, every later BEGIN would fail too. The adapter must drop the connection.
+    const { db, calls, resetCount } = makeFlakyDb({ begin: true });
+    const adapter = new SqliteOpLogAdapter(db);
+
+    await expectAsync(
+      adapter.transaction([STORE_NAMES.OPS], 'readwrite', async () => undefined),
+    ).toBeRejected();
+
+    expect(calls).toContain('BEGIN IMMEDIATE');
+    // No COMMIT/ROLLBACK attempted (the body never ran), but the connection is reset.
+    expect(calls).not.toContain('COMMIT');
+    expect(resetCount()).toBe(1);
   });
 });

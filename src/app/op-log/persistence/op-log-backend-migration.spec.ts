@@ -22,24 +22,34 @@ const makeOpEntry = (
 });
 
 /**
- * Wrap a dest adapter so its migration transaction silently drops the first OPS
- * write — simulating a partial copy, to prove verify-before-commit rolls back.
+ * Wrap a dest adapter so its migration transaction silently drops the first
+ * write to `dropStore` — simulating a partial copy, to prove verify-before-commit
+ * rolls back. Defaults to the `ops` store; pass another to exercise the
+ * per-store (blob) count verification.
  */
-const makeLossyDest = (dest: OpLogDbAdapter): OpLogDbAdapter => {
+const makeLossyDest = (
+  dest: OpLogDbAdapter,
+  dropStore: string = STORE_NAMES.OPS,
+): OpLogDbAdapter => {
   let dropped = false;
   const wrapTx = (tx: OpLogTx): OpLogTx => ({
     add: (s, v) => tx.add(s, v),
-    put: (s, v, k) => {
-      if (s === STORE_NAMES.OPS && !dropped) {
+    put: (s, v, k) => tx.put(s, v, k),
+    putBatch: (s, entries) => {
+      // Simulate a partial copy: drop the first entry written to dropStore once,
+      // so the dest row count comes up short and verify-before-commit rolls back.
+      if (s === dropStore && !dropped) {
         dropped = true;
-        return Promise.resolve();
+        const rest = entries.slice(1);
+        return rest.length ? tx.putBatch(s, rest) : Promise.resolve();
       }
-      return tx.put(s, v, k);
+      return tx.putBatch(s, entries);
     },
     get: (s, k) => tx.get(s, k),
     getAll: (s, r) => tx.getAll(s, r),
     delete: (s, k) => tx.delete(s, k),
     clear: (s) => tx.clear(s),
+    count: (s, r) => tx.count(s, r),
     getFromIndex: (s, i, k) => tx.getFromIndex(s, i, k),
     getKeyFromIndex: (s, i, k) => tx.getKeyFromIndex(s, i, k),
     getAllFromIndex: (s, i, r) => tx.getAllFromIndex(s, i, r),
@@ -133,6 +143,40 @@ describe('migrateOpLogBackend (IndexedDB -> SQLite, C1)', () => {
     });
   });
 
+  it('copies a large ops table correctly across executeSet/runSet chunk boundaries', async () => {
+    // > 2 * PUT_BATCH_CHUNK (500) so the batched write spans multiple runSet
+    // calls — guards the chunking loop against dropping/duplicating rows.
+    const N = 1100;
+    await src.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (let i = 0; i < N; i++) {
+        await tx.add(STORE_NAMES.OPS, makeOpEntry(`op-${i}`));
+      }
+    });
+
+    const result = await migrateOpLogBackend(src, dest);
+
+    expect(result.copiedCounts[STORE_NAMES.OPS]).toBe(N);
+    expect(await dest.count(STORE_NAMES.OPS)).toBe(N);
+    // No deletes → seqs are the contiguous run 1..N, fully preserved.
+    expect(result.lastSeq).toBe(N);
+    const destOps = await dest.getAll<{ op: { id: string }; seq: number }>(
+      STORE_NAMES.OPS,
+    );
+    expect(destOps.length).toBe(N);
+    expect(new Set(destOps.map((o) => o.seq)).size).toBe(N);
+    expect(new Set(destOps.map((o) => o.op.id)).size).toBe(N);
+    // a row from the last chunk resolves through the rebuilt unique byId index.
+    expect(
+      (
+        await dest.getFromIndex<{ seq: number }>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          `op-${N - 1}`,
+        )
+      )?.seq,
+    ).toBe(N);
+  });
+
   it('a new local op after migration continues past the copied high-water seq', async () => {
     await src.add(STORE_NAMES.OPS, makeOpEntry('a'));
     const s2 = await src.add(STORE_NAMES.OPS, makeOpEntry('b'));
@@ -169,5 +213,19 @@ describe('migrateOpLogBackend (IndexedDB -> SQLite, C1)', () => {
     );
     // The whole copy rolled back — the real dest is left empty.
     expect(await dest.count(STORE_NAMES.OPS)).toBe(0);
+  });
+
+  it('rolls back when a non-ops (blob) store fails to copy', async () => {
+    // ops copy cleanly; the dropped archive write must still be caught by the
+    // per-store count verify (the old ops-only verify would have missed it).
+    await src.add(STORE_NAMES.OPS, makeOpEntry('a'));
+    await src.put(STORE_NAMES.ARCHIVE_YOUNG, { id: SINGLETON_KEY, data: { foo: 1 } });
+
+    await expectAsync(
+      migrateOpLogBackend(src, makeLossyDest(dest, STORE_NAMES.ARCHIVE_YOUNG)),
+    ).toBeRejectedWith(jasmine.any(OpLogBackendMigrationError));
+    // Verify-before-commit rolled the whole copy back, ops included.
+    expect(await dest.count(STORE_NAMES.OPS)).toBe(0);
+    expect(await dest.count(STORE_NAMES.ARCHIVE_YOUNG)).toBe(0);
   });
 });

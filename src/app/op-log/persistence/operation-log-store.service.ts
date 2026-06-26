@@ -52,6 +52,20 @@ import {
 } from './compact/operation-codec.service';
 
 /**
+ * Initial window size for {@link OperationLogStoreService.hasSyncedOps}'s bounded
+ * index scan. MIGRATION/RECOVERY genesis ops are singletons, so a real synced op
+ * (if any) surfaces within the first handful of rows; 64 is a comfortable margin
+ * that still bounds what the SQLite backend ships across the native bridge — it
+ * materialises every matched row before the visitor's early `stop`, so an
+ * unbounded scan would transfer the entire synced-ops set on every sync cycle.
+ * The scan widens geometrically only in the (practically impossible) case that a
+ * whole window holds nothing but genesis ops, keeping the answer correct.
+ *
+ * Exported only so the spec can prove the widening path stays correct.
+ */
+export const SYNCED_OPS_SCAN_WINDOW = 64;
+
+/**
  * Vector clock entry stored in the vector_clock object store.
  * Contains the clock and last update timestamp.
  */
@@ -1175,7 +1189,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       STORE_NAMES.OPS,
       // Pure read on the hottest path (getUnsynced/getAppliedOpIds); readonly
       // so it doesn't take an exclusive write lock that serializes appends.
-      { direction: 'prev', mode: 'readonly' },
+      // `limit: 1` so the SQLite backend reads only the highest-seq row instead
+      // of shipping the whole `ops` table across the native bridge to read one key.
+      { direction: 'prev', mode: 'readonly', limit: 1 },
       (_value, key) => {
         lastSeq = key as number;
         return 'stop';
@@ -1198,25 +1214,44 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async hasSyncedOps(): Promise<boolean> {
     await this._ensureInit();
-    // Use the bySyncedAt index to find synced ops, but exclude MIGRATION/RECOVERY
-    let foundRealSyncedOp = false;
-    await this._adapter.iterate<StoredOperationLogEntry>(
-      STORE_NAMES.OPS,
-      // Pure read: readonly avoids a write lock on the hot ops store.
-      { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly' },
-      (value) => {
-        const op = value.op;
-        // Handle both compact format ('e') and full format ('entityType')
-        const entityType = isCompactOperation(op) ? op.e : (op as Operation).entityType;
-        // Skip MIGRATION and RECOVERY entity types - they're not real sync history
-        if (entityType !== 'MIGRATION' && entityType !== 'RECOVERY') {
-          foundRealSyncedOp = true;
-          return 'stop';
-        }
-        return 'continue';
-      },
-    );
-    return foundRealSyncedOp;
+    // Find the first SYNCED op that is real sync history (not a MIGRATION/RECOVERY
+    // genesis op). Scan the bySyncedAt index in bounded, geometrically-widening
+    // windows rather than unbounded: the SQLite backend materialises and ships
+    // every matched row across the native bridge before the visitor runs, so an
+    // unbounded scan would transfer the whole synced-ops set on every sync cycle
+    // just to read a boolean. Genesis ops are singletons, so the first window
+    // resolves it in practice; widening keeps the answer correct even if a window
+    // ever held only genesis ops. (IndexedDB stops at the first match regardless,
+    // so the bound is a no-op there.)
+    for (let window = SYNCED_OPS_SCAN_WINDOW; ; window *= 4) {
+      let visited = 0;
+      let foundRealSyncedOp = false;
+      await this._adapter.iterate<StoredOperationLogEntry>(
+        STORE_NAMES.OPS,
+        // Pure read: readonly avoids a write lock on the hot ops store.
+        { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly', limit: window },
+        (value) => {
+          visited++;
+          const op = value.op;
+          // Handle both compact format ('e') and full format ('entityType')
+          const entityType = isCompactOperation(op) ? op.e : (op as Operation).entityType;
+          // Skip MIGRATION and RECOVERY entity types - they're not real sync history
+          if (entityType !== 'MIGRATION' && entityType !== 'RECOVERY') {
+            foundRealSyncedOp = true;
+            return 'stop';
+          }
+          return 'continue';
+        },
+      );
+      if (foundRealSyncedOp) {
+        return true;
+      }
+      // Fewer rows than the window → the scan reached the end; every synced op
+      // (if any) is a genesis op, so there is no real sync history.
+      if (visited < window) {
+        return false;
+      }
+    }
   }
 
   async saveStateCache(snapshot: {

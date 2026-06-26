@@ -85,6 +85,16 @@ export interface DbIterateOptions {
    * {@link OpLogTx.iterate}, where the enclosing transaction's mode governs.
    */
   mode?: DbTxMode;
+  /**
+   * Stop the scan after at most this many entries. A correctness-neutral bound
+   * that lets a backend avoid materialising/transferring rows the visitor will
+   * never see: `getLastSeq` walks `prev` and stops at the first row, so
+   * `limit: 1` keeps the SQLite backend from shipping the whole `ops` table
+   * across the native bridge just to read the max key. IndexedDB already stops on
+   * the visitor's `stop`, so for it this is only a defensive cap; both backends
+   * honor it for parity.
+   */
+  limit?: number;
 }
 
 /**
@@ -99,11 +109,29 @@ export interface OpLogTx {
   add(store: string, value: unknown): Promise<number>;
   /** Insert/replace a value, optionally at an explicit key (for keyless stores). */
   put(store: string, value: unknown, key?: DbKey): Promise<void>;
+  /**
+   * Insert/replace many values in one shot, with the same upsert semantics as
+   * {@link put}. Exists so a bulk write (the one-time IDB→SQLite migration; a
+   * future batched op append) can collapse to a single native round-trip on the
+   * SQLite backend instead of one bridge crossing per row — the dominant cost of
+   * the migration. IndexedDB has no bridge, so it just loops; the result is
+   * identical, only the SQLite wall-clock differs.
+   */
+  putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void>;
   get<T>(store: string, key: DbKey): Promise<T | undefined>;
   /** Get all values, optionally restricted to a primary-key range. */
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]>;
   delete(store: string, key: DbKey): Promise<void>;
   clear(store: string): Promise<void>;
+  /**
+   * Count entries in a store, optionally restricted to a primary-key range.
+   * Cheap by construction (the engine aggregates) — unlike a cursor scan it never
+   * materialises the rows, so it is the right primitive for verification counts.
+   */
+  count(store: string, range?: DbKeyRange): Promise<number>;
   getFromIndex<T>(
     store: string,
     index: string,

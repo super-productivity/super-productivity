@@ -98,7 +98,16 @@ export class OperationLogHydratorService {
       }
 
       // 1. Load snapshot
+      // PERF breadcrumb: the snapshot blob read is the suspected on-device
+      // slowdown on the native SQLite backend (multi-MB blob over the JS↔native
+      // bridge). Privacy-safe — id + duration + presence only, never content.
+      const loadCacheStart = performance.now();
       let snapshot = await this.opLogStore.loadStateCache();
+      OpLog.normal('OperationLogHydratorService: loadStateCache read', {
+        id: 'hydrationLoadStateCacheMs',
+        ms: Math.round(performance.now() - loadCacheStart),
+        hasSnapshot: !!snapshot,
+      });
 
       if (!snapshot) {
         OpLog.normal(
@@ -208,7 +217,14 @@ export class OperationLogHydratorService {
         );
 
         // 4. Replay tail operations (A.7.13: with operation migration)
+        // PERF breadcrumb: the typical-boot delta read (ops after the snapshot).
+        const tailReadStart = performance.now();
         const tailOps = await this.opLogStore.getOpsAfterSeq(snapshot.lastAppliedOpSeq);
+        OpLog.normal('OperationLogHydratorService: tail ops read', {
+          id: 'hydrationTailReadMs',
+          ms: Math.round(performance.now() - tailReadStart),
+          tailOpsCount: tailOps.length,
+        });
 
         if (tailOps.length > 0) {
           // Optimization: If last op is SyncImport or Repair, skip replay and load directly
@@ -293,7 +309,14 @@ export class OperationLogHydratorService {
         );
         // No snapshot means we might be in a fresh install state or post-migration-check with no legacy data.
         // We must replay ALL operations from the beginning of the log.
+        // PERF breadcrumb: the worst-case full-table read (no/corrupt snapshot).
+        const fullReadStart = performance.now();
         const allOps = await this.opLogStore.getOpsAfterSeq(0);
+        OpLog.normal('OperationLogHydratorService: full replay read', {
+          id: 'hydrationFullReplayReadMs',
+          ms: Math.round(performance.now() - fullReadStart),
+          opsCount: allOps.length,
+        });
 
         if (allOps.length === 0) {
           // Fresh install - no data at all

@@ -1,7 +1,10 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { IDBPDatabase, unwrap } from 'idb';
 import { forceCloseDatabase } from 'fake-indexeddb';
-import { OperationLogStoreService } from './operation-log-store.service';
+import {
+  OperationLogStoreService,
+  SYNCED_OPS_SCAN_WINDOW,
+} from './operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   ActionType,
@@ -3307,6 +3310,59 @@ describe('OperationLogStoreService', () => {
       }
 
       // All are MIGRATION, so should return false
+      const result = await service.hasSyncedOps();
+      expect(result).toBe(false);
+    });
+
+    // The scan is bounded + geometrically-widening (so the SQLite backend never
+    // ships the whole synced-ops set over the bridge). These two cases prove the
+    // bound never changes the answer: a real op past the first window must still
+    // be found, and a window full of only genesis ops must still resolve to
+    // false. Both force at least one widen by exceeding SYNCED_OPS_SCAN_WINDOW.
+    it('finds a real synced op beyond the first scan window (no false negative)', async () => {
+      const genesisSeqs: number[] = [];
+      for (let i = 0; i < SYNCED_OPS_SCAN_WINDOW + 2; i++) {
+        genesisSeqs.push(
+          await service.append(
+            createTestOperation({
+              entityType: 'MIGRATION' as EntityType,
+              entityId: '*',
+              opType: OpType.Batch,
+            }),
+            'local',
+          ),
+        );
+      }
+      // Synced first → earliest syncedAt, so they sort ahead of the real op and
+      // fill the first window entirely.
+      await service.markSynced(genesisSeqs);
+
+      const realSeq = await service.append(
+        createTestOperation({ entityType: 'TASK' as EntityType, entityId: 'real-task' }),
+        'local',
+      );
+      await service.markSynced([realSeq]);
+
+      const result = await service.hasSyncedOps();
+      expect(result).toBe(true);
+    });
+
+    it('returns false for more than a scan window of only genesis ops', async () => {
+      const genesisSeqs: number[] = [];
+      for (let i = 0; i < SYNCED_OPS_SCAN_WINDOW + 5; i++) {
+        genesisSeqs.push(
+          await service.append(
+            createTestOperation({
+              entityType: 'MIGRATION' as EntityType,
+              entityId: '*',
+              opType: OpType.Batch,
+            }),
+            'local',
+          ),
+        );
+      }
+      await service.markSynced(genesisSeqs);
+
       const result = await service.hasSyncedOps();
       expect(result).toBe(false);
     });
