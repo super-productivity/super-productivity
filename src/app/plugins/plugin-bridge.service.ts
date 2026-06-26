@@ -1725,6 +1725,16 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
+   * Drop both the in-renderer session token and the main-owned persisted consent for a
+   * plugin (issue #8512 Phase 2). Used on disable / uninstall / re-upload so the next
+   * node call re-prompts. No-op on web (no node execution API).
+   */
+  async clearNodeExecutionConsent(pluginId: string): Promise<void> {
+    this.#nodeExecutionGrantTokens.delete(pluginId);
+    await this.#nodeExecutionApi?.clearConsent(pluginId);
+  }
+
+  /**
    * Internal method to execute Node.js script
    */
   private async _executeNodeScript(

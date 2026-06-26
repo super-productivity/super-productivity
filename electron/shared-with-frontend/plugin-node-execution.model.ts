@@ -21,4 +21,11 @@ export interface PluginNodeExecutionElectronApi {
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult>;
   revokeGrant(pluginId: string, grantToken: string): Promise<void>;
+  /**
+   * Drop the live session grant AND the main-owned persisted consent for this plugin so
+   * the next node call re-prompts. Called by the renderer on disable / uninstall /
+   * re-upload. There is deliberately no `setConsent` counterpart — only a native Allow
+   * dialog in main can write consent, so the renderer can never self-grant.
+   */
+  clearConsent(pluginId: string): Promise<void>;
 }

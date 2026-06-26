@@ -269,6 +269,8 @@ const ea: ElectronAPI = {
           pluginId,
           grantToken,
         ) as Promise<void>,
+      clearConsent: (pluginId: string) =>
+        _invoke('PLUGIN_CLEAR_NODE_EXECUTION_CONSENT', pluginId) as Promise<void>,
     };
   },
 
