@@ -876,6 +876,54 @@ describe('SuperSyncProvider', () => {
       ).rejects.toThrow(/HTTP 413.*Storage quota exceeded/);
     });
 
+    it('preserves structured errorCode on web non-2xx responses', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(
+          409,
+          'Conflict',
+          '{"error":"SYNC_IMPORT_EXISTS","errorCode":"SYNC_IMPORT_EXISTS"}',
+        ),
+      );
+
+      await expect(
+        provider.uploadSnapshot(
+          {},
+          'client-1',
+          'initial',
+          {},
+          1,
+          undefined,
+          'test-op-id',
+        ),
+      ).rejects.toMatchObject({
+        code: 'SYNC_IMPORT_EXISTS',
+        errorCode: 'SYNC_IMPORT_EXISTS',
+        status: 409,
+      });
+    });
+
+    it('preserves structured PAYLOAD_TOO_LARGE errorCode on web upload rejection', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(
+          413,
+          'Payload Too Large',
+          '{"error":"Too many operations in upload batch.","errorCode":"PAYLOAD_TOO_LARGE"}',
+        ),
+      );
+
+      await expect(
+        provider.uploadOps([createMockOperation()], 'client-1'),
+      ).rejects.toMatchObject({
+        code: 'PAYLOAD_TOO_LARGE',
+        errorCode: 'PAYLOAD_TOO_LARGE',
+        status: 413,
+      });
+    });
+
     it('truncates server reason to 80 chars', async () => {
       const { provider, cfgStore, fetchMock } = buildProvider();
       cfgStore.load.mockResolvedValue(testConfig);
@@ -1598,6 +1646,35 @@ describe('SuperSyncProvider', () => {
       await expect(
         ctx.provider.uploadOps([createMockOperation()], 'client-1'),
       ).rejects.toThrow(/^HTTP 422 — invalid op$/);
+    });
+
+    it('preserves structured errorCode on native non-2xx responses', async () => {
+      const ctx = buildProvider({ isNativePlatform: true });
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      ctx.nativeHttpExecutor.mockResolvedValue({
+        status: 413,
+        headers: {},
+        data: {
+          error: 'Storage quota exceeded',
+          errorCode: 'STORAGE_QUOTA_EXCEEDED',
+        },
+      });
+
+      await expect(
+        ctx.provider.uploadSnapshot(
+          {},
+          'client-1',
+          'recovery',
+          {},
+          1,
+          undefined,
+          'test-op-id-native',
+        ),
+      ).rejects.toMatchObject({
+        code: 'STORAGE_QUOTA_EXCEEDED',
+        errorCode: 'STORAGE_QUOTA_EXCEEDED',
+        status: 413,
+      });
     });
 
     it('throws fixed user-facing message (no native error interpolation) on transient native error', async () => {
