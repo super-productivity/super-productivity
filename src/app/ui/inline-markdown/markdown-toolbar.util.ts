@@ -3,6 +3,8 @@
  * Each function takes text + selection range and returns transformed text + new selection.
  */
 
+import { DatePrefixMatch, formatTodayPrefix, parseDatePrefix } from './date-prefix.util';
+
 export interface TextTransformResult {
   text: string;
   selectionStart: number;
@@ -585,11 +587,17 @@ const degradeEmptyPrefix = (
 /**
  * Handle Enter key on a list line.
  * Returns null if cursor is not on a list line (caller should not preventDefault).
+ *
+ * `today` is the logical "today" (from DateService.getLogicalTodayDate at the
+ * call site) used to continue a dated bullet — `- 18.06.: …` → `- <today>: …`
+ * (#8602). It is threaded in rather than read here so this stays a pure,
+ * deterministic transform.
  */
 export const handleEnterKey = (
   text: string,
   selectionStart: number,
   selectionEnd: number,
+  today: Date,
 ): TextTransformResult | null => {
   if (selectionStart !== selectionEnd) {
     return null;
@@ -607,10 +615,32 @@ export const handleEnterKey = (
     return null;
   }
   const contentAfterPrefix = currentLine.substring(prefixLen);
-  if (contentAfterPrefix.trim().length === 0) {
+
+  // #8602: dated-bullet continuation — plain bullets only (not checkbox/numbered
+  // in v1). Detect a leading "<date>: " and continue with today in the same
+  // layout. Skip the date fill when the cursor sits inside the date (before the
+  // full prefix): fall through to the normal bullet continuation rather than
+  // returning null, since a raw newline mid-date would be worse.
+  let datePrefix: DatePrefixMatch | null = null;
+  if (prefix === '- ') {
+    const parsed = parseDatePrefix(contentAfterPrefix);
+    if (parsed && cursorInLine >= prefixLen + parsed.length) {
+      datePrefix = parsed;
+    }
+  }
+
+  // Empty entry exits the list in one Enter. For a dated bullet, "empty" means
+  // nothing after the full "<date>: " prefix — the date itself is non-empty, so
+  // the bullet-only check would otherwise treat a bare dated entry as content.
+  const contentStart = prefixLen + (datePrefix?.length ?? 0);
+  if (currentLine.substring(contentStart).trim().length === 0) {
     return degradeEmptyPrefix(text, lineStart, lineEnd, whitespace, prefix);
   }
-  const continuation = buildContinuationPrefix(whitespace, prefix);
+
+  let continuation = buildContinuationPrefix(whitespace, prefix);
+  if (datePrefix) {
+    continuation += formatTodayPrefix(datePrefix.format, today);
+  }
   const before = text.substring(0, selectionStart);
   const after = text.substring(selectionStart);
   const newText = before + '\n' + continuation + after;
@@ -691,13 +721,16 @@ export const handleListKeydown = (
   key: string,
   shiftKey: boolean,
   ctrlKey: boolean,
-  metaKey: boolean = false,
+  metaKey: boolean,
+  // `today` is only used by the Enter path (dated-bullet continuation, #8602);
+  // the Tab / Shift-Tab branches ignore it.
+  today: Date,
 ): TextTransformResult | null => {
   if (ctrlKey || metaKey) {
     return null;
   }
   if (key === 'Enter' && !shiftKey) {
-    return handleEnterKey(text, selectionStart, selectionEnd);
+    return handleEnterKey(text, selectionStart, selectionEnd, today);
   }
   if (key === 'Tab' && !shiftKey) {
     return handleTabKey(text, selectionStart, selectionEnd);

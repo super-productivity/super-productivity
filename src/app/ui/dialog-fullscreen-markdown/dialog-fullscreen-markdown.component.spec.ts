@@ -131,6 +131,32 @@ describe('DialogFullscreenMarkdownComponent', () => {
       expect(component.close).toHaveBeenCalled();
     });
 
+    it('continues a dated bullet using logical-today from DateService (#8602)', () => {
+      // Spy returns a date far from the real "today" so the assertion also fails
+      // if a regression sourced the date from `new Date()` instead.
+      const dateServiceSpy = spyOn(
+        component['_dateService'],
+        'getLogicalTodayDate',
+      ).and.returnValue(new Date(2020, 0, 15)); // 15 Jan 2020
+      mockTextarea.value = '- 18.06.: Phone call';
+      mockTextarea.setSelectionRange(
+        mockTextarea.value.length,
+        mockTextarea.value.length,
+      );
+      const event = {
+        key: 'Enter',
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        preventDefault: jasmine.createSpy('preventDefault'),
+      } as unknown as KeyboardEvent;
+
+      component.keydownHandler(event);
+
+      expect(dateServiceSpy).toHaveBeenCalled();
+      expect(mockTextarea.value).toBe('- 18.06.: Phone call\n- 15.01.: ');
+    });
+
     it('should call onApplyBold and preventDefault on Ctrl+B', () => {
       spyOn(component, 'onApplyBold');
       const event = {

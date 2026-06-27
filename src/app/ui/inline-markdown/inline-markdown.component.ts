@@ -43,6 +43,7 @@ import { Location } from '@angular/common';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Log } from '../../core/log';
 import { handleListKeydown } from './markdown-toolbar.util';
+import { DateService } from '../../core/date/date.service';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -78,6 +79,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _store = inject(Store);
   private _location = inject(Location);
+  private _dateService = inject(DateService);
   private _currentPastePlaceholder: string | null = null;
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
@@ -280,6 +282,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       ev.shiftKey,
       ev.ctrlKey,
       ev.metaKey,
+      this._dateService.getLogicalTodayDate(),
     );
     if (result) {
       ev.preventDefault();

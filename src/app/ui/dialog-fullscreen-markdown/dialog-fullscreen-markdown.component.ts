@@ -27,6 +27,7 @@ import { debounceTime } from 'rxjs/operators';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { T } from '../../t.const';
 import { isSmallScreen } from '../../util/is-small-screen';
+import { DateService } from '../../core/date/date.service';
 import {
   handleListKeydown,
   TextTransformResult,
@@ -88,6 +89,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _taskAttachmentService = inject(TaskAttachmentService);
   private readonly _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private readonly _cdr = inject(ChangeDetectorRef);
+  private readonly _dateService = inject(DateService);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
   data: { content: string; taskId?: string } = inject(MAT_DIALOG_DATA) || { content: '' };
 
@@ -272,6 +274,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       ev.shiftKey,
       ev.ctrlKey,
       ev.metaKey,
+      this._dateService.getLogicalTodayDate(),
     );
     if (result) {
       ev.preventDefault();
