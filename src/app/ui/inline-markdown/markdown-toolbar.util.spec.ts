@@ -18,6 +18,10 @@ import {
   insertTable,
 } from './markdown-toolbar.util';
 
+// Fixed "today" for the dated-bullet continuation tests (#8602) and to satisfy
+// the required `today` param on the date-unrelated Enter/keydown cases.
+const TODAY = new Date(2026, 5, 26); // 26 Jun 2026 (month is 0-indexed)
+
 describe('markdown-toolbar.util', () => {
   // =========================================================================
   // Inline formatting tests
@@ -448,23 +452,23 @@ describe('markdown-toolbar.util', () => {
 
   describe('handleEnterKey', () => {
     it('should return null when no list prefix', () => {
-      const result = handleEnterKey('hello world', 5, 5);
+      const result = handleEnterKey('hello world', 5, 5, TODAY);
       expect(result).toBeNull();
     });
 
     it('should return null when selection spans multiple characters', () => {
-      const result = handleEnterKey('- [ ] hello', 0, 5);
+      const result = handleEnterKey('- [ ] hello', 0, 5, TODAY);
       expect(result).toBeNull();
     });
 
     it('should return null when cursor is before prefix end', () => {
-      const result = handleEnterKey('- [ ] hello', 2, 2);
+      const result = handleEnterKey('- [ ] hello', 2, 2, TODAY);
       expect(result).toBeNull();
     });
 
     it('should continue checkbox with unchecked prefix', () => {
       const text = '- [ ] Buy milk';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [ ] Buy milk\n- [ ] ');
       expect(result!.selectionStart).toBe(21);
@@ -473,7 +477,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should continue checked checkbox with unchecked prefix', () => {
       const text = '- [x] Done';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [x] Done\n- [ ] ');
       expect(result!.selectionStart).toBe(17);
@@ -481,7 +485,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should continue bullet list', () => {
       const text = '- Buy milk';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- Buy milk\n- ');
       expect(result!.selectionStart).toBe(13);
@@ -489,7 +493,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should continue numbered list with auto-increment', () => {
       const text = '3. Buy milk';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('3. Buy milk\n4. ');
       expect(result!.selectionStart).toBe(15);
@@ -497,7 +501,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should handle multi-digit number increment', () => {
       const text = '9. item';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('9. item\n10. ');
       expect(result!.selectionStart).toBe(12);
@@ -505,7 +509,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should degrade empty checkbox to bullet', () => {
       const text = '- [ ] ';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- ');
       expect(result!.selectionStart).toBe(2);
@@ -513,7 +517,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should degrade empty checked checkbox to bullet', () => {
       const text = '- [x] ';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- ');
       expect(result!.selectionStart).toBe(2);
@@ -521,7 +525,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should degrade empty bullet to blank line', () => {
       const text = '- ';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('');
       expect(result!.selectionStart).toBe(0);
@@ -529,7 +533,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should degrade empty numbered list to blank line', () => {
       const text = '1. ';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('');
       expect(result!.selectionStart).toBe(0);
@@ -537,7 +541,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should preserve indentation on continuation', () => {
       const text = '  - [ ] Buy milk';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('  - [ ] Buy milk\n  - [ ] ');
       expect(result!.selectionStart).toBe(25);
@@ -545,7 +549,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should preserve indentation on degradation', () => {
       const text = '  - [ ] ';
-      const result = handleEnterKey(text, text.length, text.length);
+      const result = handleEnterKey(text, text.length, text.length, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('  - ');
       expect(result!.selectionStart).toBe(4);
@@ -553,7 +557,7 @@ describe('markdown-toolbar.util', () => {
 
     it('should split line when cursor is in the middle', () => {
       const text = '- [ ] Buy milk';
-      const result = handleEnterKey(text, 10, 10); // cursor after "Buy "
+      const result = handleEnterKey(text, 10, 10, TODAY); // cursor after "Buy "
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [ ] Buy \n- [ ] milk');
       expect(result!.selectionStart).toBe(17);
@@ -562,7 +566,7 @@ describe('markdown-toolbar.util', () => {
     it('should handle Enter in middle of multi-line text', () => {
       const text = 'line 1\n- [ ] Buy milk\nline 3';
       const cursor = 7 + 14; // end of "- [ ] Buy milk"
-      const result = handleEnterKey(text, cursor, cursor);
+      const result = handleEnterKey(text, cursor, cursor, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('line 1\n- [ ] Buy milk\n- [ ] \nline 3');
     });
@@ -570,7 +574,7 @@ describe('markdown-toolbar.util', () => {
     it('should degrade empty bullet in middle of text', () => {
       const text = '- [ ] task\n- \nline 3';
       const cursor = 13; // end of "- " on line 2
-      const result = handleEnterKey(text, cursor, cursor);
+      const result = handleEnterKey(text, cursor, cursor, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [ ] task\n\nline 3');
       expect(result!.selectionStart).toBe(11);
@@ -694,6 +698,118 @@ describe('markdown-toolbar.util', () => {
     });
   });
 
+  describe('handleEnterKey - dated bullet continuation (#8602)', () => {
+    // TODAY is 26 Jun 2026, so a continued date becomes 26.06. / 26.06.2026 /
+    // 2026-06-26 regardless of the previous entry's date.
+    const enter = (
+      text: string,
+      cursor = text.length,
+    ): ReturnType<typeof handleEnterKey> => handleEnterKey(text, cursor, cursor, TODAY);
+
+    it('mirrors a dotted dd.MM. date with today', () => {
+      const result = enter('- 18.06.: Phone call');
+      expect(result!.text).toBe('- 18.06.: Phone call\n- 26.06.: ');
+      // cursor sits right after the "- 26.06.: " prefix
+      expect(result!.selectionStart).toBe(result!.text.length);
+    });
+
+    it('mirrors a dotted dd.MM.yyyy date with today', () => {
+      const result = enter('- 18.06.2026: x');
+      expect(result!.text).toBe('- 18.06.2026: x\n- 26.06.2026: ');
+      expect(result!.selectionStart).toBe('- 18.06.2026: x\n- 26.06.2026: '.length);
+    });
+
+    it('mirrors an ISO yyyy-MM-dd date with today', () => {
+      const result = enter('- 2026-06-18: x');
+      expect(result!.text).toBe('- 2026-06-18: x\n- 2026-06-26: ');
+      expect(result!.selectionStart).toBe('- 2026-06-18: x\n- 2026-06-26: '.length);
+    });
+
+    it('zero-pads when continuing an unpadded source date', () => {
+      const result = enter('- 8.6.: x');
+      expect(result!.text).toBe('- 8.6.: x\n- 26.06.: ');
+    });
+
+    it('splits mid-content and still inserts today after the prefix', () => {
+      const text = '- 18.06.: Phone call';
+      const cursor = '- 18.06.: Phone '.length;
+      const result = enter(text, cursor);
+      expect(result!.text).toBe('- 18.06.: Phone \n- 26.06.: call');
+      expect(result!.selectionStart).toBe('- 18.06.: Phone \n- 26.06.: '.length);
+    });
+
+    it('exits the list in one Enter on an empty dated entry (last line of a list)', () => {
+      const text = '- 18.06.: done\n- 18.06.: ';
+      const result = enter(text); // cursor at end, on the empty trailing dated entry
+      expect(result!.text).toBe('- 18.06.: done\n');
+      expect(result!.selectionStart).toBe('- 18.06.: done\n'.length);
+    });
+
+    it('fills today when the cursor is exactly at the content start (>= boundary)', () => {
+      // cursor right after "- 18.06.: ", before the content
+      const result = enter('- 18.06.: x', '- 18.06.: '.length);
+      expect(result!.text).toBe('- 18.06.: \n- 26.06.: x');
+    });
+
+    it('falls back to a plain bullet when the cursor is right after the "- " bullet', () => {
+      const result = enter('- 18.06.: x', '- '.length);
+      expect(result!.text).toBe('- \n- 18.06.: x');
+    });
+
+    it('preserves indentation of an indented dated bullet', () => {
+      const result = enter('  - 18.06.: x');
+      expect(result!.text).toBe('  - 18.06.: x\n  - 26.06.: ');
+    });
+
+    it('falls back to a plain bullet (no date) when the colon is missing', () => {
+      const result = enter('- 1.2. release notes');
+      expect(result!.text).toBe('- 1.2. release notes\n- ');
+    });
+
+    it('falls back to a plain bullet for an out-of-range month', () => {
+      const result = enter('- 1.13.: x');
+      expect(result!.text).toBe('- 1.13.: x\n- ');
+    });
+
+    it('falls back to a plain bullet for a time stamp', () => {
+      const result = enter('- 14:30: standup');
+      expect(result!.text).toBe('- 14:30: standup\n- ');
+    });
+
+    it('falls back to a plain bullet for a slashed date', () => {
+      const result = enter('- 18/06: x');
+      expect(result!.text).toBe('- 18/06: x\n- ');
+    });
+
+    it('falls back to a plain bullet for a textual month', () => {
+      const result = enter('- June 18: x');
+      expect(result!.text).toBe('- June 18: x\n- ');
+    });
+
+    it('falls back to a plain bullet for a 2-digit year', () => {
+      const result = enter('- 18.06.26: x');
+      expect(result!.text).toBe('- 18.06.26: x\n- ');
+    });
+
+    it('cursor inside the date falls back to plain bullet (never null, never a date fill)', () => {
+      const text = '- 18.06.: x';
+      const cursor = '- 18.'.length; // inside the date
+      const result = enter(text, cursor);
+      expect(result).not.toBeNull();
+      expect(result!.text).toBe('- 18.\n- 06.: x');
+    });
+
+    it('does not fill a date on a checkbox bullet (v1: plain bullets only)', () => {
+      const result = enter('- [ ] 18.06.: x');
+      expect(result!.text).toBe('- [ ] 18.06.: x\n- [ ] ');
+    });
+
+    it('does not fill a date on a numbered bullet (v1: plain bullets only)', () => {
+      const result = enter('1. 18.06.: x');
+      expect(result!.text).toBe('1. 18.06.: x\n2. ');
+    });
+  });
+
   describe('handleListKeydown', () => {
     it('should dispatch Enter to handleEnterKey', () => {
       const text = '- [ ] task';
@@ -704,21 +820,38 @@ describe('markdown-toolbar.util', () => {
         'Enter',
         false,
         false,
+        false,
+        TODAY,
       );
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [ ] task\n- [ ] ');
     });
 
+    it('should thread today through Enter to fill a dated bullet (#8602)', () => {
+      const text = '- 18.06.: x';
+      const result = handleListKeydown(
+        text,
+        text.length,
+        text.length,
+        'Enter',
+        false,
+        false,
+        false,
+        TODAY,
+      );
+      expect(result!.text).toBe('- 18.06.: x\n- 26.06.: ');
+    });
+
     it('should dispatch Tab to handleTabKey', () => {
       const text = '- [ ] ';
-      const result = handleListKeydown(text, 6, 6, 'Tab', false, false);
+      const result = handleListKeydown(text, 6, 6, 'Tab', false, false, false, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('  - [ ] ');
     });
 
     it('should dispatch Shift+Tab to handleShiftTabKey', () => {
       const text = '  - [ ] task';
-      const result = handleListKeydown(text, 8, 8, 'Tab', true, false);
+      const result = handleListKeydown(text, 8, 8, 'Tab', true, false, false, TODAY);
       expect(result).not.toBeNull();
       expect(result!.text).toBe('- [ ] task');
     });
@@ -732,12 +865,23 @@ describe('markdown-toolbar.util', () => {
         'Enter',
         false,
         true,
+        false,
+        TODAY,
       );
       expect(result).toBeNull();
     });
 
     it('should return null for unrelated keys', () => {
-      const result = handleListKeydown('- [ ] task', 6, 6, 'a', false, false);
+      const result = handleListKeydown(
+        '- [ ] task',
+        6,
+        6,
+        'a',
+        false,
+        false,
+        false,
+        TODAY,
+      );
       expect(result).toBeNull();
     });
 
@@ -750,6 +894,8 @@ describe('markdown-toolbar.util', () => {
         'Enter',
         true,
         false,
+        false,
+        TODAY,
       );
       expect(result).toBeNull();
     });
@@ -764,6 +910,7 @@ describe('markdown-toolbar.util', () => {
         false,
         false,
         true,
+        TODAY,
       );
       expect(result).toBeNull();
     });
