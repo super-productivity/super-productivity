@@ -186,7 +186,9 @@ describe('PluginOAuthBridgeService', () => {
       webClientId: 'web-client-id',
     });
 
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'OAuth: the configured client secret is not used on this platform; the public/platform client id is used instead.',
+    );
   });
 
   it('clears stale browser tokens for providers that are unavailable on web', async () => {

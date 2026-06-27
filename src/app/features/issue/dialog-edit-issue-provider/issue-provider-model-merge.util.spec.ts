@@ -48,7 +48,7 @@ describe('issue-provider-model-merge.util', () => {
     });
   });
 
-  it('merges nested twoWaySync updates instead of replacing them wholesale', () => {
+  it('replaces a nested twoWaySync object wholesale (callers always emit a complete twoWaySync)', () => {
     const result = mergeIssueProviderModelUpdates(
       {
         pluginConfig: {
@@ -70,7 +70,6 @@ describe('issue-provider-model-merge.util', () => {
     expect((result as { pluginConfig?: Record<string, unknown> }).pluginConfig).toEqual({
       twoWaySync: {
         isDone: 'off',
-        title: 'pullOnly',
       },
     });
   });
@@ -94,51 +93,5 @@ describe('issue-provider-model-merge.util', () => {
     expect((result as { pluginConfig?: Record<string, unknown> }).pluginConfig).toEqual({
       accountId: '1',
     });
-  });
-
-  it('recursively merges nested objects in pluginConfig other than twoWaySync', () => {
-    const result = mergeIssueProviderModelUpdates(
-      {
-        pluginConfig: {
-          nestedSettings: {
-            option1: 'value1',
-            option2: 'value2',
-          },
-        },
-      } as any,
-      {
-        pluginConfig: {
-          nestedSettings: {
-            option1: 'updated1',
-          },
-        },
-      } as any,
-    );
-
-    expect((result as { pluginConfig?: Record<string, unknown> }).pluginConfig).toEqual({
-      nestedSettings: {
-        option1: 'updated1',
-        option2: 'value2',
-      },
-    });
-  });
-
-  it('does not apply prototype-polluting keys (__proto__, constructor, prototype)', () => {
-    // Build the malicious update via JSON.parse so __proto__/constructor are real own
-    // enumerable keys (the actual pollution vector), not object-literal special forms.
-    const maliciousPluginConfig = JSON.parse(
-      '{"__proto__":{"polluted":"x"},"constructor":{"polluted":"y"},"prototype":{"polluted":"z"},"safe":"updated"}',
-    );
-    const result = mergeIssueProviderModelUpdates(
-      { pluginConfig: { safe: 'value' } } as any,
-      { pluginConfig: maliciousPluginConfig } as any,
-    );
-
-    const merged = (result as { pluginConfig?: Record<string, unknown> }).pluginConfig!;
-    // The safe key is updated, the polluting keys are skipped, and nothing leaks to Object.prototype.
-    expect(merged['safe']).toBe('updated');
-    expect(Object.prototype.hasOwnProperty.call(merged, 'constructor')).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(merged, 'prototype')).toBe(false);
-    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
 });

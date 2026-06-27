@@ -426,14 +426,14 @@ describe('PluginOAuthService', () => {
     it('should reject a same-origin violation on web', async () => {
       await expectAsync(
         service.prepareRedirectUri('https://evil.example.com/callback'),
-      ).toBeRejectedWithError(/same-origin/);
+      ).toBeRejectedWithError(/must be.*oauth-callback\.html/);
     });
 
     it('should accept a valid same-origin redirectUri on web', async () => {
       const result = await service.prepareRedirectUri(
-        `${window.location.origin}/callback`,
+        `${window.location.origin}/assets/oauth-callback.html`,
       );
-      expect(result).toBe(`${window.location.origin}/callback`);
+      expect(result).toBe(`${window.location.origin}/assets/oauth-callback.html`);
     });
   });
 

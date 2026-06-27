@@ -8,9 +8,9 @@ import { IS_ELECTRON } from '../../app.constants';
 import { IS_NATIVE_PLATFORM, IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
 import {
-  OAUTH_LOOPBACK_PORT_MIN,
-  OAUTH_LOOPBACK_PORT_MAX,
-} from '../../../../electron/shared-with-frontend/oauth-loopback.const';
+  validateOAuthRedirectUri,
+  WEB_OAUTH_CALLBACK_PATH,
+} from './validate-redirect-uri.util';
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const OAUTH_REDIRECT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -62,7 +62,7 @@ export class PluginOAuthService {
         ? 'com.superproductivity.superproductivity:/plugin-oauth-callback'
         : 'com.super-productivity.app:/plugin-oauth-callback';
     }
-    return `${window.location.origin}/assets/oauth-callback.html`;
+    return `${window.location.origin}${WEB_OAUTH_CALLBACK_PATH}`;
   }
 
   async buildAuthUrl(
@@ -109,49 +109,11 @@ export class PluginOAuthService {
   }
 
   private _validateRedirectUri(redirectUri: string): void {
-    let parsed: URL;
-    try {
-      parsed = new URL(redirectUri);
-    } catch {
-      throw new Error(`Invalid OAuth redirectUri: ${redirectUri}`);
-    }
-
-    if (IS_ELECTRON) {
-      if (
-        parsed.protocol !== 'http:' ||
-        parsed.hostname !== '127.0.0.1' ||
-        !parsed.port
-      ) {
-        throw new Error(
-          `OAuth redirectUri on desktop must be a loopback URI like http://127.0.0.1:<port>/...; got ${redirectUri}`,
-        );
-      }
-      const port = Number(parsed.port);
-      if (
-        !Number.isInteger(port) ||
-        port < OAUTH_LOOPBACK_PORT_MIN ||
-        port > OAUTH_LOOPBACK_PORT_MAX
-      ) {
-        throw new Error(
-          `OAuth redirectUri on desktop must use a port in range [${OAUTH_LOOPBACK_PORT_MIN}, ${OAUTH_LOOPBACK_PORT_MAX}]; got ${redirectUri}`,
-        );
-      }
-      return;
-    }
-    if (IS_NATIVE_PLATFORM) {
-      if (['http:', 'https:', 'javascript:', 'file:'].includes(parsed.protocol)) {
-        throw new Error(
-          `OAuth redirectUri on native must use the app custom scheme; got ${redirectUri}`,
-        );
-      }
-      return;
-    }
-    // web
-    if (parsed.origin !== window.location.origin) {
-      throw new Error(
-        `OAuth redirectUri on web must be same-origin (${window.location.origin}); got ${redirectUri}`,
-      );
-    }
+    validateOAuthRedirectUri(redirectUri, {
+      isElectron: IS_ELECTRON,
+      isNative: IS_NATIVE_PLATFORM,
+      origin: window.location.origin,
+    });
   }
 
   private _validateHttpsUrl(url: string, label: string): void {

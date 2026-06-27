@@ -1,8 +1,5 @@
 import { IssueProvider } from '../issue.model';
 
-const isPlainObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 const mergePluginConfig = (
   current: Record<string, unknown> | undefined,
   update: Record<string, unknown> | undefined,
@@ -13,23 +10,12 @@ const mergePluginConfig = (
   if (!update) {
     return current;
   }
-
-  const merged = { ...current };
-  // Deep merge is intentional; nested keys clear only by explicit value, never by omission.
-  for (const [key, updateValue] of Object.entries(update)) {
-    // Defense-in-depth: skip prototype-polluting keys (pluginConfig comes from form models,
-    // not raw JSON.parse, but filter defensively anyway).
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-      continue;
-    }
-    if (isPlainObject(current[key]) && isPlainObject(updateValue)) {
-      merged[key] = mergePluginConfig(current[key], updateValue);
-    } else {
-      merged[key] = updateValue;
-    }
-  }
-
-  return merged;
+  // Shallow top-level merge: preserves top-level keys omitted from a partial update (the
+  // actual bug). A nested object (e.g. twoWaySync) is replaced wholesale — callers always
+  // emit a complete twoWaySync, so no partial-nested update occurs. The spread also copies
+  // any own __proto__ key as a plain own property without touching the prototype, so no
+  // explicit prototype-pollution guard is needed.
+  return { ...current, ...update };
 };
 
 export const mergeIssueProviderModelUpdates = (

@@ -375,6 +375,14 @@ export interface PluginWorkContextHeaderBtnCfg {
   showFor: ('PROJECT' | 'TAG' | 'TODAY')[];
 }
 
+/**
+ * OAuth configuration for starting an OAuth flow.
+ *
+ * Bring-your-own credentials: an issue-provider plugin may let users override the
+ * clientId / clientSecret / redirectUri at runtime by writing them under
+ * `pluginConfig.oauthOverrides = { clientId?, clientSecret?, redirectUri? }`. These
+ * overrides apply only to the desktop (Electron loopback) flow and are ignored on web/native.
+ */
 export interface OAuthFlowConfig {
   authUrl: string;
   tokenUrl: string;

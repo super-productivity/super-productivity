@@ -52,19 +52,9 @@ export class PluginOAuthBridgeService {
     // so it lands in the Android branch (correct) and never reaches the web branch.
     const effectiveConfig = ((): OAuthFlowConfig => {
       if (IS_ANDROID_NATIVE && config.mobileClientId) {
-        if (config.clientSecret) {
-          PluginLog.warn(
-            'OAuth: a client secret is not used on Android; the platform client id is used instead.',
-          );
-        }
         return { ...config, clientId: config.mobileClientId, clientSecret: undefined };
       }
       if (IS_IOS_NATIVE && config.iosClientId) {
-        if (config.clientSecret) {
-          PluginLog.warn(
-            'OAuth: a client secret is not used on iOS; the platform client id is used instead.',
-          );
-        }
         return { ...config, clientId: config.iosClientId, clientSecret: undefined };
       }
       if (!IS_ELECTRON && !IS_NATIVE_PLATFORM) {
@@ -72,11 +62,6 @@ export class PluginOAuthBridgeService {
         if (!webClientId) {
           throw new Error(
             'OAuth: this plugin is not available in the web build. Connect from the desktop or mobile app instead.',
-          );
-        }
-        if (config.clientSecret) {
-          PluginLog.warn(
-            'OAuth: a client secret is not used in the web build; the public web client id is used instead.',
           );
         }
         return {
@@ -87,6 +72,12 @@ export class PluginOAuthBridgeService {
       }
       return config;
     })();
+
+    if (config.clientSecret && !effectiveConfig.clientSecret) {
+      PluginLog.warn(
+        'OAuth: the configured client secret is not used on this platform; the public/platform client id is used instead.',
+      );
+    }
 
     const redirectUri = await this._pluginOAuthService.prepareRedirectUri(
       effectiveConfig.redirectUri,

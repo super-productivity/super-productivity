@@ -725,6 +725,7 @@ export class DialogEditIssueProviderComponent {
         string,
         unknown
       >,
+      IS_ELECTRON,
     );
   }
 
