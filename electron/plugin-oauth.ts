@@ -1,6 +1,10 @@
 import { BrowserWindow, ipcMain, shell } from 'electron';
 import { createServer, Server } from 'http';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import {
+  OAUTH_LOOPBACK_PORT_MIN,
+  OAUTH_LOOPBACK_PORT_MAX,
+} from './shared-with-frontend/oauth-loopback.const';
 import { log } from 'electron-log/main';
 
 const LOOPBACK_HOST = '127.0.0.1';
@@ -34,62 +38,93 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
   // Prepare: start a loopback HTTP server and return the port.
   // Google Desktop OAuth requires http://127.0.0.1:<port> redirect URIs
   // and blocks embedded webviews, so we open the system browser instead.
-  ipcMain.handle(IPC.PLUGIN_OAUTH_PREPARE, async (): Promise<{ port: number }> => {
-    cleanupServer();
+  ipcMain.handle(
+    IPC.PLUGIN_OAUTH_PREPARE,
+    async (_event, requestedPort?: number): Promise<{ port: number }> => {
+      cleanupServer();
 
-    return new Promise<{ port: number }>((resolve, reject) => {
-      let handled = false;
+      return new Promise<{ port: number }>((resolve, reject) => {
+        let handled = false;
 
-      const server = createServer((req, res) => {
-        if (handled) {
+        let port = 0;
+        if (requestedPort !== undefined) {
+          if (
+            !Number.isInteger(requestedPort) ||
+            requestedPort < OAUTH_LOOPBACK_PORT_MIN ||
+            requestedPort > OAUTH_LOOPBACK_PORT_MAX
+          ) {
+            reject(
+              new Error(
+                `Invalid OAuth loopback port ${requestedPort}; must be an integer in [${OAUTH_LOOPBACK_PORT_MIN}, ${OAUTH_LOOPBACK_PORT_MAX}].`,
+              ),
+            );
+            return;
+          }
+          port = requestedPort;
+        }
+
+        const server = createServer((req, res) => {
+          if (handled) {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(SUCCESS_HTML);
+            return;
+          }
+          handled = true;
+
+          const url = new URL(req.url!, `http://${LOOPBACK_HOST}`);
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
+          const state = url.searchParams.get('state');
+
           // eslint-disable-next-line @typescript-eslint/naming-convention
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(SUCCESS_HTML);
-          return;
-        }
-        handled = true;
 
-        const url = new URL(req.url!, `http://${LOOPBACK_HOST}`);
-        const code = url.searchParams.get('code');
-        const error = url.searchParams.get('error');
-        const state = url.searchParams.get('state');
+          mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, { code, error, state });
 
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(SUCCESS_HTML);
+          // Re-focus the main window after auth completes
+          if (!mainWin.isDestroyed()) {
+            mainWin.show();
+            mainWin.focus();
+          }
 
-        mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, { code, error, state });
+          cleanupServer();
+        });
 
-        // Re-focus the main window after auth completes
-        if (!mainWin.isDestroyed()) {
-          mainWin.show();
-          mainWin.focus();
-        }
+        server.on('error', (err) => {
+          cleanupServer();
+          // Note: EADDRINUSE message interpolates port which is 0 only in the system-assigned
+          // (no requested port) case — where EADDRINUSE effectively cannot occur.
+          if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+            reject(
+              new Error(
+                `OAuth loopback port ${port} is already in use. Close the app using it and try again.`,
+              ),
+            );
+          } else {
+            reject(err);
+          }
+        });
 
-        cleanupServer();
+        server.listen(port, LOOPBACK_HOST, () => {
+          const addr = server.address();
+          if (addr && typeof addr !== 'string') {
+            loopbackServer = server;
+            oauthTimeoutId = setTimeout(() => {
+              log('Plugin OAuth: Timeout – closing abandoned loopback server');
+              cleanupServer();
+            }, OAUTH_TIMEOUT_MS);
+            log(`Plugin OAuth: Loopback server listening on port ${addr.port}`);
+            resolve({ port: addr.port });
+          } else {
+            server.close();
+            reject(new Error('Failed to start OAuth loopback server'));
+          }
+        });
       });
-
-      server.listen(0, LOOPBACK_HOST, () => {
-        const addr = server.address();
-        if (addr && typeof addr !== 'string') {
-          loopbackServer = server;
-          oauthTimeoutId = setTimeout(() => {
-            log('Plugin OAuth: Timeout – closing abandoned loopback server');
-            cleanupServer();
-          }, OAUTH_TIMEOUT_MS);
-          log(`Plugin OAuth: Loopback server listening on port ${addr.port}`);
-          resolve({ port: addr.port });
-        } else {
-          server.close();
-          reject(new Error('Failed to start OAuth loopback server'));
-        }
-      });
-
-      server.on('error', (err) => {
-        reject(err);
-      });
-    });
-  });
+    },
+  );
 
   // Open the auth URL in the system browser (not an embedded webview).
   // Google blocks OAuth in embedded browsers (Electron BrowserWindow).

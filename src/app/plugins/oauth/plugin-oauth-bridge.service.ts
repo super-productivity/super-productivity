@@ -41,7 +41,7 @@ export class PluginOAuthBridgeService {
     config: OAuthFlowConfig,
   ): Promise<OAuthTokenResult> {
     // Validate URLs before starting the loopback server. On Electron,
-    // getRedirectUri() starts a server — avoid leaking it if config is invalid.
+    // prepareRedirectUri() starts a server — avoid leaking it if config is invalid.
     this._pluginOAuthService.validateOAuthConfig(config);
 
     // Pick the platform-specific client. The default `clientId` is the desktop
@@ -73,7 +73,15 @@ export class PluginOAuthBridgeService {
       return config;
     })();
 
-    const redirectUri = await this._pluginOAuthService.getRedirectUri();
+    if (config.clientSecret && !effectiveConfig.clientSecret) {
+      PluginLog.warn(
+        'OAuth: the configured client secret is not used on this platform; the public/platform client id is used instead.',
+      );
+    }
+
+    const redirectUri = await this._pluginOAuthService.prepareRedirectUri(
+      effectiveConfig.redirectUri,
+    );
     const { url, codeVerifier, state } = await this._pluginOAuthService.buildAuthUrl(
       effectiveConfig,
       redirectUri,

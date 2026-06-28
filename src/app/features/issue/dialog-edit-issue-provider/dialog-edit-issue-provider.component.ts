@@ -55,12 +55,12 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { devError } from '../../../util/dev-error';
 import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
+import { applyPluginOAuthOverrides } from './plugin-oauth-config-overrides.util';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 // Trello is now a plugin — board selection is a dynamic `loadOptions` select field
 // ClickUp is now a plugin — no built-in config component needed
@@ -72,6 +72,7 @@ import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.co
 import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
+import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -266,24 +267,7 @@ export class DialogEditIssueProviderComponent {
   }
 
   updateModel(model: Partial<IssueProvider>): void {
-    // NOTE: this currently throws an error when loading issue point stuff for jira
-    try {
-      Object.keys(model).forEach((key) => {
-        if (key !== 'isEnabled') {
-          this.model![key] = model[key];
-        }
-      });
-    } catch (e) {
-      devError(e);
-      const updates: any = {};
-      Object.keys(model).forEach((key) => {
-        if (key !== 'isEnabled') {
-          updates[key] = model[key as keyof IssueProvider];
-        }
-      });
-      this.model = { ...this.model, ...updates };
-    }
-
+    this.model = mergeIssueProviderModelUpdates(this.model, model);
     this.isConnectionWorks.set(false);
   }
 
@@ -365,9 +349,10 @@ export class DialogEditIssueProviderComponent {
     if (!pluginId) {
       return;
     }
+    const effectiveOAuthConfig = this._withPluginOAuthOverrides(oauthConfig);
     this.isOAuthConnecting.set(true);
     try {
-      await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
+      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig);
     } catch (e) {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
@@ -731,6 +716,17 @@ export class DialogEditIssueProviderComponent {
       props: { label: T.F.ISSUE.TWO_WAY_SYNC.SECTION },
       fieldGroup: syncFields,
     };
+  }
+
+  private _withPluginOAuthOverrides(oauthConfig: OAuthFlowConfig): OAuthFlowConfig {
+    return applyPluginOAuthOverrides(
+      oauthConfig,
+      ((this.model as Record<string, unknown>)['pluginConfig'] || {}) as Record<
+        string,
+        unknown
+      >,
+      IS_ELECTRON,
+    );
   }
 
   private _getOAuthButtons(): {

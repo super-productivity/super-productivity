@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import type { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
+import { deleteOAuthTokens, loadOAuthTokens } from './plugin-oauth-token-store';
 import { PluginOAuthService } from './plugin-oauth.service';
+import { PluginLog } from '../../core/log';
 
 describe('PluginOAuthBridgeService', () => {
   let service: PluginOAuthBridgeService;
@@ -16,12 +18,14 @@ describe('PluginOAuthBridgeService', () => {
     scopes: ['calendar.readonly'],
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await deleteOAuthTokens('test-plugin__oauth').catch(() => undefined);
+
     oauthService = jasmine.createSpyObj<PluginOAuthService>(
       'PluginOAuthService',
       [
         'validateOAuthConfig',
-        'getRedirectUri',
+        'prepareRedirectUri',
         'buildAuthUrl',
         'waitForRedirectCode',
         'exchangeCodeForTokens',
@@ -51,12 +55,80 @@ describe('PluginOAuthBridgeService', () => {
     ).toBeRejectedWithError(/not available in the web build/);
 
     expect(oauthService.validateOAuthConfig).toHaveBeenCalledWith(baseConfig);
-    expect(oauthService.getRedirectUri).not.toHaveBeenCalled();
+    expect(oauthService.prepareRedirectUri).not.toHaveBeenCalled();
+  });
+
+  it('honors an explicit redirectUri override while preparing the matching loopback listener', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    oauthService.prepareRedirectUri.and.resolveTo('http://127.0.0.1:8976/callback');
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue(null);
+
+    await service.startOAuthFlow('test-plugin', {
+      ...baseConfig,
+      webClientId: 'web-client-id',
+      redirectUri: 'http://127.0.0.1:8976/callback',
+    });
+
+    expect(oauthService.prepareRedirectUri).toHaveBeenCalledWith(
+      'http://127.0.0.1:8976/callback',
+    );
+    expect(oauthService.buildAuthUrl).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        clientId: 'web-client-id',
+        clientSecret: undefined,
+        redirectUri: 'http://127.0.0.1:8976/callback',
+      }),
+      'http://127.0.0.1:8976/callback',
+    );
+    expect(oauthService.exchangeCodeForTokens).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        clientId: 'web-client-id',
+        clientSecret: undefined,
+        redirectUri: 'http://127.0.0.1:8976/callback',
+      }),
+    );
+  });
+
+  it('persists oauth tokens in the local token store after a successful flow', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    oauthService.prepareRedirectUri.and.resolveTo('http://127.0.0.1:8976/callback');
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue('serialized-tokens');
+
+    await service.startOAuthFlow('test-plugin', {
+      ...baseConfig,
+      webClientId: 'web-client-id',
+      redirectUri: 'http://127.0.0.1:8976/callback',
+    });
+
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBe('serialized-tokens');
+    await deleteOAuthTokens('test-plugin__oauth');
   });
 
   it('uses a public web client id without carrying the desktop client secret', async () => {
     spyOn(window, 'open').and.returnValue({} as Window);
-    oauthService.getRedirectUri.and.resolveTo(
+    oauthService.prepareRedirectUri.and.resolveTo(
       'https://app.super-productivity.com/assets/oauth-callback.html',
     );
     oauthService.buildAuthUrl.and.resolveTo({
@@ -86,6 +158,36 @@ describe('PluginOAuthBridgeService', () => {
         clientId: 'web-client-id',
         clientSecret: undefined,
       }),
+    );
+  });
+
+  it('warns that a client secret is not used in the web build', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    const warnSpy = spyOn(PluginLog, 'warn');
+    oauthService.prepareRedirectUri.and.resolveTo(
+      'https://app.super-productivity.com/assets/oauth-callback.html',
+    );
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue(null);
+
+    // baseConfig carries a clientSecret, which the web build cannot use.
+    await service.startOAuthFlow('pkce-web-provider', {
+      ...baseConfig,
+      webClientId: 'web-client-id',
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'OAuth: the configured client secret is not used on this platform; the public/platform client id is used instead.',
     );
   });
 

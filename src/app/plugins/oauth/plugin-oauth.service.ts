@@ -7,6 +7,10 @@ import { PluginOAuthTokens } from './plugin-oauth.model';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_NATIVE_PLATFORM, IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
+import {
+  validateOAuthRedirectUri,
+  WEB_OAUTH_CALLBACK_PATH,
+} from './validate-redirect-uri.util';
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const OAUTH_REDIRECT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -37,12 +41,18 @@ export class PluginOAuthService {
   /** Emits the pluginId when a token refresh fails and in-memory tokens are cleared. */
   tokenInvalidated$ = new Subject<string>();
 
-  async getRedirectUri(): Promise<string> {
+  async prepareRedirectUri(redirectUri?: string): Promise<string> {
+    if (redirectUri) {
+      this._validateRedirectUri(redirectUri);
+    }
+
     if (IS_ELECTRON) {
-      // Google Desktop OAuth requires loopback redirect URIs (http://127.0.0.1:<port>).
-      // Start a temporary loopback server in the main process and use its port.
-      const { port } = await window.ea.pluginOAuthPrepare();
-      return `http://127.0.0.1:${port}`;
+      const loopbackPort = redirectUri ? Number(new URL(redirectUri).port) : undefined;
+      const { port } = await window.ea.pluginOAuthPrepare(loopbackPort);
+      return redirectUri || `http://127.0.0.1:${port}`;
+    }
+    if (redirectUri) {
+      return redirectUri;
     }
     if (IS_NATIVE_PLATFORM) {
       // Scheme must match the platform's app identifier:
@@ -52,7 +62,7 @@ export class PluginOAuthService {
         ? 'com.superproductivity.superproductivity:/plugin-oauth-callback'
         : 'com.super-productivity.app:/plugin-oauth-callback';
     }
-    return `${window.location.origin}/assets/oauth-callback.html`;
+    return `${window.location.origin}${WEB_OAUTH_CALLBACK_PATH}`;
   }
 
   async buildAuthUrl(
@@ -96,6 +106,14 @@ export class PluginOAuthService {
   validateOAuthConfig(config: OAuthFlowConfig): void {
     this._validateHttpsUrl(config.authUrl, 'authUrl');
     this._validateHttpsUrl(config.tokenUrl, 'tokenUrl');
+  }
+
+  private _validateRedirectUri(redirectUri: string): void {
+    validateOAuthRedirectUri(redirectUri, {
+      isElectron: IS_ELECTRON,
+      isNative: IS_NATIVE_PLATFORM,
+      origin: window.location.origin,
+    });
   }
 
   private _validateHttpsUrl(url: string, label: string): void {
