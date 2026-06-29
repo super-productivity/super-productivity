@@ -34,6 +34,17 @@ test.describe('Planner: add subtask from detail panel', () => {
     const panel = page.locator(DETAIL_PANEL);
     await expect(panel).toBeVisible({ timeout: 5000 });
 
+    // Let the panel's deferred open-time auto-focus land first. It fires ~200ms
+    // after open (delay(50) + a 150ms guarded focus) and moves focus to the
+    // first detail item; if it lands *after* we open the inline draft below it
+    // steals focus from the input, blur-closing it — the input then vanishes
+    // mid-test and `toBeFocused()` fails with "element(s) not found".
+    await expect
+      .poll(async () =>
+        page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+      )
+      .toBe(true);
+
     // The sub-task section starts collapsed; expand it to reveal the button.
     await panel
       .locator('mat-expansion-panel-header')
