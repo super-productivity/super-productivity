@@ -82,6 +82,7 @@ import { TaskFocusService } from '../../task-focus.service';
 import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
+import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -123,6 +124,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -456,10 +458,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   addSubTask(): void {
-    // Create + focus directly rather than requesting the inline draft input:
-    // the draft is hosted by the <task> row, which does not exist in views like
-    // the Planner (<planner-task>), so a delegated request would be dropped (#8617).
-    this._taskService.addSubTaskTo(this.task.parentId || this.task.id);
+    this._addSubtaskInputService.requestOpen(this.task.parentId || this.task.id);
   }
 
   async duplicate(): Promise<void> {
