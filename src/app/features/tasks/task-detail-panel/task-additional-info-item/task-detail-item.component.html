@@ -30,7 +30,11 @@
   </section>
 }
 @if (type === 'panel') {
-  <mat-expansion-panel [expanded]="expanded">
+  <mat-expansion-panel
+    [expanded]="expanded"
+    (expandedChange)="expanded = $event; expandedChange.emit($event)"
+    (afterExpand)="afterExpand.emit()"
+  >
     <mat-expansion-panel-header (click)="focusEl()">
       <mat-panel-title>
         <ng-content select="[panel-header]"></ng-content>

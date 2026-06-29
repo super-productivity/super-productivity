@@ -49,6 +49,12 @@ export class TaskDetailItemComponent {
 
   readonly collapseParent = output<void>();
   readonly keyPress = output<KeyboardEvent>();
+  // Emits when the expansion state changes (header click, keyboard, or
+  // programmatic), so a parent can keep a controlling signal in sync.
+  readonly expandedChange = output<boolean>();
+  // Emits once the expand animation has finished, so a parent can focus content
+  // that is only focusable after the panel body becomes visible.
+  readonly afterExpand = output<void>();
   readonly editActionTriggered = output<void>();
 
   @HostBinding('tabindex') readonly tabindex: number = 3;

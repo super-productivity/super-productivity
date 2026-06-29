@@ -15,11 +15,9 @@
     <task-detail-item
       (collapseParent)="collapseParent()"
       (keyPress)="onItemKeyPress($event)"
-      [expanded]="
-        isSubTaskPanelExpandedInitially() &&
-        (task().subTasks?.length || 0) > 0 &&
-        !isDialogMode()
-      "
+      [expanded]="isSubTasksExpanded()"
+      (expandedChange)="isSubTasksExpanded.set($event)"
+      (afterExpand)="onSubTasksAfterExpand()"
       [type]="'panel'"
     >
       <ng-container panel-header>
@@ -45,8 +43,16 @@
             }
           </div>
         }
+        @if (isAddSubtaskInputVisible()) {
+          <add-subtask-input
+            [@expandFade]
+            [parentId]="task().id"
+            (closed)="onAddSubtaskInputClosed($event)"
+          ></add-subtask-input>
+        }
         <div class="add-btn-wrapper">
           <button
+            #addSubTaskBtn
             (click)="addSubTask()"
             mat-button
           >

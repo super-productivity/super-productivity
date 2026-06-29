@@ -18,7 +18,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../task.model';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
-import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -339,7 +338,6 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 describe('TaskDetailPanelComponent add sub-task', () => {
   let component: TaskDetailPanelComponent;
   let addSubTaskToSpy: jasmine.Spy;
-  let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
 
   const keydown = (key: string, target: HTMLElement): KeyboardEvent => {
     const ev = new KeyboardEvent('keydown', {
@@ -353,10 +351,6 @@ describe('TaskDetailPanelComponent add sub-task', () => {
 
   beforeEach(async () => {
     addSubTaskToSpy = jasmine.createSpy('addSubTaskTo').and.returnValue('new-sub-id');
-    addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
-      'AddSubtaskInputService',
-      ['requestOpen'],
-    );
 
     await TestBed.configureTestingModule({
       imports: [TaskDetailPanelComponent],
@@ -371,10 +365,10 @@ describe('TaskDetailPanelComponent add sub-task', () => {
             setSelectedId: () => undefined,
             focusTaskIfPossible: () => undefined,
             addSubTaskTo: addSubTaskToSpy,
+            showSubTasks: () => undefined,
             focusTaskById: () => undefined,
           },
         },
-        { provide: AddSubtaskInputService, useValue: addSubtaskInputServiceSpy },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: {} },
@@ -405,10 +399,39 @@ describe('TaskDetailPanelComponent add sub-task', () => {
     fixture.detectChanges();
   });
 
-  it('requests the inline subtask input for the shown task', () => {
+  it('shows the inline subtask input in the panel for a top-level task', () => {
     component.addSubTask();
-    expect(addSubtaskInputServiceSpy.requestOpen).toHaveBeenCalledWith('P');
+    // The input is hosted by the panel itself (not delegated to a <task> row),
+    // so it works regardless of which view opened the panel (#8617).
+    expect(component.isAddSubtaskInputVisible()).toBe(true);
+    expect(component.isSubTasksExpanded()).toBe(true);
     expect(addSubTaskToSpy).not.toHaveBeenCalled();
+  });
+
+  it('creates a sibling directly when adding a subtask from a subtask panel', () => {
+    const fixture = TestBed.createComponent(TaskDetailPanelComponent);
+    const subComponent = fixture.componentInstance;
+    fixture.componentRef.setInput('task', {
+      id: 'SUB',
+      parentId: 'P',
+      subTasks: [],
+      tagIds: [],
+    } as unknown as TaskWithSubTasks);
+    fixture.detectChanges();
+
+    subComponent.addSubTask();
+
+    expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
+    expect(subComponent.isAddSubtaskInputVisible()).toBe(false);
+  });
+
+  it('hides the input again when it is closed', () => {
+    component.addSubTask();
+    expect(component.isAddSubtaskInputVisible()).toBe(true);
+    component.onAddSubtaskInputClosed('blur');
+    expect(component.isAddSubtaskInputVisible()).toBe(false);
+    // The section stays expanded so the just-added subtasks remain visible.
+    expect(component.isSubTasksExpanded()).toBe(true);
   });
 
   it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {

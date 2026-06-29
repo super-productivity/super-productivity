@@ -489,6 +489,54 @@ describe('DropboxApi', () => {
     });
   });
 
+  describe('upload integrity verification', () => {
+    beforeEach(() => {
+      const existingConfig: DropboxPrivateCfg = {
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
+        encryptKey: 'test-key',
+      };
+      (credentialStore.load as ReturnType<typeof vi.fn>).mockResolvedValue(
+        existingConfig,
+      );
+    });
+
+    it('resolves when the stored byte size matches the uploaded data', async () => {
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ rev: 'new-rev', size: 4 }),
+      } as Response);
+
+      const result = await dropboxApi.upload({
+        path: '/test.json',
+        data: 'test', // 4 bytes
+        isForceOverwrite: true,
+      });
+
+      expect(result.rev).toBe('new-rev');
+    });
+
+    it('throws UploadRevToMatchMismatchAPIError when an ASCII payload is truncated', async () => {
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        // Dropbox accepted a partial body: stored fewer bytes than we sent.
+        json: () => Promise.resolve({ rev: 'new-rev', size: 2 }),
+      } as Response);
+
+      await expect(
+        dropboxApi.upload({
+          path: '/test.json',
+          data: 'test', // 4 ASCII bytes
+          isForceOverwrite: true,
+        }),
+      ).rejects.toThrow(UploadRevToMatchMismatchAPIError);
+    });
+
+    // Branch logic (size absent, multi-byte skip) is covered directly in
+    // verify-upload-size.spec.ts; these two cases only assert the wiring —
+    // that upload() reads result.size and runs the check.
+  });
+
   describe('getTokensFromAuthCode', () => {
     it('should exchange auth code for tokens', async () => {
       fetchSpy.mockResolvedValue({

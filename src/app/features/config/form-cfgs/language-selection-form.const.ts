@@ -75,6 +75,10 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.TIME_LOCALE_AUTO, value: null },
           { label: T.GCF.LANG.TIME_LOCALE_EN_US, value: DateTimeLocales.en_us },
           { label: T.GCF.LANG.TIME_LOCALE_EN_GB, value: DateTimeLocales.en_gb },
+          // ISO 8601 (YYYY-MM-DD + 24h) maps to the Swedish locale, which is
+          // already in the shipped DateTimeLocale set — so picking it never
+          // sends an unknown locale value to older clients on sync (#6484).
+          { label: T.GCF.LANG.TIME_LOCALE_ISO, value: DateTimeLocales.sv },
           { label: T.GCF.LANG.TIME_LOCALE_TR_TR, value: DateTimeLocales.tr_tr },
           { label: T.GCF.LANG.TIME_LOCALE_DE_DE, value: DateTimeLocales.de_de },
           { label: T.GCF.LANG.TIME_LOCALE_FR_FR, value: DateTimeLocales.fr_fr },
