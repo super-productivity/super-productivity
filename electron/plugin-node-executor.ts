@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import type { WebContents } from 'electron';
+import { error as logError } from 'electron-log/main';
 import { spawn } from 'child_process';
 import { randomBytes } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
@@ -11,6 +12,11 @@ import {
   PluginNodeScriptResult,
   PluginManifest,
 } from '../packages/plugin-api/src/types';
+import {
+  clearNodeExecutionConsent,
+  getNodeExecutionConsent,
+  setNodeExecutionConsent,
+} from './plugin-node-consent-store';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_TIMEOUT = 300000; // 5 minutes
@@ -27,6 +33,12 @@ const BUILT_IN_PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // with no Unicode range to keep updated as new code points are assigned.
 const MAX_UPLOADED_PLUGIN_ID_LENGTH = 100;
 const SAFE_UPLOADED_PLUGIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+// The id is used as a key into the persisted-consent store, which keys consent in a `Map`
+// (returns `undefined` for any unstored key) so an `Object.prototype` member name can't
+// masquerade as a stored grant. Reject the classic pollution keys at this boundary too as
+// defense in depth (`__proto__` is already excluded by the leading-char allowlist; the
+// others pass it).
+const FORBIDDEN_PLUGIN_IDS = new Set(['__proto__', 'prototype', 'constructor']);
 // Self-declared name/version are display-only. Strip every Unicode control (Cc) and
 // format (Cf) character — this covers C0/C1 controls, all zero-width characters, the BOM,
 // and every bidi control (incl. U+061C ALM, the word-joiner range, and the isolate marks)
@@ -46,6 +58,9 @@ const assertSafePluginId = (pluginId: unknown): string => {
   // can neither escape the bundled-plugins dir in getBuiltInManifestPath() nor spoof the
   // consent dialog's trust anchor.
   if (!SAFE_UPLOADED_PLUGIN_ID_RE.test(pluginId)) {
+    throw new Error('Invalid pluginId');
+  }
+  if (FORBIDDEN_PLUGIN_IDS.has(pluginId)) {
     throw new Error('Invalid pluginId');
   }
   return pluginId;
@@ -120,6 +135,9 @@ class PluginNodeExecutor {
         const safeId = assertSafePluginId(pluginId);
 
         const webContentsId = event.sender.id;
+        // Captured before any await so both the ask-once and dialog paths can detect a
+        // navigation that happened while we were resolving consent.
+        const requestUrl = event.sender.getURL();
         const existingGrant = this.grants.get(safeId);
         if (existingGrant) {
           if (existingGrant.webContentsId === webContentsId) {
@@ -135,11 +153,31 @@ class PluginNodeExecutor {
         // (id mismatch, missing nodeExecution permission, unreadable manifest) returns
         // null and falls back to the unverified dialog, so uploaded code can never borrow
         // a built-in plugin's trusted name even if its id collides with a bundled dir.
-        const dialogOptions =
-          this.describeVerifiedBuiltInDialog(safeId) ??
-          this.describeUnverifiedUploadedDialog(safeId, displayInfo);
+        const builtInManifest = this.tryGetVerifiedBuiltInManifest(safeId);
 
-        const requestUrl = event.sender.getURL();
+        // Phase 2 (issue #8512): persisted, ask-once consent is scoped to UPLOADED
+        // (community) plugins only. Built-in plugins keep the per-session verified prompt
+        // — no behaviour change, so `sync-md` etc. are regression-safe. Only a prior
+        // native Allow can have written this entry (no renderer write path), and the
+        // renderer clears it on disable/uninstall/re-upload, so a re-uploaded (changed)
+        // plugin reusing the id never silently inherits it.
+        if (!builtInManifest) {
+          const persistedConsent = await getNodeExecutionConsent(safeId);
+          if (persistedConsent) {
+            // Don't mint for a sender that was destroyed or navigated away while the
+            // consent was being read (parity with the post-dialog checks below).
+            if (event.sender.isDestroyed() || event.sender.getURL() !== requestUrl) {
+              return null;
+            }
+            this.registerGrantCleanup(event.sender);
+            return this.mintGrant(safeId, webContentsId);
+          }
+        }
+
+        const dialogOptions = builtInManifest
+          ? this.buildVerifiedBuiltInDialog(safeId, builtInManifest)
+          : this.describeUnverifiedUploadedDialog(safeId, displayInfo);
+
         this.registerGrantCleanup(event.sender);
 
         let result: Electron.MessageBoxReturnValue;
@@ -166,12 +204,57 @@ class PluginNodeExecutor {
           return null;
         }
 
-        const token = randomBytes(32).toString('base64url');
-        this.grants.set(safeId, {
-          token,
-          webContentsId,
-        });
-        return { token };
+        // Allow → mint the grant FIRST, synchronously, right after the sender-validity
+        // check above. The persist below is a new `await`; minting before it keeps the
+        // "never mint for a navigated/destroyed sender" invariant tight — if the sender
+        // navigates or is destroyed during the write, the cleanup listener registered
+        // before the dialog drops this just-minted grant, so no untracked grant survives
+        // for a stale webContents.
+        const grant = this.mintGrant(safeId, webContentsId);
+
+        // For uploaded plugins, remember the decision so later sessions don't re-prompt
+        // (ask-once). Persisting is best-effort: a write failure only costs a re-prompt
+        // next session, never a grant the user just approved.
+        if (!builtInManifest) {
+          try {
+            // Persist exactly the name/version the user saw in the dialog.
+            await setNodeExecutionConsent(safeId, {
+              ...this.sanitizedUploadedDisplay(displayInfo),
+              grantedAt: Date.now(),
+            });
+          } catch (error) {
+            // Host diagnostic → exportable log (electron-log), distinct from the sandboxed
+            // plugin's own console output. Log only the validated id and the error code —
+            // never the raw error, whose message can embed the userData absolute path (and
+            // thus the OS username) for an fs failure.
+            const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown';
+            logError(`Failed to persist nodeExecution consent for ${safeId} (${code})`);
+          }
+        }
+        return grant;
+      },
+    );
+
+    ipcMain.handle(
+      IPC.PLUGIN_CLEAR_NODE_EXECUTION_CONSENT,
+      // Explicit revoke from the trusted renderer that owns the plugin lifecycle
+      // (disable / uninstall / re-upload). Drops the live session grant for this id AND
+      // the persisted consent, so the next node call re-prompts. A delete is fail-safe:
+      // the worst a hostile renderer can do by calling this is force a prompt, never a
+      // silent grant.
+      async (_event, pluginId: string) => {
+        let safeId: string;
+        try {
+          safeId = assertSafePluginId(pluginId);
+        } catch {
+          return;
+        }
+        const grant = this.grants.get(safeId);
+        if (grant) {
+          this.grants.delete(safeId);
+          this.releaseGrantCleanupIfUnused(grant.webContentsId);
+        }
+        await clearNodeExecutionConsent(safeId);
       },
     );
 
@@ -297,23 +380,36 @@ class PluginNodeExecutor {
     this.unregisterGrantCleanup(webContentsId);
   }
 
+  private mintGrant(pluginId: string, webContentsId: number): { token: string } {
+    const token = randomBytes(32).toString('base64url');
+    this.grants.set(pluginId, { token, webContentsId });
+    return { token };
+  }
+
   /**
-   * Consent dialog for a verified built-in plugin (name/version read from disk).
-   * Returns null when the id does not resolve to a cleanly-verified built-in
-   * nodeExecution manifest (no on-disk match, id mismatch, missing permission, or
-   * unreadable/invalid manifest), so the caller falls back to the unverified-uploaded
-   * dialog — a partial or colliding match must never *upgrade* trust to the built-in
-   * dialog.
+   * Resolve the cleanly-verified built-in nodeExecution manifest for an id, or null
+   * when the id does not resolve to one (no on-disk match, id mismatch, missing
+   * permission, or unreadable/invalid manifest). A partial or colliding match must
+   * never *upgrade* trust to the built-in dialog, so callers fall back to the
+   * unverified-uploaded path on null.
    */
-  private describeVerifiedBuiltInDialog(
-    pluginId: string,
-  ): Electron.MessageBoxOptions | null {
-    let manifest: PluginManifest;
+  private tryGetVerifiedBuiltInManifest(pluginId: string): PluginManifest | null {
     try {
-      manifest = this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
+      return this.getVerifiedBuiltInNodeExecutionManifest(pluginId);
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Consent dialog for a verified built-in plugin (name/version read from disk).
+   * Built-in plugins are NOT persisted (Phase 2 ask-once is uploaded-only), so the copy
+   * keeps the per-session wording.
+   */
+  private buildVerifiedBuiltInDialog(
+    pluginId: string,
+    manifest: PluginManifest,
+  ): Electron.MessageBoxOptions {
     return {
       ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow plugin Node.js execution?',
@@ -328,6 +424,21 @@ class PluginNodeExecutor {
   }
 
   /**
+   * The self-declared name/version exactly as shown in the uploaded-plugin consent dialog.
+   * Single source of truth for the sanitize lengths and fallbacks, so the persisted record
+   * (setNodeExecutionConsent) always matches what the user actually saw and approved.
+   */
+  private sanitizedUploadedDisplay(displayInfo?: NodeExecutionGrantDisplayInfo): {
+    name: string;
+    version: string;
+  } {
+    return {
+      name: sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)',
+      version: sanitizeDialogString(displayInfo?.version, 32) || '(unknown)',
+    };
+  }
+
+  /**
    * Consent dialog for an uploaded (community) plugin. The app cannot verify an
    * uploaded plugin's identity, so the dialog anchors on the validated id and marks
    * the renderer-supplied name/version as self-declared/unverified. Default = Deny.
@@ -336,8 +447,7 @@ class PluginNodeExecutor {
     pluginId: string,
     displayInfo?: NodeExecutionGrantDisplayInfo,
   ): Electron.MessageBoxOptions {
-    const name = sanitizeDialogString(displayInfo?.name, 80) || '(unnamed)';
-    const version = sanitizeDialogString(displayInfo?.version, 32) || '(unknown)';
+    const { name, version } = this.sanitizedUploadedDisplay(displayInfo);
     return {
       ...NODE_CONSENT_DIALOG_BASE,
       title: 'Allow this plugin to run code on your machine?',
@@ -348,7 +458,8 @@ class PluginNodeExecutor {
         `Version (self-declared): ${version}`,
         '',
         'This is a third-party plugin. Super Productivity cannot verify its identity and cannot sandbox it.',
-        'If you allow it, the plugin can run any program with full access to your files and system for this app session.',
+        'If you allow it, the plugin can run any program with full access to your files and system.',
+        'Your choice is remembered on this device until you disable, remove, or re-upload this plugin.',
         '',
         'Only allow this if you trust the source of this plugin.',
       ].join('\n'),

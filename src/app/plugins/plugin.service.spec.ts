@@ -74,10 +74,12 @@ describe('PluginService', () => {
       'revokeNodeExecutionGrantToken',
       'revokeNodeExecutionGrant',
       'clearOAuthTokens',
+      'clearNodeExecutionConsent',
     ]);
     pluginBridge.hasNodeExecutionGrantToken.and.returnValue(false);
     pluginBridge.requestNodeExecutionGrant.and.resolveTo(null);
     pluginBridge.clearOAuthTokens.and.resolveTo(undefined);
+    pluginBridge.clearNodeExecutionConsent.and.resolveTo(undefined);
     pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
       'loadPlugin',
       'unloadPlugin',
@@ -320,6 +322,94 @@ describe('PluginService', () => {
       manifest.id,
       'token-1',
     );
+  });
+
+  it('clearNodeExecutionConsent drops the session denial and asks the bridge to clear consent', async () => {
+    const pluginId = 'node-plugin';
+    const deniedSet = (
+      service as unknown as { _nodeExecutionDeniedThisSession: Set<string> }
+    )._nodeExecutionDeniedThisSession;
+    deniedSet.add(pluginId);
+
+    const result = await service.clearNodeExecutionConsent(pluginId);
+
+    expect(result).toBe(true);
+    expect(deniedSet.has(pluginId)).toBe(false);
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledOnceWith(pluginId);
+  });
+
+  it('clearNodeExecutionConsent returns false when the persisted clear fails (caller can fail closed)', async () => {
+    // A persistence failure must NOT throw (lifecycle bookkeeping ignores it), but must be
+    // reported via the return value so loadPluginFromZip can abort before loading new code
+    // under an id whose stale consent could not be revoked.
+    pluginBridge.clearNodeExecutionConsent.and.rejectWith(new Error('disk full'));
+
+    const result = await service.clearNodeExecutionConsent('node-plugin');
+
+    expect(result).toBe(false);
+  });
+
+  it('removeUploadedPlugin clears persisted nodeExecution consent (Phase 2)', async () => {
+    const pluginId = 'uploaded-node-plugin';
+
+    await service.removeUploadedPlugin(pluginId);
+
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith(pluginId);
+  });
+
+  it('clearUploadedPluginsFromMemory clears persisted nodeExecution consent for uploaded plugins only (Phase 2)', async () => {
+    const setState = (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState.bind(service);
+    setState('uploaded-1', {
+      manifest: { ...mockManifest, id: 'uploaded-1', permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'uploaded://uploaded-1',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+    setState('builtin-1', {
+      manifest: { ...mockManifest, id: 'builtin-1', permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/builtin-1',
+      type: 'built-in',
+      isEnabled: true,
+    });
+
+    await service.clearUploadedPluginsFromMemory();
+
+    // Without this, a same-id re-upload after a cache clear (no `existingState`) would be
+    // silently re-granted node execution with no prompt — the bug this guards against.
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith('uploaded-1');
+    // Built-in plugins never persist consent, so they are not cleared here.
+    expect(pluginBridge.clearNodeExecutionConsent).not.toHaveBeenCalledWith('builtin-1');
+  });
+
+  it('disablePlugin persists isEnabled=false and revokes nodeExecution consent (Phase 2)', async () => {
+    const pluginId = 'uploaded-node-plugin';
+    (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState(pluginId, {
+      manifest: { ...mockManifest, id: pluginId, permissions: ['nodeExecution'] },
+      status: 'not-loaded',
+      path: 'uploaded://uploaded-node-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+
+    await service.disablePlugin(pluginId);
+
+    expect(pluginMetaPersistenceService.setPluginEnabled).toHaveBeenCalledWith(
+      pluginId,
+      false,
+    );
+    // Disable must revoke consent so re-enabling re-prompts — the invariant that previously
+    // lived only in the UI handler where a future disable path could forget it.
+    expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledWith(pluginId);
   });
 
   it('treats runner loaded:false activation results as failures', async () => {

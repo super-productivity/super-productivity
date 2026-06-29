@@ -515,17 +515,20 @@ describe('PluginBridgeService - nodeExecution grant tokens', () => {
   let service: PluginBridgeService;
   let originalElectronApi: typeof window.ea | undefined;
   let pluginExecNodeScriptSpy: jasmine.Spy;
+  let clearConsentSpy: jasmine.Spy;
   let consumePluginNodeExecutionApiSpy: jasmine.Spy;
 
   beforeEach(() => {
     originalElectronApi = window.ea;
     pluginExecNodeScriptSpy = jasmine.createSpy('pluginExecNodeScript');
+    clearConsentSpy = jasmine.createSpy('clearConsent').and.resolveTo(undefined);
     consumePluginNodeExecutionApiSpy = jasmine
       .createSpy('consumePluginNodeExecutionApi')
       .and.returnValue({
         requestGrant: jasmine.createSpy('requestGrant'),
         executeScript: pluginExecNodeScriptSpy,
         revokeGrant: jasmine.createSpy('revokeGrant'),
+        clearConsent: clearConsentSpy,
       });
     window.ea = {
       ...(window.ea ?? {}),
@@ -577,6 +580,16 @@ describe('PluginBridgeService - nodeExecution grant tokens', () => {
     expect(service.getNodeExecutionGrantToken('node-plugin')).toBe('token-1');
     expect(service.revokeNodeExecutionGrantToken('node-plugin')).toBe('token-1');
     expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeFalse();
+  });
+
+  it('clearNodeExecutionConsent drops the local token and asks main to clear consent', async () => {
+    service.setNodeExecutionGrantToken('node-plugin', 'token-1');
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeTrue();
+
+    await service.clearNodeExecutionConsent('node-plugin');
+
+    expect(service.hasNodeExecutionGrantToken('node-plugin')).toBeFalse();
+    expect(clearConsentSpy).toHaveBeenCalledOnceWith('node-plugin');
   });
 
   it('does not call Electron node execution in a web runtime', async () => {

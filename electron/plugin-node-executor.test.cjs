@@ -27,6 +27,9 @@ let ipcHandlers;
 let dialogCalls;
 let nextDialogResult;
 let nextDialogPromise;
+// In-memory stand-in for the main-owned persisted consent store (plugin-node-consent-store.ts),
+// so the executor's Phase 2 ask-once logic can be tested without touching the filesystem.
+let consentStore;
 
 class FakeWebContents extends EventEmitter {
   constructor(id, url = 'app://index.html') {
@@ -96,6 +99,20 @@ const installMocks = () => {
       };
     }
 
+    // Stub the persisted-consent store so Phase 2 ask-once logic is exercised in-memory.
+    if (
+      request === './plugin-node-consent-store' &&
+      parent &&
+      typeof parent.filename === 'string' &&
+      parent.filename.endsWith('plugin-node-executor.ts')
+    ) {
+      return consentStore;
+    }
+
+    if (request === 'electron-log/main') {
+      return { log: () => {}, error: () => {} };
+    }
+
     if (request === 'electron') {
       return {
         app: {
@@ -141,6 +158,17 @@ test.beforeEach(() => {
   dialogCalls = [];
   nextDialogResult = { response: 0 };
   nextDialogPromise = undefined;
+  const records = new Map();
+  consentStore = {
+    __records: records,
+    getNodeExecutionConsent: async (pluginId) => records.get(pluginId) ?? null,
+    setNodeExecutionConsent: async (pluginId, consent) => {
+      records.set(pluginId, consent);
+    },
+    clearNodeExecutionConsent: async (pluginId) => {
+      records.delete(pluginId);
+    },
+  };
   installMocks();
 });
 
@@ -274,6 +302,10 @@ test('issues a grant to an uploaded (non-bundled) plugin and labels it unverifie
   // and defaults to Deny.
   assert.match(opts.detail, /Plugin ID: uploaded-node-plugin/);
   assert.match(opts.detail, /self-declared, unverified/);
+  // The Allow is persisted (ask-once), so the prompt must disclose that the choice is
+  // remembered rather than claiming it is only valid "for this app session".
+  assert.match(opts.detail, /remembered on this device/);
+  assert.equal(opts.detail.includes('for this app session'), false);
   assert.equal(opts.defaultId, 1);
 });
 
@@ -477,4 +509,183 @@ test('never upgrades trust: an on-disk match that does not cleanly verify uses t
   } finally {
     BUILT_IN_PLUGIN_MANIFEST.permissions = originalPermissions;
   }
+});
+
+// --- Phase 2: persisted, per-plugin consent (#8512) ---
+
+test('uploaded plugin with persisted consent is granted without a dialog (ask-once)', async () => {
+  loadModule();
+  // Simulate a grant remembered from a previous app session.
+  consentStore.__records.set('uploaded-node-plugin', {
+    name: 'Uploaded',
+    version: '1.0.0',
+    grantedAt: 1,
+  });
+  const webContents = new FakeWebContents(20);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'uploaded-node-plugin',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  assert.equal(dialogCalls.length, 0);
+});
+
+test('granting an uploaded plugin persists consent for the next session', async () => {
+  loadModule();
+  const webContents = new FakeWebContents(21);
+
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', webContents, 'persist-me', {
+    name: 'Persist Me',
+    version: '2.0.0',
+  });
+
+  assert.equal(dialogCalls.length, 1);
+  const persisted = consentStore.__records.get('persist-me');
+  assert.equal(persisted.name, 'Persist Me');
+  assert.equal(persisted.version, '2.0.0');
+  assert.equal(typeof persisted.grantedAt, 'number');
+});
+
+test('denying an uploaded plugin does not persist consent', async () => {
+  loadModule();
+  nextDialogResult = { response: 1 };
+  const webContents = new FakeWebContents(22);
+
+  const denied = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'deny-me',
+    { name: 'Deny', version: '1.0.0' },
+  );
+
+  assert.equal(denied, null);
+  assert.equal(consentStore.__records.has('deny-me'), false);
+});
+
+test('clearConsent drops the grant + persisted consent so the next request re-prompts', async () => {
+  loadModule();
+  const wc1 = new FakeWebContents(23);
+  const grant = await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'clear-me', {
+    name: 'Clear',
+    version: '1.0.0',
+  });
+  assert.equal(dialogCalls.length, 1);
+  assert.ok(consentStore.__records.has('clear-me'));
+
+  await callIpc('PLUGIN_CLEAR_NODE_EXECUTION_CONSENT', wc1, 'clear-me');
+  assert.equal(consentStore.__records.has('clear-me'), false);
+
+  // The live session grant is gone too: exec is now unauthorized.
+  await assert.rejects(
+    () =>
+      callIpc('PLUGIN_EXEC_NODE_SCRIPT', wc1, 'clear-me', grant.token, {
+        script: 'return true;',
+      }),
+    /not authorized/,
+  );
+
+  // A fresh request re-prompts because no persisted consent remains.
+  const wc2 = new FakeWebContents(24);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'clear-me', {
+    name: 'Clear',
+    version: '1.0.0',
+  });
+  assert.equal(dialogCalls.length, 2);
+});
+
+test('rejects prototype-pollution ids before any consent lookup or mint', async () => {
+  // SECURITY regression: 'constructor'/'prototype' pass the id allowlist regex and would,
+  // against a plain-object consent map, resolve to an Object.prototype member and mint a
+  // grant with no dialog. They must be rejected outright. ('__proto__' fails the regex.)
+  loadModule();
+  const webContents = new FakeWebContents(27);
+
+  for (const badId of ['constructor', 'prototype', '__proto__']) {
+    await assert.rejects(
+      () =>
+        callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', webContents, badId, {
+          name: 'x',
+          version: '1',
+        }),
+      /Invalid pluginId/,
+      `expected ${badId} to be rejected`,
+    );
+  }
+  assert.equal(dialogCalls.length, 0);
+  assert.equal(consentStore.__records.has('constructor'), false);
+});
+
+test('built-in plugin consent is never persisted (stays per-session, regression)', async () => {
+  loadModule();
+  const wc1 = new FakeWebContents(25);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'sync-md');
+  assert.equal(dialogCalls.length, 1);
+  // Built-in plugins keep the verified per-session prompt — nothing is written to the
+  // persisted store, so a new session prompts again.
+  assert.equal(consentStore.__records.has('sync-md'), false);
+
+  const wc2 = new FakeWebContents(26);
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'sync-md');
+  assert.equal(dialogCalls.length, 2);
+});
+
+test('mints the grant before persisting consent (persist is best-effort, never gates the grant)', async () => {
+  // SECURITY ordering: the consent persist is a new `await` after the post-dialog
+  // sender-validity check. Minting BEFORE that write keeps the grant in the live table
+  // during the write, so a navigation/destroy cleanup that fires mid-write drops it (in
+  // real Electron), and a persist failure can never lose an approved grant. Asserting the
+  // grant already exists at the moment of the persist write pins that ordering.
+  let grantsSizeAtPersist = -1;
+  let mod;
+  consentStore.setNodeExecutionConsent = async (pluginId, consent) => {
+    grantsSizeAtPersist = mod.pluginNodeExecutor.grants.size;
+    consentStore.__records.set(pluginId, consent);
+  };
+  mod = loadModule();
+  const webContents = new FakeWebContents(30);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'uploaded-order',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  // The grant for this request was already live when the persist ran (mint-before-persist).
+  assert.equal(grantsSizeAtPersist, 1);
+});
+
+test('a consent persist failure still grants the approved session (best-effort)', async () => {
+  // Persisting is best-effort: a write failure only costs a re-prompt next session, never
+  // the grant the user just approved. Minting before the persist guarantees this.
+  let mod;
+  consentStore.setNodeExecutionConsent = async () => {
+    throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+  };
+  mod = loadModule();
+  assert.ok(mod);
+  const webContents = new FakeWebContents(31);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'persist-fails',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  const result = await callIpc(
+    'PLUGIN_EXEC_NODE_SCRIPT',
+    webContents,
+    'persist-fails',
+    grant.token,
+    { script: 'return 1 + 1;' },
+  );
+  assert.equal(result.success, true);
+  assert.equal(result.result, 2);
 });
