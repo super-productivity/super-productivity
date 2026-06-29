@@ -22,7 +22,7 @@
   }
 
   <!--  (focus)="clickOrFocusPreview($event, true)"-->
-  @if (!isTurnOffMarkdownParsing()) {
+  @if (isShowPreview()) {
     <markdown
       #previewEl
       (mousedown)="previewMousedown($event)"

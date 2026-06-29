@@ -208,6 +208,37 @@ describe('InlineMarkdownComponent', () => {
     }));
   });
 
+  describe('isHidePreviewWhileEditing', () => {
+    const queryPreview = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('markdown.markdown-parsed');
+
+    it('keeps the live preview while editing by default (detail-panel behavior)', () => {
+      component.model = 'hello';
+      fixture.detectChanges();
+      component['isShowEdit'].set(true);
+      fixture.detectChanges();
+      expect(queryPreview()).toBeTruthy();
+    });
+
+    it('shows the rendered preview in read mode even when opted in', () => {
+      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
+      component.model = 'hello';
+      fixture.detectChanges();
+      component['isShowEdit'].set(false);
+      fixture.detectChanges();
+      expect(queryPreview()).toBeTruthy();
+    });
+
+    it('hides the preview while editing when opted in (focus-mode single view)', () => {
+      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
+      component.model = 'hello';
+      fixture.detectChanges();
+      component['isShowEdit'].set(true);
+      fixture.detectChanges();
+      expect(queryPreview()).toBeNull();
+    });
+  });
+
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
