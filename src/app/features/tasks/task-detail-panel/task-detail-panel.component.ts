@@ -532,7 +532,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
             }
           } else if (v === TaskDetailTargetPanel.Notes) {
             const noteWrapperElRef = this.noteWrapperElRef();
-            this.panelState.isFocusNotes.set(true);
+            // Focus the notes section in its rendered (preview) state — do NOT
+            // also enter edit mode. This target opens via a checklist progress
+            // badge or the "open notes" (N) shortcut; both should land on the
+            // rendered notes, not the raw editor. Setting isFocusNotes opened
+            // the textarea that focusItem() below immediately blurred back to
+            // preview — a flash of raw "- [ ] " source (only visible for
+            // checklists). Preview was always the settled state; explicit edits
+            // still work via click/Enter (editActionTriggered).
             if (!noteWrapperElRef) {
               devError('this.noteWrapperElRef not ready');
               this._focusFirst();
