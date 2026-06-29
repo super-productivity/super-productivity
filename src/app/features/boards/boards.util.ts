@@ -1,4 +1,10 @@
-import { BoardPanelCfg, BoardSortField } from './boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgScheduledState,
+  BoardPanelCfgTaskDoneState,
+  BoardPanelCfgTaskTypeFilter,
+  BoardSortField,
+} from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
@@ -148,6 +154,98 @@ export const rewriteTagIdsForPanel = (
   }
 
   return next;
+};
+
+/**
+ * Pure membership predicate: does `task` belong in a panel/column with the
+ * given criteria? Companion to `rewriteTagIdsForPanel` (which rewrites a task's
+ * tags TO match) — the two encode the same tag rules and must stay in sync.
+ *
+ * `isInBacklog` is supplied by the caller because backlog membership derives
+ * from project state, not from the task itself. It is only consulted when
+ * `panelCfg.backlogState` requests backlog filtering.
+ */
+export const doesTaskMatchPanel = (
+  task: Readonly<TaskCopy>,
+  panelCfg: Pick<
+    BoardPanelCfg,
+    | 'includedTagIds'
+    | 'includedTagsMatch'
+    | 'excludedTagIds'
+    | 'excludedTagsMatch'
+    | 'isParentTasksOnly'
+    | 'taskDoneState'
+    | 'projectIds'
+    | 'scheduledState'
+    | 'backlogState'
+  >,
+  isInBacklog: (task: Readonly<TaskCopy>) => boolean,
+): boolean => {
+  const taskTagIds = task.tagIds ?? [];
+
+  if (panelCfg.includedTagIds?.length) {
+    const matches =
+      panelCfg.includedTagsMatch === 'any'
+        ? panelCfg.includedTagIds.some((tagId) => taskTagIds.includes(tagId))
+        : panelCfg.includedTagIds.every((tagId) => taskTagIds.includes(tagId));
+    if (!matches) return false;
+  }
+
+  if (panelCfg.excludedTagIds?.length) {
+    const hit =
+      panelCfg.excludedTagsMatch === 'all'
+        ? panelCfg.excludedTagIds.every((tagId) => taskTagIds.includes(tagId))
+        : panelCfg.excludedTagIds.some((tagId) => taskTagIds.includes(tagId));
+    if (hit) return false;
+  }
+
+  if (panelCfg.isParentTasksOnly && task.parentId) {
+    return false;
+  }
+
+  if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {
+    return false;
+  }
+  if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone && task.isDone) {
+    return false;
+  }
+
+  if (
+    panelCfg.projectIds &&
+    panelCfg.projectIds.length > 0 &&
+    !isAllProjects(panelCfg.projectIds) &&
+    !panelCfg.projectIds.includes(task.projectId)
+  ) {
+    return false;
+  }
+
+  if (
+    panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
+    !(task.dueWithTime || task.dueDay)
+  ) {
+    return false;
+  }
+  if (
+    panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled &&
+    (task.dueWithTime || task.dueDay)
+  ) {
+    return false;
+  }
+
+  if (
+    panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
+    !isInBacklog(task)
+  ) {
+    return false;
+  }
+  if (
+    panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog &&
+    isInBacklog(task)
+  ) {
+    return false;
+  }
+
+  return true;
 };
 
 /**
