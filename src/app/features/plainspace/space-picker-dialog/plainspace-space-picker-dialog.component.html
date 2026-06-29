@@ -28,6 +28,14 @@
   >
     {{ T.G.CANCEL | translate }}
   </button>
+  @if (hasError()) {
+    <button
+      mat-stroked-button
+      (click)="reconnect()"
+    >
+      {{ T.PLAINSPACE.SPACE_PICKER.RECONNECT | translate }}
+    </button>
+  }
   <button
     mat-stroked-button
     [disabled]="hasError()"

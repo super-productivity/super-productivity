@@ -2853,6 +2853,7 @@
       "LINK": "Link space",
       "LOADING": "Loading your spaces…",
       "NONE": "You don't have any spaces yet — create one to get started.",
+      "RECONNECT": "Use a different token",
       "SELECT_LABEL": "Existing space",
       "TITLE": "Choose a Plainspace space"
     }

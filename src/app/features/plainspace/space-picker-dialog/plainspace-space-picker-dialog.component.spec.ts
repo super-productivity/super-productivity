@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
@@ -17,13 +17,20 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
   let component: PlainspaceSpacePickerDialogComponent;
   let fixture: ComponentFixture<PlainspaceSpacePickerDialogComponent>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<PlainspaceSpacePickerDialogComponent>>;
-  let accountStub: { account: jasmine.Spy };
+  let accountStub: { account: jasmine.Spy; host: jasmine.Spy };
   let apiStub: { getSpaces$: jasmine.Spy };
+  let matDialogStub: { open: jasmine.Spy };
 
   beforeEach(async () => {
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
-    accountStub = { account: jasmine.createSpy('account').and.returnValue(ACCOUNT) };
+    accountStub = {
+      account: jasmine.createSpy('account').and.returnValue(ACCOUNT),
+      host: jasmine.createSpy('host').and.returnValue(ACCOUNT.host),
+    };
     apiStub = { getSpaces$: jasmine.createSpy('getSpaces$').and.returnValue(of(SPACES)) };
+    matDialogStub = {
+      open: jasmine.createSpy('open').and.returnValue({ afterClosed: () => of(true) }),
+    };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -35,6 +42,7 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: PlainspaceAccountService, useValue: accountStub },
         { provide: PlainspaceApiService, useValue: apiStub },
+        { provide: MatDialog, useValue: matDialogStub },
       ],
     }).compileComponents();
   });
@@ -98,5 +106,31 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
     await fixture.whenStable();
     expect(apiStub.getSpaces$).not.toHaveBeenCalled();
     expect(dialogRef.close).toHaveBeenCalledWith();
+  });
+
+  it('reconnect() reloads the spaces after a successful reconnect (stale token)', async () => {
+    // First load fails (revoked token), reload after reconnect succeeds.
+    apiStub.getSpaces$.and.returnValues(of(null), of(SPACES));
+    createComponent();
+    await fixture.whenStable();
+    expect(component.hasError()).toBe(true);
+
+    await component.reconnect();
+    expect(matDialogStub.open).toHaveBeenCalled();
+    expect(component.hasError()).toBe(false);
+    expect(component.spaces()).toEqual(SPACES);
+    expect(component.selectedSpaceId).toBe('s1');
+  });
+
+  it('reconnect() leaves the error state when the connect dialog is cancelled', async () => {
+    apiStub.getSpaces$.and.returnValue(of(null));
+    matDialogStub.open.and.returnValue({ afterClosed: () => of(undefined) });
+    createComponent();
+    await fixture.whenStable();
+    apiStub.getSpaces$.calls.reset();
+
+    await component.reconnect();
+    expect(apiStub.getSpaces$).not.toHaveBeenCalled();
+    expect(component.hasError()).toBe(true);
   });
 });
