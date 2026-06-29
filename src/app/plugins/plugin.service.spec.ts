@@ -387,6 +387,44 @@ describe('PluginService', () => {
     expect(pluginBridge.clearNodeExecutionConsent).not.toHaveBeenCalledWith('builtin-1');
   });
 
+  it('clearUploadedPluginsFromMemory purges local-only credentials for uploaded plugins', async () => {
+    // Same id-reuse gap as the consent clear above: the cache wipe leaves secrets/OAuth
+    // tokens in their dedicated stores, so a same-id re-upload could read the previous
+    // plugin's credentials unless they are purged here too.
+    const secretService = TestBed.inject(PluginSecretService);
+    const removeSecretsSpy = spyOn(
+      secretService,
+      'removeSecretsForPlugin',
+    ).and.resolveTo();
+    const setState = (
+      service as unknown as {
+        _setPluginState: (pluginId: string, state: PluginState) => void;
+      }
+    )._setPluginState.bind(service);
+    setState('uploaded-1', {
+      manifest: { ...mockManifest, id: 'uploaded-1' },
+      status: 'not-loaded',
+      path: 'uploaded://uploaded-1',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+    setState('builtin-1', {
+      manifest: { ...mockManifest, id: 'builtin-1' },
+      status: 'not-loaded',
+      path: 'assets/bundled-plugins/builtin-1',
+      type: 'built-in',
+      isEnabled: true,
+    });
+
+    await service.clearUploadedPluginsFromMemory();
+
+    expect(removeSecretsSpy).toHaveBeenCalledWith('uploaded-1');
+    expect(pluginBridge.clearOAuthTokens).toHaveBeenCalledWith('uploaded-1');
+    // Built-in plugins are not wiped by a cache clear, so their credentials are left alone.
+    expect(removeSecretsSpy).not.toHaveBeenCalledWith('builtin-1');
+    expect(pluginBridge.clearOAuthTokens).not.toHaveBeenCalledWith('builtin-1');
+  });
+
   it('disablePlugin persists isEnabled=false and revokes nodeExecution consent (Phase 2)', async () => {
     const pluginId = 'uploaded-node-plugin';
     (
