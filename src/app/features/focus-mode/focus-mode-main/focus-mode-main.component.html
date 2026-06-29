@@ -182,7 +182,7 @@
             ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
             : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
         "
-        [disabled]="isPlayButtonDisabled()"
+        [disabled]="isPlayButtonDisabled() || isLaunching()"
         (click)="startSession()"
         class="play-button"
       >

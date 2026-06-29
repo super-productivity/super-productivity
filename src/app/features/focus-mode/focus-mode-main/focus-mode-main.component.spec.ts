@@ -481,6 +481,30 @@ describe('FocusModeMainComponent', () => {
       );
     }));
 
+    it('should ignore a re-entrant start while the inline launch is playing', fakeAsync(() => {
+      component.displayDuration.set(900000);
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      expect(component.isLaunching()).toBe(true);
+
+      // A second start during the launch window (e.g. keyboard Enter on the
+      // still-focused play button) must be a no-op — not a second timer that
+      // would dispatch startFocusSession again and reset the session.
+      component.startSession();
+
+      tick(800);
+
+      const startSessionDispatchCount = (mockStore.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .filter(
+          ([action]) => action.type === actions.startFocusSession({ duration: 0 }).type,
+        ).length;
+      expect(startSessionDispatchCount).toBe(1);
+    }));
+
     it('should use zero duration for Flowtime on the default inline-start path', fakeAsync(() => {
       focusModeServiceSpy.focusModeConfig.and.returnValue({
         isSkipPreparation: false,

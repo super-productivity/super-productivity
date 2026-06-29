@@ -459,6 +459,14 @@ export class FocusModeMainComponent {
   }
 
   startSession(): void {
+    // Ignore re-entrant starts while the inline launch is already playing (e.g.
+    // a keyboard Enter on the still-focused play button, or a rapid double
+    // click) — otherwise a second timer would dispatch startFocusSession again
+    // and reset the freshly-started session.
+    if (this.isLaunching()) {
+      return;
+    }
+
     // Persist any pending (debounced) Pomodoro duration edit before starting so
     // a value typed within the debounce window isn't dropped.
     if (this.mode() === FocusModeMode.Pomodoro) {
@@ -491,6 +499,14 @@ export class FocusModeMainComponent {
   }
 
   private _launchThenStart(): void {
+    // Honor "reduce motion": skip the rocket flourish and its timed delay,
+    // starting immediately. Otherwise a motion-sensitive user would just wait
+    // out an 800ms delay for an animation they never see.
+    if (this._prefersReducedMotion()) {
+      this._dispatchStartSession();
+      return;
+    }
+
     this.isLaunching.set(true);
     timer(this._LAUNCH_DURATION_MS)
       .pipe(takeUntilDestroyed(this._destroyRef))
@@ -502,6 +518,10 @@ export class FocusModeMainComponent {
         }
         this._dispatchStartSession();
       });
+  }
+
+  private _prefersReducedMotion(): boolean {
+    return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   }
 
   private _dispatchStartSession(): void {

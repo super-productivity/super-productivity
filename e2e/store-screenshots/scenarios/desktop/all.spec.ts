@@ -77,7 +77,7 @@ const captureDarkScenes = async (
     .first()
     .waitFor({ state: 'visible', timeout: 10_000 });
   // Start the session. By default (prep screen opt-in, off) this plays a brief
-  // inline rocket launch (~600ms) before the session begins. The fixture pinned
+  // inline rocket launch (~800ms) before the session begins. The fixture pinned
   // the clock with `page.clock.install`, so advance simulated time past the
   // launch to fire its RxJS timer.
   await page.locator('focus-mode-main .play-button').click();
