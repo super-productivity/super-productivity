@@ -52,6 +52,15 @@ describe('AddSubtaskInputComponent', () => {
     fixture.detectChanges();
   });
 
+  it('focuses the input itself once rendered (no host setTimeout needed)', fakeAsync(() => {
+    // The host previously focused the draft via a post-render setTimeout, which
+    // races change detection on slow machines (#8617). The component now owns
+    // its initial focus, so it must be focused after the first render.
+    tick();
+
+    expect(document.activeElement).toBe(getInput());
+  }));
+
   it('commits a non-empty title on Enter and keeps the input focused', fakeAsync(() => {
     const closeSpy = jasmine.createSpy('closed');
     component.closed.subscribe(closeSpy);
