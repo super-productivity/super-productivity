@@ -1275,13 +1275,14 @@ describe('FocusModeEffects', () => {
     });
 
     // Bug #7384 fix preserved: when the user is inside the focus-mode overlay
-    // (preparation screen visible) and `isSkipPreparation` is OFF, the effect
-    // must NOT auto-start the session — the user should click 'Start' manually
-    // to see the rocket animation.
-    it('should NOT dispatch when overlay is shown and isSkipPreparation is false (issue #7384)', (done) => {
+    // and has opted into the preparation screen (`isShowPreparation` ON), the
+    // effect must NOT auto-start the session — the user should click 'Start'
+    // manually to see the rocket countdown.
+    it('should NOT dispatch when overlay is shown and isShowPreparation is true (issue #7384)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         autoStartFocusOnPlay: true,
         isSkipPreparation: false,
+        isShowPreparation: true,
       });
       store.overrideSelector(selectors.selectTimer, createMockTimer());
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);

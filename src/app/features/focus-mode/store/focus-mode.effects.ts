@@ -71,8 +71,8 @@ export class FocusModeEffects {
   // Auto-spawn (opt-in via `autoStartFocusOnPlay`): if no session is active and
   // the user has opted in, start a new session quietly. The overlay is NOT
   // dispatched — surface comes from the existing banner / future indicator.
-  // Inside the overlay we still respect `isSkipPreparation` so #7384's
-  // rocket-prep flow keeps working for users who entered via F-key.
+  // Inside the overlay we still respect `isShowPreparation` so #7384's
+  // rocket-prep flow keeps working for users who opted into the prep screen.
   syncTrackingStartToSession$ = createEffect(() =>
     this.taskService.currentTaskId$.pipe(
       skipWhileApplyingRemoteOps(),
@@ -125,10 +125,11 @@ export class FocusModeEffects {
             if (!cfg?.autoStartFocusOnPlay) {
               return EMPTY;
             }
-            // Bug #7384: respect isSkipPreparation only inside the overlay
-            // (preparation screen is overlay-bound). For the quiet auto-spawn
-            // path there's no overlay → no rocket → bypass the prep gate.
-            if (isOverlayShown && !cfg?.isSkipPreparation) {
+            // Bug #7384: respect isShowPreparation only inside the overlay
+            // (preparation screen is overlay-bound). When the user opted into the
+            // prep screen, let the manual Start click drive it; the quiet
+            // auto-spawn path (no overlay) has no rocket and bypasses the gate.
+            if (isOverlayShown && cfg?.isShowPreparation) {
               return EMPTY;
             }
             const strategy = this.strategyFactory.getStrategy(mode);

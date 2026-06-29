@@ -2333,7 +2333,7 @@
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
       "L_MANUAL_BREAK_START": "Enable Pomodoro overtime (keep timer running until manually ended)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
-      "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
+      "L_SHOW_PREPARATION_SCREEN": "Show preparation screen before each session (rocket countdown)",
       "TITLE": "Focus Mode"
     },
     "TASK_WIDGET": {

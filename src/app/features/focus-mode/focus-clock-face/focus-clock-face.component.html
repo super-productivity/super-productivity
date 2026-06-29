@@ -1,6 +1,7 @@
 <div class="clock-face">
   @if (isRing()) {
     <svg
+      @fadeSwap
       class="clock-face__layer focus-progress-circle"
       viewBox="0 0 36 36"
     >
@@ -21,10 +22,12 @@
   }
   @if (isBreathing()) {
     <breathing-dot
+      @fadeSwap
       class="clock-face__layer"
       [isPaused]="isPaused()"
     ></breathing-dot>
     <svg
+      @fadeSwap
       class="clock-face__layer focus-progress-circle focus-progress-circle--idle"
       viewBox="0 0 36 36"
     >
