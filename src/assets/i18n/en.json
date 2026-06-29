@@ -2450,6 +2450,7 @@
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_FR_FR": "French: 24-hour, DD/MM/YYYY",
+      "TIME_LOCALE_ISO": "ISO 8601: 24-hour, YYYY-MM-DD",
       "TIME_LOCALE_IT_IT": "Italian: 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_JA_JP": "Japanese: 24-hour, YYYY/MM/DD",
       "TIME_LOCALE_KO_KR": "Korean: 12-hour AM/PM, YYYY. MM. DD",
