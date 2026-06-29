@@ -69,4 +69,28 @@ describe('ClipboardImageService', () => {
       expect(await service.resolveClipboardImageUrl('')).toBeNull();
     });
   });
+
+  describe('hasResolvableImages', () => {
+    it('is true when an indexeddb clipboard-image URL is present', () => {
+      expect(
+        service.hasResolvableImages('a ![x](indexeddb://clipboard-images/clip-1.png) b'),
+      ).toBe(true);
+    });
+
+    it('is false for plain text and ordinary image links', () => {
+      expect(service.hasResolvableImages('just some notes')).toBe(false);
+      expect(service.hasResolvableImages('![x](https://example.com/img.png)')).toBe(
+        false,
+      );
+    });
+
+    // The check must be a superset of what resolveMarkdownImages rewrites: any
+    // URL the resolver would touch has to be flagged, or the synchronous render
+    // path would leave a permanently broken image.
+    it('flags every indexeddb URL the resolver would rewrite', () => {
+      const md = '![x](indexeddb://clipboard-images/abc-123)';
+      expect(md.match(/indexeddb:\/\/clipboard-images\/[^)\s=]+/g)).not.toBeNull();
+      expect(service.hasResolvableImages(md)).toBe(true);
+    });
+  });
 });

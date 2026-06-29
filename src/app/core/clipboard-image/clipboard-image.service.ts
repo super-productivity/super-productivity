@@ -300,6 +300,25 @@ export class ClipboardImageService {
   }
 
   /**
+   * Cheap synchronous check for whether resolveMarkdownImages would have async
+   * work to do (rewrite indexeddb:// or, in Electron, file:/// clipboard-image
+   * URLs). Lets callers render markdown immediately when nothing needs resolving
+   * instead of waiting a tick for the (no-op) async resolution to settle.
+   *
+   * Deliberately a coarse substring test, not the resolver's exact URL regex:
+   * it only needs to be a superset of what resolveMarkdownImages rewrites. A
+   * false positive is harmless (just defers a tick), a false negative would
+   * render a permanently broken image — so erring broad is the safe direction.
+   * Substring also avoids the regex's O(n²) backtracking on adversarial notes.
+   */
+  hasResolvableImages(markdown: string): boolean {
+    return (
+      markdown.includes(INDEXEDDB_PROTOCOL) ||
+      (IS_ELECTRON && markdown.includes('/clipboard-images/'))
+    );
+  }
+
+  /**
    * Pre-resolves all indexeddb:// URLs in markdown content to blob/file URLs.
    * Call this before rendering markdown to ensure images display correctly.
    */
