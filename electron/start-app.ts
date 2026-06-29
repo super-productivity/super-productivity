@@ -26,6 +26,7 @@ import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
+const APP_DISPLAY_NAME = 'Super Productivity';
 const IS_MAC = process.platform === 'darwin';
 // const DESKTOP_ENV = process.env.DESKTOP_SESSION;
 // const IS_GNOME = DESKTOP_ENV === 'gnome' || DESKTOP_ENV === 'gnome-xorg';
@@ -150,6 +151,14 @@ export const startApp = (): void => {
     // set userDa dir to common data to avoid the data being accessed by the update process
     app.setPath('userData', newPath);
     app.setAppLogsPath();
+  }
+
+  if (process.platform === 'linux') {
+    // Preserve the historical userData path based on package.json `name`, while
+    // exposing a human-readable app name to Linux desktop environments.
+    const userDataPath = app.getPath('userData');
+    app.setPath('userData', userDataPath);
+    app.setName(APP_DISPLAY_NAME);
   }
 
   // Defense-in-depth against GPU init failures on confined Linux packages
