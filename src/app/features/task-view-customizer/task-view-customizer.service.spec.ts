@@ -24,6 +24,7 @@ import {
   FilterOption,
   GROUP_OPTION_TYPE,
   GroupOption,
+  NO_TAG_GROUP_ID,
   SORT_OPTION_TYPE,
   SORT_ORDER,
   SortOption,
@@ -679,6 +680,60 @@ describe('TaskViewCustomizerService', () => {
         'Project A',
         'Project B',
       ]);
+    });
+  });
+
+  describe('_buildGroupTagIdByKey (drag-to-retag mapping)', () => {
+    // Build a grouped record dynamically: bucket keys are tag titles, which
+    // contain spaces and so can't be object-literal property names under the
+    // naming-convention lint rule.
+    const groupedOf = (...keys: string[]): Record<string, TaskWithSubTasks[]> =>
+      Object.fromEntries(keys.map((k) => [k, []]));
+
+    const build = (
+      grouped: Record<string, TaskWithSubTasks[]>,
+    ): Record<string, string | null> =>
+      (
+        service as unknown as {
+          _buildGroupTagIdByKey: (
+            g: Record<string, TaskWithSubTasks[]>,
+          ) => Record<string, string | null>;
+        }
+      )._buildGroupTagIdByKey(grouped);
+
+    it('maps each real tag-title group to its tagId', () => {
+      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      const res = build(groupedOf('Tag A', 'Tag B'));
+      expect(res['Tag A']).toBe('Tag A');
+      expect(res['Tag B']).toBe('Tag B');
+    });
+
+    it('maps the No-tag bucket to the clear-tags sentinel and Unknown-tag to null', () => {
+      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      const res = build(groupedOf('Tag A', 'No tag', 'Unknown tag'));
+      expect(res['Tag A']).toBe('Tag A');
+      expect(res['No tag']).toBe(NO_TAG_GROUP_ID);
+      expect(res['Unknown tag']).toBeNull();
+    });
+
+    it('maps a title shared by multiple tags to null (ambiguous, cannot retag)', () => {
+      (service as unknown as { _allTags: Tag[] })._allTags = [
+        { id: 'id1', title: 'Dup' } as Tag,
+        { id: 'id2', title: 'Dup' } as Tag,
+        { id: 'id3', title: 'Unique' } as Tag,
+      ];
+      const res = build(groupedOf('Dup', 'Unique'));
+      expect(res['Dup']).toBeNull();
+      expect(res['Unique']).toBe('id3');
+    });
+
+    it('prefers a real tag titled "No tag" over the clear-tags sentinel', () => {
+      // Guards against silently clearing tags when a user names a tag "No tag".
+      (service as unknown as { _allTags: Tag[] })._allTags = [
+        { id: 'real-no-tag', title: 'No tag' } as Tag,
+      ];
+      const res = build(groupedOf('No tag'));
+      expect(res['No tag']).toBe('real-no-tag');
     });
   });
 
@@ -1451,6 +1506,9 @@ describe('TaskViewCustomizerService', () => {
           expect(Object.keys(result.grouped!)).toEqual(['Tag A']);
           expect(result.grouped!['Tag A']?.length).toBe(1);
           expect(result.grouped!['Tag A']?.[0].id).toBe('project-a-task');
+          // Tag grouping emits the retag id-map.
+          expect(result.groupTagIdByKey).toBeDefined();
+          expect(result.groupTagIdByKey!['Tag A']).toBe('Tag A');
           done();
         });
       });
@@ -1473,6 +1531,8 @@ describe('TaskViewCustomizerService', () => {
           const groupKeys = Object.keys(result.grouped!);
           expect(groupKeys).toEqual(['Project A']);
           expect(groupKeys).not.toContain('Project B');
+          // The retag id-map is tag-grouping-only.
+          expect(result.groupTagIdByKey).toBeUndefined();
           done();
         });
       });

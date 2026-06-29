@@ -28,6 +28,7 @@ import {
   SORT_ORDER,
   FILTER_COMMON,
   OPTIONS,
+  NO_TAG_GROUP_ID,
 } from './types';
 import { DateAdapter } from '@angular/material/core';
 import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
@@ -40,10 +41,22 @@ const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
 );
 
+// Display keys for the two virtual tag-group buckets (kept as constants so the
+// grouping and the drag-to-retag id-map agree on the exact strings).
+const NO_TAG_GROUP_KEY = 'No tag';
+const UNKNOWN_TAG_GROUP_KEY = 'Unknown tag';
+
 /** Result of {@link TaskViewCustomizerService.customizeUndoneTasks}. */
 export interface CustomizedUndoneTasks {
   list: TaskWithSubTasks[];
   grouped?: Record<string, TaskWithSubTasks[]>;
+  /**
+   * Tag grouping only: group-header title → its tagId, or `null` for buckets
+   * with no single tag ('No tag', 'Unknown tag', or a title shared by several
+   * tags). Drives drag-to-retag in the work view (dragging a task into another
+   * tag group reassigns its tags). Absent for non-tag groupings.
+   */
+  groupTagIdByKey?: Record<string, string | null>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -215,8 +228,12 @@ export class TaskViewCustomizerService {
         const grouped = !isDefaultGroup
           ? this.applyGrouping(sorted, group.type)
           : undefined;
+        const groupTagIdByKey =
+          grouped && group.type === GROUP_OPTION_TYPE.tag
+            ? this._buildGroupTagIdByKey(grouped)
+            : undefined;
 
-        return { result: { list: sorted, grouped }, isDefault: false };
+        return { result: { list: sorted, grouped, groupTagIdByKey }, isDefault: false };
       }),
       // Emit the default (uncustomized) list synchronously, but keep the
       // customized path on the animation-frame scheduler. The customized branch
@@ -457,18 +474,62 @@ export class TaskViewCustomizerService {
   }
 
   /**
-   * Tag title → lowest sidebar (menu-tree) index among tags with that title.
-   * Duplicate-titled tags collapse to one slot, matching applyGrouping which
-   * also keys its buckets by title - the two stay in agreement by construction.
+   * Per-title metadata in sidebar (menu-tree) order — the single source for both
+   * group ordering and the drag-to-retag id-map, so the two can't drift:
+   * - `index`: lowest sidebar index among tags with that title (for ordering).
+   * - `id`: the tagId, or `null` when several tags share the title (ambiguous,
+   *   so retag can't pick one).
+   * Duplicate-titled tags collapse to one slot, matching {@link _groupByTag}
+   * which also keys its buckets by title. TODAY is excluded by
+   * {@link _tagsInSidebarOrder} (virtual membership, never a real tagId), so it
+   * can never appear — see ARCHITECTURE-DECISIONS #2 / sync rule #5.
    */
-  private _getTagTitleOrderMap(): Map<string, number> {
-    const titleOrder = new Map<string, number>();
+  private _tagMetaByTitle(): Map<string, { id: string | null; index: number }> {
+    const byTitle = new Map<string, { id: string | null; index: number }>();
     this._tagsInSidebarOrder().forEach((tag, index) => {
-      if (!titleOrder.has(tag.title)) {
-        titleOrder.set(tag.title, index);
+      const existing = byTitle.get(tag.title);
+      if (existing) {
+        existing.id = null; // duplicate title → ambiguous
+      } else {
+        byTitle.set(tag.title, { id: tag.id, index });
       }
     });
-    return titleOrder;
+    return byTitle;
+  }
+
+  private _getTagTitleOrderMap(): Map<string, number> {
+    const order = new Map<string, number>();
+    this._tagMetaByTitle().forEach((meta, title) => order.set(title, meta.index));
+    return order;
+  }
+
+  /**
+   * Map each tag-group header title to its drag-to-retag target:
+   * - a real tagId for a single-tag group,
+   * - {@link NO_TAG_GROUP_ID} for the 'No tag' bucket (a drop there clears tags),
+   * - `null` for the 'Unknown tag' bucket or a title shared by several tags
+   *   (ambiguous — can't be retagged).
+   */
+  private _buildGroupTagIdByKey(
+    grouped: Record<string, TaskWithSubTasks[]>,
+  ): Record<string, string | null> {
+    const meta = this._tagMetaByTitle();
+    const out: Record<string, string | null> = {};
+    Object.keys(grouped).forEach((key) => {
+      const realTag = meta.get(key);
+      // A real tag owning this title wins (its id, or null when several tags
+      // share it). This guards the case of a user tag literally titled "No tag":
+      // dropping there adds that tag instead of hitting the clear-tags sentinel,
+      // which is reserved for the genuine virtual untagged bucket.
+      if (realTag) {
+        out[key] = realTag.id;
+      } else if (key === NO_TAG_GROUP_KEY) {
+        out[key] = NO_TAG_GROUP_ID;
+      } else {
+        out[key] = null;
+      }
+    });
+    return out;
   }
 
   private _groupByTag(tasks: TaskWithSubTasks[]): Record<string, TaskWithSubTasks[]> {
@@ -505,10 +566,10 @@ export class TaskViewCustomizerService {
       }
     });
     if (unknownTagTasks.length) {
-      grouped['Unknown tag'] = unknownTagTasks;
+      grouped[UNKNOWN_TAG_GROUP_KEY] = unknownTagTasks;
     }
     if (noTagTasks.length) {
-      grouped['No tag'] = noTagTasks;
+      grouped[NO_TAG_GROUP_KEY] = noTagTasks;
     }
 
     return grouped;

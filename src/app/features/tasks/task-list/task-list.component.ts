@@ -47,7 +47,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-customizer.service';
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
-import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
+import { DEFAULT_OPTIONS, NO_TAG_GROUP_ID } from '../../task-view-customizer/types';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { DateService } from '../../../core/date/date.service';
 import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
@@ -83,6 +83,10 @@ export interface DropModelDataForList {
   listId: TaskListId;
   listModelId: ListModelId;
   filteredTasks: TaskWithSubTasks[];
+  // Set only for lists rendered inside the grouped-by-tag work view: the tagId
+  // of this group, `null` for a no-single-tag bucket, `undefined` everywhere
+  // else. A drop across two defined-but-different values reassigns tags.
+  groupTagId?: string | null;
 }
 
 @Component({
@@ -126,6 +130,11 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   listId = input.required<TaskListId>();
   listModelId = input.required<ListModelId>();
   parentId = input<string | undefined>(undefined);
+  // Tag id of the group this list renders in the grouped-by-tag work view.
+  // `undefined` (default) = not a tag group; `null` = a no-single-tag bucket
+  // ('No tag' / 'Unknown tag' / a title shared by multiple tags). A real id
+  // enables drag-to-retag across groups.
+  groupTagId = input<string | null | undefined>(undefined);
 
   noTasksMsg = input<string | undefined>(undefined);
   isBacklog = input(false);
@@ -137,6 +146,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       listId: this.listId(),
       listModelId: this.listModelId(),
       filteredTasks: this.filteredTasks(),
+      groupTagId: this.groupTagId(),
     };
   });
 
@@ -421,6 +431,34 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    // Grouped-by-tag view: dropping a task into a *different* tag group
+    // reassigns its tags instead of reordering. `groupTagId` is defined only for
+    // lists inside that view; a string is a retag target (a real tagId → move:
+    // drop the source tag, add the target; the NO_TAG_GROUP_ID sentinel → clear
+    // all tags), `null` an un-retaggable bucket ('Unknown tag'/ambiguous). A
+    // `null` target or reordering within one group falls through to the move below.
+    //
+    // NOTE: handled here, before _move() (which owns every other list-type
+    // dispatch). v1 limitations: drop position within the target group isn't
+    // preserved (the task takes the group's natural order), and a subtask
+    // dragged from a SUB list has groupTagId === undefined, so it falls through
+    // to convertToMainTask without acquiring the target tag.
+    const srcTagGroup = srcListData.groupTagId;
+    const targetTagGroup = targetListData.groupTagId;
+    if (
+      typeof targetTagGroup === 'string' &&
+      srcTagGroup !== undefined &&
+      targetTagGroup !== srcTagGroup
+    ) {
+      this.dropListService.blockAniTrigger$.next();
+      this._retagAcrossGroups(
+        srcTagGroup,
+        targetTagGroup,
+        draggedTask as TaskWithSubTasks,
+      );
+      return;
+    }
+
     const newIds =
       targetTask && targetTask.id !== draggedTask.id
         ? (() => {
@@ -498,6 +536,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     });
   }
 
+  // Dispatches a drag-drop to the right list-type action (regular/backlog/
+  // section/subtask/overdue). NOTE: grouped-by-tag cross-group drops are
+  // handled earlier, in drop(), and never reach here (see the groupTagId branch).
   private _move(
     taskId: string,
     src: DropListModelSource | string,
@@ -674,6 +715,36 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
       );
     }
+  }
+
+  /**
+   * Reassign tags when a task is dragged across tag-group boundaries in the
+   * grouped-by-tag work view:
+   * - target is the {@link NO_TAG_GROUP_ID} bucket → clear all tags;
+   * - otherwise move semantics: drop the source group's tag (when the drag
+   *   started from a real tag group) and add the target group's tag.
+   * `updateTags` de-dupes, so a task that already carries the target tag is fine.
+   *
+   * NOTE: deliberately a plain filter + append rather than reusing boards'
+   * `rewriteTagIdsForPanel` — that helper lives in the boards feature, and
+   * importing it here would invert the dependency direction (boards depends on
+   * tasks). For a single tag the rewrite is trivial; promote a shared tag util
+   * if a group ever needs to represent multiple tags.
+   */
+  private _retagAcrossGroups(
+    srcTagId: string | null,
+    targetTagId: string,
+    task: TaskWithSubTasks,
+  ): void {
+    if (targetTagId === NO_TAG_GROUP_ID) {
+      this._taskService.updateTags(task, []);
+      return;
+    }
+    const nextTagIds = [
+      ...(task.tagIds ?? []).filter((id) => id !== srcTagId),
+      targetTagId,
+    ];
+    this._taskService.updateTags(task, nextTagIds);
   }
 
   expandDoneTasks(): void {

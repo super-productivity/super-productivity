@@ -294,3 +294,11 @@ export const PRESETS = {
   deadline: deadlinePresets,
   time: timePresets,
 };
+
+/**
+ * Sentinel `groupTagId` for the virtual "No tag" bucket in the grouped-by-tag
+ * view: dropping a task here clears all of its tags. Distinct from `null`, which
+ * marks the 'Unknown tag' / ambiguous (duplicate-title) buckets that can't be
+ * retagged. Never persisted — only flows through the in-memory drop data.
+ */
+export const NO_TAG_GROUP_ID = 'NO_TAG_GROUP';
