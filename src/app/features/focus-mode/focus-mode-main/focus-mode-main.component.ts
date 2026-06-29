@@ -3,18 +3,19 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   HostListener,
   inject,
   signal,
 } from '@angular/core';
 import { Log } from '../../../core/log';
-import { from, Observable, of, Subject } from 'rxjs';
+import { from, Observable, of, Subject, timer } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
 import { debounceTime, switchMap, take } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
+import { fadeAnimation, fadeSwapAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
 import { Store } from '@ngrx/store';
 import {
@@ -61,6 +62,7 @@ import {
   FocusModeMode,
 } from '../focus-mode.model';
 import { FocusModeCountdownComponent } from '../focus-mode-countdown/focus-mode-countdown.component';
+import { FocusModePreparationRocketComponent } from '../focus-mode-countdown/rocket/focus-mode-preparation-rocket.component';
 import { InputDurationSliderComponent } from '../../../ui/duration/input-duration-slider/input-duration-slider.component';
 import {
   SegmentedButtonGroupComponent,
@@ -86,6 +88,7 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
       ]),
     ]),
     fadeAnimation,
+    fadeSwapAnimation,
     slideInOutFromBottomAni,
   ],
   imports: [
@@ -104,6 +107,7 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     SimpleCounterButtonComponent,
     MatMiniFabButton,
     FocusModeCountdownComponent,
+    FocusModePreparationRocketComponent,
     MatFabButton,
     InputDurationSliderComponent,
     SegmentedButtonGroupComponent,
@@ -122,6 +126,15 @@ export class FocusModeMainComponent {
   private readonly _store = inject(Store);
   private readonly _focusModeStorage = inject(FocusModeStorageService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _destroyRef = inject(DestroyRef);
+
+  // How long the default inline rocket "lift off" plays before the session
+  // starts. Matches the inline launch animation (0.8s: cross-fade in → settle →
+  // launch) so the rocket fully clears before the InProgress view replaces the
+  // play button.
+  private readonly _LAUNCH_DURATION_MS = 800;
+  // True while the brief inline rocket launch plays (default, prep screen off).
+  readonly isLaunching = signal(false);
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -446,6 +459,14 @@ export class FocusModeMainComponent {
   }
 
   startSession(): void {
+    // Ignore re-entrant starts while the inline launch is already playing (e.g.
+    // a keyboard Enter on the still-focused play button, or a rapid double
+    // click) — otherwise a second timer would dispatch startFocusSession again
+    // and reset the freshly-started session.
+    if (this.isLaunching()) {
+      return;
+    }
+
     // Persist any pending (debounced) Pomodoro duration edit before starting so
     // a value typed within the debounce window isn't dropped.
     if (this.mode() === FocusModeMode.Pomodoro) {
@@ -461,30 +482,52 @@ export class FocusModeMainComponent {
       return;
     }
 
-    const shouldSkipPreparation = config?.isSkipPreparation || false;
-    if (shouldSkipPreparation) {
-      const duration =
-        this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();
-      this._store.dispatch(
-        startFocusSession({
-          duration,
-        }),
-      );
+    // The full-screen preparation countdown is opt-in (off by default).
+    if (config?.isShowPreparation) {
+      this._store.dispatch(startFocusPreparation());
       return;
     }
 
-    this._store.dispatch(startFocusPreparation());
+    // Default: play a quick inline rocket launch from the play button, then start.
+    this._launchThenStart();
   }
 
   onCountdownComplete(): void {
+    // Opt-in full-prep path: the countdown screen finished, now start the session.
+    this._dispatchStartSession();
+    // Main UI state transitions are now handled by the store
+  }
+
+  private _launchThenStart(): void {
+    // Honor "reduce motion": skip the rocket flourish and its timed delay,
+    // starting immediately. Otherwise a motion-sensitive user would just wait
+    // out an 800ms delay for an animation they never see.
+    if (this._prefersReducedMotion()) {
+      this._dispatchStartSession();
+      return;
+    }
+
+    this.isLaunching.set(true);
+    timer(this._LAUNCH_DURATION_MS)
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe(() => {
+        this.isLaunching.set(false);
+        // The task could have been deselected during the brief launch window.
+        if (!this.currentTask()) {
+          return;
+        }
+        this._dispatchStartSession();
+      });
+  }
+
+  private _prefersReducedMotion(): boolean {
+    return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  }
+
+  private _dispatchStartSession(): void {
     // For Flowtime mode, duration must be 0 to count indefinitely
     const duration = this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();
-    this._store.dispatch(
-      startFocusSession({
-        duration,
-      }),
-    );
-    // Main UI state transitions are now handled by the store
+    this._store.dispatch(startFocusSession({ duration }));
   }
 
   pauseSession(): void {

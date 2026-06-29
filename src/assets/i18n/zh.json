@@ -6,6 +6,11 @@
       "MSG": "您想要将超级生产力安装为 PWA 吗？"
     },
     "B_OFFLINE": "您已断开互联网连接。同步和请求问题提供者数据将无法工作。",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "暂不",
+      "MSG": "您已经使用 Super Productivity 一段时间了。设置同步以备份您的数据，并在所有设备上保持安全。",
+      "SETUP": "设置同步"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "更改背景",
       "CHANGE_PROJECT_SETTINGS": "更改项目设置",

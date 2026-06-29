@@ -6,6 +6,11 @@
       "MSG": "Vil du installere Super Productivity som en PWA?"
     },
     "B_OFFLINE": "Du er koblet fra internett. Synkronisering og å be om data fra leverandører fungerer ikke.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Ikke nå",
+      "MSG": "Du har brukt Super Productivity en stund. Sett opp synkronisering for å sikkerhetskopiere dataene dine og holde dem trygge på tvers av enheter.",
+      "SETUP": "Sett opp synkronisering"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Endre bakgrunn"
     },

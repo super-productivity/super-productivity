@@ -6,6 +6,11 @@
       "MSG": "Super ProductivityをPWAとしてインストールしますか？"
     },
     "B_OFFLINE": "インターネットに接続していません。課題プロバイダーデータの同期と要求は機能しません。",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "後で",
+      "MSG": "Super Productivity をしばらくご利用いただいています。同期を設定して、データをバックアップし、すべてのデバイスで安全に保ちましょう。",
+      "SETUP": "同期を設定"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "変更の背景",
       "CHANGE_PROJECT_SETTINGS": "プロジェクト設定を変更",

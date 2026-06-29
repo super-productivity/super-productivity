@@ -6,6 +6,11 @@
       "MSG": "Süper Verimliliği PWA olarak kurmak ister misiniz?"
     },
     "B_OFFLINE": "İnternet bağlantınız kesildi. Verileri senkronize etmek ve sağlayıcıdan sorunları istemek işe yaramaz.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Şimdi değil",
+      "MSG": "Super Productivity'yi bir süredir kullanıyorsunuz. Verilerinizi yedeklemek ve tüm cihazlarınızda güvende tutmak için senkronizasyonu ayarlayın.",
+      "SETUP": "Senkronizasyonu ayarla"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Proje Ayarlarını Değiştir",
       "CHANGE_TAG_SETTINGS": "Etiket Ayarlarını Değiştir"

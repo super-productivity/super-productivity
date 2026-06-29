@@ -37,10 +37,10 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
           },
         },
         {
-          key: 'isSkipPreparation',
+          key: 'isShowPreparation',
           type: 'checkbox',
           templateOptions: {
-            label: T.GCF.FOCUS_MODE.L_SKIP_PREPARATION_SCREEN,
+            label: T.GCF.FOCUS_MODE.L_SHOW_PREPARATION_SCREEN,
           },
         },
         {

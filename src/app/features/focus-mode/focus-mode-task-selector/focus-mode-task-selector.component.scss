@@ -7,16 +7,18 @@
 .task-selector-backdrop {
   position: fixed;
   inset: 0;
-  background: var(--c-dark-50);
+  // Standard app scrim (matches dialogs/overlays); no custom blur.
+  background: var(--c-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(2px);
 }
 
 .task-selector-overlay {
-  background: var(--c-bg-raised);
+  // Highest-elevation surface so the panel + input read as opaque against the
+  // scrim (the previous --c-bg-raised was undefined → transparent panel).
+  background: var(--bg-lightest);
   border-radius: 8px;
   box-shadow: var(--whiteframe-shadow-8dp);
   padding: var(--s2);

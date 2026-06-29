@@ -148,11 +148,25 @@
   // its [bareRing] / [hideHandle] inputs.
 }
 
-// When the duration slider is showing (countdown prep), hide the clock
-// digits — the slider's own value display takes over. Toggled by a class
-// bound to isShowDurationSlider() in the template.
+// The clock digits cross-fade with the duration slider (which swaps via
+// @fadeSwap): when the slider takes over (countdown prep) the digits fade out;
+// when it leaves (session start) the digits wait that fade-out, then fade in —
+// so the swap is sequential, not a hard cut. Mirrors fadeSwapAnimation's timing
+// (fade in is delayed by the leave duration).
+.clock-time {
+  transition: opacity var(--transition-duration-enter) var(--transition-duration-leave)
+    var(--ani-enter-timing);
+}
+
+// When the duration slider is showing (countdown prep), hide the clock digits —
+// the slider's own value display takes over. Toggled by a class bound to
+// isShowDurationSlider() in the template.
 .clock-display__content.is-duration-slider-active .clock-time {
-  visibility: hidden;
+  opacity: 0;
+  // Fade out immediately (no delay) so the digits clear before the slider settles.
+  transition: opacity var(--transition-duration-leave) var(--ani-leave-timing);
+  // Hidden digits must not capture the slider's pointer / tooltip interactions.
+  pointer-events: none;
 }
 
 // In-circle buttons (+/-, reset-cycles) — opacity is driven globally by
@@ -200,12 +214,46 @@
 .play-button {
   width: var(--s8);
   height: var(--s8);
+  // Smoothly cross-fade out when the launch starts (see .is-launching below).
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 
   mat-icon {
     font-size: 36px;
     width: 36px;
     height: 36px;
   }
+}
+
+// Default start: the play button shrinks away (implodes) as the rocket rises up
+// into its place and lifts off. The play button and rocket share the primary
+// colour, so a plain opacity cross-fade in place reads as "blue stays blue" —
+// the scale-down here + the rocket's rise-in (see the keyframe) give the handoff
+// visible motion instead of an invisible same-colour fade.
+.play-actions.is-launching {
+  .play-button,
+  .mode-settings-btn {
+    opacity: 0;
+    transform: scale(0.4);
+    pointer-events: none;
+  }
+}
+
+// Inline rocket launch, centered over the play FAB (button stays in flow so the
+// row keeps its size). The launch keyframe fades it in, lifts it off, fades out.
+.inline-launch-rocket {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--s8);
+  height: var(--s8);
+  overflow: visible;
+  pointer-events: none;
 }
 
 // ========== ROW 1 (In Progress): SIMPLE COUNTER BUTTONS ==========

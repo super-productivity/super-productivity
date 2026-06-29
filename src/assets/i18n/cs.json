@@ -6,6 +6,11 @@
       "MSG": "Chcete nainstalovat Super Produktivitu jako PWA?"
     },
     "B_OFFLINE": "Jste odpojeni od internetu. Synchronizace a požadavky na data poskytovatele problémů nebudou fungovat.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Teď ne",
+      "MSG": "Super Productivity používáte už nějakou dobu. Nastavte synchronizaci, abyste zálohovali svá data a udrželi je v bezpečí na všech zařízeních.",
+      "SETUP": "Nastavit synchronizaci"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Změnit pozadí"
     },

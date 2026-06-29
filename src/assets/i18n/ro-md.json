@@ -6,6 +6,11 @@
       "MSG": "Vrei să instalezi Super Productivity ca PWA (Progressive Web App)?"
     },
     "B_OFFLINE": "Ești deconectat de la internet. Sincronizarea și solicitarea datelor furnizorului de probleme nu vor funcționa.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Nu acum",
+      "MSG": "Folosești Super Productivity de ceva timp. Configurează sincronizarea pentru a face o copie de rezervă a datelor tale și a le păstra în siguranță pe toate dispozitivele.",
+      "SETUP": "Configurează sincronizarea"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Schimbă setările proiectului",
       "CHANGE_TAG_SETTINGS": "Schimbă setările etichetelor"

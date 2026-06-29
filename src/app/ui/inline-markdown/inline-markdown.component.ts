@@ -176,12 +176,22 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     this._model = v || '';
     this.modelCopy.set(v || '');
 
-    // Start resolving but don't update the rendered model yet
     this._resolveGeneration++;
     if (v) {
-      this._updateResolvedModel(v);
+      if (this._clipboardImageService.hasResolvableImages(v)) {
+        // Has clipboard images whose URLs must be resolved to blob: URLs first;
+        // defer the render until then so we don't flash a broken image.
+        this._updateResolvedModel(v);
+      } else {
+        // Nothing to resolve: render the parsed markdown on the first paint
+        // instead of a tick later, which briefly showed the raw notes as plain
+        // text before the async (no-op) resolution settled.
+        this.resolvedModel.set(v);
+        this.resolvedMarkdownData = v;
+      }
     } else {
       this.resolvedModel.set('');
+      this.resolvedMarkdownData = '';
     }
 
     if (!this.isShowEdit()) {

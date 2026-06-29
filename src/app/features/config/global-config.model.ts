@@ -262,7 +262,19 @@ export type DominaModeConfig = Readonly<{
 }>;
 
 export type FocusModeConfig = Readonly<{
+  /**
+   * @deprecated Replaced by the opt-in `isShowPreparation`. The full-screen
+   * preparation countdown is now off by default; pressing start plays a brief
+   * inline rocket launch instead. Kept (still written with its default) so older
+   * clients that require this field keep validating synced config — no longer read.
+   */
   isSkipPreparation: boolean;
+  /**
+   * Opt-in: when true, starting a focus session first shows the full-screen
+   * preparation countdown (the "Get ready" checklist + rocket). Off/absent by
+   * default — the default start plays a quick inline rocket launch and begins.
+   */
+  isShowPreparation?: boolean;
   focusModeSound?: 'off' | 'tick' | 'whiteNoise';
   /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;

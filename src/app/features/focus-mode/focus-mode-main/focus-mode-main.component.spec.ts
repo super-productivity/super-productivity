@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, EMPTY, of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -448,9 +448,10 @@ describe('FocusModeMainComponent', () => {
       });
     });
 
-    it('should dispatch startFocusPreparation when skip is disabled', () => {
+    it('should dispatch startFocusPreparation when the prep screen is opted in', () => {
       focusModeServiceSpy.focusModeConfig.and.returnValue({
         isSkipPreparation: false,
+        isShowPreparation: true,
       });
 
       component.startSession();
@@ -458,31 +459,65 @@ describe('FocusModeMainComponent', () => {
       expect(mockStore.dispatch).toHaveBeenCalledWith(actions.startFocusPreparation());
     });
 
-    it('should dispatch startFocusSession with duration when skip is enabled', () => {
+    it('should play the inline rocket then dispatch startFocusSession by default', fakeAsync(() => {
       component.displayDuration.set(900000);
       focusModeServiceSpy.focusModeConfig.and.returnValue({
-        isSkipPreparation: true,
+        isSkipPreparation: false,
       });
 
       component.startSession();
 
+      // The rocket launches first; the session does not start immediately.
+      expect(component.isLaunching()).toBe(true);
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 900000 }),
+      );
+
+      tick(800);
+
+      expect(component.isLaunching()).toBe(false);
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         actions.startFocusSession({ duration: 900000 }),
       );
-    });
+    }));
 
-    it('should use zero duration for Flowtime when skipping preparation', () => {
+    it('should ignore a re-entrant start while the inline launch is playing', fakeAsync(() => {
+      component.displayDuration.set(900000);
       focusModeServiceSpy.focusModeConfig.and.returnValue({
-        isSkipPreparation: true,
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      expect(component.isLaunching()).toBe(true);
+
+      // A second start during the launch window (e.g. keyboard Enter on the
+      // still-focused play button) must be a no-op — not a second timer that
+      // would dispatch startFocusSession again and reset the session.
+      component.startSession();
+
+      tick(800);
+
+      const startSessionDispatchCount = (mockStore.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .filter(
+          ([action]) => action.type === actions.startFocusSession({ duration: 0 }).type,
+        ).length;
+      expect(startSessionDispatchCount).toBe(1);
+    }));
+
+    it('should use zero duration for Flowtime on the default inline-start path', fakeAsync(() => {
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
       });
       focusModeServiceSpy.mode.and.returnValue(FocusModeMode.Flowtime);
 
       component.startSession();
+      tick(800);
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         actions.startFocusSession({ duration: 0 }),
       );
-    });
+    }));
 
     it('should open the task selector when no task is selected', () => {
       currentTaskSubject.next(null);
@@ -1034,9 +1069,10 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       expect(component.isTaskSelectorOpen()).toBe(true);
     });
 
-    it('should dispatch startFocusPreparation when a task is selected and skip preparation is off', () => {
+    it('should dispatch startFocusPreparation when a task is selected and the prep screen is opted in', () => {
       focusModeConfigSignal.set({
         isSkipPreparation: false,
+        isShowPreparation: true,
       });
       currentTaskSubject.next(mockTask);
       fixture.detectChanges();
@@ -1047,21 +1083,25 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       expect(component.isTaskSelectorOpen()).toBe(false);
     });
 
-    it('should dispatch startFocusSession when task is selected and skip preparation is enabled', () => {
+    it('should play the inline rocket then dispatch startFocusSession by default', fakeAsync(() => {
       component.displayDuration.set(1500000);
       focusModeConfigSignal.set({
-        isSkipPreparation: true,
+        isSkipPreparation: false,
       });
       currentTaskSubject.next(mockTask);
       fixture.detectChanges();
 
       component.startSession();
+      expect(component.isLaunching()).toBe(true);
 
+      tick(800);
+
+      expect(component.isLaunching()).toBe(false);
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         actions.startFocusSession({
           duration: 1500000,
         }),
       );
-    });
+    }));
   });
 });

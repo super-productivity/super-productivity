@@ -27,9 +27,14 @@ describe('InlineMarkdownComponent', () => {
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'resolveMarkdownImages',
+      'hasResolvableImages',
     ]);
     mockClipboardImageService.resolveMarkdownImages.and.callFake((content: string) =>
       Promise.resolve(content),
+    );
+    // Default: notes have no clipboard images, so they render synchronously.
+    mockClipboardImageService.hasResolvableImages.and.callFake((content: string) =>
+      content.includes('indexeddb://clipboard-images/'),
     );
 
     await TestBed.configureTestingModule({
@@ -1677,7 +1682,9 @@ describe('InlineMarkdownComponent', () => {
 
   describe('model setter race condition', () => {
     it('should not show stale notes when switching from a task with notes to one without', async () => {
-      // Arrange: make resolveMarkdownImages return a delayed promise
+      // Arrange: notes with a clipboard image take the async resolution path, and
+      // make resolveMarkdownImages hang so the old content resolves late.
+      const notesWithImage = 'Task A ![x](indexeddb://clipboard-images/abc)';
       let resolveDelayed!: (value: string) => void;
       mockClipboardImageService.resolveMarkdownImages.and.returnValue(
         new Promise<string>((resolve) => {
@@ -1686,15 +1693,39 @@ describe('InlineMarkdownComponent', () => {
       );
 
       // Act: set model to a task with notes, then immediately clear it
-      component.model = 'Task A notes';
+      component.model = notesWithImage;
       component.model = '';
 
       // Now the delayed promise resolves with the old content
-      resolveDelayed('Task A notes');
+      resolveDelayed(notesWithImage);
       await Promise.resolve();
 
       // Assert: resolvedModel should remain empty (not stale Task A content)
       expect(component.resolvedModel()).toBe('');
+    });
+  });
+
+  describe('synchronous render', () => {
+    it('should render plain-text notes on the first paint without an async hop', () => {
+      // Notes without clipboard images must not flash as raw text: the parsed
+      // markdown data has to be available synchronously (no await), and the
+      // async image resolver must not be invoked at all.
+      component.model = '# Hello\nworld';
+
+      expect(component.resolvedMarkdownData).toBe('# Hello\nworld');
+      expect(component.resolvedModel()).toBe('# Hello\nworld');
+      expect(mockClipboardImageService.resolveMarkdownImages).not.toHaveBeenCalled();
+    });
+
+    it('should defer rendering until images resolve when notes contain clipboard images', () => {
+      const notesWithImage = '![x](indexeddb://clipboard-images/abc)';
+      component.model = notesWithImage;
+
+      // Not yet resolved synchronously — the async path owns the rendered data.
+      expect(component.resolvedMarkdownData).toBeUndefined();
+      expect(mockClipboardImageService.resolveMarkdownImages).toHaveBeenCalledWith(
+        notesWithImage,
+      );
     });
   });
 

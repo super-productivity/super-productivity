@@ -39,6 +39,18 @@ $rocket-pulse-values: 0, 1, 2, 3, 4, 5;
     animation: rocket-launch 0.8s forwards ease-in !important;
     //animation: rocket-launch 0.8s forwards cubic-bezier(0.25, 0, 0.9, 1);
   }
+
+  // Compact inline variant — small footprint, quick launch that lifts off
+  // straight from where the play button sits (default, no prep screen).
+  &.inline {
+    width: 40px;
+    height: 70px;
+    margin: 0 auto;
+
+    &.launch {
+      animation: rocket-launch-inline 0.8s forwards !important;
+    }
+  }
 }
 
 .rocket-svg {
@@ -96,5 +108,45 @@ $rocket-pulse-values: 0, 1, 2, 3, 4, 5;
   100% {
     transform: translateY(-70vh) scale(0.6, 1.2);
     opacity: 0;
+  }
+}
+
+// Inline launch travels a fixed (not viewport-relative) distance so the small
+// rocket lifts off cleanly within the play-button area rather than across the
+// screen. Three phases, so there's no hard cut with the play button:
+//   1. fade + pop in (0–16%) — cross-fades with the play button fading out;
+//   2. settle + a small squash/hop (16–62%) — the rocket dwells in the button's
+//      place at full opacity so the eye registers the handoff;
+//   3. launch (62–100%) — accelerates up and fades out.
+// Opacity is pinned at 62% so the rocket stays solid through the dwell.
+@keyframes rocket-launch-inline {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.55);
+    animation-timing-function: ease-out;
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    animation-timing-function: ease-in-out;
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(3px) scaleX(1.06) scaleY(0.94);
+    animation-timing-function: ease-in-out;
+  }
+  54% {
+    opacity: 1;
+    transform: translateY(-5px) scaleX(0.97) scaleY(1.05);
+    animation-timing-function: ease-in-out;
+  }
+  66% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    animation-timing-function: ease-in;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-190px) scale(0.5, 1.25);
   }
 }

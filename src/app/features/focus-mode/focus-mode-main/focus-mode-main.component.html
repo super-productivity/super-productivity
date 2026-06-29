@@ -34,6 +34,7 @@
     @if (simpleCounterService.enabledSimpleCounters$ | async; as enabledSimpleCounters) {
       @if (enabledSimpleCounters.length) {
         <section
+          @fadeSwap
           fmTop
           class="simple-counter-buttons"
         >
@@ -144,7 +145,10 @@
 
       <!-- Duration slider (Preparation state: Countdown drags + types, Pomodoro types only) -->
       @if (isShowDurationSlider()) {
-        <div class="duration-slider-overlay-wrapper">
+        <div
+          @fadeSwap
+          class="duration-slider-overlay-wrapper"
+        >
           <div
             class="duration-slider-overlay"
             [@modeSwitchFade]="mode()"
@@ -168,6 +172,7 @@
     <div
       fmBottom
       class="play-actions"
+      [class.is-launching]="isLaunching()"
     >
       <button
         mat-fab
@@ -177,7 +182,7 @@
             ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
             : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
         "
-        [disabled]="isPlayButtonDisabled()"
+        [disabled]="isPlayButtonDisabled() || isLaunching()"
         (click)="startSession()"
         class="play-button"
       >
@@ -205,6 +210,16 @@
           <mat-icon>settings</mat-icon>
         </button>
       }
+
+      <!-- Default start: rocket overlays the play button and lifts off as the
+           button/cog fade out (cross-fade), then the session begins. -->
+      @if (isLaunching()) {
+        <focus-mode-preparation-rocket
+          class="inline-launch-rocket"
+          [state]="'launch'"
+          [isInline]="true"
+        ></focus-mode-preparation-rocket>
+      }
     </div>
   }
 
@@ -212,6 +227,7 @@
   <!-- Back to Planning · Pause · Complete · Reset · (issue) · Notes — one bottom row. -->
   @if (isShowBottomControls()) {
     <section
+      @fadeSwap
       fmBottom
       class="bottom-controls"
     >

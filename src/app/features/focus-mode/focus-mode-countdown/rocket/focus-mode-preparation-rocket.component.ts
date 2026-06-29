@@ -13,4 +13,7 @@ export type RocketState = `pulse-${number}` | 'launch';
 })
 export class FocusModePreparationRocketComponent {
   readonly state = input<RocketState>('pulse-5');
+  // Compact variant: smaller footprint + shorter launch, used for the default
+  // inline "lift off from the play button" flourish (vs the full prep screen).
+  readonly isInline = input<boolean>(false);
 }
