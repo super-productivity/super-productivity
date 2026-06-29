@@ -42,9 +42,11 @@ test.describe('Planner: add subtask from detail panel', () => {
 
     await panel.getByRole('button', { name: 'Add subtask' }).click();
 
-    // The inline draft input must open inside the panel (the bug: it never did).
+    // The inline draft input must open inside the panel (the bug: it never did)
+    // and be focused so the user can type straight away.
     const input = page.locator('.e2e-add-subtask-input');
     await expect(input).toBeVisible({ timeout: 3000 });
+    await expect(input).toBeFocused();
     await input.fill('Sub from planner');
     await page.keyboard.press('Enter');
 

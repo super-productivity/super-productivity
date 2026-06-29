@@ -2,9 +2,11 @@ import { Injectable, signal } from '@angular/core';
 
 /**
  * Bus that tells the `TaskComponent` rendering `parentId`'s subtasks to open its
- * inline draft input. Callers (row, context menu, shortcut, detail panel) don't
+ * inline draft input. The in-list row and its `taskAddSubTask` shortcut don't
  * hold a reference to that component, so the request travels through this shared
- * signal.
+ * signal. (The detail panel hosts its own input and the context menu creates the
+ * subtask directly — neither relies on a `<task>` row being rendered — so they
+ * do not use this bus; see #8617.)
  *
  * The request is transient: the consuming row calls `consume()` once it has
  * acted on it, resetting the signal to `null`. This is deliberate — without it,

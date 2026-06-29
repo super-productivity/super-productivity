@@ -428,7 +428,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
   it('hides the input again when it is closed', () => {
     component.addSubTask();
     expect(component.isAddSubtaskInputVisible()).toBe(true);
-    component.onAddSubtaskInputClosed();
+    component.onAddSubtaskInputClosed('blur');
     expect(component.isAddSubtaskInputVisible()).toBe(false);
     // The section stays expanded so the just-added subtasks remain visible.
     expect(component.isSubTasksExpanded()).toBe(true);

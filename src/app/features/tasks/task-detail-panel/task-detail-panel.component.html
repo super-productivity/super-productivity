@@ -47,11 +47,12 @@
           <add-subtask-input
             [@expandFade]
             [parentId]="task().id"
-            (closed)="onAddSubtaskInputClosed()"
+            (closed)="onAddSubtaskInputClosed($event)"
           ></add-subtask-input>
         }
         <div class="add-btn-wrapper">
           <button
+            #addSubTaskBtn
             (click)="addSubTask()"
             mat-button
           >
