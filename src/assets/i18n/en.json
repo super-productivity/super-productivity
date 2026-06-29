@@ -2924,6 +2924,7 @@
     "RISK_PERFORMANCE": "Poorly written plugins may cause performance issues or crashes",
     "RISK_SYSTEM_ACCESS": "Desktop plugins with Node.js permissions can execute system commands",
     "SECURITY_WARNING": "Plugins have significant access to your data and system. Installing untrusted plugins poses serious security risks:",
+    "SETUP_ISSUE_PROVIDER": "Set up in Issue Provider Panel",
     "SIDE_PANEL_LABEL_REQUIRED": "Side panel button label is required",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Side panel button onClick handler is required",
     "TAGS_DO_NOT_EXIST": "One or more tags do not exist",

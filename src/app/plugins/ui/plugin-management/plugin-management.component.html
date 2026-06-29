@@ -193,17 +193,32 @@
       }
     </mat-card-content>
 
-    @if (isUploadedPlugin(plugin)) {
+    @if (
+      (isIssueProviderPlugin(plugin) && plugin.isEnabled) || isUploadedPlugin(plugin)
+    ) {
       <mat-card-actions [align]="'end'">
-        <button
-          mat-button
-          color="warn"
-          (click)="removeUploadedPlugin(plugin)"
-          [disabled]="isUploading()"
-        >
-          <mat-icon>delete</mat-icon>
-          {{ T.PLUGINS.REMOVE | translate }}
-        </button>
+        @if (isIssueProviderPlugin(plugin) && plugin.isEnabled) {
+          <button
+            mat-button
+            color="primary"
+            (click)="goToIssuePanel()"
+            [disabled]="isPluginLoading(plugin)"
+          >
+            <mat-icon>arrow_forward</mat-icon>
+            {{ T.PLUGINS.SETUP_ISSUE_PROVIDER | translate }}
+          </button>
+        }
+        @if (isUploadedPlugin(plugin)) {
+          <button
+            mat-button
+            color="warn"
+            (click)="removeUploadedPlugin(plugin)"
+            [disabled]="isUploading()"
+          >
+            <mat-icon>delete</mat-icon>
+            {{ T.PLUGINS.REMOVE | translate }}
+          </button>
+        }
       </mat-card-actions>
     }
   </mat-card>
