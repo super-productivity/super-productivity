@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { OAuthFlowConfig, OAuthTokenResult } from '@super-productivity/plugin-api';
 import { PluginOAuthService } from './plugin-oauth.service';
+import { resolveEffectiveOAuthConfig } from './resolve-effective-oauth-config.util';
 import {
   saveOAuthTokens,
   loadOAuthTokens,
@@ -44,50 +45,15 @@ export class PluginOAuthBridgeService {
     // prepareRedirectUri() starts a server — avoid leaking it if config is invalid.
     this._pluginOAuthService.validateOAuthConfig(config);
 
-    // Pick the platform-specific client. The default `clientId` is the desktop
-    // client (loopback redirect, used by Electron); other platforms override it.
-    // - Android/iOS authenticate via app signing → no client secret
-    // - Web can only use providers that support public browser clients via PKCE
-    // A plugin-declared `redirectUri` is the desktop loopback override; web/native each
-    // have a single valid callback (the host callback page / the app's fixed scheme), so
-    // strip it on those branches and let prepareRedirectUri produce the platform default —
-    // otherwise a web/native-capable plugin that also sets a desktop redirectUri throws at
-    // connect time on those platforms.
-    // Order matters: Android-WebView sets both IS_ANDROID_NATIVE and IS_NATIVE_PLATFORM,
-    // so it lands in the Android branch (correct) and never reaches the web branch.
-    const effectiveConfig = ((): OAuthFlowConfig => {
-      if (IS_ANDROID_NATIVE && config.mobileClientId) {
-        return {
-          ...config,
-          clientId: config.mobileClientId,
-          clientSecret: undefined,
-          redirectUri: undefined,
-        };
-      }
-      if (IS_IOS_NATIVE && config.iosClientId) {
-        return {
-          ...config,
-          clientId: config.iosClientId,
-          clientSecret: undefined,
-          redirectUri: undefined,
-        };
-      }
-      if (!IS_ELECTRON && !IS_NATIVE_PLATFORM) {
-        const webClientId = config.webClientId;
-        if (!webClientId) {
-          throw new Error(
-            'OAuth: this plugin is not available in the web build. Connect from the desktop or mobile app instead.',
-          );
-        }
-        return {
-          ...config,
-          clientId: webClientId,
-          clientSecret: undefined,
-          redirectUri: undefined,
-        };
-      }
-      return config;
-    })();
+    // Pick the platform-specific client id / secret / redirectUri. Extracted into a
+    // pure, platform-parameterized util so every branch is unit-testable (the IS_*
+    // consts are module-level and cannot be mocked in karma).
+    const effectiveConfig = resolveEffectiveOAuthConfig(config, {
+      isElectron: IS_ELECTRON,
+      isNative: IS_NATIVE_PLATFORM,
+      isAndroid: IS_ANDROID_NATIVE,
+      isIos: IS_IOS_NATIVE,
+    });
 
     if (config.clientSecret && !effectiveConfig.clientSecret) {
       PluginLog.warn(
