@@ -87,12 +87,12 @@ export class SyncSafetyBannerService {
   }
 
   private _getOrSeedFirstUse(): number {
-    const stored = +(localStorage.getItem(LS.FIRST_USE_TIMESTAMP) || 0);
+    const stored = +(localStorage.getItem(LS.SYNC_SAFETY_FIRST_SEEN) || 0);
     if (stored) {
       return stored;
     }
     const now = Date.now();
-    localStorage.setItem(LS.FIRST_USE_TIMESTAMP, now.toString());
+    localStorage.setItem(LS.SYNC_SAFETY_FIRST_SEEN, now.toString());
     return now;
   }
 

@@ -12,10 +12,11 @@ export enum DB {
 export enum LS {
   APP_START_COUNT = 'APP_START_COUNT',
   APP_START_COUNT_LAST_START_DAY = 'APP_START_COUNT_LAST_START_DAY',
-  // Epoch ms the app was first opened on this device, seeded once (lazily by
-  // SyncSafetyBannerService). Lets us tell "used for a while" by wall-clock time,
-  // independently of how often the app is (re)started.
-  FIRST_USE_TIMESTAMP = 'SUP_FIRST_USE_TIMESTAMP',
+  // Epoch ms first observed by SyncSafetyBannerService (seeded once, lazily, on
+  // its first run). Used only to tell "used for a while" by wall-clock time for
+  // the sync-setup nudge. NOT a true install date: for installs that predate
+  // this feature it is seeded at upgrade time, so don't reuse it as one.
+  SYNC_SAFETY_FIRST_SEEN = 'SUP_SYNC_SAFETY_FIRST_SEEN',
   RATE_DIALOG_STATE = 'SUP_RATE_DIALOG_STATE',
   // Set on an unhandled error or any detected data damage; read by the rating
   // prompt to hold off for a cooldown after a bad experience. Time only.
