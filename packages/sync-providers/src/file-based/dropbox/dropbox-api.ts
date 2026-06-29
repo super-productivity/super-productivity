@@ -13,6 +13,7 @@ import {
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../errors';
+import { assertUploadedSizeMatches } from '../verify-upload-size';
 import { executeNativeRequestWithRetry } from '../../http/native-http-retry';
 import type { NativeHttpResponse } from '../../http/native-http-retry';
 import type { DropboxDeps, DropboxPrivateCfg } from './dropbox';
@@ -268,6 +269,12 @@ export class DropboxApi {
 
       if (!result.rev) {
         throw new NoRevAPIError();
+      }
+
+      // Fail loudly on a truncated/partial write instead of silently storing a
+      // corrupt sync file (#8604). See assertUploadedSizeMatches.
+      if (typeof data === 'string') {
+        assertUploadedSizeMatches(data, result.size, targetPath);
       }
 
       return result;
