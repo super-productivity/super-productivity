@@ -22,6 +22,7 @@ import {
 import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
+import { PluginSecretService } from './secret/plugin-secret.service';
 import { PluginLoaderService } from './plugin-loader.service';
 import { validatePluginManifest } from './util/validate-manifest.util';
 import { TranslateService } from '@ngx-translate/core';
@@ -89,6 +90,18 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'yesterday-tasks',
 ]);
 
+/**
+ * Thrown by `_fireOnReady` when the user explicitly DENIES a nodeExecution consent
+ * prompt, so the failure handlers can treat it as a deliberate choice (clean disable)
+ * rather than a load failure (#8512). See `_handleNodeExecutionConsentDenied`.
+ */
+export class NodeExecutionConsentDeniedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NodeExecutionConsentDeniedError';
+  }
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -101,6 +114,7 @@ export class PluginService implements OnDestroy {
   private readonly _pluginMetaPersistenceService = inject(PluginMetaPersistenceService);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private readonly _pluginCacheService = inject(PluginCacheService);
+  private readonly _pluginSecretService = inject(PluginSecretService);
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -602,6 +616,12 @@ export class PluginService implements OnDestroy {
       }
       void this._revokeNodeExecutionGrant(pluginId);
 
+      // Deny = clean disable, not an error tile — see _handleNodeExecutionConsentDenied.
+      if (error instanceof NodeExecutionConsentDeniedError) {
+        this._handleNodeExecutionConsentDenied(pluginId);
+        return null;
+      }
+
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
@@ -671,6 +691,16 @@ export class PluginService implements OnDestroy {
     if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
       const hasGrant = await this._ensureNodeExecutionGrant(instance.manifest);
       if (!hasGrant) {
+        // `_ensureNodeExecutionGrant` returns false for two different reasons: a deliberate
+        // user DENIAL (which records the id in `_nodeExecutionDeniedThisSession`) and a
+        // technical grant-request failure (IPC/bridge error — not recorded). Only a real
+        // denial becomes the recoverable "clean disable"; a technical failure must surface
+        // as a normal error tile/snack so the user sees something actually went wrong.
+        if (this._nodeExecutionDeniedThisSession.has(instance.manifest.id)) {
+          throw new NodeExecutionConsentDeniedError(
+            this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+          );
+        }
         throw new Error(
           this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
         );
@@ -719,6 +749,12 @@ export class PluginService implements OnDestroy {
     }
     void this._revokeNodeExecutionGrant(pluginId);
 
+    // Deny = clean disable (no error tile / no ERROR snack) — see the helper below.
+    if (error instanceof NodeExecutionConsentDeniedError) {
+      this._handleNodeExecutionConsentDenied(pluginId);
+      return;
+    }
+
     const currentState = this._pluginStates().get(pluginId);
     if (currentState) {
       this._setPluginState(pluginId, {
@@ -736,6 +772,34 @@ export class PluginService implements OnDestroy {
       }),
       type: 'ERROR',
     });
+  }
+
+  /**
+   * Normalise a plugin to a clean, re-enableable disabled state after the user DENIED its
+   * nodeExecution consent prompt (#8512 deny-recovery). Clears any `error` so the
+   * management toggle is no longer grayed out (`canEnablePlugin` is `!plugin.error`) and
+   * sets it OFF; flipping it back on clears the session-denied marker (see
+   * `checkNodeExecutionPermission`) and re-opens the prompt — no app restart needed.
+   *
+   * Deliberately IN-MEMORY ONLY — it does NOT persist `isEnabled=false`. nodeExecution
+   * consent is a per-device, session-scoped decision (see `_nodeExecutionDeniedThisSession`);
+   * persisting would write the synced `pluginMetadata` entity, propagating a local "not now"
+   * to every device as a durable disable. Leaving the persisted `isEnabled` untouched means
+   * the next start on THIS device re-prompts, which matches the existing session-scoped model.
+   * Runtime teardown (unload + grant revoke) is the caller's responsibility.
+   */
+  private _handleNodeExecutionConsentDenied(pluginId: string): void {
+    PluginLog.log(`nodeExecution consent denied; disabling plugin: ${pluginId}`);
+    const currentState = this._getPluginState(pluginId);
+    if (currentState) {
+      this._setPluginState(pluginId, {
+        ...currentState,
+        status: 'not-loaded',
+        instance: undefined,
+        isEnabled: false,
+        error: undefined,
+      });
+    }
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
@@ -1336,6 +1400,23 @@ export class PluginService implements OnDestroy {
         PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
       }
 
+      // An explicit upload always (re)installs code under this id, so any prior persisted
+      // nodeExecution consent no longer applies — clear it unconditionally, BEFORE loading
+      // the new code and outside the `existingState` branch (issue #8512 Phase 2). This
+      // closes the orphaned-consent gap: if consent survived in the main-owned store while
+      // the in-memory/cache record was already gone (a crash mid-uninstall, IndexedDB
+      // eviction, or an external/partial wipe), a same-id re-upload would otherwise skip the
+      // clear and be silently granted node execution with no prompt. This MUST fail closed:
+      // if the revoke can't be persisted we abort the upload here, before any teardown or
+      // code store, rather than load replacement code that could inherit the old grant. (For
+      // a brand-new id with nothing to clear the call is a no-op and returns true.) Re-asking
+      // once per upload is intended; ask-once is about sessions, not uploads.
+      if (!(await this.clearNodeExecutionConsent(manifest.id))) {
+        throw new Error(
+          `Aborting upload of "${manifest.id}": could not clear previous nodeExecution consent`,
+        );
+      }
+
       // Teardown existing plugin runtime if re-uploading same ID
       const existingState = this._getPluginState(manifest.id);
       if (existingState) {
@@ -1556,6 +1637,21 @@ export class PluginService implements OnDestroy {
       this.unloadPlugin(pluginId);
     }
 
+    // Purge local-only credentials (secrets + OAuth tokens) FIRST so they
+    // never outlive their plugin — even if a later cleanup step throws.
+    // Best-effort: a purge failure is logged but must not abort the uninstall
+    // (on IndexedDB failure the credentials orphan locally until a later purge).
+    try {
+      await this._pluginSecretService.removeSecretsForPlugin(pluginId);
+    } catch (error) {
+      PluginLog.err(`Failed to purge secrets for plugin ${pluginId}:`, error);
+    }
+    try {
+      await this._pluginBridge.clearOAuthTokens(pluginId);
+    } catch (error) {
+      PluginLog.err(`Failed to purge OAuth tokens for plugin ${pluginId}:`, error);
+    }
+
     // Remove from cache
     await this._pluginCacheService.removePlugin(pluginId);
 
@@ -1579,9 +1675,10 @@ export class PluginService implements OnDestroy {
     this._pluginIcons.delete(pluginId);
     this._pluginIconsSignal.set(new Map(this._pluginIcons));
 
-    // Drop any session nodeExecution denial so a fresh re-upload of this id is prompted
-    // again rather than silently failing closed against the removed plugin's decision.
-    this._nodeExecutionDeniedThisSession.delete(pluginId);
+    // Clear the session denial AND the main-owned persisted consent, so a fresh upload
+    // of this id later starts from a clean prompt and a *different* plugin reusing the id
+    // can never inherit the removed plugin's consent (issue #8512 Phase 2).
+    await this.clearNodeExecutionConsent(pluginId);
 
     // Remove from plugin states
     this._deletePluginState(pluginId);
@@ -1590,10 +1687,20 @@ export class PluginService implements OnDestroy {
   }
 
   /**
-   * Clear all uploaded plugins from memory. Called when IndexedDB cache is cleared
+   * Clear all uploaded plugins from memory. Called when the IndexedDB cache is cleared
    * so that in-memory state matches the empty cache.
+   *
+   * Also purges each uploaded plugin's local-only credentials (secrets + OAuth
+   * tokens) and main-owned PERSISTED nodeExecution consent (issue #8512 Phase 2).
+   * The cache wipe removes the plugin code, but credentials and consent live in
+   * dedicated stores / the main process, so without this a later re-upload of the
+   * same id — potentially *different* code — would silently inherit the previous
+   * plugin's secrets, tokens, and node-execution grant with no prompt: the
+   * post-clear upload has no `existingState`, so the re-upload clear in
+   * `loadPluginFromZip` never fires. Mirrors `removeUploadedPlugin`, keeping
+   * "replacing code under an id always re-asks" true on every removal path.
    */
-  clearUploadedPluginsFromMemory(): void {
+  async clearUploadedPluginsFromMemory(): Promise<void> {
     const states = this._pluginStates();
     const uploadedIds: string[] = [];
     for (const [pluginId, state] of states.entries()) {
@@ -1616,6 +1723,25 @@ export class PluginService implements OnDestroy {
       return updated;
     });
     this._pluginIconsSignal.set(new Map(this._pluginIcons));
+    // Purge local-only credentials + persisted consent after teardown has released the
+    // live grants. Each purge is best-effort and idempotent, so a single failure can't
+    // skip the rest or leave a different id's credentials/consent behind for a same-id
+    // re-upload to inherit.
+    await Promise.all(
+      uploadedIds.map(async (pluginId) => {
+        try {
+          await this._pluginSecretService.removeSecretsForPlugin(pluginId);
+        } catch (error) {
+          PluginLog.err(`Failed to purge secrets for plugin ${pluginId}:`, error);
+        }
+        try {
+          await this._pluginBridge.clearOAuthTokens(pluginId);
+        } catch (error) {
+          PluginLog.err(`Failed to purge OAuth tokens for plugin ${pluginId}:`, error);
+        }
+        await this.clearNodeExecutionConsent(pluginId);
+      }),
+    );
   }
 
   /**
@@ -1853,6 +1979,52 @@ export class PluginService implements OnDestroy {
     // holds the token (main revokes by pluginId + webContents), so a re-upload under
     // the same id can never inherit a live session grant.
     await this._pluginBridge.revokeNodeExecutionGrant(pluginId, grantToken ?? '');
+  }
+
+  /**
+   * Revoke a plugin's nodeExecution consent: clears the in-session grant token, the
+   * session "denied" marker, and the main-owned PERSISTED consent (issue #8512 Phase 2),
+   * so the next node call re-prompts. Called on disable, uninstall, and re-upload — the
+   * three explicit, user-driven lifecycle edges. Deliberately NOT called from generic
+   * teardown (`_teardownPluginRuntime`), which also fires on app shutdown/navigation and
+   * must preserve "ask once across sessions".
+   *
+   * A persistence failure is logged (id only — the raw error can embed the userData path)
+   * and reported via the RETURN VALUE rather than thrown: lifecycle edges (disable /
+   * uninstall / cache-clear) treat the clear as best-effort and ignore the result, so a rare
+   * disk failure can't abort their bookkeeping (zombie plugin state, or `disablePlugin`
+   * rejecting after the plugin is already disabled). A SECURITY-critical caller that must
+   * fail closed — `loadPluginFromZip`, before it loads replacement code under this id —
+   * instead checks the result and aborts, so replacement code can never inherit a prior
+   * grant just because the revoke write failed.
+   *
+   * @returns `true` if the persisted consent was cleared (or there was nothing to clear),
+   *   `false` if the clear could not be persisted.
+   */
+  async clearNodeExecutionConsent(pluginId: string): Promise<boolean> {
+    this._nodeExecutionDeniedThisSession.delete(pluginId);
+    try {
+      await this._pluginBridge.clearNodeExecutionConsent(pluginId);
+      return true;
+    } catch {
+      PluginLog.err(`Failed to clear persisted nodeExecution consent for ${pluginId}`);
+      return false;
+    }
+  }
+
+  /**
+   * Disable an installed plugin: persist `isEnabled=false`, tear down its runtime, and
+   * revoke its nodeExecution consent (session grant + persisted), so re-enabling re-prompts
+   * (issue #8512 Phase 2). Routing every disable through here keeps "disable revokes
+   * consent" a structural invariant — a future disable path cannot silently skip the revoke
+   * — which is why the revoke lives here rather than in `unloadPlugin` /
+   * `_teardownPluginRuntime` (those also run on app shutdown/navigation, where consent must
+   * survive). `clearNodeExecutionConsent` is a safe no-op for non-node plugins.
+   */
+  async disablePlugin(pluginId: string): Promise<void> {
+    await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, false);
+    this.unloadPlugin(pluginId);
+    await this.clearNodeExecutionConsent(pluginId);
   }
 
   /**

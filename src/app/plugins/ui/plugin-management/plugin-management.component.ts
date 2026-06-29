@@ -38,7 +38,9 @@ import { LanguageCode } from '../../../core/locale.constants';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { confirmDialog } from '../../../util/native-dialogs';
 import { Store } from '@ngrx/store';
+import { Router } from '@angular/router';
 import { selectAll as selectAllIssueProviders } from '../../../features/issue/store/issue-provider.selectors';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 import COMMUNITY_PLUGINS_DATA from '../../../../assets/community-plugins.json';
 
 interface CommunityPlugin {
@@ -88,6 +90,8 @@ export class PluginManagementComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dialog = inject(MatDialog);
   private readonly _store = inject(Store);
+  private readonly _router = inject(Router);
+  private readonly _layoutService = inject(LayoutService);
   private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _allIssueProviders = this._store.selectSignal(selectAllIssueProviders);
 
@@ -230,14 +234,11 @@ export class PluginManagementComponent {
     }
 
     try {
-      // Set plugin as disabled in persistence
-      await this._pluginMetaPersistenceService.setPluginEnabled(
-        plugin.manifest.id,
-        false,
-      );
-
-      // Unload the plugin (this will unregister hooks and remove from loaded plugins)
-      this._pluginService.unloadPlugin(plugin.manifest.id);
+      // Persist isEnabled=false, tear down the runtime, and revoke nodeExecution consent
+      // (session grant + persisted) in one place so re-enabling re-prompts — issue #8512
+      // Phase 2: "consent is revocable" via the existing toggle, no separate UI. See
+      // PluginService.disablePlugin for why the revoke is funnelled there.
+      await this._pluginService.disablePlugin(plugin.manifest.id);
 
       // Reload plugins to get the updated state from the service
     } catch (error) {
@@ -321,7 +322,9 @@ export class PluginManagementComponent {
       this.uploadError.set(null);
 
       await this._pluginCacheService.clearCache();
-      this._pluginService.clearUploadedPluginsFromMemory();
+      // Awaited so persisted nodeExecution consent is cleared for every wiped uploaded
+      // plugin before the method returns (issue #8512 Phase 2 — see the service method).
+      await this._pluginService.clearUploadedPluginsFromMemory();
 
       PluginLog.log('Plugin cache cleared successfully');
     } catch (error) {
@@ -430,6 +433,25 @@ export class PluginManagementComponent {
 
   hasConfigHandler(plugin: PluginInstance): boolean {
     return this._pluginBridge.hasConfigHandler(plugin.manifest.id);
+  }
+
+  isIssueProviderPlugin(plugin: PluginInstance): boolean {
+    return plugin.manifest.type === 'issueProvider';
+  }
+
+  /**
+   * Sends the user to the issue-provider panel, the hub where connections are
+   * added and managed. Enabling an issue-provider plugin here only registers it;
+   * setup (and multiple connections per provider) lives in that panel's "+" tab,
+   * which is otherwise hard to find. Navigates to the work view first since the
+   * panel only renders there, then reveals it (guarded so we never toggle it shut).
+   */
+  goToIssuePanel(): Promise<void> {
+    return this._router.navigate(['/active/tasks']).then(() => {
+      if (!this._layoutService.isShowIssuePanel()) {
+        this._layoutService.toggleAddTaskPanel();
+      }
+    });
   }
 
   openPluginConfig(plugin: PluginInstance): void {

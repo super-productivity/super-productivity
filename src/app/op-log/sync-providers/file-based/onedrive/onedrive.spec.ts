@@ -276,6 +276,49 @@ describe('OneDrive', () => {
     expect(postCount).toBe(0);
   });
 
+  it('resolves an upload when the stored size matches the sent bytes (#8604)', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return {
+          ok: true,
+          status: 200,
+          // '{"a":1}' is 7 ASCII bytes — size matches, upload accepted.
+          json: async () => ({ eTag: 'etag-1', size: 7 }),
+          text: async () => '',
+        } as Response;
+      }
+      return { ok: true, status: 200, text: async () => '' } as Response;
+    });
+
+    await expectAsync(
+      provider.uploadFile('file-1.json', '{"a":1}', null, true),
+    ).toBeResolved();
+  });
+
+  it('throws when OneDrive stored a truncated (smaller) ASCII payload (#8604)', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return {
+          ok: true,
+          status: 200,
+          // Graph reports storing fewer bytes than the 7 we sent → truncation.
+          json: async () => ({ eTag: 'etag-1', size: 3 }),
+          text: async () => '',
+        } as Response;
+      }
+      return { ok: true, status: 200, text: async () => '' } as Response;
+    });
+
+    try {
+      await provider.uploadFile('file-1.json', '{"a":1}', null, true);
+      fail('should have thrown');
+    } catch (e) {
+      expect((e as Error).name).toBe('UploadRevToMatchMismatchAPIError');
+    }
+  });
+
   it('should refresh token and retry on 401', async () => {
     let firstRequest = true;
     cfgStoreSpy.load.and.resolveTo(baseCfg);

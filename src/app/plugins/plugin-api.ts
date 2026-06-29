@@ -610,6 +610,19 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.clearOAuthToken();
   }
 
+  async setSecret(key: string, value: string): Promise<void> {
+    return this.#boundMethods.setSecret(key, value);
+  }
+
+  async getSecret(key: string): Promise<string | null> {
+    return this.#boundMethods.getSecret(key);
+  }
+
+  async deleteSecret(key: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested secret delete`);
+    return this.#boundMethods.deleteSecret(key);
+  }
+
   /**
    * Clean up all resources associated with this plugin API instance
    * Called when the plugin is being unloaded

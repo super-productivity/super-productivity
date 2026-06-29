@@ -12,6 +12,7 @@ import {
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../errors';
+import { assertUploadedSizeMatches } from '../verify-upload-size';
 import { generateCodeVerifier, generateCodeChallenge } from '../../pkce';
 import type {
   OneDrivePrivateCfg,
@@ -231,10 +232,14 @@ export class OneDrive implements FileSyncProvider<
         headers,
         body: dataStr,
       });
-      const result = (await response.json()) as { eTag?: string };
+      const result = (await response.json()) as { eTag?: string; size?: number };
       if (!result.eTag) {
         throw new NoRevAPIError('OneDrive upload missing eTag');
       }
+      // Fail loudly on a truncated/partial write instead of silently storing a
+      // corrupt sync file (#8604). The Graph driveItem PUT response carries the
+      // stored byte size. See assertUploadedSizeMatches.
+      assertUploadedSizeMatches(dataStr, result.size, targetPath);
       return { rev: result.eTag };
     } catch (e) {
       this._mapAndThrow(e);

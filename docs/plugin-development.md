@@ -528,6 +528,74 @@ const data = await PluginAPI.loadSyncedData();
 console.log(data); // '{ count: 42 }'
 ```
 
+### Secret Storage
+
+For credentials — IMAP/SMTP passwords, API tokens, app passwords — use
+`setSecret` / `getSecret` / `deleteSecret`. Secrets are stored **local-only**:
+they are never synced, exported, or included in backups, and each plugin can
+only read its own keys.
+
+```javascript
+// Store a credential (key must be a non-empty string)
+await PluginAPI.setSecret('imapPassword', 'app-password-123');
+
+// Read it back when you need to connect
+const pw = await PluginAPI.getSecret('imapPassword'); // string | null
+
+// Remove it (e.g. when the user disconnects)
+await PluginAPI.deleteSecret('imapPassword');
+```
+
+Rules of thumb:
+
+- **Never** put a credential in `persistDataSynced` or in issue-provider
+  config — those sync to the server and land in exports/backups. Keep only
+  non-secret connection details there (host, port, username, filters) and put
+  the password/token in secret storage.
+- Secrets are **per-device**: a value set on desktop is not available on mobile,
+  so prompt the user to enter the credential on each device. (This matches how
+  IMAP app-passwords are typically used anyway.)
+- Secrets are stored unencrypted at rest today (the same as plugin OAuth
+  tokens); the guarantee is "stays on this device, never synced," not
+  hardware-level encryption. Don't store anything you wouldn't accept living in
+  the app's local profile.
+- All secrets for a plugin are purged automatically when the plugin is
+  uninstalled.
+
+#### Secrets in issue-provider plugins
+
+Issue-provider plugins get the same secret API (an issue provider is a normal
+plugin that also calls `registerIssueProvider`). Your definition callbacks
+(`getHeaders`, `getById`, `searchIssues`, …) run in your plugin's context, so
+they can read secrets directly:
+
+```javascript
+PluginAPI.registerIssueProvider({
+  // Declare only NON-secret fields here — their values are stored in the
+  // synced issue-provider config:
+  configFields: [
+    { key: 'host', type: 'text', label: 'Host' },
+    { key: 'username', type: 'text', label: 'Username' },
+  ],
+  // getHeaders may return a Promise, so read the credential from secret
+  // storage instead of from `config`:
+  async getHeaders(config) {
+    const token = await PluginAPI.getSecret('apiToken');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  },
+  async getById(issueId, config, http) {
+    /* ... http call uses the headers above ... */
+  },
+  // ...
+});
+```
+
+The host passes only the synced `config` into these callbacks — there is no
+secret parameter, and the declarative `configFields` form always writes to the
+synced config. So collect the secret through your own UI (a config dialog
+registered via `registerConfigHandler`, or a side panel) and store it with
+`setSecret` there; do **not** add the credential as a `configFields` entry.
+
 ## Best Practices
 
 ### 1. Performance
@@ -553,13 +621,22 @@ Plugins with `"permissions": ["nodeExecution"]` can run Node.js scripts in the E
 desktop app after the user allows the desktop permission prompt.
 
 Both built-in and uploaded (community) plugins may request `nodeExecution`. The grant is
-issued by the Electron **main** process after a native consent dialog, and is bound to
-the plugin id for the current app session (it is never persisted or synced). For uploaded
-plugins the app cannot verify the manifest, so the dialog flags the plugin as unverified
-third-party code with full machine access that Super Productivity cannot sandbox, and
-defaults to **Deny** — only allow plugins whose source you trust. If the user denies,
-the plugin stays enabled but its node calls fail until it is re-enabled or the app is
-restarted (consent is re-requested once per session).
+issued by the Electron **main** process after a native consent dialog and is bound to the
+plugin id. For uploaded plugins the app cannot verify the manifest, so the dialog flags
+the plugin as unverified third-party code with full machine access that Super Productivity
+cannot sandbox, and defaults to **Deny** — only allow plugins whose source you trust. If
+the user denies, the plugin stays enabled but its node calls fail until it is re-enabled.
+
+Consent handling differs by plugin type:
+
+- **Uploaded (community) plugins:** consent is remembered **once per plugin** in a
+  main-owned, local-only store (`Allow` is not asked again on the next launch). The
+  consent is **never synced** — granting on one device does not auto-grant on another;
+  the other device prompts afresh on first node use. Consent is automatically cleared
+  (forcing a fresh prompt) when you **disable**, **uninstall**, or **re-upload** the
+  plugin, so replacing a plugin's code under the same id always re-asks. To revoke access
+  without removing the plugin, simply disable it.
+- **Built-in plugins** (e.g. `sync-md`) keep the per-session prompt and are not persisted.
 
 > **Plugin id constraints (for `nodeExecution`):** the consent grant keys on your
 > manifest `id`, so it must be a single safe token — no whitespace, control/bidi

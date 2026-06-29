@@ -42,6 +42,15 @@ export class AddSubtaskInputComponent {
   readonly titleDraft = signal('');
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputEl');
 
+  constructor() {
+    // Own the initial focus instead of relying solely on the host's
+    // post-render setTimeout: on a slow machine that timeout can fire before
+    // this view's change detection commits the inputEl viewChild, so the
+    // draft opens but never gets focused (and is then torn down). afterNextRender
+    // is tied to the render lifecycle, so inputEl is guaranteed ready here.
+    afterNextRender(() => this.focus());
+  }
+
   focus(): void {
     this.inputEl()?.nativeElement.focus();
   }

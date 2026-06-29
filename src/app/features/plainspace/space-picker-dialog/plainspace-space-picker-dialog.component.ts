@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import {
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -14,6 +15,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { T } from '../../../t.const';
 import { PlainspaceAccountService } from '../plainspace-account.service';
+import { PlainspaceConnectDialogComponent } from '../connect-dialog/plainspace-connect-dialog.component';
 import {
   PlainspaceApiService,
   PlainspaceSpace,
@@ -30,6 +32,11 @@ export type PlainspaceSpaceChoice =
  * to them import) instead of always creating a new one. Assumes a connected
  * account (the share flow ensures that first); resolves to the chosen action, or
  * `undefined` if cancelled.
+ *
+ * If the stored token has gone stale (e.g. revoked in Plainspace), the spaces
+ * request fails and we offer a reconnect so the user can paste a fresh token —
+ * without it they would be stuck (the share flow only opens the connect dialog
+ * when no account exists at all). See issue #8616.
  */
 @Component({
   selector: 'plainspace-space-picker-dialog',
@@ -56,6 +63,7 @@ export class PlainspaceSpacePickerDialogComponent {
     );
   private _accountService = inject(PlainspaceAccountService);
   private _api = inject(PlainspaceApiService);
+  private _matDialog = inject(MatDialog);
 
   readonly T = T;
   readonly spaces = signal<PlainspaceSpace[]>([]);
@@ -82,7 +90,26 @@ export class PlainspaceSpacePickerDialogComponent {
     this._dialogRef.close();
   }
 
+  /**
+   * Recovery for a stale/revoked token: opens the guided connect dialog (which
+   * validates and stores a fresh token), then retries loading the spaces.
+   */
+  async reconnect(): Promise<void> {
+    const reconnected = await firstValueFrom(
+      this._matDialog
+        .open(PlainspaceConnectDialogComponent, {
+          data: { host: this._accountService.host() },
+        })
+        .afterClosed(),
+    );
+    if (reconnected === true) {
+      await this._loadSpaces();
+    }
+  }
+
   private async _loadSpaces(): Promise<void> {
+    this.hasError.set(false);
+    this.isLoading.set(true);
     const account = this._accountService.account();
     if (!account) {
       // Should not happen — the share flow connects first — but bail safely.

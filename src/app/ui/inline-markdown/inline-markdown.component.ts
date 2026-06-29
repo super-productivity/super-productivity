@@ -43,6 +43,7 @@ import { Location } from '@angular/common';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Log } from '../../core/log';
 import { handleListKeydown } from './markdown-toolbar.util';
+import { DateService } from '../../core/date/date.service';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -78,6 +79,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _store = inject(Store);
   private _location = inject(Location);
+  private _dateService = inject(DateService);
   private _currentPastePlaceholder: string | null = null;
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
@@ -88,6 +90,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   readonly isLock = input<boolean>(false);
   readonly isShowControls = input<boolean>(false);
+  // When true, the rendered preview is shown in read mode but hidden while
+  // editing, so the editor is a plain textarea (no dimmed live preview below).
+  // Used by the compact focus-mode notes panel; the detail panel keeps the
+  // live preview.
+  readonly isHidePreviewWhileEditing = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
   // The default/placeholder text currently shown when there are no real notes.
@@ -120,6 +127,16 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   });
 
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
+
+  // The rendered preview shows in read mode, and also below the textarea while
+  // editing (live preview) — unless the consumer opts out via
+  // isHidePreviewWhileEditing (the compact focus-mode panel does, to stay a
+  // single view). Hidden entirely when markdown parsing is off.
+  isShowPreview = computed(
+    () =>
+      !this.isTurnOffMarkdownParsing() &&
+      !(this.isHidePreviewWhileEditing() && this.isShowEdit()),
+  );
 
   // True when the current notes are a markdown checklist — gates the checklist
   // bulk actions (check all / uncheck all / clear completed) in the UI.
@@ -280,6 +297,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       ev.shiftKey,
       ev.ctrlKey,
       ev.metaKey,
+      this._dateService.getLogicalTodayDate(),
     );
     if (result) {
       ev.preventDefault();

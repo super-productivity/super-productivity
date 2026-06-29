@@ -35,6 +35,11 @@ describe('PluginMetaPersistenceService', () => {
     spyOn(store, 'dispatch');
   });
 
+  // SYNC-EXCLUSION GUARD (issue #8512 Phase 2). nodeExecution consent is persisted in a
+  // main-owned, local-only store (electron/plugin-node-consent-store.ts) and must NEVER
+  // leak into the pfapi-synced `pluginMetadata` — otherwise a grant on one device would
+  // auto-grant on another. The strict `toHaveBeenCalledOnceWith({id,isEnabled})` below
+  // deep-matches the dispatched payload, so any consent field reappearing here fails.
   it('does not re-persist stale nodeExecution consent metadata', async () => {
     await service.setPluginEnabled('plugin-a', true);
 

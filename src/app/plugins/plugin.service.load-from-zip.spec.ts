@@ -137,6 +137,7 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
             'setNodeExecutionGrantToken',
             'revokeNodeExecutionGrantToken',
             'revokeNodeExecutionGrant',
+            'clearNodeExecutionConsent',
           ]),
         },
         { provide: TranslateService, useValue: translateService },

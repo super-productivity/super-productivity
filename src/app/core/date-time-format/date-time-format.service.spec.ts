@@ -222,6 +222,11 @@ describe('DateTimeFormatService', () => {
 
       const formattedKoKr = service.formatDate(testDate, DateTimeLocales.ko_kr);
       expect(formattedKoKr).toBe('2000. 12. 31.');
+
+      // ISO 8601 option (mapped to the Swedish locale) must produce
+      // YYYY-MM-DD, see #6484
+      const formattedIso = service.formatDate(testDate, DateTimeLocales.sv);
+      expect(formattedIso).toBe('2000-12-31');
     });
   });
 
@@ -240,6 +245,52 @@ describe('DateTimeFormatService', () => {
 
       const formattedKoKr = service.formatTime(testTime, DateTimeLocales.ko_kr);
       expect(formattedKoKr).toBe('오후 2:00');
+
+      // ISO 8601 option (mapped to the Swedish locale) must use the 24-hour
+      // clock with a colon, see #6484
+      const formattedIso = service.formatTime(testTime, DateTimeLocales.sv);
+      expect(formattedIso).toBe('14:00');
+    });
+  });
+
+  describe('ISO 8601 locale (sv, #6484)', () => {
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: { currentLang: 'en', defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: {
+                  ...DEFAULT_GLOBAL_CONFIG.localization,
+                  dateTimeLocale: DateTimeLocales.sv,
+                },
+              },
+            },
+          }),
+        ],
+      });
+      service = TestBed.inject(DateTimeFormatService);
+    });
+
+    it('detects a year-first YYYY-MM-DD format and 24h clock', () => {
+      expect(service.dateFormat().raw).toBe('yyyy-MM-dd');
+      expect(service.is24HourFormat()).toBe(true);
+    });
+
+    it('round-trips an ISO date string through the detected format', () => {
+      const parsed = service.parseStringToDate('2026-02-12', service.dateFormat().raw);
+      expect(parsed?.getFullYear()).toBe(2026);
+      expect(parsed?.getMonth()).toBe(1);
+      expect(parsed?.getDate()).toBe(12);
     });
   });
 
