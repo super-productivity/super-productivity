@@ -19,6 +19,29 @@ const { DETAIL_PANEL } = cssSelectors;
 test.describe('Add subtask with detail panel open', () => {
   const draftInput = (page: Page): Locator => page.locator('.e2e-add-subtask-input');
 
+  const disableAnimations = async (page: Page): Promise<void> => {
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const store = (
+            window as unknown as {
+              __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
+            }
+          ).__e2eTestHelpers?.store;
+          if (!store) return false;
+          store.dispatch({
+            type: '[Global Config] Update Global Config Section',
+            sectionKey: 'misc',
+            sectionCfg: { isDisableAnimations: true },
+            isSkipSnack: true,
+          });
+          return true;
+        }),
+      )
+      .toBe(true);
+    await expect(page.locator('body.isDisableAnimations')).toBeVisible();
+  };
+
   const addParentAndOpenPanel = async (
     page: Page,
     workViewPage: WorkViewPage,
@@ -128,5 +151,37 @@ test.describe('Add subtask with detail panel open', () => {
     await page.keyboard.press('Enter');
 
     await expect(parent.locator('.sub-tasks task')).toHaveCount(2);
+  });
+
+  // With animations disabled, Material fires the expansion panel's afterExpand
+  // synchronously (inside the same change-detection pass), before the panel's
+  // add-subtask-input viewChild is committed. The focus must still land — it is
+  // deferred a tick precisely for this case. Regression guard for that fix.
+  test('opens and focuses the inline draft when animations are disabled', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await disableAnimations(page);
+    const parent = await addParentAndOpenPanel(page, workViewPage, taskPage);
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+      )
+      .toBe(true);
+
+    // Section starts collapsed, so this goes through the afterExpand focus path.
+    await page.keyboard.press('a');
+
+    const input = draftInput(page);
+    await expect(input).toBeVisible();
+    await expect(input).toBeFocused();
+    await input.fill('SubTask no anim');
+    await page.keyboard.press('Enter');
+
+    await expect(parent.locator('.sub-tasks task task-title').first()).toContainText(
+      'SubTask no anim',
+    );
   });
 });
