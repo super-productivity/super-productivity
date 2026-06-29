@@ -30,6 +30,7 @@ import { T } from '../../../t.const';
 import { TaskService } from '../task.service';
 import {
   expandAnimation,
+  expandFadeAnimation,
   expandFadeInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
@@ -87,14 +88,20 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
 import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
-import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
+import { AddSubtaskInputComponent } from '../add-subtask-input/add-subtask-input.component';
 
 @Component({
   selector: 'task-detail-panel',
   templateUrl: './task-detail-panel.component.html',
   styleUrls: ['./task-detail-panel.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandAnimation, expandFadeInOnlyAnimation, fadeAnimation, swirlAnimation],
+  animations: [
+    expandAnimation,
+    expandFadeAnimation,
+    expandFadeInOnlyAnimation,
+    fadeAnimation,
+    swirlAnimation,
+  ],
   imports: [
     TaskTitleComponent,
     TaskDetailItemComponent,
@@ -115,6 +122,7 @@ import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.s
     MsToStringPipe,
     TranslatePipe,
     IssueIconPipe,
+    AddSubtaskInputComponent,
   ],
 })
 export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -132,7 +140,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
-  private _addSubtaskInputService = inject(AddSubtaskInputService);
 
   // Inputs
   task = input.required<TaskWithSubTasks>();
@@ -143,6 +150,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   itemEls = viewChildren(TaskDetailItemComponent);
   attachmentPanelElRef = viewChild<TaskDetailItemComponent>('attachmentPanelElRef');
   noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
+  addSubtaskInput = viewChild(AddSubtaskInputComponent);
+
+  // The detail panel hosts its own inline subtask draft input rather than
+  // delegating to the <task> row that renders the parent: in the Planner (and
+  // other non-list views) that row does not exist, so the delegated request was
+  // silently dropped (#8617). isSubTasksExpanded controls the sub-task section
+  // so the input is visible even when triggered while the section is collapsed.
+  readonly isAddSubtaskInputVisible = signal(false);
+  readonly isSubTasksExpanded = signal(false);
 
   // Constants
   IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
@@ -352,10 +368,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return task && !task.parentId;
   });
 
-  isSubTaskPanelExpandedInitially = computed(() => {
-    return this.isDialogMode();
-  });
-
   showTimeEstimate = computed(() => !this.task().subTasks?.length);
 
   hasAttachments = computed(() => {
@@ -442,6 +454,9 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       takeUntilDestroyed(this._destroyRef),
     )
     .subscribe(() => {
+      // Don't carry a half-open subtask draft over to the next task (the panel
+      // component is reused across tasks, unlike per-row <task> components).
+      this.isAddSubtaskInputVisible.set(false);
       // Only auto-focus panel content when focus is already inside the panel,
       // to avoid stealing focus from the main task list during navigation (#6578)
       if (document.activeElement?.closest('task-detail-panel')) {
@@ -615,7 +630,38 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   addSubTask(): void {
     const task = this.task();
-    this._addSubtaskInputService.requestOpen(task.parentId || task.id);
+    // The sub-task section (and thus the inline input) only renders for a
+    // top-level task. On a subtask's own panel "add subtask" means "add a
+    // sibling under my parent" — there is no section to host the input, so
+    // create it directly (matches the pre-inline-draft behaviour).
+    if (task.parentId) {
+      this.taskService.addSubTaskTo(task.parentId);
+      return;
+    }
+
+    if (task._hideSubTasksMode === HideSubTasksMode.HideAll) {
+      this.taskService.showSubTasks(task.id);
+    }
+    const wasExpanded = this.isSubTasksExpanded();
+    this.isSubTasksExpanded.set(true);
+    this.isAddSubtaskInputVisible.set(true);
+    // When already expanded the input is immediately focusable. When we just
+    // expanded it, the panel body is visibility:hidden until the expand
+    // animation finishes — onSubTasksAfterExpand() handles focus in that case.
+    if (wasExpanded) {
+      window.setTimeout(() => this.addSubtaskInput()?.focus());
+    }
+  }
+
+  onSubTasksAfterExpand(): void {
+    if (this.isAddSubtaskInputVisible()) {
+      this.addSubtaskInput()?.focus();
+    }
+  }
+
+  onAddSubtaskInputClosed(): void {
+    // Keep the sub-task section expanded so the just-added sub-tasks stay visible.
+    this.isAddSubtaskInputVisible.set(false);
   }
 
   collapseParent(): void {
