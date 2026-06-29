@@ -190,3 +190,44 @@ test('keeps other consents when one is cleared', async () => {
     grantedAt: 2,
   });
 });
+
+test('ignores a malformed on-disk consent entry (presence alone must not authorize)', async () => {
+  // SECURITY: mere presence of an entry authorizes execution, so a corrupt/tampered value
+  // (empty object, array, or a record missing name/version/grantedAt) must be dropped — the
+  // user re-prompts — rather than read as a grant. Only a fully well-formed record loads.
+  await fs.writeFile(
+    getStorePath(),
+    JSON.stringify({
+      pluginNodeExecutionConsent: {
+        version: 1,
+        consents: {
+          'empty-object': {},
+          'array-entry': [],
+          'missing-version': { name: 'P', grantedAt: 1 },
+          'non-number-grantedAt': { name: 'P', version: '1', grantedAt: 'soon' },
+          'good-plugin': { name: 'Good', version: '1', grantedAt: 5 },
+        },
+      },
+    }),
+    'utf8',
+  );
+
+  const store = loadConsentStore();
+  for (const id of [
+    'empty-object',
+    'array-entry',
+    'missing-version',
+    'non-number-grantedAt',
+  ]) {
+    assert.equal(
+      await store.getNodeExecutionConsent(id),
+      null,
+      `malformed entry ${id} must be ignored`,
+    );
+  }
+  assert.deepEqual(await store.getNodeExecutionConsent('good-plugin'), {
+    name: 'Good',
+    version: '1',
+    grantedAt: 5,
+  });
+});

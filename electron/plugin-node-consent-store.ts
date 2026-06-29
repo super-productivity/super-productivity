@@ -66,16 +66,26 @@ const loadBlob = async (): Promise<NodeExecutionConsentBlob> => {
   ) {
     return emptyBlob();
   }
-  // Build the Map from the persisted plain object. Only well-formed object entries count —
-  // a corrupt/tampered primitive is dropped (the user re-prompts) rather than mis-read as
-  // a grant. A literal `__proto__`/`constructor` key from a hand-edited file is just an
-  // ordinary Map key here, never a prototype write.
+  // Build the Map from the persisted plain object. Only a fully well-formed entry counts:
+  // mere presence authorizes execution, so a corrupt/tampered value (a primitive, an array,
+  // an empty `{}`, or a partial record) is dropped — the user re-prompts — rather than
+  // mis-read as a grant. A literal `__proto__`/`constructor` key from a hand-edited file is
+  // just an ordinary Map key here, never a prototype write.
   const consents = new Map<string, PersistedNodeExecutionConsent>();
   for (const [pluginId, entry] of Object.entries(
     blob.consents as Record<string, unknown>,
   )) {
-    if (entry && typeof entry === 'object') {
-      consents.set(pluginId, entry as PersistedNodeExecutionConsent);
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const { name, version, grantedAt } = entry as Record<string, unknown>;
+    if (
+      typeof name === 'string' &&
+      typeof version === 'string' &&
+      typeof grantedAt === 'number' &&
+      Number.isFinite(grantedAt)
+    ) {
+      consents.set(pluginId, { name, version, grantedAt });
     }
   }
   return { version: NODE_EXECUTION_CONSENT_STORE_VERSION, consents };

@@ -1336,14 +1336,27 @@ export class PluginService implements OnDestroy {
         PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
       }
 
+      // An explicit upload always (re)installs code under this id, so any prior persisted
+      // nodeExecution consent no longer applies — clear it unconditionally, BEFORE loading
+      // the new code and outside the `existingState` branch (issue #8512 Phase 2). This
+      // closes the orphaned-consent gap: if consent survived in the main-owned store while
+      // the in-memory/cache record was already gone (a crash mid-uninstall, IndexedDB
+      // eviction, or an external/partial wipe), a same-id re-upload would otherwise skip the
+      // clear and be silently granted node execution with no prompt. This MUST fail closed:
+      // if the revoke can't be persisted we abort the upload here, before any teardown or
+      // code store, rather than load replacement code that could inherit the old grant. (For
+      // a brand-new id with nothing to clear the call is a no-op and returns true.) Re-asking
+      // once per upload is intended; ask-once is about sessions, not uploads.
+      if (!(await this.clearNodeExecutionConsent(manifest.id))) {
+        throw new Error(
+          `Aborting upload of "${manifest.id}": could not clear previous nodeExecution consent`,
+        );
+      }
+
       // Teardown existing plugin runtime if re-uploading same ID
       const existingState = this._getPluginState(manifest.id);
       if (existingState) {
         this._teardownPluginRuntime(manifest.id);
-        // Re-uploading replaces the code under this id, so any prior persisted consent no
-        // longer applies — clear it (in addition to the session grant teardown handles)
-        // so the new code must be consented to afresh (issue #8512 Phase 2).
-        await this.clearNodeExecutionConsent(manifest.id);
         // Clear stale assets from previous version
         this._pluginIndexHtml.delete(manifest.id);
         this._pluginIcons.delete(manifest.id);
@@ -1881,10 +1894,28 @@ export class PluginService implements OnDestroy {
    * three explicit, user-driven lifecycle edges. Deliberately NOT called from generic
    * teardown (`_teardownPluginRuntime`), which also fires on app shutdown/navigation and
    * must preserve "ask once across sessions".
+   *
+   * A persistence failure is logged (id only — the raw error can embed the userData path)
+   * and reported via the RETURN VALUE rather than thrown: lifecycle edges (disable /
+   * uninstall / cache-clear) treat the clear as best-effort and ignore the result, so a rare
+   * disk failure can't abort their bookkeeping (zombie plugin state, or `disablePlugin`
+   * rejecting after the plugin is already disabled). A SECURITY-critical caller that must
+   * fail closed — `loadPluginFromZip`, before it loads replacement code under this id —
+   * instead checks the result and aborts, so replacement code can never inherit a prior
+   * grant just because the revoke write failed.
+   *
+   * @returns `true` if the persisted consent was cleared (or there was nothing to clear),
+   *   `false` if the clear could not be persisted.
    */
-  async clearNodeExecutionConsent(pluginId: string): Promise<void> {
+  async clearNodeExecutionConsent(pluginId: string): Promise<boolean> {
     this._nodeExecutionDeniedThisSession.delete(pluginId);
-    await this._pluginBridge.clearNodeExecutionConsent(pluginId);
+    try {
+      await this._pluginBridge.clearNodeExecutionConsent(pluginId);
+      return true;
+    } catch {
+      PluginLog.err(`Failed to clear persisted nodeExecution consent for ${pluginId}`);
+      return false;
+    }
   }
 
   /**

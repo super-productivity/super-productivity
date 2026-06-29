@@ -632,3 +632,60 @@ test('built-in plugin consent is never persisted (stays per-session, regression)
   await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'sync-md');
   assert.equal(dialogCalls.length, 2);
 });
+
+test('mints the grant before persisting consent (persist is best-effort, never gates the grant)', async () => {
+  // SECURITY ordering: the consent persist is a new `await` after the post-dialog
+  // sender-validity check. Minting BEFORE that write keeps the grant in the live table
+  // during the write, so a navigation/destroy cleanup that fires mid-write drops it (in
+  // real Electron), and a persist failure can never lose an approved grant. Asserting the
+  // grant already exists at the moment of the persist write pins that ordering.
+  let grantsSizeAtPersist = -1;
+  let mod;
+  consentStore.setNodeExecutionConsent = async (pluginId, consent) => {
+    grantsSizeAtPersist = mod.pluginNodeExecutor.grants.size;
+    consentStore.__records.set(pluginId, consent);
+  };
+  mod = loadModule();
+  const webContents = new FakeWebContents(30);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'uploaded-order',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  // The grant for this request was already live when the persist ran (mint-before-persist).
+  assert.equal(grantsSizeAtPersist, 1);
+});
+
+test('a consent persist failure still grants the approved session (best-effort)', async () => {
+  // Persisting is best-effort: a write failure only costs a re-prompt next session, never
+  // the grant the user just approved. Minting before the persist guarantees this.
+  let mod;
+  consentStore.setNodeExecutionConsent = async () => {
+    throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+  };
+  mod = loadModule();
+  assert.ok(mod);
+  const webContents = new FakeWebContents(31);
+
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'persist-fails',
+    { name: 'Uploaded', version: '1.0.0' },
+  );
+
+  assert.equal(typeof grant.token, 'string');
+  const result = await callIpc(
+    'PLUGIN_EXEC_NODE_SCRIPT',
+    webContents,
+    'persist-fails',
+    grant.token,
+    { script: 'return 1 + 1;' },
+  );
+  assert.equal(result.success, true);
+  assert.equal(result.result, 2);
+});

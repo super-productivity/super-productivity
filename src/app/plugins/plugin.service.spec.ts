@@ -328,10 +328,22 @@ describe('PluginService', () => {
     )._nodeExecutionDeniedThisSession;
     deniedSet.add(pluginId);
 
-    await service.clearNodeExecutionConsent(pluginId);
+    const result = await service.clearNodeExecutionConsent(pluginId);
 
+    expect(result).toBe(true);
     expect(deniedSet.has(pluginId)).toBe(false);
     expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledOnceWith(pluginId);
+  });
+
+  it('clearNodeExecutionConsent returns false when the persisted clear fails (caller can fail closed)', async () => {
+    // A persistence failure must NOT throw (lifecycle bookkeeping ignores it), but must be
+    // reported via the return value so loadPluginFromZip can abort before loading new code
+    // under an id whose stale consent could not be revoked.
+    pluginBridge.clearNodeExecutionConsent.and.rejectWith(new Error('disk full'));
+
+    const result = await service.clearNodeExecutionConsent('node-plugin');
+
+    expect(result).toBe(false);
   });
 
   it('removeUploadedPlugin clears persisted nodeExecution consent (Phase 2)', async () => {

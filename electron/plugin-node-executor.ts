@@ -33,10 +33,11 @@ const BUILT_IN_PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // with no Unicode range to keep updated as new code points are assigned.
 const MAX_UPLOADED_PLUGIN_ID_LENGTH = 100;
 const SAFE_UPLOADED_PLUGIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-// The id is used as a key into the persisted-consent map. That store uses null-prototype
-// objects + own-property reads so an `Object.prototype` member name can't masquerade as a
-// stored grant, but reject the classic pollution keys at this boundary too as defense in
-// depth (`__proto__` is already excluded by the leading-char allowlist; the others pass it).
+// The id is used as a key into the persisted-consent store, which keys consent in a `Map`
+// (returns `undefined` for any unstored key) so an `Object.prototype` member name can't
+// masquerade as a stored grant. Reject the classic pollution keys at this boundary too as
+// defense in depth (`__proto__` is already excluded by the leading-char allowlist; the
+// others pass it).
 const FORBIDDEN_PLUGIN_IDS = new Set(['__proto__', 'prototype', 'constructor']);
 // Self-declared name/version are display-only. Strip every Unicode control (Cc) and
 // format (Cf) character — this covers C0/C1 controls, all zero-width characters, the BOM,
@@ -203,9 +204,17 @@ class PluginNodeExecutor {
           return null;
         }
 
-        // Allow → for uploaded plugins, remember the decision so later sessions don't
-        // re-prompt (ask-once). Persisting is best-effort: a write failure only costs a
-        // re-prompt next session, never a grant the user just approved.
+        // Allow → mint the grant FIRST, synchronously, right after the sender-validity
+        // check above. The persist below is a new `await`; minting before it keeps the
+        // "never mint for a navigated/destroyed sender" invariant tight — if the sender
+        // navigates or is destroyed during the write, the cleanup listener registered
+        // before the dialog drops this just-minted grant, so no untracked grant survives
+        // for a stale webContents.
+        const grant = this.mintGrant(safeId, webContentsId);
+
+        // For uploaded plugins, remember the decision so later sessions don't re-prompt
+        // (ask-once). Persisting is best-effort: a write failure only costs a re-prompt
+        // next session, never a grant the user just approved.
         if (!builtInManifest) {
           try {
             // Persist exactly the name/version the user saw in the dialog.
@@ -214,12 +223,15 @@ class PluginNodeExecutor {
               grantedAt: Date.now(),
             });
           } catch (error) {
-            // Host diagnostic → exportable log (electron-log), distinct from the
-            // sandboxed plugin's own console output. Only the validated id is logged.
-            logError(`Failed to persist nodeExecution consent for ${safeId}:`, error);
+            // Host diagnostic → exportable log (electron-log), distinct from the sandboxed
+            // plugin's own console output. Log only the validated id and the error code —
+            // never the raw error, whose message can embed the userData absolute path (and
+            // thus the OS username) for an fs failure.
+            const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown';
+            logError(`Failed to persist nodeExecution consent for ${safeId} (${code})`);
           }
         }
-        return this.mintGrant(safeId, webContentsId);
+        return grant;
       },
     );
 
