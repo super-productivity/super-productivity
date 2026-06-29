@@ -707,6 +707,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     window.clearTimeout(this._focusTimeout);
     const scheduledForTaskId = this.task().id;
     this._focusTimeout = window.setTimeout(() => {
+      // Never steal focus from an open inline "add subtask" draft. The panel's
+      // on-open auto-focus runs behind delay(50) + 150ms timers; under load
+      // those can fire *after* the user already opened the draft. Focusing a
+      // panel item then blurs the draft input, whose blur handler closes the
+      // draft — leaving "Add subtask" silently broken (#8617/#8630).
+      if (this.isAddSubtaskInputVisible()) {
+        return;
+      }
       if (this.task().id === scheduledForTaskId) {
         focusFn();
       }

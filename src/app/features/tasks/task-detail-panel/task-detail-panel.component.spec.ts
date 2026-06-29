@@ -328,6 +328,24 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(item.elementRef.nativeElement.focus).not.toHaveBeenCalled();
   }));
+
+  // A late panel auto-focus must not blur an open "add subtask" draft: the
+  // draft's blur handler closes it, which left "Add subtask" silently broken
+  // when opened from the Planner under load (#8617/#8630).
+  it('does not steal focus from an open add-subtask draft', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+
+    // The user opened the inline draft (it owns focus)...
+    component.isAddSubtaskInputVisible.set(true);
+    // ...then the on-open auto-focus timer fires late.
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+  }));
 });
 
 // Opening the notes panel via a checklist's progress badge routes through
