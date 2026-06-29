@@ -108,18 +108,27 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
     expect(dialogRef.close).toHaveBeenCalledWith();
   });
 
-  it('reconnect() reloads the spaces after a successful reconnect (stale token)', async () => {
-    // First load fails (revoked token), reload after reconnect succeeds.
+  it('reconnect() retries with the refreshed token and reloads the spaces', async () => {
+    // Stale token → first load fails. After reconnect the account holds a fresh
+    // token; the retry must use that new token (the #8616 handoff), not the old.
+    const STALE = { host: ACCOUNT.host, token: 'pat_dead', email: ACCOUNT.email };
+    const FRESH = { host: ACCOUNT.host, token: 'pat_fresh', email: ACCOUNT.email };
+    accountStub.account.and.returnValue(STALE);
     apiStub.getSpaces$.and.returnValues(of(null), of(SPACES));
     createComponent();
     await fixture.whenStable();
     expect(component.hasError()).toBe(true);
+    expect(apiStub.getSpaces$.calls.mostRecent().args[0].token).toBe('pat_dead');
 
+    // The connect dialog stored a fresh token before resolving.
+    accountStub.account.and.returnValue(FRESH);
     await component.reconnect();
+
     expect(matDialogStub.open).toHaveBeenCalled();
     expect(component.hasError()).toBe(false);
     expect(component.spaces()).toEqual(SPACES);
     expect(component.selectedSpaceId).toBe('s1');
+    expect(apiStub.getSpaces$.calls.mostRecent().args[0].token).toBe('pat_fresh');
   });
 
   it('reconnect() leaves the error state when the connect dialog is cancelled', async () => {

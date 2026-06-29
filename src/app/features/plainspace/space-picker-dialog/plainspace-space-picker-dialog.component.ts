@@ -98,18 +98,18 @@ export class PlainspaceSpacePickerDialogComponent {
     const reconnected = await firstValueFrom(
       this._matDialog
         .open(PlainspaceConnectDialogComponent, {
-          data: { host: this._accountService.host() ?? DEFAULT_PLAINSPACE_CFG.host },
+          data: { host: this._accountService.host() },
         })
         .afterClosed(),
     );
     if (reconnected === true) {
-      this.hasError.set(false);
-      this.isLoading.set(true);
       await this._loadSpaces();
     }
   }
 
   private async _loadSpaces(): Promise<void> {
+    this.hasError.set(false);
+    this.isLoading.set(true);
     const account = this._accountService.account();
     if (!account) {
       // Should not happen — the share flow connects first — but bail safely.
