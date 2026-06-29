@@ -6,6 +6,11 @@
       "MSG": "Bạn có muốn cài đặt Super Productivity dưới dạng PWA (Ứng dụng web tiến bộ) không?"
     },
     "B_OFFLINE": "Bạn đang ngoại tuyến. Đồng bộ và yêu cầu dữ liệu từ nhà cung cấp sự cố sẽ không hoạt động.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Để sau",
+      "MSG": "Bạn đã sử dụng Super Productivity một thời gian. Hãy thiết lập đồng bộ hóa để sao lưu dữ liệu của bạn và giữ an toàn trên mọi thiết bị.",
+      "SETUP": "Thiết lập đồng bộ hóa"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Thay đổi cài đặt dự án",
       "CHANGE_TAG_SETTINGS": "Thay đổi cài đặt nhãn"

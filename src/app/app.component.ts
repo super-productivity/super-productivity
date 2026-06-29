@@ -59,6 +59,7 @@ import { TaskService } from './features/tasks/task.service';
 import { MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
+import { SyncSafetyBannerService } from './imex/sync/sync-safety-banner.service';
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
@@ -154,6 +155,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _tagService = inject(TagService);
   private _destroyRef = inject(DestroyRef);
   private _noteStartupBannerService = inject(NoteStartupBannerService);
+  private _syncSafetyBannerService = inject(SyncSafetyBannerService);
   private _ngZone = inject(NgZone);
   private _document = inject(DOCUMENT, { optional: true });
   private _startupService = inject(StartupService);
@@ -309,6 +311,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       .pipe(take(1))
       .subscribe(() => {
         void this._noteStartupBannerService.showLastNoteIfNeeded();
+        this._syncSafetyBannerService.showReminderIfNeeded();
       });
 
     // ! For keyboard shortcuts to work correctly with any layouts (QWERTZ/AZERTY/etc) - user's keyboard layout must be presaved

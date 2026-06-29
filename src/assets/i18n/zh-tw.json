@@ -6,6 +6,11 @@
       "MSG": "您想將 Super Productivity 安裝為 PWA 嗎？"
     },
     "B_OFFLINE": "您已斷開與網際網路的連接。同步和資料請求將失效。",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "暫不",
+      "MSG": "您已經使用 Super Productivity 一段時間了。設定同步以備份您的資料，並在所有裝置上保持安全。",
+      "SETUP": "設定同步"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "更改背景",
       "CHANGE_PROJECT_SETTINGS": "變更專案設定",

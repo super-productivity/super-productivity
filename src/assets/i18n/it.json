@@ -6,6 +6,11 @@
       "MSG": "Vuoi installare Super Productivity come PWA?"
     },
     "B_OFFLINE": "Sei disconnesso da Internet. La sincronizzazione e la richiesta dei dati del provider di problemi non funzioneranno.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Non ora",
+      "MSG": "Usi Super Productivity da un po'. Configura la sincronizzazione per eseguire il backup dei tuoi dati e tenerli al sicuro su tutti i dispositivi.",
+      "SETUP": "Configura sincronizzazione"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Cambia sfondo",
       "CHANGE_PROJECT_SETTINGS": "Modifica impostazioni progetto",

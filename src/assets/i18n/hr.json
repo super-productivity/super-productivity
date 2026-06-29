@@ -6,6 +6,11 @@
       "MSG": "Želiš instalirati Super Productivity kao PWA (Progressive Web App)?"
     },
     "B_OFFLINE": "Nemaš vezu s internetom. Sinkronizacija i dohvaćanje podataka od usluge za praćenje problema neće raditi.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Ne sada",
+      "MSG": "Već neko vrijeme koristiš Super Productivity. Postavi sinkronizaciju kako bi sigurnosno kopirao svoje podatke i čuvao ih sigurnima na svim uređajima.",
+      "SETUP": "Postavi sinkronizaciju"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Promijeni postavke projekta",
       "CHANGE_TAG_SETTINGS": "Promijeni postavke oznaka"

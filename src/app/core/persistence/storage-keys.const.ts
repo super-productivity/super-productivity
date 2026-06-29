@@ -12,6 +12,10 @@ export enum DB {
 export enum LS {
   APP_START_COUNT = 'APP_START_COUNT',
   APP_START_COUNT_LAST_START_DAY = 'APP_START_COUNT_LAST_START_DAY',
+  // Epoch ms the app was first opened on this device, seeded once (lazily by
+  // SyncSafetyBannerService). Lets us tell "used for a while" by wall-clock time,
+  // independently of how often the app is (re)started.
+  FIRST_USE_TIMESTAMP = 'SUP_FIRST_USE_TIMESTAMP',
   RATE_DIALOG_STATE = 'SUP_RATE_DIALOG_STATE',
   // Set on an unhandled error or any detected data damage; read by the rating
   // prompt to hold off for a cooldown after a bad experience. Time only.
@@ -32,6 +36,10 @@ export enum LS {
   IS_TAG_LIST_EXPANDED = 'SUP_IS_TAG_LIST_EXPANDED',
 
   LAST_NOTE_BANNER_DAY = 'SUP_LAST_NOTE_BANNER_DAY',
+
+  // Set once the user acts on or dismisses the "set up sync to keep your data
+  // safe" startup banner, so the nudge is shown at most once ever.
+  SYNC_SAFETY_NUDGE_DISMISSED = 'SUP_SYNC_SAFETY_NUDGE_DISMISSED',
 
   SELECTED_TIME_VIEW = 'SELECTED_TIME_VIEW',
   SCHEDULE_WEEK_ROW_HEIGHT = 'SUP_SCHEDULE_WEEK_ROW_HEIGHT',

@@ -6,6 +6,11 @@
       "MSG": "Apa kamu ingin memasang Super Productivity sebagai sebuah PWA?"
     },
     "B_OFFLINE": "Jaringanmu terputus dari internet. Sinkronasi dan meminta masalah penyedia data mungkin tidak akan bekerja.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Nanti saja",
+      "MSG": "Anda telah menggunakan Super Productivity selama beberapa waktu. Siapkan sinkronisasi untuk mencadangkan data Anda dan menjaganya tetap aman di semua perangkat.",
+      "SETUP": "Siapkan sinkronisasi"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Ubah Latar Belakang",
       "CHANGE_PROJECT_SETTINGS": "Ubah pengaturan proyek",

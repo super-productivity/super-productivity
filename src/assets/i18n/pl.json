@@ -6,6 +6,11 @@
       "MSG": "Czy chcesz zinstalować Super Productivity jako aplikację PWA?"
     },
     "B_OFFLINE": "Zostałeś odłączony od internetu. Synchronizacja nie będzie działać.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Nie teraz",
+      "MSG": "Używasz Super Productivity już od jakiegoś czasu. Skonfiguruj synchronizację, aby utworzyć kopię zapasową danych i zapewnić im bezpieczeństwo na wszystkich urządzeniach.",
+      "SETUP": "Skonfiguruj synchronizację"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Zmień ustawienia Projektu",
       "CHANGE_TAG_SETTINGS": "Zmień ustawienia Tagów"

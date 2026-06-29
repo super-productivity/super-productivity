@@ -6,6 +6,11 @@
       "MSG": "Möchtest du Super Productivity als PWA installieren?"
     },
     "B_OFFLINE": "Du bist vom Internet getrennt. Das Synchronisieren und Anfordern von Daten des Issue-Providers funktioniert nicht.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Jetzt nicht",
+      "MSG": "Du nutzt Super Productivity schon eine Weile. Richte die Synchronisierung ein, um deine Daten zu sichern und geräteübergreifend zu schützen.",
+      "SETUP": "Synchronisierung einrichten"
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Projekteinstellungen ändern",
       "CHANGE_TAG_SETTINGS": "Tag-Einstellungen ändern"

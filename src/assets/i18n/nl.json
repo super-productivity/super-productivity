@@ -6,6 +6,11 @@
       "MSG": "Wilt u Super Productivity als PWA installeren?"
     },
     "B_OFFLINE": "Je hebt geen verbinding met internet. Het synchroniseren en opvragen van probleemprovidergegevens werkt niet.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Niet nu",
+      "MSG": "Je gebruikt Super Productivity al een tijdje. Stel synchronisatie in om een back-up van je gegevens te maken en ze veilig te houden op al je apparaten.",
+      "SETUP": "Synchronisatie instellen"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Achtergrond wijzigen",
       "CHANGE_PROJECT_SETTINGS": "Projectinstellingen wijzigen",

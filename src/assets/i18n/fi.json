@@ -6,6 +6,11 @@
       "MSG": "Haluatko asentaa Super Productivityn PWA-sovellukseksi?"
     },
     "B_OFFLINE": "Olet irti internetistä. Synkronointi ja tiedustelut ongelmanantajien tiedoista eivät toimi.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "Ei nyt",
+      "MSG": "Olet käyttänyt Super Productivitya jo jonkin aikaa. Määritä synkronointi varmuuskopioidaksesi tietosi ja pitääksesi ne turvassa kaikilla laitteilla.",
+      "SETUP": "Määritä synkronointi"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Vaihda taustakuva"
     },

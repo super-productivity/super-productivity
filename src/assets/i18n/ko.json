@@ -6,6 +6,11 @@
       "MSG": "PWA로 Super Productivity를 설치하시겠습니까?"
     },
     "B_OFFLINE": "인터넷 연결이 끊어졌습니다. 문제 제공자 데이터 동기화 및 요청이 작동하지 않습니다.",
+    "B_SYNC_SAFETY": {
+      "DISMISS": "나중에",
+      "MSG": "Super Productivity를 사용하신 지 꽤 되셨네요. 동기화를 설정하여 데이터를 백업하고 모든 기기에서 안전하게 보관하세요.",
+      "SETUP": "동기화 설정"
+    },
     "UPDATE_WEB_APP": "새 버전을 사용할 수 있습니다. 새 버전을 로드하시겠습니까?",
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "배경 변경",
