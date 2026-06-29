@@ -10,6 +10,7 @@ import { GlobalThemeService } from '../core/theme/global-theme.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { PluginCacheService } from './plugin-cache.service';
+import { PluginSecretService } from './secret/plugin-secret.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginHooksService } from './plugin-hooks';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -72,9 +73,11 @@ describe('PluginService', () => {
       'setNodeExecutionGrantToken',
       'revokeNodeExecutionGrantToken',
       'revokeNodeExecutionGrant',
+      'clearOAuthTokens',
     ]);
     pluginBridge.hasNodeExecutionGrantToken.and.returnValue(false);
     pluginBridge.requestNodeExecutionGrant.and.resolveTo(null);
+    pluginBridge.clearOAuthTokens.and.resolveTo(undefined);
     pluginRunner = jasmine.createSpyObj<PluginRunner>('PluginRunner', [
       'loadPlugin',
       'unloadPlugin',
@@ -467,5 +470,38 @@ describe('PluginService', () => {
       }),
     );
     expect(service.getLoadedPlugins()).toEqual([]);
+  });
+
+  describe('removeUploadedPlugin credential cleanup', () => {
+    it('purges both secrets and OAuth tokens on uninstall', async () => {
+      const secretService = TestBed.inject(PluginSecretService);
+      const removeSecretsSpy = spyOn(
+        secretService,
+        'removeSecretsForPlugin',
+      ).and.resolveTo();
+
+      await service.removeUploadedPlugin('ghost-plugin');
+
+      expect(removeSecretsSpy).toHaveBeenCalledWith('ghost-plugin');
+      expect(pluginBridge.clearOAuthTokens).toHaveBeenCalledWith('ghost-plugin');
+    });
+
+    it('purges credentials even when a later cleanup step fails', async () => {
+      const secretService = TestBed.inject(PluginSecretService);
+      const removeSecretsSpy = spyOn(
+        secretService,
+        'removeSecretsForPlugin',
+      ).and.resolveTo();
+      const cache = TestBed.inject(
+        PluginCacheService,
+      ) as jasmine.SpyObj<PluginCacheService>;
+      cache.removePlugin.and.rejectWith(new Error('cache failure'));
+
+      // The credential purges run before the failing step, so they still fire.
+      await expectAsync(service.removeUploadedPlugin('ghost-plugin')).toBeRejected();
+
+      expect(removeSecretsSpy).toHaveBeenCalledWith('ghost-plugin');
+      expect(pluginBridge.clearOAuthTokens).toHaveBeenCalledWith('ghost-plugin');
+    });
   });
 });

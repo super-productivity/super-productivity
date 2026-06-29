@@ -84,6 +84,7 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { createPluginSyncAdapter } from './issue-provider/plugin-sync-adapter.service';
 import { PluginOAuthBridgeService } from './oauth/plugin-oauth-bridge.service';
+import { PluginSecretService } from './secret/plugin-secret.service';
 import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -155,6 +156,7 @@ export class PluginBridgeService implements OnDestroy {
   private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
   private _pluginHttpService = inject(PluginHttpService);
   private _pluginOAuthBridge = inject(PluginOAuthBridgeService);
+  private _pluginSecretService = inject(PluginSecretService);
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
@@ -270,6 +272,9 @@ export class PluginBridgeService implements OnDestroy {
     startOAuthFlow: (config: OAuthFlowConfig) => Promise<OAuthTokenResult>;
     getOAuthToken: () => Promise<string | null>;
     clearOAuthToken: () => Promise<void>;
+    setSecret: (key: string, value: string) => Promise<void>;
+    getSecret: (key: string) => Promise<string | null>;
+    deleteSecret: (key: string) => Promise<void>;
     translate: (key: string, params?: Record<string, string | number>) => string;
     formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
     getCurrentLanguage: () => string;
@@ -363,6 +368,14 @@ export class PluginBridgeService implements OnDestroy {
         ),
       clearOAuthToken: (): Promise<void> =>
         this._pluginOAuthBridge.clearOAuthTokens(pluginId),
+
+      // Secret storage (local-only, per-plugin, never synced)
+      setSecret: (key: string, value: string): Promise<void> =>
+        this._pluginSecretService.setSecret(pluginId, key, value),
+      getSecret: (key: string): Promise<string | null> =>
+        this._pluginSecretService.getSecret(pluginId, key),
+      deleteSecret: (key: string): Promise<void> =>
+        this._pluginSecretService.deleteSecret(pluginId, key),
 
       // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>

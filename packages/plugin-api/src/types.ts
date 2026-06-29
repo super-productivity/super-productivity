@@ -675,6 +675,22 @@ export interface PluginAPI {
 
   clearOAuthToken(): Promise<void>;
 
+  // secret storage
+  //
+  // Local-only, per-plugin credential storage (IMAP passwords, API tokens, …).
+  // Stored in a dedicated store that is never part of Super Productivity's
+  // sync, exports, or backups, so secrets are per-device — the user re-enters
+  // them on each device. (This is not protection against OS-level device
+  // backups; values are stored unencrypted at rest, like plugin OAuth tokens.)
+  // Use this instead of `persistDataSynced` / issue-provider config for
+  // anything sensitive; those land in synced state, exports, and backups.
+  // `key` must be a non-empty string.
+  setSecret(key: string, value: string): Promise<void>;
+
+  getSecret(key: string): Promise<string | null>;
+
+  deleteSecret(key: string): Promise<void>;
+
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 

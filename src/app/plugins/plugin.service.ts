@@ -22,6 +22,7 @@ import {
 import { take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
+import { PluginSecretService } from './secret/plugin-secret.service';
 import { PluginLoaderService } from './plugin-loader.service';
 import { validatePluginManifest } from './util/validate-manifest.util';
 import { TranslateService } from '@ngx-translate/core';
@@ -101,6 +102,7 @@ export class PluginService implements OnDestroy {
   private readonly _pluginMetaPersistenceService = inject(PluginMetaPersistenceService);
   private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private readonly _pluginCacheService = inject(PluginCacheService);
+  private readonly _pluginSecretService = inject(PluginSecretService);
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -1554,6 +1556,21 @@ export class PluginService implements OnDestroy {
 
       // Unload and unregister the plugin
       this.unloadPlugin(pluginId);
+    }
+
+    // Purge local-only credentials (secrets + OAuth tokens) FIRST so they
+    // never outlive their plugin — even if a later cleanup step throws.
+    // Best-effort: a purge failure is logged but must not abort the uninstall
+    // (on IndexedDB failure the credentials orphan locally until a later purge).
+    try {
+      await this._pluginSecretService.removeSecretsForPlugin(pluginId);
+    } catch (error) {
+      PluginLog.err(`Failed to purge secrets for plugin ${pluginId}:`, error);
+    }
+    try {
+      await this._pluginBridge.clearOAuthTokens(pluginId);
+    } catch (error) {
+      PluginLog.err(`Failed to purge OAuth tokens for plugin ${pluginId}:`, error);
     }
 
     // Remove from cache
