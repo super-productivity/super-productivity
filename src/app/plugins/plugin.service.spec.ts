@@ -19,7 +19,7 @@ import { PluginRunner } from './plugin-runner';
 import { PluginSecurityService } from './plugin-security';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginInstance, PluginManifest } from './plugin-api.model';
-import { PluginService } from './plugin.service';
+import { NodeExecutionConsentDeniedError, PluginService } from './plugin.service';
 import { PluginState } from './plugin-state.model';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { T } from '../t.const';
@@ -466,6 +466,105 @@ describe('PluginService', () => {
         error: 'ready failed',
       }),
     );
+    expect(service.getLoadedPlugins()).toEqual([]);
+  });
+
+  // chokepoint #1: the actual #8385 path (startup re-activation / reload both flow through
+  // `activatePlugin`'s catch). Driven by making `_loadPluginLazy` reject with the denial
+  // sentinel, since the real `_fireOnReady` grant block is gated on the un-mockable
+  // `IS_ELECTRON` constant in the web test env.
+  it('disables (not errors) via activatePlugin when nodeExecution consent is denied (#8385)', async () => {
+    const runtime = service as unknown as { _isElectronRuntime: () => boolean };
+    spyOn(runtime, '_isElectronRuntime').and.returnValue(true);
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const svc = service as unknown as {
+      _setPluginState: (pluginId: string, state: PluginState) => void;
+      _loadPluginLazy: (state: PluginState) => Promise<PluginInstance>;
+    };
+    svc._setPluginState(manifest.id, {
+      manifest,
+      status: 'not-loaded',
+      path: 'uploaded://node-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+    });
+    spyOn(svc, '_loadPluginLazy').and.rejectWith(
+      new NodeExecutionConsentDeniedError(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+    );
+
+    const result = await service.activatePlugin(manifest.id); // non-manual = startup
+
+    expect(result).toBeNull();
+    // Clean disabled state, NOT an error tile → `canEnablePlugin` (= !plugin.error) stays
+    // true, so the toggle is clickable and re-enabling re-prompts (no restart needed).
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'not-loaded',
+        instance: undefined,
+        isEnabled: false,
+        error: undefined,
+      }),
+    );
+    // Device-local decision: a denial must NOT write the synced `pluginMetadata` entity,
+    // else it would disable the plugin on every other device too.
+    expect(pluginMetaPersistenceService.setPluginEnabled).not.toHaveBeenCalled();
+    // The main-process grant is still revoked on the way out (the security-load-bearing step).
+    expect(pluginBridge.revokeNodeExecutionGrantToken).toHaveBeenCalledWith(manifest.id);
+    // A denial is a deliberate choice, not a failure → no ERROR snack.
+    const snack = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  // chokepoint #2: the same normalisation when the denial surfaces via `_handleReadyFailure`
+  // (the live ZIP re-upload-of-an-enabled-id path).
+  it('disables (does not error) a plugin when nodeExecution consent is denied at onReady', () => {
+    const manifest: PluginManifest = {
+      ...mockManifest,
+      id: 'node-plugin',
+      name: 'Node Plugin',
+      permissions: ['nodeExecution'],
+    };
+    const instance: PluginInstance = { manifest, loaded: true, isEnabled: true };
+    const svc = service as unknown as {
+      _loadedPlugins: PluginInstance[];
+      _setPluginState: (pluginId: string, state: PluginState) => void;
+      _handleReadyFailure: (instance: PluginInstance, error: unknown) => void;
+    };
+    svc._loadedPlugins = [instance];
+    svc._setPluginState(manifest.id, {
+      manifest,
+      status: 'loaded',
+      path: 'uploaded://node-plugin',
+      type: 'uploaded',
+      isEnabled: true,
+      instance,
+    });
+
+    svc._handleReadyFailure(
+      instance,
+      new NodeExecutionConsentDeniedError(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+    );
+
+    // Clean disabled state, NOT an error tile (so `canEnablePlugin` stays true).
+    expect(service.getAllPluginStates().get(manifest.id)).toEqual(
+      jasmine.objectContaining({
+        status: 'not-loaded',
+        instance: undefined,
+        isEnabled: false,
+        error: undefined,
+      }),
+    );
+    // Device-local: never writes the synced pluginMetadata.
+    expect(pluginMetaPersistenceService.setPluginEnabled).not.toHaveBeenCalled();
+    // A denial is a deliberate choice, not a failure → no ERROR snack.
+    const snack = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+    expect(snack.open).not.toHaveBeenCalled();
+    expect(pluginRunner.unloadPlugin).toHaveBeenCalledOnceWith(manifest.id);
     expect(service.getLoadedPlugins()).toEqual([]);
   });
 });

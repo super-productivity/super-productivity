@@ -89,6 +89,18 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'yesterday-tasks',
 ]);
 
+/**
+ * Thrown by `_fireOnReady` when the user explicitly DENIES a nodeExecution consent
+ * prompt, so the failure handlers can treat it as a deliberate choice (clean disable)
+ * rather than a load failure (#8512). See `_handleNodeExecutionConsentDenied`.
+ */
+export class NodeExecutionConsentDeniedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NodeExecutionConsentDeniedError';
+  }
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -602,6 +614,12 @@ export class PluginService implements OnDestroy {
       }
       void this._revokeNodeExecutionGrant(pluginId);
 
+      // Deny = clean disable, not an error tile — see _handleNodeExecutionConsentDenied.
+      if (error instanceof NodeExecutionConsentDeniedError) {
+        this._handleNodeExecutionConsentDenied(pluginId);
+        return null;
+      }
+
       this._setPluginState(pluginId, {
         ...currentState,
         status: 'error',
@@ -671,6 +689,16 @@ export class PluginService implements OnDestroy {
     if (IS_ELECTRON && instance.manifest.permissions?.includes('nodeExecution')) {
       const hasGrant = await this._ensureNodeExecutionGrant(instance.manifest);
       if (!hasGrant) {
+        // `_ensureNodeExecutionGrant` returns false for two different reasons: a deliberate
+        // user DENIAL (which records the id in `_nodeExecutionDeniedThisSession`) and a
+        // technical grant-request failure (IPC/bridge error — not recorded). Only a real
+        // denial becomes the recoverable "clean disable"; a technical failure must surface
+        // as a normal error tile/snack so the user sees something actually went wrong.
+        if (this._nodeExecutionDeniedThisSession.has(instance.manifest.id)) {
+          throw new NodeExecutionConsentDeniedError(
+            this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
+          );
+        }
         throw new Error(
           this._translateService.instant(T.PLUGINS.NODE_EXECUTION_PERMISSION_DENIED),
         );
@@ -719,6 +747,12 @@ export class PluginService implements OnDestroy {
     }
     void this._revokeNodeExecutionGrant(pluginId);
 
+    // Deny = clean disable (no error tile / no ERROR snack) — see the helper below.
+    if (error instanceof NodeExecutionConsentDeniedError) {
+      this._handleNodeExecutionConsentDenied(pluginId);
+      return;
+    }
+
     const currentState = this._pluginStates().get(pluginId);
     if (currentState) {
       this._setPluginState(pluginId, {
@@ -736,6 +770,34 @@ export class PluginService implements OnDestroy {
       }),
       type: 'ERROR',
     });
+  }
+
+  /**
+   * Normalise a plugin to a clean, re-enableable disabled state after the user DENIED its
+   * nodeExecution consent prompt (#8512 deny-recovery). Clears any `error` so the
+   * management toggle is no longer grayed out (`canEnablePlugin` is `!plugin.error`) and
+   * sets it OFF; flipping it back on clears the session-denied marker (see
+   * `checkNodeExecutionPermission`) and re-opens the prompt — no app restart needed.
+   *
+   * Deliberately IN-MEMORY ONLY — it does NOT persist `isEnabled=false`. nodeExecution
+   * consent is a per-device, session-scoped decision (see `_nodeExecutionDeniedThisSession`);
+   * persisting would write the synced `pluginMetadata` entity, propagating a local "not now"
+   * to every device as a durable disable. Leaving the persisted `isEnabled` untouched means
+   * the next start on THIS device re-prompts, which matches the existing session-scoped model.
+   * Runtime teardown (unload + grant revoke) is the caller's responsibility.
+   */
+  private _handleNodeExecutionConsentDenied(pluginId: string): void {
+    PluginLog.log(`nodeExecution consent denied; disabling plugin: ${pluginId}`);
+    const currentState = this._getPluginState(pluginId);
+    if (currentState) {
+      this._setPluginState(pluginId, {
+        ...currentState,
+        status: 'not-loaded',
+        instance: undefined,
+        isEnabled: false,
+        error: undefined,
+      });
+    }
   }
 
   private async _loadUploadedPlugins(): Promise<void> {
