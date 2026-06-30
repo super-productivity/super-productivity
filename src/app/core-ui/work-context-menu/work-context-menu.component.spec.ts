@@ -16,6 +16,7 @@ import { DialogCompleteResolveTasksComponent } from '../../features/project/dial
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DateService } from '../../core/date/date.service';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
+import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
@@ -23,8 +24,10 @@ describe('WorkContextMenuComponent', () => {
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let mockPlainspaceShareService: jasmine.SpyObj<PlainspaceShareService>;
   let resolveResult$: any;
   let confirmResult$: any;
+  let isSharedOnPlainspace$: any;
   let router: Router;
   const logicalDoneOn = new Date(2026, 5, 5, 1, 0, 0).getTime();
 
@@ -69,6 +72,18 @@ describe('WorkContextMenuComponent', () => {
     const mockShareService = jasmine.createSpyObj('ShareService', ['getShareSupport']);
     mockShareService.getShareSupport.and.returnValue(Promise.resolve('none'));
 
+    mockPlainspaceShareService = jasmine.createSpyObj('PlainspaceShareService', [
+      'shareProjectOnPlainspace',
+    ]);
+    mockPlainspaceShareService.shareProjectOnPlainspace.and.returnValue(
+      Promise.resolve('space-1'),
+    );
+
+    // Default: project not yet shared → the Collaborate action is visible.
+    isSharedOnPlainspace$ = of(false);
+    const mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    mockStore.select.and.callFake(() => isSharedOnPlainspace$);
+
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     resolveResult$ = of(undefined);
     confirmResult$ = of(true);
@@ -96,7 +111,11 @@ describe('WorkContextMenuComponent', () => {
         },
         { provide: WorkContextMarkdownService, useValue: {} },
         { provide: ShareService, useValue: mockShareService },
-        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+        { provide: Store, useValue: mockStore },
+        {
+          provide: PlainspaceShareService,
+          useValue: mockPlainspaceShareService,
+        },
         {
           provide: DateService,
           useValue: {
@@ -377,6 +396,65 @@ describe('WorkContextMenuComponent', () => {
       expect(menuButtonByIcon('unarchive')).toBeNull();
       expect(menuButtonByIcon('archive')).toBeNull();
       expect(menuButtonByIcon('check_circle')).toBeTruthy();
+    });
+  });
+
+  describe('shareProjectOnPlainspace()', () => {
+    it('provisions sharing for the project via the share service', async () => {
+      mockProjectService.getByIdOnce$.and.returnValue(
+        of({ id: 'project-123', title: 'Demo project' } as any),
+      );
+      await component.shareProjectOnPlainspace();
+      expect(mockPlainspaceShareService.shareProjectOnPlainspace).toHaveBeenCalledWith(
+        'project-123',
+        'Demo project',
+      );
+    });
+
+    it('does nothing when the project cannot be found', async () => {
+      mockProjectService.getByIdOnce$.and.returnValue(of(undefined as any));
+      await component.shareProjectOnPlainspace();
+      expect(mockPlainspaceShareService.shareProjectOnPlainspace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rendered Collaborate-on-Plainspace action', () => {
+    it('renders the action for an active, not-yet-shared project and wires it up', async () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: false } as any),
+      );
+      mockProjectService.getByIdOnce$.and.returnValue(
+        of({ id: 'project-123', title: 'Demo project' } as any),
+      );
+      isSharedOnPlainspace$ = of(false);
+      fixture.detectChanges();
+
+      const shareBtn = menuButtonByIcon('group_add');
+      expect(shareBtn).toBeTruthy();
+
+      shareBtn!.click();
+      await fixture.whenStable();
+      expect(mockPlainspaceShareService.shareProjectOnPlainspace).toHaveBeenCalledWith(
+        'project-123',
+        'Demo project',
+      );
+    });
+
+    it('hides the action once the project is already shared', async () => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: false } as any),
+      );
+      isSharedOnPlainspace$ = of(true);
+      fixture.detectChanges();
+
+      expect(menuButtonByIcon('group_add')).toBeNull();
+    });
+
+    it('does not render the action for a tag context', async () => {
+      component.contextTypeSet = WorkContextType.TAG;
+      fixture.detectChanges();
+
+      expect(menuButtonByIcon('group_add')).toBeNull();
     });
   });
 });

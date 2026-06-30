@@ -92,6 +92,15 @@
       <mat-icon>check_circle</mat-icon>
       <span class="text">{{ T.MH.COMPLETE_PROJECT | translate }}</span>
     </button>
+    @if (!(isSharedOnPlainspace$ | async)) {
+      <button
+        (click)="shareProjectOnPlainspace()"
+        mat-menu-item
+      >
+        <mat-icon>group_add</mat-icon>
+        <span class="text">{{ T.PLAINSPACE.SHARE_MENU | translate }}</span>
+      </button>
+    }
   }
   <button
     (click)="duplicateProject()"

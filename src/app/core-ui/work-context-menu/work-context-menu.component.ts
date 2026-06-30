@@ -47,6 +47,8 @@ import { AsyncPipe } from '@angular/common';
 import { DateService } from '../../core/date/date.service';
 import { openWorkContextSettingsDialog } from '../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { Log } from '../../core/log';
+import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
+import { selectIsProjectSharedOnPlainspace } from '../../features/issue/store/issue-provider.selectors';
 
 @Component({
   selector: 'work-context-menu',
@@ -68,6 +70,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
   private _dateService = inject(DateService);
+  private _plainspaceShareService = inject(PlainspaceShareService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -78,6 +81,7 @@ export class WorkContextMenuComponent implements OnInit {
   isForProject: boolean = true;
   isArchived$: Observable<boolean> = of(false);
   isDone$: Observable<boolean> = of(false);
+  isSharedOnPlainspace$: Observable<boolean> = of(false);
   base: string = 'project';
   shareSupport: ShareSupport = 'none';
 
@@ -96,6 +100,9 @@ export class WorkContextMenuComponent implements OnInit {
       this.isDone$ = this._projectService
         .getByIdLive$(this.contextId)
         .pipe(map((project) => !!project?.isDone));
+      this.isSharedOnPlainspace$ = this._store.select(
+        selectIsProjectSharedOnPlainspace(this.contextId),
+      );
     }
     const support = await this._shareService.getShareSupport();
     this._setShareSupport(support);
@@ -291,6 +298,21 @@ export class WorkContextMenuComponent implements OnInit {
     } else {
       await this._projectService.unarchive(this.contextId);
     }
+  }
+
+  async shareProjectOnPlainspace(): Promise<void> {
+    const project = await firstValueFrom(
+      this._projectService.getByIdOnce$(this.contextId),
+    );
+    if (!project) {
+      return;
+    }
+    // Self-contained: prompts for sign-in + space, and surfaces its own
+    // success/failure snack. Never rejects, so no try/catch needed here.
+    await this._plainspaceShareService.shareProjectOnPlainspace(
+      project.id,
+      project.title,
+    );
   }
 
   async duplicateProject(): Promise<void> {

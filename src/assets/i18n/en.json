@@ -2856,6 +2856,7 @@
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",
     "SHARE_FAILED": "Could not share this project on Plainspace.",
     "SHARE_LABEL": "Collaborate on this project on Plainspace (Beta)",
+    "SHARE_MENU": "Collaborate on Plainspace (Beta)",
     "SHARE_SUCCESS": "Project shared on Plainspace. Tasks assigned to you will import automatically.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Create new space",
