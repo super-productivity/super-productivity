@@ -12,6 +12,7 @@ import { DEFAULT_PLAINSPACE_CFG } from './plainspace-cfg-form.const';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
+import { isOnline } from '../../../../util/is-online';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 import {
@@ -48,7 +49,12 @@ export class PlainspaceShareService {
     title: string,
   ): Promise<string | null> {
     try {
-      if (!(await this._ensureConnected())) {
+      const conn = await this._ensureUsableAccount();
+      if (conn === 'offline') {
+        this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.OFFLINE });
+        return null;
+      }
+      if (conn === 'cancelled') {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.LOGIN_REQUIRED });
         return null;
       }
@@ -110,21 +116,37 @@ export class PlainspaceShareService {
   }
 
   /**
-   * Ensures a Plainspace account is connected, opening the guided connect dialog
-   * (link + step-by-step) if not. The dialog validates the pasted token against
-   * the host and resolves to whether a connection was established.
+   * Makes sure we have a *usable* connection before opening the space picker —
+   * the picker only fails with a confusing "check your token" error otherwise.
+   *
+   * - `offline`: we can't reach Plainspace at all; say so plainly.
+   * - revalidate a stored token: a stale one (revoked, or created on another
+   *   device and never valid here) routes to the guided connect dialog to
+   *   re-auth, instead of dead-ending in the picker.
+   * - no/invalid account: open the guided connect dialog (intro + token steps).
+   *
+   * Returns `ready` once usable, `cancelled` if the user backed out of connect.
    */
-  private async _ensureConnected(): Promise<boolean> {
-    if (this._accountService.isLoggedIn()) {
-      return true;
+  private async _ensureUsableAccount(): Promise<'ready' | 'offline' | 'cancelled'> {
+    if (!this._isOnline()) {
+      return 'offline';
+    }
+    if (this._accountService.isLoggedIn() && (await this._accountService.revalidate())) {
+      return 'ready';
     }
     const connected = await firstValueFrom(
       this._matDialog
         .open(PlainspaceConnectDialogComponent, {
-          data: { host: DEFAULT_PLAINSPACE_CFG.host },
+          data: { host: this._accountService.host() ?? DEFAULT_PLAINSPACE_CFG.host },
         })
         .afterClosed(),
     );
-    return connected === true;
+    return connected === true ? 'ready' : 'cancelled';
+  }
+
+  // Seam over the `isOnline()` util so the offline path is unit-testable
+  // (navigator.onLine is not reliably overridable in the test runner).
+  private _isOnline(): boolean {
+    return isOnline();
   }
 }

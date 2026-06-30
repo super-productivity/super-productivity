@@ -7,23 +7,14 @@
   margin-top: 0;
 }
 
-.steps {
-  margin: 0 0 12px;
-  padding-inline-start: 20px;
+.open-link {
+  margin-bottom: 12px;
 }
 
-.steps li {
-  margin-bottom: 4px;
-}
-
-.email-hint {
+.hint {
   margin: 0 0 16px;
   font-size: 12px;
   color: var(--text-color-muted);
-}
-
-.open-link {
-  margin-bottom: 16px;
 }
 
 .token-field {

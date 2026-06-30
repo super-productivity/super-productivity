@@ -41,6 +41,28 @@ export class PlainspaceAccountService {
     return true;
   }
 
+  /**
+   * Re-checks the stored token against the host (`GET /me`). Returns false when
+   * there is no account, or the token no longer works (revoked, or created on
+   * another device and never valid here), or the request fails. Does NOT clear
+   * the account — a transient/offline failure must not drop an otherwise-good
+   * token; callers should gate on connectivity first.
+   */
+  async revalidate(): Promise<boolean> {
+    const account = this._account();
+    if (!account) {
+      return false;
+    }
+    const me = await firstValueFrom(
+      this._api.getMe$({
+        ...DEFAULT_PLAINSPACE_CFG,
+        host: account.host,
+        token: account.token,
+      }),
+    );
+    return !!me;
+  }
+
   logout(): void {
     this._account.set(null);
     localStorage.removeItem(LS.PLAINSPACE_ACCOUNT);
