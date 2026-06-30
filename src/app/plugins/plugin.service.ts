@@ -1639,8 +1639,9 @@ export class PluginService implements OnDestroy {
 
     // Purge local-only credentials (secrets + OAuth tokens) FIRST so they
     // never outlive their plugin — even if a later cleanup step throws.
-    // Best-effort: a purge failure is logged but must not abort the uninstall
-    // (on IndexedDB failure the credentials orphan locally until a later purge).
+    // Best-effort: a purge failure is logged but must not abort the uninstall.
+    // There is no later reconcile, so on IndexedDB failure the credentials
+    // orphan on disk until the same plugin id is reinstalled and removed again.
     try {
       await this._pluginSecretService.removeSecretsForPlugin(pluginId);
     } catch (error) {
