@@ -62,21 +62,21 @@ test.beforeEach(() => {
   logCalls = [];
 });
 
-test('new-task shows the window and opens the add-task bar', () => {
+test('add-task shows the window and opens the add-task bar', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
 
-  processProtocolUrl('superproductivity://new-task', win);
+  processProtocolUrl('superproductivity://add-task', win);
 
   assert.equal(showOrFocusCalls.length, 1);
   assert.deepEqual(win.sent, [{ channel: 'SHOW_ADD_TASK_BAR', payload: undefined }]);
 });
 
-test('new-note shows the window and triggers add-note', () => {
+test('add-note shows the window and triggers add-note', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
 
-  processProtocolUrl('superproductivity://new-note', win);
+  processProtocolUrl('superproductivity://add-note', win);
 
   assert.equal(showOrFocusCalls.length, 1);
   assert.deepEqual(win.sent, [{ channel: 'ADD_NOTE', payload: undefined }]);
@@ -190,8 +190,33 @@ test('second-instance pre-focuses for a plain launch and for non-toggle actions'
   app.handlers['second-instance']({}, ['/path/to/app']);
   assert.equal(showOrFocusCalls.length, 1);
 
-  // b) new-task still focuses the window and opens the add-task bar.
-  app.handlers['second-instance']({}, ['/path/to/app', 'superproductivity://new-task']);
+  // b) add-task still focuses the window and opens the add-task bar.
+  app.handlers['second-instance']({}, ['/path/to/app', 'superproductivity://add-task']);
   assert.ok(showOrFocusCalls.length >= 2, 'non-toggle action still focuses the window');
   assert.deepEqual(win.sent, [{ channel: 'SHOW_ADD_TASK_BAR', payload: undefined }]);
+});
+
+test('cold-start toggle-visibility shows the launched window instead of toggling it (#7114)', () => {
+  const win = makeWin();
+  const app = makeFakeApp();
+  const originalArgv = process.argv;
+  // Simulate the app being COLD-LAUNCHED by the URL: it appears in argv at startup.
+  process.argv = ['/path/to/app', 'superproductivity://toggle-visibility'];
+  let mod;
+  try {
+    mod = loadModule();
+    mod.initializeProtocolHandling(false, app, () => win);
+  } finally {
+    process.argv = originalArgv;
+  }
+
+  // The window is created + shown by startup, then the ready-drain runs ~1s later.
+  mod.processPendingProtocolUrls(win);
+
+  // Cold start must SHOW the window, never route it through the toggle (which, on a freshly
+  // shown+focused window, would immediately hide it again).
+  assert.equal(toggleVisibilityCalls.length, 0, 'cold-start must not toggle');
+  assert.equal(showOrFocusCalls.length, 1);
+  assert.equal(showOrFocusCalls[0], win);
+  assert.deepEqual(win.sent, []);
 });

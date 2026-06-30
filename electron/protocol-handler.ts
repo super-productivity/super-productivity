@@ -10,6 +10,13 @@ export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
 // Store pending URLs to process after window is ready
 let pendingUrls: string[] = [];
 
+// When the app is COLD-LAUNCHED by `superproductivity://toggle-visibility` (it was not
+// already running), the freshly-created window must just be SHOWN — never toggled, which
+// would immediately hide the window the launch was meant to reveal (#7114). The cold-start
+// argv scan sets this one-shot flag instead of routing that URL through the toggle, and the
+// window-ready drain (processPendingProtocolUrls) consumes it with a single showOrFocus.
+let coldStartShowPending = false;
+
 /**
  * Parse the action (host) of a `superproductivity://` URL, or `null` if it is
  * missing/unparseable. Used by the `second-instance` handler to special-case actions
@@ -85,11 +92,11 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
       case 'toggle-visibility':
         toggleWindowVisibility(mainWin);
         break;
-      case 'new-note':
+      case 'add-note':
         showOrFocus(mainWin);
         mainWin.webContents.send(IPC.ADD_NOTE);
         break;
-      case 'new-task':
+      case 'add-task':
         showOrFocus(mainWin);
         mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
         break;
@@ -102,6 +109,12 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
 };
 
 export const processPendingProtocolUrls = (mainWin: BrowserWindow): void => {
+  if (coldStartShowPending) {
+    coldStartShowPending = false;
+    // Cold-start toggle-visibility: show the window (works even if start-minimized-to-tray
+    // left it hidden) instead of toggling it back off.
+    showOrFocus(mainWin);
+  }
   if (pendingUrls.length > 0) {
     log(`Processing ${pendingUrls.length} pending protocol URLs`);
     const urls = [...pendingUrls];
@@ -168,6 +181,13 @@ export const initializeProtocolHandling = (
         'Protocol URL from command line:',
         `${PROTOCOL_PREFIX}${getProtocolAction(val) ?? ''}`,
       );
+      // A toggle-visibility that cold-launched the app must SHOW the new window, not toggle
+      // it (see coldStartShowPending) — running the normal toggle would hide the window the
+      // user just asked to see (#7114). Flag it for the window-ready drain instead.
+      if (getProtocolAction(val) === 'toggle-visibility') {
+        coldStartShowPending = true;
+        return;
+      }
       // Process after app is ready
       appInstance.whenReady().then(() => {
         processProtocolUrl(val, getMainWindow());
