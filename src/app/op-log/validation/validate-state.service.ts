@@ -115,10 +115,46 @@ export class ValidateStateService {
       return true;
     }
 
+    // Sync-related contexts run unattended in the background.
+    const isSyncContext =
+      context === 'sync' ||
+      context === 'conflict-resolution' ||
+      context === 'partial-apply-failure';
+
     // State is invalid — load the full snapshot including archives so the REPAIR
     // operation carries archive data. A REPAIR op built from the sync snapshot
     // would ship empty archives and wipe them on every client that applies it.
+    // Loading archives also gives the sync path below a real re-check, so an
+    // empty-archive false alarm from the quick (NgRx-only) check doesn't escalate.
     const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
+
+    // #8279: During automatic sync we must NOT interrupt the user with a blocking
+    // repair modal, and must NOT auto-repair. Repair is not purely cosmetic — it
+    // can un-archive tasks (restoring orphaned project.taskIds refs from the
+    // archive) and emits a REPAIR op to every device, so running it unattended on
+    // a detection that may be a false positive risks corrupting good data across
+    // the fleet. Instead we defer: the remote change is already applied and the
+    // state is usable. validateAfterSync() surfaces a non-blocking snack and flips
+    // the session-validation latch (#7330) — i.e. exactly the state we'd be in if
+    // the user had pressed "Cancel" on the old modal, minus the modal. A genuine
+    // cleanup, if ever wanted, must be a deliberate user-initiated action.
+    if (isSyncContext) {
+      const fullValidation = await this.validateState(
+        currentState as unknown as Record<string, unknown>,
+      );
+      if (fullValidation.isValid) {
+        OpLog.normal(`[ValidateStateService:${context}] State valid (full snapshot)`);
+        return true;
+      }
+      OpLog.warn(
+        `[ValidateStateService:${context}] State invalid after sync — deferring repair (no auto-repair during sync, #8279)`,
+        {
+          crossModelError: fullValidation.crossModelError,
+          typiaErrorCount: fullValidation.typiaErrors.length,
+        },
+      );
+      return false;
+    }
 
     const result = await this.validateAndRepair(
       currentState as unknown as Record<string, unknown>,
@@ -157,12 +193,8 @@ export class ValidateStateService {
       { skipLock: options?.callerHoldsLock },
     );
 
-    // Determine if we need to suppress effects (sync-related contexts)
-    const isSyncContext =
-      context === 'sync' ||
-      context === 'conflict-resolution' ||
-      context === 'partial-apply-failure';
-
+    // Effect suppression for sync-related contexts (see isSyncContext above).
+    // Reached only for non-sync contexts today, since sync contexts defer above.
     // Check if already applying to avoid nested call issues
     const wasAlreadyApplying = this.hydrationStateService.isApplyingRemoteOps();
     if (isSyncContext && !wasAlreadyApplying) {
