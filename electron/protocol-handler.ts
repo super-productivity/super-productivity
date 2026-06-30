@@ -2,7 +2,7 @@ import { App, BrowserWindow } from 'electron';
 import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { showOrFocus } from './various-shared';
+import { showOrFocus, toggleWindowVisibility } from './various-shared';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
@@ -59,6 +59,20 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
         if (mainWin && mainWin.webContents) {
           mainWin.webContents.send(IPC.TASK_TOGGLE_START);
         }
+        break;
+      // The following three mirror the `globalShowHide` / `globalAddNote` / `globalAddTask`
+      // global shortcuts. On Wayland the compositor owns global hotkeys, so users bind keys
+      // to `xdg-open superproductivity://<action>` instead (#7114).
+      case 'toggle-visibility':
+        toggleWindowVisibility(mainWin);
+        break;
+      case 'new-note':
+        showOrFocus(mainWin);
+        mainWin.webContents.send(IPC.ADD_NOTE);
+        break;
+      case 'new-task':
+        showOrFocus(mainWin);
+        mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
         break;
       default:
         log('Unknown protocol action:', action);
