@@ -1,4 +1,10 @@
-<h2 mat-dialog-title>{{ T.PLAINSPACE.CONNECT.TITLE | translate }}</h2>
+<h2
+  mat-dialog-title
+  class="dialog-title"
+>
+  <mat-icon svgIcon="plainspace"></mat-icon>
+  {{ T.PLAINSPACE.CONNECT.TITLE | translate }}
+</h2>
 
 <mat-dialog-content>
   <p class="intro">{{ T.PLAINSPACE.CONNECT.INTRO | translate }}</p>
