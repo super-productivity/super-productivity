@@ -1100,10 +1100,12 @@
     },
     "SCHEDULE": {
       "CALENDAR_VISIBILITY": "Calendar visibility",
+      "CLICK_TO_CREATE_TASK": "click to create task",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"
       },
+      "DROP_TASKS_HERE_TO_SCHEDULE": "Drop tasks here to schedule them",
       "END": "Work End",
       "EXCESS_TASK_TOOLTIP": "This task does not fully fit this day.",
       "EXCESS_TASKS_DAY_TOOLTIP": "{{count}} tasks do not fit into the available time",
@@ -1115,14 +1117,18 @@
       "NEXT_WEEK": "Next Week",
       "PREVIOUS_MONTH": "Previous Month",
       "PREVIOUS_WEEK": "Previous Week",
+      "PLAN_TASK_FOR_DAY_PLACEHOLDER": "Plan task for day...",
       "VIEW_MONTH": "View Month",
       "VIEW_WEEK": "View Week",
       "NO_TASKS": "Currently there are no tasks. Please add some tasks via the plus (+) button in the top bar.",
       "NOW": "Now",
       "PLAN_END_DAY": "End of {{date}}",
       "PLAN_START_DAY": "Start of {{date}}",
+      "SCHEDULE_TASK_PLACEHOLDER": "Schedule task...",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
-      "START": "Work Start"
+      "START": "Work Start",
+      "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 to toggle day planning",
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 to toggle time scheduling"
     },
     "SEARCH_BAR": {
       "INCLUDE_COMPLETED": "Include completed and archived tasks",

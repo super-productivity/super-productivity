@@ -14,7 +14,7 @@
 @if (!isEditMode()) {
   <div class="msg">
     <mat-icon>add</mat-icon>
-    click to create task
+    {{ T.F.SCHEDULE.CLICK_TO_CREATE_TASK | translate }}
   </div>
 } @else {
   <div class="task-input-container">
@@ -27,16 +27,26 @@
       (keyPressed)="onSelectTaskKeyDown($event)"
       (autocompleteOpened)="onAutocompleteOpened()"
       (autocompleteClosed)="onAutocompleteClosed()"
-      [placeholder]="isForDayMode() ? 'Plan task for day...' : 'Schedule task...'"
+      [placeholder]="
+        (isForDayMode()
+          ? T.F.SCHEDULE.PLAN_TASK_FOR_DAY_PLACEHOLDER
+          : T.F.SCHEDULE.SCHEDULE_TASK_PLACEHOLDER
+        ) | translate
+      "
       [isIncludeDoneTasks]="false"
       [isLimitToProject]="false"
     ></select-task-minimal>
 
     <!-- Mode toggle hint -->
     <div class="mode-hint">
-      <small
-        >Ctrl+1 to toggle {{ isForDayMode() ? 'time scheduling' : 'day planning' }}</small
-      >
+      <small>
+        {{
+          (isForDayMode()
+            ? T.F.SCHEDULE.TOGGLE_TIME_SCHEDULING_HINT
+            : T.F.SCHEDULE.TOGGLE_DAY_PLANNING_HINT
+          ) | translate
+        }}
+      </small>
     </div>
   </div>
 }
