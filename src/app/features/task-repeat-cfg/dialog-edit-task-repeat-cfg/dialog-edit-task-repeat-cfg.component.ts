@@ -38,6 +38,7 @@ import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { getDefaultSkipOverdue } from './get-default-skip-overdue';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
@@ -314,6 +315,10 @@ export class DialogEditTaskRepeatCfgComponent {
         : undefined;
       return {
         ...DEFAULT_TASK_REPEAT_CFG,
+        // New configs default to the "Daily" quick setting, where collapsing
+        // overdue instances is both useful and safe; see getDefaultSkipOverdue.
+        // Re-derived from the final schedule on save in case the user switches.
+        skipOverdue: getDefaultSkipOverdue(DEFAULT_TASK_REPEAT_CFG),
         startDate:
           this._data.task.dueDay ??
           getDbDateStr(this._data.task.dueWithTime || undefined),
@@ -456,10 +461,17 @@ export class DialogEditTaskRepeatCfgComponent {
       );
       this.close();
     } else {
+      // Seed skipOverdue from the FINAL schedule (the initial default assumed
+      // Daily; the user may have switched to e.g. Monthly). Skip this only when
+      // the user explicitly toggled the checkbox, so an opt-in/out is honoured.
+      const skipOverdueTouched = this.formGroup2().get('skipOverdue')?.dirty ?? false;
+      const newRepeatCfg = skipOverdueTouched
+        ? finalRepeatCfg
+        : { ...finalRepeatCfg, skipOverdue: getDefaultSkipOverdue(finalRepeatCfg) };
       this._taskRepeatCfgService.addTaskRepeatCfgToTask(
         (this._data.task as Task).id,
         (this._data.task as Task).projectId || null,
-        finalRepeatCfg,
+        newRepeatCfg,
       );
       this.close();
     }
