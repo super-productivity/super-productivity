@@ -187,6 +187,34 @@ export const autoFixTypiaErrors = (
         setValueByPath(data, keys, 0);
         logAutoFixApplied(path, keys, 'simple-counter-countOnDay-null-to-zero', value, 0);
       } else if (
+        // Issue #7330 (recurrence on SIMPLE_COUNTER): a counter recreated from a
+        // partial LWW Update (concurrent delete-vs-update across devices) can be
+        // missing required scalar fields — most often `type`, an enum with no
+        // value typia will accept, so dataRepair previously dead-ended on the
+        // "Repair attempted but failed" dialog. Primary fix is the
+        // RECREATE_FALLBACK backfill in lwwUpdateMetaReducer; this branch is
+        // defense-in-depth for state already corrupted on disk. Field list and
+        // defaults come from RECREATE_FALLBACK.SIMPLE_COUNTER so this heal can't
+        // drift from the recreate defaults. Only `title`/`type`/`countOnDay`
+        // reach here; undefined `icon`/`isEnabled`/`isOn` are already coerced by
+        // the generic null/boolean branches above.
+        keys[0] === 'simpleCounter' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        value === undefined &&
+        RECREATE_FALLBACK.SIMPLE_COUNTER?.requiredKeys.includes(keys[3] as string)
+      ) {
+        const field = keys[3] as string;
+        const defaultValue = RECREATE_FALLBACK.SIMPLE_COUNTER.defaults[field];
+        setValueByPath(data, keys, defaultValue);
+        logAutoFixApplied(
+          path,
+          keys,
+          'simple-counter-required-field-default',
+          value,
+          defaultValue,
+        );
+      } else if (
         keys[0] === 'taskRepeatCfg' &&
         keys[1] === 'entities' &&
         keys.length >= 4 &&
