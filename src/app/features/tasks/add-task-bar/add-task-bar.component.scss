@@ -49,7 +49,11 @@
   border-radius: var(--card-border-radius);
 
   &.isGlobalBarVariant {
-    box-shadow: var(--whiteframe-shadow-12dp);
+    box-shadow: none;
+    // Ensure the HUD surface is fully opaque on macOS. The window itself may
+    // use a transparent background, so the content must provide the solid color.
+    background-color: var(--bg-lighter);
+    opacity: 1;
   }
 }
 

@@ -106,8 +106,11 @@ export const initDebug = (
   }
 
   app.on('browser-window-created', (event, win) => {
-    // Skip dev tools for task widget window
-    if (win.title === 'Super Productivity Task Widget') {
+    // Skip dev tools for auxiliary utility windows.
+    if (
+      win.title === 'Super Productivity Task Widget' ||
+      win.title === 'Super Productivity Quick Add'
+    ) {
       return;
     }
 

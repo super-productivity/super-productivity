@@ -13,8 +13,8 @@
 <!--TODO move inside page container somehow -->
 @if (layoutService.isShowAddTaskBar()) {
   <add-task-bar
-    (closed)="layoutService.hideAddTaskBar()"
-    (done)="layoutService.hideAddTaskBar()"
+    (closed)="onAddTaskBarClosed()"
+    (done)="onAddTaskBarDone()"
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
     class="global"
@@ -22,7 +22,7 @@
 }
 @if (layoutService.isShowAddTaskBar()) {
   <div
-    (click)="layoutService.hideAddTaskBar()"
+    (click)="onAddTaskBarClosed()"
     @fade
     class="backdrop"
   ></div>

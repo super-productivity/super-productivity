@@ -16,6 +16,7 @@ import { quitApp, showOrFocus } from './various-shared';
 import { closeWinAndQuit, createWindow } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
+import { destroyQuickAddWindow, initQuickAddWindow } from './quick-add-window';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
@@ -61,6 +62,13 @@ export const startApp = (): void => {
   // https://github.com/super-productivity/super-productivity/issues/4375#issuecomment-2883838113
   // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
   app.commandLine.appendSwitch('gtk-version', '3');
+
+  if (
+    process.platform === 'linux' &&
+    (process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY)
+  ) {
+    app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+  }
 
   // Force X11 in Snap on Wayland sessions or when the gnome-42-2204 runtime
   // is missing. Chromium's Wayland EGL/GBM init can fail against the Mesa
@@ -436,6 +444,7 @@ export const startApp = (): void => {
     // isQuiting=true: all before-close IPC work is complete — safe to clean up.
     idleTimeHandler?.dispose();
     destroyTaskWidget();
+    destroyQuickAddWindow();
     if (global.gc) {
       global.gc();
     }
@@ -504,6 +513,7 @@ export const startApp = (): void => {
       quitApp,
       customUrl,
     });
+    initQuickAddWindow(IS_DEV, customUrl);
 
     initPluginOAuth(mainWin);
 

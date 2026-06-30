@@ -1647,7 +1647,9 @@
     },
     "TASK": {
       "ADD_TASK_BAR": {
+        "ADDED": "Added",
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
+        "SUCCESS_ADDED": "Task \"{{taskTitle}}\" successfully added.",
         "CREATE_NEW_TAGS": "Create new tags",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
@@ -2367,6 +2369,11 @@
       "EXPAND_SUB_TASKS": "Expand subtasks",
       "GLOBAL_ADD_NOTE": "Add new note",
       "GLOBAL_ADD_TASK": "Add new task",
+      "GLOBAL_TASK_QUICK_ADD": "Quick add task HUD",
+      "WAYLAND_QUICK_ADD_COPY_COMMAND": "Copy system command",
+      "WAYLAND_QUICK_ADD_HELP": "<p>GNOME Wayland can block app-registered global shortcuts. If this shortcut does not work, add a GNOME custom shortcut with this command: <code>xdg-open superproductivity://quick-add</code></p>",
+      "WAYLAND_QUICK_ADD_OPEN_SETTINGS": "Open keyboard settings",
+      "WAYLAND_QUICK_ADD_TEST": "Test Quick Add HUD",
       "GLOBAL_SHOW_HIDE": "Show/hide Super Productivity",
       "GLOBAL_TOGGLE_TASK_START": "Start/stop time tracking for last active task",
       "GLOBAL_TOGGLE_TASK_WIDGET": "Show/hide task widget",

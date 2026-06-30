@@ -3,9 +3,11 @@ import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { showOrFocus } from './various-shared';
+import { showQuickAddWindow } from './quick-add-window';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
+export const QUICK_ADD_PROTOCOL_URL = `${PROTOCOL_PREFIX}quick-add`;
 
 // Store pending URLs to process after window is ready
 let pendingUrls: string[] = [];
@@ -60,11 +62,23 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
           mainWin.webContents.send(IPC.TASK_TOGGLE_START);
         }
         break;
+      case 'quick-add':
+        showQuickAddWindow();
+        break;
       default:
         log('Unknown protocol action:', action);
     }
   } catch (error) {
     log('Error processing protocol URL:', error);
+  }
+};
+
+const isQuickAddProtocolUrl = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.protocol === `${PROTOCOL_NAME}:` && urlObj.hostname === 'quick-add';
+  } catch {
+    return false;
   }
 };
 
@@ -104,14 +118,16 @@ export const initializeProtocolHandling = (
   // Handle protocol on Windows/Linux via second instance
   appInstance.on('second-instance', (event, commandLine) => {
     const mainWin = getMainWindow();
+    const url = commandLine.find((arg) => arg.startsWith(PROTOCOL_PREFIX));
 
     // Someone tried to run a second instance, we should focus our window instead.
-    if (mainWin) {
+    // Quick Add is intentionally exempt: focusing the main window steals focus from
+    // the HUD and immediately closes it via the HUD window blur handler.
+    if (mainWin && (!url || !isQuickAddProtocolUrl(url))) {
       showOrFocus(mainWin);
     }
 
     // Handle protocol url from second instance
-    const url = commandLine.find((arg) => arg.startsWith(PROTOCOL_PREFIX));
     if (url) {
       processProtocolUrl(url, mainWin);
     }

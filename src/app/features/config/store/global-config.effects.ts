@@ -77,9 +77,7 @@ export class GlobalConfigEffects {
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
-        filter(
-          ({ sectionKey, sectionCfg }) => this._isElectron && sectionKey === 'keyboard',
-        ),
+        filter(({ sectionKey }) => this._isElectron && sectionKey === 'keyboard'),
         tap(({ sectionKey, sectionCfg }) => {
           let keyboardCfg: KeyboardConfig = sectionCfg as KeyboardConfig;
           if (this._isMac) {

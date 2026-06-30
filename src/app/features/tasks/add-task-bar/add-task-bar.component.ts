@@ -26,14 +26,8 @@ import { AsyncPipe } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
-import { TaskService } from '../task.service';
-import { WorkContextService } from '../../work-context/work-context.service';
+import { TaskCopy } from '../task.model';
 import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
-import { ProjectService } from '../../project/project.service';
-import { TagService } from '../../tag/tag.service';
-import { GlobalConfigService } from '../../config/global-config.service';
-import { AddTaskBarIssueSearchService } from './add-task-bar-issue-search.service';
 import { T } from '../../../t.const';
 import {
   distinctUntilChanged,
@@ -42,7 +36,6 @@ import {
   map,
   startWith,
   switchMap,
-  timeout,
   withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
@@ -56,35 +49,18 @@ import {
 } from '@angular/material/autocomplete';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
-import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { TagComponent } from '../../tag/tag/tag.component';
-import { truncate } from '../../../util/truncate';
-import { SnackService } from '../../../core/snack/snack.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
-import { MarkdownPasteService } from '../markdown-paste.service';
-import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { unique } from '../../../util/unique';
-import { MentionConfigService } from '../mention-config.service';
-import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
-import { Log } from '../../../core/log';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { BodyClass } from '../../../app.constants';
-import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { Store } from '@ngrx/store';
-import { PlannerActions } from '../../planner/store/planner.actions';
-import { DateService } from '../../../core/date/date.service';
-import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
+import { buildAddTaskPayload } from './add-task-payload-builder';
+import { ADD_TASK_BAR_DATA_FACADE } from './add-task-bar-data-facade.token';
 
 @Component({
   selector: 'add-task-bar',
@@ -106,7 +82,6 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
     MatAutocompleteTrigger,
     MatOption,
     MatProgressSpinner,
-    IssueIconPipe,
     TagComponent,
     AddTaskBarActionsComponent,
     TranslateModule,
@@ -115,22 +90,11 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
 export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
-  private readonly _taskService = inject(TaskService);
-  private readonly _workContextService = inject(WorkContextService);
-  private readonly _projectService = inject(ProjectService);
-  private readonly _tagService = inject(TagService);
-  private readonly _globalConfigService = inject(GlobalConfigService);
-  private readonly _addTaskBarIssueSearchService = inject(AddTaskBarIssueSearchService);
+  private readonly _dataFacade = inject(ADD_TASK_BAR_DATA_FACADE);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _snackService = inject(SnackService);
   private readonly _parserService = inject(AddTaskBarParserService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _translateService = inject(TranslateService);
-  private readonly _store = inject(Store);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
-  private readonly _markdownPasteService = inject(MarkdownPasteService);
-  private readonly _dateService = inject(DateService);
-  private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -161,22 +125,39 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedSuggestion$ = new BehaviorSubject<AddTaskSuggestion | null>(null);
   isMentionListShown = signal(false);
   isScheduleDialogOpen = signal(false);
+  successPlaceholderMsg = signal<string | null>(null);
+
+  inputPlaceholder = computed(() => {
+    const successMsg = this.successPlaceholderMsg();
+    if (successMsg) {
+      return successMsg;
+    }
+    return this.isSearchMode()
+      ? this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH)
+      : this._translateService.instant(T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE);
+  });
+
+  private _successPlaceholderTimeout: number | undefined;
 
   // Computed signals for projects and tags
-  projects = this._projectService.listInTreeOrderForUI;
+  projects = this._dataFacade.projects;
   // Observable version for compatibility with existing code
-  projects$ = toObservable(this.projects);
-  tags$ = this._tagService.tags$;
+  projects$ = this._dataFacade.projects$;
+  tags$ = this._dataFacade.tags$;
   suggestions$!: Observable<AddTaskSuggestion[]>;
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
   // Computed values
-  projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
-  tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
+  projectFolderMap = this._dataFacade.projectFolderMap;
+  tagFolderMap = this._dataFacade.tagFolderMap;
 
   getFolderPath(id?: string): string | null {
     if (!id) return null;
     return this.projectFolderMap().get(id) || this.tagFolderMap().get(id) || null;
+  }
+
+  getIssueIcon(issueType: AddTaskSuggestion['issueType']): string | undefined {
+    return this._dataFacade.getIssueIcon(issueType);
   }
 
   hasNewTags = computed(() => this.stateService.state().newTagTitles.length > 0);
@@ -196,8 +177,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   defaultProject$ = combineLatest([
     this.projects$,
-    this._workContextService.activeWorkContext$,
-    this._globalConfigService.tasks$,
+    this._dataFacade.activeWorkContext$,
+    this._dataFacade.tasksConfig$,
   ]).pipe(
     map(([projects, workContext, tasksConfig]) => {
       // Priority order:
@@ -216,7 +197,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }),
   );
 
-  defaultDateAndTime$ = this._workContextService.activeWorkContext$.pipe(
+  defaultDateAndTime$ = this._dataFacade.activeWorkContext$.pipe(
     map((workContext) => {
       if (!this.isNoDefaults()) {
         if (this.planForDay()) {
@@ -229,7 +210,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           workContext?.id === 'TODAY'
         ) {
           return {
-            date: this._dateService.todayStr(),
+            date: this._dataFacade.todayStr(),
             time: undefined as string | undefined,
           };
         }
@@ -248,10 +229,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   tagMentions$: Observable<ShortSyntaxTag[]> = this.stateService.inputTxt$.pipe(
     filter((val) => typeof val === 'string'),
     withLatestFrom(
-      this._tagService.tagsNoMyDayAndNoListSorted$,
-      this._projectService.listSorted$,
-      this._workContextService.activeWorkContext$,
-      this._globalConfigService.shortSyntax$,
+      this._dataFacade.tagsNoMyDayAndNoListSorted$,
+      this.projects$,
+      this._dataFacade.activeWorkContext$,
+      this._dataFacade.shortSyntax$,
     ),
     switchMap(([val, tags, projects, activeWorkContext, shortSyntaxConfig]) =>
       from(
@@ -267,7 +248,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
+  mentionCfg$ = this._dataFacade.mentionConfig$;
 
   // View children
   inputEl = viewChild<ElementRef>('inputEl');
@@ -287,6 +268,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._setupDefaultDate();
     this._setupTextParsing();
     this._setupSuggestions();
+    this._setupHudWindowLifecycle();
 
     document.body.classList.add(BodyClass.isAddTaskBarOpen);
   }
@@ -300,6 +282,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   ngOnDestroy(): void {
     window.clearTimeout(this._focusTimeout);
     window.clearTimeout(this._autocompleteTimeout);
+    window.clearTimeout(this._successPlaceholderTimeout);
     document.body.classList.remove(BodyClass.isAddTaskBarOpen);
   }
 
@@ -324,7 +307,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    this._workContextService.activeWorkContext$
+    this._dataFacade.activeWorkContext$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((workContext) => {
         this._defaultTagIds = this._getDefaultTagIdsForWorkContext(workContext);
@@ -347,7 +330,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _setupTextParsing(): void {
     combineLatest([
       this.stateService.inputTxt$.pipe(distinctUntilChanged()),
-      this._globalConfigService.shortSyntax$,
+      this._dataFacade.shortSyntax$,
       this.tags$,
       this.projects$,
       this.defaultProject$,
@@ -376,7 +359,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private _setupSuggestions(): void {
-    this.suggestions$ = this._addTaskBarIssueSearchService.getFilteredIssueSuggestions$(
+    this.suggestions$ = this._dataFacade.getFilteredIssueSuggestions$(
       this.stateService.inputTxt$,
       this._isSearchIssueProviders$,
       this.isSearchLoading,
@@ -392,6 +375,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           this.onTaskSuggestionActivated(null);
         }
       });
+  }
+
+  private _setupHudWindowLifecycle(): void {
+    const unsubscribeQuickAddOpened = this._dataFacade.onHudOpened(() => {
+      this.stateService.collapseTransientPanels();
+      this.focusInput(true);
+    });
+    this._destroyRef.onDestroy(unsubscribeQuickAddOpened);
   }
 
   // Public methods
@@ -421,12 +412,17 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     try {
       const state = currentState;
       let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
+      let newTagTitles: string[] | undefined;
 
       if (this.hasNewTags()) {
         const shouldCreateNewTags = await this._confirmNewTags();
         if (shouldCreateNewTags) {
-          const newTagIds = await this._createNewTags(state.newTagTitles);
-          finalTagIds = [...finalTagIds, ...newTagIds];
+          if (this._dataFacade.isSubmitDelegated) {
+            newTagTitles = state.newTagTitles;
+          } else {
+            const newTagIds = await this._dataFacade.createNewTags(state.newTagTitles);
+            finalTagIds = [...finalTagIds, ...newTagIds];
+          }
         }
       }
 
@@ -436,135 +432,25 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         finalTagIds = finalTagIds.filter((tagId) => !tagsToRemoveList.includes(tagId));
       }
 
-      const additionalFields = this.additionalFields();
-      const taskData: Partial<TaskCopy> = {
-        ...additionalFields,
-        projectId: state.projectId,
-        tagIds: additionalFields?.tagIds
-          ? unique([...finalTagIds, ...additionalFields.tagIds])
-          : finalTagIds,
-        // needs to be 0
-        timeEstimate: state.estimate || 0,
-        attachments:
-          state.attachments.length > 0
-            ? state.attachments
-            : additionalFields?.attachments || [],
-      };
-
-      const note = this.stateService.noteTxt().trim();
-      if (note) {
-        taskData.notes = note;
-      }
-
-      if (state.spent) {
-        taskData.timeSpentOnDay = state.spent;
-      }
-
-      if (state.deadlineDate) {
-        if (state.deadlineTime && isValidSplitTime(state.deadlineTime)) {
-          const deadlineDateObj = dateStrToUtcDate(state.deadlineDate);
-          const deadlineTimestamp = getDateTimeFromClockString(
-            state.deadlineTime,
-            deadlineDateObj,
-          );
-          taskData.deadlineWithTime = deadlineTimestamp;
-          if (
-            state.deadlineRemindOption &&
-            state.deadlineRemindOption !== TaskReminderOptionId.DoNotRemind
-          ) {
-            taskData.deadlineRemindAt = remindOptionToMilliseconds(
-              deadlineTimestamp,
-              state.deadlineRemindOption,
-            );
-          }
-        } else {
-          taskData.deadlineDay = state.deadlineDate;
-        }
-      }
-
-      if (state.date) {
-        // Parse date components to create date in local timezone
-        // This avoids timezone issues when parsing date strings like "2024-01-15"
-        const [year, month, day] = state.date.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-
-        if (state.time) {
-          // TODO we need to add unit tests to confirm this works
-          const [hours, minutes] = state.time.split(':').map(Number);
-          date.setHours(hours, minutes, 0, 0);
-          taskData.dueWithTime = date.getTime();
-          taskData.hasPlannedTime = true;
-        } else {
-          taskData.dueDay = state.date;
-        }
-      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
-        // When a repeat preset is selected without an explicit date, set dueDay to today
-        // so the first task instance appears as today's occurrence instead of staying in inbox
-        taskData.dueDay = this._dateService.todayStr();
-      } else {
-        // Explicitly set dueDay to undefined when no date is selected
-        // This prevents automatic assignment of today's date in TODAY context
-        taskData.dueDay = undefined;
-      }
-
-      const taskId = this._taskService.add(
-        title,
-        this.isAddToBacklog(),
-        taskData,
-        this.isAddToBottom(),
+      const defaultRemindOption =
+        state.remindOption ?? this._dataFacade.defaultTaskRemindOption();
+      const taskId = await this._dataFacade.submitTask(
+        buildAddTaskPayload({
+          title,
+          state,
+          note: this.stateService.noteTxt().trim(),
+          isAddToBacklog: this.isAddToBacklog(),
+          isAddToBottom: this.isAddToBottom(),
+          todayStr: this._dataFacade.todayStr(),
+          defaultRemindOption,
+          finalTagIds,
+          additionalFields: this.additionalFields(),
+          newTagTitles,
+        }),
       );
 
-      // Resolve remind option once for both scheduleTask and repeat config paths
-      const resolvedRemindOption =
-        state.remindOption ??
-        this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
-
-      // Skip scheduleTask for timed repeat tasks — the addRepeatCfgToTaskUpdateTask$
-      // effect already handles scheduling via scheduleTaskWithTime, so calling both
-      // would cause double-scheduling.
-      const isTimedRepeatTask =
-        !!state.repeatQuickSetting &&
-        state.repeatQuickSetting !== 'CUSTOM' &&
-        !!state.time;
-      if (taskData.dueWithTime && !isTimedRepeatTask) {
-        this._taskService
-          .getByIdOnce$(taskId)
-          .pipe(timeout(1000))
-          .subscribe((task) => {
-            this._taskService.scheduleTask(
-              task,
-              taskData.dueWithTime!,
-              resolvedRemindOption,
-              this.isAddToBacklog(),
-            );
-          });
-      }
-
-      // Create repeat config if a repeat setting was selected
-      if (state.repeatQuickSetting) {
-        if (state.repeatQuickSetting === 'CUSTOM') {
-          this._openRepeatDialogForTask(taskId, resolvedRemindOption);
-        } else {
-          const startDate = state.date || this._dateService.todayStr();
-          const referenceDate = dateStrToUtcDate(startDate);
-          const quickSettingUpdates =
-            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
-          this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
-            ...DEFAULT_TASK_REPEAT_CFG,
-            startDate,
-            ...quickSettingUpdates,
-            title,
-            quickSetting: state.repeatQuickSetting,
-            tagIds: taskData.tagIds ?? [],
-            defaultEstimate: state.estimate || 0,
-            startTime: state.time || undefined,
-            remindAt: state.time ? resolvedRemindOption : undefined,
-          });
-        }
-      }
-
       this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
+      this._showSuccessPlaceholder(title);
       this._resetAfterAdd();
     } finally {
       this._isAddingTask = false;
@@ -588,72 +474,18 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       this._processingAutocompleteSelection = false;
     }, 100);
 
-    let taskId: string | undefined;
-
     const planForDay = this.planForDay();
-    let didPlanForDay = false;
+    const result = await this._dataFacade.handleSuggestionSelected(
+      suggestion,
+      planForDay,
+      this.isAddToBacklog(),
+      this.isAddToBottom(),
+    );
 
-    if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
-      if (planForDay) {
-        await this._planTaskForCurrentDay(suggestion.taskId);
-        didPlanForDay = true;
-      } else if (this._workContextService.activeWorkContextType === WorkContextType.TAG) {
-        const task = await this._taskService.getByIdOnce$(suggestion.taskId).toPromise();
-        this._taskService.moveToCurrentWorkContext(task);
-      }
-      this._snackService.open({
-        ico: 'playlist_add',
-        msg: T.F.TASK.S.FOUND_MOVE_FROM_OTHER_LIST,
-        translateParams: {
-          title: truncate(suggestion.title),
-          contextTitle: suggestion.ctx?.title
-            ? truncate(suggestion.ctx.title)
-            : '~the void~',
-        },
-      });
-      taskId = suggestion.taskId;
-    } else if (suggestion.taskId) {
-      if (planForDay) {
-        await this._planTaskForCurrentDay(suggestion.taskId);
-        didPlanForDay = true;
-      } else {
-        this._taskService.getByIdOnce$(suggestion.taskId).subscribe((task) => {
-          this._taskService.moveToCurrentWorkContext(task);
-        });
-      }
-
-      if (suggestion.isArchivedTask) {
-        this._snackService.open({
-          ico: 'unarchive',
-          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
-          translateParams: { title: suggestion.title },
-        });
-      } else if (suggestion.projectId) {
-        this._snackService.open({
-          ico: 'arrow_upward',
-          msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
-          translateParams: { title: suggestion.title },
-        });
-      }
-
-      taskId = suggestion.taskId;
-    } else if (suggestion.issueType && suggestion.issueData) {
-      taskId = await this._addTaskBarIssueSearchService.addTaskFromExistingTaskOrIssue(
-        suggestion,
-        this.isAddToBacklog(),
-        true,
-      );
-    }
-
-    if (taskId && planForDay && !didPlanForDay) {
-      await this._planTaskForCurrentDay(taskId);
-      didPlanForDay = true;
-    }
-
-    if (taskId) {
+    if (result) {
       this.afterTaskAdd.emit({
-        taskId,
-        isAddToBottom: false,
+        taskId: result.taskId,
+        isAddToBottom: result.isAddToBottom,
       });
     }
 
@@ -668,6 +500,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     const value = target.value;
     this.stateService.updateInputTxt(value);
+    if (value && this.successPlaceholderMsg()) {
+      this._clearSuccessPlaceholder();
+    }
   }
 
   onPaste(event: ClipboardEvent): void {
@@ -678,10 +513,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const lines = pastedText.split('\n').filter((line) => line.trim().length > 0);
     if (lines.length < 2) return;
 
-    if (!this._markdownPasteService.isMarkdownTaskList(pastedText)) return;
+    if (!this._dataFacade.isMarkdownTaskList(pastedText)) return;
 
     event.preventDefault();
-    this._markdownPasteService.handleMarkdownPaste(pastedText, null).then(() => {
+    this._dataFacade.handleMarkdownPaste(pastedText).then(() => {
       this.stateService.updateInputTxt('');
     });
   }
@@ -785,28 +620,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  // Private helper methods
-  private async _planTaskForCurrentDay(taskId: string): Promise<void> {
-    const planForDay = this.planForDay();
-    if (!planForDay) {
-      return;
-    }
-
-    const task = await this._taskService.getByIdOnce$(taskId).toPromise();
-    if (!task) {
-      Log.error('Unable to load task for planning', taskId);
-      return;
-    }
-
-    this._store.dispatch(
-      PlannerActions.planTaskForDay({
-        task,
-        day: planForDay,
-        isAddToTop: !this.isAddToBottom(),
-      }),
-    );
-  }
-
   private async _confirmNewTags(): Promise<boolean> {
     const dialogRef = this._matDialog.open(DialogConfirmComponent, {
       data: {
@@ -816,47 +629,36 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     return await dialogRef.afterClosed().toPromise();
   }
 
-  private async _createNewTags(tagTitles: string[]): Promise<string[]> {
-    const newTagIds: string[] = [];
-    for (const title of tagTitles) {
-      const tagId = this._tagService.addTag({ title });
-      newTagIds.push(tagId);
-    }
-    return newTagIds;
-  }
-
-  private _openRepeatDialogForTask(
-    taskId: string,
-    remindOption: TaskReminderOptionId,
-  ): void {
-    this._taskService
-      .getByIdOnce$(taskId)
-      .pipe(timeout(1000), takeUntilDestroyed(this._destroyRef))
-      .subscribe({
-        next: async (task) => {
-          const { DialogEditTaskRepeatCfgComponent } =
-            await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
-          this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-            data: { task, defaultRemindOption: remindOption },
-          });
-        },
-        error: (err) => {
-          Log.error('Failed to open repeat dialog', err);
-          this._snackService.open({
-            type: 'ERROR',
-            msg: T.F.TASK_REPEAT.SNACK_REPEAT_DIALOG_FAIL,
-          });
-        },
-      });
-  }
-
   private _resetAfterAdd(): void {
-    this.stateService.resetAfterAdd();
+    this.stateService.resetAfterAdd({
+      isCollapseNote: this._dataFacade.isSubmitDelegated,
+    });
     if (this._defaultTagIds.length > 0) {
       this.stateService.updateTagIds(this._defaultTagIds);
     }
     // Reset parser state but don't reset project/date/estimate
     this._parserService.resetPreviousResult();
+  }
+
+  private _showSuccessPlaceholder(taskTitle: string): void {
+    const MAX_TITLE_LENGTH = 35;
+    const trimmedTitle =
+      taskTitle.length > MAX_TITLE_LENGTH
+        ? taskTitle.slice(0, MAX_TITLE_LENGTH) + '…'
+        : taskTitle;
+    const msg = this._translateService.instant(T.F.TASK.ADD_TASK_BAR.SUCCESS_ADDED, {
+      taskTitle: trimmedTitle,
+    });
+    this.successPlaceholderMsg.set(msg);
+    window.clearTimeout(this._successPlaceholderTimeout);
+    this._successPlaceholderTimeout = window.setTimeout(() => {
+      this.successPlaceholderMsg.set(null);
+    }, 1500);
+  }
+
+  private _clearSuccessPlaceholder(): void {
+    window.clearTimeout(this._successPlaceholderTimeout);
+    this.successPlaceholderMsg.set(null);
   }
 
   private _getDefaultTagIdsForWorkContext(

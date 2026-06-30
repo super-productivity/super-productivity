@@ -25,6 +25,7 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
+import { preloadQuickAddWindow } from './quick-add-window';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -70,6 +71,8 @@ export const getWin = (): BrowserWindow => {
   }
   return mainWinModule.win;
 };
+
+export const getWinSafe = (): BrowserWindow | undefined => mainWinModule.win;
 
 // How long the "quit requested" intent survives before auto-clearing.
 // Long enough to cover normal before-close IPC (sync, finish-day prompt);
@@ -368,6 +371,14 @@ export const createWindow = async ({
   mainWinModule.win = mainWin;
 
   // listen for app ready
+  mainWin.webContents.on(
+    'did-start-navigation',
+    (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) {
+        mainWinModule.isAppReady = false;
+      }
+    },
+  );
   ipcMain.on(IPC.APP_READY, () => {
     mainWinModule.isAppReady = true;
     // Signal the GPU startup guard that the full boot chain completed
@@ -375,6 +386,13 @@ export const createWindow = async ({
     // frame. This avoids clearing the crash counter on blank/broken
     // renderers that still fire `ready-to-show`.
     markGpuStartupSuccess();
+  });
+
+  ipcMain.on(IPC.QUICK_ADD_BRIDGE_READY, () => {
+    // Preload the hidden Quick Add HUD window as soon as the main renderer
+    // announces it can service snapshot/submit requests. This eliminates the
+    // first-open bootup screen the user otherwise sees while Angular loads.
+    preloadQuickAddWindow();
   });
 
   // Register F11 key handler for fullscreen toggle
@@ -649,8 +667,8 @@ const appCloseHandler = (app: App): void => {
     setIsQuitRequested(false);
 
     // Dereference the window object
-    mainWin = null;
-    mainWinModule.win = null;
+    mainWin = null as unknown as BrowserWindow;
+    mainWinModule.win = undefined;
   });
 
   mainWin.webContents.on('render-process-gone', (event, detailed) => {

@@ -1,10 +1,13 @@
 import { app, dialog, ipcMain, shell } from 'electron';
+import { spawn } from 'child_process';
+import { error as logError } from 'electron-log/main';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import {
   isExternalUrlSchemeAllowed,
   isPathSafeToOpen,
 } from '../shared-with-frontend/is-external-url-allowed';
 import { getWin } from '../main-window';
+import { IS_GNOME_DESKTOP } from '../common.const';
 
 export const initSystemIpc = (): void => {
   ipcMain.on(IPC.OPEN_PATH, (ev, path: string) => {
@@ -30,6 +33,19 @@ export const initSystemIpc = (): void => {
     IPC.SHOW_EMOJI_PANEL,
     () => app.isEmojiPanelSupported() && app.showEmojiPanel(),
   );
+  ipcMain.on(IPC.OPEN_SYSTEM_KEYBOARD_SETTINGS, () => {
+    if (!IS_GNOME_DESKTOP) {
+      return;
+    }
+    const child = spawn('gnome-control-center', ['keyboard'], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.on('error', (err) => {
+      logError('Failed to open GNOME keyboard settings:', err);
+    });
+    child.unref();
+  });
 
   ipcMain.handle(IPC.SAVE_FILE_DIALOG, async (ev, { filename, data }) => {
     const result = await dialog.showSaveDialog(getWin(), {
