@@ -63,7 +63,17 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   }, 60);
 }
 
-const TOGGLE_VISIBILITY_REPEAT_GAP_MS = 1000;
+// One physical key press can fire this action several times in a row: Electron's
+// globalShortcut auto-repeats while the key is held (X11 XGrabKey), and a held compositor
+// key bound to `xdg-open superproductivity://toggle-visibility` spawns repeated launches.
+// Without a guard the burst hides the window and immediately re-shows it — the #7114
+// flicker. We debounce in BOTH directions (a repeat must never undo the first event's
+// toggle) with a sliding quiet-gap: every event — even a swallowed one — extends the
+// window, so a held key settles on a single toggle instead of oscillating. The gap has to
+// exceed the OS/compositor auto-repeat *initial* delay (commonly 250–660 ms) or the first
+// repeat slips through and flickers again; 750 ms covers typical setups while keeping a
+// deliberate later re-press responsive.
+const TOGGLE_VISIBILITY_REPEAT_GAP_MS = 750;
 let lastToggleVisibilityEvent = 0;
 
 /**
@@ -80,16 +90,9 @@ export function toggleWindowVisibility(passedWin: BrowserWindow): void {
 
   const now = Date.now();
   const sinceLastMs = now - lastToggleVisibilityEvent;
+  // Update on every event (even swallowed ones) so a held key keeps the gap alive.
   lastToggleVisibilityEvent = now;
-
-  // On some Linux/Wayland setups one physical key press repeats while held — either via
-  // Electron's globalShortcut key-repeat or via repeated `xdg-open
-  // superproductivity://toggle-visibility` launches bound to a compositor key. Without this
-  // guard the first event hides the window and the next repeat immediately re-shows it
-  // (#7114). Treat repeats on an already-hidden window within a short quiet gap as the same
-  // press; only allow re-show once there has been a real pause.
-  const isHidden = !win.isVisible() || win.isMinimized();
-  if (isHidden && sinceLastMs < TOGGLE_VISIBILITY_REPEAT_GAP_MS) {
+  if (sinceLastMs < TOGGLE_VISIBILITY_REPEAT_GAP_MS) {
     return;
   }
 

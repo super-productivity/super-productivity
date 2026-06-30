@@ -13,6 +13,7 @@ const originalDateNow = Date.now;
 let mockNow = 0;
 let mockIsMinimizeToTray = false;
 let mockEnsureIndicator = false;
+let mockIsMac = false;
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -46,7 +47,7 @@ const installMocks = () => {
       return { ensureIndicator: () => mockEnsureIndicator };
     }
     if (request === './common.const') {
-      return { IS_MAC: false };
+      return { IS_MAC: mockIsMac };
     }
     return originalModuleLoad.call(this, request, parent, isMain);
   };
@@ -90,7 +91,10 @@ const makeWin = (state) => {
       calls.push('show');
       win._state = { visible: true, minimized: false, focused: false };
     },
-    focus: () => calls.push('focus'),
+    focus: () => {
+      calls.push('focus');
+      win._state = { ...win._state, focused: true };
+    },
     maximize: () => calls.push('maximize'),
     webContents: { isDestroyed: () => true, focus: () => {} },
   };
@@ -101,6 +105,7 @@ test.beforeEach(() => {
   mockNow = 100000;
   mockIsMinimizeToTray = false;
   mockEnsureIndicator = false;
+  mockIsMac = false;
   Date.now = () => mockNow;
 });
 
@@ -120,7 +125,11 @@ test('a held key-repeat does not hide then immediately re-show the window (#7114
   // 2) Key-repeat 80ms later (same physical press): must be ignored, NOT re-shown.
   mockNow += 80;
   toggleWindowVisibility(win);
-  assert.deepEqual(win.calls, ['minimize'], 'repeat within the quiet gap must be ignored');
+  assert.deepEqual(
+    win.calls,
+    ['minimize'],
+    'repeat within the quiet gap must be ignored',
+  );
 
   // 3) Another repeat, still within the gap relative to the previous event.
   mockNow += 80;
@@ -128,15 +137,53 @@ test('a held key-repeat does not hide then immediately re-show the window (#7114
   assert.deepEqual(win.calls, ['minimize'], 'consecutive repeats keep resetting the gap');
 });
 
-test('a deliberate later press re-shows a hidden window', () => {
+test('a deliberate press after the quiet gap toggles again (gap actually expires)', () => {
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({ visible: true, minimized: false, focused: true });
+
+  // 1) First press hides it and records the toggle timestamp.
+  toggleWindowVisibility(win);
+  assert.deepEqual(win.calls, ['minimize']);
+
+  // 2) A repeat within the gap is swallowed (and still slides the gap forward).
+  mockNow += 200;
+  toggleWindowVisibility(win);
+  assert.deepEqual(win.calls, ['minimize'], 'within-gap repeat ignored');
+
+  // 3) After a real pause (> the quiet gap, measured from the LAST event) a deliberate
+  //    press shows it again — proving the debounce releases rather than sticking.
+  mockNow += 1000;
+  toggleWindowVisibility(win);
+  assert.ok(win.calls.includes('show'), 'press after the gap re-shows the window');
+});
+
+test('a held key starting HIDDEN settles shown, not hidden (#7114, both directions)', () => {
   const { toggleWindowVisibility } = loadModule();
   const win = makeWin({ visible: false, minimized: true, focused: false });
 
-  // More than the quiet gap has elapsed since any prior toggle -> real press, show it.
-  mockNow += 5000;
+  // 1) First event of the held key: hidden+unfocused -> show.
+  toggleWindowVisibility(win);
+  assert.ok(win.calls.includes('show'), 'first event shows the window');
+  assert.equal(win.isVisible(), true);
+  const callsAfterShow = [...win.calls];
+
+  // 2-3) Repeats within the gap must NOT hide it again. The old isHidden-only guard let
+  //      the now-visible window fall through to the hide branch -> ended HIDDEN.
+  mockNow += 80;
+  toggleWindowVisibility(win);
+  mockNow += 80;
+  toggleWindowVisibility(win);
+  assert.deepEqual(win.calls, callsAfterShow, 'repeats swallowed in both directions');
+  assert.equal(win.isVisible(), true, 'window stays shown for the whole held press');
+});
+
+test('a visible-but-unfocused window is brought to front, never hidden', () => {
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({ visible: true, minimized: false, focused: false });
+
   toggleWindowVisibility(win);
 
-  assert.ok(win.calls.includes('show'), 'window should be shown again');
+  assert.deepEqual(win.calls, ['focus'], 'should focus, not hide');
 });
 
 test('macless minimize-to-tray hides to tray only when the indicator exists', () => {
@@ -148,4 +195,26 @@ test('macless minimize-to-tray hides to tray only when the indicator exists', ()
   toggleWindowVisibility(win);
 
   assert.deepEqual(win.calls, ['blur', 'hide']);
+});
+
+test('minimize-to-tray falls back to minimize when the tray is unavailable (#7282)', () => {
+  mockIsMinimizeToTray = true;
+  mockEnsureIndicator = false; // tray failed to (re)create
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({ visible: true, minimized: false, focused: true });
+
+  toggleWindowVisibility(win);
+
+  // Must keep a taskbar handle (minimize), not hide() into an unreachable state.
+  assert.deepEqual(win.calls, ['minimize']);
+});
+
+test('on macOS the window hides (dock icon stays), never minimizes', () => {
+  mockIsMac = true;
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({ visible: true, minimized: false, focused: true });
+
+  toggleWindowVisibility(win);
+
+  assert.deepEqual(win.calls, ['hide']);
 });

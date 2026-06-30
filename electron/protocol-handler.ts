@@ -10,10 +10,27 @@ export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
 // Store pending URLs to process after window is ready
 let pendingUrls: string[] = [];
 
+/**
+ * Parse the action (host) of a `superproductivity://` URL, or `null` if it is
+ * missing/unparseable. Used by the `second-instance` handler to special-case actions
+ * whose behavior the generic pre-focus would otherwise break.
+ */
+export const getProtocolAction = (url: string | undefined): string | null => {
+  if (!url) {
+    return null;
+  }
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+};
+
 export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): void => {
-  // Redact query params before logging — OAuth code/state are credentials
-  const redactedUrl = url.split('?')[0].split('#')[0];
-  log('Processing protocol URL:', redactedUrl);
+  // Log only the scheme + action host. The query/fragment carry OAuth credentials and the
+  // path carries user content (e.g. a create-task title); the log is exportable, so neither
+  // may be written to it.
+  log('Processing protocol URL:', `${PROTOCOL_PREFIX}${getProtocolAction(url) ?? ''}`);
 
   // Only process after window is ready
   if (!mainWin || !mainWin.webContents) {
@@ -33,7 +50,8 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
 
     log('Protocol action:', action);
-    log('Protocol path parts:', pathParts);
+    // Log the count only — path parts can hold user content (e.g. a create-task title).
+    log('Protocol path part count:', pathParts.length);
 
     switch (action) {
       case 'oauth-callback':
@@ -46,7 +64,8 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
       case 'create-task':
         if (pathParts.length > 0) {
           const taskTitle = decodeURIComponent(pathParts[0]);
-          log('Creating task with title:', taskTitle);
+          // Don't log the title — the log is exportable and must not contain user content.
+          log('Creating task from protocol URL');
 
           // Send IPC message to create task
           if (mainWin && mainWin.webContents) {
@@ -118,14 +137,17 @@ export const initializeProtocolHandling = (
   // Handle protocol on Windows/Linux via second instance
   appInstance.on('second-instance', (event, commandLine) => {
     const mainWin = getMainWindow();
+    const url = commandLine.find((arg) => arg.startsWith(PROTOCOL_PREFIX));
 
-    // Someone tried to run a second instance, we should focus our window instead.
-    if (mainWin) {
+    // A second launch should normally bring our window to front. But `toggle-visibility`
+    // must observe the *pre-press* window state — pre-focusing here would make the toggle
+    // always read "visible" and hide the window the user actually asked to show (#7114),
+    // so let that action manage visibility itself.
+    if (mainWin && getProtocolAction(url) !== 'toggle-visibility') {
       showOrFocus(mainWin);
     }
 
     // Handle protocol url from second instance
-    const url = commandLine.find((arg) => arg.startsWith(PROTOCOL_PREFIX));
     if (url) {
       processProtocolUrl(url, mainWin);
     }
@@ -142,7 +164,10 @@ export const initializeProtocolHandling = (
   // Handle protocol URL passed as command line argument for testing
   process.argv.forEach((val) => {
     if (val && val.startsWith(PROTOCOL_PREFIX)) {
-      log('Protocol URL from command line:', val.split('?')[0].split('#')[0]);
+      log(
+        'Protocol URL from command line:',
+        `${PROTOCOL_PREFIX}${getProtocolAction(val) ?? ''}`,
+      );
       // Process after app is ready
       appInstance.whenReady().then(() => {
         processProtocolUrl(val, getMainWindow());
