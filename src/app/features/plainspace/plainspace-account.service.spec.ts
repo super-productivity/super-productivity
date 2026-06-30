@@ -65,38 +65,4 @@ describe('PlainspaceAccountService', () => {
     expect(service.token()).toBeNull();
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
   });
-
-  describe('revalidate', () => {
-    it('returns false without any request when there is no account', async () => {
-      expect(await service.revalidate()).toBe(false);
-      httpMock.expectNone(ME_URL);
-    });
-
-    it('returns true when the stored token still works', async () => {
-      const c = service.connect('pat_x');
-      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
-      await c;
-
-      const r = service.revalidate();
-      const req = httpMock.expectOne(ME_URL);
-      expect(req.request.headers.get('Authorization')).toBe('Bearer pat_x');
-      req.flush({ email: 'me@example.com', projects: [] });
-      expect(await r).toBe(true);
-    });
-
-    it('returns false on a stale token but keeps the account (transient-safe)', async () => {
-      const c = service.connect('pat_x');
-      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
-      await c;
-
-      const r = service.revalidate();
-      httpMock
-        .expectOne(ME_URL)
-        .flush({ error: 'nope' }, { status: 401, statusText: 'Unauthorized' });
-      expect(await r).toBe(false);
-      // Do NOT clear on failure — an offline blip must not drop a good token.
-      expect(service.isLoggedIn()).toBe(true);
-      expect(service.token()).toBe('pat_x');
-    });
-  });
 });

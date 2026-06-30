@@ -20,10 +20,10 @@ export interface PlainspaceConnectDialogData {
 }
 
 /**
- * Guided "Connect to Plainspace" dialog: shows where to create a personal API
- * token (link + step-by-step), takes the pasted token and validates it against
- * the host before closing. Resolves to `true` once connected, `false` if the
- * user cancels. Replaces the bare single-line token prompt.
+ * Value-first "Connect to Plainspace" dialog: leads with what you get, links out
+ * to Plainspace to create a personal API token, then takes the pasted token and
+ * validates it against the host before closing. Resolves to `true` once
+ * connected, `false` if the user cancels.
  */
 @Component({
   selector: 'plainspace-connect-dialog',

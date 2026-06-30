@@ -10,9 +10,11 @@ const DEFAULT_HOST = 'https://plainspace.org';
 
 /**
  * Holds the connected Plainspace account (a personal API token + host) and
- * exposes it as signals. Persisted to localStorage (local-only, never synced —
- * a PAT is per device). Used by the share-on-create flow, which needs a token
- * before any provider/space exists.
+ * exposes it as signals. The account record itself is local-only (localStorage,
+ * never synced). Note: sharing a project also copies the token into a bound
+ * `PLAINSPACE` issue provider, and providers ARE synced — so a copy of the token
+ * can reach other devices that way (as with every issue provider's credentials).
+ * Used by the share flow, which needs a token before any provider/space exists.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceAccountService {
@@ -39,28 +41,6 @@ export class PlainspaceAccountService {
     this._account.set(account);
     this._save(account);
     return true;
-  }
-
-  /**
-   * Re-checks the stored token against the host (`GET /me`). Returns false when
-   * there is no account, or the token no longer works (revoked, or created on
-   * another device and never valid here), or the request fails. Does NOT clear
-   * the account — a transient/offline failure must not drop an otherwise-good
-   * token; callers should gate on connectivity first.
-   */
-  async revalidate(): Promise<boolean> {
-    const account = this._account();
-    if (!account) {
-      return false;
-    }
-    const me = await firstValueFrom(
-      this._api.getMe$({
-        ...DEFAULT_PLAINSPACE_CFG,
-        host: account.host,
-        token: account.token,
-      }),
-    );
-    return !!me;
   }
 
   logout(): void {

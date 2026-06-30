@@ -24,8 +24,8 @@ import {
  * Provisions Plainspace sharing for a project: ensures the user is signed in,
  * creates a remote space and registers a bound `PLAINSPACE` issue-provider
  * instance (so tasks assigned to me / unassigned auto-import to the project
- * backlog). Used by the "Share on Plainspace" toggle in the create-project
- * dialog.
+ * backlog). Used by the project context menu's "Collaborate on Plainspace"
+ * action and the create-project dialog's share toggle.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceShareService {
@@ -49,12 +49,13 @@ export class PlainspaceShareService {
     title: string,
   ): Promise<string | null> {
     try {
-      const conn = await this._ensureUsableAccount();
-      if (conn === 'offline') {
+      // Sharing is an online action — say so plainly instead of letting the
+      // space picker fail later with a confusing "check your token" error.
+      if (!isOnline()) {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.OFFLINE });
         return null;
       }
-      if (conn === 'cancelled') {
+      if (!(await this._ensureConnected())) {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.LOGIN_REQUIRED });
         return null;
       }
@@ -116,37 +117,21 @@ export class PlainspaceShareService {
   }
 
   /**
-   * Makes sure we have a *usable* connection before opening the space picker —
-   * the picker only fails with a confusing "check your token" error otherwise.
-   *
-   * - `offline`: we can't reach Plainspace at all; say so plainly.
-   * - revalidate a stored token: a stale one (revoked, or created on another
-   *   device and never valid here) routes to the guided connect dialog to
-   *   re-auth, instead of dead-ending in the picker.
-   * - no/invalid account: open the guided connect dialog (intro + token steps).
-   *
-   * Returns `ready` once usable, `cancelled` if the user backed out of connect.
+   * Ensures a Plainspace account is connected, opening the guided connect dialog
+   * if not. A stored token that has since gone stale is left to the space
+   * picker, which detects it and offers a reconnect.
    */
-  private async _ensureUsableAccount(): Promise<'ready' | 'offline' | 'cancelled'> {
-    if (!this._isOnline()) {
-      return 'offline';
-    }
-    if (this._accountService.isLoggedIn() && (await this._accountService.revalidate())) {
-      return 'ready';
+  private async _ensureConnected(): Promise<boolean> {
+    if (this._accountService.isLoggedIn()) {
+      return true;
     }
     const connected = await firstValueFrom(
       this._matDialog
         .open(PlainspaceConnectDialogComponent, {
-          data: { host: this._accountService.host() ?? DEFAULT_PLAINSPACE_CFG.host },
+          data: { host: DEFAULT_PLAINSPACE_CFG.host },
         })
         .afterClosed(),
     );
-    return connected === true ? 'ready' : 'cancelled';
-  }
-
-  // Seam over the `isOnline()` util so the offline path is unit-testable
-  // (navigator.onLine is not reliably overridable in the test runner).
-  private _isOnline(): boolean {
-    return isOnline();
+    return connected === true;
   }
 }

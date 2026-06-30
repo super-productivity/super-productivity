@@ -14,14 +14,13 @@ describe('PlainspaceShareService', () => {
   let service: PlainspaceShareService;
   let account: {
     isLoggedIn: jasmine.Spy;
-    revalidate: jasmine.Spy;
     account: jasmine.Spy;
-    host: jasmine.Spy;
   };
   let matDialog: jasmine.SpyObj<MatDialog>;
   let api: jasmine.SpyObj<PlainspaceApiService>;
   let snack: jasmine.SpyObj<SnackService>;
   let store: jasmine.SpyObj<Store>;
+  let onlineSpy: jasmine.Spy;
 
   // afterClosed() results, keyed by which dialog opened.
   let connectResult: unknown;
@@ -33,11 +32,9 @@ describe('PlainspaceShareService', () => {
   beforeEach(() => {
     account = {
       isLoggedIn: jasmine.createSpy('isLoggedIn').and.returnValue(true),
-      revalidate: jasmine.createSpy('revalidate').and.returnValue(Promise.resolve(true)),
       account: jasmine
         .createSpy('account')
         .and.returnValue({ host: 'https://plainspace.org', token: 'pat_x', email: 'e' }),
-      host: jasmine.createSpy('host').and.returnValue('https://plainspace.org'),
     };
 
     matDialog = jasmine.createSpyObj('MatDialog', ['open']);
@@ -69,14 +66,13 @@ describe('PlainspaceShareService', () => {
       ],
     });
     service = TestBed.inject(PlainspaceShareService);
-    // Default to online; individual tests flip this.
-    spyOn(service as never as { _isOnline: () => boolean }, '_isOnline').and.returnValue(
-      true,
-    );
+    // Default to online; the offline test flips this. (The Karma runner reports
+    // navigator.onLine === false, so we must spy it for the online path.)
+    onlineSpy = spyOnProperty(navigator, 'onLine').and.returnValue(true);
   });
 
   it('shows a calm offline message and does nothing when offline', async () => {
-    (service as never as { _isOnline: jasmine.Spy })._isOnline.and.returnValue(false);
+    onlineSpy.and.returnValue(false);
 
     const result = await service.shareProjectOnPlainspace('p1', 'Proj');
 
@@ -88,39 +84,19 @@ describe('PlainspaceShareService', () => {
     expect(matDialog.open).not.toHaveBeenCalled();
   });
 
-  it('skips the connect dialog when the stored token still validates', async () => {
+  it('skips the connect dialog when already logged in', async () => {
     account.isLoggedIn.and.returnValue(true);
-    account.revalidate.and.returnValue(Promise.resolve(true));
     spaceResult = undefined; // user cancels the space picker
 
     const result = await service.shareProjectOnPlainspace('p1', 'Proj');
 
-    expect(account.revalidate).toHaveBeenCalled();
     expect(openedConnectDialog()).toBe(false);
     expect(result).toBeNull();
     // Cancelling the picker is not an error — no LOGIN_REQUIRED/OFFLINE snack.
     expect(snack.open).not.toHaveBeenCalled();
   });
 
-  it('routes a stale stored token to the connect dialog instead of the picker error', async () => {
-    account.isLoggedIn.and.returnValue(true);
-    account.revalidate.and.returnValue(Promise.resolve(false));
-    connectResult = true; // user re-auths
-    spaceResult = { action: 'create' };
-
-    const result = await service.shareProjectOnPlainspace('p1', 'Proj');
-
-    expect(account.revalidate).toHaveBeenCalled();
-    expect(openedConnectDialog()).toBe(true);
-    expect(result).toBe('space-1');
-    expect(store.dispatch).toHaveBeenCalled();
-    expect(snack.open).toHaveBeenCalledWith({
-      type: 'SUCCESS',
-      msg: T.PLAINSPACE.SHARE_SUCCESS,
-    });
-  });
-
-  it('asks the user to connect when there is no account, and reports cancel', async () => {
+  it('opens the connect dialog when there is no account, and reports cancel', async () => {
     account.isLoggedIn.and.returnValue(false);
     connectResult = false; // user backs out of connect
 
@@ -131,6 +107,20 @@ describe('PlainspaceShareService', () => {
     expect(snack.open).toHaveBeenCalledWith({
       type: 'ERROR',
       msg: T.PLAINSPACE.LOGIN_REQUIRED,
+    });
+  });
+
+  it('provisions a new space and registers a bound provider on success', async () => {
+    account.isLoggedIn.and.returnValue(true);
+    spaceResult = { action: 'create' };
+
+    const result = await service.shareProjectOnPlainspace('p1', 'Proj');
+
+    expect(result).toBe('space-1');
+    expect(store.dispatch).toHaveBeenCalled();
+    expect(snack.open).toHaveBeenCalledWith({
+      type: 'SUCCESS',
+      msg: T.PLAINSPACE.SHARE_SUCCESS,
     });
   });
 });
