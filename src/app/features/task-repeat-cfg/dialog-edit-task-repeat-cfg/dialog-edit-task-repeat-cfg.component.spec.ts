@@ -721,4 +721,59 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(savedCfg().skipOverdue).toBe(true);
     });
   });
+
+  describe('skipOverdue display stays honest while pristine (#8644)', () => {
+    it('re-derives skipOverdue OFF when the schedule changes to Monthly', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // A new config starts on Daily → seeded ON.
+      expect(component.repeatCfg().skipOverdue).toBe(true);
+
+      // User switches the preset (essential-form change), checkbox untouched.
+      component.onScheduleModelChange({
+        ...component.repeatCfg(),
+        quickSetting: 'MONTHLY_FIRST_DAY',
+      });
+
+      expect(component.repeatCfg().skipOverdue).toBe(false);
+    });
+
+    it('updates a rendered (pristine) checkbox to match the new schedule', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // Advanced is open: a pristine control reflecting the Daily default.
+      const ctrl = new FormControl(true);
+      component.formGroup2().addControl('skipOverdue', ctrl);
+
+      component.onScheduleModelChange({
+        ...component.repeatCfg(),
+        quickSetting: 'MONTHLY_FIRST_DAY',
+      });
+
+      expect(ctrl.value).toBe(false);
+      expect(ctrl.dirty).toBe(false);
+      expect(component.repeatCfg().skipOverdue).toBe(false);
+    });
+
+    it('does not re-derive once the user has toggled the checkbox', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // User explicitly ticked it ON; switching schedule must not override.
+      const ctrl = new FormControl(true);
+      ctrl.markAsDirty();
+      component.formGroup2().addControl('skipOverdue', ctrl);
+
+      component.onScheduleModelChange({
+        ...component.repeatCfg(),
+        quickSetting: 'MONTHLY_FIRST_DAY',
+        skipOverdue: true,
+      });
+
+      expect(component.repeatCfg().skipOverdue).toBe(true);
+      expect(ctrl.value).toBe(true);
+    });
+  });
 });
