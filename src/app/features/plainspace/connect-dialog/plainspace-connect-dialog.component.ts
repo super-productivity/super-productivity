@@ -13,6 +13,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { IS_ELECTRON } from '../../../app.constants';
 import { PlainspaceAccountService } from '../plainspace-account.service';
 
 export interface PlainspaceConnectDialogData {
@@ -57,7 +58,16 @@ export class PlainspaceConnectDialogComponent {
   // Deep link to the dedicated "from Super Productivity" onboarding flow, which
   // guides token creation — instead of dropping the user on the bare marketing
   // host. Trailing slash stripped so we never produce a double slash.
-  readonly connectUrl = `${this.host.replace(/\/+$/, '')}/connect/super-productivity`;
+  //
+  // On desktop we also pass a `?return=` deep link so the connect page can bounce
+  // the user back to the app. Only Electron registers the `superproductivity://`
+  // scheme (mobile uses a different one, web none), so gate it on IS_ELECTRON —
+  // otherwise the page would render dead "Open Super Productivity" buttons.
+  readonly connectUrl =
+    `${this.host.replace(/\/+$/, '')}/connect/super-productivity` +
+    (IS_ELECTRON
+      ? `?return=${encodeURIComponent('superproductivity://plainspace-connect')}`
+      : '');
   token = '';
   readonly isConnecting = signal(false);
   readonly hasError = signal(false);
