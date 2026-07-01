@@ -131,6 +131,24 @@ export class PlainspaceApiService {
       );
   }
 
+  /**
+   * Creates a new task in the bound space (`cfg.spaceId`) and returns it mapped
+   * to a `PlainspaceIssue`. The symmetric twin of `claimTask$`: it lets a task
+   * added to a Plainspace-backed project appear for the team. Used by the
+   * two-way-sync adapter's `createIssue`. Errors propagate (unlike the reads and
+   * like `createSpace$`) so the auto-create effect can surface a failure snack
+   * instead of silently dropping the task.
+   */
+  createTask$(title: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue> {
+    return this._http
+      .post<SPTaskResponse>(
+        `${this._base(cfg)}/tasks`,
+        { spaceId: cfg.spaceId, title },
+        { headers: this._headers(cfg) },
+      )
+      .pipe(map((res) => mapSPTaskToIssue(res.task)));
+  }
+
   /** Creates a remote space and returns its id (used by the share flow). */
   createSpace$(title: string, cfg: PlainspaceCfg): Observable<{ id: string }> {
     return this._http

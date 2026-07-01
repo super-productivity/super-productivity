@@ -311,6 +311,53 @@ day-only task would fabricate one.
 
 ---
 
+## 4c. New endpoint 4 — Create a task (add directly to Plainspace)
+
+```
+POST /api/integration/tasks
+Authorization: Bearer pat_…
+body: { spaceId: string, title: string }   // title 1–500 chars
+→ 201 { task: SPTask }
+```
+
+The symmetric twin of `claimTask$`: it lets a task added to a Plainspace-backed
+SP project appear for the team. When SP adds a task to a project that has a bound
+`PLAINSPACE` provider, it POSTs here and links the returned `SPTask.id` back to
+the local task (then the existing done/title/`scheduledAt` write-back keeps it in
+sync). `spaceId` accepts the project **UUID or slug** (same as everywhere SP
+holds `cfg.spaceId`); resolve it against `scope.projectIds` so a token can't
+create tasks in a foreign Space.
+
+This is the PAT-authed integration-API equivalent of the existing member-token
+route `POST /api/projects/:slug/items` — reuse that route's item-creation logic
+(append at end of the project's primary/hero list, `recordActivity`, broadcast
+`item.created` over SSE), just behind `apiTokenMiddleware` + `loadIntegrationScope`
+and returning the `SPTask` DTO instead of the internal activity entry. The
+member-token route is **not** reusable from SP directly: the SP client only ever
+holds a PAT (`pat_…`), never a per-session member token.
+
+```ts
+const { spaceId, title } = c.req.valid('json'); // CreateTaskViaTokenSchema
+const scope = await loadIntegrationScope(emailLookup);
+const projectId = resolveScopedProjectId(spaceId, scope); // UUID or slug → UUID, or 404
+// then the same insert path as POST /api/projects/:slug/items (primary list,
+// position = max+GAP), serializeSPTask(row) → c.json({ task }, 201)
+```
+
+- **Status codes:** `201` created · `422` validation · `404` unknown/foreign
+  `spaceId` · `401`/`428` auth (same as the other integration routes).
+- No new table. `title` maps to the item `text` column (`MAX_ITEM_TEXT_LENGTH`).
+- SP lets create errors propagate (unlike its fail-soft reads) so a failed add
+  surfaces a snack instead of silently dropping the task.
+
+**Client side is already implemented** (this repo): `PlainspaceApiService.createTask$`,
+`PlainspaceSyncAdapterService.createIssue`, and `_hasAutoCreateEnabled` recognising
+the native `PLAINSPACE` key (no opt-in flag — the bound provider is the opt-in).
+It wires into the generic `autoCreateIssueOnTaskAdd$` effect and is inert until
+this endpoint ships.
+
+---
+
 ## 5. Onboarding caveat (important for the SP "Share" UX)
 
 A PAT can only be minted from **inside an existing Space**
@@ -423,6 +470,7 @@ All isolated in SP's `PlainspaceApiService` (one file) — see
 | scheduled-time sync         | `PATCH /tasks/:id { scheduledAt }` + read    | `dueWithTime ↔ scheduledAt` (§4b)               |
 | `getUnclaimedTasks$`        | `GET /claimable-tasks?projectId=cfg.spaceId` | claim pool feed                                 |
 | `claimTask$`                | `POST /tasks/:id/claim`                      | then `addTaskFromIssue` imports it              |
+| `createTask$`               | `POST /tasks { spaceId, title }`             | add task in a bound project → link `SPTask.id`  |
 | `createSpace$`              | `POST /spaces`                               | bind provider `spaceId = project.id`            |
 
 Two **client-side** fixes SP must make when going real (server unaffected, noting
@@ -437,8 +485,10 @@ link is `itemUrl` = `{origin}/{slug}/item/{id}`).
 
 - **Device-code auth** (`/api/integration/device-code` + `/device-token`) — the
   real onboarding fix; see §5 and the SP brainstorm doc.
-- **SP → Plainspace promotion** (assign an SP task to someone → seed a Space +
-  invite) — the dominant flow in the product vision, larger than this PR's needs.
+- **SP → Plainspace promotion** (assign an SP task to someone → seed a _new_
+  Space + invite) — the dominant flow in the product vision, larger than this
+  PR's needs. Note: adding a task to an _already-bound_ Space is now in scope —
+  see §4c (`POST /api/integration/tasks`).
 - **Assignee/“waiting-on” surfacing**, presence, comments, attachments.
 - Per-occurrence reminders / repeat rules over the integration channel.
 

@@ -17,7 +17,11 @@ describe('PlainspaceSyncAdapterService', () => {
   };
 
   beforeEach(() => {
-    api = jasmine.createSpyObj('PlainspaceApiService', ['getById$', 'patchTask$']);
+    api = jasmine.createSpyObj('PlainspaceApiService', [
+      'getById$',
+      'patchTask$',
+      'createTask$',
+    ]);
     TestBed.configureTestingModule({
       providers: [
         PlainspaceSyncAdapterService,
@@ -95,6 +99,34 @@ describe('PlainspaceSyncAdapterService', () => {
   it('pushChanges does nothing when no mapped field is in the changes', async () => {
     await adapter.pushChanges('t1', { notes: 'x' }, cfg);
     expect(api.patchTask$).not.toHaveBeenCalled();
+  });
+
+  it('createIssue creates the task and returns id + baseline-seeding issueData', async () => {
+    const created = {
+      id: 'new-1',
+      title: 'Buy milk',
+      isDone: false,
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      url: 'https://plainspace.org/p/item/new-1',
+      projectId: 'space-1',
+      scheduledAt: null,
+      isRecurring: false,
+    };
+    api.createTask$.and.returnValue(of(created));
+
+    const res = await adapter.createIssue('Buy milk', cfg);
+
+    expect(api.createTask$).toHaveBeenCalledWith('Buy milk', cfg);
+    expect(res.issueId).toBe('new-1');
+    // issueData must carry the fields extractSyncValues reads, so the effect can
+    // seed the two-way-sync baseline (else the first push is dropped).
+    expect(adapter.extractSyncValues(res.issueData)).toEqual({
+      isDone: false,
+      title: 'Buy milk',
+      scheduledAt: null,
+    });
+    // No numeric issue number -> the SP title keeps no '#123' prefix.
+    expect((res as { issueNumber?: number }).issueNumber).toBeUndefined();
   });
 
   it('fetchIssue returns the issue, or {} when it is missing', async () => {

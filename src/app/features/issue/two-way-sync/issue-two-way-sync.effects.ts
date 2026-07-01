@@ -418,6 +418,12 @@ export class IssueTwoWaySyncEffects {
     if (this._pluginRegistry.getUseAgendaView(provider.issueProviderKey)) {
       return false;
     }
+    // Plainspace-backed projects are collaborative by definition: a task added
+    // there is pushed up so the team sees it (symmetric with auto-import). The
+    // bound provider is itself the opt-in, so there is no separate flag.
+    if (provider.issueProviderKey === 'PLAINSPACE') {
+      return true;
+    }
     // Check for plugin providers (both plugin:* and migrated keys like GITHUB)
     const pluginCfg = (provider as { pluginConfig?: Record<string, unknown> })
       .pluginConfig;

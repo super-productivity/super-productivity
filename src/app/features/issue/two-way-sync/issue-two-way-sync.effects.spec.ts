@@ -1404,6 +1404,73 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    it('should create issue for a native PLAINSPACE provider without a pluginConfig flag (collaborative by default)', fakeAsync(() => {
+      // Contrast with the TEST_PROVIDER case above: a native provider with no
+      // `pluginConfig.isAutoCreateIssues` normally does NOT auto-create. A bound
+      // Plainspace provider does — the binding itself is the opt-in, so tasks
+      // added to a shared project reach the team.
+      const createIssueSpy = jasmine.createSpy('createIssue').and.resolveTo({
+        issueId: 'ps-issue-1',
+        issueData: { isDone: false, title: 'New Task', scheduledAt: null },
+      });
+      const adapter = createMockAdapter({
+        createIssue: createIssueSpy,
+        getFieldMappings: jasmine.createSpy('getFieldMappings').and.returnValue([]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+      });
+      // Override the Plainspace adapter the effects constructor registered.
+      adapterRegistry.register('PLAINSPACE', adapter);
+
+      const provider = createMockIssueProvider({
+        id: 'provider-1',
+        issueProviderKey: 'PLAINSPACE' as any,
+        defaultProjectId: 'project-1',
+        // Deliberately NO pluginConfig / isAutoCreateIssues.
+      });
+
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const cfg = createMockIssueProvider({
+        id: 'provider-1',
+        issueProviderKey: 'PLAINSPACE' as any,
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-new',
+        title: 'New Task',
+        projectId: 'project-1',
+        parentId: undefined,
+        issueId: undefined,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+
+      effects.autoCreateIssueOnTaskAdd$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.addTask({
+          task,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      );
+
+      tick();
+
+      expect(createIssueSpy).toHaveBeenCalledWith('New Task', cfg);
+      expect(taskServiceSpy.update).toHaveBeenCalledWith(
+        'task-new',
+        jasmine.objectContaining({
+          issueId: 'ps-issue-1',
+          issueType: 'PLAINSPACE',
+          issueProviderId: 'provider-1',
+        }),
+      );
+    }));
+
     it('should not create issue when task has no projectId', fakeAsync(() => {
       const createIssueSpy = jasmine.createSpy('createIssue').and.resolveTo({
         issueId: 'new-issue-1',

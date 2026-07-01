@@ -154,6 +154,27 @@ describe('PlainspaceApiService', () => {
     expect((await p).id).toBe('proj-new');
   });
 
+  it('createTask$ POSTs { spaceId, title } and maps the created task', async () => {
+    const p = firstValueFrom(service.createTask$('Buy milk', cfg));
+    const req = httpMock.expectOne(`${BASE}/tasks`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_test');
+    expect(req.request.body).toEqual({ spaceId: 'space-1', title: 'Buy milk' });
+    req.flush({ task: { ...spTask('new-1', 'space-1'), title: 'Buy milk' } });
+    const issue = await p;
+    expect(issue.id).toBe('new-1');
+    expect(issue.title).toBe('Buy milk');
+    expect(issue.isDone).toBe(false);
+  });
+
+  it('createTask$ lets errors propagate (so the auto-create effect can report)', async () => {
+    const p = firstValueFrom(service.createTask$('x', cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks`)
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    await expectAsync(p).toBeRejected();
+  });
+
   it('searchIssues$ filters my tasks by title', async () => {
     const p = firstValueFrom(service.searchIssues$('task a', cfg));
     httpMock

@@ -67,6 +67,24 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
     return { isDone: 'pushOnly', title: 'pushOnly', dueWithTime: 'pushOnly' };
   }
 
+  /**
+   * Creates the task in Plainspace when it is first added to a Plainspace-backed
+   * project (via the generic `autoCreateIssueOnTaskAdd$` effect), then hands the
+   * created issue back so the effect can link it and seed the two-way-sync
+   * baseline. No `issueNumber`: Plainspace tasks have no numeric id, so the SP
+   * title stays as typed (no `#123` prefix).
+   */
+  async createIssue(
+    title: string,
+    cfg: PlainspaceCfg,
+  ): Promise<{ issueId: string; issueData: Record<string, unknown> }> {
+    const issue = await firstValueFrom(this._api.createTask$(title, cfg));
+    return {
+      issueId: issue.id,
+      issueData: issue as unknown as Record<string, unknown>,
+    };
+  }
+
   async fetchIssue(
     issueId: string,
     cfg: PlainspaceCfg,
