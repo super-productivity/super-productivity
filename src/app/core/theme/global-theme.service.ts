@@ -11,7 +11,8 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { BodyClass, IS_ELECTRON, IS_GNOME_WAYLAND } from '../../app.constants';
 import { IS_MAC } from '../../util/is-mac';
-import { distinctUntilChanged, map, startWith, switchMap, take } from 'rxjs/operators';
+import { distinctUntilChanged, filter, map, startWith, switchMap, take } from 'rxjs/operators';
+import { NavigationEnd, Router } from '@angular/router';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { MaterialCssVarsService } from 'angular-material-css-vars';
 import { DOCUMENT } from '@angular/common';
@@ -65,6 +66,19 @@ const CSS_VAR_SAFE_AREA_LEFT = '--safe-area-inset-left';
 const CSS_VAR_SAFE_AREA_RIGHT = '--safe-area-inset-right';
 const VIEWPORT_RESIZE_EPSILON_PX = 1;
 
+export const getBackgroundImageForUrl = (
+  theme: WorkContextThemeCfg,
+  isDarkMode: boolean,
+  url: string,
+): string | null | undefined => {
+  const isWorkContextUrl = /\/(tag|project)\//.test(url);
+  if (!isWorkContextUrl) {
+    return null;
+  }
+
+  return isDarkMode ? theme.backgroundImageDark : theme.backgroundImageLight;
+};
+
 @Injectable({ providedIn: 'root' })
 export class GlobalThemeService {
   private document = inject<Document>(DOCUMENT);
@@ -75,6 +89,7 @@ export class GlobalThemeService {
   private _matIconRegistry = inject(MatIconRegistry);
   private readonly _registeredPluginIcons = new Set<string>();
   private _domSanitizer = inject(DomSanitizer);
+  private _router = inject(Router);
 
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
@@ -134,13 +149,27 @@ export class GlobalThemeService {
 
   isDarkTheme = toSignal(this._isDarkThemeObs$, { initialValue: false });
 
+  // Emits the current URL after each completed navigation, starting with the
+  // current URL so the stream is immediately available before any navigation.
+  private _currentUrl$: Observable<string> = this._router.events.pipe(
+    filter((e) => e instanceof NavigationEnd),
+    map((e) => (e as NavigationEnd).urlAfterRedirects),
+    startWith(this._router.url),
+  );
+
   private _backgroundImgObs$: Observable<string | null | undefined> = combineLatest([
     this._workContextService.currentTheme$,
     this._isDarkThemeObs$,
+    this._currentUrl$,
   ]).pipe(
-    map(([theme, isDarkMode]) =>
-      isDarkMode ? theme.backgroundImageDark : theme.backgroundImageLight,
-    ),
+    map(([theme, isDarkMode, url]) => {
+      // On non-work-context views (Planner, Schedule, Boards, Config, etc.) the
+      // active context stays as "Today" (the reducer default) even though the
+      // user is not on the Today page. Showing the Today background on those
+      // pages is wrong, so we suppress it for any URL that is not a tag or
+      // project work-context route.
+      return getBackgroundImageForUrl(theme, isDarkMode, url);
+    }),
     distinctUntilChanged(),
   );
 
