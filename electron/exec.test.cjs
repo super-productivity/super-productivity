@@ -6,7 +6,7 @@ const Module = require('node:module');
 require('ts-node/register/transpile-only');
 
 const originalModuleLoad = Module._load;
-const execModulePath = path.resolve(__dirname, 'exec.ts');
+const execModulePath = path.resolve(__dirname, 'ipc-handlers', 'exec.ts');
 
 let ipcHandlers;
 let dialogResult;
