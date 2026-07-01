@@ -24,8 +24,6 @@ describe('getBackgroundImageForUrl()', () => {
   });
 
   it('uses the dark work context background in dark mode', () => {
-    expect(getBackgroundImageForUrl(theme, true, '/tag/TODAY/tasks')).toBe(
-      'dark-bg.jpg',
-    );
+    expect(getBackgroundImageForUrl(theme, true, '/tag/TODAY/tasks')).toBe('dark-bg.jpg');
   });
 });

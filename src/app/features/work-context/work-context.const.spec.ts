@@ -162,7 +162,6 @@ describe('work-context theme background slider persistence (#8504)', () => {
     key: keyof WorkContextThemeCfg,
   ): FormlyFieldConfig => fields.find((f) => f.key === key)!;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkExpressions = (field: FormlyFieldConfig): void => {
     const opts = field.options as any;
     opts.checkExpressions({ fieldGroup: [field], options: opts });

@@ -11,7 +11,14 @@ import {
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { BodyClass, IS_ELECTRON, IS_GNOME_WAYLAND } from '../../app.constants';
 import { IS_MAC } from '../../util/is-mac';
-import { distinctUntilChanged, filter, map, startWith, switchMap, take } from 'rxjs/operators';
+import {
+  distinctUntilChanged,
+  filter,
+  map,
+  startWith,
+  switchMap,
+  take,
+} from 'rxjs/operators';
 import { NavigationEnd, Router } from '@angular/router';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { MaterialCssVarsService } from 'angular-material-css-vars';
