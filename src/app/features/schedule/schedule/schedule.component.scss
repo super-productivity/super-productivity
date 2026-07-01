@@ -117,13 +117,17 @@
   }
 }
 
+.cal-provider-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .cal-color-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 4px;
-  vertical-align: middle;
   flex-shrink: 0;
 }
 

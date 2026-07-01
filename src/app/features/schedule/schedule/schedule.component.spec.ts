@@ -9,8 +9,12 @@ import { DateAdapter } from '@angular/material/core';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -805,6 +809,98 @@ describe('ScheduleComponent', () => {
       store.refreshState();
       fixture.detectChanges();
       expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('plugin calendar providers', () => {
+    const icalProvider = (id: string): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: 'ICAL',
+      icalUrl: `https://example.com/${id}.ics`,
+    });
+    const pluginProvider = (id: string, key = 'plugin:cal'): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: key,
+      pluginId: 'cal',
+      pluginConfig: {},
+    });
+
+    beforeEach(() => {
+      localStorage.removeItem('SUP_HIDDEN_CALENDAR_PROVIDER_IDS');
+      TestBed.inject(HiddenCalendarProvidersService).setHidden([]);
+    });
+
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
+    });
+
+    it('includes plugin issue providers that opt into the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders().map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('excludes plugin providers that do not use the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(false);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders()).toEqual([]);
+    });
+
+    it('shows the filter button for one iCal plus one plugin calendar provider', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, [icalProvider('ical')]);
+      store.overrideSelector(selectEnabledIssueProviders, [
+        icalProvider('ical'),
+        pluginProvider('plug'),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('calProviderLabel', () => {
+    it('normalizes a URL-shaped label to host-only', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { serverUrl: 'https://calendar.example.com/dav/' },
+        } as any),
+      ).toBe('calendar.example.com');
+    });
+
+    it('leaves an already host-only iCal label untouched', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'ICAL',
+          icalUrl: 'https://feeds.example.com/cal.ics',
+        } as any),
+      ).toBe('feeds.example.com');
     });
   });
 
