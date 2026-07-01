@@ -7,7 +7,9 @@
 >
   @if (hasNoEvents()) {
     <div class="empty-state">
-      <div class="empty-state-text">Drop tasks here to schedule them</div>
+      <div class="empty-state-text">
+        {{ T.F.SCHEDULE.DROP_TASKS_HERE_TO_SCHEDULE | translate }}
+      </div>
     </div>
   }
   <schedule-week

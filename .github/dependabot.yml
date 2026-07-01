@@ -27,6 +27,33 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
 
+    # Group tightly-coupled families into a single PR. These packages pin each
+    # other's peer versions in lockstep (e.g. @ngrx/effects peer-requires an
+    # exact @ngrx/store), so a single-package bump can never resolve `npm ci`
+    # on its own — it must move as a set. Each group bundles all update types
+    # (major/minor/patch) since a major moves the whole family at once.
+    groups:
+      angular:
+        patterns:
+          - '@angular/*'
+          - '@angular-devkit/*'
+          - '@schematics/angular'
+      angular-eslint:
+        patterns:
+          - '@angular-eslint/*'
+          - 'angular-eslint'
+      ngrx:
+        patterns:
+          - '@ngrx/*'
+      capacitor:
+        patterns:
+          - '@capacitor/*'
+          - '@capawesome/*'
+      typescript-eslint:
+        patterns:
+          - '@typescript-eslint/*'
+          - 'typescript-eslint'
+
   # ==========================================
   # GitHub Actions (Weekly Updates - SECURITY)
   # ==========================================

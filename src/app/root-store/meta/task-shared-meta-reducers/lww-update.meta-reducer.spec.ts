@@ -18,6 +18,11 @@ import { CONFIG_FEATURE_NAME } from '../../../features/config/store/global-confi
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { SIMPLE_COUNTER_FEATURE_NAME } from '../../../features/simple-counter/store/simple-counter.reducer';
+import {
+  SimpleCounter,
+  SimpleCounterType,
+} from '../../../features/simple-counter/simple-counter.model';
 
 describe('lwwUpdateMetaReducer', () => {
   const mockReducer = jasmine.createSpy('reducer');
@@ -637,6 +642,91 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.title).toBe('Recreated Tag');
       // Backfilled from DEFAULT_TAG
       expect(recreated.taskIds).toEqual([]);
+    });
+  });
+
+  // Issue #7330 recurred on SIMPLE_COUNTER (ruckusvol's logs, both clients
+  // ≥ v18.6.0): a concurrent delete-vs-update across devices recreated a
+  // counter from a partial payload missing `type` — an enum typia rejects and
+  // dataRepair/auto-fix had no rule for — dead-ending the user on "Repair
+  // attempted but failed". SIMPLE_COUNTER was added to RECREATE_FALLBACK so the
+  // generic recreate path backfills required fields.
+  describe('[SIMPLE_COUNTER] LWW Update (#7330)', () => {
+    const makeStateWithCounters = (
+      entities: Record<string, unknown> = {},
+    ): Partial<RootState> =>
+      ({
+        [SIMPLE_COUNTER_FEATURE_NAME]: {
+          ids: Object.keys(entities),
+          entities,
+        },
+      }) as unknown as Partial<RootState>;
+
+    it('backfills type (and other required fields) when recreating from a partial payload', () => {
+      // Counter was deleted locally; a remote UPDATE won via LWW.
+      const state = makeStateWithCounters();
+      const action = {
+        type: '[SIMPLE_COUNTER] LWW Update',
+        id: 'cnt_partial',
+        // The remote UPDATE only touched the count; `type` never made it in.
+        countOnDay: { [getDbDateStr()]: 4 },
+        meta: {
+          isPersistent: true,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt_partial',
+        },
+      };
+
+      spyOn(OpLog, 'warn');
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const recreated = updatedState[SIMPLE_COUNTER_FEATURE_NAME]?.entities[
+        'cnt_partial'
+      ] as SimpleCounter;
+
+      expect(recreated).toBeDefined();
+      // The missing enum is backfilled to the harmless ClickCounter default.
+      expect(recreated.type).toBe(SimpleCounterType.ClickCounter);
+      expect(recreated.isEnabled).toBe(false);
+      expect(recreated.isOn).toBe(false);
+      // The remote-changed field the payload carried is preserved.
+      expect(recreated.countOnDay).toEqual({ [getDbDateStr()]: 4 });
+      expect(OpLog.warn).toHaveBeenCalledWith(
+        jasmine.stringMatching(/missing required fields/),
+      );
+    });
+
+    // The proof the user's dialog can't fire from this upstream path: run the
+    // recreated SimpleCounterState through the real Typia validator.
+    it('produces a Typia-valid SimpleCounterState when recreating from a partial payload', () => {
+      const state = makeStateWithCounters();
+      const action = {
+        type: '[SIMPLE_COUNTER] LWW Update',
+        id: 'cnt_producer_shape',
+        countOnDay: { [getDbDateStr()]: 2 },
+        meta: {
+          isPersistent: true,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt_producer_shape',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const counterState = updatedState[SIMPLE_COUNTER_FEATURE_NAME];
+
+      const result = appDataValidators.simpleCounter(counterState as never);
+      if (!result.success) {
+        // Surface the typia errors so any future regression is debuggable.
+        fail(
+          `SimpleCounterState failed Typia validation: ${JSON.stringify(
+            (result as { errors?: unknown }).errors,
+          )}`,
+        );
+      }
+      expect(result.success).toBe(true);
     });
   });
 
