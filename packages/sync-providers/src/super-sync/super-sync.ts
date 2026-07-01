@@ -123,6 +123,9 @@ export class SuperSyncProvider
   readonly maxConcurrentRequests = 10;
   readonly supportsOperationSync = true;
   readonly providerMode = 'superSyncOps' as const;
+  // SuperSync is E2EE-mandatory: the upload path must never push plaintext ops.
+  // See `isEncryptionMandatory` on OperationSyncCapable (GHSA-9v8x-68pf-p5x7).
+  readonly isEncryptionMandatory = true;
 
   public privateCfg: SyncCredentialStorePort<
     typeof PROVIDER_ID_SUPER_SYNC,

@@ -124,6 +124,21 @@ export class OperationLogUploadService {
         : undefined;
       const isEncryptionEnabled = !!encryptKey;
 
+      // GHSA-9v8x-68pf-p5x7: providers that mandate E2E encryption (SuperSync)
+      // must NEVER transmit plaintext ops. While no usable key is configured yet
+      // — e.g. first-time setup, before the user has chosen a password — abort the
+      // upload entirely and leave every pending op unsynced. Downloads still run
+      // (merge-first), and the encryption-enable flow performs the first, encrypted
+      // upload. Without this guard the initial setup sync pushes all local ops to
+      // the server in cleartext, breaking the E2EE promise even if later deleted.
+      if (syncProvider.isEncryptionMandatory && !encryptKey) {
+        OpLog.warn(
+          'OperationLogUploadService: Encryption is mandatory for this provider but ' +
+            'no key is configured yet — skipping upload until encryption setup completes.',
+        );
+        return;
+      }
+
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency
       const fullStateOps = pendingOps.filter((entry) =>

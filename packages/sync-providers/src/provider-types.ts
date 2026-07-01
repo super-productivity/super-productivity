@@ -188,6 +188,19 @@ export interface OperationSyncCapable<
    * encrypted config — the dropped-credential signature.
    */
   isEncryptionEnabled?(): Promise<boolean>;
+  /**
+   * Whether this provider mandates end-to-end encryption and must NEVER transmit
+   * plaintext operations. When true, the upload path refuses to push ops while no
+   * usable encryption key is configured yet (e.g. first-time setup, before the
+   * user has chosen a password): the encrypted snapshot uploaded by the
+   * encryption-enable flow becomes the first data to reach the server. Without
+   * this guard the initial-setup sync leaks all local ops in cleartext, breaking
+   * the E2EE promise even if they are later deleted (GHSA-9v8x-68pf-p5x7).
+   *
+   * Providers where unencrypted sync is a legitimate user choice (file-based)
+   * leave this unset.
+   */
+  readonly isEncryptionMandatory?: boolean;
 }
 
 export interface RestorePoint<TRestorePointType extends string = string> {

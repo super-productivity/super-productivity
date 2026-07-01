@@ -132,6 +132,93 @@ describe('OperationLogUploadService', () => {
         expect(mockApiProvider.uploadOps).toHaveBeenCalled();
       });
 
+      // Regression guard for GHSA-9v8x-68pf-p5x7: a provider that mandates E2E
+      // encryption (SuperSync) must never upload plaintext ops. During first-time
+      // setup the config has no encryption key yet, so the initial sync used to
+      // push all local ops to the server in cleartext.
+      describe('encryption-mandatory provider without a key (GHSA-9v8x-68pf-p5x7)', () => {
+        beforeEach(() => {
+          (mockApiProvider as any).isEncryptionMandatory = true;
+          (mockApiProvider as any).getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve(undefined));
+          mockOpLogStore.getUnsynced.and.returnValue(
+            Promise.resolve([
+              createMockEntry(1, 'op-1', 'client-1'),
+              createMockEntry(2, 'op-2', 'client-1'),
+            ]),
+          );
+        });
+
+        it('does NOT upload any ops when no key is configured yet', async () => {
+          await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        });
+
+        it('leaves pending ops unsynced (does NOT mark them synced)', async () => {
+          await service.uploadPendingOps(mockApiProvider);
+
+          // Must stay unsynced so they upload (encrypted) once encryption is set up.
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+        });
+
+        it('returns an empty upload result', async () => {
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(result).toEqual({
+            uploadedCount: 0,
+            rejectedCount: 0,
+            piggybackedOps: [],
+            rejectedOps: [],
+          });
+        });
+
+        it('uploads (encrypted) once a key becomes available', async () => {
+          (mockApiProvider as any).getEncryptKey.and.returnValue(
+            Promise.resolve('the-key'),
+          );
+          mockApiProvider.uploadOps.and.returnValue(
+            Promise.resolve({
+              results: [
+                { opId: 'op-1', accepted: true },
+                { opId: 'op-2', accepted: true },
+              ],
+              latestSeq: 2,
+              newOps: [],
+            }),
+          );
+
+          await service.uploadPendingOps(mockApiProvider);
+
+          // Guard no longer blocks once a usable key exists; the ops are uploaded
+          // (encrypted by the encryption service, covered by its own specs).
+          expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+        });
+      });
+
+      it('still uploads plaintext for providers that do NOT mandate encryption', async () => {
+        // File-based providers leave isEncryptionMandatory unset — unencrypted
+        // sync is a legitimate user choice there, so the guard must not fire.
+        (mockApiProvider as any).getEncryptKey = jasmine
+          .createSpy('getEncryptKey')
+          .and.returnValue(Promise.resolve(undefined));
+        mockOpLogStore.getUnsynced.and.returnValue(
+          Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
+        );
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          }),
+        );
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+      });
+
       it('should acquire lock before uploading', async () => {
         await service.uploadPendingOps(mockApiProvider);
 
