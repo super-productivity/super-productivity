@@ -38,6 +38,7 @@ import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { getDefaultSkipOverdue } from './get-default-skip-overdue';
 import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
@@ -314,6 +315,10 @@ export class DialogEditTaskRepeatCfgComponent {
         : undefined;
       return {
         ...DEFAULT_TASK_REPEAT_CFG,
+        // New configs default to the "Daily" quick setting, where collapsing
+        // overdue instances is both useful and safe; see getDefaultSkipOverdue.
+        // Re-derived from the final schedule on save in case the user switches.
+        skipOverdue: getDefaultSkipOverdue(DEFAULT_TASK_REPEAT_CFG),
         startDate:
           this._data.task.dueDay ??
           getDbDateStr(this._data.task.dueWithTime || undefined),
@@ -456,13 +461,46 @@ export class DialogEditTaskRepeatCfgComponent {
       );
       this.close();
     } else {
+      // Seed skipOverdue from the FINAL schedule (the initial default assumed
+      // Daily; the user may have switched to e.g. Monthly). Skip this only when
+      // the user explicitly toggled the checkbox, so an opt-in/out is honoured.
+      const skipOverdueTouched = this.formGroup2().get('skipOverdue')?.dirty ?? false;
+      const newRepeatCfg = skipOverdueTouched
+        ? finalRepeatCfg
+        : { ...finalRepeatCfg, skipOverdue: getDefaultSkipOverdue(finalRepeatCfg) };
       this._taskRepeatCfgService.addTaskRepeatCfgToTask(
         (this._data.task as Task).id,
         (this._data.task as Task).projectId || null,
-        finalRepeatCfg,
+        newRepeatCfg,
       );
       this.close();
     }
+  }
+
+  /**
+   * Essential-form change handler. Persists the model and, while the user has
+   * not explicitly toggled the checkbox, re-derives the `skipOverdue` default
+   * from the *current* schedule. Without this, the seed (computed once from the
+   * initial Daily default) goes stale when the schedule changes, so the Advanced
+   * checkbox would display a value that disagrees with what `save()` persists —
+   * e.g. showing ON for a Monthly schedule that `save()` re-derives to OFF.
+   *
+   * Only for new configs; an existing config keeps its stored value untouched.
+   */
+  onScheduleModelChange(model: Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg): void {
+    const skipOverdueCtrl = this.formGroup2().get('skipOverdue');
+    const isSkipOverduePristine = !(skipOverdueCtrl?.dirty ?? false);
+    if (!this.isEdit() && isSkipOverduePristine) {
+      const derived = getDefaultSkipOverdue(model);
+      if (model.skipOverdue !== derived) {
+        // Mirror the derived value into the rendered control (if Advanced is
+        // open) without emitting — keeps it pristine and avoids a feedback loop.
+        skipOverdueCtrl?.setValue(derived, { emitEvent: false });
+        this.repeatCfg.set({ ...model, skipOverdue: derived });
+        return;
+      }
+    }
+    this.repeatCfg.set(model);
   }
 
   private _normalizeMonthlyAnchor<

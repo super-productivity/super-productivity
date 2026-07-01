@@ -46,7 +46,7 @@
       </div>
 
       <formly-form
-        (modelChange)="repeatCfg.set($event)"
+        (modelChange)="onScheduleModelChange($event)"
         [form]="formGroup1()"
         [fields]="essentialFormFields()"
         [model]="repeatCfg()"
