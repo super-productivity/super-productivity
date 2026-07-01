@@ -12,8 +12,10 @@ let ipcHandlers;
 let dialogResult;
 let dialogOptions;
 let execCalls;
+let execError;
 let store;
 let savedKeys;
+let errorHandlerCalls;
 
 const resetModule = () => {
   delete require.cache[execModulePath];
@@ -42,7 +44,7 @@ const installMocks = () => {
         exec: (command, cb) => {
           execCalls.push(command);
           if (cb) {
-            cb(null);
+            cb(execError);
           }
         },
       };
@@ -67,7 +69,11 @@ const installMocks = () => {
     }
 
     if (request === '../error-handler-with-frontend-inform') {
-      return { errorHandlerWithFrontendInform: () => {} };
+      return {
+        errorHandlerWithFrontendInform: (err) => {
+          errorHandlerCalls.push(err);
+        },
+      };
     }
 
     if (request === '../shared-with-frontend/ipc-events.const') {
@@ -98,8 +104,10 @@ test.beforeEach(() => {
   dialogResult = { response: 0, checkboxChecked: false };
   dialogOptions = undefined;
   execCalls = [];
+  execError = null;
   store = {};
   savedKeys = [];
+  errorHandlerCalls = [];
   installMocks();
 });
 
@@ -156,9 +164,41 @@ test('already-whitelisted command executes silently without a dialog', async () 
   assert.deepEqual(execCalls, ['echo hi']);
 });
 
-test('throws on a corrupt (non-array) allow-list', async () => {
+test('corrupt (non-array) allow-list fails closed: informs the error, runs nothing', async () => {
   store = { allowedCommands: 'not-an-array' };
   const handler = getHandler();
 
-  await assert.rejects(() => handler({}, 'echo hi'), /must be an array/);
+  // The handler is fire-and-forget (ipcMain.on), so a corrupt store must be
+  // routed to the frontend error handler rather than thrown as an unhandled
+  // rejection — and critically must never fall through to executing.
+  await handler({}, 'echo hi');
+
+  assert.equal(errorHandlerCalls.length, 1);
+  assert.match(errorHandlerCalls[0].message, /must be an array/);
+  assert.deepEqual(execCalls, []);
+  assert.deepEqual(savedKeys, []);
+});
+
+test('exec error on a whitelisted command is routed to the frontend error handler', async () => {
+  store = { allowedCommands: ['echo hi'] };
+  execError = new Error('boom');
+  const handler = getHandler();
+  await handler({}, 'echo hi');
+
+  assert.deepEqual(execCalls, ['echo hi']);
+  assert.equal(errorHandlerCalls.length, 1);
+  assert.equal(errorHandlerCalls[0], execError);
+});
+
+test('confirming with remember appends to an existing allow-list (no overwrite)', async () => {
+  store = { allowedCommands: ['pre-existing'] };
+  dialogResult = { response: 1, checkboxChecked: true };
+  const handler = getHandler();
+  await handler({}, 'echo hi');
+
+  // The new command was not whitelisted, so it must still prompt...
+  assert.notEqual(dialogOptions, undefined);
+  // ...and remembering it must preserve prior entries, not replace them.
+  assert.deepEqual(store.allowedCommands, ['pre-existing', 'echo hi']);
+  assert.deepEqual(execCalls, ['echo hi']);
 });
