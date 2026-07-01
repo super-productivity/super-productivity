@@ -1,8 +1,9 @@
-import { inject, Injectable } from '@angular/core';
+import { DestroyRef, inject, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
-import { Store } from '@ngrx/store';
-import { combineLatest } from 'rxjs';
-import { filter, map, scan, take } from 'rxjs/operators';
+import { createSelector, Store } from '@ngrx/store';
+import { filter, scan, switchMap, take } from 'rxjs/operators';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
@@ -24,6 +25,19 @@ import {
 } from './rate-dialog-state';
 import { StoreReview } from './store-review';
 
+// Single composed selector so `done`/`total` are always read from the SAME
+// settled state. Deriving them from two separate store.select subscriptions
+// (combineLatest) glitches: a task-add emits new total with a stale undone
+// count, transiently inflating `done` and firing the prompt on a non-completion.
+export const selectTodayProgress = createSelector(
+  selectTodayTaskIds,
+  selectUndoneTodayTaskIds,
+  (allIds, undoneIds) => ({
+    done: allIds.length - undoneIds.length,
+    total: allIds.length,
+  }),
+);
+
 /**
  * Owns the "please rate" prompt: when to ask (cadence) and when within a session
  * to actually show it. We never prompt on cold launch — both stores recommend
@@ -35,6 +49,8 @@ import { StoreReview } from './store-review';
 export class RatePromptService {
   private readonly _matDialog = inject(MatDialog);
   private readonly _store = inject(Store);
+  private readonly _dataInitStateService = inject(DataInitStateService);
+  private readonly _destroyRef = inject(DestroyRef);
 
   private _appStarts = 0;
   private _isArmed = false;
@@ -61,15 +77,16 @@ export class RatePromptService {
   private _armForWin(): void {
     this._isArmed = true;
 
-    combineLatest([
-      this._store.select(selectTodayTaskIds),
-      this._store.select(selectUndoneTodayTaskIds),
-    ])
+    this._dataInitStateService.isAllDataLoadedInitially$
       .pipe(
-        map(([all, undone]) => ({ done: all.length - undone.length, total: all.length })),
-        // Treat the first emission as the session baseline so we only fire after
-        // an in-session completion — never because the win was already true when
-        // the app opened (which would just be a disguised cold-launch prompt).
+        // Sample the baseline only once data has hydrated — otherwise the empty
+        // pre-hydration state is captured as the baseline and the first loaded
+        // emission looks like an in-session win (a disguised cold-launch prompt).
+        filter((isLoaded) => isLoaded),
+        take(1),
+        switchMap(() => this._store.select(selectTodayProgress)),
+        // First (settled) emission is the session baseline; only fire on a later
+        // increase, i.e. a real completion this session.
         scan(
           (acc, cur, index) => ({
             ...cur,
@@ -78,11 +95,12 @@ export class RatePromptService {
           { done: 0, total: 0, baseline: 0 },
         ),
         filter(
-          ({ done, total, baseline }) =>
-            this._isArmed && done > baseline && isProgressWin(done, total),
+          ({ done, total, baseline }) => done > baseline && isProgressWin(done, total),
         ),
         take(1),
+        takeUntilDestroyed(this._destroyRef),
       )
+      // _promptNow re-checks _isArmed, so a stray second init() can't double-prompt.
       .subscribe(() => this._promptNow());
   }
 

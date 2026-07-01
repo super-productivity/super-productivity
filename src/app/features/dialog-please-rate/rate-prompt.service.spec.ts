@@ -3,16 +3,14 @@ import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
-import { RatePromptService } from './rate-prompt.service';
+import { RatePromptService, selectTodayProgress } from './rate-prompt.service';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import {
-  selectTodayTaskIds,
-  selectUndoneTodayTaskIds,
-} from '../work-context/store/work-context.selectors';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 
-const ids = (n: number): string[] => Array.from({ length: n }, (_, i) => `t${i}`);
-
+// Note: IS_ANDROID_WEB_VIEW / IS_IOS_NATIVE are false in jsdom, so _promptNow
+// always takes the web-dialog branch here. The native Play/iOS card paths (and
+// their cadence save) are not exercisable in unit tests — they need e2e/native.
 describe('RatePromptService', () => {
   let service: RatePromptService;
   let matDialog: jasmine.SpyObj<MatDialog>;
@@ -32,11 +30,12 @@ describe('RatePromptService', () => {
       providers: [
         RatePromptService,
         { provide: MatDialog, useValue: matDialog },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: of(true) },
+        },
         provideMockStore({
-          selectors: [
-            { selector: selectTodayTaskIds, value: ids(10) },
-            { selector: selectUndoneTodayTaskIds, value: ids(10) }, // done = 0
-          ],
+          selectors: [{ selector: selectTodayProgress, value: { done: 0, total: 10 } }],
         }),
       ],
     });
@@ -53,9 +52,8 @@ describe('RatePromptService', () => {
     });
   };
 
-  // Simulate completing tasks: fewer undone → more done.
-  const completeDownTo = (undoneCount: number): void => {
-    store.overrideSelector(selectUndoneTodayTaskIds, ids(undoneCount));
+  const setProgress = (done: number, total = 10): void => {
+    store.overrideSelector(selectTodayProgress, { done, total });
     store.refreshState();
   };
 
@@ -99,14 +97,44 @@ describe('RatePromptService', () => {
     it('prompts once a productive win is reached this session', () => {
       setEligible();
       service.init(); // baseline done = 0
-      completeDownTo(2); // done = 8 → absolute-win threshold
+      setProgress(8); // done = 8 → absolute-win threshold
       expect(matDialog.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT prompt when the win is already true at arm time (baseline guard)', () => {
+      setProgress(8); // 8 done before we ever arm — a disguised cold-launch win
+      setEligible();
+      service.init();
+      expect(matDialog.open).not.toHaveBeenCalled();
+
+      // ...but a genuine further completion this session still fires.
+      setProgress(9);
+      expect(matDialog.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('prompts at most once per session even on further wins', () => {
+      setEligible();
+      service.init();
+      setProgress(8);
+      setProgress(9);
+      setProgress(10);
+      expect(matDialog.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('advances the prompt cadence after showing the dialog', () => {
+      setEligible();
+      service.init();
+      setProgress(8);
+      expect(localStorage.setItem).toHaveBeenCalledWith(
+        LS.RATE_DIALOG_STATE,
+        jasmine.stringMatching('"lastShownAppStartDay":32'),
+      );
     });
 
     it('does not prompt for progress below the win threshold', () => {
       setEligible();
       service.init();
-      completeDownTo(8); // done = 2 → below the floor of 3
+      setProgress(2); // below the floor of 3
       expect(matDialog.open).not.toHaveBeenCalled();
     });
 
@@ -120,7 +148,7 @@ describe('RatePromptService', () => {
       });
 
       service.init();
-      completeDownTo(0); // done = 10, a clear win — but opted out
+      setProgress(10); // a clear win — but opted out
       expect(matDialog.open).not.toHaveBeenCalled();
     });
 
@@ -132,7 +160,7 @@ describe('RatePromptService', () => {
       });
 
       service.init();
-      completeDownTo(0);
+      setProgress(10);
       expect(matDialog.open).not.toHaveBeenCalled();
     });
   });

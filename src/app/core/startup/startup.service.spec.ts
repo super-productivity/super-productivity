@@ -26,6 +26,7 @@ import { RatePromptService } from '../../features/dialog-please-rate/rate-prompt
 describe('StartupService', () => {
   let service: StartupService;
   let pluginService: jasmine.SpyObj<PluginService>;
+  let ratePromptService: jasmine.SpyObj<RatePromptService>;
 
   beforeEach(() => {
     // Mock localStorage
@@ -150,6 +151,9 @@ describe('StartupService', () => {
 
     service = TestBed.inject(StartupService);
     pluginService = TestBed.inject(PluginService) as jasmine.SpyObj<PluginService>;
+    ratePromptService = TestBed.inject(
+      RatePromptService,
+    ) as jasmine.SpyObj<RatePromptService>;
   });
 
   describe('init', () => {
@@ -173,6 +177,9 @@ describe('StartupService', () => {
       tick(200); // Wait for single instance check
 
       flush();
+
+      // Deferred init hands the rating prompt off to RatePromptService.
+      expect(ratePromptService.init).toHaveBeenCalled();
 
       // Restore
       (window as any).BroadcastChannel = originalBroadcastChannel;

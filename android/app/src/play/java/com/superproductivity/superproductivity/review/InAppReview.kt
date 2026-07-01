@@ -45,7 +45,13 @@ object InAppReview {
                 }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Unable to open Play Store listing", e)
+            // Play Store app is absent → fall back to a plain view intent so a
+            // browser can still open the listing.
+            try {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PLAY_URL)))
+            } catch (e2: Exception) {
+                Log.e(TAG, "Unable to open Play Store listing", e2)
+            }
         }
     }
 }

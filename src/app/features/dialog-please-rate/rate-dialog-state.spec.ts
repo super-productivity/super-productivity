@@ -207,6 +207,7 @@ describe('rate-dialog-state', () => {
     it('handles the empty/zero case', () => {
       expect(isProgressWin(0, 0)).toBe(false);
       expect(isProgressWin(0, 5)).toBe(false);
+      expect(isProgressWin(3, 0)).toBe(false); // no divide-by-zero win
     });
   });
 });
