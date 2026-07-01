@@ -781,7 +781,7 @@ describe('Sync compressed body routes', () => {
       existingImportId: 'existing-import',
     });
     expect(mocks.prisma.operation.findFirst).toHaveBeenCalledTimes(2);
-    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
+    expect(mocks.syncService.checkStorageQuota.mock.calls[0]).toEqual([1, 1]);
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 
@@ -1004,16 +1004,18 @@ describe('Sync compressed body routes', () => {
     const clientId = 'pre-gate-reconcile-client';
     const vectorClock = { [clientId]: 1 };
 
-    // 1st getStorageInfo returns stale-high (over quota). After reconcile,
+    // 1st quota check returns stale-high (at quota). After reconcile,
     // the 2nd call returns the corrected (under quota) value.
-    mocks.syncService.getStorageInfo
+    mocks.syncService.checkStorageQuota
       .mockResolvedValueOnce({
-        storageUsedBytes: 100 * 1024 * 1024,
-        storageQuotaBytes: 100 * 1024 * 1024,
+        allowed: false,
+        currentUsage: 100 * 1024 * 1024,
+        quota: 100 * 1024 * 1024,
       })
       .mockResolvedValue({
-        storageUsedBytes: 50_000,
-        storageQuotaBytes: 100 * 1024 * 1024,
+        allowed: true,
+        currentUsage: 50_000,
+        quota: 100 * 1024 * 1024,
       });
 
     const response = await app.inject({
@@ -1029,17 +1031,20 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(mocks.syncService.updateStorageUsage).toHaveBeenCalledWith(1);
+    expect(mocks.syncService.checkStorageQuota.mock.calls[0]).toEqual([1, 1]);
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
   });
 
-  it('should still 413 on the snapshot pre-gate when reconcile confirms over-quota', async () => {
+  it('should still 413 on the snapshot pre-gate when reconcile confirms quota is full', async () => {
     // Same path as above, but reconcile does not move the counter. The
     // rejection now uses errorCode (not code) and routes through the unified
     // 413 helper.
     const clientId = 'pre-gate-no-reconcile-client';
-    mocks.syncService.getStorageInfo.mockResolvedValue({
-      storageUsedBytes: 100 * 1024 * 1024,
-      storageQuotaBytes: 100 * 1024 * 1024,
+    mocks.syncService.checkStorageQuota.mockResolvedValue({
+      allowed: false,
+      currentUsage: 100 * 1024 * 1024,
+      quota: 100 * 1024 * 1024,
     });
 
     const response = await app.inject({
@@ -1057,8 +1062,12 @@ describe('Sync compressed body routes', () => {
     expect(response.statusCode).toBe(413);
     const body = response.json();
     expect(body.errorCode).toBe('STORAGE_QUOTA_EXCEEDED');
+    expect(body.autoCleanupAttempted).toBe(false);
+    expect(body.cleanupStats).toBeUndefined();
     // No legacy `code:` key — clients dispatch on errorCode.
     expect(body.code).toBeUndefined();
+    expect(mocks.syncService.checkStorageQuota.mock.calls[0]).toEqual([1, 1]);
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 
@@ -1067,9 +1076,10 @@ describe('Sync compressed body routes', () => {
     // cached read. Either accept (cached < quota) or reject with 413 — but
     // never bubble a 500.
     const clientId = 'pre-gate-reconcile-throws';
-    mocks.syncService.getStorageInfo.mockResolvedValue({
-      storageUsedBytes: 100 * 1024 * 1024,
-      storageQuotaBytes: 100 * 1024 * 1024,
+    mocks.syncService.checkStorageQuota.mockResolvedValue({
+      allowed: false,
+      currentUsage: 100 * 1024 * 1024,
+      quota: 100 * 1024 * 1024,
     });
     mocks.syncService.updateStorageUsage.mockRejectedValueOnce(new Error('db down'));
 
@@ -1086,7 +1096,12 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(413);
-    expect(response.json().errorCode).toBe('STORAGE_QUOTA_EXCEEDED');
+    const body = response.json();
+    expect(body.errorCode).toBe('STORAGE_QUOTA_EXCEEDED');
+    expect(body.autoCleanupAttempted).toBe(false);
+    expect(body.cleanupStats).toBeUndefined();
+    expect(mocks.syncService.checkStorageQuota.mock.calls[0]).toEqual([1, 1]);
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
   });
 
   it('should mark the user for forced reconcile when post-commit counter delta fails', async () => {
