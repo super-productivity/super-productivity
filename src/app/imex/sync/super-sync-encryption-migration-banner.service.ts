@@ -51,13 +51,10 @@ export class SuperSyncEncryptionMigrationBannerService {
       ico: 'enhanced_encryption',
       action: {
         label: T.APP.B_SUPER_SYNC_ENCRYPTION.ENABLE,
-        fn: () => {
-          // Snooze on click too: if the user opens the dialog and cancels, the
-          // banner should not immediately reappear next session mid-decision.
-          // On success, detection stops anyway (a key is now present).
-          this._snooze();
-          void this._startMigration().catch(devError);
-        },
+        // Snooze is deferred into _startMigration (only once we actually reach the
+        // migration dialog), so a transient pre-sync failure doesn't silently hide
+        // the nudge for the whole snooze window.
+        fn: () => void this._startMigration().catch(devError),
       },
       action2: {
         label: T.APP.B_SUPER_SYNC_ENCRYPTION.LATER,
@@ -91,10 +88,13 @@ export class SuperSyncEncryptionMigrationBannerService {
       return false;
     }
 
-    // isReady() is false for the "encryption flagged on but key missing" state, so
-    // this gate also excludes the multi-device "needs the existing password" cohort.
-    // Those users must enter their existing password (handled reactively on sync via
-    // DecryptNoPasswordError) — they must NOT be offered a destructive re-encrypt.
+    // isReady() is false only for the HALF-configured state (encryption flagged on
+    // but key missing), so that variant is excluded here. A device that synced
+    // BEFORE encryption existed (isEncryptionEnabled:false) whose peer later enabled
+    // it still passes this gate and may briefly show a not-yet-accurate nudge — that
+    // case is caught safely in _startMigration(), where the pre-action sync(true)
+    // hits DecryptNoPasswordError → HANDLED_ERROR and we defer to the enter-password
+    // flow rather than offering a destructive re-encrypt.
     if (!(await provider.isReady())) {
       return false;
     }
@@ -115,23 +115,28 @@ export class SuperSyncEncryptionMigrationBannerService {
   }
 
   private async _startMigration(): Promise<void> {
-    // Re-check against the server RIGHT NOW, immediately before the destructive
+    // Refresh against the server RIGHT NOW, before the destructive
     // delete-and-reupload the dialog will run. The banner may have sat on screen
-    // for hours; another device could have enabled encryption meanwhile. A fresh
-    // sync (download+merge) both refreshes local state — so the reupload doesn't
-    // clobber server-only ops — and surfaces a now-encrypted server as a
-    // DecryptNoPasswordError (→ enter-password dialog, returns HANDLED_ERROR).
+    // for hours; a peer could have enabled encryption meanwhile. A fresh sync
+    // (download+merge) both refreshes local state — so the reupload doesn't clobber
+    // server-only ops — and surfaces a now-encrypted server as a
+    // DecryptNoPasswordError → HANDLED_ERROR (the enter-password flow then owns it).
     const result = await this._syncWrapperService.sync(true);
     if (result === 'HANDLED_ERROR') {
-      // A password/error dialog is already handling this (e.g. the server turned
-      // out to be encrypted by another device). Don't stack a re-encrypt dialog.
+      // Offline, or a password/error dialog is already handling this. Defer WITHOUT
+      // snoozing so the nudge returns next session (the user asked to encrypt but
+      // never reached the decision).
       SyncLog.log(
         'SuperSyncEncryptionMigration: pre-sync returned HANDLED_ERROR, deferring',
       );
       return;
     }
 
-    if (!(await this._isServerStillUnencrypted())) {
+    // Re-run the full eligibility check post-sync (same predicate as the banner).
+    // If the account turned out to be encrypted (a peer enabled it), this is now
+    // false — inform the user (the reactive enter-password flow handles the real
+    // credential step) rather than offering a destructive re-encrypt under a new key.
+    if (!(await this._isMigrationNeeded())) {
       this._snackService.open({
         type: 'CUSTOM',
         ico: 'info',
@@ -140,6 +145,15 @@ export class SuperSyncEncryptionMigrationBannerService {
       return;
     }
 
+    // Don't stack on another open dialog (e.g. an enter-password prompt). Skip
+    // without snoozing so the nudge returns next session.
+    if (this._matDialog.openDialogs.length > 0) {
+      return;
+    }
+
+    // Reached the migration decision: snooze now so backing out of the dialog
+    // doesn't re-nag next session (a successful enable stops detection anyway).
+    this._snooze();
     await this._openEnableEncryptionDialog();
   }
 
@@ -147,27 +161,14 @@ export class SuperSyncEncryptionMigrationBannerService {
     const { DialogEnableEncryptionComponent } =
       await import('./dialog-enable-encryption/dialog-enable-encryption.component');
     // initialSetup: false → the escapable variant with a real Cancel (not the
-    // dead-end initialSetup modal, see #8671). enableEncryption() re-uploads the
+    // dead-end initialSetup modal, see #8671). Deliberately NOT routed through
+    // EncryptionPasswordDialogOpenerService.openEnableEncryptionDialog: that helper
+    // forces disableClose:true, which would remove the escapability that is the
+    // whole point of this calm banner. enableEncryption() re-uploads the
     // freshly-synced state encrypted, with its revert-on-failure safety net.
     this._matDialog.open(DialogEnableEncryptionComponent, {
       data: { providerType: 'supersync', initialSetup: false },
     });
-  }
-
-  private async _isServerStillUnencrypted(): Promise<boolean> {
-    const provider = this._providerManager.getActiveProvider();
-    if (
-      !provider ||
-      provider.id !== SyncProviderId.SuperSync ||
-      !isOperationSyncCapable(provider) ||
-      !(await provider.isReady())
-    ) {
-      return false;
-    }
-    const encryptKey = provider.getEncryptKey
-      ? await provider.getEncryptKey()
-      : undefined;
-    return encryptKey === undefined;
   }
 
   private _snooze(): void {

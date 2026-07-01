@@ -1335,7 +1335,8 @@ export class SyncWrapperService {
    * Established/returning unencrypted accounts are nudged by the calm, dismissible
    * SuperSyncEncryptionMigrationBannerService instead, so the per-sync modal must
    * NOT fire for them — otherwise both would prompt at startup. Set by the config
-   * dialog via markPromptEncryptionAfterSetupSync(); consumed on the next prompt.
+   * dialog via markPromptEncryptionAfterSetupSync(); consumed on the first
+   * post-sync prompt evaluation for SuperSync (see _promptSuperSyncEncryptionIfNeeded).
    */
   private _shouldPromptEncryptionAfterSetupSync = false;
 
@@ -1370,22 +1371,28 @@ export class SyncWrapperService {
       return;
     }
 
+    // Established/returning unencrypted accounts are owned by the calm migration
+    // banner (SuperSyncEncryptionMigrationBannerService); only the fresh-setup sync
+    // that armed the flag fires this dead-end modal, so the two never both prompt.
+    // Consume the one-shot flag HERE (not at dialog-open) so it can't leak to a
+    // later, unrelated sync via one of the early-returns below. A failed setup sync
+    // returns HANDLED_ERROR and never reaches this method, so the arming survives
+    // and retries on the next successful sync.
+    // TODO(#8670): once the mandatory-encryption upload guard lands, retire this
+    // modal + flag entirely and let the banner own all cohorts.
+    if (!this._shouldPromptEncryptionAfterSetupSync) {
+      SyncLog.log(
+        'Skipping legacy setup encryption modal — migration banner owns established nudge',
+      );
+      return;
+    }
+    this._shouldPromptEncryptionAfterSetupSync = false;
+
     const cfg = (await provider.privateCfg.load()) as
       | { isEncryptionEnabled?: boolean; encryptKey?: string }
       | undefined;
     if (cfg?.isEncryptionEnabled && cfg?.encryptKey) {
       SyncLog.log('SuperSync encryption already enabled, skipping');
-      return;
-    }
-
-    // Established/returning unencrypted accounts are owned by the calm migration
-    // banner (SuperSyncEncryptionMigrationBannerService). Only fire this dead-end
-    // setup modal for the fresh-setup sync that flagged it, so the two never both
-    // prompt at startup.
-    if (!this._shouldPromptEncryptionAfterSetupSync) {
-      SyncLog.log(
-        'Skipping legacy setup encryption modal — migration banner owns established nudge',
-      );
       return;
     }
 
@@ -1420,8 +1427,6 @@ export class SyncWrapperService {
           return;
         }
 
-        // Consume the one-shot setup flag now that the modal is actually opening.
-        this._shouldPromptEncryptionAfterSetupSync = false;
         this._encryptionRequiredDialog = this._matDialog.open(
           DialogEnableEncryptionComponent,
           {

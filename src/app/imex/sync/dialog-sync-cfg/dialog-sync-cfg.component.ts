@@ -633,13 +633,16 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     this._matDialogRef.close();
 
+    // Enabling SuperSync from a previously-disabled state: arm the one-time setup
+    // encryption modal for the setup sync. Done OUTSIDE the isOnline() guard because
+    // an offline save still needs the flag armed for whenever the setup sync finally
+    // runs (else the prompt is silently skipped and the account syncs unencrypted).
+    // Established/returning accounts are nudged by the calm migration banner instead.
+    if (_isInitialSetup && providerId === SyncProviderId.SuperSync) {
+      this.syncWrapperService.markPromptEncryptionAfterSetupSync();
+    }
+
     if (isOnline()) {
-      // Fresh SuperSync setup (sync was previously disabled): let the setup sync
-      // fire the one-time encryption modal. Established/returning accounts are
-      // nudged by the calm migration banner instead, so we don't flag them here.
-      if (_isInitialSetup && providerId === SyncProviderId.SuperSync) {
-        this.syncWrapperService.markPromptEncryptionAfterSetupSync();
-      }
       this.syncWrapperService.sync(true);
     }
   }

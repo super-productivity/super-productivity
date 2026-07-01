@@ -63,7 +63,9 @@ describe('SuperSyncEncryptionMigrationBannerService', () => {
     });
 
     bannerService = jasmine.createSpyObj<BannerService>('BannerService', ['open']);
-    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open'], {
+      openDialogs: [],
+    });
     snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     syncSpy = jasmine.createSpy('sync').and.resolveTo('IN_SYNC');
     getActiveProviderSpy = jasmine.createSpy('getActiveProvider');
@@ -148,7 +150,7 @@ describe('SuperSyncEncryptionMigrationBannerService', () => {
       );
     });
 
-    it('on "Enable": snoozes, re-syncs, and opens the escapable dialog when still unencrypted', async () => {
+    it('on "Enable": re-syncs, opens the escapable dialog, and snoozes only at that point', async () => {
       const openSpy = spyOn(
         service as unknown as { _openEnableEncryptionDialog: () => Promise<void> },
         '_openEnableEncryptionDialog',
@@ -158,15 +160,16 @@ describe('SuperSyncEncryptionMigrationBannerService', () => {
       lastBanner().action!.fn();
       await flush();
 
-      expect(+lsStore[LS.SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL]).toBeGreaterThan(
-        NOW,
-      );
       expect(syncSpy).toHaveBeenCalledWith(true);
       expect(openSpy).toHaveBeenCalledTimes(1);
       expect(snackService.open).not.toHaveBeenCalled();
+      // Snooze is set once we reach the migration decision (not on click).
+      expect(+lsStore[LS.SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL]).toBeGreaterThan(
+        NOW,
+      );
     });
 
-    it('on "Enable": defers (no dialog) when the pre-sync returns HANDLED_ERROR', async () => {
+    it('on "Enable": defers WITHOUT snoozing when the pre-sync returns HANDLED_ERROR', async () => {
       syncSpy.and.resolveTo('HANDLED_ERROR');
       const openSpy = spyOn(
         service as unknown as { _openEnableEncryptionDialog: () => Promise<void> },
@@ -179,6 +182,8 @@ describe('SuperSyncEncryptionMigrationBannerService', () => {
 
       expect(openSpy).not.toHaveBeenCalled();
       expect(snackService.open).not.toHaveBeenCalled();
+      // Must NOT snooze on a failed attempt — the user never reached the decision.
+      expect(lsStore[LS.SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL]).toBeUndefined();
     });
 
     it('on "Enable": shows a snack (no dialog) when the server got encrypted meanwhile', async () => {
@@ -198,6 +203,21 @@ describe('SuperSyncEncryptionMigrationBannerService', () => {
 
       expect(openSpy).not.toHaveBeenCalled();
       expect(snackService.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('on "Enable": defers WITHOUT snoozing when another dialog is already open', async () => {
+      (matDialog.openDialogs as unknown as unknown[]).push({});
+      const openSpy = spyOn(
+        service as unknown as { _openEnableEncryptionDialog: () => Promise<void> },
+        '_openEnableEncryptionDialog',
+      ).and.resolveTo();
+      await service.showBannerIfNeeded();
+
+      lastBanner().action!.fn();
+      await flush();
+
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(lsStore[LS.SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL]).toBeUndefined();
     });
   });
 });
