@@ -37,11 +37,17 @@ export class DialogPleaseRateComponent {
     inject<MatDialogRef<DialogPleaseRateComponent, RateDialogResult>>(MatDialogRef);
 
   protected readonly T = T;
-  protected readonly view = signal<'main' | 'feedback'>('main');
+  // Sentiment gate first: only users who say they like the app reach the store
+  // CTA ('main'); everyone else is routed to the feedback paths.
+  protected readonly view = signal<'gate' | 'main' | 'feedback'>('gate');
   protected readonly cta = getPrimaryCta();
   protected readonly mailtoUrl = buildFeedbackMailto();
   protected readonly discussionsUrl = DISCUSSIONS_URL;
   protected readonly contributingUrl = CONTRIBUTING_URL;
+
+  protected showGate(): void {
+    this.view.set('gate');
+  }
 
   protected showFeedback(): void {
     this.view.set('feedback');
