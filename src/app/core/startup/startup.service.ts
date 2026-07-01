@@ -30,6 +30,8 @@ import {
 import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
+import { IS_IOS_NATIVE } from '../../util/is-native-platform';
+import { StoreReview } from '../../features/dialog-please-rate/store-review';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -463,6 +465,17 @@ export class StartupService {
       typeof androidInterface.requestReview === 'function'
     ) {
       androidInterface.requestReview();
+      saveRateDialogState(applyRateDialogResult(state, 'later', appStarts));
+      return;
+    }
+
+    // iOS: use the native App Store review prompt (SKStoreReviewController).
+    // Same rationale as the Android native path — system-gated, no result — so
+    // advance the cadence and don't open the custom dialog.
+    if (IS_IOS_NATIVE) {
+      void StoreReview.requestReview().catch((e) =>
+        Log.err({ id: 'rate-store-review-ios', error: (e as Error)?.message }),
+      );
       saveRateDialogState(applyRateDialogResult(state, 'later', appStarts));
       return;
     }
