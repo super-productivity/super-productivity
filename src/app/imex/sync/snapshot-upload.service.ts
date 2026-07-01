@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import {
   AppStateSnapshot,
   StateSnapshotService,
@@ -69,6 +70,7 @@ export class SnapshotUploadService {
   private _vectorClockService = inject(VectorClockService);
   private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _encryptionService = inject(OperationEncryptionService);
+  private _opLogStore = inject(OperationLogStoreService);
 
   /**
    * Validates that the active provider is SuperSync and operation-sync capable.
@@ -239,6 +241,17 @@ export class SnapshotUploadService {
       );
     }
 
+    // Capture the pending ops this full-state snapshot subsumes, BEFORE the
+    // destructive delete. This runs under runWithSyncBlocked behind a modal
+    // dialog, so no concurrent op can appear between here and the mark-synced
+    // below — the captured set exactly matches the uploaded snapshot. After the
+    // snapshot lands, these ops are fully represented on the server, so we mark
+    // them synced to avoid a redundant re-upload on the next sync (for first-time
+    // SuperSync setup that would otherwise re-push the entire local history on
+    // top of the snapshot). Mirrors planRegularOpsAfterFullStateUpload in the
+    // op-log upload path, which this direct snapshot upload bypasses.
+    const opsSubsumedBySnapshot = await this._opLogStore.getUnsynced();
+
     // Encrypt before delete (fail-early)
     let payload: unknown = state;
     if (isEncryptionEnabled && encryptKey) {
@@ -274,6 +287,15 @@ export class SnapshotUploadService {
     }
 
     await this.updateLastServerSeq(syncProvider, result.serverSeq, logPrefix);
+
+    // Consolidate: the snapshot now represents these ops on the server, so mark
+    // them synced instead of leaving them to re-upload incrementally next sync.
+    if (opsSubsumedBySnapshot.length > 0) {
+      await this._opLogStore.markSynced(opsSubsumedBySnapshot.map((entry) => entry.seq));
+      SyncLog.normal(
+        `${logPrefix}: Marked ${opsSubsumedBySnapshot.length} op(s) synced (subsumed by snapshot).`,
+      );
+    }
 
     return { ...result, existingCfg };
   }

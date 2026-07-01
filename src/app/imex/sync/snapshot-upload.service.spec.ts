@@ -10,6 +10,7 @@ import {
   SyncProviderBase,
 } from '../../op-log/sync-providers/provider.interface';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
@@ -24,6 +25,7 @@ describe('SnapshotUploadService', () => {
     getOrGenerateClientId: jasmine.Spy;
   };
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
+  let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockSyncProvider: jasmine.SpyObj<
     SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
@@ -94,6 +96,13 @@ describe('SnapshotUploadService', () => {
     ]);
     mockEncryptionService.encryptPayload.and.resolveTo('encrypted-state-data');
 
+    mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+      'getUnsynced',
+      'markSynced',
+    ]);
+    mockOpLogStore.getUnsynced.and.resolveTo([]);
+    mockOpLogStore.markSynced.and.resolveTo(undefined);
+
     TestBed.configureTestingModule({
       providers: [
         SnapshotUploadService,
@@ -102,6 +111,7 @@ describe('SnapshotUploadService', () => {
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: OperationEncryptionService, useValue: mockEncryptionService },
+        { provide: OperationLogStoreService, useValue: mockOpLogStore },
       ],
     });
 
@@ -297,6 +307,64 @@ describe('SnapshotUploadService', () => {
       );
       expect(mockSyncProvider.uploadSnapshot).toHaveBeenCalled();
       expect(mockSyncProvider.setLastServerSeq).toHaveBeenCalledWith(42);
+    });
+
+    // The snapshot subsumes all local ops, so they must be marked synced rather
+    // than left to re-upload incrementally on the next sync (GHSA-9v8x-68pf-p5x7
+    // follow-up: first-time setup would otherwise re-push the whole history).
+    describe('op-log consolidation', () => {
+      it('marks the ops subsumed by the snapshot as synced', async () => {
+        mockCryptoSubtleAvailable();
+        mockOpLogStore.getUnsynced.and.resolveTo([{ seq: 5 } as any, { seq: 6 } as any]);
+
+        await service.deleteAndReuploadWithNewEncryption({
+          encryptKey: 'my-key',
+          isEncryptionEnabled: true,
+          logPrefix: 'TestPrefix',
+        });
+
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([5, 6]);
+      });
+
+      it('does NOT mark synced when the snapshot upload fails', async () => {
+        mockCryptoSubtleAvailable();
+        mockOpLogStore.getUnsynced.and.resolveTo([{ seq: 5 } as any]);
+        mockSyncProvider.uploadSnapshot.and.resolveTo({
+          accepted: false,
+          error: 'boom',
+        } as any);
+
+        await expectAsync(
+          service.deleteAndReuploadWithNewEncryption({
+            encryptKey: 'my-key',
+            isEncryptionEnabled: true,
+            logPrefix: 'TestPrefix',
+          }),
+        ).toBeRejected();
+
+        expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+      });
+
+      it('captures ops BEFORE the destructive deleteAllData', async () => {
+        mockCryptoSubtleAvailable();
+        const callOrder: string[] = [];
+        mockOpLogStore.getUnsynced.and.callFake(async () => {
+          callOrder.push('getUnsynced');
+          return [{ seq: 5 } as any];
+        });
+        mockSyncProvider.deleteAllData.and.callFake(async () => {
+          callOrder.push('deleteAllData');
+          return { success: true };
+        });
+
+        await service.deleteAndReuploadWithNewEncryption({
+          encryptKey: 'my-key',
+          isEncryptionEnabled: true,
+          logPrefix: 'TestPrefix',
+        });
+
+        expect(callOrder).toEqual(['getUnsynced', 'deleteAllData']);
+      });
     });
 
     // Defense-in-depth for GHSA-9v8x-68pf-p5x7: for a provider that mandates E2E

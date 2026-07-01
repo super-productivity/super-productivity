@@ -7,6 +7,8 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { expectConsistentState, expectTaskCount } from '../../utils/supersync-assertions';
+import { expectNoGlobalError } from '../../utils/assertions';
 
 /**
  * SuperSync Encryption E2E Tests
@@ -141,6 +143,68 @@ test.describe('@supersync SuperSync Encryption', () => {
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientC) await closeClient(clientC);
+    }
+  });
+
+  // Regression test for GHSA-9v8x-68pf-p5x7 (+ the snapshot-consolidation
+  // follow-up): local task history exists BEFORE first-time encrypted SuperSync
+  // setup. The pre-encryption sync must not push plaintext, the enable-snapshot
+  // must subsume the pre-existing ops (so they are not re-uploaded on top of it),
+  // and a second client with the same password must receive exactly those tasks
+  // with no duplicates, conflicts, or errors.
+  test('First-time encrypted setup with pre-existing local data syncs cleanly to a 2nd client', async ({
+    browser,
+    baseURL,
+    testRunId,
+    serverHealthy,
+  }) => {
+    void serverHealthy;
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const baseConfig = getSuperSyncConfig(user);
+      const syncConfig = {
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: `preexisting-${testRunId}`,
+      };
+
+      // --- Client A: create tasks BEFORE any sync/encryption is configured ---
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+
+      const task1 = `Pre1-${testRunId}`;
+      const task2 = `Pre2-${testRunId}`;
+      const task3 = `Pre3-${testRunId}`;
+      await clientA.workView.addTask(task1);
+      await clientA.page.waitForTimeout(100);
+      await clientA.workView.addTask(task2);
+      await clientA.page.waitForTimeout(100);
+      await clientA.workView.addTask(task3);
+
+      // First-time encrypted setup runs with the tasks already present.
+      await clientA.sync.setupSuperSync(syncConfig);
+      // A second sync must be a clean no-op: consolidation marks the pre-existing
+      // ops as synced, so there is nothing to re-upload on top of the snapshot.
+      await clientA.sync.syncAndWait();
+
+      await expectTaskCount(clientA, 3);
+      await expectNoGlobalError(clientA.page);
+
+      // --- Client B: same password → must receive exactly the 3 tasks ---
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.syncAndWait();
+
+      await waitForTask(clientB.page, task1);
+      await expectConsistentState([clientA, clientB], [task1, task2, task3]);
+      await expectTaskCount(clientB, 3);
+      await expectNoGlobalError(clientB.page);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 
