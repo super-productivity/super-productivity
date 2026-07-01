@@ -57,14 +57,24 @@ const SERVER_ERROR_REASON_MAX_CHARS = 80;
  */
 class SuperSyncHttpStatusError extends Error {
   override readonly name = 'SuperSyncHttpStatusError';
+  readonly code?: string;
+  readonly errorCode?: string;
 
   constructor(
     message: string,
     readonly status: number,
+    errorCode?: string,
   ) {
     super(message);
+    this.code = errorCode;
+    this.errorCode = errorCode;
   }
 }
+
+type ParsedServerErrorDetails = {
+  reason?: string;
+  errorCode?: string;
+};
 
 const defaultDelay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -533,7 +543,7 @@ export class SuperSyncProvider
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      const reason = this._extractServerErrorReason(body, status);
+      const { reason } = this._extractServerErrorDetails(body, status);
       throw new AuthFailSPError(reason || `Authentication failed (HTTP ${status})`);
     }
   }
@@ -545,8 +555,11 @@ export class SuperSyncProvider
    * `expired`); we cap at `SERVER_ERROR_REASON_MAX_CHARS` to defend
    * against future contract drift that might embed user content.
    */
-  private _extractServerErrorReason(body?: string, status?: number): string | undefined {
-    if (!body) return undefined;
+  private _extractServerErrorDetails(
+    body?: string,
+    status?: number,
+  ): ParsedServerErrorDetails {
+    if (!body) return {};
     try {
       const parsed = JSON.parse(body) as unknown;
       if (typeof parsed === 'object' && parsed !== null) {
@@ -554,14 +567,21 @@ export class SuperSyncProvider
           'error' in parsed && typeof (parsed as { error: unknown }).error === 'string'
             ? (parsed as { error: string }).error.slice(0, SERVER_ERROR_REASON_MAX_CHARS)
             : undefined;
+        const errorCode =
+          'errorCode' in parsed &&
+          typeof (parsed as { errorCode: unknown }).errorCode === 'string'
+            ? (parsed as { errorCode: string }).errorCode
+            : undefined;
         const retryDelayReason =
           status === 429 ? this._extractRetryDelayReason(parsed) : undefined;
-        return [errorReason, retryDelayReason].filter(Boolean).join(' — ') || undefined;
+        const reason =
+          [errorReason, retryDelayReason].filter(Boolean).join(' — ') || undefined;
+        return { reason, errorCode };
       }
     } catch {
       // Not JSON — ignore
     }
-    return undefined;
+    return {};
   }
 
   private _extractRetryDelayReason(parsed: object): string | undefined {
@@ -613,9 +633,13 @@ export class SuperSyncProvider
     errorCode?: string | number;
   } {
     const syncError = toSyncLogError(error);
+    const code =
+      error instanceof SuperSyncHttpStatusError && error.code !== undefined
+        ? error.code
+        : syncError.code;
     return {
       errorName: syncError.name,
-      ...(syncError.code !== undefined ? { errorCode: syncError.code } : {}),
+      ...(code !== undefined ? { errorCode: code } : {}),
     };
   }
 
@@ -803,11 +827,15 @@ export class SuperSyncProvider
           clearTimeout(timeoutId);
           // Check for auth failure FIRST before throwing generic error
           this._checkHttpStatus(response.status, errorText);
-          const reason = this._extractServerErrorReason(errorText, response.status);
+          const { reason, errorCode } = this._extractServerErrorDetails(
+            errorText,
+            response.status,
+          );
           const suffix = reason ? ` — ${reason}` : '';
           throw new SuperSyncHttpStatusError(
             `HTTP ${response.status} ${response.statusText}${suffix}`,
             response.status,
+            errorCode,
           );
         }
 
@@ -932,12 +960,16 @@ export class SuperSyncProvider
             : JSON.stringify(response.data);
         // Check for auth failure FIRST before throwing generic error
         this._checkHttpStatus(response.status, errorData);
-        const reason = this._extractServerErrorReason(errorData, response.status);
+        const { reason, errorCode } = this._extractServerErrorDetails(
+          errorData,
+          response.status,
+        );
         const suffix = reason ? ` — ${reason}` : '';
         // No `statusText` on CapacitorHttp responses; status-only form.
         throw new SuperSyncHttpStatusError(
           `HTTP ${response.status}${suffix}`,
           response.status,
+          errorCode,
         );
       }
 
