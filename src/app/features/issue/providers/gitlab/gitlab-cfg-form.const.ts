@@ -8,7 +8,14 @@ import {
   CROSS_ORIGIN_WARNING,
   ISSUE_PROVIDER_COMMON_FORM_FIELDS,
 } from '../../common-issue-form-stuff.const';
-export const GITLAB_PROJECT_REGEX = /(^[1-9][0-9]*$)|((\/|%2F|\w-?|\.-?)+$)/i;
+// Matches either a numeric project ID or a path (namespace/project-slug, or its
+// %2F-encoded form). Anchored at both ends: without a leading `^` the original
+// pattern only matched a valid *tail*, so display names with spaces (e.g.
+// "My Group/My Gitlab") passed validation and produced a 404 at poll time (#8665).
+// This is a "did you paste a display name?" sanity guard, not a strict GitLab
+// path validator, so the char class stays permissive (e.g. accepts consecutive
+// hyphens, which GitLab paths allow) rather than risk false-rejecting valid paths.
+export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|[\w%./-]+)$/i;
 
 export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[] = [
   ...CROSS_ORIGIN_WARNING,

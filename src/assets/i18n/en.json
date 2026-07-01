@@ -415,7 +415,7 @@
         "FILTER_USER": "Filter username",
         "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
         "PROJECT": "user name/project",
-        "PROJECT_HINT": "e.g. super-productivity/super-productivity",
+        "PROJECT_HINT": "Project path (namespace/project-slug) or numeric project ID, not the display name (e.g. super-productivity/super-productivity or 12345)",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
