@@ -340,6 +340,84 @@ describe('autoFixTypiaErrors', () => {
     });
   });
 
+  // Issue #7330 recurred on SIMPLE_COUNTER: a concurrent delete-vs-update
+  // across devices recreated a counter with `type === undefined` (and possibly
+  // other required scalars), which typia rejects and dataRepair had no rule
+  // for — dead-ending the user on "Repair attempted but failed". These verify
+  // the on-disk heal mirrors the task fix.
+  describe('issue #7330 — partial simpleCounter entities from LWW recreate', () => {
+    it('should fix undefined simpleCounter.type to the ClickCounter default', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).simpleCounter = {
+        ids: ['cnt1'],
+        entities: {
+          // A counter recreated from a partial payload: id + the count data
+          // survived, but `type` (and isEnabled/isOn) never made it in.
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          cnt1: { id: 'cnt1', countOnDay: { '2026-06-29': 3 } },
+        },
+      };
+      const errors = [
+        createTypiaError(
+          '$input.simpleCounter.entities["cnt1"].type',
+          '("ClickCounter" | "RepeatedCountdownReminder" | "StopWatch")',
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      expect((result as any).simpleCounter.entities['cnt1'].type).toBe('ClickCounter');
+      // The surviving count data must be preserved, not clobbered by defaults.
+      expect((result as any).simpleCounter.entities['cnt1'].countOnDay).toEqual({
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        '2026-06-29': 3,
+      });
+    });
+
+    it('should fix undefined simpleCounter boolean/string required fields', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).simpleCounter = {
+        ids: ['cnt1'],
+        entities: {
+          cnt1: { id: 'cnt1', type: 'StopWatch' },
+        },
+      };
+      const errors = [
+        createTypiaError(
+          '$input.simpleCounter.entities["cnt1"].title',
+          'string',
+          undefined,
+        ),
+        createTypiaError(
+          '$input.simpleCounter.entities["cnt1"].isEnabled',
+          'boolean',
+          undefined,
+        ),
+        createTypiaError(
+          '$input.simpleCounter.entities["cnt1"].isOn',
+          'boolean',
+          undefined,
+        ),
+        createTypiaError(
+          '$input.simpleCounter.entities["cnt1"].countOnDay',
+          'Record<string, number>',
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors as any);
+
+      const counter = (result as any).simpleCounter.entities['cnt1'];
+      expect(counter.title).toBe('');
+      expect(counter.isEnabled).toBe(false);
+      expect(counter.isOn).toBe(false);
+      expect(counter.countOnDay).toEqual({});
+      // A user-chosen field present in the payload must not be overwritten.
+      expect(counter.type).toBe('StopWatch');
+    });
+  });
+
   // Discussion #8022: a Nextcloud-synced state imported from MS Todos had 84
   // taskRepeatCfg entities with undefined `quickSetting` (required field) and
   // a TODAY tag with undefined `created`. dataRepair couldn't repair them so
