@@ -17,8 +17,9 @@ export const DEFAULT_PLAINSPACE_CFG: PlainspaceCfg = {
   // poll keeps them in sync — Plainspace is meant to feel automatic.
   isAutoAddToBacklog: true,
   // Poll in the background regardless of which project is open, so assigned
-  // tasks appear without navigating to the bound project. Background polls stay
-  // silent (no polling spinner) — see checkAndImportNewIssuesToBacklogForProject.
+  // tasks appear without navigating to the bound project. The backlog-poll
+  // spinner is suppressed for these background polls (see
+  // checkAndImportNewIssuesToBacklogForProject).
   pollingMode: 'always',
 };
 

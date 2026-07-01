@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { unique } from '../../util/unique';
 import { generateCalendarTaskId } from '../calendar-integration/generate-calendar-task-id';
+import { generatePlainspaceTaskId } from './providers/plainspace/generate-plainspace-task-id';
 import {
   BuiltInIssueProviderKey,
   IssueData,
@@ -574,6 +575,14 @@ export class IssueService {
       additional = {
         ...additional,
         id: generateCalendarTaskId(issueProviderId, issueDataReduced.id.toString()),
+      };
+    } else if (issueProviderKey === PLAINSPACE_TYPE) {
+      // Plainspace auto-imports in the background on every device, so concurrent
+      // imports of the same issue must converge on one task id (see
+      // generatePlainspaceTaskId) instead of creating cross-device duplicates.
+      additional = {
+        ...additional,
+        id: generatePlainspaceTaskId(issueProviderId, issueDataReduced.id.toString()),
       };
     }
 
