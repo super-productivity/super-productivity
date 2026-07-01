@@ -32,16 +32,27 @@ const execWithFrontendErrorHandlerInform = async (
     });
   } else {
     const mainWin = getWin();
+    // Security: this confirmation is the only gate before an arbitrary shell
+    // command runs with the user's privileges, so it must fail safe.
+    // - Cancel (index 0) is both the default-focused and the Escape/close
+    //   action, so an accidental Enter/Esc never executes (the old `defaultId: 2`
+    //   was out of range — buttons has indices 0..1 — leaving the default
+    //   undefined per-platform).
+    // - "Remember my answer" defaults to UNCHECKED so persisting a command to
+    //   the silent allow-list is an explicit opt-in. Persisted entries skip
+    //   this dialog entirely (see allow-list branch above), so opt-out
+    //   remembering let a single careless click whitelist a command forever.
     const res = await dialog.showMessageBox(mainWin, {
       type: 'question',
       buttons: ['Cancel', 'Yes, execute!'],
-      defaultId: 2,
+      defaultId: 0,
+      cancelId: 0,
       title: 'Super Productivity – Exec',
       message:
         'Do you want to execute this command? ONLY confirm if you are sure you know what you are doing!!',
       detail: command,
       checkboxLabel: 'Remember my answer',
-      checkboxChecked: true,
+      checkboxChecked: false,
     });
     const { response, checkboxChecked } = res;
 
