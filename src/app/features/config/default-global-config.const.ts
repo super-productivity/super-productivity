@@ -69,6 +69,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isShowProductivityTipLonger: false,
     customTheme: 'default',
     defaultStartPage: 0,
+    backgroundImageDark: null,
+    backgroundImageLight: null,
   },
   shortSyntax: {
     isEnableProject: true,

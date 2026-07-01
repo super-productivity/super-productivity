@@ -75,15 +75,17 @@ const VIEWPORT_RESIZE_EPSILON_PX = 1;
 
 export const getBackgroundImageForUrl = (
   theme: WorkContextThemeCfg,
+  globalBg: { dark?: string | null; light?: string | null },
   isDarkMode: boolean,
   url: string,
 ): string | null | undefined => {
+  const ctx = isDarkMode ? theme.backgroundImageDark : theme.backgroundImageLight;
+  const glob = isDarkMode ? globalBg.dark : globalBg.light;
   const isWorkContextUrl = /\/(tag|project)\//.test(url);
-  if (!isWorkContextUrl) {
-    return null;
-  }
-
-  return isDarkMode ? theme.backgroundImageDark : theme.backgroundImageLight;
+  
+  return isWorkContextUrl
+    ? (ctx ?? glob)
+    : (glob ?? null);
 };
 
 @Injectable({ providedIn: 'root' })
@@ -168,14 +170,16 @@ export class GlobalThemeService {
     this._workContextService.currentTheme$,
     this._isDarkThemeObs$,
     this._currentUrl$,
+    this._globalConfigService.misc$,
   ]).pipe(
-    map(([theme, isDarkMode, url]) => {
+    map(([theme, isDarkMode, url, misc]) => {
       // On non-work-context views (Planner, Schedule, Boards, Config, etc.) the
       // active context stays as "Today" (the reducer default) even though the
       // user is not on the Today page. Showing the Today background on those
       // pages is wrong, so we suppress it for any URL that is not a tag or
       // project work-context route.
-      return getBackgroundImageForUrl(theme, isDarkMode, url);
+      const globalBg = { dark: misc.backgroundImageDark, light: misc.backgroundImageLight };
+      return getBackgroundImageForUrl(theme, globalBg, isDarkMode, url);
     }),
     distinctUntilChanged(),
   );

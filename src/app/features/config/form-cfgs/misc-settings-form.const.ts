@@ -134,5 +134,21 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.DEFAULT_START_PAGE,
       },
     },
+    {
+      key: 'backgroundImageDark',
+      type: 'image-input',
+      templateOptions: {
+        label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_IMAGE_DARK,
+        description: '* https://some/cool.jpg',
+      },
+    },
+    {
+      key: 'backgroundImageLight',
+      type: 'image-input',
+      templateOptions: {
+        label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_IMAGE_LIGHT,
+        description: '* https://some/cool.jpg',
+      },
+    },
   ],
 };

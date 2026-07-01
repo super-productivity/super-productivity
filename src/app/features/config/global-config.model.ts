@@ -43,9 +43,10 @@ export type MiscConfig = Readonly<{
   isTrayShowCurrentCountdown?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
-  // number: one of DefaultStartPage. string: project id.
   defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
+  backgroundImageDark?: string | null;
+  backgroundImageLight?: string | null;
 
   // @todo: remove deprecated items in future major releases, after giving users time to migrate
   isConfirmBeforeTaskDelete?: boolean; // Deprecated
