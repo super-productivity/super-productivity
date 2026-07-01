@@ -24,11 +24,15 @@ const execWithFrontendErrorHandlerInform = async (
   try {
     log('trying to run command ' + command);
     const existingData = await loadSimpleStoreAll();
-    const allowedCommands: string[] = (existingData[COMMAND_MAP_PROP] as string[]) || [];
-
-    if (!Array.isArray(allowedCommands)) {
+    // Keep the value `unknown` and let Array.isArray narrow it, so the guard is
+    // a real type-check (a cast to string[] would assert away the corruption it
+    // is meant to catch). Falsy/absent → empty list (prompt); truthy non-array
+    // → fail closed via the throw below.
+    const stored = existingData[COMMAND_MAP_PROP];
+    if (stored && !Array.isArray(stored)) {
       throw new Error('Invalid configuration: allowedCommands must be an array');
     }
+    const allowedCommands: string[] = Array.isArray(stored) ? (stored as string[]) : [];
     if (allowedCommands.includes(command)) {
       exec(command, (err) => {
         if (err) {
