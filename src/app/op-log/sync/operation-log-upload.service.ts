@@ -132,7 +132,9 @@ export class OperationLogUploadService {
       // upload. Without this guard the initial setup sync pushes all local ops to
       // the server in cleartext, breaking the E2EE promise even if later deleted.
       if (syncProvider.isEncryptionMandatory && !encryptKey) {
-        OpLog.warn(
+        // Expected during the pre-encryption setup window (fires on every
+        // auto-sync until a key is set), so log at normal level, not warn.
+        OpLog.normal(
           'OperationLogUploadService: Encryption is mandatory for this provider but ' +
             'no key is configured yet — skipping upload until encryption setup completes.',
         );

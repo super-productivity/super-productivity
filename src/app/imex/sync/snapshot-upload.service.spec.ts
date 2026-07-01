@@ -299,6 +299,54 @@ describe('SnapshotUploadService', () => {
       expect(mockSyncProvider.setLastServerSeq).toHaveBeenCalledWith(42);
     });
 
+    // Defense-in-depth for GHSA-9v8x-68pf-p5x7: for a provider that mandates E2E
+    // encryption, this method must never push a plaintext snapshot — it must fail
+    // closed BEFORE the destructive deleteAllData, regardless of caller.
+    describe('encryption-mandatory provider (GHSA-9v8x-68pf-p5x7)', () => {
+      beforeEach(() => {
+        (mockSyncProvider as any).isEncryptionMandatory = true;
+      });
+
+      it('throws (before deleting) when disabling encryption', async () => {
+        await expectAsync(
+          service.deleteAndReuploadWithNewEncryption({
+            encryptKey: undefined,
+            isEncryptionEnabled: false,
+            logPrefix: 'TestPrefix',
+          }),
+        ).toBeRejectedWithError(/unencrypted snapshot/);
+
+        expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
+        expect(mockSyncProvider.uploadSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('throws (before deleting) when enabling without a usable key', async () => {
+        await expectAsync(
+          service.deleteAndReuploadWithNewEncryption({
+            encryptKey: undefined,
+            isEncryptionEnabled: true,
+            logPrefix: 'TestPrefix',
+          }),
+        ).toBeRejectedWithError(/unencrypted snapshot/);
+
+        expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
+      });
+
+      it('still succeeds when enabling with a usable key', async () => {
+        mockCryptoSubtleAvailable();
+        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo({ task: [] } as any);
+
+        await service.deleteAndReuploadWithNewEncryption({
+          encryptKey: 'my-key',
+          isEncryptionEnabled: true,
+          logPrefix: 'TestPrefix',
+        });
+
+        expect(mockSyncProvider.deleteAllData).toHaveBeenCalled();
+        expect(mockSyncProvider.uploadSnapshot).toHaveBeenCalled();
+      });
+    });
+
     it('should encrypt payload when enabling encryption', async () => {
       mockCryptoSubtleAvailable();
       const mockState = { task: [] };

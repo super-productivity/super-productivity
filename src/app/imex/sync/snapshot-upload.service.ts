@@ -224,6 +224,21 @@ export class SnapshotUploadService {
     const { syncProvider, existingCfg, state, vectorClock, clientId } =
       await this.gatherSnapshotData(logPrefix);
 
+    // GHSA-9v8x-68pf-p5x7 defense-in-depth: a provider that mandates E2E
+    // encryption (SuperSync) must never have a plaintext snapshot pushed. Fail
+    // closed — before any destructive delete — if this call would upload
+    // unencrypted (encryption turned off, or on without a usable key) rather
+    // than silently leaking. Complements the op-upload guard in
+    // OperationLogUploadService so the invariant holds regardless of caller
+    // (e.g. a keyless import, or a future disable-encryption wiring — currently
+    // UI-unreachable for SuperSync).
+    if (syncProvider.isEncryptionMandatory && !(isEncryptionEnabled && encryptKey)) {
+      throw new Error(
+        `${logPrefix}: refusing to upload an unencrypted snapshot for an ` +
+          'encryption-mandatory provider',
+      );
+    }
+
     // Encrypt before delete (fail-early)
     let payload: unknown = state;
     if (isEncryptionEnabled && encryptKey) {
