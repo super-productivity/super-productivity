@@ -1839,6 +1839,10 @@ describe('SyncWrapperService', () => {
         privateCfg: { load: privateCfgLoad },
       } as any);
       mockMatDialog.open.and.returnValue({ afterClosed: () => of(undefined) } as any);
+      // Arm the one-shot setup-sync flag the prompt consumes; without it the method
+      // early-returns (the migration banner owns established accounts) and never
+      // evaluates the dialog logic these tests cover.
+      service.markPromptEncryptionAfterSetupSync();
     });
 
     const callPrompt = (): Promise<void> =>
