@@ -14,6 +14,10 @@ export interface AndroidShareData {
 export interface AndroidInterface {
   getVersion?(): string;
 
+  // Launches the native Play In-App Review card (play flavor). No-op on fdroid.
+  // The outcome is intentionally opaque (Play policy) — nothing is returned.
+  requestReview?(): void;
+
   showToast(s: string): void;
 
   // save

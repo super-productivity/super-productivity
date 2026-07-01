@@ -105,6 +105,9 @@ dependencies {
     implementation "com.anggrayudi:storage:1.5.4"
 
     playImplementation "com.google.android.gms:play-services-auth:21.3.0"
+    // Play In-App Review (native rating card). play flavor ONLY — this is a
+    // proprietary Google library and must never enter the F-Droid build.
+    playImplementation "com.google.android.play:review:2.0.2"
 
     implementation project(':capacitor-android')
 
