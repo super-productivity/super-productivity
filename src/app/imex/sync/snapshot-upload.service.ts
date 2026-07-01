@@ -223,6 +223,20 @@ export class SnapshotUploadService {
       );
     }
 
+    // Capture the pending ops this full-state snapshot subsumes BEFORE taking the
+    // state snapshot below, so every captured op is guaranteed to be reflected in
+    // that snapshot. (If ordered the other way, an op landing between the state
+    // snapshot and this capture would be marked synced yet absent from the
+    // snapshot — silently lost.) A concurrent op arriving *after* this capture is
+    // simply left unsynced and re-uploaded on the next sync (safe, idempotent by
+    // op id), never dropped. After the snapshot lands, these ops are fully
+    // represented on the server, so we mark them synced to avoid a redundant
+    // re-upload on the next sync (for first-time SuperSync setup that would
+    // otherwise re-push the entire local history on top of the snapshot). Mirrors
+    // planRegularOpsAfterFullStateUpload in the op-log upload path, which this
+    // direct snapshot upload bypasses.
+    const opsSubsumedBySnapshot = await this._opLogStore.getUnsynced();
+
     const { syncProvider, existingCfg, state, vectorClock, clientId } =
       await this.gatherSnapshotData(logPrefix);
 
@@ -240,17 +254,6 @@ export class SnapshotUploadService {
           'encryption-mandatory provider',
       );
     }
-
-    // Capture the pending ops this full-state snapshot subsumes, BEFORE the
-    // destructive delete. This runs under runWithSyncBlocked behind a modal
-    // dialog, so no concurrent op can appear between here and the mark-synced
-    // below — the captured set exactly matches the uploaded snapshot. After the
-    // snapshot lands, these ops are fully represented on the server, so we mark
-    // them synced to avoid a redundant re-upload on the next sync (for first-time
-    // SuperSync setup that would otherwise re-push the entire local history on
-    // top of the snapshot). Mirrors planRegularOpsAfterFullStateUpload in the
-    // op-log upload path, which this direct snapshot upload bypasses.
-    const opsSubsumedBySnapshot = await this._opLogStore.getUnsynced();
 
     // Encrypt before delete (fail-early)
     let payload: unknown = state;
