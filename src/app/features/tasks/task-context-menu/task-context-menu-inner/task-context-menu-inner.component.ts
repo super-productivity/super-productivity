@@ -485,6 +485,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         const subTaskInfo = {
           isDone: subTask.isDone,
           projectId: subTask.projectId,
+          dueWithTime: subTask.dueWithTime,
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
         };
