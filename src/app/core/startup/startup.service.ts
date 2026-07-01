@@ -28,6 +28,8 @@ import {
   shouldShowRateDialog,
 } from '../../features/dialog-please-rate/rate-dialog-state';
 import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
+import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
+import { androidInterface } from '../../features/android/android-interface';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -449,6 +451,22 @@ export class StartupService {
     if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
       return;
     }
+
+    // Play-flavor Android: use the native Play In-App Review card instead of our
+    // custom dialog. It converts far better and is the store-blessed path. Play
+    // decides whether/when it actually shows and returns no result, so we just
+    // advance the prompt cadence ('later' → no permanent opt-out, since we can't
+    // know the outcome). fdroid (no native review) falls through to the dialog.
+    if (
+      IS_ANDROID_WEB_VIEW &&
+      !IS_F_DROID_APP &&
+      typeof androidInterface.requestReview === 'function'
+    ) {
+      androidInterface.requestReview();
+      saveRateDialogState(applyRateDialogResult(state, 'later', appStarts));
+      return;
+    }
+
     this._matDialog
       .open(DialogPleaseRateComponent)
       .afterClosed()

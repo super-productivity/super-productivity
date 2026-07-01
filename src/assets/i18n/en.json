@@ -263,6 +263,7 @@
     "D_RATE": {
       "A_HOW": "How to rate",
       "BTN_DONT_BOTHER": "Don't ask again",
+      "BTN_FEEDBACK": "Give feedback",
       "BTN_LATER": "Maybe later",
       "BTN_RATE_APP_STORE": "Rate on App Store",
       "BTN_RATE_PLAY_STORE": "Rate on Play Store",
@@ -274,11 +275,8 @@
       "FEEDBACK_PUBLIC": "Post on GitHub Discussions",
       "FEEDBACK_PUBLIC_DESC": "Others can see and respond",
       "FEEDBACK_TITLE": "How would you like to help?",
-      "GATE_NO": "Not really",
-      "GATE_YES": "Yes, I like it!",
-      "MAIN_TITLE": "Awesome — glad you like it! 🎉",
       "TITLE": "Enjoying Super Productivity?",
-      "TXT": "It's a free, open-source project built by enthusiasts – no tracking, no ads. A rating helps more people find it."
+      "TXT": "It's a free, open-source project built by enthusiasts – no tracking, no ads. A rating or short message helps more people find it."
     },
     "DROPBOX": {
       "S": {

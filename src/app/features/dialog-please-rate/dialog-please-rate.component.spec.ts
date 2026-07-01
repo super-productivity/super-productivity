@@ -13,10 +13,10 @@ describe('DialogPleaseRateComponent', () => {
     MatDialogRef<DialogPleaseRateComponent, RateDialogResult>
   >;
 
-  // The gate/nav members are `protected`; access them through typed casts so the
+  // The view/nav members are `protected`; access them through typed casts so the
   // spec exercises real behaviour without widening the component's API.
   const view = (): string => (component as unknown as { view: () => string }).view();
-  const nav = (m: 'showGate' | 'showMain' | 'showFeedback'): void =>
+  const nav = (m: 'showMain' | 'showFeedback'): void =>
     (component as unknown as Record<string, () => void>)[m]();
   const close = (r: RateDialogResult): void =>
     (component as unknown as { close: (r: RateDialogResult) => void }).close(r);
@@ -38,23 +38,20 @@ describe('DialogPleaseRateComponent', () => {
     fixture.detectChanges();
   });
 
-  it('opens on the sentiment gate', () => {
-    expect(view()).toBe('gate');
+  it('opens on the main view (store CTA shown to everyone — no sentiment gate)', () => {
+    expect(view()).toBe('main');
   });
 
-  it('navigates between gate, main and feedback views', () => {
-    nav('showMain');
-    expect(view()).toBe('main');
+  it('navigates to the feedback view and back', () => {
     nav('showFeedback');
     expect(view()).toBe('feedback');
-    nav('showGate');
-    expect(view()).toBe('gate');
+    nav('showMain');
+    expect(view()).toBe('main');
   });
 
-  it('gate choices only navigate — they never close the dialog or opt the user out', () => {
-    nav('showMain');
+  it('navigating to feedback never closes the dialog or opts the user out', () => {
     nav('showFeedback');
-    nav('showGate');
+    nav('showMain');
     expect(mockDialogRef.close).not.toHaveBeenCalled();
   });
 

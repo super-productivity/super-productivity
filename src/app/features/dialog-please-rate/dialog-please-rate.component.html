@@ -1,49 +1,5 @@
-@if (view() === 'gate') {
+@if (view() === 'main') {
   <h1 mat-dialog-title>{{ T.F.D_RATE.TITLE | translate }}</h1>
-
-  <mat-dialog-content>
-    <div class="action-list">
-      <button
-        type="button"
-        class="action-item action-item--primary"
-        (click)="showMain()"
-      >
-        <mat-icon class="action-item-icon">sentiment_very_satisfied</mat-icon>
-        <span class="action-item-text">{{ T.F.D_RATE.GATE_YES | translate }}</span>
-        <mat-icon class="action-item-trailing">arrow_forward</mat-icon>
-      </button>
-      <button
-        type="button"
-        class="action-item"
-        (click)="showFeedback()"
-      >
-        <mat-icon class="action-item-icon">sentiment_dissatisfied</mat-icon>
-        <span class="action-item-text">{{ T.F.D_RATE.GATE_NO | translate }}</span>
-        <mat-icon class="action-item-trailing">arrow_forward</mat-icon>
-      </button>
-    </div>
-  </mat-dialog-content>
-
-  <mat-dialog-actions class="footer-actions">
-    <button
-      mat-button
-      type="button"
-      class="opt-out-link"
-      (click)="close('never')"
-    >
-      {{ T.F.D_RATE.BTN_DONT_BOTHER | translate }}
-    </button>
-    <span class="spacer"></span>
-    <button
-      mat-button
-      type="button"
-      (click)="close('later')"
-    >
-      {{ T.F.D_RATE.BTN_LATER | translate }}
-    </button>
-  </mat-dialog-actions>
-} @else if (view() === 'main') {
-  <h1 mat-dialog-title>{{ T.F.D_RATE.MAIN_TITLE | translate }}</h1>
 
   <mat-dialog-content>
     <p [innerHTML]="T.F.D_RATE.TXT | translate"></p>
@@ -60,6 +16,15 @@
         <span class="action-item-text">{{ cta.labelKey | translate }}</span>
         <mat-icon class="action-item-trailing">open_in_new</mat-icon>
       </a>
+      <button
+        type="button"
+        class="action-item"
+        (click)="showFeedback()"
+      >
+        <mat-icon class="action-item-icon">chat_bubble_outline</mat-icon>
+        <span class="action-item-text">{{ T.F.D_RATE.BTN_FEEDBACK | translate }}</span>
+        <mat-icon class="action-item-trailing">arrow_forward</mat-icon>
+      </button>
     </div>
   </mat-dialog-content>
 
@@ -67,10 +32,10 @@
     <button
       mat-button
       type="button"
-      (click)="showGate()"
+      class="opt-out-link"
+      (click)="close('never')"
     >
-      <mat-icon>arrow_back</mat-icon>
-      {{ T.F.D_RATE.FEEDBACK_BACK | translate }}
+      {{ T.F.D_RATE.BTN_DONT_BOTHER | translate }}
     </button>
     <span class="spacer"></span>
     <button
@@ -125,19 +90,6 @@
         </span>
         <mat-icon class="action-item-trailing">open_in_new</mat-icon>
       </a>
-      <!-- Keep the store reachable from here too, so we route emphasis without
-           ever blocking a rating based on sentiment (store-policy compliant). -->
-      <a
-        class="action-item"
-        [href]="cta.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        (click)="close('rate')"
-      >
-        <mat-icon class="action-item-icon">star</mat-icon>
-        <span class="action-item-text">{{ cta.labelKey | translate }}</span>
-        <mat-icon class="action-item-trailing">open_in_new</mat-icon>
-      </a>
     </div>
   </mat-dialog-content>
 
@@ -145,7 +97,7 @@
     <button
       mat-button
       type="button"
-      (click)="showGate()"
+      (click)="showMain()"
     >
       <mat-icon>arrow_back</mat-icon>
       {{ T.F.D_RATE.FEEDBACK_BACK | translate }}

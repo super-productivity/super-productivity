@@ -37,17 +37,14 @@ export class DialogPleaseRateComponent {
     inject<MatDialogRef<DialogPleaseRateComponent, RateDialogResult>>(MatDialogRef);
 
   protected readonly T = T;
-  // Sentiment gate first: only users who say they like the app reach the store
-  // CTA ('main'); everyone else is routed to the feedback paths.
-  protected readonly view = signal<'gate' | 'main' | 'feedback'>('gate');
+  // No sentiment gate: the store CTA is shown to everyone (store-policy safe),
+  // with a separate, decoupled path to feedback. On play-flavor Android the
+  // native review card is used instead and this dialog isn't shown at all.
+  protected readonly view = signal<'main' | 'feedback'>('main');
   protected readonly cta = getPrimaryCta();
   protected readonly mailtoUrl = buildFeedbackMailto();
   protected readonly discussionsUrl = DISCUSSIONS_URL;
   protected readonly contributingUrl = CONTRIBUTING_URL;
-
-  protected showGate(): void {
-    this.view.set('gate');
-  }
 
   protected showFeedback(): void {
     this.view.set('feedback');

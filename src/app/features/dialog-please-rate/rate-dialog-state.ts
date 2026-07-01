@@ -1,5 +1,5 @@
 import { LS } from '../../core/persistence/storage-keys.const';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
 import { IS_IOS } from '../../util/is-ios';
 import { IS_ELECTRON } from '../../app.constants';
 import { getAppVersionStr } from '../../util/get-app-version-str';
@@ -94,6 +94,13 @@ export interface PrimaryCta {
 
 export const getPrimaryCta = (): PrimaryCta => {
   if (IS_ANDROID_WEB_VIEW) {
+    // F-Droid has no store ratings, so point those users at the neutral
+    // "how to rate / support" doc instead of the Play listing. The play flavor
+    // normally uses the native review card and never reaches this dialog; the
+    // Play URL here is only a fallback if the native flow is unavailable.
+    if (IS_F_DROID_APP) {
+      return { labelKey: 'F.D_RATE.A_HOW', url: HOW_TO_RATE_URL };
+    }
     return { labelKey: 'F.D_RATE.BTN_RATE_PLAY_STORE', url: PLAY_STORE_URL };
   }
   if (IS_IOS) {
