@@ -1,4 +1,4 @@
-import { BaseIssueProviderCfg } from '../../issue.model';
+import { BaseIssueProviderCfg, IssueProviderPollingMode } from '../../issue.model';
 
 /**
  * Per-instance config for the Plainspace (plainspace.org / `Johannesjo/spaces`)
@@ -16,4 +16,5 @@ export interface PlainspaceCfg extends BaseIssueProviderCfg {
   token?: string | null;
   isAutoPoll?: boolean;
   isAutoAddToBacklog?: boolean;
+  pollingMode?: IssueProviderPollingMode;
 }

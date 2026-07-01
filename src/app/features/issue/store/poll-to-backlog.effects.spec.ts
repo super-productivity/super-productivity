@@ -109,7 +109,7 @@ describe('PollToBacklogEffects', () => {
 
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
-      ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1');
+      ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', false);
     }));
 
     it('should NOT poll providers with pollingMode always (handled by separate effect)', fakeAsync(() => {
@@ -194,7 +194,7 @@ describe('PollToBacklogEffects', () => {
 
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
-      ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1');
+      ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
     }));
 
     it('should NOT poll always-mode providers without isAutoAddToBacklog', fakeAsync(() => {

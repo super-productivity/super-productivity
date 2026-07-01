@@ -133,6 +133,7 @@ export class PollToBacklogEffects {
           this._issueService.checkAndImportNewIssuesToBacklogForProject(
             provider.issueProviderKey,
             provider.id,
+            provider.pollingMode === 'always',
           ),
         ).pipe(
           catchError((e) => {

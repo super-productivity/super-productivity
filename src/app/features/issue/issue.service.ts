@@ -239,22 +239,28 @@ export class IssueService {
   async checkAndImportNewIssuesToBacklogForProject(
     providerKey: IssueProviderKey,
     issueProviderId: string,
+    isBackgroundPoll = false,
   ): Promise<void> {
     const service = this._getService(providerKey);
     if (!service?.getNewIssuesToAddToBacklog) {
       return;
     }
-    this._snackService.open({
-      svgIco: this._getProviderIcon(providerKey),
-      msg: T.F.ISSUE.S.POLLING_BACKLOG,
-      isSpinner: true,
-      translateParams: {
-        issueProviderName: this._getProviderName(providerKey),
-        issuesStr: this._translateService.instant(
-          this._getIssueStrings(providerKey).ISSUES_STR,
-        ),
-      },
-    });
+    // Background ('always'-mode) polls run every few minutes regardless of
+    // navigation, so keep them quiet — only the import result snack below is
+    // shown, and only when something is actually added.
+    if (!isBackgroundPoll) {
+      this._snackService.open({
+        svgIco: this._getProviderIcon(providerKey),
+        msg: T.F.ISSUE.S.POLLING_BACKLOG,
+        isSpinner: true,
+        translateParams: {
+          issueProviderName: this._getProviderName(providerKey),
+          issuesStr: this._translateService.instant(
+            this._getIssueStrings(providerKey).ISSUES_STR,
+          ),
+        },
+      });
+    }
 
     const allExistingIssueIds: string[] | number[] =
       await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
