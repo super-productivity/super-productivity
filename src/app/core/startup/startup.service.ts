@@ -4,7 +4,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { SnackService } from '../snack/snack.service';
-import { MatDialog } from '@angular/material/dialog';
 import { PluginService } from '../../plugins/plugin.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { BannerService } from '../banner/banner.service';
@@ -19,19 +18,7 @@ import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { BannerId } from '../banner/banner.model';
 import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
-import { getDbDateStr } from '../../util/get-db-date-str';
-import { DialogPleaseRateComponent } from '../../features/dialog-please-rate/dialog-please-rate.component';
-import {
-  applyRateDialogResult,
-  loadRateDialogState,
-  saveRateDialogState,
-  shouldShowRateDialog,
-} from '../../features/dialog-please-rate/rate-dialog-state';
-import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
-import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
-import { androidInterface } from '../../features/android/android-interface';
-import { IS_IOS_NATIVE } from '../../util/is-native-platform';
-import { StoreReview } from '../../features/dialog-please-rate/store-review';
+import { RatePromptService } from '../../features/dialog-please-rate/rate-prompt.service';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -71,7 +58,7 @@ export class StartupService {
   private _localBackupService = inject(LocalBackupService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
-  private _matDialog = inject(MatDialog);
+  private _ratePromptService = inject(RatePromptService);
   private _pluginService = inject(PluginService);
   private _syncWrapperService = inject(SyncWrapperService);
   private _bannerService = inject(BannerService);
@@ -177,7 +164,7 @@ export class StartupService {
         }
       }
 
-      this._handleAppStartRating();
+      this._ratePromptService.init();
       await this._initPlugins();
     }, DEFERRED_INIT_DELAY_MS);
 
@@ -437,60 +424,6 @@ export class StartupService {
         });
       }
     }
-  }
-
-  private _handleAppStartRating(): void {
-    const lastStartDay = localStorage.getItem(LS.APP_START_COUNT_LAST_START_DAY);
-    const todayStr = getDbDateStr();
-    let appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
-    if (lastStartDay !== todayStr) {
-      appStarts += 1;
-      localStorage.setItem(LS.APP_START_COUNT, appStarts.toString());
-      localStorage.setItem(LS.APP_START_COUNT_LAST_START_DAY, todayStr);
-    }
-
-    const state = loadRateDialogState();
-    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
-      return;
-    }
-
-    // Play-flavor Android: use the native Play In-App Review card instead of our
-    // custom dialog. It converts far better and is the store-blessed path. Play
-    // decides whether/when it actually shows and returns no result, so we just
-    // advance the prompt cadence ('later' → no permanent opt-out, since we can't
-    // know the outcome). fdroid (no native review) falls through to the dialog.
-    if (
-      IS_ANDROID_WEB_VIEW &&
-      !IS_F_DROID_APP &&
-      typeof androidInterface.requestReview === 'function'
-    ) {
-      androidInterface.requestReview();
-      saveRateDialogState(applyRateDialogResult(state, 'later', appStarts));
-      return;
-    }
-
-    // iOS: use the native App Store review prompt (SKStoreReviewController).
-    // Same rationale as the Android native path — system-gated, no result — so
-    // advance the cadence and don't open the custom dialog.
-    if (IS_IOS_NATIVE) {
-      void StoreReview.requestReview().catch((e) =>
-        Log.err({ id: 'rate-store-review-ios', error: (e as Error)?.message }),
-      );
-      saveRateDialogState(applyRateDialogResult(state, 'later', appStarts));
-      return;
-    }
-
-    this._matDialog
-      .open(DialogPleaseRateComponent)
-      .afterClosed()
-      .subscribe((result) => {
-        const next = applyRateDialogResult(
-          loadRateDialogState(),
-          result ?? null,
-          appStarts,
-        );
-        saveRateDialogState(next);
-      });
   }
 
   private async _initPlugins(): Promise<void> {

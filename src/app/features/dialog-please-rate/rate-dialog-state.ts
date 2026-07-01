@@ -87,6 +87,23 @@ export const applyRateDialogResult = (
   return { ...state, lastShownAppStartDay: currentAppStarts };
 };
 
+// "Productive win" thresholds for timing the rating prompt after a positive
+// moment rather than on cold launch. A win is: cleared at least half of today's
+// tasks (with a floor so finishing 1 of 2 doesn't count) OR got a solid number
+// done regardless of list size (so heavy planners who never cross 50% still
+// hit a win).
+export const RATE_PROGRESS_MIN_DONE = 3;
+export const RATE_PROGRESS_ABSOLUTE_DONE = 8;
+
+export const isProgressWin = (doneToday: number, totalToday: number): boolean => {
+  if (doneToday >= RATE_PROGRESS_ABSOLUTE_DONE) {
+    return true;
+  }
+  return (
+    doneToday >= RATE_PROGRESS_MIN_DONE && totalToday > 0 && doneToday / totalToday >= 0.5
+  );
+};
+
 export interface PrimaryCta {
   labelKey: string;
   url: string;

@@ -2,6 +2,7 @@ import {
   ERROR_SUPPRESSION_MS,
   RateDialogState,
   applyRateDialogResult,
+  isProgressWin,
   loadRateDialogState,
   saveRateDialogState,
   shouldShowRateDialog,
@@ -179,6 +180,33 @@ describe('rate-dialog-state', () => {
         lastShownAppStartDay: 0,
         permanentOptOut: false,
       });
+    });
+  });
+
+  describe('isProgressWin', () => {
+    it('fires on the absolute threshold regardless of list size', () => {
+      expect(isProgressWin(8, 100)).toBe(true); // 8 done even if only 8% of a big list
+      expect(isProgressWin(8, 8)).toBe(true);
+    });
+
+    it('fires at >=50% done once the min-done floor is met', () => {
+      expect(isProgressWin(3, 6)).toBe(true); // 50%, 3 done
+      expect(isProgressWin(5, 6)).toBe(true);
+    });
+
+    it('does not fire on the trivial "half of a tiny list" case', () => {
+      expect(isProgressWin(1, 2)).toBe(false); // 50% but only 1 done
+      expect(isProgressWin(2, 4)).toBe(false); // 50% but below the floor of 3
+    });
+
+    it('does not fire below 50% when under the absolute threshold', () => {
+      expect(isProgressWin(3, 10)).toBe(false); // 30%
+      expect(isProgressWin(7, 20)).toBe(false); // 35%, still < 8 done
+    });
+
+    it('handles the empty/zero case', () => {
+      expect(isProgressWin(0, 0)).toBe(false);
+      expect(isProgressWin(0, 5)).toBe(false);
     });
   });
 });
