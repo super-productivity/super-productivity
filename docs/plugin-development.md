@@ -131,7 +131,10 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
 
 ### 1. JavaScript Plugins (`plugin.js`)
 
-Pure JavaScript plugins that run in a sandboxed environment with full API access.
+Pure JavaScript plugins with full API access. **These run in the host app's own
+renderer** (via `new Function`), not in a sandbox — plugin code shares the page's
+context and can reach privileged host APIs, so only install plugins whose source you
+trust (see [Security Considerations](#security-considerations)).
 
 **Use when:**
 
@@ -752,11 +755,22 @@ persistence in iframes; persist when the data changes instead.
 
 ## Security Considerations
 
-### Sandboxing
+### Execution model & trust
 
-- JavaScript plugins run in isolated VM contexts
-- Iframe plugins run in sandboxed iframes with restricted permissions
-- No access to file system unless through API
+Plugins are **not** strongly sandboxed from the host — installing a plugin means
+trusting its code with your data:
+
+- JavaScript (`plugin.js`) plugins run in the host app's renderer via `new Function`,
+  in the same context as the app. They can reach privileged host APIs (including, on
+  desktop, `window.ea`).
+- Iframe plugins render with the `allow-same-origin` sandbox flag (required so the UI
+  paints on the packaged `file://` desktop build). Being same-origin, they can read
+  `window.parent.ea` directly, so the `postMessage` bridge is a convenience, not a hard
+  security boundary.
+- Filesystem/process access on desktop goes through `executeNodeScript()`, which stays
+  gated by an explicit main-process consent prompt (`nodeExecution` permission).
+
+Only install plugins from sources you trust, and read the code first.
 
 ### Iframe API Surface
 
@@ -774,9 +788,13 @@ the desktop app grants the plugin `nodeExecution` permission.
 
 ### Iframe Boundary
 
-- Iframe plugins run without `allow-same-origin`, so they have an opaque origin
-- Host access is limited to the filtered Plugin API `postMessage` bridge
+- Iframe plugins render with `allow-same-origin` (required so the UI paints on the
+  packaged `file://` desktop build; an opaque-origin iframe stays blank — see #8467)
+- Because they are same-origin, iframe plugins can read `window.parent.ea` directly;
+  the filtered `postMessage` bridge is the intended API, not an enforced boundary
 - Remote assets depend on the app/runtime CSP and should not be relied on
+- Restoring opaque-origin isolation (serving the renderer from an `app://` scheme) is
+  tracked separately
 
 ## Testing Your Plugin
 
