@@ -193,9 +193,15 @@ export class TaskViewCustomizerService {
     const currentFilter = OPTIONS.filter.list.find(
       (option) => option.type === stored.type,
     );
-    return currentFilter
-      ? { ...currentFilter, preset: stored.preset ?? null }
-      : DEFAULT_OPTIONS.filter;
+    if (!currentFilter) return DEFAULT_OPTIONS.filter;
+
+    const base: FilterOption = { ...currentFilter, preset: stored.preset ?? null };
+    // Preserve multi-tag state across context switches and page reloads.
+    if (stored.type === FILTER_OPTION_TYPE.tag && stored.tagIds?.length) {
+      base.tagIds = stored.tagIds;
+      base.tagFilterMode = stored.tagFilterMode;
+    }
+    return base;
   }
 
   customizeUndoneTasks(
@@ -210,8 +216,10 @@ export class TaskViewCustomizerService {
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
+        const hasTagIds =
+          filter.type === FILTER_OPTION_TYPE.tag && !!filter.tagIds?.length;
 
-        const isDefaultFilter = !filter.type || !filterValueToUse;
+        const isDefaultFilter = !filter.type || (!filterValueToUse && !hasTagIds);
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
@@ -219,9 +227,17 @@ export class TaskViewCustomizerService {
           return { result: { list: tasks }, isDefault: true };
         }
 
-        const filtered = isDefaultFilter
-          ? tasks
-          : this.applyFilter(tasks, filter.type, filterValueToUse);
+        let filtered: TaskWithSubTasks[];
+        if (isDefaultFilter) {
+          filtered = tasks;
+        } else if (hasTagIds) {
+          filtered =
+            filter.tagFilterMode === 'AND'
+              ? tasks.filter((t) => filter.tagIds!.every((id) => t.tagIds.includes(id)))
+              : tasks.filter((t) => filter.tagIds!.some((id) => t.tagIds.includes(id)));
+        } else {
+          filtered = this.applyFilter(tasks, filter.type, filterValueToUse);
+        }
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
