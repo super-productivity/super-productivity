@@ -494,6 +494,65 @@ describe('IssueService', () => {
     });
   });
 
+  describe('addTaskFromIssue - auto-import tag inheritance (#8673)', () => {
+    const jiraIssue = { id: 'JIRA-8673', title: 'Auto Import' };
+
+    const setActiveTag = (tagId: string): void => {
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.TAG,
+        configurable: true,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => tagId,
+        configurable: true,
+      });
+    };
+
+    beforeEach(() => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Auto Import',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag'],
+        } as any),
+      );
+      // Auto-imports always target the backlog; the leak only surfaces via the
+      // non-PROJECT branch, i.e. while a non-Today tag is the active context.
+      setActiveTag('errands-tag');
+    });
+
+    it('inherits the ambient tag for a foreground import (isAutoImport unset)', async () => {
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+        isAddToBacklog: true,
+      });
+
+      const taskData = taskServiceSpy.add.calls.mostRecent().args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['errands-tag', 'default-tag']);
+      expect(taskData.projectId).toBe('proj-1');
+    });
+
+    it('does NOT inherit the ambient tag for an automatic import', async () => {
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+        isAddToBacklog: true,
+        isAutoImport: true,
+      });
+
+      const taskData = taskServiceSpy.add.calls.mostRecent().args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['default-tag']);
+      expect(taskData.projectId).toBe('proj-1');
+    });
+  });
+
   describe('addTaskFromIssue - CalDAV sub-task / archived-parent path', () => {
     const caldavIssue = {
       id: 'child-uid',

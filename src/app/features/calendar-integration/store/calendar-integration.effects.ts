@@ -139,6 +139,10 @@ export class CalendarIntegrationEffects {
                                 issueDataReduced: calEv,
                                 // from this context we should always add to the default project rather than current context
                                 isForceDefaultProject: true,
+                                // Automatic auto-import fires regardless of what
+                                // the user is viewing; don't stamp the incidentally
+                                // active tag onto the event task (#8673).
+                                isAutoImport: true,
                               });
                             }
                           });

@@ -162,6 +162,8 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
         issueProviderId: PROVIDER_ID,
         issueDataReduced: jasmine.objectContaining({ id: 'cal-evt-1' }),
         isForceDefaultProject: true,
+        // Automatic auto-import must not inherit the active context's tag (#8673).
+        isAutoImport: true,
       }),
     );
   }));
