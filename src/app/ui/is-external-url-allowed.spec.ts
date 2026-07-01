@@ -1,5 +1,6 @@
 import {
   ALLOWED_EXTERNAL_URL_SCHEMES,
+  hasExecutableFileExtension,
   isExternalUrlSchemeAllowed,
   isPathSafeToOpen,
   isUncPath,
@@ -159,5 +160,73 @@ describe('isExternalUrlSchemeAllowed', () => {
       expect(isExternalUrlSchemeAllowed(42)).toBe(false);
       expect(isExternalUrlSchemeAllowed({ href: 'https://example.com' })).toBe(false);
     });
+  });
+});
+
+describe('hasExecutableFileExtension (shell.openPath execution gate)', () => {
+  it('flags executable / script extensions across platforms', () => {
+    [
+      'C:\\Users\\me\\evil.bat',
+      '/home/u/evil.sh',
+      './rel/evil.cmd',
+      'x.exe',
+      'x.com',
+      'x.vbs',
+      'x.js',
+      'x.jse',
+      'x.wsf',
+      'x.hta',
+      'x.ps1',
+      'x.msi',
+      'x.scr',
+      'x.lnk',
+      'x.reg',
+      'x.jar',
+      'payload.command',
+      'payload.app',
+      'payload.desktop',
+      'payload.appimage',
+      'payload.run',
+      'file:///C:/tools/evil.bat',
+    ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(true));
+  });
+
+  it('is case-insensitive and resolves double extensions to the last one', () => {
+    ['EVIL.BAT', 'x.ExE', 'invoice.pdf.bat', 'photo.png.cmd'].forEach((p) =>
+      expect(hasExecutableFileExtension(p)).toBe(true),
+    );
+  });
+
+  it('normalizes Windows trailing dots/spaces and NTFS alternate data streams', () => {
+    [
+      'evil.bat.', // trailing dot — Windows executes as evil.bat
+      'evil.bat   ', // trailing spaces
+      'evil.bat . ',
+      'evil.bat::$DATA', // NTFS ADS
+      'C:\\x\\evil.bat:stream',
+      'file:///C:/x.bat?download=1', // query stripped before the check
+    ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(true));
+  });
+
+  it('allows documents, folders, and extensionless paths', () => {
+    [
+      '/home/u/report.pdf',
+      'C:\\docs\\sheet.xlsx',
+      'notes.txt',
+      'image.png',
+      'archive.zip',
+      'data.json',
+      'page.html',
+      '/home/u/folder',
+      'C:\\Users\\me',
+      'README',
+      '.bashrc', // dotfile with no extension
+    ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(false));
+  });
+
+  it('returns false for non-string input', () => {
+    [undefined, null, 42, { path: 'x.bat' }].forEach((p) =>
+      expect(hasExecutableFileExtension(p as unknown as string)).toBe(false),
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import {
+  hasExecutableFileExtension,
   isExternalUrlSchemeAllowed,
   isPathSafeToOpen,
 } from '../shared-with-frontend/is-external-url-allowed';
@@ -13,6 +14,14 @@ export const initSystemIpc = (): void => {
     // the user's NTLM hash. FILE-type task-attachment paths are synced and thus
     // attacker-controllable. See GHSA-hr87-735w-hfq3.
     if (!isPathSafeToOpen(path)) {
+      return;
+    }
+    // Never launch an executable/script. shell.openPath runs .bat/.cmd/.vbs/...
+    // via the OS handler (ShellExecute on Windows needs no exec bit), so a
+    // renderer that drops a file into a writable dir + calls openPath — or a
+    // malicious synced FILE attachment clicked by the user — would get native
+    // code execution that bypasses the nodeExecution consent gate.
+    if (hasExecutableFileExtension(path)) {
       return;
     }
     shell.openPath(path);

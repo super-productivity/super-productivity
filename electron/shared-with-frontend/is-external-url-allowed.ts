@@ -136,3 +136,101 @@ export const isPathSafeToOpen = (path: unknown): boolean => {
   }
   return true;
 };
+
+/**
+ * Executable / script extensions that `shell.openPath` must never launch.
+ *
+ * `shell.openPath` hands the file to the OS default handler, and on Windows
+ * `ShellExecute` *runs* these from a plain file with no exec bit — so a renderer
+ * (a plugin or XSS) that can drop a file into a writable dir (e.g. the
+ * local-file sync folder via `FILE_SYNC_SAVE`) and then call
+ * `window.ea.openPath()` on it gets native code execution that bypasses the
+ * `nodeExecution` consent gate. A malicious synced FILE attachment whose path
+ * points at such a file is the same vector on user click.
+ *
+ * shortcut: a curated denylist — executable extensions vary by platform and new
+ * ones appear. If this proves leaky, the upgrade path is to invert it into an
+ * allowlist of openable document types (or a user confirm) at the openPath sink.
+ */
+const EXECUTABLE_FILE_EXTENSIONS = new Set<string>([
+  // Windows — run directly by ShellExecute
+  'exe',
+  'com',
+  'bat',
+  'cmd',
+  'pif',
+  'scr',
+  'cpl',
+  'msi',
+  'msp',
+  'msc',
+  'vbs',
+  'vbe',
+  'js',
+  'jse',
+  'ws',
+  'wsf',
+  'wsh',
+  'ps1',
+  'psm1',
+  'psc1',
+  'hta',
+  'reg',
+  'inf',
+  'scf',
+  'lnk',
+  'url',
+  'jar',
+  'jnlp',
+  'gadget',
+  'application',
+  // macOS
+  'command',
+  'app',
+  'workflow',
+  'action',
+  'scpt',
+  // Linux / cross-platform
+  'sh',
+  'bash',
+  'zsh',
+  'csh',
+  'ksh',
+  'run',
+  'out',
+  'bin',
+  'appimage',
+  'desktop',
+  'deb',
+  'rpm',
+]);
+
+/**
+ * True if `path` ends in a known-executable/script extension (see
+ * {@link EXECUTABLE_FILE_EXTENSIONS}). Windows strips trailing dots/spaces from
+ * filenames (so `evil.bat.` / `evil.bat ` execute as `evil.bat`) and supports
+ * NTFS alternate data streams (`evil.bat::$DATA`), so both are normalized away
+ * before the check. Double extensions (`invoice.pdf.bat`) resolve to `.bat`.
+ */
+export const hasExecutableFileExtension = (path: unknown): boolean => {
+  if (typeof path !== 'string') {
+    return false;
+  }
+  // Drop query/fragment (`file:///x.bat?y`) and trailing Windows dots/spaces.
+  const candidate = path
+    .trim()
+    .split(/[?#]/)[0]
+    .replace(/[ .]+$/, '');
+  const lastSep = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'));
+  const base = candidate.slice(lastSep + 1);
+  const dot = base.lastIndexOf('.');
+  if (dot <= 0) {
+    return false; // no extension, or a dotfile with none
+  }
+  // `.slice` after the dot, then strip an NTFS ADS suffix (`bat:$DATA`).
+  const ext = base
+    .slice(dot + 1)
+    .toLowerCase()
+    .split(':')[0];
+  return EXECUTABLE_FILE_EXTENSIONS.has(ext);
+};
