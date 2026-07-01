@@ -1423,9 +1423,11 @@ describe('IssueTwoWaySyncEffects', () => {
 
       const provider = createMockIssueProvider({
         id: 'provider-1',
-        issueProviderKey: 'PLAINSPACE' as any,
+        issueProviderKey: 'PLAINSPACE',
         defaultProjectId: 'project-1',
-        // Deliberately NO pluginConfig / isAutoCreateIssues.
+        // Configured (bound), but deliberately NO pluginConfig / isAutoCreateIssues.
+        spaceId: 'space-1',
+        token: 'pat_x',
       });
 
       store.overrideSelector(selectEnabledIssueProviders, [provider]);
@@ -1433,7 +1435,7 @@ describe('IssueTwoWaySyncEffects', () => {
 
       const cfg = createMockIssueProvider({
         id: 'provider-1',
-        issueProviderKey: 'PLAINSPACE' as any,
+        issueProviderKey: 'PLAINSPACE',
       });
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
 
@@ -1469,6 +1471,55 @@ describe('IssueTwoWaySyncEffects', () => {
           issueProviderId: 'provider-1',
         }),
       );
+    }));
+
+    it('should NOT create issue for a PLAINSPACE provider that is enabled but not yet configured (no spaceId/token)', fakeAsync(() => {
+      // selectEnabledIssueProviders filters on the isEnabled flag only, so a
+      // mid-connect provider (enabled, bound to the project, but spaceId/token
+      // still null) reaches the gate. It must NOT auto-create — otherwise every
+      // add POSTs an invalid create and error-snacks.
+      const createIssueSpy = jasmine.createSpy('createIssue').and.resolveTo({
+        issueId: 'ps-issue-1',
+        issueData: {},
+      });
+      const adapter = createMockAdapter({ createIssue: createIssueSpy });
+      adapterRegistry.register('PLAINSPACE', adapter);
+
+      const provider = createMockIssueProvider({
+        id: 'provider-1',
+        issueProviderKey: 'PLAINSPACE',
+        defaultProjectId: 'project-1',
+        spaceId: null,
+        token: null,
+      });
+
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const task = createMockTask({
+        id: 'task-new',
+        title: 'New Task',
+        projectId: 'project-1',
+        issueId: undefined,
+      });
+
+      effects.autoCreateIssueOnTaskAdd$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.addTask({
+          task,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      );
+
+      tick();
+
+      expect(createIssueSpy).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('PLAINSPACE');
     }));
 
     it('should not create issue when task has no projectId', fakeAsync(() => {

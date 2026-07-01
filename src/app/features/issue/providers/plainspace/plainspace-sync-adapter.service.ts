@@ -81,7 +81,7 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
     const issue = await firstValueFrom(this._api.createTask$(title, cfg));
     return {
       issueId: issue.id,
-      issueData: issue as unknown as Record<string, unknown>,
+      issueData: issue as Record<string, unknown>,
     };
   }
 

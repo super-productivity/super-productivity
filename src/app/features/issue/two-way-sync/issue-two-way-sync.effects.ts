@@ -420,9 +420,13 @@ export class IssueTwoWaySyncEffects {
     }
     // Plainspace-backed projects are collaborative by definition: a task added
     // there is pushed up so the team sees it (symmetric with auto-import). The
-    // bound provider is itself the opt-in, so there is no separate flag.
+    // bound provider is itself the opt-in, so there is no separate flag — but
+    // only once it is actually configured. An enabled-but-unbound provider
+    // (mid-connect, spaceId/token still null) would otherwise POST an invalid
+    // create and error-snack on every add; skip silently until it's ready.
     if (provider.issueProviderKey === 'PLAINSPACE') {
-      return true;
+      const ps = provider as { spaceId?: string | null; token?: string | null };
+      return !!ps.spaceId && !!ps.token;
     }
     // Check for plugin providers (both plugin:* and migrated keys like GITHUB)
     const pluginCfg = (provider as { pluginConfig?: Record<string, unknown> })
