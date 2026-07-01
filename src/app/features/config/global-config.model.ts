@@ -10,6 +10,7 @@ export type AppFeaturesConfig = Readonly<{
   isTimeTrackingEnabled: boolean;
   isFocusModeEnabled: boolean;
   isSchedulerEnabled: boolean;
+  isAllTasksEnabled: boolean;
   isPlannerEnabled: boolean;
   isBoardsEnabled: boolean;
   isScheduleDayPanelEnabled: boolean;

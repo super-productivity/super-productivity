@@ -47,7 +47,7 @@ import {
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import {
@@ -241,7 +241,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   });
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
-    this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
+    this.customizerService.customizeUndoneTasks(toObservable(this.undoneTasks)),
     { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
@@ -253,11 +253,22 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
-  estimateRemainingToday = toSignal(this.workContextService.estimateRemainingToday$, {
-    initialValue: 0,
+  private _estimateRemainingFromService = toSignal(
+    this.workContextService.estimateRemainingToday$,
+    { initialValue: 0 },
+  );
+  estimateRemainingToday = computed(() => {
+    if (this.isDisableTodayPanels()) {
+      return this.customizedUndoneTasks().list.reduce(
+        (sum, t) => Math.max(0, sum + (t.timeEstimate ?? 0) - (t.timeSpent ?? 0)),
+        0,
+      );
+    }
+    return this._estimateRemainingFromService();
   });
   workingToday = toSignal(this.workContextService.workingToday$, { initialValue: 0 });
   selectedTaskId = this.taskService.selectedTaskId;
+  isDisableTodayPanels = input<boolean>(false);
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
@@ -339,7 +350,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   });
 
   isShowOverduePanel = computed(
-    () => this.isOnTodayList() && this.overdueTasks().length > 0,
+    () =>
+      !this.isDisableTodayPanels() &&
+      this.isOnTodayList() &&
+      this.overdueTasks().length > 0,
   );
 
   isShowTimeWorkedWithoutBreak: boolean = true;
