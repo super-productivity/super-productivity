@@ -293,7 +293,7 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "^2.2.0",
     "karma-spec-reporter": "^0.0.36",
-    "marked": "^17.0.1",
+    "marked": "^18.0.5",
     "nanoid": "^5.1.11",
     "new-github-issue-url": "^1.1.0",
     "ng2-charts": "^10.0.0",
