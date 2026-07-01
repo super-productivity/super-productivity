@@ -132,7 +132,7 @@ export interface RepairPayload {
  * Some older code wrapped the state in { appDataComplete: ... }.
  * New code should use unwrapped format directly.
  */
-export interface WrappedFullStatePayload {
+export interface WrappedFullStatePayload extends Record<string, unknown> {
   appDataComplete: Record<string, unknown>;
 }
 
@@ -149,16 +149,23 @@ export const isWrappedFullStatePayload = (
   (payload as WrappedFullStatePayload).appDataComplete !== null;
 
 /**
- * Extracts the raw application state from a full-state operation payload.
- * Handles both wrapped ({ appDataComplete: ... }) and unwrapped formats.
+ * Normalizes full-state operation payloads between the stored op format and
+ * the action payload format expected by loadAllData.
  */
-export const extractFullStateFromPayload = (
+export const normalizeFullStatePayload = <TMode extends 'wrapped' | 'unwrapped'>(
   payload: unknown,
-): Record<string, unknown> => {
+  mode: TMode,
+): TMode extends 'wrapped' ? WrappedFullStatePayload : Record<string, unknown> => {
   if (isWrappedFullStatePayload(payload)) {
-    return payload.appDataComplete;
+    return (
+      mode === 'wrapped' ? payload : payload.appDataComplete
+    ) as TMode extends 'wrapped' ? WrappedFullStatePayload : Record<string, unknown>;
   }
-  return payload as Record<string, unknown>;
+
+  const state = payload as Record<string, unknown>;
+  return (
+    mode === 'wrapped' ? { appDataComplete: state } : state
+  ) as TMode extends 'wrapped' ? WrappedFullStatePayload : Record<string, unknown>;
 };
 
 /**
@@ -169,7 +176,7 @@ export const assertValidFullStatePayload: (
   payload: unknown,
   context: string,
 ) => asserts payload is Record<string, unknown> = (payload, context) => {
-  const state = extractFullStateFromPayload(payload);
+  const state = normalizeFullStatePayload(payload, 'unwrapped');
 
   if (typeof state !== 'object' || state === null) {
     throw new Error(

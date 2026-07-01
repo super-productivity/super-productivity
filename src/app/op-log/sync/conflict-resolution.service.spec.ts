@@ -3313,55 +3313,6 @@ describe('ConflictResolutionService', () => {
     });
   });
 
-  describe('_extractUpdateChanges', () => {
-    it('should extract changes from NgRx adapter format (id + changes)', () => {
-      const payload = {
-        task: { id: 'task-1', changes: { title: 'New', notes: 'Updated' } },
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New', notes: 'Updated' });
-    });
-
-    it('should extract changes from flat format (exclude id)', () => {
-      const payload = { task: { id: 'task-1', title: 'New', notes: 'Updated' } };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New', notes: 'Updated' });
-    });
-
-    it('should handle MultiEntityPayload wrapping NgRx adapter format', () => {
-      const payload = {
-        actionPayload: {
-          task: { id: 'task-1', changes: { title: 'New' } },
-        },
-        entityChanges: [],
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New' });
-    });
-
-    it('should handle MultiEntityPayload wrapping flat format', () => {
-      const payload = {
-        actionPayload: {
-          task: { id: 'task-1', title: 'New' },
-        },
-        entityChanges: [],
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New' });
-    });
-
-    it('should return empty object when entity key is not in payload', () => {
-      const payload = { wrongKey: { id: 'task-1', title: 'New' } };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({});
-    });
-  });
-
   describe('_extractEntityFromDeleteOperation with MultiEntityPayload', () => {
     const createOpWithTimestamp = (
       id: string,

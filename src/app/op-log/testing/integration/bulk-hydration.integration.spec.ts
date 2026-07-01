@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 /**
- * Integration tests for bulk hydration optimization.
+ * Integration tests for bulk operations optimization.
  *
- * These tests verify that the bulkHydrationMetaReducer correctly applies
+ * These tests verify that the bulkOperationsMetaReducer correctly applies
  * multiple operations in a single dispatch, producing the same final state
  * as individual dispatches would.
  *
@@ -10,8 +10,8 @@
  * operations need to be replayed efficiently.
  */
 import { ActionReducer, Action } from '@ngrx/store';
-import { bulkHydrationMetaReducer } from '../../apply/bulk-hydration.meta-reducer';
-import { bulkApplyHydrationOperations } from '../../apply/bulk-hydration.action';
+import { bulkOperationsMetaReducer } from '../../apply/bulk-hydration.meta-reducer';
+import { bulkApplyOperations } from '../../apply/bulk-hydration.action';
 import { convertOpToAction } from '../../apply/operation-converter.util';
 import { ActionType, Operation, OpType } from '../../core/operation.types';
 import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
@@ -138,7 +138,7 @@ describe('Bulk Hydration Integration', () => {
   describe('bulk dispatch equivalence', () => {
     it('should produce same state as individual dispatches for mixed operations', () => {
       // Compose the reducer chain: bulk -> lww -> taskCrud
-      const composedReducer = bulkHydrationMetaReducer(
+      const composedReducer = bulkOperationsMetaReducer(
         lwwUpdateMetaReducer(taskCrudReducer),
       ) as ActionReducer<MockRootState, Action>;
 
@@ -207,7 +207,7 @@ describe('Bulk Hydration Integration', () => {
       ];
 
       // Apply via BULK dispatch (single action)
-      const bulkAction = bulkApplyHydrationOperations({ operations });
+      const bulkAction = bulkApplyOperations({ operations });
       const bulkResultState = composedReducer(initialState, bulkAction);
 
       // Apply via INDIVIDUAL dispatches (for comparison)
@@ -235,7 +235,7 @@ describe('Bulk Hydration Integration', () => {
     });
 
     it('should handle 100+ operations correctly', () => {
-      const composedReducer = bulkHydrationMetaReducer(taskCrudReducer) as ActionReducer<
+      const composedReducer = bulkOperationsMetaReducer(taskCrudReducer) as ActionReducer<
         MockRootState,
         Action
       >;
@@ -289,7 +289,7 @@ describe('Bulk Hydration Integration', () => {
       }
 
       // Apply via bulk dispatch
-      const bulkAction = bulkApplyHydrationOperations({ operations });
+      const bulkAction = bulkApplyOperations({ operations });
       const resultState = composedReducer(initialState, bulkAction);
 
       // Verify results
@@ -313,7 +313,7 @@ describe('Bulk Hydration Integration', () => {
     });
 
     it('should handle sequential updates to same entity', () => {
-      const composedReducer = bulkHydrationMetaReducer(taskCrudReducer) as ActionReducer<
+      const composedReducer = bulkOperationsMetaReducer(taskCrudReducer) as ActionReducer<
         MockRootState,
         Action
       >;
@@ -358,7 +358,7 @@ describe('Bulk Hydration Integration', () => {
         ),
       ];
 
-      const bulkAction = bulkApplyHydrationOperations({ operations });
+      const bulkAction = bulkApplyOperations({ operations });
       const resultState = composedReducer(initialState, bulkAction);
 
       // Should have final state from all sequential updates
@@ -369,7 +369,7 @@ describe('Bulk Hydration Integration', () => {
     });
 
     it('should handle empty operations array', () => {
-      const composedReducer = bulkHydrationMetaReducer(taskCrudReducer) as ActionReducer<
+      const composedReducer = bulkOperationsMetaReducer(taskCrudReducer) as ActionReducer<
         MockRootState,
         Action
       >;
@@ -386,7 +386,7 @@ describe('Bulk Hydration Integration', () => {
         },
       });
 
-      const bulkAction = bulkApplyHydrationOperations({ operations: [] });
+      const bulkAction = bulkApplyOperations({ operations: [] });
       const resultState = composedReducer(initialState, bulkAction);
 
       // State should be unchanged
@@ -396,7 +396,7 @@ describe('Bulk Hydration Integration', () => {
 
   describe('performance characteristics', () => {
     it('should apply 500 operations synchronously without timeout', () => {
-      const composedReducer = bulkHydrationMetaReducer(taskCrudReducer) as ActionReducer<
+      const composedReducer = bulkOperationsMetaReducer(taskCrudReducer) as ActionReducer<
         MockRootState,
         Action
       >;
@@ -421,7 +421,7 @@ describe('Bulk Hydration Integration', () => {
         );
       }
 
-      const bulkAction = bulkApplyHydrationOperations({ operations });
+      const bulkAction = bulkApplyOperations({ operations });
       const resultState = composedReducer(initialState, bulkAction);
 
       // All 500 tasks should be created
