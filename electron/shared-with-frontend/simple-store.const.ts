@@ -1,5 +1,8 @@
 export enum SimpleStoreKey {
   IS_USE_CUSTOM_WINDOW_TITLE_BAR = 'isUseCustomWindowTitleBar',
+  // Legacy: allow-list persisted by the old exec confirmation dialog. The exec IPC
+  // was removed (GHSA-256q), so nothing reads or writes this anymore; kept only so
+  // stores that still hold the key from older versions continue to load cleanly.
   ALLOWED_COMMANDS = 'allowedCommands',
   // Main-owned sync folder path (issue #8228); the renderer no longer holds it.
   SYNC_FOLDER_PATH = 'syncFolderPath',
