@@ -64,7 +64,7 @@ export class PlannerPage extends BasePage {
 
   async scheduleTaskForTime(taskName: string, time: string): Promise<void> {
     const task = this.page.locator(`task:has-text("${taskName}")`);
-    const timeInput = task.locator('input[type="time"]');
+    const timeInput = task.locator('[data-test-id="time-input"], input[type="time"]');
 
     await timeInput.fill(time);
     await this.page.keyboard.press('Enter');

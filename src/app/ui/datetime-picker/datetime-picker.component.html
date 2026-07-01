@@ -57,17 +57,41 @@
 <div class="form-ctrl-wrapper">
   <mat-form-field class="time-form-field">
     <mat-label>{{ timeLabel() }}</mat-label>
-    <mat-icon matPrefix>schedule</mat-icon>
-    <input
-      type="time"
-      spTimeStep
-      (focus)="onTimeFocus()"
-      [ngModel]="selectedTime()"
-      (ngModelChange)="onTimeChange($event)"
-      step="60"
-      matInput
-      (keydown)="onTimeKeyDown($event)"
-    />
+    @if (useMatTimepicker) {
+      <!-- Desktop: type the time directly (panel does NOT auto-open), or click
+           the clock toggle to pick. Honors the app's 12h/24h locale setting. -->
+      <mat-timepicker-toggle
+        matPrefix
+        [for]="timepicker"
+      />
+      <input
+        #timeInputEl
+        type="text"
+        data-test-id="time-input"
+        [matTimepicker]="timepicker"
+        [matTimepickerOpenOnClick]="false"
+        [ngModel]="timeAsDate()"
+        [ngModelOptions]="{ updateOn: 'blur' }"
+        (ngModelChange)="onTimeDateChange($event)"
+        (focus)="onTimeFocus()"
+        (keydown)="onTimeKeyDown($event)"
+        matInput
+      />
+      <mat-timepicker #timepicker />
+    } @else {
+      <mat-icon matPrefix>schedule</mat-icon>
+      <input
+        type="time"
+        data-test-id="time-input"
+        spTimeStep
+        (focus)="onTimeFocus()"
+        [ngModel]="selectedTime()"
+        (ngModelChange)="onTimeChange($event)"
+        step="60"
+        matInput
+        (keydown)="onTimeKeyDown($event)"
+      />
+    }
     @if (selectedTime()) {
       <mat-icon
         class="time-clear-btn"
