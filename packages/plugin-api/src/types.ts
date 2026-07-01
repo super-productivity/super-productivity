@@ -270,6 +270,9 @@ export interface Task {
   remindAt?: number | null;
   dueDay?: string | null;
   dueWithTime?: number | null;
+  deadlineDay?: string | null;
+  deadlineWithTime?: number | null;
+  deadlineRemindAt?: number | null;
   repeatCfgId?: string | null;
 
   // Issue tracking fields (optional)
