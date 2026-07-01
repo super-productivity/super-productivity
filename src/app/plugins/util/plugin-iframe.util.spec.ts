@@ -330,6 +330,50 @@ describe('handlePluginMessage()', () => {
     );
   });
 
+  it('routes request iframe API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const request = jasmine.createSpy('request').and.resolveTo({ ok: true });
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        request,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'request',
+          callId: 17,
+          args: [
+            'https://example.test/api',
+            { method: 'POST', body: { ok: true } },
+          ],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(request).toHaveBeenCalledOnceWith('https://example.test/api', {
+      method: 'POST',
+      body: { ok: true },
+    });
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 17,
+        result: { ok: true },
+      },
+      '*',
+    );
+  });
+
   it('routes getSelectedTask iframe API calls through plugin-bound methods', async () => {
     const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
       'sourceWindow',
@@ -383,6 +427,7 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain('const bridgeGeneration = 4');
     expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
     expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
+    expect(script).toContain("request: (url, options) => callApi('request', [url, options])");
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
     );

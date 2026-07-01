@@ -437,6 +437,83 @@ describe('PluginBridgeService - iframe task selection methods', () => {
   });
 });
 
+describe('PluginBridgeService - request()', () => {
+  let service: PluginBridgeService;
+  let pluginHttpService: jasmine.SpyObj<PluginHttpService>;
+  let requestSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    requestSpy = jasmine.createSpy('request').and.resolveTo({ ok: true });
+    pluginHttpService = jasmine.createSpyObj<PluginHttpService>('PluginHttpService', [
+      'createHttpHelper',
+    ]);
+    pluginHttpService.createHttpHelper.and.returnValue({
+      request: requestSpy,
+    } as any);
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: pluginHttpService },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  it('routes generic host HTTP requests through PluginHttpService without host auth injection', async () => {
+    const bound = service.createBoundMethods('test-plugin');
+    const options = {
+      method: 'POST',
+      headers: { Authorization: 'Bearer plugin-token' },
+      body: { hours: '1.50' },
+      timeout: 15000,
+    };
+
+    const result = await bound.request<{ ok: boolean }>(
+      'https://example.test/timesheet/entries.json',
+      options,
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(pluginHttpService.createHttpHelper).toHaveBeenCalledTimes(1);
+    const getHeaders = pluginHttpService.createHttpHelper.calls.mostRecent().args[0] as
+      | (() => Record<string, string>)
+      | (() => Promise<Record<string, string>>);
+    await expectAsync(Promise.resolve(getHeaders())).toBeResolvedTo({});
+    expect(requestSpy).toHaveBeenCalledOnceWith(
+      'POST',
+      'https://example.test/timesheet/entries.json',
+      { hours: '1.50' },
+      {
+        params: undefined,
+        headers: { Authorization: 'Bearer plugin-token' },
+        timeout: 15000,
+        responseType: undefined,
+      },
+    );
+  });
+});
+
 describe('PluginBridgeService - openDialog', () => {
   let service: PluginBridgeService;
   let matDialog: jasmine.SpyObj<MatDialog>;

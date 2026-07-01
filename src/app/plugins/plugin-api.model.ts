@@ -17,6 +17,7 @@ export {
   PluginHeaderBtnCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
+  PluginRequestOptions,
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,

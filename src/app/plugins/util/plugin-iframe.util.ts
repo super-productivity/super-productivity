@@ -55,6 +55,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'updateTag',
   'showSnack',
   'notify',
+  'request',
   'translate',
   'formatDate',
   'getCurrentLanguage',
@@ -431,6 +432,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           // UI methods
           showSnack: (cfg) => callApi('showSnack', [cfg]),
           notify: (cfg) => callApi('notify', [cfg]),
+          request: (url, options) => callApi('request', [url, options]),
           openDialog: (cfg) => callApi('openDialog', [cfg]),
           showIndexHtmlAsView: () => callApi('showIndexHtmlAsView'),
           showIndexHtmlInSidePanel: () => callApi('showIndexHtmlInSidePanel'),

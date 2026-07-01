@@ -36,6 +36,7 @@ import {
   PluginAppState,
   PluginManifest,
   PluginNote,
+  PluginRequestOptions,
   PluginSimpleCounterFull,
   PluginTaskRepeatCfg,
   SnackCfg,
@@ -275,6 +276,7 @@ export class PluginBridgeService implements OnDestroy {
     setSecret: (key: string, value: string) => Promise<void>;
     getSecret: (key: string) => Promise<string | null>;
     deleteSecret: (key: string) => Promise<void>;
+    request: <T = unknown>(url: string, options?: PluginRequestOptions) => Promise<T>;
     translate: (key: string, params?: Record<string, string | number>) => string;
     formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
     getCurrentLanguage: () => string;
@@ -376,6 +378,10 @@ export class PluginBridgeService implements OnDestroy {
         this._pluginSecretService.getSecret(pluginId, key),
       deleteSecret: (key: string): Promise<void> =>
         this._pluginSecretService.deleteSecret(pluginId, key),
+      request: <T = unknown>(
+        url: string,
+        options?: PluginRequestOptions,
+      ): Promise<T> => this.request<T>(url, options),
 
       // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>
@@ -499,6 +505,25 @@ export class PluginBridgeService implements OnDestroy {
 
   async clearOAuthTokens(pluginId: string): Promise<void> {
     return this._pluginOAuthBridge.clearOAuthTokens(pluginId);
+  }
+
+  async request<T = unknown>(
+    url: string,
+    options?: PluginRequestOptions,
+  ): Promise<T> {
+    const { method = 'GET', body } = options ?? {};
+    const requestOptions = options
+      ? {
+          params: options.params,
+          headers: options.headers,
+          timeout: options.timeout,
+          responseType: options.responseType,
+        }
+      : undefined;
+
+    return this._pluginHttpService
+      .createHttpHelper(() => ({}))
+      .request<T>(method, url, body, requestOptions);
   }
 
   async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {

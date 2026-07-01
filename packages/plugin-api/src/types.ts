@@ -4,6 +4,7 @@
 import {
   IssueProviderManifestConfig,
   IssueProviderPluginDefinition,
+  PluginHttpOptions,
 } from './issue-provider-types';
 
 export interface PluginMenuEntryCfg {
@@ -489,6 +490,11 @@ export interface PluginAppState {
   readonly globalConfig: Readonly<Record<string, unknown>>;
 }
 
+export interface PluginRequestOptions extends PluginHttpOptions {
+  method?: string;
+  body?: unknown;
+}
+
 export interface PluginAPI {
   cfg: PluginBaseCfg;
   readonly Hooks: typeof PluginHooks;
@@ -708,6 +714,13 @@ export interface PluginAPI {
   getSecret(key: string): Promise<string | null>;
 
   deleteSecret(key: string): Promise<void>;
+
+  /**
+   * Issue a host-side HTTP request through Super Productivity's guarded HTTP bridge.
+   * Plugins must provide any Authorization headers themselves; the host only executes
+   * the request and applies existing URL/private-network protections.
+   */
+  request<T = unknown>(url: string, options?: PluginRequestOptions): Promise<T>;
 
   // download file
   downloadFile(filename: string, data: string): Promise<void>;

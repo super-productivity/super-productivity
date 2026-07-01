@@ -14,6 +14,7 @@ describe('PluginAPI', () => {
   let showIndexHtmlAsViewSpy: jasmine.Spy;
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
+  let requestSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
@@ -36,6 +37,7 @@ describe('PluginAPI', () => {
     showIndexHtmlAsViewSpy = jasmine.createSpy('showIndexHtmlAsView');
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
+    requestSpy = jasmine.createSpy('request').and.resolveTo({ ok: true });
     getSelectedTaskSpy = jasmine
       .createSpy('getSelectedTask')
       .and.resolveTo({ id: 'selected-task', title: 'Selected Task' });
@@ -55,6 +57,7 @@ describe('PluginAPI', () => {
     mockBridge.createBoundMethods.and.returnValue({
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
+      request: requestSpy,
       getSelectedTask: getSelectedTaskSpy,
       getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
@@ -157,6 +160,24 @@ describe('PluginAPI', () => {
 
       expect(result).toBe('Continue');
       expect(mockBridge.openDialog).toHaveBeenCalledOnceWith(dialogCfg);
+    });
+  });
+
+  describe('request()', () => {
+    it('should delegate host HTTP requests to the bound bridge method', async () => {
+      const options = {
+        method: 'POST',
+        headers: { Authorization: 'Bearer mock-token' },
+        body: { ok: true },
+      };
+
+      const result = await pluginAPI.request<{ ok: boolean }>(
+        'https://example.test/api',
+        options,
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(requestSpy).toHaveBeenCalledOnceWith('https://example.test/api', options);
     });
   });
 

@@ -19,6 +19,7 @@ import {
   PluginMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
+  PluginRequestOptions,
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
@@ -621,6 +622,16 @@ export class PluginAPI implements PluginAPIInterface {
   async deleteSecret(key: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested secret delete`);
     return this.#boundMethods.deleteSecret(key);
+  }
+
+  async request<T = unknown>(
+    url: string,
+    options?: PluginRequestOptions,
+  ): Promise<T> {
+    PluginLog.log(
+      `Plugin ${this.#pluginId} requested host HTTP ${options?.method ?? 'GET'}`,
+    );
+    return this.#boundMethods.request<T>(url, options);
   }
 
   /**
