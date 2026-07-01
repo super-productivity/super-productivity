@@ -1377,7 +1377,10 @@ export class SyncWrapperService {
     // Consume the one-shot flag HERE (not at dialog-open) so it can't leak to a
     // later, unrelated sync via one of the early-returns below. A failed setup sync
     // returns HANDLED_ERROR and never reaches this method, so the arming survives
-    // and retries on the next successful sync.
+    // and retries on the next successful sync. Tradeoff: if the modal-open is later
+    // blocked (another dialog open / TOCTOU guard below), the flag is already spent
+    // and this modal won't retry — acceptable because the migration banner catches
+    // the still-unencrypted account on the next app start (seq is now > 0).
     // TODO(#8670): once the mandatory-encryption upload guard lands, retire this
     // modal + flag entirely and let the banner own all cohorts.
     if (!this._shouldPromptEncryptionAfterSetupSync) {

@@ -186,11 +186,12 @@ describe('DialogSyncCfgComponent', () => {
   });
 
   describe('save() — SuperSync fresh-setup encryption prompt flag', () => {
-    // navigator.onLine is false in the sandbox; force it true so the online-only
-    // sync/flag branch runs deterministically.
-    const forceOnline = (): void => {
-      spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    // navigator.onLine is false in the sandbox; pin it explicitly so the
+    // online-gated sync branch runs deterministically regardless of environment.
+    const setOnline = (isOnline: boolean): void => {
+      spyOnProperty(navigator, 'onLine', 'get').and.returnValue(isOnline);
     };
+    const forceOnline = (): void => setOnline(true);
 
     const superSyncProvider = {
       id: SyncProviderId.SuperSync,
@@ -213,6 +214,28 @@ describe('DialogSyncCfgComponent', () => {
       expect(
         mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
       ).toHaveBeenCalledTimes(1);
+    });
+
+    it('arms the flag even when offline (setup sync runs once back online)', async () => {
+      // Regression guard: the flag must be armed OUTSIDE the isOnline() gate, else
+      // an offline SuperSync setup silently syncs unencrypted with no prompt later.
+      setOnline(false);
+      mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        isEnabled: true,
+        _isInitialSetup: true,
+      };
+
+      await component.save();
+
+      expect(
+        mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
+      ).toHaveBeenCalledTimes(1);
+      // Offline → no sync kicked off this session.
+      expect(mockSyncWrapperService.sync).not.toHaveBeenCalled();
     });
 
     it('does NOT flag when re-saving an already-established SuperSync config', async () => {
