@@ -45,6 +45,7 @@ const config: CapacitorConfig = {
     // @capacitor/keyboard Android-side registers an unused insets callback
     // that can crash in Keyboard$1.onEnd on some devices.
     includePlugins: [
+      '@capacitor-community/sqlite',
       '@capacitor/browser',
       '@capacitor/status-bar',
       'capacitor-plugin-safe-area',

@@ -71,6 +71,18 @@ class SqlJsDb implements SqliteDb {
     return { changes, lastId };
   }
 
+  async runSet(
+    set: ReadonlyArray<{ statement: string; values: unknown[] }>,
+  ): Promise<void> {
+    // sql.js has no executeSet; loop run() in declaration order. This still
+    // exercises the adapter's batch path (statement/param building + chunking)
+    // and proves it produces the same data — the native one-crossing win is the
+    // plugin's contract, validated on-device.
+    for (const { statement, values } of set) {
+      this._db.run(statement, values);
+    }
+  }
+
   async query(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
     const stmt = this._db.prepare(sql);
     try {

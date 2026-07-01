@@ -4,4 +4,14 @@
   <exclude
     domain="sharedpref"
     path="com.superproductivity.superproductivity_preferences.xml" />
+  <!--
+    Pre-Android-12 equivalent of data_extraction_rules.xml. Exclude the AUTHORITATIVE
+    native SQLite op-log (SUP_OPS) from Auto Backup: a stale restore seeds it before
+    boot hydration and can confuse sync reconciliation. The KeyValStore
+    (SupKeyValStore) disaster-recovery backup stays included as the intended restore
+    path. @capacitor-community/sqlite names the file `SUP_OPSSQLite.db` (+ WAL sidecars).
+  -->
+  <exclude domain="database" path="SUP_OPSSQLite.db" />
+  <exclude domain="database" path="SUP_OPSSQLite.db-wal" />
+  <exclude domain="database" path="SUP_OPSSQLite.db-shm" />
 </full-backup-content>

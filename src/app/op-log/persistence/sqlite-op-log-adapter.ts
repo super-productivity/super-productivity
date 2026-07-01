@@ -44,6 +44,7 @@ import {
 } from './op-log-db-adapter';
 import { DbStoreSchema, OP_LOG_DB_SCHEMA, OpLogDbSchema } from './op-log-db-schema';
 import { OPS_INDEXES } from './db-keys.const';
+import { decodeValue, encodeValue } from './value-codec';
 
 /** Column carrying the JSON-encoded stored object. */
 export const VALUE_COLUMN = 'value';
@@ -96,6 +97,51 @@ export interface SqliteDb {
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastId?: number }>;
   /** Run a query, returning rows as plain objects. */
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+  /**
+   * Optional batched write: run many parameterized statements in ONE native
+   * round-trip (the plugin's `executeSet`), within the caller's *current*
+   * transaction (no implicit BEGIN/COMMIT of its own — the adapter's enclosing
+   * transaction governs). This collapses the per-row JS↔native bridge crossings
+   * that dominate the one-time IDB→SQLite migration (N rows = N crossings → a few
+   * crossings). Backends without a bridge may omit it (the sql.js test stand-in
+   * implements it by looping `run`, which still exercises the adapter's batch
+   * path); when absent {@link SqliteOpLogAdapter} falls back to per-row `run`.
+   */
+  runSet?(set: ReadonlyArray<{ statement: string; values: unknown[] }>): Promise<void>;
+  /**
+   * Optional connection-level serializer. A single SQLite connection has exactly
+   * ONE transaction context, so when two services share one connection (the
+   * native backend: OperationLogStoreService + ArchiveStoreService over one
+   * `SUP_OPS` file) their `transaction()`s — and any stray standalone statement —
+   * MUST NOT interleave, or a second `BEGIN` throws "transaction within a
+   * transaction" and stray statements get swept into (and rolled back with) the
+   * wrong transaction. When present, {@link SqliteOpLogAdapter} routes every
+   * top-level op (and each transaction as one unit) through this so the shared
+   * connection only ever runs one at a time. Single-threaded/in-process backends
+   * (the sql.js test stand-in) may omit it — the adapter then runs inline.
+   */
+  runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Optional connection-recovery hook. If a transaction's `COMMIT` *and* its
+   * fallback `ROLLBACK` both fail, the connection may still hold an open
+   * transaction that would make every later `BEGIN` throw "transaction within a
+   * transaction" and wedge the backend. The adapter calls this to drop the
+   * connection so the next op reopens clean. In-process backends (the sql.js
+   * test stand-in) may omit it — there the failure mode does not arise.
+   */
+  reset?(): Promise<void>;
+  /**
+   * Optional durable "does the database file exist on disk?" probe, answerable
+   * WITHOUT opening (or successfully opening) the connection. The native backend
+   * uses it to decide — after a bootstrap failure it could not recover from —
+   * whether it is safe to fall back to the legacy IndexedDB copy: only when NO
+   * SQLite file exists (so a migration can never have committed). A
+   * present-but-unopenable file might hold post-migration ops, so falling back
+   * would silently lose them. Returns `false` when the plugin is unavailable
+   * (SQLite was never authoritative here). In-process backends (the sql.js test
+   * stand-in) may omit it.
+   */
+  databaseExists?(): Promise<boolean>;
 }
 
 /**
@@ -242,7 +288,7 @@ const buildInsert = (
     }
   }
   columns.push(VALUE_COLUMN);
-  params.push(JSON.stringify(value));
+  params.push(encodeValue(value));
   for (const ic of plan.indexColumns) {
     columns.push(ic.column);
     params.push(toSqlValue(extractPath(value, ic.jsonPath)));
@@ -251,7 +297,7 @@ const buildInsert = (
 };
 
 const decodeRow = <T>(plan: SqlTablePlan, row: Record<string, unknown>): T => {
-  const value = JSON.parse(row[VALUE_COLUMN] as string) as Record<string, unknown>;
+  const value = decodeValue(row[VALUE_COLUMN] as string) as Record<string, unknown>;
   // The autoinc PK (`seq`) lives in its own column, never the JSON `value` blob
   // — inject it back (from the `__pk` alias every read selects) so callers see
   // `.seq`, exactly like IDB's keyPath+autoIncrement store. keyPath stores keep
@@ -318,6 +364,27 @@ const whereRange = (
 
 const whereClause = (clause: string): string => (clause ? ` WHERE ${clause}` : '');
 
+/** AND together the non-empty WHERE fragments. */
+const andClauses = (...parts: string[]): string => parts.filter(Boolean).join(' AND ');
+
+/**
+ * IndexedDB omits a record from an index when its index key path evaluates to
+ * `undefined`. Reproduce that in SQL: an index scan must only see rows whose
+ * index column(s) are non-NULL. Local ops store `syncedAt: undefined`, so they
+ * are absent from IDB's `bySyncedAt` index; without this filter the SQLite scan
+ * would visit them and diverge — e.g. `hasSyncedOps` would report an unsynced op
+ * as synced. Exact-match index lookups (`whereExact`, `= ?`) already exclude
+ * NULLs, so this matters for the unbounded / open-range index scans.
+ */
+const indexNotNull = (columns: string[]): string =>
+  columns.map((c) => `${c} IS NOT NULL`).join(' AND ');
+
+/** `LIMIT n` for a positive integer `n`, else empty. Bound never carries data. */
+const limitClause = (limit?: number): string =>
+  typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+    ? ` LIMIT ${Math.floor(limit)}`
+    : '';
+
 // ── SQL operations (shared by the adapter and its transaction) ───────────────
 //
 // Every method takes a SqliteDb so the same code serves both the adapter
@@ -340,24 +407,77 @@ const sqlAdd = async (
   }
 };
 
-const sqlPut = async (
-  db: SqliteDb,
+/** Max rows per `executeSet` batch — bounds one native call's payload + duration. */
+const PUT_BATCH_CHUNK = 500;
+
+/**
+ * The upsert statement + bound params for putting `value` (the single source of
+ * truth shared by single {@link sqlPut} and batched {@link sqlPutBatch}, so they
+ * can never diverge).
+ */
+const buildPutStatement = (
   plan: SqlTablePlan,
   value: unknown,
   key?: DbKey,
-): Promise<void> => {
+): { statement: string; values: (string | number | null)[] } => {
   const { columns, params } = buildInsert(plan, value, key);
   // Never overwrite the primary-key column on conflict (it is the match key).
   const updateCols = columns.filter((c) => c !== plan.pkColumn);
-  const sql =
+  const statement =
     `INSERT INTO ${plan.table} (${columns.join(', ')}) VALUES (${columns
       .map(() => '?')
       .join(', ')}) ` +
     `ON CONFLICT(${plan.pkColumn}) DO UPDATE SET ${updateCols
       .map((c) => `${c} = excluded.${c}`)
       .join(', ')}`;
+  return { statement, values: params };
+};
+
+const sqlPut = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  value: unknown,
+  key?: DbKey,
+): Promise<void> => {
+  const { statement, values } = buildPutStatement(plan, value, key);
   try {
-    await db.run(sql, params);
+    await db.run(statement, values);
+  } catch (e) {
+    mapSqliteError(e);
+  }
+};
+
+/**
+ * Batched {@link sqlPut}: same upsert semantics, but the whole set crosses the
+ * native bridge in one `runSet` (chunked) instead of one crossing per row. When
+ * the backend exposes no `runSet`, falls back to per-row `sqlPut` — identical
+ * result, no batching win. Caller is responsible for the enclosing transaction.
+ */
+const sqlPutBatch = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+): Promise<void> => {
+  if (!entries.length) {
+    return;
+  }
+  if (!db.runSet) {
+    for (const { value, key } of entries) {
+      await sqlPut(db, plan, value, key);
+    }
+    return;
+  }
+  try {
+    // Build AND ship one chunk at a time, so at most PUT_BATCH_CHUNK statements are
+    // ever resident. Mapping the whole `entries` array up front would double the
+    // store's peak memory and defeat the migration's one-store-at-a-time bound on
+    // large accounts / low-end devices.
+    for (let i = 0; i < entries.length; i += PUT_BATCH_CHUNK) {
+      const chunk = entries
+        .slice(i, i + PUT_BATCH_CHUNK)
+        .map(({ value, key }) => buildPutStatement(plan, value, key));
+      await db.runSet(chunk);
+    }
   } catch (e) {
     mapSqliteError(e);
   }
@@ -456,13 +576,12 @@ const sqlGetAllFromIndex = async <T>(
   range?: DbKeyRange,
 ): Promise<T[]> => {
   const idx = indexPlan(plan, indexName);
-  const { clause, params } = whereRange(
-    idx.columns.map((c) => c.column),
-    range,
-  );
-  const order = idx.columns.map((c) => c.column).join(', ');
+  const cols = idx.columns.map((c) => c.column);
+  const { clause, params } = whereRange(cols, range);
+  const fullClause = andClauses(clause, indexNotNull(cols));
+  const order = cols.join(', ');
   const rows = await db.query(
-    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${order} ASC`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(fullClause)} ORDER BY ${order} ASC`,
     params,
   );
   return rows.map((r) => decodeRow<T>(plan, r));
@@ -480,9 +599,10 @@ const sqlIterate = async <T>(
   options: DbIterateOptions,
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
-  const orderCols = options.index
+  const indexCols = options.index
     ? indexPlan(plan, options.index).columns.map((c) => c.column)
-    : [plan.pkColumn];
+    : null;
+  const orderCols = indexCols ?? [plan.pkColumn];
   const dir = options.direction === 'prev' ? 'DESC' : 'ASC';
 
   let clause = '';
@@ -492,10 +612,15 @@ const sqlIterate = async <T>(
     clause = ex.clause;
     params = ex.params;
   }
+  // Match IDB: an index scan never visits rows whose index key is NULL.
+  if (indexCols) {
+    clause = andClauses(clause, indexNotNull(indexCols));
+  }
 
   const rows = await db.query(
     `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}` +
-      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}`,
+      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}` +
+      limitClause(options.limit),
     params,
   );
 
@@ -550,14 +675,28 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     return plan;
   }
 
-  async init(): Promise<void> {
+  /**
+   * Serialize a top-level operation on the connection when the backend exposes a
+   * serializer ({@link SqliteDb.runExclusive}) — needed when two services share
+   * one connection. A transaction is wrapped as ONE unit so its inner statements
+   * (issued directly on `_db` by {@link SqliteOpLogTx}, NOT re-serialized) can
+   * never interleave with another op. No public method calls another, so this
+   * never re-enters / deadlocks. Backends without a serializer run inline.
+   */
+  private _exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    return this._db.runExclusive ? this._db.runExclusive(fn) : fn();
+  }
+
+  init(): Promise<void> {
     // Apply DDL for every store. Idempotent via `IF NOT EXISTS`. Phase C adds
     // the one-time IDB→SQLite data copy ahead of first use.
-    for (const plan of this._plans.values()) {
-      for (const stmt of buildDdl(plan)) {
-        await this._db.run(stmt);
+    return this._exclusive(async () => {
+      for (const plan of this._plans.values()) {
+        for (const stmt of buildDdl(plan)) {
+          await this._db.run(stmt);
+        }
       }
-    }
+    });
   }
 
   close(): void {
@@ -565,31 +704,31 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   add(store: string, value: unknown): Promise<number> {
-    return sqlAdd(this._db, this._plan(store), value);
+    return this._exclusive(() => sqlAdd(this._db, this._plan(store), value));
   }
 
   put(store: string, value: unknown, key?: DbKey): Promise<void> {
-    return sqlPut(this._db, this._plan(store), value, key);
+    return this._exclusive(() => sqlPut(this._db, this._plan(store), value, key));
   }
 
   get<T>(store: string, key: DbKey): Promise<T | undefined> {
-    return sqlGet<T>(this._db, this._plan(store), key);
+    return this._exclusive(() => sqlGet<T>(this._db, this._plan(store), key));
   }
 
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAll<T>(this._db, this._plan(store), range);
+    return this._exclusive(() => sqlGetAll<T>(this._db, this._plan(store), range));
   }
 
   delete(store: string, key: DbKey): Promise<void> {
-    return sqlDelete(this._db, this._plan(store), key);
+    return this._exclusive(() => sqlDelete(this._db, this._plan(store), key));
   }
 
   clear(store: string): Promise<void> {
-    return sqlClear(this._db, this._plan(store));
+    return this._exclusive(() => sqlClear(this._db, this._plan(store)));
   }
 
   count(store: string, range?: DbKeyRange): Promise<number> {
-    return sqlCount(this._db, this._plan(store), range);
+    return this._exclusive(() => sqlCount(this._db, this._plan(store), range));
   }
 
   getFromIndex<T>(
@@ -597,7 +736,9 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<T | undefined> {
-    return sqlGetFromIndex<T>(this._db, this._plan(store), index, key);
+    return this._exclusive(() =>
+      sqlGetFromIndex<T>(this._db, this._plan(store), index, key),
+    );
   }
 
   getKeyFromIndex(
@@ -605,48 +746,58 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<DbKey | undefined> {
-    return sqlGetKeyFromIndex(this._db, this._plan(store), index, key);
+    return this._exclusive(() =>
+      sqlGetKeyFromIndex(this._db, this._plan(store), index, key),
+    );
   }
 
   getAllFromIndex<T>(store: string, index: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAllFromIndex<T>(this._db, this._plan(store), index, range);
+    return this._exclusive(() =>
+      sqlGetAllFromIndex<T>(this._db, this._plan(store), index, range),
+    );
   }
 
   countFromIndex(store: string, index: string, range?: DbKeyRange): Promise<number> {
-    const plan = this._plan(store);
-    const idx = indexPlan(plan, index);
-    const { clause, params } = whereRange(
-      idx.columns.map((c) => c.column),
-      range,
-    );
-    return this._db
-      .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
-      .then((rows) => Number(rows[0]?.['n'] ?? 0));
+    return this._exclusive(async () => {
+      const plan = this._plan(store);
+      const idx = indexPlan(plan, index);
+      const cols = idx.columns.map((c) => c.column);
+      const { clause, params } = whereRange(cols, range);
+      const fullClause = andClauses(clause, indexNotNull(cols));
+      const rows = await this._db.query(
+        `SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(fullClause)}`,
+        params,
+      );
+      return Number(rows[0]?.['n'] ?? 0);
+    });
   }
 
-  async iterate<T>(
+  iterate<T>(
     store: string,
     options: DbIterateOptions,
     visit: DbCursorVisitor<T>,
   ): Promise<void> {
     const plan = this._plan(store);
-    // A delete-capable scan must be atomic; a pure read scan needs no lock.
+    // A delete-capable scan must be atomic; a pure read scan needs no lock — but
+    // both still serialize on the shared connection so they can't interleave
+    // with another op's open transaction.
     if (options.mode === 'readonly') {
-      await sqlIterate(this._db, plan, options, visit);
-      return;
+      return this._exclusive(() => sqlIterate(this._db, plan, options, visit));
     }
-    await this._inTransaction('IMMEDIATE', async () => {
-      await sqlIterate(this._db, plan, options, visit);
-    });
+    return this._exclusive(() =>
+      this._inTransaction('IMMEDIATE', () => sqlIterate(this._db, plan, options, visit)),
+    );
   }
 
-  async transaction<T>(
+  transaction<T>(
     stores: string[],
     mode: DbTxMode,
     fn: (tx: OpLogTx) => Promise<T>,
   ): Promise<T> {
-    return this._inTransaction(mode === 'readonly' ? 'DEFERRED' : 'IMMEDIATE', () =>
-      fn(new SqliteOpLogTx(this._db, this._plans, new Set(stores), mode)),
+    return this._exclusive(() =>
+      this._inTransaction(mode === 'readonly' ? 'DEFERRED' : 'IMMEDIATE', () =>
+        fn(new SqliteOpLogTx(this._db, this._plans, new Set(stores), mode)),
+      ),
     );
   }
 
@@ -655,18 +806,46 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     kind: 'IMMEDIATE' | 'DEFERRED',
     fn: () => Promise<T>,
   ): Promise<T> {
-    await this._db.run(`BEGIN ${kind}`);
+    try {
+      await this._db.run(`BEGIN ${kind}`);
+    } catch (e) {
+      // A failing BEGIN (e.g. "transaction within a transaction" from a leaked
+      // prior tx, or a wedged-connection timeout) is the one spot on the shared
+      // connection that wouldn't otherwise self-heal — every later BEGIN would
+      // fail too. Drop the connection so the next op reopens clean, then rethrow.
+      if (this._db.reset) {
+        await this._db.reset().catch(() => undefined);
+      }
+      return mapSqliteError(e);
+    }
     try {
       const result = await fn();
       await this._db.run('COMMIT');
       return result;
     } catch (e) {
-      try {
-        await this._db.run('ROLLBACK');
-      } catch {
-        // Already rolled back / no active transaction.
-      }
+      await this._rollback();
       return mapSqliteError(e);
+    }
+  }
+
+  /**
+   * Best-effort rollback of the open transaction. If `ROLLBACK` itself fails the
+   * connection may still hold the transaction, which would make the next `BEGIN`
+   * throw "transaction within a transaction" and wedge every later op — so we
+   * fall back to {@link SqliteDb.reset} (when the backend offers it) to drop the
+   * connection and force a clean reopen.
+   */
+  private async _rollback(): Promise<void> {
+    try {
+      await this._db.run('ROLLBACK');
+      return;
+    } catch {
+      // ROLLBACK failed — recover via a connection reset below.
+    }
+    try {
+      await this._db.reset?.();
+    } catch {
+      // Nothing more we can safely do here.
     }
   }
 }
@@ -707,6 +886,15 @@ class SqliteOpLogTx implements OpLogTx {
     return sqlPut(this._db, this._plan(store), value, key);
   }
 
+  putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void> {
+    // Already inside the enclosing BEGIN/COMMIT — sqlPutBatch issues directly on
+    // _db (one executeSet per chunk), so the whole batch shares this atomic unit.
+    return sqlPutBatch(this._db, this._plan(store), entries);
+  }
+
   get<T>(store: string, key: DbKey): Promise<T | undefined> {
     return sqlGet<T>(this._db, this._plan(store), key);
   }
@@ -721,6 +909,10 @@ class SqliteOpLogTx implements OpLogTx {
 
   clear(store: string): Promise<void> {
     return sqlClear(this._db, this._plan(store));
+  }
+
+  count(store: string, range?: DbKeyRange): Promise<number> {
+    return sqlCount(this._db, this._plan(store), range);
   }
 
   getFromIndex<T>(
