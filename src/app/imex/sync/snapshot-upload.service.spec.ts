@@ -389,6 +389,10 @@ describe('SnapshotUploadService', () => {
       });
 
       it('throws (before deleting) when enabling without a usable key', async () => {
+        // Crypto must be available so the WebCrypto-availability check passes and
+        // execution reaches the mandatory-encryption guard (the assertion target).
+        mockCryptoSubtleAvailable();
+
         await expectAsync(
           service.deleteAndReuploadWithNewEncryption({
             encryptKey: undefined,
