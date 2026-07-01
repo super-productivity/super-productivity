@@ -39,12 +39,13 @@ export class TaskAttachmentLinkDirective {
       } else if (type === 'FILE') {
         window.ea.openPath(href);
       } else if (type === 'COMMAND') {
+        // COMMAND attachments can no longer run shell commands: the exec IPC was
+        // removed to close GHSA-256q. Legacy/imported COMMAND attachments still
+        // render but are inert on click.
         this._snackService.open({
-          msg: T.GLOBAL_SNACK.RUNNING_X,
-          translateParams: { str: href },
-          ico: 'laptop_windows',
+          msg: T.F.ATTACHMENT.COMMAND_UNSUPPORTED,
+          type: 'ERROR',
         });
-        this._exec(href);
       }
     } else if (this.type() === 'LINK') {
       this._openExternalUrl(href);
@@ -73,9 +74,5 @@ export class TaskAttachmentLinkDirective {
         win.focus();
       }
     }
-  }
-
-  private _exec(command: string): void {
-    window.ea.exec(command);
   }
 }

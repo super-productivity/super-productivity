@@ -92,6 +92,7 @@
     },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
+      "COMMAND_UNSUPPORTED": "Command attachments can no longer run commands.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Add Link",
         "EDIT_ATTACHMENT": "Edit Link",
@@ -2649,7 +2650,6 @@
     "OPEN_SETTINGS_ERROR": "Could not open settings",
     "PERSISTENCE_DISALLOWED": "Data will not be persisted permanently. Be aware that this can lead to data loss!",
     "PERSISTENCE_ERROR": "Error when requesting to persist data: {{err}}",
-    "RUNNING_X": "Running \"{{str}}\".",
     "SAVE_BLOCKED_DURING_SYNC": "Sync in progress - some changes may need to be re-saved",
     "SHARE_FAILED": "Sharing failed. Please copy manually.",
     "SHARE_FAILED_FALLBACK": "Sharing failed. Copied to clipboard instead.",

@@ -250,8 +250,6 @@ export interface ElectronAPI {
 
   onSwitchTask(listener: (taskId: string) => void): void;
 
-  exec(command: string): void;
-
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
   // Plugin OAuth

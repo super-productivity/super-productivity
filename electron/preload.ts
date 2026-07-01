@@ -228,8 +228,6 @@ const ea: ElectronAPI = {
       focusModeMode,
     ),
 
-  exec: (command: string) => _send('EXEC', command),
-
   updateTodayTasks: (tasks: any[]) => _send('TODAY_TASKS_UPDATED', tasks),
 
   onSwitchTask: (listener: (taskId: string) => void) => {
