@@ -184,12 +184,27 @@ const EXECUTABLE_FILE_EXTENSIONS = new Set<string>([
   'jnlp',
   'gadget',
   'application',
+  'appref-ms', // ClickOnce launcher (sibling of .application)
+  'settingcontent-ms', // runs arbitrary commands via ShellExecute (LOLBin RCE)
+  'library-ms', // crafted library files have been used for code exec
+  'wsc', // Windows Script Component (sibling of .wsf/.wsh)
+  'chm', // compiled HTML help — executes on open
+  'hlp', // legacy WinHelp — executes on open
+  'diagcab', // Windows troubleshooter package — runs on open
+  'msix',
+  'msixbundle',
+  'appx',
+  'appxbundle',
   // macOS
   'command',
   'app',
   'workflow',
   'action',
   'scpt',
+  'pkg', // launches the Installer for an arbitrary package
+  'terminal', // Terminal settings file that also runs a command on open
+  'fileloc', // location files abused to run commands (CVE-2022-42821)
+  'inetloc',
   // Linux / cross-platform
   'sh',
   'bash',
@@ -216,11 +231,15 @@ export const hasExecutableFileExtension = (path: unknown): boolean => {
   if (typeof path !== 'string') {
     return false;
   }
-  // Drop query/fragment (`file:///x.bat?y`) and trailing Windows dots/spaces.
-  const candidate = path
-    .trim()
-    .split(/[?#]/)[0]
-    .replace(/[ .]+$/, '');
+  const trimmed = path.trim();
+  // Drop the query/fragment ONLY for real `file:` URLs (`file:///x.bat?y`). In a
+  // bare filesystem path `#` is a legal filename char on Windows/NTFS (and both
+  // `#` and `?` are legal on POSIX), so splitting on them there would let
+  // `evil.txt#.bat` — whose real extension ShellExecute reads as `.bat` — slip
+  // through as the harmless-looking `.txt`.
+  const withoutQuery = /^file:/i.test(trimmed) ? trimmed.split(/[?#]/)[0] : trimmed;
+  // Strip trailing Windows dots/spaces (a real filesystem normalization).
+  const candidate = withoutQuery.replace(/[ .]+$/, '');
   const lastSep = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'));
   const base = candidate.slice(lastSep + 1);
   const dot = base.lastIndexOf('.');

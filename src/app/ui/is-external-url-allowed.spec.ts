@@ -224,6 +224,36 @@ describe('hasExecutableFileExtension (shell.openPath execution gate)', () => {
     ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(false));
   });
 
+  it('does NOT treat `#`/`?` in a bare path as a URL delimiter (real ext wins)', () => {
+    // `#` is a legal Windows/NTFS filename char; both `#` and `?` are legal on
+    // POSIX. Splitting on them for a bare path would misread the extension and
+    // let the executable through. The real extension must win here.
+    [
+      'C:\\sync\\evil.txt#.bat', // ShellExecute runs this as .bat
+      '/home/u/evil.txt#.sh',
+      '/home/u/launcher.txt?.desktop',
+      'C:\\sync\\report.pdf#.cmd',
+    ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(true));
+  });
+
+  it('flags additional ShellExecute / launcher vectors', () => {
+    [
+      'x.settingcontent-ms',
+      'x.appref-ms',
+      'x.library-ms',
+      'x.wsc',
+      'x.chm',
+      'x.hlp',
+      'x.diagcab',
+      'x.msix',
+      'x.appx',
+      'payload.pkg',
+      'payload.terminal',
+      'payload.fileloc',
+      'payload.inetloc',
+    ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(true));
+  });
+
   it('returns false for non-string input', () => {
     [undefined, null, 42, { path: 'x.bat' }].forEach((p) =>
       expect(hasExecutableFileExtension(p as unknown as string)).toBe(false),
