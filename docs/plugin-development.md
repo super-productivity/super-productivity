@@ -769,6 +769,10 @@ trusting its code with your data:
   security boundary.
 - Filesystem/process access on desktop goes through `executeNodeScript()`, which stays
   gated by an explicit main-process consent prompt (`nodeExecution` permission).
+- On desktop there is also a separate, more direct path: `window.ea.exec()` runs
+  arbitrary shell commands via `child_process.exec`, gated only by a native
+  confirmation dialog and an optional persistent allow-list (not the `nodeExecution`
+  consent). Removing `exec` from the plugin-reachable bridge is tracked separately.
 
 Only install plugins from sources you trust, and read the code first.
 
