@@ -9,6 +9,16 @@ import { SimpleStoreKey } from '../shared-with-frontend/simple-store.const';
 
 const COMMAND_MAP_PROP = SimpleStoreKey.ALLOWED_COMMANDS;
 
+// Single audited call site for spawning the shell command; both the
+// allow-listed and the just-confirmed paths route exec errors to the frontend.
+const runCommand = (command: string): void => {
+  exec(command, (err) => {
+    if (err) {
+      errorHandlerWithFrontendInform(err);
+    }
+  });
+};
+
 export const initExecIpc = (): void => {
   ipcMain.on(IPC.EXEC, execWithFrontendErrorHandlerInform);
 };
@@ -22,7 +32,9 @@ const execWithFrontendErrorHandlerInform = async (
   // config/dialog/persist failures through the same channel as exec errors and
   // fail closed — a corrupt allow-list must never fall through to executing.
   try {
-    log('trying to run command ' + command);
+    // Do not log the command itself: log history is exportable and a command
+    // can carry secrets in its arguments (CLAUDE.md: never log user content).
+    log('exec IPC: run-command requested');
     const existingData = await loadSimpleStoreAll();
     // Keep the value `unknown` and let Array.isArray narrow it, so the guard is
     // a real type-check (a cast to string[] would assert away the corruption it
@@ -34,11 +46,7 @@ const execWithFrontendErrorHandlerInform = async (
     }
     const allowedCommands: string[] = Array.isArray(stored) ? (stored as string[]) : [];
     if (allowedCommands.includes(command)) {
-      exec(command, (err) => {
-        if (err) {
-          errorHandlerWithFrontendInform(err);
-        }
-      });
+      runCommand(command);
     } else {
       const mainWin = getWin();
       // Security: this confirmation is the only gate before an arbitrary shell
@@ -69,11 +77,7 @@ const execWithFrontendErrorHandlerInform = async (
         if (checkboxChecked) {
           await saveSimpleStore(COMMAND_MAP_PROP, [...allowedCommands, command]);
         }
-        exec(command, (err) => {
-          if (err) {
-            errorHandlerWithFrontendInform(err);
-          }
-        });
+        runCommand(command);
       }
     }
   } catch (err) {
