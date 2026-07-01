@@ -9,7 +9,7 @@ import { T } from 'src/app/t.const';
   providedIn: 'root',
 })
 export class EmlDropService {
-  private readonly taskService = inject(TaskService);
+  private readonly _taskService = inject(TaskService);
   private readonly _snackService = inject(SnackService);
 
   async createTaskFromEml(file: File): Promise<void> {
@@ -25,13 +25,12 @@ export class EmlDropService {
         return;
       }
 
-      const message = `${sender}: ${subject}`;
-      this.taskService.add(message);
+      const message = [sender, subject].filter(Boolean).join(': ');
+      this._taskService.add(message);
       // TODO: add attachment to task
     } catch (e) {
       Log.err(e);
       this._snackService.open({ type: 'ERROR', msg: T.MH.EML_PARSE_ERROR });
     }
-    return;
   }
 }
