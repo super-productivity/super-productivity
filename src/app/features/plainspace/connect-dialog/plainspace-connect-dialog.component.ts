@@ -54,6 +54,10 @@ export class PlainspaceConnectDialogComponent {
 
   readonly T = T;
   readonly host = this._data?.host || 'https://plainspace.org';
+  // Deep link to the dedicated "from Super Productivity" onboarding flow, which
+  // guides token creation — instead of dropping the user on the bare marketing
+  // host. Trailing slash stripped so we never produce a double slash.
+  readonly connectUrl = `${this.host.replace(/\/+$/, '')}/connect/super-productivity`;
   token = '';
   readonly isConnecting = signal(false);
   readonly hasError = signal(false);
