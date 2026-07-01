@@ -232,12 +232,13 @@ export const hasExecutableFileExtension = (path: unknown): boolean => {
     return false;
   }
   const trimmed = path.trim();
-  // Drop the query/fragment ONLY for real `file:` URLs (`file:///x.bat?y`). In a
-  // bare filesystem path `#` is a legal filename char on Windows/NTFS (and both
-  // `#` and `?` are legal on POSIX), so splitting on them there would let
+  // Drop the query/fragment ONLY for a real `file://` URL (`file:///x.bat?y`). In
+  // a bare filesystem path `#` is a legal filename char on Windows/NTFS (and `#`,
+  // `?` and `:` are all legal on POSIX), so splitting on them there would let
   // `evil.txt#.bat` — whose real extension ShellExecute reads as `.bat` — slip
-  // through as the harmless-looking `.txt`.
-  const withoutQuery = /^file:/i.test(trimmed) ? trimmed.split(/[?#]/)[0] : trimmed;
+  // through as the harmless-looking `.txt`. Require the `//` so a POSIX file that
+  // merely starts with the literal `file:` isn't mistaken for a URL either.
+  const withoutQuery = /^file:\/\//i.test(trimmed) ? trimmed.split(/[?#]/)[0] : trimmed;
   // Strip trailing Windows dots/spaces (a real filesystem normalization).
   const candidate = withoutQuery.replace(/[ .]+$/, '');
   const lastSep = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'));

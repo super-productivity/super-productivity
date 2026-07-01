@@ -233,6 +233,10 @@ describe('hasExecutableFileExtension (shell.openPath execution gate)', () => {
       '/home/u/evil.txt#.sh',
       '/home/u/launcher.txt?.desktop',
       'C:\\sync\\report.pdf#.cmd',
+      // POSIX filename that merely starts with the literal `file:` (not a URL) —
+      // `#`/`?` are legal chars here, so the real `.sh`/`.desktop` ext must win.
+      'file:notes.txt#.sh',
+      'file:launcher.txt?.desktop',
     ].forEach((p) => expect(hasExecutableFileExtension(p)).toBe(true));
   });
 
