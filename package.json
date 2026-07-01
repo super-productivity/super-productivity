@@ -346,7 +346,7 @@
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
     "@lmdb/lmdb-linux-x64": "^3.5.4",
     "@lmdb/lmdb-win32-x64": "^3.5.4",
-    "@rollup/rollup-darwin-x64": "4.60.2",
+    "@rollup/rollup-darwin-x64": "4.62.2",
     "@rollup/rollup-linux-x64-gnu": "4.60.2",
     "@rollup/rollup-win32-x64-msvc": "4.60.2"
   },
