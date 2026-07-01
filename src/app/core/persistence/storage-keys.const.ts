@@ -42,6 +42,12 @@ export enum LS {
   // safe" startup banner, so the nudge is shown at most once ever.
   SYNC_SAFETY_NUDGE_DISMISSED = 'SUP_SYNC_SAFETY_NUDGE_DISMISSED',
 
+  // Epoch ms until which the "encrypt your SuperSync account" migration banner
+  // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
+  // a permanent dismiss — an unencrypted E2EE-intended account is re-nudged calmly
+  // rather than nagged every sync or forgotten forever. Device-local, no telemetry.
+  SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL = 'SUP_SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL',
+
   SELECTED_TIME_VIEW = 'SELECTED_TIME_VIEW',
   SCHEDULE_WEEK_ROW_HEIGHT = 'SUP_SCHEDULE_WEEK_ROW_HEIGHT',
 

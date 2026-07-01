@@ -14,6 +14,7 @@ export enum BannerId {
   StartupNote = 'StartupNote',
   DeadlinesToday = 'DeadlinesToday',
   SyncSafetyReminder = 'SyncSafetyReminder',
+  SuperSyncEncryptionMigration = 'SuperSyncEncryptionMigration',
 }
 
 export const BANNER_SORT_PRIO_MAP = {
@@ -30,6 +31,7 @@ export const BANNER_SORT_PRIO_MAP = {
   [BannerId.Offline]: 0,
   [BannerId.InstallWebApp]: 0,
   [BannerId.SyncSafetyReminder]: 0,
+  [BannerId.SuperSyncEncryptionMigration]: 0,
 } as const;
 
 export interface BannerAction {

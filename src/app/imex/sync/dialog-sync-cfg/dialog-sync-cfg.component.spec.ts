@@ -49,6 +49,7 @@ describe('DialogSyncCfgComponent', () => {
     mockSyncWrapperService = jasmine.createSpyObj('SyncWrapperService', [
       'configuredAuthForSyncProviderIfNecessary',
       'sync',
+      'markPromptEncryptionAfterSetupSync',
     ]);
     mockSyncWrapperService.sync.and.resolveTo();
 
@@ -181,6 +182,55 @@ describe('DialogSyncCfgComponent', () => {
 
       expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('save() — SuperSync fresh-setup encryption prompt flag', () => {
+    // navigator.onLine is false in the sandbox; force it true so the online-only
+    // sync/flag branch runs deterministically.
+    const forceOnline = (): void => {
+      spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    };
+
+    const superSyncProvider = {
+      id: SyncProviderId.SuperSync,
+      isReady: jasmine.createSpy('isReady').and.resolveTo(true),
+    };
+
+    it('flags the setup sync when SuperSync is enabled from a disabled state (fresh setup)', async () => {
+      forceOnline();
+      mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        isEnabled: true,
+        _isInitialSetup: true,
+      };
+
+      await component.save();
+
+      expect(
+        mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT flag when re-saving an already-established SuperSync config', async () => {
+      forceOnline();
+      mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        isEnabled: true,
+        _isInitialSetup: false,
+      };
+
+      await component.save();
+
+      expect(
+        mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
+      ).not.toHaveBeenCalled();
     });
   });
 

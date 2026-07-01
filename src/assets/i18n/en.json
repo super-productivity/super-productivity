@@ -6,6 +6,12 @@
       "MSG": "Do you want to install Super Productivity as a PWA (Progressive Web App)?"
     },
     "B_OFFLINE": "You are disconnected from the internet. Syncing and requesting issue provider data will not work.",
+    "B_SUPER_SYNC_ENCRYPTION": {
+      "ALREADY_ENCRYPTED": "This account is already encrypted on another device. Enter your existing password to keep syncing.",
+      "ENABLE": "Enable encryption",
+      "LATER": "Later",
+      "MSG": "SuperSync is end-to-end encrypted, but this account still syncs without a password. Set one to protect your data — it stays and is re-uploaded encrypted on the next sync."
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "Not now",
       "MSG": "You've been using Super Productivity for a while. Set up sync to back up your data and keep it safe across devices.",

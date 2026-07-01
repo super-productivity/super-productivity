@@ -1330,6 +1330,24 @@ export class SyncWrapperService {
   private _isOpeningEncryptionDialog = false;
 
   /**
+   * One-shot flag: the legacy post-sync setup modal only fires for the fresh-setup
+   * sync (the sync triggered right after the config dialog enables SuperSync).
+   * Established/returning unencrypted accounts are nudged by the calm, dismissible
+   * SuperSyncEncryptionMigrationBannerService instead, so the per-sync modal must
+   * NOT fire for them — otherwise both would prompt at startup. Set by the config
+   * dialog via markPromptEncryptionAfterSetupSync(); consumed on the next prompt.
+   */
+  private _shouldPromptEncryptionAfterSetupSync = false;
+
+  /**
+   * Called by the sync config dialog immediately after (re)enabling SuperSync from
+   * a disabled state, so the setup encryption modal fires once for that setup sync.
+   */
+  markPromptEncryptionAfterSetupSync(): void {
+    this._shouldPromptEncryptionAfterSetupSync = true;
+  }
+
+  /**
    * After a successful sync, checks if SuperSync is active without encryption.
    * If so, opens the encryption dialog. Data has already been synced, so no data loss.
    */
@@ -1357,6 +1375,17 @@ export class SyncWrapperService {
       | undefined;
     if (cfg?.isEncryptionEnabled && cfg?.encryptKey) {
       SyncLog.log('SuperSync encryption already enabled, skipping');
+      return;
+    }
+
+    // Established/returning unencrypted accounts are owned by the calm migration
+    // banner (SuperSyncEncryptionMigrationBannerService). Only fire this dead-end
+    // setup modal for the fresh-setup sync that flagged it, so the two never both
+    // prompt at startup.
+    if (!this._shouldPromptEncryptionAfterSetupSync) {
+      SyncLog.log(
+        'Skipping legacy setup encryption modal — migration banner owns established nudge',
+      );
       return;
     }
 
@@ -1391,6 +1420,8 @@ export class SyncWrapperService {
           return;
         }
 
+        // Consume the one-shot setup flag now that the modal is actually opening.
+        this._shouldPromptEncryptionAfterSetupSync = false;
         this._encryptionRequiredDialog = this._matDialog.open(
           DialogEnableEncryptionComponent,
           {
