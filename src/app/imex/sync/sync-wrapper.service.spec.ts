@@ -1819,6 +1819,99 @@ describe('SyncWrapperService', () => {
     });
   });
 
+  describe('_promptSuperSyncEncryptionIfNeeded() — post-sync encryption prompt', () => {
+    let privateCfgLoad: jasmine.Spy;
+    // Drive openDialogs through a getter over a closure variable so mutations are
+    // reliably observed by the service (Jasmine property-bag values are not).
+    let openDialogs: unknown[];
+
+    beforeEach(() => {
+      openDialogs = [];
+      Object.defineProperty(mockMatDialog, 'openDialogs', {
+        configurable: true,
+        get: () => openDialogs,
+      });
+      privateCfgLoad = jasmine
+        .createSpy('privateCfg.load')
+        .and.resolveTo({ isEncryptionEnabled: false, encryptKey: '' });
+      mockProviderManager.getActiveProvider.and.returnValue({
+        id: SyncProviderId.SuperSync,
+        privateCfg: { load: privateCfgLoad },
+      } as any);
+      mockMatDialog.open.and.returnValue({ afterClosed: () => of(undefined) } as any);
+    });
+
+    const callPrompt = (): Promise<void> =>
+      (service as any)._promptSuperSyncEncryptionIfNeeded();
+
+    const waitMs = (ms: number): Promise<void> =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
+    it('opens the encryption dialog immediately when no other dialog is open', async () => {
+      openDialogs = [];
+
+      await callPrompt();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+    });
+
+    it('defers the prompt while a dialog is open, then opens it once it closes (#8670)', async () => {
+      // Simulate the sync-config dialog still playing its close animation: with the
+      // E2EE-mandatory upload guard the first sync now completes almost instantly,
+      // so the prompt fires while the config dialog is still in openDialogs.
+      openDialogs = [{}];
+
+      const done = callPrompt();
+      // Prompt must NOT open while the dialog is still there (several poll cycles)…
+      await waitMs(250);
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+
+      // …but must open once the dialog finishes closing (never dropped).
+      openDialogs = [];
+      await done;
+      expect(mockMatDialog.open).toHaveBeenCalled();
+    });
+
+    it('does not prompt if encryption gets configured while waiting for the dialog to close', async () => {
+      openDialogs = [{}];
+
+      const done = callPrompt();
+      await waitMs(250);
+
+      // The open dialog configured encryption itself (e.g. an enter-password flow);
+      // once it closes the re-check must see the key and skip the enable prompt.
+      privateCfgLoad.and.resolveTo({ isEncryptionEnabled: true, encryptKey: 'key' });
+      openDialogs = [];
+      await done;
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('skips when encryption is already enabled', async () => {
+      privateCfgLoad.and.resolveTo({ isEncryptionEnabled: true, encryptKey: 'key' });
+      openDialogs = [];
+
+      await callPrompt();
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('does not prompt if the active provider is no longer SuperSync after the wait', async () => {
+      openDialogs = [{}];
+
+      const done = callPrompt();
+      await waitMs(250);
+
+      // The closing dialog switched provider / disabled SuperSync while we waited;
+      // the disableClose setup dialog must not open for a stale provider.
+      configSubject.next(createMockSyncConfig(SyncProviderId.Dropbox));
+      openDialogs = [];
+      await done;
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+  });
+
   describe('runWithSyncBlocked()', () => {
     it('should execute the operation and return its result', async () => {
       const result = await service.runWithSyncBlocked(async () => {
