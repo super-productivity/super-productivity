@@ -22,15 +22,13 @@ const MAX_TIMEOUT = 120000;
  * instead, which accepts arbitrary method strings. Standard verbs keep using the
  * normal `HttpClient` path (it handles JSON + works on every platform).
  *
- * Scoped to the verbs the CalDAV calendar plugin actually uses (discovery +
- * event query). Entries MUST stay within the set the native `WebDavHttp` plugin
- * implements (e.g. it rejects `MKCALENDAR`). `PATCH` is also rejected by
- * `HttpURLConnection` and would belong here, but it's used by other providers
- * (GitHub, Google Calendar) whose JSON round-trips need separate on-device
- * verification — tracked separately, intentionally not rerouted here.
- * See issue #8558.
+ * Scoped to the verbs issue-provider plugins need on native platforms. Entries
+ * MUST stay within the set the native `WebDavHttp` plugin implements (e.g. it
+ * rejects `MKCALENDAR`). `PATCH` is required by the GitHub and Google Calendar
+ * issue providers; keep it off any automatic transient retry path because PATCH
+ * is not guaranteed to be idempotent. See issues #8558 and #8579.
  */
-const NATIVE_HTTP_METHODS = new Set(['PROPFIND', 'REPORT']);
+const NATIVE_HTTP_METHODS = new Set(['PROPFIND', 'REPORT', 'PATCH']);
 
 /**
  * Whether plugin HTTP runs in a native Capacitor context. Injectable so tests
