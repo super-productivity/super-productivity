@@ -768,11 +768,11 @@ trusting its code with your data:
   `window.parent.ea` directly, so the `postMessage` bridge is a convenience, not a hard
   security boundary.
 - Filesystem/process access on desktop goes through `executeNodeScript()`, which stays
-  gated by an explicit main-process consent prompt (`nodeExecution` permission).
-- On desktop there is also a separate, more direct path: `window.ea.exec()` runs
-  arbitrary shell commands via `child_process.exec`, gated only by a native
-  confirmation dialog and an optional persistent allow-list (not the `nodeExecution`
-  consent). Removing `exec` from the plugin-reachable bridge is tracked separately.
+  gated by an explicit main-process consent prompt (`nodeExecution` permission). This is
+  the only sanctioned way for a plugin to run native code.
+- There is no `window.ea.exec()`: the old IPC that ran arbitrary shell commands via
+  `child_process.exec` (reachable by any plugin/iframe/XSS, bypassing the `nodeExecution`
+  consent) was removed. Legacy `COMMAND` task attachments no longer execute.
 
 Only install plugins from sources you trust, and read the code first.
 
