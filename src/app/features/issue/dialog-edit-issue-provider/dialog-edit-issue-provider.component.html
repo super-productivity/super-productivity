@@ -183,6 +183,21 @@
                 {{ T.F.ISSUE.DIALOG.LOAD_OPTIONS_FAILED | translate }}
               </span>
             }
+            @case ('empty') {
+              <button
+                mat-stroked-button
+                type="button"
+                color="primary"
+                (click)="loadDynamicOptions()"
+              >
+                <mat-icon>refresh</mat-icon>
+                {{ T.F.ISSUE.DIALOG.RELOAD_OPTIONS | translate }}
+              </button>
+              <span class="empty-status">
+                <mat-icon class="empty-status-icon">info</mat-icon>
+                {{ T.F.ISSUE.DIALOG.NO_OPTIONS_FOUND_HELP | translate }}
+              </span>
+            }
             @default {
               <button
                 mat-stroked-button
