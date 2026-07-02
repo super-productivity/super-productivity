@@ -14,6 +14,7 @@ import * as path from 'path';
 import { join, normalize } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
+import { isLocalFileUrl, openLocalPath } from './open-url';
 import { readFileSync, stat, writeFileSync } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
@@ -435,6 +436,14 @@ function initWinEventListeners(app: Electron.App): void {
     // schemes are OS protocol handlers / UNC paths. See GHSA-hr87-735w-hfq3.
     if (!isExternalUrlSchemeAllowed(url)) {
       error('Refused to open URL with disallowed scheme via openExternal');
+      return;
+    }
+    // A local file: URL (a folder/file linked from a task) must open via
+    // openPath, not openExternal: openExternal percent-encodes the path and
+    // Windows' ShellExecute then can't resolve non-ASCII names or spaces.
+    // See openLocalPath / issue #8695.
+    if (isLocalFileUrl(url)) {
+      openLocalPath(url);
       return;
     }
     // needed for mac; especially for jira urls we might have a host like this www.host.de//
