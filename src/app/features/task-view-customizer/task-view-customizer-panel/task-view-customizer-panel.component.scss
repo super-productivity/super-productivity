@@ -9,3 +9,8 @@
     width: 100%;
   }
 }
+
+.project-list-wrapper {
+  max-height: 280px;
+  overflow-y: auto;
+}
