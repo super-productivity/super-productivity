@@ -29,9 +29,9 @@ describe('GITLAB_PROJECT_REGEX', () => {
       'a.b-c/d_e',
       'group%2Fproject',
       'group%2Fsub%2Fproject',
-      // GitLab allows consecutive hyphens in a path segment; must not be rejected.
-      'foo--bar',
-      'single',
+      // GitLab allows consecutive hyphens in a path segment; must not be rejected
+      // (as long as the reference is still namespace-qualified).
+      'group/foo--bar',
       '12345',
     ];
     validCases.forEach((value) => {
@@ -42,8 +42,9 @@ describe('GITLAB_PROJECT_REGEX', () => {
   });
 
   describe('invalid project identifiers', () => {
-    // Regression for #8665: a display name with a space must be rejected inline
-    // instead of producing a confusing 404 at poll time.
+    // Regression for #8665: both a display name with a space AND a bare
+    // single-segment slug (which the REST API can never resolve, so it 404s at
+    // poll time) must be rejected inline instead.
     const invalidCases = [
       'My Group/My Gitlab',
       'group/Test Gitlab',
@@ -52,6 +53,10 @@ describe('GITLAB_PROJECT_REGEX', () => {
       'trailingSpace ',
       'https://gitlab.com/foo/bar',
       'foo/bar?scope=all',
+      // Missing namespace — the exact value from the #8665 logs.
+      'test_config',
+      'single',
+      'foo--bar',
     ];
     invalidCases.forEach((value) => {
       it(`rejects "${value}"`, () => {

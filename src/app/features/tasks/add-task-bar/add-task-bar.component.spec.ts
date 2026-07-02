@@ -434,6 +434,47 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('onSubmitBtnClick', () => {
+    it('should add the task and refocus the input for rapid entry', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const focusSpy = spyOn(component, 'focusInput');
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+
+      component.onSubmitBtnClick();
+      // Wait for the addTask promise (and its .finally) to settle.
+      await Promise.resolve();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+      expect(focusSpy).toHaveBeenCalled();
+    });
+
+    it('should refocus the input even when nothing is added', async () => {
+      const focusSpy = spyOn(component, 'focusInput');
+      component.stateService.updateInputTxt('   ');
+
+      component.onSubmitBtnClick();
+      await Promise.resolve();
+
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+      expect(focusSpy).toHaveBeenCalled();
+    });
+
+    it('should NOT refocus for CUSTOM repeat (it opens a dialog)', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const focusSpy = spyOn(component, 'focusInput');
+      component.stateService.updateInputTxt('Buy milk');
+      component.stateService.updateCleanText('Buy milk');
+      component.stateService.updateRepeatSetting('CUSTOM');
+
+      component.onSubmitBtnClick();
+      await Promise.resolve();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+      expect(focusSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('note panel', () => {
     it('toggleNote should flip the expanded state', () => {
       // focusInput re-focuses the title input, which tries to open the

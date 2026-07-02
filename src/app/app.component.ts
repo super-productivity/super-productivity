@@ -64,14 +64,10 @@ import { SuperSyncEncryptionMigrationBannerService } from './imex/sync/super-syn
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import {
-  WorkContextType,
-  type WorkContextThemeCfg,
-} from './features/work-context/work-context.model';
+import { WorkContextType } from './features/work-context/work-context.model';
 import { SectionService } from './features/section/section.service';
 import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.component';
 import { TODAY_TAG } from './features/tag/tag.const';
-import { normalizeBackgroundImageBlur } from './features/work-context/work-context.const';
 import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
@@ -94,21 +90,6 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
-
-type WorkContextThemeSource =
-  | {
-      theme?: WorkContextThemeCfg | null;
-    }
-  | null
-  | undefined;
-
-export const getBackgroundOverlayOpacity = (context: WorkContextThemeSource): number => {
-  const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
-  return baseOpacity * 0.01;
-};
-
-export const getBackgroundImageBlur = (context: WorkContextThemeSource): number =>
-  normalizeBackgroundImageBlur(context?.theme?.backgroundImageBlur);
 
 @Component({
   selector: 'app-root',
@@ -226,10 +207,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     { initialValue: null },
   );
 
-  private readonly _activeWorkContext = toSignal(
-    this.workContextService.activeWorkContext$,
-    { initialValue: null },
-  );
   readonly resolvedBgImage = signal<string | null>(null);
 
   isShowOnboardingPresets = signal(
@@ -449,13 +426,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.layoutService.scrollToNewTask(taskId);
   }
 
-  readonly bgOverlayOpacity = computed((): number => {
-    return getBackgroundOverlayOpacity(this._activeWorkContext());
-  });
-
-  readonly bgImageBlur = computed((): number => {
-    return getBackgroundImageBlur(this._activeWorkContext());
-  });
+  // Opacity + blur follow the resolved background source (per-context image or
+  // the global wallpaper), resolved centrally by GlobalThemeService — on
+  // non-context pages the active context is the sticky "Today" default and must
+  // not style the wallpaper.
+  readonly bgOverlayOpacity = this._globalThemeService.bgOverlayOpacity;
+  readonly bgImageBlur = this._globalThemeService.bgImageBlur;
 
   readonly bgImageBlurFilter = computed((): string => {
     const blur = this.bgImageBlur();

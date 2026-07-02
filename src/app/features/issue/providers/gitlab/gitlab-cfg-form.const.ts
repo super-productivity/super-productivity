@@ -8,14 +8,15 @@ import {
   CROSS_ORIGIN_WARNING,
   ISSUE_PROVIDER_COMMON_FORM_FIELDS,
 } from '../../common-issue-form-stuff.const';
-// Matches either a numeric project ID or a path (namespace/project-slug, or its
-// %2F-encoded form). Anchored at both ends: without a leading `^` the original
-// pattern only matched a valid *tail*, so display names with spaces (e.g.
-// "My Group/My Gitlab") passed validation and produced a 404 at poll time (#8665).
-// This is a "did you paste a display name?" sanity guard, not a strict GitLab
-// path validator, so the char class stays permissive (e.g. accepts consecutive
-// hyphens, which GitLab paths allow) rather than risk false-rejecting valid paths.
-export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|[\w%./-]+)$/i;
+// A GitLab project reference is EITHER a numeric project ID OR a namespace-qualified
+// path (`group/project`, subgroups, or the `%2F`-encoded form) — the REST API has no
+// way to resolve a project by a bare slug, so a single-segment name like `test_config`
+// always 404s at poll time (#8665). Require a path separator (`/` or `%2F`) for the
+// non-numeric branch so that mistake gets inline feedback instead. Still permissive
+// about the segment chars (e.g. consecutive hyphens, which GitLab paths allow) to
+// avoid false-rejecting valid paths; the separator lookahead keeps the char class a
+// single unnested quantifier (no catastrophic backtracking).
+export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|(?=.*(?:\/|%2F))[\w.%/-]+)$/i;
 
 export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[] = [
   ...CROSS_ORIGIN_WARNING,

@@ -1200,6 +1200,10 @@
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
       },
+      "B": {
+        "CONTENT_CONFLICT_RESOLVED": "Conflicting edits to {{taskList}} were auto-resolved by keeping the most recent version. Older edits may have been discarded — please double-check.",
+        "CONTENT_CONFLICT_UNTITLED": "Untitled task"
+      },
       "BTN_RESTORE_FROM_HISTORY": "Restore from History",
       "BTN_SYNC_NOW": "Sync Now",
       "C": {
@@ -1587,7 +1591,7 @@
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}",
         "UPLOAD_ERROR": "Unknown Upload Error (Settings correct?): {{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}} operation(s) were permanently rejected by the server and won't be synced.",
-        "VECTOR_CLOCK_LIMIT_REACHED": "Sync has tracked {{originalSize}} devices/browsers, exceeding the limit of {{maxSize}}. Inactive device entries were pruned. Consider a sync reset if you experience issues.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "Sync tidied up old device entries ({{originalSize}} → {{maxSize}}). This is normal — no action needed.",
         "VERSION_TOO_OLD": "Your app version is too old for the synced data. Please update!",
         "VERSION_UNSUPPORTED": "Cannot sync: data requires a newer app version. Please update.",
         "WEB_CRYPTO_NOT_AVAILABLE": "Encryption is not available on this device. On Android, encryption requires a secure context (HTTPS) which is not available. Please disable encryption in sync settings or sync from a desktop web browser."
@@ -2537,7 +2541,11 @@
       "THEME_REMOVE_BUTTON": "Remove theme",
       "THEME_REMOVED_TOAST": "Theme removed; reverted to Default.",
       "THEME_SELECT_LABEL": "Select Theme",
-      "TITLE": "Misc Settings"
+      "TITLE": "Misc Settings",
+      "WALLPAPER": "Wallpaper",
+      "WALLPAPER_BUTTON": "Set wallpaper…",
+      "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",
@@ -2870,6 +2878,7 @@
     "LOGIN_REQUIRED": "A Plainspace API token is required to share a project.",
     "NO_UNCLAIMED": "No unclaimed tasks right now.",
     "OFFLINE": "You're offline. Connecting to Plainspace needs an internet connection.",
+    "OPEN_FAILED": "Could not open the Plainspace project — check your connection and try again.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "RECURRING": "Recurring task",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",

@@ -145,6 +145,69 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
+  it('getSpaceUrl$ resolves {host}/{slug} by matching the stored space id', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'p2' }));
+    const req = httpMock.expectOne(`${BASE}/me`);
+    req.flush({
+      email: 'a@b.c',
+      projects: [
+        { id: 'p1', name: 'One', slug: 'one', memberDisplayName: 'Me', role: 'admin' },
+        { id: 'p2', name: 'Two', slug: 'two', memberDisplayName: 'Me', role: 'member' },
+      ],
+    });
+    expect(await p).toBe('https://plainspace.org/two');
+  });
+
+  it('getSpaceUrl$ also matches the bound space by slug', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'two' }));
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'a@b.c',
+      projects: [
+        { id: 'p2', name: 'Two', slug: 'two', memberDisplayName: 'Me', role: 'member' },
+      ],
+    });
+    expect(await p).toBe('https://plainspace.org/two');
+  });
+
+  it('getSpaceUrl$ returns null when the space is not in the account', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'gone' }));
+    httpMock.expectOne(`${BASE}/me`).flush({ email: 'a@b.c', projects: [] });
+    expect(await p).toBeNull();
+  });
+
+  it('getSpaceUrl$ returns null on error (offline / invalid token)', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$(cfg));
+    httpMock
+      .expectOne(`${BASE}/me`)
+      .flush('boom', { status: 401, statusText: 'Unauthorized' });
+    expect(await p).toBeNull();
+  });
+
+  it('getSpaceUrl$ returns null (no throw) on a malformed /me body', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'p2' }));
+    // 200 with a non-array `projects` — not caught by getMe$'s HTTP catchError.
+    httpMock.expectOne(`${BASE}/me`).flush({ email: 'a@b.c' });
+    expect(await p).toBeNull();
+  });
+
+  it('getSpaceUrl$ returns null when the matched space has a blank slug', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'p2' }));
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'a@b.c',
+      projects: [
+        { id: 'p2', name: 'Two', slug: '', memberDisplayName: 'Me', role: 'member' },
+      ],
+    });
+    expect(await p).toBeNull();
+  });
+
+  it('getSpaceUrl$ returns null without a request when host/spaceId are missing', async () => {
+    expect(
+      await firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: null })),
+    ).toBeNull();
+    // httpMock.verify() in afterEach asserts no /me call was made.
+  });
+
   it('createSpace$ returns the new project id', async () => {
     const p = firstValueFrom(service.createSpace$('My Space', cfg));
     const req = httpMock.expectOne(`${BASE}/spaces`);

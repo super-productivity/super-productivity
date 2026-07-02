@@ -13,6 +13,8 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
 import { isOnline } from '../../../../util/is-online';
+import { IS_ELECTRON } from '../../../../app.constants';
+import { selectPlainspaceProviderForProject } from '../../store/issue-provider.selectors';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 import {
@@ -25,7 +27,9 @@ import {
  * creates a remote space and registers a bound `PLAINSPACE` issue-provider
  * instance (so tasks assigned to me / unassigned auto-import to the project
  * backlog). Used by the project context menu's "Collaborate on Plainspace"
- * action and the create-project dialog's share toggle.
+ * action and the create-project dialog's share toggle. Also hosts
+ * `openProjectOnPlainspace` (the header "Open in Plainspace" button), which
+ * reuses this service's store/api/snack/electron-open wiring.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceShareService {
@@ -102,6 +106,39 @@ export class PlainspaceShareService {
       Log.err('Plainspace: failed to share project', { projectId });
       this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.SHARE_FAILED });
       return null;
+    }
+  }
+
+  /**
+   * Opens the bound Plainspace space's web page (in the system browser under
+   * Electron, a new tab otherwise). Resolves the space slug on demand (see
+   * {@link PlainspaceApiService.getSpaceUrl$}) and surfaces a snack if it can't be
+   * resolved (offline / revoked token). The header button is only shown once a
+   * provider is bound; this also re-guards by returning early when none is found.
+   */
+  async openProjectOnPlainspace(projectId: string): Promise<void> {
+    const provider = await firstValueFrom(
+      this._store.select(selectPlainspaceProviderForProject(projectId)),
+    );
+    if (!provider) {
+      return;
+    }
+    const url = await firstValueFrom(this._plainspaceApiService.getSpaceUrl$(provider));
+    if (!url) {
+      this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.OPEN_FAILED });
+      return;
+    }
+    if (IS_ELECTRON) {
+      window.ea.openExternalUrl(url);
+    } else {
+      // Known web-only limitation: this window.open runs after the /me await, so
+      // it's outside the click's transient user-activation. Chrome (~5s window)
+      // opens fine; strict blockers (Safari/Firefox) may suppress the tab. We
+      // can't detect the block — `noopener` makes window.open return null on
+      // success too. Accepted over the fix's cost (a synchronous placeholder tab
+      // that also forfeits `noopener`, or a background /me fetch per shared view
+      // to pre-resolve the slug). Electron (the primary target) is unaffected.
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   }
 

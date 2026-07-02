@@ -10,8 +10,13 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { filter, map, switchMap } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
+import { selectIsProjectSharedOnPlainspace } from '../../../features/issue/store/issue-provider.selectors';
+import { PlainspaceShareService } from '../../../features/issue/providers/plainspace/plainspace-share.service';
 import { TaskViewCustomizerService } from '../../../features/task-view-customizer/task-view-customizer.service';
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
@@ -45,6 +50,16 @@ import { KeyboardConfig } from '@sp/keyboard-config';
       </div>
       @if (!isXxxs() && !isSpecialSection()) {
         <div class="page-title-actions">
+          @if (isSharedOnPlainspace()) {
+            <button
+              (click)="openInPlainspace()"
+              [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+              [attr.aria-label]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+              mat-icon-button
+            >
+              <mat-icon>open_in_new</mat-icon>
+            </button>
+          }
           <button
             [mat-menu-trigger-for]="activeWorkContextMenu"
             [matTooltip]="T.MH.PROJECT_MENU | translate"
@@ -176,6 +191,8 @@ export class PageTitleComponent {
   readonly taskViewCustomizerService = inject(TaskViewCustomizerService);
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
+  private _store = inject(Store);
+  private _plainspaceShareService = inject(PlainspaceShareService);
 
   readonly T = T;
 
@@ -183,6 +200,21 @@ export class PageTitleComponent {
   activeWorkContextTitle = toSignal(this._workContextService.activeWorkContextTitle$);
   activeWorkContextTypeAndId = toSignal(
     this._workContextService.activeWorkContextTypeAndId$,
+  );
+
+  // Whether the active project is shared on Plainspace — drives the visible
+  // "Open in Plainspace" header button. Uses the same shared-detection selector
+  // as the Collaborate-on-Plainspace menu entry. False for tags/special
+  // sections, so the button stays project-only.
+  isSharedOnPlainspace = toSignal(
+    this._workContextService.activeWorkContextTypeAndId$.pipe(
+      switchMap(({ activeId, activeType }) =>
+        activeType === WorkContextType.PROJECT
+          ? this._store.select(selectIsProjectSharedOnPlainspace(activeId))
+          : of(false),
+      ),
+    ),
+    { initialValue: false },
   );
 
   // Single source for the current URL path — all route-derived signals compute off this.
@@ -228,5 +260,12 @@ export class PageTitleComponent {
 
   get kb(): KeyboardConfig {
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
+  }
+
+  openInPlainspace(): void {
+    const active = this.activeWorkContextTypeAndId();
+    if (active) {
+      void this._plainspaceShareService.openProjectOnPlainspace(active.activeId);
+    }
   }
 }

@@ -571,6 +571,21 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
+  onSubmitBtnClick(): void {
+    // Clicking the + button moves focus onto the button, which then vanishes
+    // once the input clears — refocus the input so the next task can be typed
+    // right away. (The Enter-key submit path never loses input focus.)
+    // Skip the refocus for CUSTOM repeat: addTask() opens the repeat-config
+    // dialog asynchronously, and refocusing would steal focus from it.
+    const willOpenRepeatDialog =
+      this.stateService.state().repeatQuickSetting === 'CUSTOM';
+    void this.addTask().finally(() => {
+      if (!willOpenRepeatDialog) {
+        this.focusInput();
+      }
+    });
+  }
+
   onTaskSuggestionActivated(suggestion: AddTaskSuggestion | null): void {
     this.activatedSuggestion$.next(suggestion);
   }
