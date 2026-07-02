@@ -131,6 +131,13 @@ export class PlainspaceShareService {
     if (IS_ELECTRON) {
       window.ea.openExternalUrl(url);
     } else {
+      // Known web-only limitation: this window.open runs after the /me await, so
+      // it's outside the click's transient user-activation. Chrome (~5s window)
+      // opens fine; strict blockers (Safari/Firefox) may suppress the tab. We
+      // can't detect the block — `noopener` makes window.open return null on
+      // success too. Accepted over the fix's cost (a synchronous placeholder tab
+      // that also forfeits `noopener`, or a background /me fetch per shared view
+      // to pre-resolve the slug). Electron (the primary target) is unaffected.
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   }
