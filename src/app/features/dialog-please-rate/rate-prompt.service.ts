@@ -27,7 +27,8 @@ import { StoreReview } from './store-review';
 
 // Don't fire the instant a task is checked off — let the completion land, then
 // prompt a beat later so it reads as "nice session" rather than a reflex popup.
-const WIN_PROMPT_DELAY_MS = 3000;
+// Exported for the spec (which has to tick past it).
+export const WIN_PROMPT_DELAY_MS = 3000;
 
 /**
  * Owns the "please rate" prompt: when to ask (cadence) and when within a session

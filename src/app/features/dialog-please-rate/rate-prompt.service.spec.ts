@@ -3,7 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 
-import { RatePromptService } from './rate-prompt.service';
+import { RatePromptService, WIN_PROMPT_DELAY_MS } from './rate-prompt.service';
 import { selectTodayProgress } from '../work-context/store/work-context.selectors';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -11,9 +11,9 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { BannerService } from '../../core/banner/banner.service';
 import { Banner } from '../../core/banner/banner.model';
 
-// Mirrors WIN_PROMPT_DELAY_MS in the service (the prompt fires a beat after the
-// win, not on the same tick). Tick past it to flush the delayed emission.
-const WIN_DELAY = 3000;
+// The prompt fires a beat after the win, not on the same tick — tick past the
+// delay to flush the delayed emission.
+const WIN_DELAY = WIN_PROMPT_DELAY_MS;
 
 // Note: IS_ANDROID_WEB_VIEW / IS_IOS_NATIVE are false in jsdom, so _promptNow
 // always takes the web-banner branch here. The native Play/iOS card paths (and
