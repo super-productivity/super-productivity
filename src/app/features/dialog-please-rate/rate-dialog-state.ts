@@ -18,7 +18,16 @@ const TRIGGER_TIERS = [32, 96] as const;
 // third-party noise rather than a genuine app failure.
 export const ERROR_SUPPRESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-const MAINTAINER_EMAIL = 'contact@super-productivity.com';
+// After the user chooses "give feedback" we hold off asking to rate for a good
+// while — giving feedback means "I have something to say", not "never ask me" —
+// but we can't detect when that feedback is actually resolved, so we approximate
+// with a long cooldown. Measured in app-start days (same unit as TRIGGER_TIERS);
+// the counter increments at most once per calendar day, so this is also a
+// wall-clock floor of ~this many days. A feedbacker still gets their one
+// remaining tiered prompt afterwards (the ≤2-lifetime cap still holds).
+export const FEEDBACK_SUPPRESSION_STARTS = 90;
+
+export const MAINTAINER_EMAIL = 'contact@super-productivity.com';
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.superproductivity.superproductivity';
 const APP_STORE_URL = 'https://apps.apple.com/app/id1482572463';
@@ -32,6 +41,10 @@ export const CONTRIBUTING_URL =
 export interface RateDialogState {
   lastShownAppStartDay: number;
   permanentOptOut: boolean;
+  // App-start day the user last chose "give feedback" (0 = never). Drives the
+  // post-feedback cooldown; separate from lastShownAppStartDay so it survives
+  // the later tiered prompt bookkeeping.
+  feedbackGivenAppStartDay: number;
 }
 
 export type RateDialogResult = 'rate' | 'feedback' | 'later' | 'never';
@@ -39,6 +52,7 @@ export type RateDialogResult = 'rate' | 'feedback' | 'later' | 'never';
 const DEFAULT_STATE: RateDialogState = {
   lastShownAppStartDay: 0,
   permanentOptOut: false,
+  feedbackGivenAppStartDay: 0,
 };
 
 export const loadRateDialogState = (): RateDialogState => {
@@ -50,6 +64,10 @@ export const loadRateDialogState = (): RateDialogState => {
       lastShownAppStartDay:
         typeof parsed.lastShownAppStartDay === 'number' ? parsed.lastShownAppStartDay : 0,
       permanentOptOut: parsed.permanentOptOut === true,
+      feedbackGivenAppStartDay:
+        typeof parsed.feedbackGivenAppStartDay === 'number'
+          ? parsed.feedbackGivenAppStartDay
+          : 0,
     };
   } catch {
     return { ...DEFAULT_STATE };
@@ -69,6 +87,14 @@ export const shouldShowRateDialog = (
   // Recent crash or data damage → delay (not cancel). Caller passes Infinity
   // when none; see getMsSinceLastCriticalError in util/critical-error-signal.
   if (msSinceLastCriticalError < ERROR_SUPPRESSION_MS) return false;
+  // Gave feedback recently → hold off (see FEEDBACK_SUPPRESSION_STARTS). Also a
+  // delay, not a cancel: once the window elapses the tier check resumes.
+  if (
+    state.feedbackGivenAppStartDay > 0 &&
+    currentAppStarts < state.feedbackGivenAppStartDay + FEEDBACK_SUPPRESSION_STARTS
+  ) {
+    return false;
+  }
   if (currentAppStarts <= state.lastShownAppStartDay) return false;
   const nextTier = TRIGGER_TIERS.find((t) => t > state.lastShownAppStartDay);
   return nextTier !== undefined && currentAppStarts >= nextTier;
@@ -79,11 +105,22 @@ export const applyRateDialogResult = (
   result: RateDialogResult | null,
   currentAppStarts: number,
 ): RateDialogState => {
-  // null = ESC / backdrop close. Treat as silent dismiss for cadence purposes —
-  // do not pester again until the next tier — but never trigger permanent opt-out.
-  if (result === 'rate' || result === 'feedback' || result === 'never') {
-    return { lastShownAppStartDay: currentAppStarts, permanentOptOut: true };
+  // Rated or explicitly dismissed forever → never ask again.
+  if (result === 'rate' || result === 'never') {
+    return { ...state, lastShownAppStartDay: currentAppStarts, permanentOptOut: true };
   }
+  // Gave feedback → NOT a permanent opt-out. Advance the tier (this prompt is
+  // spent) and start the long feedback cooldown so we don't ask again until it
+  // elapses — a feedbacker is engaged and may still rate later.
+  if (result === 'feedback') {
+    return {
+      ...state,
+      lastShownAppStartDay: currentAppStarts,
+      feedbackGivenAppStartDay: currentAppStarts,
+    };
+  }
+  // 'later' or null (ESC / backdrop / silent dismiss): advance the tier only —
+  // do not pester again until the next tier — but never permanently opt out.
   return { ...state, lastShownAppStartDay: currentAppStarts };
 };
 

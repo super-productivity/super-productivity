@@ -76,6 +76,9 @@
           <small>{{ T.F.D_RATE.FEEDBACK_PRIVATE_DESC | translate }}</small>
         </span>
       </a>
+      <!-- Fallback: if no mail client is registered the mailto: link above does
+           nothing, so show the address as selectable text (never a dead end). -->
+      <small class="feedback-email">{{ maintainerEmail }}</small>
       <a
         class="action-item"
         [href]="contributingUrl"

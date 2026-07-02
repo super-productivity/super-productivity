@@ -17,6 +17,15 @@ mat-dialog-content {
   margin-bottom: 4px;
 }
 
+// Selectable email fallback shown under the email option (mailto: dead-end guard).
+.feedback-email {
+  align-self: center;
+  margin-top: -2px;
+  opacity: 0.65;
+  user-select: text;
+  cursor: text;
+}
+
 .action-item {
   display: flex;
   align-items: center;

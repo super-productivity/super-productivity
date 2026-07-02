@@ -285,6 +285,13 @@ export class MagicNavConfigService {
             icon: 'bug_report',
             action: () => this._openBugReport(),
           },
+          {
+            type: 'href',
+            id: 'help-feedback',
+            label: T.MH.HM.SEND_FEEDBACK,
+            icon: 'feedback',
+            href: 'https://github.com/super-productivity/super-productivity/discussions',
+          },
           // Not allowed to display donation stuff on iOS per App Store guidelines
           ...(!IS_IOS_NATIVE
             ? [

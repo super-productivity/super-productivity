@@ -262,6 +262,7 @@
     },
     "D_RATE": {
       "A_HOW": "How to rate",
+      "BANNER_ACTION": "Sure!",
       "BTN_DONT_BOTHER": "Don't ask again",
       "BTN_FEEDBACK": "Give feedback",
       "BTN_LATER": "Maybe later",
@@ -2700,6 +2701,7 @@
       "KEYBOARD": "How to: Keyboard Navigation",
       "REDDIT_COMMUNITY": "Reddit community",
       "REPORT_A_PROBLEM": "Report a problem",
+      "SEND_FEEDBACK": "Send feedback",
       "START_WELCOME": "Start welcome tour",
       "SYNC": "How to: Configure sync"
     },

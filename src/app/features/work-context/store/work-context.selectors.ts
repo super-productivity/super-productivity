@@ -352,6 +352,23 @@ export const selectUndoneTodayTaskIds = createSelector(
   },
 );
 
+/**
+ * Done vs total count of today's top-level tasks, from a single composed
+ * selector so `done`/`total` are always read from the SAME settled state.
+ * Deriving them from two separate store.select subscriptions (combineLatest)
+ * glitches: a task-add emits the new total with a stale undone count,
+ * transiently inflating `done`. Since `undone ⊆ all`, `done` never goes
+ * negative. Used by the rating-prompt "productive win" signal.
+ */
+export const selectTodayProgress = createSelector(
+  selectTodayTaskIds,
+  selectUndoneTodayTaskIds,
+  (allIds, undoneIds): { done: number; total: number } => ({
+    done: allIds.length - undoneIds.length,
+    total: allIds.length,
+  }),
+);
+
 export const selectTimelineTasks = createSelector(
   selectTodayTaskIds,
   selectMapOfAllTasksInActiveProjects,

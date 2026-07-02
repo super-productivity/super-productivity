@@ -1,8 +1,6 @@
 package com.superproductivity.superproductivity.review
 
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import com.google.android.play.core.review.ReviewManagerFactory
 
@@ -11,14 +9,17 @@ import com.google.android.play.core.review.ReviewManagerFactory
  *
  * Per Play policy the flow is opaque — we get no signal about whether the card
  * was shown or what the user did, and Play enforces its own display quota, so
- * we simply request-then-launch and ignore the outcome. If the flow can't be
- * obtained (offline, unsupported device, quota), we fall back to opening the
- * Play Store listing so the user still has a path to rate.
+ * we simply request-then-launch and ignore the outcome.
+ *
+ * On failure (offline, unsupported device, quota) we log and abandon. We do NOT
+ * fall back to opening the Play Store listing: the review request is triggered
+ * automatically at a "productive win", not by a user tapping "Rate", so yanking
+ * the user out to the Play Store would be a surprising, unrequested context
+ * switch. This also matches Google's guidance that a failed in-app review flow
+ * must not alter the user's normal flow.
  */
 object InAppReview {
     private const val TAG = "InAppReview"
-    private const val PLAY_URL =
-        "https://play.google.com/store/apps/details?id=com.superproductivity.superproductivity"
 
     fun request(activity: Activity) {
         try {
@@ -27,31 +28,12 @@ object InAppReview {
                 if (task.isSuccessful) {
                     manager.launchReviewFlow(activity, task.result)
                 } else {
-                    Log.w(TAG, "requestReviewFlow failed; opening Play listing", task.exception)
-                    openPlayListing(activity)
+                    // Log and abandon — do not redirect the user (see class doc).
+                    Log.w(TAG, "requestReviewFlow failed; skipping", task.exception)
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "In-app review unavailable; opening Play listing", e)
-            openPlayListing(activity)
-        }
-    }
-
-    private fun openPlayListing(activity: Activity) {
-        try {
-            activity.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(PLAY_URL)).apply {
-                    setPackage("com.android.vending")
-                }
-            )
-        } catch (e: Exception) {
-            // Play Store app is absent → fall back to a plain view intent so a
-            // browser can still open the listing.
-            try {
-                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PLAY_URL)))
-            } catch (e2: Exception) {
-                Log.e(TAG, "Unable to open Play Store listing", e2)
-            }
+            Log.e(TAG, "In-app review unavailable; skipping", e)
         }
     }
 }
