@@ -54,6 +54,16 @@
               T.F.ISSUE.S.PLUGIN_NOT_INSTALLED
                 | translate: { pluginName: entry.missingPluginName }
             }}
+            <div style="margin-top: 16px">
+              <button
+                mat-stroked-button
+                color="warn"
+                (click)="removeMissingProvider(entry.issueProvider)"
+              >
+                <mat-icon>delete</mat-icon>
+                {{ T.G.DELETE | translate }}
+              </button>
+            </div>
           </div>
         } @else {
           <issue-provider-tab [issueProvider]="entry.issueProvider"></issue-provider-tab>

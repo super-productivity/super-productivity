@@ -27,6 +27,11 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { moveItemInArray } from '../../util/move-item-in-array';
 import { IssueProviderActions } from '../issue/store/issue-provider.actions';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { TaskService } from '../tasks/task.service';
+import { firstValueFrom } from 'rxjs';
+import { MatButton } from '@angular/material/button';
 import { IssueIconPipe } from '../issue/issue-icon/issue-icon.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
@@ -47,6 +52,7 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
     CdkDrag,
     IssueIconPipe,
     TranslatePipe,
+    MatButton,
   ],
   templateUrl: './issue-panel.component.html',
   styleUrl: './issue-panel.component.scss',
@@ -59,6 +65,7 @@ export class IssuePanelComponent {
   private _matDialog = inject(MatDialog);
   private _workContextService = inject(WorkContextService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _taskService = inject(TaskService);
 
   dragStartDelay = { touch: 300, mouse: 0 };
   selectedTabIndex = signal(0);
@@ -84,6 +91,35 @@ export class IssuePanelComponent {
 
   constructor() {
     this._setSelectedTabIndex();
+  }
+
+  // A provider whose plugin was uninstalled has no working tab content, and the
+  // long-press edit path is unreachable with a mouse (the tab's drag handler wins),
+  // so the error tab offers this direct removal.
+  removeMissingProvider(issueProvider: IssueProvider): void {
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          cancelTxt: T.G.CANCEL,
+          okTxt: T.G.DELETE,
+          message: T.F.ISSUE.DIALOG.DELETE_CONFIRM,
+        },
+      })
+      .afterClosed()
+      .subscribe(async (isConfirm: boolean) => {
+        if (!isConfirm) return;
+        const allTasks = await firstValueFrom(this._taskService.allTasks$);
+        const taskIdsToUnlink = allTasks
+          .filter((task) => task.issueProviderId === issueProvider.id)
+          .map((task) => task.id);
+        this._store.dispatch(
+          TaskSharedActions.deleteIssueProvider({
+            issueProviderId: issueProvider.id,
+            taskIdsToUnlink,
+          }),
+        );
+      });
   }
 
   openEditIssueProvider(issueProvider: IssueProvider): void {
