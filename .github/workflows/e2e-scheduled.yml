@@ -11,6 +11,11 @@ on:
         required: false
         type: string
         default: '@supersync'
+      webdav_grep:
+        description: 'Playwright --grep filter for the WebDAV job (default: @webdav)'
+        required: false
+        type: string
+        default: '@webdav'
 
   push:
     branches: [master, release/*]
@@ -143,7 +148,7 @@ jobs:
       - name: Run WebDAV E2E Tests
         env:
           E2E_REQUIRE_WEBDAV: 'true'
-        run: npm run e2e:all -- --grep "@webdav"
+        run: npm run e2e:all -- --grep "${{ inputs.webdav_grep || '@webdav' }}"
 
       - name: Stop Docker Services
         if: always()
