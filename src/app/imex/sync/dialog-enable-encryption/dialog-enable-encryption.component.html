@@ -40,6 +40,7 @@
       <mat-form-field appearance="outline">
         <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
         <input
+          class="e2e-setup-encrypt-password"
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
@@ -64,6 +65,7 @@
       <mat-form-field appearance="outline">
         <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
         <input
+          class="e2e-setup-encrypt-confirm-password"
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
@@ -105,6 +107,7 @@
       </button>
     }
     <button
+      class="e2e-setup-encrypt-submit"
       mat-flat-button
       color="primary"
       type="button"
