@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { EMPTY, timer } from 'rxjs';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { HttpClient } from '@angular/common/http';
+import { EMPTY, firstValueFrom, timer } from 'rxjs';
+import { distinctUntilChanged, map, switchMap, timeout } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../../features/config/global-config.service';
@@ -16,6 +17,12 @@ const RELEASES_API_URL =
   'https://api.github.com/repos/super-productivity/super-productivity/releases/latest';
 const INITIAL_CHECK_DELAY = 30 * 1000;
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000;
+const REQUEST_TIMEOUT = 15 * 1000;
+
+// Strict (anchored) on purpose, unlike the lenient parser in is-newer-version.ts:
+// the tag is remote input that ends up in a banner and in the release URL we
+// open, so anything that isn't exactly a version tag is treated as malformed.
+const RELEASE_TAG_REGEX = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 /**
  * Desktop-only "new version available" check (#5463). Fetches the latest
@@ -29,9 +36,12 @@ const CHECK_INTERVAL = 24 * 60 * 60 * 1000;
  */
 @Injectable({ providedIn: 'root' })
 export class UpdateCheckService {
+  private _http = inject(HttpClient);
   private _globalConfigService = inject(GlobalConfigService);
   private _bannerService = inject(BannerService);
   private _snackService = inject(SnackService);
+
+  private _isCheckInFlight = false;
 
   init(): void {
     if (!isUpdateCheckPossible()) {
@@ -39,7 +49,9 @@ export class UpdateCheckService {
     }
     this._globalConfigService.misc$
       .pipe(
-        // missing key (pre-feature persisted config) means default ON
+        // Hydration merges defaults per-key (global-config.reducer loadAllData),
+        // but the pre-hydration initial state and partial section updates can
+        // still lack the key — treat missing as the default ON either way.
         map((misc) => misc?.isCheckForUpdates !== false),
         distinctUntilChanged(),
         switchMap((isEnabled) =>
@@ -50,19 +62,24 @@ export class UpdateCheckService {
   }
 
   async checkForUpdate({ isUserTriggered = false } = {}): Promise<void> {
+    if (this._isCheckInFlight) {
+      return;
+    }
+    this._isCheckInFlight = true;
     try {
-      const res = await fetch(RELEASES_API_URL, {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
-      if (!res.ok) {
-        throw new Error(`Unexpected response ${res.status}`);
-      }
-      const release: { tag_name?: string; html_url?: string } = await res.json();
-      if (!release.tag_name || !release.html_url) {
+      const release = await firstValueFrom(
+        this._http
+          .get<{ tag_name?: string }>(RELEASES_API_URL, {
+            headers: { Accept: 'application/vnd.github+json' },
+          })
+          .pipe(timeout(REQUEST_TIMEOUT)),
+      );
+      const tagName = release.tag_name;
+      if (!tagName || !RELEASE_TAG_REGEX.test(tagName)) {
         throw new Error('Malformed release data');
       }
 
-      if (!isNewerVersion(release.tag_name, environment.version)) {
+      if (!isNewerVersion(tagName, environment.version)) {
         if (isUserTriggered) {
           this._snackService.open({
             type: 'SUCCESS',
@@ -74,21 +91,27 @@ export class UpdateCheckService {
       }
       if (
         !isUserTriggered &&
-        localStorage.getItem(LS.UPDATE_CHECK_DISMISSED_VERSION) === release.tag_name
+        localStorage.getItem(LS.UPDATE_CHECK_DISMISSED_VERSION) === tagName
       ) {
         return;
       }
-      this._showUpdateBanner(release.tag_name, release.html_url);
+      this._showUpdateBanner(tagName);
     } catch (err) {
       // being offline is a normal state for the automatic check → info log only
       Log.log('Update check failed', { error: (err as Error)?.message });
       if (isUserTriggered) {
         this._snackService.open({ type: 'ERROR', msg: T.APP.UPDATE_CHECK.ERROR });
       }
+    } finally {
+      this._isCheckInFlight = false;
     }
   }
 
-  private _showUpdateBanner(versionTag: string, downloadUrl: string): void {
+  private _showUpdateBanner(versionTag: string): void {
+    // Built locally from the validated tag instead of trusting the response's
+    // html_url: openExternalUrl only checks the scheme, so a forged response
+    // could otherwise point "Download" at an arbitrary https host.
+    const downloadUrl = `https://github.com/super-productivity/super-productivity/releases/tag/${versionTag}`;
     this._bannerService.open({
       id: BannerId.UpdateAvailable,
       msg: T.APP.B_UPDATE_AVAILABLE.MSG,

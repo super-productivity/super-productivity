@@ -7,8 +7,12 @@ import { DistChannel } from '../../util/get-app-version-str';
  * out-of-store downloads. Kept as a denylist (not an allowlist of manual
  * channels) so an unknown or future channel defaults to being told about
  * updates: never learning about them is the failure mode this feature fixes.
+ *
+ * `linux-flatpak` is deliberately NOT listed: Flathub updates depend on the
+ * user's software-center setup (auto on GNOME Software defaults, manual for
+ * CLI users), so flatpak users still get the once-per-version notice.
  */
-const SELF_UPDATING_CHANNELS: readonly (DistChannel | null)[] = [
+const SELF_UPDATING_CHANNELS: readonly DistChannel[] = [
   'win-store',
   'mac-store',
   'linux-snap',
@@ -21,5 +25,6 @@ export const isUpdateCheckPossible = (): boolean => {
     // service worker (InitialPwaUpdateCheckService).
     return false;
   }
-  return !SELF_UPDATING_CHANNELS.includes(window.ea?.getDistChannel?.() ?? null);
+  const channel = window.ea?.getDistChannel?.();
+  return !channel || !SELF_UPDATING_CHANNELS.includes(channel);
 };

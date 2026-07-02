@@ -58,10 +58,11 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
           {
             key: 'isCheckForUpdates',
             type: 'checkbox',
-            // Display-only seed: pre-feature persisted configs lack the key but the
-            // check defaults to ON (UpdateCheckService treats missing as enabled), so
-            // the checkbox must show checked. Same pattern + #7891 residual as
-            // isUseCustomWindowTitleBar below.
+            // Display-only seed for the paths where the key can still be absent
+            // (pre-hydration initial state, partial section updates) — hydration
+            // itself per-key-merges DEFAULT_GLOBAL_CONFIG.misc in the reducer.
+            // UpdateCheckService treats missing as ON, so the checkbox must show
+            // checked. Same pattern + #7891 residual as isUseCustomWindowTitleBar.
             defaultValue: true,
             templateOptions: {
               label: T.GCF.MISC.IS_CHECK_FOR_UPDATES,
