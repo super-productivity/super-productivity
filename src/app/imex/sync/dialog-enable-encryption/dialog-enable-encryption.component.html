@@ -86,6 +86,7 @@
       <!-- E2EE is optional here, so setup must be skippable (the modal is
            disableClose, so this is the only non-encrypting way out). -->
       <button
+        class="e2e-setup-encrypt-skip"
         mat-button
         type="button"
         [disabled]="isLoading()"

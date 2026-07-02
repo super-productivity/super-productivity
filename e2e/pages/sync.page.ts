@@ -197,6 +197,12 @@ export class SyncPage extends BasePage {
         // Save the configuration
         await this.saveBtn.click();
 
+        // A fresh file-based setup now opens the optional "Encrypt before first
+        // upload?" dialog (disableClose) before the config is persisted. Skip it
+        // so setup proceeds unencrypted; encryption tests still enable it
+        // afterwards via enableEncryption() below.
+        await this._skipSetupEncryptionDialogIfPresent();
+
         // Wait for dialog to close
         await dialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
         await this.page.waitForTimeout(500);
@@ -223,6 +229,18 @@ export class SyncPage extends BasePage {
     throw new Error(
       '[setupWebdavSync] Failed to setup WebDAV sync after multiple dialog-level retries',
     );
+  }
+
+  /**
+   * Dismisses the optional "Encrypt before first upload?" setup dialog that
+   * opens on a fresh file-based setup (see DialogSyncCfgComponent.save()). Clicks
+   * Skip so setup stays unencrypted. No-op if the dialog did not appear.
+   */
+  private async _skipSetupEncryptionDialogIfPresent(): Promise<void> {
+    const skipBtn = this.page.locator('.e2e-setup-encrypt-skip');
+    if (await skipBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await skipBtn.click();
+    }
   }
 
   async triggerSync(): Promise<void> {
