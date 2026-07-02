@@ -11,11 +11,19 @@
       "MSG": "Već neko vrijeme koristiš Super Productivity. Postavi sinkronizaciju kako bi sigurnosno kopirao svoje podatke i čuvao ih sigurnima na svim uređajima.",
       "SETUP": "Postavi sinkronizaciju"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Preuzmi",
+      "MSG": "Dostupna je nova verzija aplikacije Super Productivity ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Promijeni postavke projekta",
       "CHANGE_TAG_SETTINGS": "Promijeni postavke oznaka"
     },
     "SKIP_SYNC_WAIT": "Preskoči čekanje sinkronizacije",
+    "UPDATE_CHECK": {
+      "ERROR": "Provjera ažuriranja nije uspjela. Pokušaj ponovno kasnije.",
+      "UP_TO_DATE": "Imaš najnoviju verziju ({{version}})."
+    },
     "UPDATE_WEB_APP": "Dostupna je nova verzija. Učitaj novu verziju?"
   },
   "BL": {
@@ -2287,6 +2295,8 @@
       "DEFAULT_START_PAGE": "Zadana početna stranica",
       "FIRST_DAY_OF_WEEK": "Prvi dan u tjednu",
       "HELP": "<p><strong>Ne vidiš obavijesti na računalu?</strong> Za Windows provjerite 'Sustav' > 'Obavijesti i akcije' i provjerite jesu li potrebne obavijesti omogućene.</p>",
+      "IS_CHECK_FOR_UPDATES": "Automatski provjeravaj nove verzije (samo za desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Jednom dnevno provjerava najnovije izdanje na GitHubu i prikazuje obavijest kad je dostupna novija verzija. Šalje se samo standardni web zahtjev — osobni podaci se ne šalju.",
       "IS_CONFIRM_BEFORE_EXIT": "Potvrdi prije izlaska iz aplikacije",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Potvrdi prije izlaska iz aplikacije bez završetka dana",
       "IS_DARK_MODE": "Tamni modus",
@@ -2702,6 +2712,7 @@
     "DIALOG_TITLE": "Aktualiziranje sustava"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Provjeri ažuriranja",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Nije uspjelo kopiranje u međuspremnik",
     "GLOBAL_SETTINGS": "Globalne postavke",
     "NO_PLUGINS_INSTALLED": "Trenutačno nema instaliranih dodataka",

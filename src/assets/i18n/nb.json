@@ -11,10 +11,18 @@
       "MSG": "Du har brukt Super Productivity en stund. Sett opp synkronisering for å sikkerhetskopiere dataene dine og holde dem trygge på tvers av enheter.",
       "SETUP": "Sett opp synkronisering"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Last ned",
+      "MSG": "En ny versjon av Super Productivity er tilgjengelig ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Endre bakgrunn"
     },
     "SKIP_SYNC_WAIT": "Hopp over venting på synkronisering",
+    "UPDATE_CHECK": {
+      "ERROR": "Kunne ikke se etter oppdateringer. Prøv igjen senere.",
+      "UP_TO_DATE": "Du bruker den nyeste versjonen ({{version}})."
+    },
     "UPDATE_WEB_APP": "Ny versjon tilgjengelig. Last inn ny versjon?"
   },
   "BL": {
@@ -2155,6 +2163,8 @@
       "DEFAULT_START_PAGE": "Standard startside",
       "FIRST_DAY_OF_WEEK": "Første ukedag",
       "HELP": "<p><strong>Ser du ikke skrivebordsvarsler?</strong> For Windows vil du kanskje sjekke System&gt; Varsler og handlinger og sjekke om de nødvendige varslene er aktivert.</p>",
+      "IS_CHECK_FOR_UPDATES": "Se automatisk etter nye versjoner (kun skrivebordsappen)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Sjekker den nyeste utgivelsen på GitHub én gang om dagen og viser et varsel når en nyere versjon er tilgjengelig. Kun en vanlig nettforespørsel sendes — ingen personopplysninger sendes.",
       "IS_CONFIRM_BEFORE_EXIT": "Bekreft før du avslutter appen",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bekreft før du avslutter appen uten å avslutte dagen først",
       "IS_DARK_MODE": "Mørk modus",
@@ -2557,6 +2567,7 @@
     "ALL_TASKS_TITLE": "Statistikk (alle oppgaver)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Se etter oppdateringer",
     "GLOBAL_SETTINGS": "Globale innstillinger",
     "NO_PLUGINS_INSTALLED": "Ingen plugins er installert for øyeblikket",
     "PLUGINS": "Plugins",

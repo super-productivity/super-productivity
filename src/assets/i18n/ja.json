@@ -11,13 +11,21 @@
       "MSG": "Super Productivity をしばらくご利用いただいています。同期を設定して、データをバックアップし、すべてのデバイスで安全に保ちましょう。",
       "SETUP": "同期を設定"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "ダウンロード",
+      "MSG": "Super Productivity の新しいバージョンがあります（{{version}}）。"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "変更の背景",
       "CHANGE_PROJECT_SETTINGS": "プロジェクト設定を変更",
       "CHANGE_TAG_SETTINGS": "タグ設定を変更"
     },
     "UPDATE_WEB_APP": "新しいバージョンがあります。新しいバージョンをロードしますか？",
-    "SKIP_SYNC_WAIT": "同期の待機をスキップ"
+    "SKIP_SYNC_WAIT": "同期の待機をスキップ",
+    "UPDATE_CHECK": {
+      "ERROR": "アップデートを確認できませんでした。後でもう一度お試しください。",
+      "UP_TO_DATE": "最新バージョンを使用しています（{{version}}）。"
+    }
   },
   "BL": {
     "NO_TASKS": "現在、バックログにタスクはありません"
@@ -2241,6 +2249,8 @@
       "DARK_MODE_SYSTEM": "制",
       "FIRST_DAY_OF_WEEK": "週の最初の日",
       "HELP": "<p><strong>デスクトップ通知が表示されませんか？</strong> Windowsの場合は、[システム]> [通知とアクション]を確認し、必要な通知が有効になっているかどうかを確認します。</p>",
+      "IS_CHECK_FOR_UPDATES": "新しいバージョンを自動的に確認する（デスクトップのみ）",
+      "IS_CHECK_FOR_UPDATES_HINT": "1日に1回、GitHub 上の最新リリースを確認し、より新しいバージョンがある場合に通知を表示します。標準的なWebリクエストが送信されるだけで、個人データは送信されません。",
       "IS_CONFIRM_BEFORE_EXIT": "アプリを終了する前に確認する",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "最初に1日を終えずにアプリを終了する前に確認してください",
       "IS_DARK_MODE": "ダークモード",
@@ -2710,6 +2720,7 @@
     "ALL_TASKS_TITLE": "メトリクス (すべてのタスク)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "アップデートを確認",
     "GLOBAL_SETTINGS": "全体設定",
     "PRIVACY_POLICY": "プライベートポリシー",
     "PROJECT_SETTINGS": "プロジェクト固有の設定",

@@ -11,12 +11,20 @@
       "MSG": "您已經使用 Super Productivity 一段時間了。設定同步以備份您的資料，並在所有裝置上保持安全。",
       "SETUP": "設定同步"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "下載",
+      "MSG": "Super Productivity 有新版本可用（{{version}}）。"
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "更改背景",
       "CHANGE_PROJECT_SETTINGS": "變更專案設定",
       "CHANGE_TAG_SETTINGS": "變更標籤設定"
     },
     "SKIP_SYNC_WAIT": "跳過同步等待",
+    "UPDATE_CHECK": {
+      "ERROR": "無法檢查更新。請稍後再試。",
+      "UP_TO_DATE": "您使用的已是最新版本（{{version}}）。"
+    },
     "UPDATE_WEB_APP": "有可用的新版本。是否載入新版本？"
   },
   "BL": {
@@ -2299,6 +2307,8 @@
       "DEFAULT_START_PAGE": "預設起始頁面",
       "FIRST_DAY_OF_WEEK": "一週的第一天",
       "HELP": "<p><strong>看不到桌面通知？</strong>對於 Windows，您可能需要檢查「系統」>「通知與動作」並確認已啟用必要的通知。</p>",
+      "IS_CHECK_FOR_UPDATES": "自動檢查新版本（僅限桌面版）",
+      "IS_CHECK_FOR_UPDATES_HINT": "每天檢查一次 GitHub 上的最新發布版本，並在有較新版本可用時顯示提示。僅發出一個標準網路請求——不會傳送任何個人資料。",
       "IS_CONFIRM_BEFORE_EXIT": "結束應用程式前確認",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "未完成每日工作前結束應用程式需確認",
       "IS_DARK_MODE": "深色模式",
@@ -2727,6 +2737,7 @@
     "DIALOG_TITLE": "系統更新"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "檢查更新",
     "FAILED_TO_COPY_TO_CLIPBOARD": "複製到剪貼簿失敗",
     "GLOBAL_SETTINGS": "全域設定",
     "NO_PLUGINS_INSTALLED": "目前未安裝任何外掛程式",

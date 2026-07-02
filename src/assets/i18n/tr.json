@@ -11,11 +11,19 @@
       "MSG": "Super Productivity'yi bir süredir kullanıyorsunuz. Verilerinizi yedeklemek ve tüm cihazlarınızda güvende tutmak için senkronizasyonu ayarlayın.",
       "SETUP": "Senkronizasyonu ayarla"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "İndir",
+      "MSG": "Super Productivity'nin yeni bir sürümü mevcut ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Proje Ayarlarını Değiştir",
       "CHANGE_TAG_SETTINGS": "Etiket Ayarlarını Değiştir"
     },
     "SKIP_SYNC_WAIT": "Senkronizasyon beklemesini atla",
+    "UPDATE_CHECK": {
+      "ERROR": "Güncellemeler kontrol edilemedi. Lütfen daha sonra tekrar deneyin.",
+      "UP_TO_DATE": "En son sürümü kullanıyorsunuz ({{version}})."
+    },
     "UPDATE_WEB_APP": "Yeni sürüm mevcut. Yeni Sürüm Yüklensin Mi?"
   },
   "BL": {
@@ -2475,6 +2483,8 @@
       "DEFAULT_START_PAGE": "Varsayılan başlangıç sayfası",
       "FIRST_DAY_OF_WEEK": "Haftanın ilk günü",
       "HELP": "<p><strong>Masaüstü Bildirimleri'ni göremiyor musunuz?</strong> Pencereler için Sistem> Bildirimler ve eylemleri kontrol etmek ve gerekli bildirimlerin etkin olup olmadığını kontrol etmek isteyebilirsiniz.</p>",
+      "IS_CHECK_FOR_UPDATES": "Yeni sürümleri otomatik olarak kontrol et (yalnızca masaüstü)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Günde bir kez GitHub'daki en son sürümü kontrol eder ve daha yeni bir sürüm mevcut olduğunda bir bildirim gösterir. Yalnızca standart bir web isteği yapılır — hiçbir kişisel veri gönderilmez.",
       "IS_CONFIRM_BEFORE_EXIT": "Uygulamadan çıkmadan önce onayla",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Uygulamadan çıkmadan önce günü bitirmeden çıkış yaptığınızı onaylayın",
       "IS_DARK_MODE": "Karanlık mod",
@@ -2945,6 +2955,7 @@
     "DIALOG_TITLE": "Sistem Güncellemesi"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Güncellemeleri kontrol et",
     "CLICK_TO_COPY_VERSION": "Sürümü kopyalamak için tıklayın",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Panoya kopyalanamadı",
     "GLOBAL_SETTINGS": "Genel Ayarlar",

@@ -11,12 +11,20 @@
       "MSG": "Já usa o Super Productivity há algum tempo. Configure a sincronização para fazer uma cópia de segurança dos seus dados e mantê-los seguros em todos os dispositivos.",
       "SETUP": "Configurar sincronização"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Transferir",
+      "MSG": "Está disponível uma nova versão do Super Productivity ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Mudar Fundo",
       "CHANGE_PROJECT_SETTINGS": "Alterar definições do projeto",
       "CHANGE_TAG_SETTINGS": "Alterar definições da etiqueta"
     },
     "SKIP_SYNC_WAIT": "Pular espera pela sincronização",
+    "UPDATE_CHECK": {
+      "ERROR": "Não foi possível verificar se há atualizações. Tente novamente mais tarde.",
+      "UP_TO_DATE": "Está a usar a versão mais recente ({{version}})."
+    },
     "UPDATE_WEB_APP": "Nova versão disponível. Carregar nova versão?"
   },
   "BL": {
@@ -2299,6 +2307,8 @@
       "DEFAULT_START_PAGE": "Página inicial padrão",
       "FIRST_DAY_OF_WEEK": "Primeiro dia da semana",
       "HELP": "<p><strong>Não está vendo as notificações da área de trabalho?</strong> Para janelas, convém verificar Sistema> Notificações e ações, e verificar se as notificações necessárias foram ativadas.</p>",
+      "IS_CHECK_FOR_UPDATES": "Verificar automaticamente se há novas versões (apenas desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Verifica uma vez por dia a versão mais recente no GitHub e mostra um aviso quando está disponível uma versão mais nova. Apenas é feito um pedido web normal — nenhum dado pessoal é enviado.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirme antes de sair do aplicativo",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirme antes de sair do aplicativo sem terminar o dia primeiro",
       "IS_DARK_MODE": "Modo escuro",
@@ -2718,6 +2728,7 @@
     "ALL_TASKS_TITLE": "Métricas (todas as tarefas)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Verificar atualizações",
     "GLOBAL_SETTINGS": "Configurações globais",
     "NO_PLUGINS_INSTALLED": "Nenhum plugin está atualmente instalado",
     "PLUGINS": "Plugins",

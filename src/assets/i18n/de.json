@@ -11,11 +11,19 @@
       "MSG": "Du nutzt Super Productivity schon eine Weile. Richte die Synchronisierung ein, um deine Daten zu sichern und geräteübergreifend zu schützen.",
       "SETUP": "Synchronisierung einrichten"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Herunterladen",
+      "MSG": "Eine neue Version von Super Productivity ist verfügbar ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Projekteinstellungen ändern",
       "CHANGE_TAG_SETTINGS": "Tag-Einstellungen ändern"
     },
     "SKIP_SYNC_WAIT": "Warten auf Synchronisierung überspringen",
+    "UPDATE_CHECK": {
+      "ERROR": "Nach Updates konnte nicht gesucht werden. Bitte versuche es später erneut.",
+      "UP_TO_DATE": "Du bist auf der neuesten Version ({{version}})."
+    },
     "UPDATE_WEB_APP": "Neue Version verfügbar. Neue Version laden?"
   },
   "BL": {
@@ -2463,6 +2471,8 @@
       "DEFAULT_START_PAGE": "Standard-Startseite",
       "FIRST_DAY_OF_WEEK": "Erster Tag der Woche",
       "HELP": "<p><strong>Desktop-Benachrichtigungen werden nicht angezeigt?</strong> Unter Windows kannst du unter System -> Benachrichtigungen und Aktionen prüfen, ob die erforderlichen Benachrichtigungen aktiviert wurden.</p>",
+      "IS_CHECK_FOR_UPDATES": "Automatisch nach neuen Versionen suchen (nur Desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Prüft einmal täglich das neueste Release auf GitHub und zeigt einen Hinweis an, wenn eine neuere Version verfügbar ist. Es wird nur eine gewöhnliche Web-Anfrage gestellt — es werden keine persönlichen Daten gesendet.",
       "IS_CONFIRM_BEFORE_EXIT": "Bestätigen, bevor die App beendet wird",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bestätigen, bevor die App beendet wird, ohne den Tag zuerst zu beenden",
       "IS_DARK_MODE": "Dunkler Modus",
@@ -2883,6 +2893,7 @@
     "DIALOG_TITLE": "Systemaktualisierung"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Nach Updates suchen",
     "CLICK_TO_COPY_VERSION": "Klicken, um Version zu kopieren",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Kopieren in die Zwischenablage fehlgeschlagen",
     "GLOBAL_SETTINGS": "Globale Einstellungen",

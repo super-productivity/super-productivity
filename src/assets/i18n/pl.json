@@ -11,11 +11,19 @@
       "MSG": "Używasz Super Productivity już od jakiegoś czasu. Skonfiguruj synchronizację, aby utworzyć kopię zapasową danych i zapewnić im bezpieczeństwo na wszystkich urządzeniach.",
       "SETUP": "Skonfiguruj synchronizację"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Pobierz",
+      "MSG": "Dostępna jest nowa wersja Super Productivity ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Zmień ustawienia Projektu",
       "CHANGE_TAG_SETTINGS": "Zmień ustawienia Tagów"
     },
     "SKIP_SYNC_WAIT": "Pomiń oczekiwanie na synchronizację",
+    "UPDATE_CHECK": {
+      "ERROR": "Nie udało się sprawdzić dostępności aktualizacji. Spróbuj ponownie później.",
+      "UP_TO_DATE": "Masz najnowszą wersję ({{version}})."
+    },
     "UPDATE_WEB_APP": "Dostępna jest nowa wersja. Czy chcesz są załadować?"
   },
   "BL": {
@@ -2287,6 +2295,8 @@
       "DEFAULT_START_PAGE": "Domyślna strona startowa",
       "FIRST_DAY_OF_WEEK": "Pierwszy dzień tygodnia",
       "HELP": "<p><strong>Nie widzisz powiadomień na pulpicie?</strong> Dla systemu Windows wejdź w Ustawienia > System > Powiadomienia i upewnij się, że włączono wymagane powiadomienia</p>",
+      "IS_CHECK_FOR_UPDATES": "Automatycznie sprawdzaj dostępność nowych wersji (tylko aplikacja desktopowa)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Raz dziennie sprawdza najnowsze wydanie na GitHubie i wyświetla powiadomienie, gdy dostępna jest nowsza wersja. Wykonywane jest tylko standardowe zapytanie internetowe — żadne dane osobowe nie są wysyłane.",
       "IS_CONFIRM_BEFORE_EXIT": "Potwierdzaj zamknięcie aplikacji",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Potwierdzaj zamknięcie aplikacji bez wcześniejszego zakończenia dnia.",
       "IS_DARK_MODE": "Ciemny motyw",
@@ -2708,6 +2718,7 @@
     "DIALOG_TITLE": "Aktualizacja systemu"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Sprawdź aktualizacje",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Nie udało się skopiować do schowka",
     "GLOBAL_SETTINGS": "Ustawienia globalne",
     "NO_PLUGINS_INSTALLED": "Obecnie nie ma zainstalowanych wtyczek",

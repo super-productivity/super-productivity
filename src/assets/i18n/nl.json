@@ -11,12 +11,20 @@
       "MSG": "Je gebruikt Super Productivity al een tijdje. Stel synchronisatie in om een back-up van je gegevens te maken en ze veilig te houden op al je apparaten.",
       "SETUP": "Synchronisatie instellen"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Downloaden",
+      "MSG": "Er is een nieuwe versie van Super Productivity beschikbaar ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Achtergrond wijzigen",
       "CHANGE_PROJECT_SETTINGS": "Projectinstellingen wijzigen",
       "CHANGE_TAG_SETTINGS": "Taginstellingen wijzigen"
     },
     "SKIP_SYNC_WAIT": "Sla wachten op synchronisatie over",
+    "UPDATE_CHECK": {
+      "ERROR": "Kon niet controleren op updates. Probeer het later opnieuw.",
+      "UP_TO_DATE": "Je gebruikt de nieuwste versie ({{version}})."
+    },
     "UPDATE_WEB_APP": "Nieuwe versie beschikbaar. Nieuwe versie laden?"
   },
   "BL": {
@@ -2299,6 +2307,8 @@
       "DEFAULT_START_PAGE": "Standaard startpagina",
       "FIRST_DAY_OF_WEEK": "Eerste dag van de week",
       "HELP": "<p><strong>Ziet u geen bureaubladmeldingen?</strong> Voor vensters wilt u misschien Systeem> Meldingen en acties controleren en controleren of de vereiste meldingen zijn ingeschakeld.</p>",
+      "IS_CHECK_FOR_UPDATES": "Automatisch controleren op nieuwe versies (alleen desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Controleert eenmaal per dag de nieuwste release op GitHub en toont een melding wanneer er een nieuwere versie beschikbaar is. Er wordt alleen een standaard webverzoek gedaan — er worden geen persoonlijke gegevens verzonden.",
       "IS_CONFIRM_BEFORE_EXIT": "Bevestig voordat u de app afsluit",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bevestig voordat u de app verlaat zonder eerst de dag af te sluiten",
       "IS_DARK_MODE": "Donkere modus",
@@ -2718,6 +2728,7 @@
     "ALL_TASKS_TITLE": "Statistieken (alle taken)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Controleren op updates",
     "GLOBAL_SETTINGS": "Algemene instellingen",
     "NO_PLUGINS_INSTALLED": "Er zijn momenteel geen plugins geïnstalleerd",
     "PLUGINS": "Plugins",

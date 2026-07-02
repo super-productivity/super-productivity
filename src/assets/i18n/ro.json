@@ -11,11 +11,19 @@
       "MSG": "Folosești Super Productivity de ceva timp. Configurează sincronizarea pentru a face o copie de rezervă a datelor tale și a le păstra în siguranță pe toate dispozitivele.",
       "SETUP": "Configurează sincronizarea"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Descarcă",
+      "MSG": "O nouă versiune de Super Productivity este disponibilă ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Schimbă setările proiectului",
       "CHANGE_TAG_SETTINGS": "Schimbă setările etichetelor"
     },
     "SKIP_SYNC_WAIT": "Omite așteptarea sincronizării",
+    "UPDATE_CHECK": {
+      "ERROR": "Nu s-a putut verifica dacă există actualizări. Încearcă din nou mai târziu.",
+      "UP_TO_DATE": "Ai cea mai recentă versiune ({{version}})."
+    },
     "UPDATE_WEB_APP": "O nouă versiune este disponibilă. Încarci noua versiune?"
   },
   "BL": {
@@ -2484,6 +2492,8 @@
       "DEFAULT_START_PAGE": "Pagina de start implicită",
       "FIRST_DAY_OF_WEEK": "Prima zi a săptămânii",
       "HELP": "<p><strong>Nu primești notificări desktop?</strong> Pentru Windows, poți verifica 'System' > 'Notifications & actions' și poți verifica dacă notificările necesare sunt activate.</p>",
+      "IS_CHECK_FOR_UPDATES": "Verifică automat dacă există versiuni noi (doar pe desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Verifică o dată pe zi cea mai recentă lansare pe GitHub și afișează o notificare când este disponibilă o versiune mai nouă. Se efectuează doar o cerere web standard — nu se trimit date personale.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirmă înainte de a ieși din aplicație",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirmă înainte de a ieși din aplicație fără a finaliza ziua mai întâi",
       "IS_DARK_MODE": "Mod întunecat",
@@ -2954,6 +2964,7 @@
     "DIALOG_TITLE": "Actualizare de sistem"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Caută actualizări",
     "CLICK_TO_COPY_VERSION": "Clic pentru a copia versiunea",
     "FAILED_TO_COPY_TO_CLIPBOARD": "A eșuat copierea în clipboard",
     "GLOBAL_SETTINGS": "Setări globale",

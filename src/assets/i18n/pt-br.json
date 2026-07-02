@@ -11,11 +11,19 @@
       "MSG": "Você usa o Super Productivity há algum tempo. Configure a sincronização para fazer backup dos seus dados e mantê-los seguros em todos os dispositivos.",
       "SETUP": "Configurar sincronização"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Baixar",
+      "MSG": "Uma nova versão do Super Productivity está disponível ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Alterar Configurações do Projeto",
       "CHANGE_TAG_SETTINGS": "Alterar Configurações da Etiqueta"
     },
     "SKIP_SYNC_WAIT": "Pular espera pela sincronização",
+    "UPDATE_CHECK": {
+      "ERROR": "Não foi possível verificar se há atualizações. Tente novamente mais tarde.",
+      "UP_TO_DATE": "Você está na versão mais recente ({{version}})."
+    },
     "UPDATE_WEB_APP": "Nova versão disponível. Carregar nova versão?"
   },
   "BL": {
@@ -2283,6 +2291,8 @@
       "DEFAULT_START_PAGE": "Página inicial padrão",
       "FIRST_DAY_OF_WEEK": "Primeiro dia da semana",
       "HELP": "<p><strong>Não vê notificações no desktop?</strong> No Windows, verifique em 'Sistema' > 'Notificações e ações' se as notificações necessárias estão ativadas.</p>",
+      "IS_CHECK_FOR_UPDATES": "Verificar automaticamente se há novas versões (apenas desktop)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Verifica uma vez por dia a versão mais recente no GitHub e mostra um aviso quando uma versão mais nova está disponível. Apenas uma solicitação web padrão é feita — nenhum dado pessoal é enviado.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirmar antes de sair do aplicativo",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirmar antes de sair sem encerrar o dia primeiro",
       "IS_DARK_MODE": "Modo Escuro",
@@ -2704,6 +2714,7 @@
     "DIALOG_TITLE": "Atualização do Sistema"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Verificar atualizações",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Falha ao copiar para a área de transferência",
     "GLOBAL_SETTINGS": "Configurações Globais",
     "NO_PLUGINS_INSTALLED": "Nenhum plugin instalado no momento",

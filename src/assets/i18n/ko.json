@@ -11,13 +11,21 @@
       "MSG": "Super Productivity를 사용하신 지 꽤 되셨네요. 동기화를 설정하여 데이터를 백업하고 모든 기기에서 안전하게 보관하세요.",
       "SETUP": "동기화 설정"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "다운로드",
+      "MSG": "Super Productivity의 새 버전을 사용할 수 있습니다 ({{version}})."
+    },
     "UPDATE_WEB_APP": "새 버전을 사용할 수 있습니다. 새 버전을 로드하시겠습니까?",
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "배경 변경",
       "CHANGE_PROJECT_SETTINGS": "프로젝트 설정 변경",
       "CHANGE_TAG_SETTINGS": "태그 설정 변경"
     },
-    "SKIP_SYNC_WAIT": "동기화 대기 건너뛰기"
+    "SKIP_SYNC_WAIT": "동기화 대기 건너뛰기",
+    "UPDATE_CHECK": {
+      "ERROR": "업데이트를 확인할 수 없습니다. 나중에 다시 시도해 주세요.",
+      "UP_TO_DATE": "최신 버전을 사용 중입니다 ({{version}})."
+    }
   },
   "BL": {
     "NO_TASKS": "현재 백 로그에 작업이 없습니다."
@@ -2227,6 +2235,8 @@
       "DARK_MODE_DARK": "어둠",
       "FIRST_DAY_OF_WEEK": "주의 첫 요일",
       "HELP": "<p><strong>데스크톱 알림이 표시되지 않습니까?</strong> 창의 경우 시스템 > 알림 및 작업을 확인하고 필요한 알림이 활성화되었는지 확인할 수 있습니다.</p>",
+      "IS_CHECK_FOR_UPDATES": "새 버전 자동 확인 (데스크톱만 해당)",
+      "IS_CHECK_FOR_UPDATES_HINT": "하루에 한 번 GitHub의 최신 릴리스를 확인하고 새 버전이 있으면 알림을 표시합니다. 표준 웹 요청만 전송되며 개인 데이터는 전송되지 않습니다.",
       "IS_CONFIRM_BEFORE_EXIT": "앱을 종료하기 전에 확인",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "하루를 먼저 끝내지 않고 앱을 종료하기 전에 확인",
       "IS_DARK_MODE": "다크 모드",
@@ -2699,6 +2709,7 @@
     "ALL_TASKS_TITLE": "측정항목 (모든 작업)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "업데이트 확인",
     "GLOBAL_SETTINGS": "전체 설정",
     "PRIVACY_POLICY": "개인 정책",
     "PROJECT_SETTINGS": "프로젝트 별 설정",

@@ -11,10 +11,18 @@
       "MSG": "Super Productivity používate už nejaký čas. Nastavte synchronizáciu, aby ste zálohovali svoje údaje a udržali ich v bezpečí na všetkých zariadeniach.",
       "SETUP": "Nastaviť synchronizáciu"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Stiahnuť",
+      "MSG": "Je k dispozícii nová verzia Super Productivity ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Zmeniť pozadie"
     },
     "SKIP_SYNC_WAIT": "Preskočiť čakanie na synchronizáciu",
+    "UPDATE_CHECK": {
+      "ERROR": "Nepodarilo sa skontrolovať aktualizácie. Skúste to prosím neskôr.",
+      "UP_TO_DATE": "Máte najnovšiu verziu ({{version}})."
+    },
     "UPDATE_WEB_APP": "K dispozícii je nová verzia. Načítať novú verziu?"
   },
   "BL": {
@@ -2155,6 +2163,8 @@
       "DEFAULT_START_PAGE": "Predvolená úvodná stránka",
       "FIRST_DAY_OF_WEEK": "Prvý deň v týždni",
       "HELP": "<p><strong>Not seeing Desktop Notifications?</strong> For windows you might want to check System > Notifications & actions and check if the required notifications have been enabled.</p>",
+      "IS_CHECK_FOR_UPDATES": "Automaticky kontrolovať nové verzie (iba desktopová aplikácia)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Raz denne skontroluje najnovšie vydanie na GitHube a zobrazí upozornenie, keď je k dispozícii novšia verzia. Vykoná sa iba bežná webová požiadavka — žiadne osobné údaje sa neodosielajú.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirm before exiting the app without finishing day first",
       "IS_DARK_MODE": "Tmavý režim",
@@ -2557,6 +2567,7 @@
     "ALL_TASKS_TITLE": "Metriky (všetky úlohy)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Skontrolovať aktualizácie",
     "GLOBAL_SETTINGS": "Global Settings",
     "NO_PLUGINS_INSTALLED": "Momentálne nie sú nainštalované žiadne pluginy",
     "PLUGINS": "Pluginy",

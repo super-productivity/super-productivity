@@ -11,11 +11,19 @@
       "MSG": "Du har använt Super Productivity ett tag. Konfigurera synkronisering för att säkerhetskopiera dina data och hålla dem säkra på alla enheter.",
       "SETUP": "Konfigurera synkronisering"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Ladda ner",
+      "MSG": "En ny version av Super Productivity är tillgänglig ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Ändra projektinställningar",
       "CHANGE_TAG_SETTINGS": "Ändra tagginställningar"
     },
     "SKIP_SYNC_WAIT": "Hoppa over synkväntan",
+    "UPDATE_CHECK": {
+      "ERROR": "Det gick inte att söka efter uppdateringar. Försök igen senare.",
+      "UP_TO_DATE": "Du använder den senaste versionen ({{version}})."
+    },
     "UPDATE_WEB_APP": "Ny version tillgänglig. Ladda in ny version?"
   },
   "BL": {
@@ -2489,6 +2497,8 @@
       "DEFAULT_START_PAGE": "Standardstartsida",
       "FIRST_DAY_OF_WEEK": "Veckans första dag",
       "HELP": "<p><strong>Ser du inte skrivbordsmeddelanden?</strong> För Windows kan du gå till System > Meddelanden och åtgärder och kontrollera om de nödvändiga meddelandena har aktiverats.</p>",
+      "IS_CHECK_FOR_UPDATES": "Sök automatiskt efter nya versioner (endast skrivbordsappen)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Kontrollerar den senaste utgåvan på GitHub en gång om dagen och visar ett meddelande när en nyare version finns tillgänglig. Endast en vanlig webbförfrågan görs — inga personuppgifter skickas.",
       "IS_CONFIRM_BEFORE_EXIT": "Bekräfta innan du stänger appen",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bekräfta innan du stänger appen utan att först avsluta dagen.",
       "IS_DARK_MODE": "Mörkt läge",
@@ -2961,6 +2971,7 @@
     "DIALOG_TITLE": "Systemuppdatering"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Sök efter uppdateringar",
     "CLICK_TO_COPY_VERSION": "Klicka för att kopiera version",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Kunde inte kopiera till urklipp",
     "GLOBAL_SETTINGS": "Globala inställningar",

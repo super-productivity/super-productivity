@@ -11,12 +11,20 @@
       "MSG": "Vous utilisez Super Productivity depuis un certain temps. Configurez la synchronisation pour sauvegarder vos données et les garder en sécurité sur tous vos appareils.",
       "SETUP": "Configurer la synchronisation"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Télécharger",
+      "MSG": "Une nouvelle version de Super Productivity est disponible ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Changer le fond",
       "CHANGE_PROJECT_SETTINGS": "Modifier les paramètres du projet",
       "CHANGE_TAG_SETTINGS": "Modifier les paramètres de l'étiquette"
     },
     "SKIP_SYNC_WAIT": "Ignorer l'attente de synchronisation",
+    "UPDATE_CHECK": {
+      "ERROR": "Impossible de vérifier les mises à jour. Veuillez réessayer plus tard.",
+      "UP_TO_DATE": "Vous utilisez la dernière version ({{version}})."
+    },
     "UPDATE_WEB_APP": "Une nouvelle version est disponible. Charger la nouvelle version ?"
   },
   "BL": {
@@ -2299,6 +2307,8 @@
       "DEFAULT_START_PAGE": "Page de démarrage par défaut",
       "FIRST_DAY_OF_WEEK": "Premier jour de la semaine",
       "HELP": "<p><strong>Vous ne voyez pas les notifications de bureau ?</strong> Pour Windows, vous pouvez vérifier Système> Notifications et actions et vérifier si les notifications requises ont été activées.</p>",
+      "IS_CHECK_FOR_UPDATES": "Vérifier automatiquement les nouvelles versions (bureau uniquement)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Vérifie une fois par jour la dernière version publiée sur GitHub et affiche un avis lorsqu'une version plus récente est disponible. Seule une requête web standard est effectuée — aucune donnée personnelle n'est envoyée.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirmez avant de quitter l'application",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirmez avant de quitter l'application sans terminer le jour en premier",
       "IS_DARK_MODE": "Mode sombre",
@@ -2718,6 +2728,7 @@
     "ALL_TASKS_TITLE": "Métriques (toutes les tâches)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Vérifier les mises à jour",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Échec de la copie dans le presse-papiers",
     "GLOBAL_SETTINGS": "Paramètres globaux",
     "NO_PLUGINS_INSTALLED": "Aucun plugin n'est actuellement installé",

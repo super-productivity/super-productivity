@@ -11,12 +11,20 @@
       "MSG": "Llevas un tiempo usando Super Productivity. Configura la sincronización para hacer una copia de seguridad de tus datos y mantenerlos seguros en todos tus dispositivos.",
       "SETUP": "Configurar sincronización"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Descargar",
+      "MSG": "Hay una nueva versión de Super Productivity disponible ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Cambiar fondo",
       "CHANGE_PROJECT_SETTINGS": "Cambiar configuración del proyecto",
       "CHANGE_TAG_SETTINGS": "Cambiar configuración de la etiqueta"
     },
     "SKIP_SYNC_WAIT": "Omitir espera para sincronizar",
+    "UPDATE_CHECK": {
+      "ERROR": "No se pudo comprobar si hay actualizaciones. Inténtalo de nuevo más tarde.",
+      "UP_TO_DATE": "Estás en la última versión ({{version}})."
+    },
     "UPDATE_WEB_APP": "Nueva versión disponible. ¿Quieres cargar la nueva versión?"
   },
   "BL": {
@@ -2299,6 +2307,8 @@
       "DEFAULT_START_PAGE": "Página de inicio predeterminada",
       "FIRST_DAY_OF_WEEK": "Primer día de la semana",
       "HELP": "<p><strong>¿No ves Notificaciones de Escritorio?</strong> Para windows podrías querer comprobar Sistema > Notificaciones y acciones y comprobar si las notificaciones requeridas han sido habilitadas.</p>",
+      "IS_CHECK_FOR_UPDATES": "Comprobar automáticamente si hay nuevas versiones (solo escritorio)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Comprueba una vez al día la última versión publicada en GitHub y muestra un aviso cuando hay una versión más reciente disponible. Solo se realiza una petición web estándar — no se envían datos personales.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirmar antes de salir de la aplicación",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirmar antes de salir de la aplicación sin finalizar el día primero",
       "IS_DARK_MODE": "Modo Oscuro",
@@ -2718,6 +2728,7 @@
     "ALL_TASKS_TITLE": "Métricas (todas las tareas)"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Buscar actualizaciones",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Error al copiar al portapapeles",
     "GLOBAL_SETTINGS": "Ajustes globales",
     "NO_PLUGINS_INSTALLED": "Actualmente no hay plugins instalados",
