@@ -2,12 +2,18 @@ import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { delay, filter, scan, switchMap, take } from 'rxjs/operators';
+import {
+  delay,
+  distinctUntilChanged,
+  filter,
+  scan,
+  switchMap,
+  take,
+} from 'rxjs/operators';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
-import { getAppVersionStr } from '../../util/get-app-version-str';
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
 import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 import { androidInterface } from '../android/android-interface';
@@ -23,7 +29,6 @@ import {
   loadRateDialogState,
   saveRateDialogState,
   shouldShowRateDialog,
-  VERSION_MIN_AGE_MS,
 } from './rate-dialog-state';
 import { StoreReview } from './store-review';
 
@@ -64,35 +69,11 @@ export class RatePromptService {
     }
     this._appStarts = appStarts;
 
-    this._stampVersionSeen();
-
     const state = loadRateDialogState();
-    if (
-      !shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError()) ||
-      this._isVersionTooNew()
-    ) {
+    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
       return;
     }
     this._armForWin();
-  }
-
-  /** Record the first time we see the current app version (for the age gate). */
-  private _stampVersionSeen(): void {
-    if (localStorage.getItem(LS.RATE_PROMPT_VERSION) !== getAppVersionStr()) {
-      localStorage.setItem(LS.RATE_PROMPT_VERSION, getAppVersionStr());
-      localStorage.setItem(LS.RATE_PROMPT_VERSION_SEEN_AT, Date.now().toString());
-    }
-  }
-
-  /** Don't prompt in the first days after an update (a regressed release should
-   * settle before we ask for a rating). Unknown/garbage timestamp → don't block. */
-  private _isVersionTooNew(): boolean {
-    const raw = localStorage.getItem(LS.RATE_PROMPT_VERSION_SEEN_AT);
-    const seenAt = raw ? +raw : 0;
-    if (!Number.isFinite(seenAt) || seenAt <= 0) {
-      return false;
-    }
-    return Date.now() - seenAt < VERSION_MIN_AGE_MS;
   }
 
   private _armForWin(): void {
@@ -112,6 +93,10 @@ export class RatePromptService {
         filter((isLoaded) => isLoaded),
         take(1),
         switchMap(() => this._store.select(selectTodayProgress)),
+        // selectTodayProgress recomputes on unrelated task changes (e.g. the 1s
+        // time-tracking tick emits a new {done,total} object with identical
+        // numbers); collapse those so the scan/filter only run on a real change.
+        distinctUntilChanged((a, b) => a.done === b.done && a.total === b.total),
         // First (settled) emission is the session baseline; only fire on a later
         // increase, i.e. a real completion this session. NOTE: the baseline is a
         // fixed count, so a session left open past midnight keeps yesterday's
@@ -144,14 +129,11 @@ export class RatePromptService {
     this._isArmed = false;
 
     const state = loadRateDialogState();
-    // Re-check full eligibility, not just opt-out: a crash or data-damage
-    // recorded *after* arming (GlobalErrorHandler / state-validation this
-    // session) must still suppress the prompt, so we never ask for a review
-    // right after the user hit a failure. Inputs are re-read fresh here.
-    if (
-      !shouldShowRateDialog(state, this._appStarts, getMsSinceLastCriticalError()) ||
-      this._isVersionTooNew()
-    ) {
+    // Re-check eligibility, not just opt-out: a crash or data-damage recorded
+    // *after* arming (GlobalErrorHandler / state-validation this session) must
+    // still suppress the prompt, so we never ask for a review right after the
+    // user hit a failure. Inputs are re-read fresh here.
+    if (!shouldShowRateDialog(state, this._appStarts, getMsSinceLastCriticalError())) {
       return;
     }
 
@@ -173,7 +155,7 @@ export class RatePromptService {
     // iOS: native App Store review prompt (SKStoreReviewController). Advance the
     // cadence only once the request actually resolves — if the plugin rejects
     // (e.g. no active window scene), leave eligibility intact so a later session
-    // can retry rather than silently burning one of the ~2 lifetime prompts.
+    // can retry rather than silently burning this cadence slot.
     if (IS_IOS_NATIVE) {
       void StoreReview.requestReview()
         .then(() =>

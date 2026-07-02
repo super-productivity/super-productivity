@@ -21,12 +21,6 @@ const TRIGGER_TIERS = [32, 96] as const;
 // allowance and Play's own quota.
 export const RECURRING_INTERVAL_STARTS = 180;
 
-// Hold the prompt for this long after the app version first changes, so a fresh
-// (possibly regressed) release isn't asked to be rated immediately. Managed at
-// the service boundary (needs the running version + a timestamp), same delay-
-// not-cancel shape as the crash cooldown.
-export const VERSION_MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
 // After a real (unhandled) error we hold the rating prompt for this long, so we
 // never ask for a review right after the user hit a crash. Because the tier
 // check below stays `>=`, the prompt simply re-fires on the first app start
