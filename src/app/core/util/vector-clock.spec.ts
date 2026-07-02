@@ -3,8 +3,10 @@ import {
   VectorClockComparison,
   compareVectorClocks,
   hasVectorClockChanges,
+  vectorClockPruned$,
 } from './vector-clock';
 import { MAX_VECTOR_CLOCK_SIZE } from '../../op-log/core/operation-log.const';
+import { OpLog } from '../log';
 
 describe('vector-clock', () => {
   describe('limitVectorClockSize', () => {
@@ -65,6 +67,56 @@ describe('vector-clock', () => {
       const result = limitVectorClockSize(clock, currentClientId);
 
       expect(Object.keys(result).length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+    });
+
+    it('should emit on vectorClockPruned$ when pruning occurs (drives the user notice)', () => {
+      const events: { originalSize: number; maxSize: number }[] = [];
+      const sub = vectorClockPruned$.subscribe((e) => events.push(e));
+
+      const clock: Record<string, number> = { current: 500 };
+      const overflow = MAX_VECTOR_CLOCK_SIZE + 3;
+      for (let i = 0; i < overflow; i++) {
+        clock[`client_${i}`] = 100 + i;
+      }
+      limitVectorClockSize(clock, 'current');
+      sub.unsubscribe();
+
+      expect(events.length).toBe(1);
+      expect(events[0].originalSize).toBe(overflow + 1); // + current
+      expect(events[0].maxSize).toBe(MAX_VECTOR_CLOCK_SIZE);
+    });
+
+    it('should NOT emit on vectorClockPruned$ when within the limit', () => {
+      const events: unknown[] = [];
+      const sub = vectorClockPruned$.subscribe((e) => events.push(e));
+      limitVectorClockSize({ a: 1, b: 2 }, 'a');
+      sub.unsubscribe();
+      expect(events.length).toBe(0);
+    });
+
+    it('should log pruned + surviving client IDs at WARN level for bug-report diagnostics', () => {
+      const warnSpy = spyOn(OpLog, 'warn');
+
+      const clock: Record<string, number> = {
+        current: 500,
+        staleLow: 1, // lowest counter → gets pruned
+      };
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+        clock[`client_${i}`] = 100 + i;
+      }
+
+      limitVectorClockSize(clock, 'current');
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const payload = warnSpy.calls.mostRecent().args[1] as {
+        prunedIds: string[];
+        survivingIds: string[];
+        prunedCount: number;
+      };
+      expect(payload.prunedIds).toContain('staleLow');
+      expect(payload.survivingIds).toContain('current');
+      expect(payload.prunedCount).toBe(payload.prunedIds.length);
+      expect(payload.survivingIds.length).toBe(MAX_VECTOR_CLOCK_SIZE);
     });
   });
 

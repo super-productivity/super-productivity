@@ -100,15 +100,24 @@ export class SyncEffects {
   vectorClockPruningNotification$ = createEffect(
     () =>
       vectorClockPruned$.pipe(
+        // Pruning fires on essentially every download-merge once a user has
+        // accumulated >20 client IDs (see #8696). Show a calm breadcrumb at
+        // most once per app session — enough to recognise it is happening,
+        // without nagging. The durable record lives in the (WARN-level) log.
+        take(1),
         tap(({ originalSize, maxSize }) => {
           this._snackService.open({
             msg: T.F.SYNC.S.VECTOR_CLOCK_LIMIT_REACHED,
-            type: 'WARNING',
+            // CUSTOM (not WARNING): this is a benign, self-healing cleanup, not
+            // an alert the user must act on. Neutral icon, auto-dismiss — but a
+            // touch longer than the 3s default so the sentence is readable.
+            type: 'CUSTOM',
+            ico: 'sync',
             translateParams: {
               originalSize,
               maxSize,
             },
-            config: { duration: 0 },
+            config: { duration: 5000 },
           });
         }),
       ),
