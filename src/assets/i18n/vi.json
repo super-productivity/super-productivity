@@ -230,11 +230,13 @@
     },
     "D_RATE": {
       "A_HOW": "Cách và nơi đánh giá",
+      "BANNER_ACTION": "Chắc chắn!",
       "BTN_DONT_BOTHER": "Đừng làm phiền tôi nữa",
       "BTN_FEEDBACK": "Gửi phản hồi",
       "BTN_LATER": "Để sau",
       "BTN_RATE_APP_STORE": "Đánh giá trên App Store",
       "BTN_RATE_PLAY_STORE": "Đánh giá trên Play Store",
+      "BTN_STAR_GITHUB": "Gắn sao cho chúng tôi trên GitHub",
       "FEEDBACK_BACK": "Quay lại",
       "FEEDBACK_CONTRIBUTE": "Đóng góp cho dự án",
       "FEEDBACK_CONTRIBUTE_DESC": "Mã nguồn, thiết kế, bản dịch và hơn thế nữa",
@@ -2525,6 +2527,7 @@
       "KEYBOARD": "Cách: Bàn phím nâng cao",
       "REDDIT_COMMUNITY": "Cộng đồng Reddit",
       "REPORT_A_PROBLEM": "Báo cáo vấn đề",
+      "SEND_FEEDBACK": "Gửi phản hồi",
       "START_WELCOME": "Bắt đầu hướng dẫn chào mừng",
       "SYNC": "Cách: Cấu hình đồng bộ"
     },

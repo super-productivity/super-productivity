@@ -255,11 +255,13 @@
     },
     "D_RATE": {
       "A_HOW": "Nasıl değerlendirilir",
+      "BANNER_ACTION": "Tabii ki!",
       "BTN_DONT_BOTHER": "Bir daha sorma",
       "BTN_FEEDBACK": "Geri bildirim gönder",
       "BTN_LATER": "Belki daha sonra",
       "BTN_RATE_APP_STORE": "App Store'da değerlendir",
       "BTN_RATE_PLAY_STORE": "Play Store'da değerlendir",
+      "BTN_STAR_GITHUB": "GitHub'da bize yıldız verin",
       "FEEDBACK_BACK": "Geri",
       "FEEDBACK_CONTRIBUTE": "Projeye katkıda bulun",
       "FEEDBACK_CONTRIBUTE_DESC": "Kod, tasarım, çeviri ve daha fazlası",
@@ -2674,6 +2676,7 @@
       "KEYBOARD": "Nasıl Yapılır: Gelişmiş Klavye",
       "REDDIT_COMMUNITY": "Reddit Topluluğu",
       "REPORT_A_PROBLEM": "Sorun bildir",
+      "SEND_FEEDBACK": "Geri bildirim gönder",
       "START_WELCOME": "Hoşgeldin turunu başlat",
       "SYNC": "Nasıl Yapılır: Eşitleme ayarlamak"
     },

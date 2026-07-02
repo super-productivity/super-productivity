@@ -177,11 +177,13 @@
     },
     "D_RATE": {
       "A_HOW": "چگونه امتیاز دهیم",
+      "BANNER_ACTION": "حتماً!",
       "BTN_DONT_BOTHER": "دیگر نپرس",
       "BTN_FEEDBACK": "ارسال بازخورد",
       "BTN_LATER": "شاید بعداً",
       "BTN_RATE_APP_STORE": "در App Store امتیاز دهید",
       "BTN_RATE_PLAY_STORE": "در Play Store امتیاز دهید",
+      "BTN_STAR_GITHUB": "به ما در GitHub ستاره بدهید",
       "FEEDBACK_BACK": "بازگشت",
       "FEEDBACK_CONTRIBUTE": "مشارکت در پروژه",
       "FEEDBACK_CONTRIBUTE_DESC": "کد، طراحی، ترجمه و موارد دیگر",
@@ -2337,6 +2339,7 @@
       "KEYBOARD": "نحوه انجام: صفحه کلید پیشرفته",
       "REDDIT_COMMUNITY": "انجمن Reddit",
       "REPORT_A_PROBLEM": "گزارش یک مشکل",
+      "SEND_FEEDBACK": "ارسال بازخورد",
       "START_WELCOME": "آغاز تور خوش‌آمدگویی",
       "SYNC": "نحوه انجام: همگام سازی را پیکربندی کنید"
     },

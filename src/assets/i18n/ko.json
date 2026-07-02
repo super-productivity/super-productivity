@@ -197,11 +197,13 @@
     },
     "D_RATE": {
       "A_HOW": "평가하는 방법",
+      "BANNER_ACTION": "좋아요!",
       "BTN_DONT_BOTHER": "다시 묻지 않기",
       "BTN_FEEDBACK": "피드백 보내기",
       "BTN_LATER": "나중에",
       "BTN_RATE_APP_STORE": "App Store에서 평가",
       "BTN_RATE_PLAY_STORE": "Play Store에서 평가",
+      "BTN_STAR_GITHUB": "GitHub에서 스타 주기",
       "FEEDBACK_BACK": "뒤로",
       "FEEDBACK_CONTRIBUTE": "프로젝트에 기여하기",
       "FEEDBACK_CONTRIBUTE_DESC": "코드, 디자인, 번역 등",
@@ -2483,6 +2485,7 @@
       "KEYBOARD": "Howto: 고급 키보드",
       "REDDIT_COMMUNITY": "Reddit 커뮤니티",
       "REPORT_A_PROBLEM": "문제 신고하기",
+      "SEND_FEEDBACK": "피드백 보내기",
       "START_WELCOME": "웰컴 투어 시작",
       "SYNC": "방법: 동기화 구성"
     },

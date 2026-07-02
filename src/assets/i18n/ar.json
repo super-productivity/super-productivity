@@ -208,11 +208,13 @@
     },
     "D_RATE": {
       "A_HOW": "كيفية التقييم",
+      "BANNER_ACTION": "بالتأكيد!",
       "BTN_DONT_BOTHER": "لا تسأل مرة أخرى",
       "BTN_FEEDBACK": "إرسال ملاحظات",
       "BTN_LATER": "ربما لاحقًا",
       "BTN_RATE_APP_STORE": "قيّم على App Store",
       "BTN_RATE_PLAY_STORE": "قيّم على Play Store",
+      "BTN_STAR_GITHUB": "قيّمنا بنجمة على GitHub",
       "FEEDBACK_BACK": "رجوع",
       "FEEDBACK_CONTRIBUTE": "ساهم في المشروع",
       "FEEDBACK_CONTRIBUTE_DESC": "البرمجة، التصميم، الترجمة وغير ذلك",
@@ -2495,6 +2497,7 @@
       "KEYBOARD": "كيفية: لوحة المفاتيح المتقدمة",
       "REDDIT_COMMUNITY": "مجتمع ريديت",
       "REPORT_A_PROBLEM": "الإبلاغ عن مشكلة",
+      "SEND_FEEDBACK": "إرسال ملاحظات",
       "START_WELCOME": "ابدأ جولة الترحيب",
       "SYNC": "كيفية: تكوين المزامنة"
     },

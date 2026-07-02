@@ -217,11 +217,13 @@
     },
     "D_RATE": {
       "A_HOW": "Como avaliar",
+      "BANNER_ACTION": "Claro!",
       "BTN_DONT_BOTHER": "Não perguntar de novo",
       "BTN_FEEDBACK": "Enviar feedback",
       "BTN_LATER": "Talvez mais tarde",
       "BTN_RATE_APP_STORE": "Avaliar na App Store",
       "BTN_RATE_PLAY_STORE": "Avaliar na Play Store",
+      "BTN_STAR_GITHUB": "Dê uma estrela no GitHub",
       "FEEDBACK_BACK": "Voltar",
       "FEEDBACK_CONTRIBUTE": "Contribuir com o projeto",
       "FEEDBACK_CONTRIBUTE_DESC": "Código, design, traduções e mais",
@@ -2485,6 +2487,7 @@
       "KEYBOARD": "Como fazer: Teclado avançado",
       "REDDIT_COMMUNITY": "Comunidade no Reddit",
       "REPORT_A_PROBLEM": "Relatar um problema",
+      "SEND_FEEDBACK": "Enviar feedback",
       "START_WELCOME": "Iniciar tour de boas-vindas",
       "SYNC": "Como fazer: Configurar sincronização"
     },

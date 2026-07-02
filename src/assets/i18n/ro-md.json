@@ -255,11 +255,13 @@
     },
     "D_RATE": {
       "A_HOW": "Cum acorzi o notă",
+      "BANNER_ACTION": "Sigur!",
       "BTN_DONT_BOTHER": "Nu mă mai întreba",
       "BTN_FEEDBACK": "Trimite feedback",
       "BTN_LATER": "Poate mai tîrziu",
       "BTN_RATE_APP_STORE": "Acordă o notă pe App Store",
       "BTN_RATE_PLAY_STORE": "Acordă o notă pe Play Store",
+      "BTN_STAR_GITHUB": "Oferă-ne o stea pe GitHub",
       "FEEDBACK_BACK": "Înapoi",
       "FEEDBACK_CONTRIBUTE": "Contribuie la proiect",
       "FEEDBACK_CONTRIBUTE_DESC": "Cod, design, traduceri și altele",
@@ -2683,6 +2685,7 @@
       "KEYBOARD": "Cum să: Tastatură avansată",
       "REDDIT_COMMUNITY": "Comunitatea Reddit",
       "REPORT_A_PROBLEM": "Raportează o problemă",
+      "SEND_FEEDBACK": "Trimite feedback",
       "START_WELCOME": "Începe tur de bun venit",
       "SYNC": "Cum să: Configurare sincronizare"
     },

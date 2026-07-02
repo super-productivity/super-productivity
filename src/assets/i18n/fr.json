@@ -213,11 +213,13 @@
     },
     "D_RATE": {
       "A_HOW": "Comment évaluer",
+      "BANNER_ACTION": "Avec plaisir !",
       "BTN_DONT_BOTHER": "Ne plus me demander",
       "BTN_FEEDBACK": "Envoyer un retour",
       "BTN_LATER": "Peut-être plus tard",
       "BTN_RATE_APP_STORE": "Noter sur l'App Store",
       "BTN_RATE_PLAY_STORE": "Noter sur le Play Store",
+      "BTN_STAR_GITHUB": "Mettez-nous une étoile sur GitHub",
       "FEEDBACK_BACK": "Retour",
       "FEEDBACK_CONTRIBUTE": "Contribuer au projet",
       "FEEDBACK_CONTRIBUTE_DESC": "Code, design, traductions et plus",
@@ -2506,6 +2508,7 @@
       "KEYBOARD": "Tutoriel : Raccourcis clavier avancés",
       "REDDIT_COMMUNITY": "Communauté Reddit",
       "REPORT_A_PROBLEM": "Signaler un problème",
+      "SEND_FEEDBACK": "Envoyer un retour",
       "START_WELCOME": "Démarrer le tour de bienvenue",
       "SYNC": "Tutoriel : Configurer la synchronisation"
     },

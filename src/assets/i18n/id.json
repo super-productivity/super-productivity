@@ -213,11 +213,13 @@
     },
     "D_RATE": {
       "A_HOW": "Cara menilai",
+      "BANNER_ACTION": "Tentu!",
       "BTN_DONT_BOTHER": "Jangan tanya lagi",
       "BTN_FEEDBACK": "Beri masukan",
       "BTN_LATER": "Mungkin nanti",
       "BTN_RATE_APP_STORE": "Nilai di App Store",
       "BTN_RATE_PLAY_STORE": "Nilai di Play Store",
+      "BTN_STAR_GITHUB": "Beri kami bintang di GitHub",
       "FEEDBACK_BACK": "Kembali",
       "FEEDBACK_CONTRIBUTE": "Berkontribusi ke proyek",
       "FEEDBACK_CONTRIBUTE_DESC": "Kode, desain, terjemahan, dan lainnya",
@@ -2505,6 +2507,7 @@
       "KEYBOARD": "Howto: Papan Ketik Tingkat Lanjut",
       "REDDIT_COMMUNITY": "Komunitas Reddit",
       "REPORT_A_PROBLEM": "Laporkan masalah",
+      "SEND_FEEDBACK": "Kirim masukan",
       "START_WELCOME": "Mulai Tur Selamat Datang",
       "SYNC": "Howto: Mengonfigurasi Sinkronisasi"
     },

@@ -208,11 +208,13 @@
     },
     "D_RATE": {
       "A_HOW": "評価の方法",
+      "BANNER_ACTION": "はい！",
       "BTN_DONT_BOTHER": "今後表示しない",
       "BTN_FEEDBACK": "フィードバックを送る",
       "BTN_LATER": "あとで",
       "BTN_RATE_APP_STORE": "App Store で評価",
       "BTN_RATE_PLAY_STORE": "Play Store で評価",
+      "BTN_STAR_GITHUB": "GitHub でスターを付ける",
       "FEEDBACK_BACK": "戻る",
       "FEEDBACK_CONTRIBUTE": "プロジェクトに貢献する",
       "FEEDBACK_CONTRIBUTE_DESC": "コード、デザイン、翻訳など",
@@ -2495,6 +2497,7 @@
       "KEYBOARD": "ハウツー高度なキーボード",
       "REDDIT_COMMUNITY": "Reddit コミュニティ",
       "REPORT_A_PROBLEM": "問題を報告する",
+      "SEND_FEEDBACK": "フィードバックを送る",
       "START_WELCOME": "ウェルカムツアー開始",
       "SYNC": "ハウツー同期の設定"
     },

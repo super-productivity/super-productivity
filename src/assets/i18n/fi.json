@@ -182,11 +182,13 @@
     },
     "D_RATE": {
       "A_HOW": "Miten arvostella",
+      "BANNER_ACTION": "Toki!",
       "BTN_DONT_BOTHER": "Älä kysy uudelleen",
       "BTN_FEEDBACK": "Anna palautetta",
       "BTN_LATER": "Ehkä myöhemmin",
       "BTN_RATE_APP_STORE": "Arvostele App Storessa",
       "BTN_RATE_PLAY_STORE": "Arvostele Play Storessa",
+      "BTN_STAR_GITHUB": "Tähditä meidät GitHubissa",
       "FEEDBACK_BACK": "Takaisin",
       "FEEDBACK_CONTRIBUTE": "Osallistu projektiin",
       "FEEDBACK_CONTRIBUTE_DESC": "Koodi, suunnittelu, käännökset ja muuta",
@@ -2347,6 +2349,7 @@
       "KEYBOARD": "Ohje: Kehittynyt näppäimistö",
       "REDDIT_COMMUNITY": "Reddit-yhteisö",
       "REPORT_A_PROBLEM": "Ilmoita ongelmasta",
+      "SEND_FEEDBACK": "Lähetä palautetta",
       "START_WELCOME": "Aloita tervetuloa-kierros",
       "SYNC": "Ohje: Määritä synkronointi"
     },

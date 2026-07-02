@@ -213,11 +213,13 @@
     },
     "D_RATE": {
       "A_HOW": "Как оценить",
+      "BANNER_ACTION": "Конечно!",
       "BTN_DONT_BOTHER": "Больше не спрашивать",
       "BTN_FEEDBACK": "Отправить отзыв",
       "BTN_LATER": "Может, позже",
       "BTN_RATE_APP_STORE": "Оценить в App Store",
       "BTN_RATE_PLAY_STORE": "Оценить в Play Store",
+      "BTN_STAR_GITHUB": "Поставьте нам звезду на GitHub",
       "FEEDBACK_BACK": "Назад",
       "FEEDBACK_CONTRIBUTE": "Внести вклад в проект",
       "FEEDBACK_CONTRIBUTE_DESC": "Код, дизайн, переводы и другое",
@@ -2512,6 +2514,7 @@
       "KEYBOARD": "Инструкция: Продвинутая клавиатура",
       "REDDIT_COMMUNITY": "Сообщество Reddit",
       "REPORT_A_PROBLEM": "Сообщить о проблеме",
+      "SEND_FEEDBACK": "Отправить отзыв",
       "START_WELCOME": "Начать приветственный тур",
       "SYNC": "Как настроить синхронизацию"
     },

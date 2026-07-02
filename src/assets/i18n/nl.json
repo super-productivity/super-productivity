@@ -213,11 +213,13 @@
     },
     "D_RATE": {
       "A_HOW": "Hoe te beoordelen",
+      "BANNER_ACTION": "Zeker!",
       "BTN_DONT_BOTHER": "Niet meer vragen",
       "BTN_FEEDBACK": "Feedback geven",
       "BTN_LATER": "Misschien later",
       "BTN_RATE_APP_STORE": "Beoordeel in App Store",
       "BTN_RATE_PLAY_STORE": "Beoordeel in Play Store",
+      "BTN_STAR_GITHUB": "Geef ons een ster op GitHub",
       "FEEDBACK_BACK": "Terug",
       "FEEDBACK_CONTRIBUTE": "Bijdragen aan het project",
       "FEEDBACK_CONTRIBUTE_DESC": "Code, design, vertalingen en meer",
@@ -2506,6 +2508,7 @@
       "KEYBOARD": "Howto: Geavanceerd toetsenbord",
       "REDDIT_COMMUNITY": "Reddit-gemeenschap",
       "REPORT_A_PROBLEM": "Een probleem melden",
+      "SEND_FEEDBACK": "Feedback versturen",
       "START_WELCOME": "Begin welkomstrondleiding",
       "SYNC": "Howto: Synchronisatie configureren"
     },

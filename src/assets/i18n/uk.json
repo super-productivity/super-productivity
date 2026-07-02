@@ -255,11 +255,13 @@
     },
     "D_RATE": {
       "A_HOW": "Як оцінити",
+      "BANNER_ACTION": "Звісно!",
       "BTN_DONT_BOTHER": "Більше не запитувати",
       "BTN_FEEDBACK": "Надіслати відгук",
       "BTN_LATER": "Можливо, пізніше",
       "BTN_RATE_APP_STORE": "Оцінити в App Store",
       "BTN_RATE_PLAY_STORE": "Оцінити в Play Store",
+      "BTN_STAR_GITHUB": "Поставте нам зірку на GitHub",
       "FEEDBACK_BACK": "Назад",
       "FEEDBACK_CONTRIBUTE": "Зробити внесок у проєкт",
       "FEEDBACK_CONTRIBUTE_DESC": "Код, дизайн, переклади тощо",
@@ -2686,6 +2688,7 @@
       "KEYBOARD": "Як використовувати розширені клавіатурні команди",
       "REDDIT_COMMUNITY": "Спільнота Reddit",
       "REPORT_A_PROBLEM": "Повідомити про проблему",
+      "SEND_FEEDBACK": "Надіслати відгук",
       "START_WELCOME": "Почати ознайомчий тур",
       "SYNC": "Як налаштувати синхронізацію"
     },

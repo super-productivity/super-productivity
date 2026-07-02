@@ -254,11 +254,13 @@
     },
     "D_RATE": {
       "A_HOW": "Wie bewerten",
+      "BANNER_ACTION": "Gerne!",
       "BTN_DONT_BOTHER": "Nicht mehr fragen",
       "BTN_FEEDBACK": "Feedback geben",
       "BTN_LATER": "Vielleicht später",
       "BTN_RATE_APP_STORE": "Im App Store bewerten",
       "BTN_RATE_PLAY_STORE": "Im Play Store bewerten",
+      "BTN_STAR_GITHUB": "Gib uns einen Stern auf GitHub",
       "FEEDBACK_BACK": "Zurück",
       "FEEDBACK_CONTRIBUTE": "Zum Projekt beitragen",
       "FEEDBACK_CONTRIBUTE_DESC": "Code, Design, Übersetzungen und mehr",
@@ -2662,6 +2664,7 @@
       "KEYBOARD": "Howto: Erweiterte Tastatursteuerung",
       "REDDIT_COMMUNITY": "Reddit-Gemeinschaft",
       "REPORT_A_PROBLEM": "Ein Problem melden",
+      "SEND_FEEDBACK": "Feedback senden",
       "START_WELCOME": "Willkommenstour starten",
       "SYNC": "Howto: Synchronisierung konfigurieren"
     },

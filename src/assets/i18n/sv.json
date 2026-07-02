@@ -255,11 +255,13 @@
     },
     "D_RATE": {
       "A_HOW": "Så betygsätter du",
+      "BANNER_ACTION": "Gärna!",
       "BTN_DONT_BOTHER": "Fråga inte igen",
       "BTN_FEEDBACK": "Lämna feedback",
       "BTN_LATER": "Kanske senare",
       "BTN_RATE_APP_STORE": "Betygsätt i App Store",
       "BTN_RATE_PLAY_STORE": "Betygsätt i Play Store",
+      "BTN_STAR_GITHUB": "Ge oss en stjärna på GitHub",
       "FEEDBACK_BACK": "Tillbaka",
       "FEEDBACK_CONTRIBUTE": "Bidra till projektet",
       "FEEDBACK_CONTRIBUTE_DESC": "Kod, design, översättningar och mer",
@@ -2688,6 +2690,7 @@
       "KEYBOARD": "Hur man gör: Avancerat tangentbord",
       "REDDIT_COMMUNITY": "Reddit-community",
       "REPORT_A_PROBLEM": "Rapportera ett problem",
+      "SEND_FEEDBACK": "Skicka feedback",
       "START_WELCOME": "Starta välkomstrundtur",
       "SYNC": "Hur man gör: Konfigurera synkronisering"
     },

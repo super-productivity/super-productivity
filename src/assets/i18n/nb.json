@@ -182,11 +182,13 @@
     },
     "D_RATE": {
       "A_HOW": "Hvordan vurdere",
+      "BANNER_ACTION": "Gjerne!",
       "BTN_DONT_BOTHER": "Ikke spør igjen",
       "BTN_FEEDBACK": "Gi tilbakemelding",
       "BTN_LATER": "Kanskje senere",
       "BTN_RATE_APP_STORE": "Vurder i App Store",
       "BTN_RATE_PLAY_STORE": "Vurder i Play Store",
+      "BTN_STAR_GITHUB": "Gi oss en stjerne på GitHub",
       "FEEDBACK_BACK": "Tilbake",
       "FEEDBACK_CONTRIBUTE": "Bidra til prosjektet",
       "FEEDBACK_CONTRIBUTE_DESC": "Kode, design, oversettelser og mer",
@@ -2347,6 +2349,7 @@
       "KEYBOARD": "Slik gjør du det: Avansert tastatur",
       "REDDIT_COMMUNITY": "Reddit-fellesskapet",
       "REPORT_A_PROBLEM": "Rapporter et problem",
+      "SEND_FEEDBACK": "Send tilbakemelding",
       "START_WELCOME": "Start velkomstturen",
       "SYNC": "Slik gjør du det: Konfigurere synkronisering"
     },

@@ -225,11 +225,13 @@
     },
     "D_RATE": {
       "A_HOW": "Kako ocijeniti",
+      "BANNER_ACTION": "Naravno!",
       "BTN_DONT_BOTHER": "Ne pitaj ponovno",
       "BTN_FEEDBACK": "Pošalji povratnu informaciju",
       "BTN_LATER": "Možda kasnije",
       "BTN_RATE_APP_STORE": "Ocijeni na App Storeu",
       "BTN_RATE_PLAY_STORE": "Ocijeni na Play Storeu",
+      "BTN_STAR_GITHUB": "Označite nas zvjezdicom na GitHubu",
       "FEEDBACK_BACK": "Natrag",
       "FEEDBACK_CONTRIBUTE": "Doprinesi projektu",
       "FEEDBACK_CONTRIBUTE_DESC": "Kod, dizajn, prijevodi i više",
@@ -2484,6 +2486,7 @@
       "KEYBOARD": "Kako: Napredna tipkovnica",
       "REDDIT_COMMUNITY": "Reddit zajednica",
       "REPORT_A_PROBLEM": "Prijavi problem",
+      "SEND_FEEDBACK": "Pošalji povratnu informaciju",
       "START_WELCOME": "Pokreni uvodni vodič",
       "SYNC": "Kako: Konfigurirati sinkronizaciju"
     },

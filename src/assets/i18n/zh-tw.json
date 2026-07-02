@@ -218,11 +218,13 @@
     },
     "D_RATE": {
       "A_HOW": "如何評分",
+      "BANNER_ACTION": "好啊！",
       "BTN_DONT_BOTHER": "不要再詢問",
       "BTN_FEEDBACK": "提供意見",
       "BTN_LATER": "稍後再說",
       "BTN_RATE_APP_STORE": "在 App Store 評分",
       "BTN_RATE_PLAY_STORE": "在 Play Store 評分",
+      "BTN_STAR_GITHUB": "在 GitHub 上為我們點星",
       "FEEDBACK_BACK": "返回",
       "FEEDBACK_CONTRIBUTE": "為此專案貢獻",
       "FEEDBACK_CONTRIBUTE_DESC": "程式碼、設計、翻譯等",
@@ -2508,6 +2510,7 @@
       "KEYBOARD": "如何：進階鍵盤",
       "REDDIT_COMMUNITY": "Reddit 社群",
       "REPORT_A_PROBLEM": "回報問題",
+      "SEND_FEEDBACK": "提供意見",
       "START_WELCOME": "開始歡迎導覽",
       "SYNC": "如何：設定同步"
     },

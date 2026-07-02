@@ -182,11 +182,13 @@
     },
     "D_RATE": {
       "A_HOW": "Ako hodnotiť",
+      "BANNER_ACTION": "Jasné!",
       "BTN_DONT_BOTHER": "Už sa nepýtať",
       "BTN_FEEDBACK": "Poslať spätnú väzbu",
       "BTN_LATER": "Možno neskôr",
       "BTN_RATE_APP_STORE": "Ohodnotiť v App Store",
       "BTN_RATE_PLAY_STORE": "Ohodnotiť v Play Store",
+      "BTN_STAR_GITHUB": "Dajte nám hviezdičku na GitHube",
       "FEEDBACK_BACK": "Späť",
       "FEEDBACK_CONTRIBUTE": "Prispieť do projektu",
       "FEEDBACK_CONTRIBUTE_DESC": "Kód, dizajn, preklady a viac",
@@ -2347,6 +2349,7 @@
       "KEYBOARD": "Ako na to: Pokročilá klávesnica",
       "REDDIT_COMMUNITY": "Komunita Reddit",
       "REPORT_A_PROBLEM": "Nahlásiť problém",
+      "SEND_FEEDBACK": "Poslať spätnú väzbu",
       "START_WELCOME": "Začiatok uvítacej prehliadky",
       "SYNC": "Ako na to: Konfigurácia synchronizácie"
     },

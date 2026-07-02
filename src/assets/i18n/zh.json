@@ -231,11 +231,13 @@
     },
     "D_RATE": {
       "A_HOW": "如何评分",
+      "BANNER_ACTION": "好的！",
       "BTN_DONT_BOTHER": "不再询问",
       "BTN_FEEDBACK": "提供反馈",
       "BTN_LATER": "稍后再说",
       "BTN_RATE_APP_STORE": "在 App Store 评分",
       "BTN_RATE_PLAY_STORE": "在 Play Store 评分",
+      "BTN_STAR_GITHUB": "在 GitHub 上给我们点星",
       "FEEDBACK_BACK": "返回",
       "FEEDBACK_CONTRIBUTE": "为项目做贡献",
       "FEEDBACK_CONTRIBUTE_DESC": "代码、设计、翻译等",
@@ -2519,6 +2521,7 @@
       "KEYBOARD": "如何：高级键盘",
       "REDDIT_COMMUNITY": "Reddit 社区",
       "REPORT_A_PROBLEM": "报告问题",
+      "SEND_FEEDBACK": "发送反馈",
       "START_WELCOME": "开始欢迎导览",
       "SYNC": "如何：配置同步"
     },

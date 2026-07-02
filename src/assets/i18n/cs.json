@@ -200,11 +200,13 @@
     },
     "D_RATE": {
       "A_HOW": "Jak hodnotit",
+      "BANNER_ACTION": "Jasně!",
       "BTN_DONT_BOTHER": "Příště se neptat",
       "BTN_FEEDBACK": "Poslat zpětnou vazbu",
       "BTN_LATER": "Možná později",
       "BTN_RATE_APP_STORE": "Ohodnotit v App Store",
       "BTN_RATE_PLAY_STORE": "Ohodnotit v Play Store",
+      "BTN_STAR_GITHUB": "Dejte nám hvězdičku na GitHubu",
       "FEEDBACK_BACK": "Zpět",
       "FEEDBACK_CONTRIBUTE": "Přispět do projektu",
       "FEEDBACK_CONTRIBUTE_DESC": "Kód, design, překlady a další",
@@ -2360,6 +2362,7 @@
       "KEYBOARD": "Návod: Pokročilá klávesnice",
       "REDDIT_COMMUNITY": "Komunita Reddit",
       "REPORT_A_PROBLEM": "Nahlásit problém",
+      "SEND_FEEDBACK": "Poslat zpětnou vazbu",
       "START_WELCOME": "Spustit uvítací prohlídku",
       "SYNC": "Návod: Konfigurace synchronizace"
     },
