@@ -72,12 +72,8 @@ const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootS
     }
   }
 
-  // Scan EVERY tag (incl. TODAY_TAG) from CURRENT STATE for references to the
-  // archived tasks — not just the tags named in each task's own `tagIds`.
-  // During sync a receiving client can hold a one-sided tag→task reference
-  // (tag.taskIds contains the id even though task.tagIds does not); only
-  // visiting the task's own tagIds would leave that dangling reference behind,
-  // which later trips cross-model validation and forces a reconciliation.
+  // Scan every tag, not just each task's own `tagIds` — see
+  // removeTasksFromAllTags for why (one-sided tag refs after sync).
   return removeTasksFromAllTags(updatedState, taskIdsToArchive);
 };
 
