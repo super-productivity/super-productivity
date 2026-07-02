@@ -13,7 +13,9 @@ import { Task, TaskWithSubTasks } from '../task.model';
 export const isBlankTask = (task: Task | TaskWithSubTasks): boolean => {
   const subTasks = (task as TaskWithSubTasks).subTasks;
   return (
-    !task.title.trim() &&
+    // Corrupted/legacy tasks can lack a title entirely; treat that as blank
+    // instead of crashing the callers (e.g. the delete-undo snack effect).
+    !task.title?.trim() &&
     !task.notes?.trim() &&
     !task.timeSpent &&
     !task.timeEstimate &&

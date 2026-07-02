@@ -32,6 +32,12 @@ describe('isBlankTask', () => {
     expect(isBlankTask(createTaskWithSubTasks())).toBe(true);
   });
 
+  it('should be true (and not throw) when the title is missing entirely', () => {
+    const t = createTaskWithSubTasks() as any;
+    delete t.title;
+    expect(isBlankTask(t)).toBe(true);
+  });
+
   it('should be true when the title is only whitespace', () => {
     expect(isBlankTask(createTaskWithSubTasks({ title: '   ' }))).toBe(true);
   });
