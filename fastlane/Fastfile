@@ -99,22 +99,64 @@ end
 # direction.
 REVIEW_SUBMISSION_RACE = 'review submission is already in progress'
 
+# App Store Connect also serializes review state per app across releases: while
+# one version is still in review, the next version can neither be created nor
+# have a build attached. So a release tagged before the previous one clears
+# review fails either at version creation ("You cannot create a new version of
+# the App in the current state") or at build-attach ("The specified pre-release
+# build could not be added"). Unlike the race above this is NOT softened -- the
+# version genuinely did not go out, and a green run would falsely read as
+# "released". We only trade the raw spaceship stacktrace for a one-line,
+# actionable explanation; the lane still fails. Message-matched against fastlane
+# deliver 2.225.0 -- if the phrasing drifts it simply falls back to the raw
+# error, which is fine (the job still fails).
+VERSION_IN_REVIEW_BLOCKS = [
+  'cannot create a new version',
+  'pre-release build could not be added',
+].freeze
+
 def submit_to_app_store(extra)
   upload_to_app_store(deliver_options(extra))
 rescue => e
-  raise unless submit_for_review? && e.message.to_s.downcase.include?(REVIEW_SUBMISSION_RACE)
-  # Surface as a GitHub Actions run annotation, not just a buried log line, so a
-  # green job still flags the required manual step. Static text only -- never
-  # interpolate e/options here (they can carry API key material; see header).
-  if ENV['GITHUB_ACTIONS']
-    puts '::warning title=App Store build uploaded but NOT submitted::A review ' \
-         'submission is already open for this app. Add this build to it in App ' \
-         'Store Connect, or this platform skips this version.'
+  msg = e.message.to_s.downcase
+
+  # Soft success: the other platform's release lane already opened the shared
+  # per-app review submission. The binary is uploaded and safe; it just needs to
+  # be added to the open submission by hand. Surface as a GitHub Actions run
+  # annotation, not just a buried log line, so a green job still flags the
+  # required manual step. Static text only -- never interpolate e/options here
+  # (they can carry API key material; see header).
+  if submit_for_review? && msg.include?(REVIEW_SUBMISSION_RACE)
+    if ENV['GITHUB_ACTIONS']
+      puts '::warning title=App Store build uploaded but NOT submitted::A review ' \
+           'submission is already open for this app. Add this build to it in App ' \
+           'Store Connect, or this platform skips this version.'
+    end
+    UI.important('Build uploaded, but a review submission is already open for this app')
+    UI.important("(the other platform's release lane created it first). Add this build to")
+    UI.important('the open submission in App Store Connect for this version, or this platform')
+    UI.important('will skip this version. Not failing the lane: the binary is uploaded.')
+    return
   end
-  UI.important('Build uploaded, but a review submission is already open for this app')
-  UI.important("(the other platform's release lane created it first). Add this build to")
-  UI.important('the open submission in App Store Connect for this version, or this platform')
-  UI.important('will skip this version. Not failing the lane: the binary is uploaded.')
+
+  # Known "a previous version is still in review" block. Still a hard failure --
+  # we only replace the raw stacktrace with a clear, actionable one-liner (the
+  # raw error still prints after the re-raise). Static text only, same
+  # key-material reason as above.
+  if submit_for_review? && VERSION_IN_REVIEW_BLOCKS.any? { |m| msg.include?(m) }
+    if ENV['GITHUB_ACTIONS']
+      puts '::error title=App Store submit blocked: previous version still in review::' \
+           'App Store Connect will not create or submit this version while the ' \
+           'previous version is still in review. Let it finish review (or remove ' \
+           'it from review in App Store Connect), then re-run this release.'
+    end
+    UI.error('App Store submit blocked: a previous version is still in review.')
+    UI.error('App Store Connect will not create or submit this version until the')
+    UI.error('previous one clears review. Let it finish (or pull it from review in')
+    UI.error('App Store Connect), then re-run this release.')
+  end
+
+  raise
 end
 
 platform :ios do
