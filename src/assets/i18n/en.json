@@ -2527,7 +2527,11 @@
       "THEME_REMOVE_BUTTON": "Remove theme",
       "THEME_REMOVED_TOAST": "Theme removed; reverted to Default.",
       "THEME_SELECT_LABEL": "Select Theme",
-      "TITLE": "Misc Settings"
+      "TITLE": "Misc Settings",
+      "WALLPAPER": "Wallpaper",
+      "WALLPAPER_BUTTON": "Set wallpaper…",
+      "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",

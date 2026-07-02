@@ -18,6 +18,7 @@ export const DEFAULT_TAG_COLOR = '#a05db1';
 export const DEFAULT_TODAY_TAG_COLOR = '#6495ED';
 export const DEFAULT_BACKGROUND_IMAGE_BLUR = 0;
 export const MAX_BACKGROUND_IMAGE_BLUR = 20;
+export const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 20;
 
 export const WORK_CONTEXT_DEFAULT_THEME: WorkContextThemeCfg = {
   isAutoContrast: true,
@@ -61,20 +62,22 @@ export const HUES = [
   { value: '900', label: '900' },
 ];
 
-const _isBackgroundImageSet = (value: unknown): boolean =>
+// A cleared image picker stores '' rather than null, so treat empty/whitespace
+// strings as "no image set".
+export const isBackgroundImageSet = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
 export const hasAnyBackgroundImage = (model: unknown): boolean =>
   typeof model === 'object' &&
   model !== null &&
-  (_isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageDark) ||
-    _isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageLight));
+  (isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageDark) ||
+    isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageLight));
 
 export const hasAllBackgroundImages = (model: unknown): boolean =>
   typeof model === 'object' &&
   model !== null &&
-  _isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageDark) &&
-  _isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageLight);
+  isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageDark) &&
+  isBackgroundImageSet((model as WorkContextThemeCfg).backgroundImageLight);
 
 export const normalizeBackgroundImageBlur = (value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
