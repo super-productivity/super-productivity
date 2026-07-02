@@ -129,6 +129,14 @@ export type {
   LwwResolvedConflict,
 } from './conflict-resolution';
 
+// Plain-language summary of already-resolved LWW conflicts (routine vs.
+// discarded user content). Purely descriptive — does not affect resolution.
+export {
+  summarizeLwwResolutions,
+  LWW_CONTENT_FIELDS_BY_ENTITY_TYPE,
+} from './lww-conflict-summary';
+export type { LwwContentConflict, LwwResolutionSummary } from './lww-conflict-summary';
+
 // Entity-frontier and clock-corruption helpers (per-entity vector-clock domain).
 export { adjustForClockCorruption, buildEntityFrontier } from './entity-frontier';
 
