@@ -15,6 +15,7 @@ import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
+import com.superproductivity.superproductivity.review.InAppReview
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
@@ -80,6 +81,18 @@ class JavaScriptInterface(
         val launchDecider = LaunchDecider(activity)
         val launchMode = launchDecider.getLaunchMode()
         return "${versionName}_L$launchMode"
+    }
+
+    // Launch the Play In-App Review flow (play flavor). Delegates to a
+    // flavor-specific InAppReview: the real Play Core implementation in src/play,
+    // and a no-op stub in src/fdroid so the proprietary library stays out of the
+    // F-Droid build. Play controls whether/when the card actually shows.
+    @Suppress("unused")
+    @JavascriptInterface
+    fun requestReview() {
+        activity.runOnUiThread {
+            InAppReview.request(activity)
+        }
     }
 
     @Suppress("unused")

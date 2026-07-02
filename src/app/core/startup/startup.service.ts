@@ -4,7 +4,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { SnackService } from '../snack/snack.service';
-import { MatDialog } from '@angular/material/dialog';
 import { PluginService } from '../../plugins/plugin.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { BannerService } from '../banner/banner.service';
@@ -19,15 +18,7 @@ import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { BannerId } from '../banner/banner.model';
 import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
-import { getDbDateStr } from '../../util/get-db-date-str';
-import { DialogPleaseRateComponent } from '../../features/dialog-please-rate/dialog-please-rate.component';
-import {
-  applyRateDialogResult,
-  loadRateDialogState,
-  saveRateDialogState,
-  shouldShowRateDialog,
-} from '../../features/dialog-please-rate/rate-dialog-state';
-import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
+import { RatePromptService } from '../../features/dialog-please-rate/rate-prompt.service';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
@@ -67,7 +58,7 @@ export class StartupService {
   private _localBackupService = inject(LocalBackupService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
-  private _matDialog = inject(MatDialog);
+  private _ratePromptService = inject(RatePromptService);
   private _pluginService = inject(PluginService);
   private _syncWrapperService = inject(SyncWrapperService);
   private _bannerService = inject(BannerService);
@@ -173,7 +164,7 @@ export class StartupService {
         }
       }
 
-      this._handleAppStartRating();
+      this._ratePromptService.init();
       await this._initPlugins();
     }, DEFERRED_INIT_DELAY_MS);
 
@@ -433,33 +424,6 @@ export class StartupService {
         });
       }
     }
-  }
-
-  private _handleAppStartRating(): void {
-    const lastStartDay = localStorage.getItem(LS.APP_START_COUNT_LAST_START_DAY);
-    const todayStr = getDbDateStr();
-    let appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
-    if (lastStartDay !== todayStr) {
-      appStarts += 1;
-      localStorage.setItem(LS.APP_START_COUNT, appStarts.toString());
-      localStorage.setItem(LS.APP_START_COUNT_LAST_START_DAY, todayStr);
-    }
-
-    const state = loadRateDialogState();
-    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
-      return;
-    }
-    this._matDialog
-      .open(DialogPleaseRateComponent)
-      .afterClosed()
-      .subscribe((result) => {
-        const next = applyRateDialogResult(
-          loadRateDialogState(),
-          result ?? null,
-          appStarts,
-        );
-        saveRateDialogState(next);
-      });
   }
 
   private async _initPlugins(): Promise<void> {
