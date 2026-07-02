@@ -42,7 +42,10 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption', () => {
     syncFolderPath: `/${SYNC_FOLDER_NAME}`,
   };
 
-  const SYNC_FILE_URL = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${SYNC_FOLDER_NAME}/sync-data.json`;
+  // Non-production builds nest the sync file under a `/DEV` segment
+  // (`environment.production ? undefined : '/DEV'` in sync-providers.factory.ts).
+  // E2E always runs a non-production build, so include it here.
+  const SYNC_FILE_URL = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${SYNC_FOLDER_NAME}/DEV/sync-data.json`;
   const AUTH_HEADER =
     'Basic ' +
     Buffer.from(
