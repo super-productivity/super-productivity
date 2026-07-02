@@ -9,21 +9,18 @@ import {
   isExternalUrlSchemeAllowed,
   isPathSafeToOpen,
 } from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import { escapeHtml } from '../util/escape-html';
 
 /**
  * Escape a string for safe interpolation into a double-quoted HTML attribute.
  *
  * Defense-in-depth: note renders are sanitized as HTML before display, but the
  * raw renderer output still must not be attribute-injectable on its own.
- * `&` must be replaced first.
+ * Delegates to the shared {@link escapeHtml} (same escaping is correct for both
+ * attribute and text contexts); kept as a named re-export for attribute-context
+ * call sites.
  */
-export const escapeHtmlAttr = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+export const escapeHtmlAttr = escapeHtml;
 
 /**
  * Parses image sizing syntax from title attribute.

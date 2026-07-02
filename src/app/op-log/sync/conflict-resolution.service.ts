@@ -16,10 +16,12 @@ import {
   partitionLwwResolutions,
   planLwwConflictResolutions,
   suggestConflictResolution,
-  summarizeLwwResolutions,
-  type LwwContentConflict,
   type LwwResolvedConflict,
 } from '@sp/sync-core';
+import {
+  findLwwContentConflicts,
+  type LwwContentConflict,
+} from './lww-conflict-summary.util';
 import type { SelectByIdFactory } from '../core/entity-registry-host.types';
 import { Store } from '@ngrx/store';
 import {
@@ -540,11 +542,11 @@ export class ConflictResolutionService {
     localWinsCount: number,
     remoteWinsCount: number,
   ): Promise<void> {
-    const summary = summarizeLwwResolutions(resolutions, {
-      payloadKeyFor: (entityType) => this._resolvePayloadKey(entityType as EntityType),
-    });
+    const contentConflicts = findLwwContentConflicts(resolutions, (entityType) =>
+      this._resolvePayloadKey(entityType as EntityType),
+    );
 
-    if (summary.contentConflicts.length === 0) {
+    if (contentConflicts.length === 0) {
       this.snackService.open({
         msg: T.F.SYNC.S.LWW_CONFLICTS_AUTO_RESOLVED,
         translateParams: {
@@ -555,16 +557,19 @@ export class ConflictResolutionService {
       return;
     }
 
-    await this._showContentConflictBanner(summary.contentConflicts);
+    await this._showContentConflictBanner(contentConflicts);
   }
 
   /**
    * Shows a dismissible banner naming the tasks whose edits diverged and were
-   * auto-resolved by keeping the most recent version.
+   * auto-resolved by keeping the most recent version. Uses the banner's built-in
+   * dismiss button — no custom action needed.
    *
-   * Titles are user content: they are shown on-screen (escaped, because the
-   * banner renders via `innerHTML` and titles originate from synced remote data)
-   * but MUST NOT be logged — the log history is exportable (sync rule #9).
+   * Titles are user content escaped before display: the banner renders via
+   * `[innerHTML]` and titles come from synced remote data, so Angular's own
+   * sanitizer is the primary XSS control and this escaping is defense-in-depth
+   * plus correct literal rendering (a `<b>`-looking title shows as text). Titles
+   * MUST NOT be logged — the log history is exportable (sync rule #9).
    */
   private async _showContentConflictBanner(
     contentConflicts: LwwContentConflict[],
@@ -583,18 +588,14 @@ export class ConflictResolutionService {
       ico: 'sync_problem',
       msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
       translateParams: { taskList },
-      isHideDismissBtn: true,
-      action: {
-        label: T.F.SYNC.B.CONTENT_CONFLICT_DISMISS,
-        fn: (): void => {},
-      },
     });
   }
 
   private async _getContentConflictTitle(entityId: string): Promise<string> {
     const entity = await this.getCurrentEntityState('TASK' as EntityType, entityId);
     const title = (entity as { title?: string } | undefined)?.title;
-    if (title && title.trim().length) {
+    // Guard against a corrupt/non-string title from remote state before .trim().
+    if (typeof title === 'string' && title.trim().length) {
       return title;
     }
     return (

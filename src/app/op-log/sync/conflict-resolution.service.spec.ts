@@ -467,19 +467,30 @@ describe('ConflictResolutionService', () => {
       const openBannerSpy = spyOn(bannerService, 'open');
       const now = Date.now();
       // Remote wins (newer) -> the local title edit is discarded = content loss.
+      // Use the real captured payload shape: { actionPayload, entityChanges: [] }.
       const conflicts: EntityConflict[] = [
         createConflict(
           'task-1',
           [
             {
               ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
-              payload: { task: { id: 'task-1', changes: { title: 'My local title' } } },
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'My local title' } },
+                },
+                entityChanges: [],
+              },
             },
           ],
           [
             {
               ...createOpWithTimestamp('remote-1', 'client-b', now),
-              payload: { task: { id: 'task-1', changes: { title: 'Remote title' } } },
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'Remote title' } },
+                },
+                entityChanges: [],
+              },
             },
           ],
         ),
@@ -511,13 +522,19 @@ describe('ConflictResolutionService', () => {
           [
             {
               ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
-              payload: { task: { id: 'task-1', changes: { notes: 'edited' } } },
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { notes: 'edited' } } },
+                entityChanges: [],
+              },
             },
           ],
           [
             {
               ...createOpWithTimestamp('remote-1', 'client-b', now),
-              payload: { task: { id: 'task-1', changes: { notes: 'other' } } },
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { notes: 'other' } } },
+                entityChanges: [],
+              },
             },
           ],
         ),
@@ -545,13 +562,21 @@ describe('ConflictResolutionService', () => {
           [
             {
               ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
-              payload: { task: { id: 'task-1', changes: { dueDay: '2026-07-02' } } },
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { dueDay: '2026-07-02' } },
+                },
+                entityChanges: [],
+              },
             },
           ],
           [
             {
               ...createOpWithTimestamp('remote-1', 'client-b', now),
-              payload: { task: { id: 'task-1', changes: { dueDay: null } } },
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { dueDay: null } } },
+                entityChanges: [],
+              },
             },
           ],
         ),
