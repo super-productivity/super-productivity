@@ -12,13 +12,14 @@ import type { EntityConflict, Operation } from '../core/operation.types';
  * notice only names tasks. Widening to another entity type is NOT a one-liner —
  * it also needs the title lookup and the banner wording in
  * ConflictResolutionService to handle that type.
+ *
+ * Only fields that actually travel inside an `updateTask` change-set belong here.
+ * Attachments are intentionally excluded: they are edited via dedicated
+ * `[TaskAttachment] …` actions whose payload is `{ taskId, taskAttachment }`,
+ * never `updateTask({ task: { changes: { attachments } } })`, so an entry here
+ * would silently never match.
  */
-const TASK_CONTENT_FIELDS: readonly string[] = [
-  'title',
-  'notes',
-  'subTaskIds',
-  'attachments',
-];
+const TASK_CONTENT_FIELDS: readonly string[] = ['title', 'notes', 'subTaskIds'];
 
 export interface LwwContentConflict {
   entityId: string;

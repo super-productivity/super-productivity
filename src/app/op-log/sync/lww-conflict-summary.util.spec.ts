@@ -103,7 +103,7 @@ describe('findLwwContentConflicts', () => {
     expect(result).toEqual([{ entityId: 'task-1', discardedFields: ['notes'] }]);
   });
 
-  it('treats subtask-structure and attachment changes as content', () => {
+  it('treats subtask-structure changes as content', () => {
     const result = findLwwContentConflicts(
       [
         resolution(
@@ -111,20 +111,33 @@ describe('findLwwContentConflicts', () => {
           [wrappedUpdate({ subTaskIds: ['a', 'b'] })],
           [wrappedUpdate({ isDone: true })],
         ),
-        resolution(
-          'remote',
-          [wrappedUpdate({ attachments: [{ id: 'att-1' }] }, { entityId: 'task-2' })],
-          [wrappedUpdate({ dueDay: null }, { entityId: 'task-2' })],
-          { entityId: 'task-2' },
-        ),
       ],
       payloadKeyFor,
     );
 
-    expect(result.map((c) => c.discardedFields)).toEqual([
-      ['subTaskIds'],
-      ['attachments'],
-    ]);
+    expect(result.map((c) => c.discardedFields)).toEqual([['subTaskIds']]);
+  });
+
+  it('does not flag attachment edits (dedicated action shape, no task.changes)', () => {
+    // Attachments are edited via [TaskAttachment] actions whose payload is
+    // { taskId, taskAttachment } — there is no task.changes, so extractUpdateChanges
+    // finds nothing. Guards against re-adding 'attachments' to the content list.
+    const attachmentOp = op({
+      opType: OpType.Update,
+      payload: {
+        actionPayload: {
+          taskId: 'task-1',
+          taskAttachment: { id: 'att-1', type: 'LINK' },
+        },
+        entityChanges: [],
+      },
+    });
+    const result = findLwwContentConflicts(
+      [resolution('remote', [attachmentOp], [wrappedUpdate({ dueDay: null })])],
+      payloadKeyFor,
+    );
+
+    expect(result).toEqual([]);
   });
 
   it('does not flag discarded CREATE / DELETE / MOVE ops (only field-level UPDATE loss)', () => {
