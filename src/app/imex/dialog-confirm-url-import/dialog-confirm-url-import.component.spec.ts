@@ -120,9 +120,7 @@ describe('ConfirmUrlImportDialogComponent', () => {
     it('should call onCancel when cancel button is clicked', () => {
       spyOn(component, 'onCancel');
 
-      const cancelButton = fixture.debugElement.query(
-        By.css('button[mat-stroked-button]'),
-      );
+      const cancelButton = fixture.debugElement.query(By.css('button[mat-button]'));
       cancelButton.nativeElement.click();
 
       expect(component.onCancel).toHaveBeenCalled();
@@ -180,14 +178,12 @@ describe('ConfirmUrlImportDialogComponent', () => {
   describe('accessibility and template structure', () => {
     it('should have proper button types and attributes', () => {
       const confirmButton = fixture.debugElement.query(By.css('button[color="primary"]'));
-      const cancelButton = fixture.debugElement.query(
-        By.css('button[mat-stroked-button]'),
-      );
+      const cancelButton = fixture.debugElement.query(By.css('button[mat-button]'));
 
-      expect(confirmButton.nativeElement.hasAttribute('mat-raised-button')).toBe(true);
+      expect(confirmButton.nativeElement.hasAttribute('mat-flat-button')).toBe(true);
       expect(confirmButton.attributes['color']).toBe('primary');
 
-      expect(cancelButton.nativeElement.hasAttribute('mat-stroked-button')).toBe(true);
+      expect(cancelButton.nativeElement.hasAttribute('mat-button')).toBe(true);
       expect(cancelButton.attributes['color']).toBeUndefined();
     });
 

@@ -24,7 +24,6 @@
           [innerHTML]="T.F.SYNC.D_DECRYPT_ERROR.P2_FORGOT_PW | translate"
         ></p>
         <button
-          class="btn btn-primary submit-button"
           mat-flat-button
           color="primary"
           (click)="formEl.valid && updatePwAndResync()"
@@ -62,11 +61,9 @@
   <div class="wrap-buttons">
     <button
       (click)="cancel()"
-      class="btn btn-primary submit-button"
       mat-button
       type="button"
     >
-      <mat-icon>close</mat-icon>
       {{ T.G.CANCEL | translate }}
     </button>
   </div>

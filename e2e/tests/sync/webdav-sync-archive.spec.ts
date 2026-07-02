@@ -583,7 +583,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Handle potential confirmation dialog for marking parent done
     const confirmDialog = pageA.locator('dialog-confirm');
     if (await confirmDialog.isVisible().catch(() => false)) {
-      await confirmDialog.locator('button[mat-stroked-button]').click();
+      await confirmDialog.locator('button[mat-flat-button]').click();
       await pageA.waitForTimeout(200);
     }
 

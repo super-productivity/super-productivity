@@ -41,21 +41,17 @@
   <div class="wrap-buttons">
     <button
       (click)="close(false)"
-      class="btn btn-primary submit-button"
       mat-button
       type="button"
     >
-      <mat-icon>close</mat-icon>
       {{ data.cancelTxt || T.G.CANCEL | translate }}
     </button>
 
     <button
       (click)="close(true)"
-      class="btn btn-primary submit-button"
       color="primary"
-      mat-stroked-button
+      mat-flat-button
     >
-      <mat-icon>check</mat-icon>
       {{ data.saveTxt || T.G.SAVE | translate }}
     </button>
   </div>

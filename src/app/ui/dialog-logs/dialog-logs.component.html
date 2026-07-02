@@ -14,18 +14,15 @@
   <div class="wrap-buttons">
     <button
       (click)="close()"
-      class="btn"
       mat-button
       type="button"
     >
-      <mat-icon>close</mat-icon>
       {{ T.G.CLOSE | translate }}
     </button>
 
     @if (isNative) {
       <button
         (click)="shareFile()"
-        class="btn"
         mat-button
         type="button"
       >
@@ -36,9 +33,8 @@
 
     <button
       (click)="copy()"
-      class="btn submit-button"
       color="primary"
-      mat-stroked-button
+      mat-flat-button
       type="button"
     >
       <mat-icon>content_copy</mat-icon>

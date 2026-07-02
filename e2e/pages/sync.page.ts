@@ -23,7 +23,7 @@ export class SyncPage extends BasePage {
     this.userNameInput = page.locator('.e2e-userName input');
     this.passwordInput = page.locator('.e2e-password input');
     this.syncFolderInput = page.locator('.e2e-syncFolderPath input');
-    this.saveBtn = page.locator('mat-dialog-actions button[mat-stroked-button]');
+    this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
     this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
     // Encryption-related locators

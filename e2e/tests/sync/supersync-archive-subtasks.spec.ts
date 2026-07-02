@@ -94,7 +94,7 @@ const markTaskDone = async (
 
   // Handle confirmation dialog if it appears (when marking parent with undone subtasks)
   await page.waitForTimeout(200);
-  const confirmBtn = page.locator('dialog-confirm button[mat-stroked-button]');
+  const confirmBtn = page.locator('dialog-confirm button[mat-flat-button]');
   if (await confirmBtn.isVisible().catch(() => false)) {
     await confirmBtn.click();
   }

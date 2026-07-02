@@ -379,7 +379,7 @@ describe('DialogImportFromUrlComponent', () => {
         By.css('button:not([color="primary"])'),
       );
 
-      expect(submitButton.nativeElement.hasAttribute('mat-raised-button')).toBe(true);
+      expect(submitButton.nativeElement.hasAttribute('mat-flat-button')).toBe(true);
       expect(cancelButton.nativeElement.hasAttribute('mat-button')).toBe(true);
     });
   });

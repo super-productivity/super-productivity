@@ -31,18 +31,16 @@
   >
     <button
       (click)="cancel()"
-      color=""
       mat-button
       type="button"
     >
-      <mat-icon>close</mat-icon>
       {{ T.G.CANCEL | translate }}
     </button>
 
     <button
       [disabled]="!(selectedTask || newTaskTitle)"
       color="primary"
-      mat-stroked-button
+      mat-flat-button
       type="submit"
     >
       @if (!isCreate) {

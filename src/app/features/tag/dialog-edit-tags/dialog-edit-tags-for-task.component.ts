@@ -17,7 +17,6 @@ import { Observable, Subscription } from 'rxjs';
 import { Tag } from '../tag.model';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Store } from '@ngrx/store';
@@ -35,7 +34,6 @@ import { addTag } from '../store/tag.actions';
     ChipListInputComponent,
     MatDialogActions,
     MatButton,
-    MatIcon,
     AsyncPipe,
     TranslatePipe,
   ],

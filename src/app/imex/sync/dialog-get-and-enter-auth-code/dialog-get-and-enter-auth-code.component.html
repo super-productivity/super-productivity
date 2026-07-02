@@ -72,7 +72,6 @@
   <div class="wrap-buttons">
     <button
       (click)="close()"
-      color="primary"
       mat-button
     >
       {{ T.G.CANCEL | translate }}
@@ -82,7 +81,7 @@
         (click)="close(token)"
         [disabled]="!token"
         color="primary"
-        mat-stroked-button
+        mat-flat-button
       >
         <mat-icon>save</mat-icon>
         {{ T.G.SAVE | translate }}

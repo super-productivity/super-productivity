@@ -28,7 +28,7 @@
     {{ T.G.CANCEL | translate }}
   </button>
   <button
-    mat-raised-button
+    mat-flat-button
     color="primary"
     (click)="submit()"
     [disabled]="!url() || url().trim() === '' || urlCtrl.invalid"

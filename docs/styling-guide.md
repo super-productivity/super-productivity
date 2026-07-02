@@ -19,6 +19,24 @@
 | Custom z-index values                | Z-index variables (`--z-main-header`, `--z-backdrop`, etc.)               |
 | New styled elements without checking | Check `src/app/ui/` for existing reusable components first                |
 
+## Dialog action buttons
+
+One treatment per role so dialogs feel consistent. Classify by **function, not label** ("Close" that dismisses a read-only view is secondary; "Close" that commits is primary).
+
+| Role                             | Treatment                         | Notes                                                            |
+| -------------------------------- | --------------------------------- | ---------------------------------------------------------------- |
+| Primary / confirming             | `mat-flat-button color="primary"` | Save, OK, Submit, Create, Schedule — the main affirmative action |
+| Cancel / dismiss / secondary     | `mat-button` (no `color`)         | De-emphasized text button                                        |
+| Destructive                      | `color="warn"` (keep the variant) | Delete, Remove, Unschedule — never folded into primary           |
+| Genuine alternative (not cancel) | `mat-stroked-button`              | e.g. "Skip instance", "Configure" next to a primary action       |
+
+Rules:
+
+- **Icons:** drop generic `check`/`close` icons on OK/Cancel/Save/Submit — they add nothing. Keep icons that carry meaning (`alarm`/`today`/`event_busy` in scheduling, `wb_sunny`, `save`, `cloud_upload`, `delete_forever`).
+- **No `color` on cancel/close** — leftover `color="primary"` on a Cancel just tints it; remove it.
+- **No dead classes** — the legacy Bootstrap `btn btn-primary` classes are gone; don't reintroduce them. `submit-button` is only styled inside `dialog-create-tag`.
+- **Symmetric choice dialogs** (e.g. sync "use remote" vs "use local") may use two matched `mat-stroked-button`s — there is no single primary.
+
 ## Key Files
 
 | File                             | Purpose                                                       |

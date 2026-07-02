@@ -81,16 +81,14 @@ export class SuperSyncPage extends BasePage {
     this.enableEncryptionBtn = page.locator('.e2e-enable-encryption-btn button');
     this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
     this.encryptionPasswordInput = page.locator('.e2e-encryptKey input[type="password"]');
-    this.saveBtn = page.locator('mat-dialog-actions button[mat-stroked-button]');
+    this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
     this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
     // Error state shows sync_problem icon (no special class, just the icon name)
     this.syncErrorIcon = page.locator('.sync-btn mat-icon:has-text("sync_problem")');
     // Fresh client confirmation dialog elements
     this.freshClientDialog = page.locator('dialog-confirm');
-    this.freshClientConfirmBtn = page.locator(
-      'dialog-confirm button[mat-stroked-button]',
-    );
+    this.freshClientConfirmBtn = page.locator('dialog-confirm button[mat-flat-button]');
     // Conflict resolution dialog elements
     this.conflictDialog = page.locator('dialog-conflict-resolution');
     this.conflictUseRemoteBtn = page.locator(

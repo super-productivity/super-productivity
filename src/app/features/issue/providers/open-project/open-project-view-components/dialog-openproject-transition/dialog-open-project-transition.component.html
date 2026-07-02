@@ -70,8 +70,6 @@
   <div class="wrap-buttons">
     <button
       (click)="close()"
-      class="btn btn-primary submit-button"
-      color="primary"
       mat-button
       type="button"
     >
@@ -79,9 +77,8 @@
     </button>
     <button
       (click)="transitionIssue()"
-      class="btn btn-primary submit-button"
       color="primary"
-      mat-stroked-button
+      mat-flat-button
     >
       {{ T.F.OPEN_PROJECT.DIALOG_TRANSITION.TITLE | translate }}
     </button>

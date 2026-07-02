@@ -10,7 +10,6 @@
       mat-button
       type="button"
     >
-      <mat-icon>close</mat-icon>
       {{ T.F.FINISH_DAY_BEFORE_EXIT.C.DONT_QUIT | translate }}
     </button>
     <button
@@ -24,13 +23,11 @@
     <button
       (click)="close('finish-day')"
       e2e="finishDayBtn"
-      class="submit-button"
       color="primary"
-      mat-stroked-button
+      mat-flat-button
       type="button"
       cdkFocusInitial
     >
-      <mat-icon>check</mat-icon>
       {{ T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY | translate }}
     </button>
   </div>

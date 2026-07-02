@@ -60,7 +60,7 @@
         }
         <button
           color="primary"
-          mat-stroked-button
+          mat-flat-button
           [disabled]="!selectedDate"
           (click)="submit()"
           type="button"
@@ -76,8 +76,7 @@
       </div>
       <button
         class="dialog-cancel-btn"
-        mat-stroked-button
-        color="default"
+        mat-button
         (click)="close()"
         type="button"
         data-test-id="schedule-cancel-btn"

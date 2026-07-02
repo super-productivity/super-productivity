@@ -87,7 +87,6 @@
       (click)="close()"
       [attr.aria-label]="T.G.CANCEL | translate"
       class="icon-on-small"
-      color="primary"
       mat-button
       type="button"
     >
@@ -133,7 +132,7 @@
       [attr.aria-describedby]="isWeekdaySelectionInvalid() ? 'weekday-error' : null"
       class="icon-on-small"
       color="primary"
-      mat-raised-button
+      mat-flat-button
       type="submit"
     >
       <mat-icon>save</mat-icon>

@@ -26,8 +26,6 @@
     <div class="wrap-buttons">
       <button
         (click)="cancelEdit()"
-        class="btn btn-primary submit-button"
-        color="primary"
         mat-button
         type="button"
       >
@@ -35,9 +33,8 @@
       </button>
       <button
         [disabled]="!formBasic.valid"
-        class="btn btn-primary submit-button"
         color="primary"
-        mat-stroked-button
+        mat-flat-button
         type="submit"
       >
         {{ T.G.SAVE | translate }}
