@@ -279,6 +279,14 @@
     target="_blank"
     >Changelog</a
   >
+  @if (isUpdateCheckPossible) {
+    –
+    <a
+      (click)="checkForUpdates(); $event?.preventDefault()"
+      href="#"
+      >{{ T.PS.CHECK_FOR_UPDATES | translate }}</a
+    >
+  }
   –
   <a
     (click)="showLogs(); $event?.preventDefault()"

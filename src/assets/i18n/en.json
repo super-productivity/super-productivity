@@ -17,11 +17,19 @@
       "MSG": "You've been using Super Productivity for a while. Set up sync to back up your data and keep it safe across devices.",
       "SETUP": "Set up sync"
     },
+    "B_UPDATE_AVAILABLE": {
+      "DOWNLOAD": "Download",
+      "MSG": "A new version of Super Productivity is available ({{version}})."
+    },
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Change Project Settings",
       "CHANGE_TAG_SETTINGS": "Change Tag Settings"
     },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
+    "UPDATE_CHECK": {
+      "ERROR": "Could not check for updates. Please try again later.",
+      "UP_TO_DATE": "You are on the latest version ({{version}})."
+    },
     "UPDATE_WEB_APP": "New version available. Load new version?"
   },
   "BL": {
@@ -2502,6 +2510,8 @@
       "DEFAULT_START_PAGE": "Default start page",
       "FIRST_DAY_OF_WEEK": "First day of the week",
       "HELP": "<p><strong>Not seeing desktop notifications?</strong> For Windows you may want to check 'System' > 'Notifications & actions' and verify the required notifications are enabled.</p>",
+      "IS_CHECK_FOR_UPDATES": "Automatically check for new versions (desktop only)",
+      "IS_CHECK_FOR_UPDATES_HINT": "Checks the latest release on GitHub once a day and shows a notice when a newer version is available. Only a standard web request is made — no personal data is sent.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirm before exiting the app without finishing day first",
       "IS_DARK_MODE": "Dark Mode",
@@ -2971,6 +2981,7 @@
     "DIALOG_TITLE": "System Update"
   },
   "PS": {
+    "CHECK_FOR_UPDATES": "Check for updates",
     "CLICK_TO_COPY_VERSION": "Click to copy version",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Failed to copy to clipboard",
     "GLOBAL_SETTINGS": "Global Settings",

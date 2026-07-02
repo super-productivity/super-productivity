@@ -28,6 +28,9 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
+  // Desktop-only daily check for a newer GitHub release (#5463). Optional
+  // because it was added later; a missing key means ON (see UpdateCheckService).
+  isCheckForUpdates?: boolean;
   /** @deprecated Legacy hour-only representation. Use `startOfNextDayTime` as canonical source of truth. */
   startOfNextDay: number;
   /** Canonical start-of-next-day value, including minute precision. */

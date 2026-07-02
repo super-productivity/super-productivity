@@ -42,6 +42,11 @@ export enum LS {
   // safe" startup banner, so the nudge is shown at most once ever.
   SYNC_SAFETY_NUDGE_DISMISSED = 'SUP_SYNC_SAFETY_NUDGE_DISMISSED',
 
+  // Release tag the user already acted on in the desktop "update available"
+  // banner, so each new version is announced at most once. Device-local on
+  // purpose: other devices run other builds.
+  UPDATE_CHECK_DISMISSED_VERSION = 'SUP_UPDATE_CHECK_DISMISSED_VERSION',
+
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
   // a permanent dismiss — an unencrypted E2EE-intended account is re-nudged calmly
