@@ -1,6 +1,7 @@
 import {
   ERROR_SUPPRESSION_MS,
   FEEDBACK_SUPPRESSION_STARTS,
+  RECURRING_INTERVAL_STARTS,
   RateDialogState,
   applyRateDialogResult,
   isProgressWin,
@@ -41,10 +42,19 @@ describe('rate-dialog-state', () => {
       expect(shouldShowRateDialog(afterFirst, 96, NO_ERR)).toBe(true);
     });
 
-    it('does not show again after the second tier (96)', () => {
+    it('recurs on a slow cadence after the last fixed tier (not a lifetime cap)', () => {
       const afterSecond = state({ lastShownAppStartDay: 96 });
+      const recurDay = 96 + RECURRING_INTERVAL_STARTS;
       expect(shouldShowRateDialog(afterSecond, 97, NO_ERR)).toBe(false);
-      expect(shouldShowRateDialog(afterSecond, 1000, NO_ERR)).toBe(false);
+      expect(shouldShowRateDialog(afterSecond, recurDay - 1, NO_ERR)).toBe(false);
+      expect(shouldShowRateDialog(afterSecond, recurDay, NO_ERR)).toBe(true);
+    });
+
+    it('keeps recurring at the same interval on each subsequent prompt', () => {
+      const afterRecur = state({ lastShownAppStartDay: 96 + RECURRING_INTERVAL_STARTS });
+      const nextRecurDay = 96 + RECURRING_INTERVAL_STARTS + RECURRING_INTERVAL_STARTS;
+      expect(shouldShowRateDialog(afterRecur, nextRecurDay - 1, NO_ERR)).toBe(false);
+      expect(shouldShowRateDialog(afterRecur, nextRecurDay, NO_ERR)).toBe(true);
     });
 
     it('never shows when permanentOptOut is true', () => {
@@ -152,11 +162,15 @@ describe('rate-dialog-state', () => {
       );
     });
 
-    it('two later clicks across tiers result in no further prompts (implicit permanent stop)', () => {
+    it('two later clicks walk both fixed tiers, then the prompt recurs slowly', () => {
       const afterFirstLater = applyRateDialogResult(state(), 'later', 32);
       expect(shouldShowRateDialog(afterFirstLater, 96, NO_ERR)).toBe(true);
       const afterSecondLater = applyRateDialogResult(afterFirstLater, 'later', 96);
-      expect(shouldShowRateDialog(afterSecondLater, 1000, NO_ERR)).toBe(false);
+      // No longer a permanent stop — recurs after the interval.
+      expect(shouldShowRateDialog(afterSecondLater, 97, NO_ERR)).toBe(false);
+      expect(
+        shouldShowRateDialog(afterSecondLater, 96 + RECURRING_INTERVAL_STARTS, NO_ERR),
+      ).toBe(true);
     });
 
     it('feedback then the final tiered prompt, then a rate opts out for good', () => {

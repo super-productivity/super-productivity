@@ -7,6 +7,7 @@ import { RatePromptService, WIN_PROMPT_DELAY_MS } from './rate-prompt.service';
 import { selectTodayProgress } from '../work-context/store/work-context.selectors';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { getAppVersionStr } from '../../util/get-app-version-str';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { Banner } from '../../core/banner/banner.model';
@@ -58,6 +59,9 @@ describe('RatePromptService', () => {
     (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
       if (key === LS.APP_START_COUNT) return '31'; // → 32, the first tier
       if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2020-01-01';
+      // Settled version (seen long ago) so the version-age gate doesn't block.
+      if (key === LS.RATE_PROMPT_VERSION) return getAppVersionStr();
+      if (key === LS.RATE_PROMPT_VERSION_SEEN_AT) return '1';
       return null;
     });
   };
@@ -182,6 +186,21 @@ describe('RatePromptService', () => {
 
       service.init();
       setProgress(10);
+      tick(WIN_DELAY);
+      expect(bannerService.open).not.toHaveBeenCalled();
+    }));
+
+    it('does not prompt right after an app-version update (version-age gate)', fakeAsync(() => {
+      (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
+        if (key === LS.APP_START_COUNT) return '31';
+        if (key === LS.APP_START_COUNT_LAST_START_DAY) return '2020-01-01';
+        if (key === LS.RATE_PROMPT_VERSION) return getAppVersionStr();
+        if (key === LS.RATE_PROMPT_VERSION_SEEN_AT) return Date.now().toString(); // just updated
+        return null;
+      });
+
+      service.init();
+      setProgress(10); // a clear win — but the release is too fresh to ask
       tick(WIN_DELAY);
       expect(bannerService.open).not.toHaveBeenCalled();
     }));

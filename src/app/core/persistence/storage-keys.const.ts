@@ -18,6 +18,11 @@ export enum LS {
   // this feature it is seeded at upgrade time, so don't reuse it as one.
   SYNC_SAFETY_FIRST_SEEN = 'SUP_SYNC_SAFETY_FIRST_SEEN',
   RATE_DIALOG_STATE = 'SUP_RATE_DIALOG_STATE',
+  // App version last observed by the rating prompt + the epoch ms it was first
+  // seen. Used to hold the prompt for a few days after an update, so a fresh
+  // (possibly regressed) release doesn't get asked to be rated immediately.
+  RATE_PROMPT_VERSION = 'SUP_RATE_PROMPT_VERSION',
+  RATE_PROMPT_VERSION_SEEN_AT = 'SUP_RATE_PROMPT_VERSION_SEEN_AT',
   // Set on an unhandled error or any detected data damage; read by the rating
   // prompt to hold off for a cooldown after a bad experience. Time only.
   LAST_CRITICAL_ERROR_TIME = 'SUP_LAST_CRITICAL_ERROR_TIME',

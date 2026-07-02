@@ -7,6 +7,7 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getMsSinceLastCriticalError } from '../../util/critical-error-signal';
+import { getAppVersionStr } from '../../util/get-app-version-str';
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
 import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 import { androidInterface } from '../android/android-interface';
@@ -22,6 +23,7 @@ import {
   loadRateDialogState,
   saveRateDialogState,
   shouldShowRateDialog,
+  VERSION_MIN_AGE_MS,
 } from './rate-dialog-state';
 import { StoreReview } from './store-review';
 
@@ -62,11 +64,35 @@ export class RatePromptService {
     }
     this._appStarts = appStarts;
 
+    this._stampVersionSeen();
+
     const state = loadRateDialogState();
-    if (!shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError())) {
+    if (
+      !shouldShowRateDialog(state, appStarts, getMsSinceLastCriticalError()) ||
+      this._isVersionTooNew()
+    ) {
       return;
     }
     this._armForWin();
+  }
+
+  /** Record the first time we see the current app version (for the age gate). */
+  private _stampVersionSeen(): void {
+    if (localStorage.getItem(LS.RATE_PROMPT_VERSION) !== getAppVersionStr()) {
+      localStorage.setItem(LS.RATE_PROMPT_VERSION, getAppVersionStr());
+      localStorage.setItem(LS.RATE_PROMPT_VERSION_SEEN_AT, Date.now().toString());
+    }
+  }
+
+  /** Don't prompt in the first days after an update (a regressed release should
+   * settle before we ask for a rating). Unknown/garbage timestamp → don't block. */
+  private _isVersionTooNew(): boolean {
+    const raw = localStorage.getItem(LS.RATE_PROMPT_VERSION_SEEN_AT);
+    const seenAt = raw ? +raw : 0;
+    if (!Number.isFinite(seenAt) || seenAt <= 0) {
+      return false;
+    }
+    return Date.now() - seenAt < VERSION_MIN_AGE_MS;
   }
 
   private _armForWin(): void {
@@ -122,12 +148,18 @@ export class RatePromptService {
     // recorded *after* arming (GlobalErrorHandler / state-validation this
     // session) must still suppress the prompt, so we never ask for a review
     // right after the user hit a failure. Inputs are re-read fresh here.
-    if (!shouldShowRateDialog(state, this._appStarts, getMsSinceLastCriticalError())) {
+    if (
+      !shouldShowRateDialog(state, this._appStarts, getMsSinceLastCriticalError()) ||
+      this._isVersionTooNew()
+    ) {
       return;
     }
 
     // Play-flavor Android: native Play In-App Review card. Play decides
-    // whether/when it shows and returns no result, so just advance the cadence.
+    // whether/when it shows and returns no result, so we just advance the
+    // cadence. Play may quota-suppress the card silently — with the recurring
+    // cadence that's only a deferral to the next window, not a lost lifetime
+    // prompt, and Play throttles duplicate requests itself.
     if (
       IS_ANDROID_WEB_VIEW &&
       !IS_F_DROID_APP &&
