@@ -193,6 +193,12 @@ mac:
   notarize: true
   extendInfo:
     ITSAppUsesNonExemptEncryption: false
+    # Optional Apple Reminders access for plugins/integrations (e.g. syncing tasks
+    # with Apple Reminders, which brings Apple Watch / Siri / iCloud shared lists).
+    # Declaring this string does NOT request or grant access on its own; macOS only
+    # prompts if a user-enabled plugin actually accesses Reminders, and users can
+    # deny or later revoke it in System Settings > Privacy & Security > Reminders.
+    NSRemindersUsageDescription: Super Productivity only accesses Apple Reminders if you enable a plugin or integration that syncs your tasks with the Reminders app.
   publish:
     - github
   target:
