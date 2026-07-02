@@ -6,9 +6,14 @@ import {
 } from './shared-with-frontend/is-external-url-allowed';
 
 /**
- * True for a local `file:` URL. `isExternalUrlSchemeAllowed` guarantees such a
- * value is the canonical `file:///<path>` form (no remote authority) before it
- * reaches the open sinks below.
+ * True for anything shaped like a `file:` URL. Intentionally broad: at the
+ * OPEN_PATH sink there is no `isExternalUrlSchemeAllowed` pre-gate, so this must
+ * catch every `file:`-shape value and hand it to `openLocalPath`, which
+ * re-validates the decoded path. (At the OPEN_EXTERNAL / navigation sinks,
+ * `isExternalUrlSchemeAllowed` has already narrowed the input to a canonical
+ * `file:///<path>`.) Note this is deliberately looser than that check and than
+ * the renderer's `startsWith('file://')` guard — the safety comes from the
+ * post-decode guards in `openLocalPath`, not from this test.
  */
 export const isLocalFileUrl = (value: string): boolean => /^\s*file:/i.test(value);
 

@@ -52,6 +52,12 @@ test('isLocalFileUrl detects local file: URLs (case-insensitive, leading space)'
   assert.equal(isLocalFileUrl('/home/x'), false);
 });
 
+// NOTE: these decode tests run on Linux CI, where fileURLToPath returns POSIX
+// form ("/D:/Projects/Grüne") and does NOT do the drive-letter + backslash
+// conversion ("D:\\Projects\\Grüne") that is the actual Windows behavior. They
+// verify percent-decoding (the mechanism that was broken); the Windows-specific
+// path conversion relies on Node's documented cross-platform fileURLToPath
+// contract and can only be confirmed on-device.
 test('openLocalPath decodes non-ASCII chars in a file: URL (issue #8695)', () => {
   const { openLocalPath } = loadModule();
   // The umlaut arrives percent-encoded from the WHATWG URL parser (ü → %C3%BC).
@@ -95,6 +101,24 @@ test('openLocalPath blocks UNC paths', () => {
   const { openLocalPath } = loadModule();
   openLocalPath('\\\\host\\share\\file.txt');
   openLocalPath('//host/share/file.txt');
+  assert.deepEqual(openPathCalls, []);
+});
+
+test('openLocalPath blocks a path-based UNC file: URL (four slashes)', () => {
+  const { openLocalPath } = loadModule();
+  // The OPEN_PATH sink has no isExternalUrlSchemeAllowed pre-gate, so
+  // openLocalPath alone must block this NTLM-leak vector (GHSA-hr87-735w-hfq3):
+  // file:////host/share decodes to //host/share, which isUncPath rejects.
+  openLocalPath('file:////host/share');
+  assert.deepEqual(openPathCalls, []);
+});
+
+test('openLocalPath blocks an executable hidden behind a percent-encoded dot', () => {
+  const { openLocalPath } = loadModule();
+  // fileURLToPath decodes %2E → "." so the executable guard sees the real
+  // ".bat" extension. (Stricter than the old openExternal path, where the
+  // encoded dot hid the extension.)
+  openLocalPath('file:///C:/tmp/evil%2Ebat');
   assert.deepEqual(openPathCalls, []);
 });
 
