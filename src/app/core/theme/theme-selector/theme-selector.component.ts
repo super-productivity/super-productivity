@@ -17,7 +17,9 @@ import { MatSelect, MatSelectChange } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
 import { GlobalThemeService } from '../global-theme.service';
+import { DialogWallpaperComponent } from '../dialog-wallpaper/dialog-wallpaper.component';
 import { CustomTheme, CustomThemeRef, CustomThemeService } from '../custom-theme.service';
 import { ThemeStorageService } from '../theme-storage.service';
 import { SnackService } from '../../snack/snack.service';
@@ -129,6 +131,18 @@ const valueToRef = (value: string): CustomThemeRef => {
           (change)="onFileSelected($event)"
         />
       </div>
+
+      <div class="wallpaper-select">
+        <h3>{{ T.GCF.MISC.WALLPAPER | translate }}</h3>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="openWallpaperDialog()"
+        >
+          <mat-icon>wallpaper</mat-icon>
+          {{ T.GCF.MISC.WALLPAPER_BUTTON | translate }}
+        </button>
+      </div>
     </div>
   `,
   styles: [
@@ -141,7 +155,8 @@ const valueToRef = (value: string): CustomThemeRef => {
       }
 
       .dark-mode-select,
-      .theme-select {
+      .theme-select,
+      .wallpaper-select {
         display: flex;
         align-items: center;
         gap: 16px;
@@ -182,7 +197,8 @@ const valueToRef = (value: string): CustomThemeRef => {
 
       @media (max-width: 600px) {
         .dark-mode-select,
-        .theme-select {
+        .theme-select,
+        .wallpaper-select {
           flex-direction: column;
           align-items: flex-start;
         }
@@ -200,6 +216,7 @@ export class ThemeSelectorComponent {
   readonly customThemeService = inject(CustomThemeService);
   private readonly _themeStorage = inject(ThemeStorageService);
   private readonly _snackService = inject(SnackService);
+  private readonly _matDialog = inject(MatDialog);
   readonly T = T;
 
   readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
@@ -232,6 +249,10 @@ export class ThemeSelectorComponent {
 
   openFilePicker(): void {
     this.fileInput()?.nativeElement.click();
+  }
+
+  openWallpaperDialog(): void {
+    this._matDialog.open(DialogWallpaperComponent, { autoFocus: false });
   }
 
   async onFileSelected(event: Event): Promise<void> {

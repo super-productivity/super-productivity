@@ -4,6 +4,8 @@ import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { BannerService } from '../../core/banner/banner.service';
+import { BannerId } from '../../core/banner/banner.model';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import { ActionType, EntityConflict, OpType, Operation } from '../core/operation.types';
@@ -458,6 +460,136 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
       // Snack should show local wins
       expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    it('shows a content-conflict banner (not the generic snack) when a discarded edit touched task content (#8694)', async () => {
+      const bannerService = TestBed.inject(BannerService);
+      const openBannerSpy = spyOn(bannerService, 'open');
+      const now = Date.now();
+      // Remote wins (newer) -> the local title edit is discarded = content loss.
+      // Use the real captured payload shape: { actionPayload, entityChanges: [] }.
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'My local title' } },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-1', 'client-b', now),
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'Remote title' } },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+        ),
+      ];
+
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(openBannerSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: BannerId.SyncConflictContentResolved }),
+      );
+      // The generic "N local/remote wins" count snack must NOT fire for content loss.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {
+      const bannerService = TestBed.inject(BannerService);
+      const openBannerSpy = spyOn(bannerService, 'open');
+      // The banner renders msg via [innerHTML]; a title synced from another
+      // device must not be able to inject markup.
+      mockStore.select.and.returnValue(of({ title: '<img src=x onerror=alert(1)>' }));
+      const now = Date.now();
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { notes: 'edited' } } },
+                entityChanges: [],
+              },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-1', 'client-b', now),
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { notes: 'other' } } },
+                entityChanges: [],
+              },
+            },
+          ],
+        ),
+      ];
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      const bannerArg = openBannerSpy.calls.mostRecent().args[0];
+      const taskList = bannerArg.translateParams?.taskList as string;
+      expect(taskList).not.toContain('<img');
+      expect(taskList).toContain('&lt;img');
+    });
+
+    it('keeps the quiet count snack (no banner) for routine-only resolutions (#8694)', async () => {
+      const bannerService = TestBed.inject(BannerService);
+      const openBannerSpy = spyOn(bannerService, 'open');
+      const now = Date.now();
+      // Remote wins -> discarded local op only rescheduled (dueDay) = routine.
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { dueDay: '2026-07-02' } },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-1', 'client-b', now),
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { dueDay: null } } },
+                entityChanges: [],
+              },
+            },
+          ],
+        ),
+      ];
+
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(mockSnackService.open).toHaveBeenCalled();
+      expect(openBannerSpy).not.toHaveBeenCalled();
     });
 
     it('should auto-resolve as remote when timestamps are equal (tie-breaker)', async () => {

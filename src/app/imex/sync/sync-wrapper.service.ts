@@ -89,6 +89,16 @@ export type ForceUploadTriggerSource =
   | 'DecryptError'
   | 'unknown';
 
+/**
+ * When the post-sync SuperSync encryption prompt fires while another dialog is
+ * still open (typically the sync-config dialog still playing its close animation
+ * right after first-time setup), defer rather than drop the prompt: poll until
+ * dialogs clear, up to this bound, then re-check state.
+ * See `_promptSuperSyncEncryptionIfNeeded` (#8670 regression).
+ */
+const ENCRYPTION_PROMPT_DIALOG_WAIT_MS = 8000;
+const ENCRYPTION_PROMPT_DIALOG_POLL_MS = 100;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -1408,13 +1418,59 @@ export class SyncWrapperService {
       !!this._encryptionRequiredDialog,
     );
 
-    // Don't open if ANY dialog is already open. The config dialog's save() method
-    // handles encryption setup (either "enable encryption" or "enter password" based
-    // on a server probe). Opening a competing dialog causes duplicate encryption
-    // prompts and can trigger unwanted clean-slate operations.
-    if (this._matDialog.openDialogs.length > 0) {
-      SyncLog.log('Dialog already open — skipping encryption prompt');
+    // If our own encryption prompt is already open or being opened, there is
+    // nothing to do — and we must not wait on it below.
+    if (this._encryptionRequiredDialog || this._isOpeningEncryptionDialog) {
+      SyncLog.log('Encryption prompt already open/opening — skipping');
       return;
+    }
+
+    // A transiently-open dialog — typically the sync-config dialog still playing
+    // its close animation right after first-time setup — must only DEFER this
+    // prompt, never drop it. With the E2EE-mandatory upload guard (GHSA-9v8x) the
+    // initial sync finishes almost instantly (upload is skipped until a key
+    // exists), so it can now beat the config dialog's close animation; a one-shot
+    // skip here then leaves SuperSync enabled with no encryption configured and no
+    // prompt shown (#8670 regression). Wait (bounded) for open dialogs to clear,
+    // then re-check state before prompting. A competing dialog that is still open
+    // after the wait (e.g. an enter-password flow the user is interacting with) is
+    // left alone — the next sync re-runs this check.
+    if (this._matDialog.openDialogs.length > 0) {
+      SyncLog.log('Dialog open — deferring encryption prompt until it closes');
+      const waitStart = Date.now();
+      while (
+        this._matDialog.openDialogs.length > 0 &&
+        Date.now() - waitStart < ENCRYPTION_PROMPT_DIALOG_WAIT_MS
+      ) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, ENCRYPTION_PROMPT_DIALOG_POLL_MS),
+        );
+      }
+      if (this._matDialog.openDialogs.length > 0) {
+        SyncLog.log('Dialog still open after wait — skipping encryption prompt');
+        return;
+      }
+      // Provider/encryption state can change during the wait: the closing dialog
+      // may switch providers, disable SuperSync, or configure encryption itself
+      // (e.g. an enter-password flow). Re-validate the active provider and its
+      // config before prompting — otherwise we could open the disableClose setup
+      // dialog for a provider that is no longer active, trapping the user.
+      const providerIdAfterWait = await firstValueFrom(this.syncProviderId$);
+      if (providerIdAfterWait !== SyncProviderId.SuperSync) {
+        SyncLog.log('Provider changed while waiting — skipping encryption prompt');
+        return;
+      }
+      const providerAfterWait = this._providerManager.getActiveProvider();
+      if (!providerAfterWait) {
+        return;
+      }
+      const cfgAfterWait = (await providerAfterWait.privateCfg.load()) as
+        | { isEncryptionEnabled?: boolean; encryptKey?: string }
+        | undefined;
+      if (cfgAfterWait?.isEncryptionEnabled && cfgAfterWait?.encryptKey) {
+        SyncLog.log('Encryption enabled while waiting — skipping prompt');
+        return;
+      }
     }
 
     if (!this._encryptionRequiredDialog && !this._isOpeningEncryptionDialog) {

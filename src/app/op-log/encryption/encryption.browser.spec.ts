@@ -18,6 +18,22 @@ import {
   setArgon2ParamsForTesting,
 } from '@sp/sync-core';
 
+// crypto.subtle is an accessor inherited from Crypto.prototype, not an own
+// property, so getOwnPropertyDescriptor(crypto, 'subtle') returns undefined and
+// stubbing it defines a shadowing OWN property. Restoring must then DELETE that
+// own property to re-expose the prototype getter — merely skipping restore when
+// there was no own descriptor leaks `subtle: undefined` into every later spec in
+// the karma run (isCryptoSubtleAvailable() then returns false suite-wide).
+const restoreCryptoSubtle = (
+  originalDescriptor: PropertyDescriptor | undefined,
+): void => {
+  if (originalDescriptor) {
+    Object.defineProperty(window.crypto, 'subtle', originalDescriptor);
+  } else {
+    delete (window.crypto as { subtle?: unknown }).subtle;
+  }
+};
+
 describe('Encryption (browser smoke)', () => {
   const PASSWORD = 'super_secret_password';
   const DATA = 'some very secret data';
@@ -69,9 +85,7 @@ describe('Encryption (browser smoke)', () => {
       const ct = await encrypt(DATA, PASSWORD);
       expect(await decrypt(ct, PASSWORD)).toBe(DATA);
     } finally {
-      if (originalDescriptor) {
-        Object.defineProperty(window.crypto, 'subtle', originalDescriptor);
-      }
+      restoreCryptoSubtle(originalDescriptor);
     }
   });
 
@@ -89,9 +103,7 @@ describe('Encryption (browser smoke)', () => {
     try {
       expect(await decrypt(ct, PASSWORD)).toBe(DATA);
     } finally {
-      if (originalDescriptor) {
-        Object.defineProperty(window.crypto, 'subtle', originalDescriptor);
-      }
+      restoreCryptoSubtle(originalDescriptor);
     }
   });
 });

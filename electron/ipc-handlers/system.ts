@@ -1,35 +1,29 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
-import {
-  hasExecutableFileExtension,
-  isExternalUrlSchemeAllowed,
-  isPathSafeToOpen,
-} from '../shared-with-frontend/is-external-url-allowed';
+import { isExternalUrlSchemeAllowed } from '../shared-with-frontend/is-external-url-allowed';
+import { isLocalFileUrl, openLocalPath } from '../open-url';
 import { getWin } from '../main-window';
 
 export const initSystemIpc = (): void => {
   ipcMain.on(IPC.OPEN_PATH, (ev, path: string) => {
-    // Block UNC / network paths and remote file:// URLs: shell.openPath would
-    // resolve \\host\share (and file://host/share) to an SMB connection and leak
-    // the user's NTLM hash. FILE-type task-attachment paths are synced and thus
-    // attacker-controllable. See GHSA-hr87-735w-hfq3.
-    if (!isPathSafeToOpen(path)) {
-      return;
-    }
-    // Never launch an executable/script. shell.openPath runs .bat/.cmd/.vbs/...
-    // via the OS handler (ShellExecute on Windows needs no exec bit), so a
-    // renderer that drops a file into a writable dir + calls openPath — or a
-    // malicious synced FILE attachment clicked by the user — would get native
-    // code execution that bypasses the nodeExecution consent gate.
-    if (hasExecutableFileExtension(path)) {
-      return;
-    }
-    shell.openPath(path);
+    // openLocalPath enforces the guards this sink needs: reject UNC / remote
+    // file:// paths (NTLM-hash leak) and never launch an executable/script.
+    // FILE-type task-attachment paths are synced and thus attacker-controllable.
+    // See GHSA-hr87-735w-hfq3.
+    openLocalPath(path);
   });
   ipcMain.on(IPC.OPEN_EXTERNAL, (ev, url: string) => {
     // Defense in depth: never hand an unsafe scheme to the OS handler, even if
     // the renderer-side guard is bypassed. See GHSA-hr87-735w-hfq3.
     if (!isExternalUrlSchemeAllowed(url)) {
+      return;
+    }
+    // A local file: URL opens reliably via openPath, not openExternal:
+    // openExternal percent-encodes the path on Windows and then can't resolve
+    // non-ASCII names or spaces. openLocalPath decodes it and re-applies the
+    // openPath guards. See issue #8695.
+    if (isLocalFileUrl(url)) {
+      openLocalPath(url);
       return;
     }
     shell.openExternal(url);

@@ -46,6 +46,12 @@ export type MiscConfig = Readonly<{
   // number: one of DefaultStartPage. string: project id.
   defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
+  // Global wallpaper: shown on pages that don't provide their own background
+  // (Planner, Schedule, Boards, Config, and tags/projects without an image).
+  backgroundImageDark?: string | null;
+  backgroundImageLight?: string | null;
+  backgroundOverlayOpacity?: number;
+  backgroundImageBlur?: number;
 
   // @todo: remove deprecated items in future major releases, after giving users time to migrate
   isConfirmBeforeTaskDelete?: boolean; // Deprecated

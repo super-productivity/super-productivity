@@ -18,6 +18,10 @@ import {
   suggestConflictResolution,
   type LwwResolvedConflict,
 } from '@sp/sync-core';
+import {
+  findLwwContentConflicts,
+  type LwwContentConflict,
+} from './lww-conflict-summary.util';
 import type { SelectByIdFactory } from '../core/entity-registry-host.types';
 import { Store } from '@ngrx/store';
 import {
@@ -38,6 +42,10 @@ import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
+import { BannerService } from '../../core/banner/banner.service';
+import { BannerId } from '../../core/banner/banner.model';
+import { escapeHtml } from '../../util/escape-html';
+import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
@@ -97,6 +105,10 @@ export class ConflictResolutionService {
   private operationApplier = inject(OperationApplierService);
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
+  private bannerService = inject(BannerService);
+  // Optional: production always has it (TranslateModule.forRoot); optional keeps
+  // the many specs that construct this service from needing to provide it.
+  private translateService = inject(TranslateService, { optional: true });
   private validateStateService = inject(ValidateStateService);
   private sessionValidation = inject(SyncSessionValidationService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
@@ -492,15 +504,15 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 7: Show non-blocking notification
+    //
+    // Distinguish "routine" self-healing (reschedule/repeat/archive/done churn
+    // that resolves correctly on its own) from resolutions that discarded a real
+    // user content edit (title/notes/subtasks). Routine stays quiet with the
+    // existing transient count; genuine content loss gets a dismissible banner
+    // naming the affected task(s) so the user can double-check. (#8694)
     // ─────────────────────────────────────────────────────────────────────────
     if (localWinsCount > 0 || remoteWinsCount > 0) {
-      this.snackService.open({
-        msg: T.F.SYNC.S.LWW_CONFLICTS_AUTO_RESOLVED,
-        translateParams: {
-          localWins: localWinsCount,
-          remoteWins: remoteWinsCount,
-        },
-      });
+      await this._notifyResolutionOutcome(resolutions, localWinsCount, remoteWinsCount);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -512,6 +524,84 @@ export class ConflictResolutionService {
     if (!isValid) this.sessionValidation.setFailed();
 
     return { localWinOpsCreated: newLocalWinOps.length };
+  }
+
+  /**
+   * Surfaces the outcome of auto-resolution to the user (#8694).
+   *
+   * Routine self-healing (rescheduling, repeat/archive/done churn) keeps the
+   * existing quiet transient snack. When a resolution discarded a real user
+   * content edit (title/notes/subtasks), a dismissible banner names the affected
+   * task(s) so the user knows data may differ and can double-check.
+   *
+   * Purely a read of the already-decided resolutions — it never influences which
+   * ops were applied or rejected.
+   */
+  private async _notifyResolutionOutcome(
+    resolutions: LWWResolution[],
+    localWinsCount: number,
+    remoteWinsCount: number,
+  ): Promise<void> {
+    const contentConflicts = findLwwContentConflicts(resolutions, (entityType) =>
+      this._resolvePayloadKey(entityType as EntityType),
+    );
+
+    if (contentConflicts.length === 0) {
+      this.snackService.open({
+        msg: T.F.SYNC.S.LWW_CONFLICTS_AUTO_RESOLVED,
+        translateParams: {
+          localWins: localWinsCount,
+          remoteWins: remoteWinsCount,
+        },
+      });
+      return;
+    }
+
+    await this._showContentConflictBanner(contentConflicts);
+  }
+
+  /**
+   * Shows a dismissible banner naming the tasks whose edits diverged and were
+   * auto-resolved by keeping the most recent version. Uses the banner's built-in
+   * dismiss button — no custom action needed.
+   *
+   * Titles are user content escaped before display: the banner renders via
+   * `[innerHTML]` and titles come from synced remote data, so Angular's own
+   * sanitizer is the primary XSS control and this escaping is defense-in-depth
+   * plus correct literal rendering (a `<b>`-looking title shows as text). Titles
+   * MUST NOT be logged — the log history is exportable (sync rule #9).
+   */
+  private async _showContentConflictBanner(
+    contentConflicts: LwwContentConflict[],
+  ): Promise<void> {
+    const MAX_NAMED = 3;
+    const titles = await Promise.all(
+      contentConflicts
+        .slice(0, MAX_NAMED)
+        .map((conflict) => this._getContentConflictTitle(conflict.entityId)),
+    );
+    const named = titles.map((title) => `"${escapeHtml(title)}"`).join(', ');
+    const taskList = contentConflicts.length > MAX_NAMED ? `${named} …` : named;
+
+    this.bannerService.open({
+      id: BannerId.SyncConflictContentResolved,
+      ico: 'sync_problem',
+      msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
+      translateParams: { taskList },
+    });
+  }
+
+  private async _getContentConflictTitle(entityId: string): Promise<string> {
+    const entity = await this.getCurrentEntityState('TASK' as EntityType, entityId);
+    const title = (entity as { title?: string } | undefined)?.title;
+    // Guard against a corrupt/non-string title from remote state before .trim().
+    if (typeof title === 'string' && title.trim().length) {
+      return title;
+    }
+    return (
+      this.translateService?.instant(T.F.SYNC.B.CONTENT_CONFLICT_UNTITLED) ??
+      'Untitled task'
+    );
   }
 
   /**

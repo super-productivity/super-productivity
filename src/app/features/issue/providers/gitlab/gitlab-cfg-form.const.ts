@@ -8,7 +8,15 @@ import {
   CROSS_ORIGIN_WARNING,
   ISSUE_PROVIDER_COMMON_FORM_FIELDS,
 } from '../../common-issue-form-stuff.const';
-export const GITLAB_PROJECT_REGEX = /(^[1-9][0-9]*$)|((\/|%2F|\w-?|\.-?)+$)/i;
+// A GitLab project reference is EITHER a numeric project ID OR a namespace-qualified
+// path (`group/project`, subgroups, or the `%2F`-encoded form) — the REST API has no
+// way to resolve a project by a bare slug, so a single-segment name like `test_config`
+// always 404s at poll time (#8665). Require a path separator (`/` or `%2F`) for the
+// non-numeric branch so that mistake gets inline feedback instead. Still permissive
+// about the segment chars (e.g. consecutive hyphens, which GitLab paths allow) to
+// avoid false-rejecting valid paths; the separator lookahead keeps the char class a
+// single unnested quantifier (no catastrophic backtracking).
+export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|(?=.*(?:\/|%2F))[\w.%/-]+)$/i;
 
 export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[] = [
   ...CROSS_ORIGIN_WARNING,

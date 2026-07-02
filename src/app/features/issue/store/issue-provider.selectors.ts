@@ -7,6 +7,7 @@ import {
   IssueProvider,
   IssueProviderCalendar,
   IssueProviderKey,
+  IssueProviderPlainspace,
   IssueProviderState,
 } from '../issue.model';
 import { ICAL_TYPE } from '../issue.const';
@@ -38,21 +39,39 @@ export const selectIssueProvidersWithDisabledLast = createSelector(
 );
 
 /**
- * Whether a project already has a bound `PLAINSPACE` issue provider (i.e. it is
- * shared/collaborated on). Includes disabled providers so the "Collaborate on
- * Plainspace" entry point can be hidden once a project is shared, rather than
- * silently provisioning a second space on a repeat click. Trade-off: a disabled
- * Plainspace provider therefore also hides the action — re-enable it in the
- * integrations panel to resume (chosen over risking a duplicate remote space).
+ * The `PLAINSPACE` issue provider bound to a project (i.e. the space it is
+ * shared/collaborated on), or undefined. Includes disabled providers so both the
+ * "Collaborate on Plainspace" entry point (hidden once shared) and the "Open in
+ * Plainspace" action (shown once shared) stay consistent — a disabled provider
+ * still counts as shared. Returns the first match; a project is expected to have
+ * at most one bound space.
+ */
+export const selectPlainspaceProviderForProject = (
+  projectId: string,
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+) =>
+  createSelector(
+    selectAll,
+    (issueProviders: IssueProvider[]): IssueProviderPlainspace | undefined =>
+      issueProviders.find(
+        (ip): ip is IssueProviderPlainspace =>
+          !!ip &&
+          ip.issueProviderKey === 'PLAINSPACE' &&
+          ip.defaultProjectId === projectId,
+      ),
+  );
+
+/**
+ * Whether a project already has a bound `PLAINSPACE` issue provider. See
+ * {@link selectPlainspaceProviderForProject} for why disabled providers count.
  */
 export const selectIsProjectSharedOnPlainspace = (
   projectId: string,
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 ) =>
-  createSelector(selectAll, (issueProviders: IssueProvider[]): boolean =>
-    issueProviders.some(
-      (ip) => ip?.issueProviderKey === 'PLAINSPACE' && ip.defaultProjectId === projectId,
-    ),
+  createSelector(
+    selectPlainspaceProviderForProject(projectId),
+    (provider): boolean => !!provider,
   );
 
 export const selectIssueProviderById = <T extends IssueProvider>(

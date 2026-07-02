@@ -307,11 +307,21 @@ export const limitVectorClockSize = (
     return clock;
   }
 
-  OpLog.info('Vector clock pruning triggered', {
+  const limited = sharedLimitVectorClockSize(clock, [currentClientId]);
+  const prunedIds = Object.keys(clock).filter((id) => !(id in limited));
+
+  // WARN (not info): pruning is meant to be rare, so when it fires it is worth
+  // surfacing in the exported log history users share in bug reports (see issue
+  // #8696). clientIds are safe to log — they are not user content — and knowing
+  // which identities keep churning is the key diagnostic for stale-device
+  // accumulation.
+  OpLog.warn('Vector clock pruning triggered', {
     originalSize: entries.length,
     maxSize: MAX_VECTOR_CLOCK_SIZE,
     currentClientId,
-    pruned: entries.length - MAX_VECTOR_CLOCK_SIZE,
+    prunedCount: prunedIds.length,
+    prunedIds,
+    survivingIds: Object.keys(limited),
   });
 
   vectorClockPruned$.next({
@@ -319,5 +329,5 @@ export const limitVectorClockSize = (
     maxSize: MAX_VECTOR_CLOCK_SIZE,
   });
 
-  return sharedLimitVectorClockSize(clock, [currentClientId]);
+  return limited;
 };
