@@ -1,5 +1,6 @@
 import {
   isFileBasedProvider,
+  isFileBasedProviderId,
   isOperationSyncCapable,
   syncOpToOperation,
 } from './operation-sync.util';
@@ -81,6 +82,23 @@ describe('operation-sync utility', () => {
           .withContext(`isFileBasedProvider mismatch for SyncProviderId.${id}`)
           .toBe(KNOWN_FILE_BASED.has(id));
       }
+    });
+  });
+
+  describe('isFileBasedProviderId', () => {
+    it('agrees with isFileBasedProvider for every SyncProviderId member', () => {
+      const allIds = Object.values(SyncProviderId) as SyncProviderId[];
+      for (const id of allIds) {
+        const provider = { id } as unknown as SyncProviderBase<SyncProviderId>;
+        expect(isFileBasedProviderId(id))
+          .withContext(`isFileBasedProviderId mismatch for SyncProviderId.${id}`)
+          .toBe(isFileBasedProvider(provider));
+      }
+    });
+
+    it('returns true for WebDAV and false for SuperSync', () => {
+      expect(isFileBasedProviderId(SyncProviderId.WebDAV)).toBeTrue();
+      expect(isFileBasedProviderId(SyncProviderId.SuperSync)).toBeFalse();
     });
   });
 

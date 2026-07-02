@@ -82,14 +82,27 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button
-      mat-button
-      type="button"
-      [disabled]="isLoading()"
-      (click)="disableSuperSync()"
-    >
-      {{ textKeys.SETUP_DISABLE_SUPERSYNC_BTN | translate }}
-    </button>
+    @if (providerType === 'file-based') {
+      <!-- E2EE is optional here, so setup must be skippable (the modal is
+           disableClose, so this is the only non-encrypting way out). -->
+      <button
+        mat-button
+        type="button"
+        [disabled]="isLoading()"
+        (click)="cancel()"
+      >
+        {{ textKeys.SETUP_SKIP_ENCRYPTION_BTN | translate }}
+      </button>
+    } @else {
+      <button
+        mat-button
+        type="button"
+        [disabled]="isLoading()"
+        (click)="disableSuperSync()"
+      >
+        {{ textKeys.SETUP_DISABLE_SUPERSYNC_BTN | translate }}
+      </button>
+    }
     <button
       mat-flat-button
       color="primary"

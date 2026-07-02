@@ -45,7 +45,16 @@ export const isOperationSyncCapable = (
 export const isFileBasedProvider = (
   provider: SyncProviderBase<SyncProviderId>,
 ): boolean => {
-  return FILE_BASED_PROVIDER_IDS.has(provider.id);
+  return isFileBasedProviderId(provider.id);
+};
+
+/**
+ * Id-based sibling of `isFileBasedProvider` for callers that only have the
+ * provider id, not a resolved provider instance (e.g. the sync-config dialog
+ * deciding whether to offer pre-upload encryption during first-time setup).
+ */
+export const isFileBasedProviderId = (id: SyncProviderId): boolean => {
+  return FILE_BASED_PROVIDER_IDS.has(id);
 };
 
 const VALID_OP_TYPES = new Set<string>(Object.values(OpType));

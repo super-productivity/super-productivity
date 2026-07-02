@@ -1365,13 +1365,18 @@
           "ENABLE_ENCRYPTION_TITLE": "Enable Encryption?",
           "ENABLE_ENCRYPTION_WARNING": "WARNING: This will re-upload your data with encryption. If you forget your encryption password, your data cannot be recovered!",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Set a password to encrypt your data before it is uploaded</strong>, so it never leaves this device unencrypted. This is optional — you can also enable or change it later.",
           "L_CHANGE_ENCRYPTION_PASSWORD": "Change Encryption Password",
           "L_CONFIRM_PASSWORD": "Confirm Password",
           "L_NEW_PASSWORD": "New Encryption Password",
           "L_REMOVE_ENCRYPTION": "Or Remove Encryption",
           "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters",
           "PASSWORDS_DONT_MATCH": "Passwords do not match",
-          "REMOVE_ENCRYPTION_WARNING": "Removing encryption will re-upload your data without encryption. All devices will need to reconfigure."
+          "REMOVE_ENCRYPTION_WARNING": "Removing encryption will re-upload your data without encryption. All devices will need to reconfigure.",
+          "SETUP_ENCRYPTION_BTN": "Encrypt & Continue",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. If you forget it, encrypted data cannot be recovered.",
+          "SETUP_ENCRYPTION_TITLE": "Encrypt before first upload?",
+          "SETUP_SKIP_ENCRYPTION_BTN": "Skip"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "Sync File Name"

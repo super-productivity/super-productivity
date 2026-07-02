@@ -32,8 +32,10 @@ import {
 } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
+import { firstValueFrom } from 'rxjs';
 import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
+import { isFileBasedProviderId } from '../../../op-log/sync/operation-sync.util';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
 
@@ -630,6 +632,28 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       }
     }
 
+    // File-based providers support OPTIONAL E2EE but (unlike SuperSync) have no
+    // mandatory-encryption upload guard. So instead of prompting AFTER the first
+    // sync (which would already have shipped plaintext, and would race the auto
+    // "just enabled" sync), offer to set the encryption password here and persist
+    // it as part of THIS config save. The key lands in the provider's privateCfg
+    // and `isEncryptionEnabled` in the global config atomically with `isEnabled`,
+    // so the normal first sync encrypts from the very first op — no separate
+    // snapshot-overwrite, no plaintext-upload window. Skipping keeps today's
+    // unencrypted behavior. No network needed, so this also covers offline setup.
+    if (
+      _isInitialSetup &&
+      providerId &&
+      isFileBasedProviderId(providerId) &&
+      !configToSave.isEncryptionEnabled
+    ) {
+      const encryptKey = await this._collectFileBasedSetupEncryptionKey();
+      if (encryptKey) {
+        configToSave.encryptKey = encryptKey;
+        configToSave.isEncryptionEnabled = true;
+      }
+    }
+
     await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     this._matDialogRef.close();
 
@@ -645,6 +669,28 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     if (isOnline()) {
       this.syncWrapperService.sync(true);
     }
+  }
+
+  /**
+   * Open the encryption dialog in collect-only mode to gather an optional
+   * setup password for a file-based provider. Returns the password, or `null`
+   * if the user skipped. Performs no side effect — the caller persists the key
+   * as part of the sync config so the normal first sync encrypts from op #1.
+   */
+  private async _collectFileBasedSetupEncryptionKey(): Promise<string | null> {
+    const { DialogEnableEncryptionComponent } =
+      await import('../dialog-enable-encryption/dialog-enable-encryption.component');
+    const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+      width: '450px',
+      disableClose: true,
+      data: {
+        providerType: 'file-based',
+        initialSetup: true,
+        collectPasswordOnly: true,
+      },
+    });
+    const result = await firstValueFrom(dialogRef.afterClosed());
+    return result?.success && result.password ? result.password : null;
   }
 
   updateTmpCfg(cfg: SyncConfig & { _isInitialSetup?: boolean }): void {

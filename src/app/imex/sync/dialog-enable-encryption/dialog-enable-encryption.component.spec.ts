@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
@@ -351,6 +352,82 @@ describe('DialogEnableEncryptionComponent', () => {
       component.cancel();
 
       expect(mockDialogRef.close).toHaveBeenCalledWith({ success: false });
+    });
+  });
+
+  // Collect-only mode (first-time file-based setup): confirm() returns the
+  // password to the caller and performs NO side effect — no upload, no config
+  // write. The caller persists it as part of the sync config.
+  describe('collectPasswordOnly mode', () => {
+    beforeEach(() => {
+      mockProviderManager.getActiveProvider.and.returnValue({
+        id: SyncProviderId.WebDAV,
+      } as any);
+      createComponent({
+        initialSetup: true,
+        providerType: 'file-based',
+        collectPasswordOnly: true,
+      });
+    });
+
+    it('returns the entered password and calls no encryption service', async () => {
+      component.password = 'password123';
+      component.confirmPassword = 'password123';
+
+      await component.confirm();
+
+      expect(mockDialogRef.close).toHaveBeenCalledWith({
+        success: true,
+        password: 'password123',
+      });
+      expect(mockFileBasedEncryptionService.enableEncryption).not.toHaveBeenCalled();
+      expect(mockEncryptionToggleService.enableEncryption).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the password is invalid', async () => {
+      component.password = 'short';
+      component.confirmPassword = 'short';
+
+      await component.confirm();
+
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  // The initialSetup modal is disableClose. For file-based providers E2EE is
+  // optional, so the secondary action must be a Skip (cancel) — NOT the
+  // SuperSync-only "disable sync" — otherwise the user would be trapped.
+  describe('initialSetup secondary action', () => {
+    const secondaryButton = (): HTMLButtonElement =>
+      fixture.debugElement.queryAll(By.css('mat-dialog-actions button'))[0]
+        .nativeElement as HTMLButtonElement;
+
+    it('file-based: secondary action skips via cancel(), never disableSuperSync()', () => {
+      mockProviderManager.getActiveProvider.and.returnValue({
+        id: SyncProviderId.WebDAV,
+      } as any);
+      createComponent({
+        initialSetup: true,
+        providerType: 'file-based',
+        collectPasswordOnly: true,
+      });
+      spyOn(component, 'cancel').and.callThrough();
+      spyOn(component, 'disableSuperSync');
+
+      secondaryButton().click();
+
+      expect(component.cancel).toHaveBeenCalledTimes(1);
+      expect(component.disableSuperSync).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).toHaveBeenCalledWith({ success: false });
+    });
+
+    it('supersync: secondary action is disableSuperSync()', () => {
+      createComponent({ initialSetup: true, providerType: 'supersync' });
+      spyOn(component, 'disableSuperSync').and.callThrough();
+
+      secondaryButton().click();
+
+      expect(component.disableSuperSync).toHaveBeenCalledTimes(1);
     });
   });
 });

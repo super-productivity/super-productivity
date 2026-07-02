@@ -29,10 +29,21 @@ export interface EnableEncryptionDialogData {
   encryptKey?: string;
   providerType?: 'supersync' | 'file-based';
   initialSetup?: boolean;
+  /**
+   * Collect-only mode: `confirm()` returns the entered password via
+   * `EnableEncryptionResult.password` and performs NO side effect (no upload,
+   * no config write). Used during first-time file-based setup so the key can be
+   * persisted atomically with the sync config — the normal first sync then
+   * encrypts from the first op, with no separate snapshot-overwrite and no
+   * plaintext-upload race. See `DialogSyncCfgComponent.save()`.
+   */
+  collectPasswordOnly?: boolean;
 }
 
 export interface EnableEncryptionResult {
   success: boolean;
+  /** Set only in `collectPasswordOnly` mode — the password the user entered. */
+  password?: string;
 }
 
 @Component({
@@ -78,6 +89,7 @@ export class DialogEnableEncryptionComponent {
   errorReason = signal<string | null>(null);
   showPassword = signal(false);
   initialSetup: boolean = this._data?.initialSetup || false;
+  collectPasswordOnly: boolean = this._data?.collectPasswordOnly || false;
   providerType: 'supersync' | 'file-based' = this._data?.providerType || 'supersync';
   textKeys: Record<string, string> =
     this.providerType === 'file-based'
@@ -138,6 +150,18 @@ export class DialogEnableEncryptionComponent {
 
   async confirm(): Promise<void> {
     if (this.isLoading() || !this.canProceed() || !this.isPasswordValid) {
+      return;
+    }
+
+    // Collect-only mode: hand the password back to the caller and do nothing
+    // else. The caller (first-time file-based setup) persists it as part of the
+    // sync config, so encryption is applied by the normal sync flow — no upload
+    // and no config mutation happen here.
+    if (this.collectPasswordOnly) {
+      const password = this.password;
+      this.password = '';
+      this.confirmPassword = '';
+      this._matDialogRef.close({ success: true, password });
       return;
     }
 
