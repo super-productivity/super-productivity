@@ -30,6 +30,8 @@ let nextDialogPromise;
 // In-memory stand-in for the main-owned persisted consent store (plugin-node-consent-store.ts),
 // so the executor's Phase 2 ask-once logic can be tested without touching the filesystem.
 let consentStore;
+// Recorded (command, args, options) tuples from the stubbed child_process.spawn.
+let spawnCalls;
 
 class FakeWebContents extends EventEmitter {
   constructor(id, url = 'app://index.html') {
@@ -109,6 +111,33 @@ const installMocks = () => {
       return consentStore;
     }
 
+    // Stub child_process so the spawn-path tests can assert the resolved binary and
+    // env without launching a real process.
+    if (
+      request === 'child_process' &&
+      parent &&
+      typeof parent.filename === 'string' &&
+      parent.filename.endsWith('plugin-node-executor.ts')
+    ) {
+      return {
+        spawn: (command, spawnArgs, options) => {
+          spawnCalls.push([command, spawnArgs, options]);
+          const child = new EventEmitter();
+          child.stdout = new EventEmitter();
+          child.stderr = new EventEmitter();
+          child.killed = false;
+          child.kill = () => {
+            child.killed = true;
+          };
+          setImmediate(() => {
+            child.stdout.emit('data', JSON.stringify({ __result: 42 }));
+            child.emit('close', 0);
+          });
+          return child;
+        },
+      };
+    }
+
     if (request === 'electron-log/main') {
       return { log: () => {}, error: () => {} };
     }
@@ -156,6 +185,7 @@ const callIpc = (channel, sender, ...args) => {
 test.beforeEach(() => {
   ipcHandlers = new Map();
   dialogCalls = [];
+  spawnCalls = [];
   nextDialogResult = { response: 0 };
   nextDialogPromise = undefined;
   const records = new Map();
@@ -658,6 +688,42 @@ test('mints the grant before persisting consent (persist is best-effort, never g
   assert.equal(typeof grant.token, 'string');
   // The grant for this request was already live when the persist ran (mint-before-persist).
   assert.equal(grantsSizeAtPersist, 1);
+});
+
+test('spawn path runs the script with process.execPath, never a bare node lookup', async () => {
+  // REGRESSION: the spawn path used `execPath.includes('electron') ? execPath : 'node'`.
+  // In a packaged app the executable name contains no "electron" (e.g. "Super
+  // Productivity"), and the child env below has no PATH, so spawn('node') could only
+  // resolve through the execvp fallback (/usr/bin:/bin) — ENOENT on most machines.
+  // The executor must always use its own binary in node mode.
+  loadModule();
+  const webContents = new FakeWebContents(32);
+  const grant = await callIpc(
+    'PLUGIN_REQUEST_NODE_EXECUTION_GRANT',
+    webContents,
+    'sync-md',
+  );
+
+  // The script must mention child_process so canExecuteDirectly() routes it to spawn.
+  const result = await callIpc(
+    'PLUGIN_EXEC_NODE_SCRIPT',
+    webContents,
+    'sync-md',
+    grant.token,
+    {
+      script: "const cp = require('child_process'); void cp; return 1;",
+    },
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(result.result, 42); // from the stubbed child's stdout
+  assert.equal(spawnCalls.length, 1);
+  const [command, spawnArgs, options] = spawnCalls[0];
+  assert.equal(command, process.execPath);
+  assert.ok(spawnArgs.includes('-e'));
+  assert.equal(options.env.ELECTRON_RUN_AS_NODE, '1');
+  // The env stays minimal by design — which is exactly why a bare 'node' cannot resolve.
+  assert.equal('PATH' in options.env, false);
 });
 
 test('a consent persist failure still grants the approved session (best-effort)', async () => {

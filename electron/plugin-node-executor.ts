@@ -656,8 +656,13 @@ class PluginNodeExecutor {
         })();
       `;
 
-      // Use electron's node or system node
-      const nodePath = process.execPath.includes('electron') ? process.execPath : 'node';
+      // Run the script with our own binary in node mode (ELECTRON_RUN_AS_NODE is set
+      // below). In packaged builds the executable name doesn't contain "electron"
+      // (e.g. "Super Productivity"), and the stripped child env has no PATH, so
+      // falling back to spawn('node') fails with ENOENT unless node happens to live
+      // in /usr/bin. process.execPath works in every mode: dev (Electron from
+      // node_modules), packaged apps, and plain node (tests).
+      const nodePath = process.execPath;
 
       // Spawn process with script via -e flag (no temp files!)
       const child = spawn(nodePath, ['--no-warnings', '-e', wrappedScript], {
