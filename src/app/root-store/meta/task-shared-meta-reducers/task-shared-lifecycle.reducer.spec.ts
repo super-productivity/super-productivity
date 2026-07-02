@@ -296,6 +296,49 @@ describe('taskSharedLifecycleMetaReducer', () => {
       );
     });
 
+    // Regression: divergent/one-sided tag→task reference from a sync replay.
+    // A receiving client can end up with `tag.taskIds` containing a task id that
+    // is NOT listed in the task's own `tagIds`. The archive path used to only
+    // visit tags named in `task.tagIds`, so it left this reference dangling —
+    // which later tripped cross-model validation and forced a reconciliation
+    // (observed in SP-logs: an archived repeating-task instance still held by a
+    // regular tag). Cleanup must scan ALL tags, like the delete path does.
+    it('should remove archived task from a tag that references it even when the task.tagIds omits that tag', () => {
+      const testState = createStateWithExistingTasks(
+        ['rpt-task', 'keep-task'],
+        [],
+        ['rpt-task', 'keep-task'], // regular tag1 references rpt-task
+        [], // TODAY empty
+      );
+
+      // One-sided reference: the task itself does NOT list tag1.
+      testState[TASK_FEATURE_NAME].entities['rpt-task'] = createMockTask({
+        id: 'rpt-task',
+        projectId: 'project1',
+        tagIds: [],
+      });
+
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks({
+          id: 'rpt-task',
+          projectId: 'project1',
+          tagIds: [], // payload also omits the tag
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTagUpdate('tag1', { taskIds: ['keep-task'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should handle archiving tasks from multiple projects', () => {
       const testState = createStateWithExistingTasks(
         ['task1'],

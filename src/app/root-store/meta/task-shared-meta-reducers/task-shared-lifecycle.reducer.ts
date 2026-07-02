@@ -22,6 +22,7 @@ import {
   ActionHandlerMap,
   getProject,
   getTag,
+  removeTasksFromAllTags,
   removeTasksFromList,
   TaskEntity,
   updateTags,
@@ -71,28 +72,13 @@ const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootS
     }
   }
 
-  // Get tag associations from CURRENT STATE for the same reason as above.
-  // Always include TODAY_TAG to ensure cleanup even if tasks aren't in it.
-  const affectedTagIds = unique([
-    TODAY_TAG.id,
-    ...taskIdsToArchive.flatMap((taskId) => {
-      const task = state[TASK_FEATURE_NAME].entities[taskId];
-      return task?.tagIds ?? [];
-    }),
-  ]);
-
-  const tagUpdates = affectedTagIds
-    .filter((tagId) => !!state[TAG_FEATURE_NAME].entities[tagId])
-    .map(
-      (tagId): Update<Tag> => ({
-        id: tagId,
-        changes: {
-          taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIdsToArchive),
-        },
-      }),
-    );
-
-  return updateTags(updatedState, tagUpdates);
+  // Scan EVERY tag (incl. TODAY_TAG) from CURRENT STATE for references to the
+  // archived tasks — not just the tags named in each task's own `tagIds`.
+  // During sync a receiving client can hold a one-sided tag→task reference
+  // (tag.taskIds contains the id even though task.tagIds does not); only
+  // visiting the task's own tagIds would leave that dangling reference behind,
+  // which later trips cross-model validation and forces a reconciliation.
+  return removeTasksFromAllTags(updatedState, taskIdsToArchive);
 };
 
 /**

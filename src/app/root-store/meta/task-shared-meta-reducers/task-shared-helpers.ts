@@ -108,6 +108,32 @@ export const removeTasksFromList = (taskIds: string[], toRemove: string[]): stri
   return taskIds.filter((id) => !removeSet.has(id));
 };
 
+/**
+ * Removes the given task IDs from every tag's `taskIds`. Scans ALL tags from
+ * the CURRENT state (not a payload-provided list or the task's own `tagIds`)
+ * so sync replays with divergent/one-sided tag associations are fully cleaned
+ * up. Uses a Set for O(1) lookup. Returns state unchanged when no tag
+ * references the tasks.
+ */
+export const removeTasksFromAllTags = (
+  state: RootState,
+  taskIds: string[],
+): RootState => {
+  const taskIdSet = new Set(taskIds);
+  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
+    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
+    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
+    .map(
+      (tag): Update<Tag> => ({
+        id: tag.id,
+        changes: {
+          taskIds: removeTasksFromList(tag.taskIds, taskIds),
+        },
+      }),
+    );
+  return updateTags(state, tagUpdates);
+};
+
 // =============================================================================
 // PLANNER DAY HELPERS
 // =============================================================================

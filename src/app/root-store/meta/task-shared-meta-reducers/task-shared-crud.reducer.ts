@@ -39,6 +39,7 @@ import {
   ProjectTaskList,
   filterOutTodayTag,
   removeTaskFromPlannerDays,
+  removeTasksFromAllTags,
   removeTasksFromList,
   TaskWithTags,
   updateProject,
@@ -138,28 +139,6 @@ const handleAddTask = (
   }
 
   return updatedState;
-};
-
-/**
- * Removes the given task IDs from every tag's `taskIds`. Scans all tags from
- * the CURRENT state (not a payload-provided list) so sync replays with
- * divergent tag associations are fully cleaned up. Uses a Set for O(1) lookup.
- * Returns state unchanged when no tag references the tasks.
- */
-const removeTasksFromAllTags = (state: RootState, taskIds: string[]): RootState => {
-  const taskIdSet = new Set(taskIds);
-  const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
-    .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
-    .filter((tag): tag is Tag => !!tag && tag.taskIds.some((id) => taskIdSet.has(id)))
-    .map(
-      (tag): Update<Tag> => ({
-        id: tag.id,
-        changes: {
-          taskIds: removeTasksFromList(tag.taskIds, taskIds),
-        },
-      }),
-    );
-  return updateTags(state, tagUpdates);
 };
 
 const handleConvertToMainTask = (
