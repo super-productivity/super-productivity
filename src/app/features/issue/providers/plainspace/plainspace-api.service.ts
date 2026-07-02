@@ -59,10 +59,17 @@ export class PlainspaceApiService {
     }
     return this.getMe$(cfg).pipe(
       map((me) => {
-        const space = me?.projects.find(
+        // Guard the body shape defensively: a 200 with a malformed payload
+        // (non-array `projects`) is NOT caught by getMe$'s HTTP catchError and
+        // would otherwise throw here — becoming an unhandled rejection with no
+        // OPEN_FAILED snack. Mirrors the Array.isArray guard in getMyTasks$.
+        const projects = me && Array.isArray(me.projects) ? me.projects : [];
+        const space = projects.find(
           (p) => p.id === cfg.spaceId || p.slug === cfg.spaceId,
         );
-        return space ? `${cfg.host}/${space.slug}` : null;
+        // Require a non-empty slug: `space` with a blank slug would build the
+        // host root ({host}/) — send OPEN_FAILED instead of the wrong page.
+        return space?.slug ? `${cfg.host}/${space.slug}` : null;
       }),
     );
   }

@@ -27,7 +27,9 @@ import {
  * creates a remote space and registers a bound `PLAINSPACE` issue-provider
  * instance (so tasks assigned to me / unassigned auto-import to the project
  * backlog). Used by the project context menu's "Collaborate on Plainspace"
- * action and the create-project dialog's share toggle.
+ * action and the create-project dialog's share toggle. Also hosts
+ * `openProjectOnPlainspace` (the header "Open in Plainspace" button), which
+ * reuses this service's store/api/snack/electron-open wiring.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceShareService {
@@ -111,8 +113,8 @@ export class PlainspaceShareService {
    * Opens the bound Plainspace space's web page (in the system browser under
    * Electron, a new tab otherwise). Resolves the space slug on demand (see
    * {@link PlainspaceApiService.getSpaceUrl$}) and surfaces a snack if it can't be
-   * resolved (offline / revoked token). Assumes the project is shared — the menu
-   * only offers this once a provider is bound.
+   * resolved (offline / revoked token). The header button is only shown once a
+   * provider is bound; this also re-guards by returning early when none is found.
    */
   async openProjectOnPlainspace(projectId: string): Promise<void> {
     const provider = await firstValueFrom(

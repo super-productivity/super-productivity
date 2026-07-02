@@ -183,6 +183,24 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
+  it('getSpaceUrl$ returns null (no throw) on a malformed /me body', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'p2' }));
+    // 200 with a non-array `projects` — not caught by getMe$'s HTTP catchError.
+    httpMock.expectOne(`${BASE}/me`).flush({ email: 'a@b.c' });
+    expect(await p).toBeNull();
+  });
+
+  it('getSpaceUrl$ returns null when the matched space has a blank slug', async () => {
+    const p = firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: 'p2' }));
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'a@b.c',
+      projects: [
+        { id: 'p2', name: 'Two', slug: '', memberDisplayName: 'Me', role: 'member' },
+      ],
+    });
+    expect(await p).toBeNull();
+  });
+
   it('getSpaceUrl$ returns null without a request when host/spaceId are missing', async () => {
     expect(
       await firstValueFrom(service.getSpaceUrl$({ ...cfg, spaceId: null })),

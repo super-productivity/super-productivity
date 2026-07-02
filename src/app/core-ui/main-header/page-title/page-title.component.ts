@@ -54,6 +54,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
             <button
               (click)="openInPlainspace()"
               [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+              [attr.aria-label]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
               mat-icon-button
             >
               <mat-icon>open_in_new</mat-icon>
@@ -202,8 +203,9 @@ export class PageTitleComponent {
   );
 
   // Whether the active project is shared on Plainspace — drives the visible
-  // "Open in Plainspace" header button (mirrors the work-context menu entry).
-  // False for tags/special sections, so the button stays project-only.
+  // "Open in Plainspace" header button. Uses the same shared-detection selector
+  // as the Collaborate-on-Plainspace menu entry. False for tags/special
+  // sections, so the button stays project-only.
   isSharedOnPlainspace = toSignal(
     this._workContextService.activeWorkContextTypeAndId$.pipe(
       switchMap(({ activeId, activeType }) =>
