@@ -50,10 +50,11 @@ describe('PlainspaceShareService', () => {
       return { afterClosed: () => of(undefined) } as ReturnType<MatDialog['open']>;
     });
 
-    api = jasmine.createSpyObj('PlainspaceApiService', ['createSpace$']);
+    api = jasmine.createSpyObj('PlainspaceApiService', ['createSpace$', 'getSpaceUrl$']);
     api.createSpace$.and.returnValue(of({ id: 'space-1' }));
     snack = jasmine.createSpyObj('SnackService', ['open']);
-    store = jasmine.createSpyObj('Store', ['dispatch']);
+    store = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    store.select.and.returnValue(of(undefined));
 
     TestBed.configureTestingModule({
       providers: [
@@ -121,6 +122,57 @@ describe('PlainspaceShareService', () => {
     expect(snack.open).toHaveBeenCalledWith({
       type: 'SUCCESS',
       msg: T.PLAINSPACE.SHARE_SUCCESS,
+    });
+  });
+
+  describe('openProjectOnPlainspace', () => {
+    const provider = {
+      id: 'ip1',
+      issueProviderKey: 'PLAINSPACE',
+      host: 'https://plainspace.org',
+      spaceId: 'space-1',
+      token: 'pat_x',
+    } as unknown;
+
+    it('resolves the space URL and opens it in a new tab', async () => {
+      store.select.and.returnValue(of(provider));
+      api.getSpaceUrl$.and.returnValue(of('https://plainspace.org/my-slug'));
+      const openSpy = spyOn(window, 'open');
+
+      await service.openProjectOnPlainspace('p1');
+
+      expect(api.getSpaceUrl$).toHaveBeenCalledWith(provider as never);
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://plainspace.org/my-slug',
+        '_blank',
+        'noopener,noreferrer',
+      );
+      expect(snack.open).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the project has no bound provider', async () => {
+      store.select.and.returnValue(of(undefined));
+      api.getSpaceUrl$.and.returnValue(of('x'));
+      const openSpy = spyOn(window, 'open');
+
+      await service.openProjectOnPlainspace('p1');
+
+      expect(api.getSpaceUrl$).not.toHaveBeenCalled();
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('shows an error snack when the URL cannot be resolved', async () => {
+      store.select.and.returnValue(of(provider));
+      api.getSpaceUrl$.and.returnValue(of(null));
+      const openSpy = spyOn(window, 'open');
+
+      await service.openProjectOnPlainspace('p1');
+
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(snack.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.PLAINSPACE.OPEN_FAILED,
+      });
     });
   });
 });

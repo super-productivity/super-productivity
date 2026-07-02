@@ -2860,6 +2860,7 @@
     "LOGIN_REQUIRED": "A Plainspace API token is required to share a project.",
     "NO_UNCLAIMED": "No unclaimed tasks right now.",
     "OFFLINE": "You're offline. Connecting to Plainspace needs an internet connection.",
+    "OPEN_FAILED": "Could not open the Plainspace project — check your connection and try again.",
     "OPEN_IN_PLAINSPACE": "Open in Plainspace",
     "RECURRING": "Recurring task",
     "SHARE_DESCRIPTION": "Creates a shared Plainspace space and links it to this project so you can collaborate with others.",

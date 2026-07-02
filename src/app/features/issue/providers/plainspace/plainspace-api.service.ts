@@ -46,6 +46,27 @@ export class PlainspaceApiService {
     );
   }
 
+  /**
+   * The human-facing web URL of the bound space (`{host}/{slug}`), so the project
+   * menu can open it. `cfg.spaceId` holds the project UUID (or, if the user pasted
+   * it, the slug), but the web app addresses spaces by slug — task URLs are
+   * `{origin}/{slug}/item/{id}` — so resolve the canonical slug via `/me`. Returns
+   * null when offline, the token is invalid, or the space is no longer accessible.
+   */
+  getSpaceUrl$(cfg: PlainspaceCfg): Observable<string | null> {
+    if (!cfg.host || !cfg.spaceId) {
+      return of(null);
+    }
+    return this.getMe$(cfg).pipe(
+      map((me) => {
+        const space = me?.projects.find(
+          (p) => p.id === cfg.spaceId || p.slug === cfg.spaceId,
+        );
+        return space ? `${cfg.host}/${space.slug}` : null;
+      }),
+    );
+  }
+
   /** Tasks assigned to me in this provider's space — imported as SP tasks. */
   getMyTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
     return this._http

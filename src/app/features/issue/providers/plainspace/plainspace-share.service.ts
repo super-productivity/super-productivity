@@ -13,6 +13,8 @@ import { SnackService } from '../../../../core/snack/snack.service';
 import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
 import { isOnline } from '../../../../util/is-online';
+import { IS_ELECTRON } from '../../../../app.constants';
+import { selectPlainspaceProviderForProject } from '../../store/issue-provider.selectors';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 import {
@@ -102,6 +104,32 @@ export class PlainspaceShareService {
       Log.err('Plainspace: failed to share project', { projectId });
       this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.SHARE_FAILED });
       return null;
+    }
+  }
+
+  /**
+   * Opens the bound Plainspace space's web page (in the system browser under
+   * Electron, a new tab otherwise). Resolves the space slug on demand (see
+   * {@link PlainspaceApiService.getSpaceUrl$}) and surfaces a snack if it can't be
+   * resolved (offline / revoked token). Assumes the project is shared — the menu
+   * only offers this once a provider is bound.
+   */
+  async openProjectOnPlainspace(projectId: string): Promise<void> {
+    const provider = await firstValueFrom(
+      this._store.select(selectPlainspaceProviderForProject(projectId)),
+    );
+    if (!provider) {
+      return;
+    }
+    const url = await firstValueFrom(this._plainspaceApiService.getSpaceUrl$(provider));
+    if (!url) {
+      this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.OPEN_FAILED });
+      return;
+    }
+    if (IS_ELECTRON) {
+      window.ea.openExternalUrl(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   }
 
