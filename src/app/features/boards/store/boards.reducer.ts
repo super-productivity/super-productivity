@@ -1,6 +1,6 @@
 import { createFeature, createReducer, on } from '@ngrx/store';
 import { BoardsActions } from './boards.actions';
-import { BoardCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
+import { BoardCfg } from '../boards.model';
 import { DEFAULT_BOARDS } from '../boards.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { nanoid } from 'nanoid';
@@ -44,18 +44,22 @@ export const initialBoardsState: BoardsState = {
 };
 
 /**
- * Fix for #7498: pre-existing default boards persisted to user state still
- * have the buggy filters that make tasks vanish on done-toggle. We narrowly
- * patch only panels still matching the original default IDs so customized
- * panels are never touched. Idempotent: re-running is a no-op.
+ * Fix for #7498: the default Kanban DONE column shipped with an IN_PROGRESS_TAG
+ * exclusion that hid completed tasks still carrying the tag. We narrowly patch
+ * only the default DONE panel (matched by board+panel id).
+ * Idempotent: re-running is a no-op.
+ *
+ * NOTE (#8723): this deliberately no longer reverts the Eisenhower quadrants'
+ * `taskDoneState` from UnDone → All. Because it runs on every `loadAllData`, it
+ * could not tell the old buggy default apart from a user's intentional "Not
+ * Completed" choice, so that choice reset to "All" on every restart. New
+ * installs are already covered by the relaxed `All` default in DEFAULT_BOARDS.
+ * The remaining Kanban branch has the same every-load / can't-tell-intent shape,
+ * so it is kept ONLY because re-excluding IN_PROGRESS_TAG from a Done-filtered
+ * column is not a plausible deliberate choice (unlike UnDone on Eisenhower) —
+ * not because "everyone is already migrated" (that reason is symmetric and would
+ * apply to Eisenhower too). Don't remove it via that misleading symmetry.
  */
-const EISENHOWER_PANEL_IDS = new Set([
-  'URGENT_AND_IMPORTANT',
-  'NOT_URGENT_AND_IMPORTANT',
-  'URGENT_AND_NOT_IMPORTANT',
-  'NOT_URGENT_AND_NOT_IMPORTANT',
-]);
-
 export const fixBuggyDefaultBoardFilters = (boardsState: BoardsState): BoardsState => {
   let changed = false;
 
@@ -63,20 +67,10 @@ export const fixBuggyDefaultBoardFilters = (boardsState: BoardsState): BoardsSta
     let boardChanged = false;
 
     const panels = board.panels.map((panel) => {
-      // Eisenhower quadrants: revert taskDoneState UnDone → All so completed
-      // tasks remain visible (struck through) instead of vanishing — Eisenhower
-      // has no Done column.
-      if (
-        board.id === 'EISENHOWER_MATRIX' &&
-        EISENHOWER_PANEL_IDS.has(panel.id) &&
-        panel.taskDoneState === BoardPanelCfgTaskDoneState.UnDone
-      ) {
-        boardChanged = true;
-        return { ...panel, taskDoneState: BoardPanelCfgTaskDoneState.All };
-      }
-
       // Kanban DONE column: drop the IN_PROGRESS_TAG exclusion so a completed
-      // task that still carries the tag actually lands here.
+      // task that still carries the tag actually lands here. Same latent
+      // #8723-class risk as the removed Eisenhower branch (a user who re-adds
+      // this exclusion gets it stripped on reload) — accepted, see the note above.
       if (
         board.id === 'KANBAN_DEFAULT' &&
         panel.id === 'DONE' &&

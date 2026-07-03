@@ -312,7 +312,9 @@ describe('fixBuggyDefaultBoardFilters (#7498)', () => {
     'NOT_URGENT_AND_NOT_IMPORTANT',
   ];
 
-  it('flips taskDoneState UnDone → All on the four default Eisenhower quadrants', () => {
+  // #8723: the Eisenhower taskDoneState revert used to run on every load and
+  // clobbered a user's intentional "Not Completed" (UnDone) choice back to All.
+  it('preserves an intentional UnDone taskDoneState on the Eisenhower quadrants', () => {
     const state: BoardsState = {
       boardCfgs: [
         makeBoard({
@@ -326,69 +328,10 @@ describe('fixBuggyDefaultBoardFilters (#7498)', () => {
 
     const result = fixBuggyDefaultBoardFilters(state);
 
+    expect(result).toBe(state);
     for (const panel of result.boardCfgs[0].panels) {
-      expect(panel.taskDoneState).toBe(BoardPanelCfgTaskDoneState.All);
+      expect(panel.taskDoneState).toBe(BoardPanelCfgTaskDoneState.UnDone);
     }
-  });
-
-  it('does not touch Eisenhower panels with non-default IDs (user customization)', () => {
-    const state: BoardsState = {
-      boardCfgs: [
-        makeBoard({
-          id: 'EISENHOWER_MATRIX',
-          panels: [
-            makePanel({
-              id: 'CUSTOM_PANEL',
-              taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
-            }),
-          ],
-        }),
-      ],
-    };
-
-    const result = fixBuggyDefaultBoardFilters(state);
-
-    expect(result).toBe(state);
-    expect(result.boardCfgs[0].panels[0].taskDoneState).toBe(
-      BoardPanelCfgTaskDoneState.UnDone,
-    );
-  });
-
-  it('does not touch Eisenhower panels already set to All (idempotent)', () => {
-    const state: BoardsState = {
-      boardCfgs: [
-        makeBoard({
-          id: 'EISENHOWER_MATRIX',
-          panels: eisenhowerPanelIds.map((id) =>
-            makePanel({ id, taskDoneState: BoardPanelCfgTaskDoneState.All }),
-          ),
-        }),
-      ],
-    };
-
-    const result = fixBuggyDefaultBoardFilters(state);
-
-    expect(result).toBe(state);
-  });
-
-  it('does not touch a Done-state Eisenhower panel (user-added Done quadrant)', () => {
-    const state: BoardsState = {
-      boardCfgs: [
-        makeBoard({
-          id: 'EISENHOWER_MATRIX',
-          panels: [
-            makePanel({
-              id: 'URGENT_AND_IMPORTANT',
-              taskDoneState: BoardPanelCfgTaskDoneState.Done,
-            }),
-          ],
-        }),
-      ],
-    };
-
-    const result = fixBuggyDefaultBoardFilters(state);
-
-    expect(result).toBe(state);
   });
 
   it('strips IN_PROGRESS_TAG from the Kanban DONE panel excludedTagIds', () => {
@@ -441,7 +384,7 @@ describe('fixBuggyDefaultBoardFilters (#7498)', () => {
     expect(result).toBe(state);
   });
 
-  it('migrates both Eisenhower and Kanban defaults in one pass', () => {
+  it('migrates the Kanban default while leaving an Eisenhower UnDone choice intact', () => {
     const state: BoardsState = {
       boardCfgs: [
         makeBoard({
@@ -468,8 +411,33 @@ describe('fixBuggyDefaultBoardFilters (#7498)', () => {
     const result = fixBuggyDefaultBoardFilters(state);
 
     expect(result.boardCfgs[0].panels[0].taskDoneState).toBe(
-      BoardPanelCfgTaskDoneState.All,
+      BoardPanelCfgTaskDoneState.UnDone,
     );
     expect(result.boardCfgs[1].panels[0].excludedTagIds).toEqual([]);
+  });
+});
+
+describe('Boards Reducer - loadAllData preserves Eisenhower taskDoneState (#8723)', () => {
+  it('keeps a user-set "Not Completed" (UnDone) quadrant across a reload', () => {
+    const stored: BoardsState = {
+      boardCfgs: [
+        makeBoard({
+          id: 'EISENHOWER_MATRIX',
+          panels: [
+            makePanel({
+              id: 'URGENT_AND_IMPORTANT',
+              taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+            }),
+          ],
+        }),
+      ],
+    };
+    const appDataComplete = { boards: stored } as unknown as AppDataComplete;
+
+    const result = boardsReducer({ boardCfgs: [] }, loadAllData({ appDataComplete }));
+
+    expect(result.boardCfgs[0].panels[0].taskDoneState).toBe(
+      BoardPanelCfgTaskDoneState.UnDone,
+    );
   });
 });
