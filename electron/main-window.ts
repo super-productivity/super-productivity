@@ -566,11 +566,11 @@ function createMenu(quitApp: () => void): void {
   // Create application menu to enable copy & pasting on MacOS
   const menuTpl: MenuItemConstructorOptions[] = [
     {
-      label: 'Application',
+      label: 'Super Productivity',
       submenu: [
-        { role: 'about' },
+        { role: 'about', label: 'About Super Productivity' },
         { type: 'separator' },
-        { role: 'hide' },
+        { role: 'hide', label: 'Hide Super Productivity' },
         { role: 'hideOthers' },
         { role: 'unhide' },
         { type: 'separator' },
