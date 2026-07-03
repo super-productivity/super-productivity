@@ -1,9 +1,6 @@
 import { Action } from '@ngrx/store';
-import { bulkHydrationMetaReducer } from './bulk-hydration.meta-reducer';
-import {
-  bulkApplyHydrationOperations,
-  bulkApplyOperations,
-} from './bulk-hydration.action';
+import { bulkOperationsMetaReducer } from './bulk-hydration.meta-reducer';
+import { bulkApplyOperations } from './bulk-hydration.action';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { RootState } from '../../root-store/root-state';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
@@ -18,7 +15,7 @@ import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 // These tests take 1-2 seconds each and are skipped by default to speed up test runs
 const RUN_STRESS_TESTS = false;
 
-describe('bulkHydrationMetaReducer', () => {
+describe('bulkOperationsMetaReducer', () => {
   // Helper to conditionally run stress tests
   const stressTest = RUN_STRESS_TESTS ? it : xit;
 
@@ -185,7 +182,7 @@ describe('bulkHydrationMetaReducer', () => {
 
   describe('non-bulk actions', () => {
     it('should pass through non-bulk actions unchanged', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const action = { type: '[Task] Update Task', task: { id: TASK_ID, changes: {} } };
 
@@ -195,7 +192,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should pass through other action types', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const action = { type: '[Project] Add Project', project: { id: 'proj-1' } };
 
@@ -205,14 +202,14 @@ describe('bulkHydrationMetaReducer', () => {
     });
   });
 
-  describe('bulkApplyHydrationOperations action', () => {
+  describe('bulkApplyOperations action', () => {
     it('should apply single operation correctly', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operation = createMockOperation({
         payload: { task: { id: TASK_ID, changes: { title: 'New Title' } } },
       });
-      const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const action = bulkApplyOperations({ operations: [operation] });
 
       const result = reducer(state, action);
 
@@ -226,7 +223,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should apply multiple operations in sequence', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operations = [
         createMockOperation({
@@ -242,7 +239,7 @@ describe('bulkHydrationMetaReducer', () => {
           payload: { task: { id: TASK_ID, changes: { title: 'Third Update' } } },
         }),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       const result = reducer(state, action);
 
@@ -255,9 +252,9 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should handle empty operations array', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
-      const action = bulkApplyHydrationOperations({ operations: [] });
+      const action = bulkApplyOperations({ operations: [] });
 
       const result = reducer(state, action);
 
@@ -267,7 +264,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should pass state through reducer chain for each operation', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operations = [
         createMockOperation({
@@ -279,7 +276,7 @@ describe('bulkHydrationMetaReducer', () => {
           payload: { task: { id: TASK_ID, changes: { title: 'Update 2' } } },
         }),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -294,10 +291,10 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should add isRemote: true meta to converted actions', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operation = createMockOperation();
-      const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const action = bulkApplyOperations({ operations: [operation] });
 
       reducer(state, action);
 
@@ -306,7 +303,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should tag isApplyingFromOtherClient when op.clientId differs from localClientId', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operation = createMockOperation({ clientId: 'otherClient' });
       const action = bulkApplyOperations({
@@ -323,7 +320,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should NOT tag isApplyingFromOtherClient for own-op replay (clientId === localClientId)', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operation = createMockOperation({ clientId: 'thisClient' });
       const action = bulkApplyOperations({
@@ -340,7 +337,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should NOT tag isApplyingFromOtherClient when localClientId is unknown', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operation = createMockOperation({ clientId: 'otherClient' });
       // No localClientId on the action → cannot tell own from foreign; default to
@@ -356,7 +353,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should handle Create operations', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const newTask = createMockTask({ id: TASK_ID_2, title: 'New Task' });
       const operation = createMockOperation({
@@ -366,7 +363,7 @@ describe('bulkHydrationMetaReducer', () => {
         actionType: '[Task] Add Task' as ActionType,
         payload: { task: newTask },
       });
-      const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const action = bulkApplyOperations({ operations: [operation] });
 
       const result = reducer(state, action);
 
@@ -377,7 +374,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should apply 500+ operations efficiently', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // Create 500 operations
@@ -390,7 +387,7 @@ describe('bulkHydrationMetaReducer', () => {
           }),
         );
       }
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       const startTime = performance.now();
       const result = reducer(state, action);
@@ -410,7 +407,7 @@ describe('bulkHydrationMetaReducer', () => {
     /**
      * Stress test: 10,000+ operations
      *
-     * This test validates that the bulk hydration system can handle extremely
+     * This test validates that the bulk operations system can handle extremely
      * large operation batches without:
      * - Blocking the main thread for too long
      * - Causing memory issues
@@ -423,7 +420,7 @@ describe('bulkHydrationMetaReducer', () => {
     stressTest(
       'should handle 10,000+ operations without blocking main thread for too long',
       () => {
-        const reducer = bulkHydrationMetaReducer(mockReducer);
+        const reducer = bulkOperationsMetaReducer(mockReducer);
         const state = createMockState();
 
         // Create 10,000 operations - mix of different types for realistic scenario
@@ -452,7 +449,7 @@ describe('bulkHydrationMetaReducer', () => {
             );
           }
         }
-        const action = bulkApplyHydrationOperations({ operations });
+        const action = bulkApplyOperations({ operations });
 
         const startTime = performance.now();
         const result = reducer(state, action);
@@ -485,7 +482,7 @@ describe('bulkHydrationMetaReducer', () => {
     stressTest(
       'should maintain O(n) performance - 20k ops should take ~2x 10k ops',
       () => {
-        const reducer = bulkHydrationMetaReducer(mockReducer);
+        const reducer = bulkOperationsMetaReducer(mockReducer);
 
         // Measure 5k ops
         const state5k = createMockState();
@@ -500,7 +497,7 @@ describe('bulkHydrationMetaReducer', () => {
         }
 
         const start5k = performance.now();
-        reducer(state5k, bulkApplyHydrationOperations({ operations: ops5k }));
+        reducer(state5k, bulkApplyOperations({ operations: ops5k }));
         const time5k = performance.now() - start5k;
 
         // Reset mock
@@ -519,7 +516,7 @@ describe('bulkHydrationMetaReducer', () => {
         }
 
         const start20k = performance.now();
-        reducer(state20k, bulkApplyHydrationOperations({ operations: ops20k }));
+        reducer(state20k, bulkApplyOperations({ operations: ops20k }));
         const time20k = performance.now() - start20k;
 
         console.log(
@@ -537,9 +534,9 @@ describe('bulkHydrationMetaReducer', () => {
 
   describe('undefined state handling', () => {
     it('should handle undefined state for bulk action', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const operation = createMockOperation();
-      const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const action = bulkApplyOperations({ operations: [operation] });
 
       // Should not throw
       expect(() => reducer(undefined, action)).not.toThrow();
@@ -547,7 +544,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should handle undefined state for non-bulk action', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const action = { type: '[Task] Some Action' };
 
       reducer(undefined, action);
@@ -558,7 +555,7 @@ describe('bulkHydrationMetaReducer', () => {
 
   describe('action type preservation', () => {
     it('should preserve operation action types through conversion', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const operations = [
         createMockOperation({
@@ -571,7 +568,7 @@ describe('bulkHydrationMetaReducer', () => {
           opType: OpType.Delete,
         }),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -585,10 +582,10 @@ describe('bulkHydrationMetaReducer', () => {
       const errorReducer = jasmine
         .createSpy('errorReducer')
         .and.throwError('Reducer error');
-      const reducer = bulkHydrationMetaReducer(errorReducer);
+      const reducer = bulkOperationsMetaReducer(errorReducer);
       const state = createMockState();
       const operation = createMockOperation();
-      const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const action = bulkApplyOperations({ operations: [operation] });
 
       expect(() => reducer(state, action)).toThrowError('Reducer error');
     });
@@ -602,14 +599,14 @@ describe('bulkHydrationMetaReducer', () => {
         }
         return createMockState();
       });
-      const reducer = bulkHydrationMetaReducer(errorReducer);
+      const reducer = bulkOperationsMetaReducer(errorReducer);
       const state = createMockState();
       const operations = [
         createMockOperation({ id: 'op-1' }),
         createMockOperation({ id: 'op-2' }),
         createMockOperation({ id: 'op-3' }),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       expect(() => reducer(state, action)).toThrowError('Second operation failed');
       // Should have called reducer twice (second call threw)
@@ -648,11 +645,11 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
     it('should skip LWW Update for entity archived in same batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const operations = [createMoveToArchiveOp([TASK_ID]), createLwwUpdateOp(TASK_ID)];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -662,12 +659,12 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should apply LWW Update for non-archived entity normally', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // Archive task-1, LWW Update targets task-2 (different entity)
       const operations = [createMoveToArchiveOp([TASK_ID]), createLwwUpdateOp(TASK_ID_2)];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -676,11 +673,11 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should NOT skip moveToArchive op itself', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const operations = [createMoveToArchiveOp([TASK_ID])];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -689,7 +686,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should apply non-LWW-Update ops for archived entities normally', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // Archive task-1, then a regular Update for task-1 (not LWW Update)
@@ -702,7 +699,7 @@ describe('bulkHydrationMetaReducer', () => {
         payload: { task: { id: TASK_ID, changes: { title: 'Regular Update' } } },
       });
       const operations = [createMoveToArchiveOp([TASK_ID]), regularUpdate];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -711,12 +708,12 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should skip LWW Update even when it appears BEFORE moveToArchive in the batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // LWW Update comes first, moveToArchive comes second — pre-scan should still catch it
       const operations = [createLwwUpdateOp(TASK_ID), createMoveToArchiveOp([TASK_ID])];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -726,7 +723,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should skip multiple LWW Updates when multi-entity archive is in same batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // Archive both task1 and task2, plus LWW Updates for each
@@ -735,7 +732,7 @@ describe('bulkHydrationMetaReducer', () => {
         createLwwUpdateOp(TASK_ID),
         createLwwUpdateOp(TASK_ID_2),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -745,7 +742,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should skip LWW Update for entity deleted (not archived) in same batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const deleteOp = createMockOperation({
@@ -763,7 +760,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [deleteOp, createLwwUpdateOp(TASK_ID)];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -773,7 +770,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should skip LWW Update for entity in deleteTasks (TASK_SHARED_DELETE_MULTIPLE) batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const deleteMultipleOp = createMockOperation({
@@ -794,7 +791,7 @@ describe('bulkHydrationMetaReducer', () => {
         createLwwUpdateOp(TASK_ID),
         createLwwUpdateOp(TASK_ID_2),
       ];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -804,7 +801,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('should filter using entityId fallback when entityIds array is missing', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       // Archive op with only entityId, no entityIds — fallback should still filter
@@ -823,7 +820,7 @@ describe('bulkHydrationMetaReducer', () => {
       delete (archiveOpEntityIdOnly as any).entityIds;
 
       const operations = [archiveOpEntityIdOnly, createLwwUpdateOp(TASK_ID)];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -866,7 +863,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
     it('strips archiving task IDs from a TAG LWW Update taskIds payload', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const tagLwwOp = createMockOperation({
@@ -886,7 +883,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [tagLwwOp, archiveOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -902,7 +899,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('strips archiving task IDs from a PROJECT LWW Update taskIds + backlogTaskIds', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const projectLwwOp = createMockOperation({
@@ -921,7 +918,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [projectLwwOp, archiveOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -937,7 +934,7 @@ describe('bulkHydrationMetaReducer', () => {
     // explicitly: if a future refactor moved Set-collection into the apply
     // loop, this case would regress.
     it('also strips when the archive op precedes the TAG LWW Update in the batch', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const tagLwwOp = createMockOperation({
@@ -957,7 +954,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [archiveOp, tagLwwOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -970,7 +967,7 @@ describe('bulkHydrationMetaReducer', () => {
     // reducer cascades to subtasks via taskIdsToArchive = [t.id, ...t.subTasks.map(st => st.id)].
     // The pre-scan must harvest subtask IDs from the archive payload too.
     it('strips subtask IDs (cascade) referenced by a TAG LWW Update', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const SUB_TASK_ID = 'sub-task-1';
@@ -1013,7 +1010,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [tagLwwOp, archiveOpWithSubtasks];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1024,7 +1021,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('strips state-derived orphan subtask IDs when moveToArchive payload omits subtasks', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const SUB_TASK_ID = 'state-only-sub-of-archived';
       const state = {
         ...createMockState(),
@@ -1070,7 +1067,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [tagLwwOp, archiveOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1080,7 +1077,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('strips subtask IDs created earlier in the same batch before a stale moveToArchive', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
       const SUB_TASK_ID = 'same-batch-created-sub';
 
@@ -1114,7 +1111,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [taskLwwOp, tagLwwOp, archiveOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1128,7 +1125,7 @@ describe('bulkHydrationMetaReducer', () => {
     // pre-scan must do the same — otherwise a co-batched TAG/PROJECT LWW
     // Update can retain subtask IDs deleted by the bulk delete.
     it('strips subtask IDs (cascade) when a deleteTasks op references parents with subtasks via state lookup', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const SUB_TASK_ID = 'sub-of-bulk-deleted';
       const state = {
         ...createMockState(),
@@ -1182,7 +1179,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [tagLwwOp, deleteMultipleOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1193,7 +1190,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('does not strip state-only orphan subtask IDs for deleteTasks because that reducer does not remove them', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const SUB_TASK_ID = 'state-only-sub-of-bulk-deleted';
       const state = {
         ...createMockState(),
@@ -1248,7 +1245,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [tagLwwOp, deleteMultipleOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1261,7 +1258,7 @@ describe('bulkHydrationMetaReducer', () => {
     // entries (type violations from a malformed remote payload) must not be
     // preserved verbatim into the consumer reducer.
     it('drops non-string ids from a TAG LWW Update taskIds payload', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const tagLwwOp = createMockOperation({
@@ -1281,7 +1278,7 @@ describe('bulkHydrationMetaReducer', () => {
       const archiveOp = createMoveToArchiveOp([TASK_ID]);
 
       const operations = [tagLwwOp, archiveOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1296,7 +1293,7 @@ describe('bulkHydrationMetaReducer', () => {
     // cascades to subtasks, so subtask IDs must be stripped from co-batched
     // TAG/PROJECT LWW Update payloads.
     it('strips subtask IDs (cascade) when a deleteTask op carries subtasks', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const state = createMockState();
 
       const SUB_TASK_ID = 'sub-of-deleted';
@@ -1334,7 +1331,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [tagLwwOp, deleteOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 
@@ -1344,7 +1341,7 @@ describe('bulkHydrationMetaReducer', () => {
     });
 
     it('strips state-derived orphan subtask IDs when deleteTask payload omits subtasks', () => {
-      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const reducer = bulkOperationsMetaReducer(mockReducer);
       const SUB_TASK_ID = 'state-only-sub-of-deleted';
       const state = {
         ...createMockState(),
@@ -1404,7 +1401,7 @@ describe('bulkHydrationMetaReducer', () => {
       });
 
       const operations = [tagLwwOp, deleteOp];
-      const action = bulkApplyHydrationOperations({ operations });
+      const action = bulkApplyOperations({ operations });
 
       reducer(state, action);
 

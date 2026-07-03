@@ -3,7 +3,7 @@ import {
   FULL_STATE_OP_TYPES,
   isFullStateOpType,
   isWrappedFullStatePayload,
-  extractFullStateFromPayload,
+  normalizeFullStatePayload,
   assertValidFullStatePayload,
 } from './operation.types';
 
@@ -78,22 +78,36 @@ describe('operation.types full-state payload utilities', () => {
     });
   });
 
-  describe('extractFullStateFromPayload', () => {
+  describe('normalizeFullStatePayload', () => {
     it('should unwrap wrapped payload format', () => {
       const wrapped = { appDataComplete: validState };
-      const result = extractFullStateFromPayload(wrapped);
+      const result = normalizeFullStatePayload(wrapped, 'unwrapped');
       expect(result).toEqual(validState);
     });
 
     it('should return unwrapped payload as-is', () => {
-      const result = extractFullStateFromPayload(validState);
+      const result = normalizeFullStatePayload(validState, 'unwrapped');
       expect(result).toEqual(validState);
+    });
+
+    it('should wrap unwrapped payload format', () => {
+      const result = normalizeFullStatePayload(validState, 'wrapped');
+
+      expect(result).toEqual({ appDataComplete: validState });
+    });
+
+    it('should preserve wrapped payload format without double wrapping', () => {
+      const wrapped = { appDataComplete: validState };
+      const result = normalizeFullStatePayload(wrapped, 'wrapped');
+
+      expect(result).toEqual(wrapped);
+      expect(result.appDataComplete).toBe(validState);
     });
 
     it('should handle deeply nested appDataComplete correctly', () => {
       // This is the bug case: wrapped payload with state that also has some key
       const wrapped = { appDataComplete: validState };
-      const result = extractFullStateFromPayload(wrapped);
+      const result = normalizeFullStatePayload(wrapped, 'unwrapped');
 
       // Should have task, project, tag, globalConfig at top level
       expect('task' in result).toBe(true);
@@ -165,8 +179,8 @@ describe('operation.types full-state payload utilities', () => {
       // This is what SyncHydrationService and fixed BackupService produce
       const unwrappedPayload = validState;
 
-      // extractFullStateFromPayload should return it as-is
-      const extracted = extractFullStateFromPayload(unwrappedPayload);
+      // normalizeFullStatePayload should return it as-is
+      const extracted = normalizeFullStatePayload(unwrappedPayload, 'unwrapped');
       expect(extracted).toEqual(validState);
 
       // Validation should pass
@@ -174,11 +188,11 @@ describe('operation.types full-state payload utilities', () => {
     });
 
     it('should still handle legacy wrapped format for backwards compatibility', () => {
-      // Old BackupService format - should still work via extractFullStateFromPayload
+      // Old BackupService format - should still work via normalizeFullStatePayload
       const wrappedPayload = { appDataComplete: validState };
 
-      // extractFullStateFromPayload should unwrap it
-      const extracted = extractFullStateFromPayload(wrappedPayload);
+      // normalizeFullStatePayload should unwrap it
+      const extracted = normalizeFullStatePayload(wrappedPayload, 'unwrapped');
       expect(extracted).toEqual(validState);
 
       // Validation should pass

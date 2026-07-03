@@ -24,7 +24,7 @@ import { OpLog } from '../../core/log';
  *
  * ## Caching
  * Wrapped adapters are cached per provider ID to avoid recreating them on every sync.
- * Call `clearCache()` when encryption settings change to force adapter recreation.
+ * Provider config changes automatically invalidate the cache.
  *
  * @example
  * ```typescript
@@ -117,15 +117,5 @@ export class WrappedProviderService {
     const adapter = this._fileBasedAdapter.createAdapter(provider, cfg, encryptKey);
     this._cache.set(provider.id, adapter);
     return adapter;
-  }
-
-  /**
-   * Clears the adapter cache.
-   * @deprecated Cache is now auto-invalidated when provider config changes via SyncProviderManager.
-   * Kept as an escape hatch for edge cases.
-   */
-  clearCache(): void {
-    this._cache.clear();
-    OpLog.normal('WrappedProviderService: Cache cleared');
   }
 }

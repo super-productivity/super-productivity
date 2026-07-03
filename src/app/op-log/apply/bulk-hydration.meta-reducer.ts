@@ -115,8 +115,3 @@ export const bulkOperationsMetaReducer = <T>(
     return reducer(state, action);
   };
 };
-
-/**
- * @deprecated Use bulkOperationsMetaReducer instead. Kept for backwards compatibility.
- */
-export const bulkHydrationMetaReducer = bulkOperationsMetaReducer;

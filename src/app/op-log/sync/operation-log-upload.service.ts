@@ -10,7 +10,7 @@ import {
   OperationLogEntry,
   OpType,
   FULL_STATE_OP_TYPES,
-  extractFullStateFromPayload,
+  normalizeFullStatePayload,
   assertValidFullStatePayload,
   ActionType,
 } from '../core/operation.types';
@@ -530,7 +530,7 @@ export class OperationLogUploadService {
     // Extract state from payload, handling both wrapped and unwrapped formats.
     // Uses shared utility to ensure consistent handling across the codebase.
     let state: unknown = stripLocalOnlySyncSettingsFromAppData(
-      extractFullStateFromPayload(op.payload),
+      normalizeFullStatePayload(op.payload, 'unwrapped'),
     );
 
     // Validate the payload structure before uploading to catch bugs early.
