@@ -101,6 +101,24 @@ const isPrivateIp = (hostname: string): boolean => {
 
 export interface PluginHttpHelperOpts {
   allowPrivateNetwork?: boolean;
+  /**
+   * Refuse to follow HTTP redirects (executes via `fetch` with
+   * `redirect: 'error'`). Set for `PluginAPI.request`: only the initial URL is
+   * allowlist/SSRF-checked, and `HttpClient`/XHR would auto-follow a 3xx to an
+   * unchecked host (e.g. a declared host bouncing to a private/metadata IP).
+   * Blocking redirects closes that SSRF-escalation hole. Default false, so
+   * issue-provider HTTP keeps its existing `HttpClient` behavior unchanged.
+   *
+   * Notes:
+   * - Blocks ALL redirects, including benign same-host ones (http→https,
+   *   trailing-slash). APIs that rely on redirects must be called at their
+   *   final URL. (Manual per-hop re-validation isn't possible on the web:
+   *   cross-origin `Location` is opaque to `fetch`.)
+   * - Web/desktop only. On native (Capacitor), `CapacitorHttp` patches `fetch`
+   *   and ignores `redirect`/`signal`, so the caller falls back to the
+   *   `HttpClient` path there; native retains the documented redirect limitation.
+   */
+  blockRedirects?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -114,13 +132,22 @@ export class PluginHttpService {
     opts?: PluginHttpHelperOpts,
   ): PluginHttp {
     const allowPrivateNetwork = opts?.allowPrivateNetwork ?? false;
+    const blockRedirects = opts?.blockRedirects ?? false;
     const doRequest = <T>(
       method: string,
       url: string,
       body?: unknown,
       options?: PluginHttpOptions,
     ): Promise<T> =>
-      this._request<T>(method, url, body, options, getHeaders, allowPrivateNetwork);
+      this._request<T>(
+        method,
+        url,
+        body,
+        options,
+        getHeaders,
+        allowPrivateNetwork,
+        blockRedirects,
+      );
     return {
       get: <T>(url: string, options?: PluginHttpOptions) =>
         doRequest<T>('GET', url, undefined, options),
@@ -148,6 +175,7 @@ export class PluginHttpService {
     options: PluginHttpOptions | undefined,
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
     allowPrivateNetwork: boolean,
+    blockRedirects: boolean,
   ): Promise<T> {
     const upperMethod = method.toUpperCase();
     if (!ALLOWED_HTTP_METHODS.has(upperMethod)) {
@@ -157,6 +185,17 @@ export class PluginHttpService {
 
     const authHeaders = await Promise.resolve(getHeaders());
     const mergedHeaders = { ...options?.headers, ...authHeaders };
+
+    // Redirect-blocking path (PluginAPI.request): only the initial URL was
+    // allowlist/SSRF-checked above, so a followed 3xx would reach an unchecked
+    // host. fetch(redirect:'error') rejects on any redirect instead of chasing
+    // it. Web/desktop only: on native, Capacitor's CapacitorHttp patches fetch
+    // and ignores `redirect`/`signal`, so we fall through to the HttpClient path
+    // (still bounded by the rxjs timeout below). Native keeps the documented
+    // redirect limitation — no worse than before this option existed.
+    if (blockRedirects && !this._isNativePlatform) {
+      return this._requestNoRedirect<T>(upperMethod, url, body, options, mergedHeaders);
+    }
 
     // On-device, route WebDAV/CalDAV verbs through the native OkHttp/URLSession
     // executor — Capacitor's CapacitorHttp would otherwise reject them via
@@ -255,6 +294,113 @@ export class PluginHttpService {
       }
     }
     return res.data as T;
+  }
+
+  /**
+   * Execute via `fetch` with `redirect: 'error'` so a 3xx is refused rather than
+   * followed to an unchecked host. Reproduces the `HttpClient` contract callers
+   * depend on: query params, timeout (via `AbortController`), text/json parsing,
+   * and — critically — a non-2xx rejects with an error carrying `.status` and
+   * `.error` (the parsed body), matching `HttpErrorResponse`.
+   */
+  private async _requestNoRedirect<T>(
+    method: string,
+    url: string,
+    body: unknown,
+    options: PluginHttpOptions | undefined,
+    headers: Record<string, string>,
+  ): Promise<T> {
+    let finalUrl = url;
+    if (options?.params && Object.keys(options.params).length) {
+      const withParams = new URL(url);
+      for (const [k, v] of Object.entries(options.params)) {
+        withParams.searchParams.set(k, v);
+      }
+      finalUrl = withParams.toString();
+    }
+
+    const timeoutMs = Math.min(
+      Math.max(options?.timeout ?? DEFAULT_TIMEOUT, MIN_TIMEOUT),
+      MAX_TIMEOUT,
+    );
+    const isText = options?.responseType === 'text';
+
+    // Only JSON-serialize plain objects/arrays. fetch handles string / FormData /
+    // Blob / URLSearchParams / ArrayBuffer(View) bodies natively — stringifying
+    // those would corrupt them (a regression vs the HttpClient path).
+    const isStructuredBody =
+      typeof body === 'string' ||
+      body instanceof FormData ||
+      body instanceof Blob ||
+      body instanceof URLSearchParams ||
+      body instanceof ArrayBuffer ||
+      ArrayBuffer.isView(body);
+    const isJsonBody = body != null && !isStructuredBody;
+    const requestBody: BodyInit | undefined =
+      body == null ? undefined : isJsonBody ? JSON.stringify(body) : (body as BodyInit);
+
+    // HttpClient auto-sets Content-Type: application/json for object bodies; fetch
+    // does not, so mirror it (only for the JSON case, and without clobbering a
+    // caller-supplied content type — never for FormData/Blob/etc).
+    const outHeaders: Record<string, string> = { ...headers };
+    if (
+      isJsonBody &&
+      !Object.keys(outHeaders).some((h) => h.toLowerCase() === 'content-type')
+    ) {
+      outHeaders['Content-Type'] = 'application/json';
+    }
+
+    // The timer must cover the whole exchange, including the body read — clearing
+    // it as soon as headers arrive would let a slow-drip body stall forever.
+    // Aborting also cancels an in-flight body read.
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    let res: Response;
+    let rawText: string;
+    try {
+      res = await fetch(finalUrl, {
+        method,
+        headers: outHeaders,
+        body: requestBody,
+        redirect: 'error',
+        signal: controller.signal,
+      });
+      rawText = await res.text();
+    } catch (e) {
+      // A refused redirect (redirect:'error') and a genuine network failure both
+      // surface as a TypeError here; a timeout surfaces as an abort. Fail closed
+      // either way — a redirect is never silently followed.
+      if (timedOut) {
+        throw new Error(`[PluginHttp] request timed out after ${timeoutMs}ms`);
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`[PluginHttp] request failed: ${msg}`);
+    } finally {
+      clearTimeout(timer);
+    }
+
+    let parsed: unknown = rawText;
+    if (!isText) {
+      try {
+        parsed = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        parsed = rawText;
+      }
+    }
+
+    if (res.status < 200 || res.status >= 300) {
+      throw Object.assign(
+        new Error(`[PluginHttp] Request failed with status ${res.status}`),
+        { status: res.status, error: parsed },
+      );
+    }
+
+    return parsed as T;
   }
 
   private _validateUrl(url: string, allowPrivateNetwork: boolean): void {

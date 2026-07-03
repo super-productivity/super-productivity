@@ -526,7 +526,7 @@ export class PluginBridgeService implements OnDestroy {
       : undefined;
 
     return this._pluginHttpService
-      .createHttpHelper(() => ({}))
+      .createHttpHelper(() => ({}), { blockRedirects: true })
       .request<T>(method, url, body, requestOptions);
   }
 

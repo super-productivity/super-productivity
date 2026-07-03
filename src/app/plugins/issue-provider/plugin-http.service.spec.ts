@@ -284,3 +284,203 @@ describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () =
     expect(nativeHttp).not.toHaveBeenCalled();
   });
 });
+
+describe('PluginHttpService - blockRedirects (PluginAPI.request path)', () => {
+  let service: PluginHttpService;
+  let httpMock: HttpTestingController;
+  let fetchSpy: jasmine.Spy<typeof fetch>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PluginHttpService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PluginHttpService);
+    httpMock = TestBed.inject(HttpTestingController);
+    fetchSpy = spyOn(window, 'fetch');
+  });
+
+  afterEach(() => httpMock.verify());
+
+  const noopHeaders = (): Record<string, string> => ({});
+  const initOf = (): RequestInit => fetchSpy.calls.mostRecent().args[1] as RequestInit;
+
+  it('executes via fetch with redirect:"error" (never HttpClient)', async () => {
+    fetchSpy.and.resolveTo(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    const result = await http.get<{ ok: boolean }>('https://api.example.com/data');
+
+    expect(result).toEqual({ ok: true });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.calls.mostRecent().args[0]).toBe('https://api.example.com/data');
+    expect(initOf().redirect).toBe('error');
+    expect(initOf().signal).toBeTruthy();
+    httpMock.expectNone(() => true);
+  });
+
+  it('fails closed when a redirect is refused (fetch rejects)', async () => {
+    // redirect:'error' makes the browser reject a 3xx before it is followed.
+    fetchSpy.and.rejectWith(new TypeError('Failed to fetch'));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await expectAsync(http.get('https://api.example.com/x')).toBeRejectedWithError(
+      /request failed/,
+    );
+  });
+
+  it('re-runs URL/SSRF validation before fetching (blocks metadata IP, no fetch)', async () => {
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await expectAsync(
+      http.get('https://169.254.169.254/latest/meta-data/'),
+    ).toBeRejectedWithError(/cloud metadata endpoints/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-2xx with an error carrying .status and .error (HttpErrorResponse parity)', async () => {
+    fetchSpy.and.resolveTo(
+      new Response(JSON.stringify({ message: 'nope' }), { status: 429 }),
+    );
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await expectAsync(http.get('https://api.example.com/x')).toBeRejectedWith(
+      jasmine.objectContaining({ status: 429, error: { message: 'nope' } }),
+    );
+  });
+
+  it('sends method, JSON-serialized body, and merged headers', async () => {
+    fetchSpy.and.resolveTo(new Response('', { status: 201 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await http.post(
+      'https://api.example.com/entries',
+      { hours: '1.50' },
+      { headers: { Authorization: 'Bearer plugin-token' } },
+    );
+
+    const init = initOf();
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ hours: '1.50' }));
+    expect((init.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer plugin-token',
+    );
+  });
+
+  it('auto-sets Content-Type: application/json for object bodies (HttpClient parity)', async () => {
+    fetchSpy.and.resolveTo(new Response('', { status: 201 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await http.post('https://api.example.com/entries', { a: 1 });
+
+    expect((initOf().headers as Record<string, string>)['Content-Type']).toBe(
+      'application/json',
+    );
+  });
+
+  it('does not override a caller-supplied content type (case-insensitive)', async () => {
+    fetchSpy.and.resolveTo(new Response('', { status: 201 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+    // Bracket-assigned to keep the hyphenated header name out of an object literal.
+    const callerHeaders: Record<string, string> = {};
+    callerHeaders['content-type'] = 'application/vnd.api+json';
+
+    await http.post(
+      'https://api.example.com/entries',
+      { a: 1 },
+      { headers: callerHeaders },
+    );
+
+    const headers = initOf().headers as Record<string, string>;
+    expect(headers['content-type']).toBe('application/vnd.api+json');
+    // No duplicate canonical-case key was injected.
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+
+  it('passes FormData/URLSearchParams bodies through unserialized (no forced JSON)', async () => {
+    fetchSpy.and.resolveTo(new Response('', { status: 201 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+    const form = new URLSearchParams({ a: '1' });
+
+    await http.post('https://api.example.com/entries', form);
+
+    const init = initOf();
+    // Not JSON.stringify'd, and no application/json forced (fetch sets the type).
+    expect(init.body).toBe(form);
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
+  it('appends query params and returns text for responseType:text', async () => {
+    fetchSpy.and.resolveTo(new Response('plain-text', { status: 200 }));
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    const result = await http.get<string>('https://api.example.com/data', {
+      params: { q: 'x' },
+      responseType: 'text',
+    });
+
+    expect(result).toBe('plain-text');
+    expect(fetchSpy.calls.mostRecent().args[0]).toBe('https://api.example.com/data?q=x');
+  });
+
+  it('times out (aborts) if the exchange exceeds the deadline', async () => {
+    // Real timer (no fake clock — it would race with the getHeaders await and
+    // leak into other specs). timeout:1 is clamped up to MIN_TIMEOUT (1000ms),
+    // still well under jasmine's 2000ms default. The fetch only settles when its
+    // abort signal fires, so the deadline is what rejects it.
+    fetchSpy.and.callFake(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+    const http = service.createHttpHelper(noopHeaders, { blockRedirects: true });
+
+    await expectAsync(
+      http.get('https://api.example.com/slow', { timeout: 1 }),
+    ).toBeRejectedWithError(/timed out/);
+  });
+
+  it('does NOT use fetch when blockRedirects is off (issue-provider path unchanged)', async () => {
+    const http = service.createHttpHelper(noopHeaders);
+    const promise = http.get('https://api.example.com/data');
+    await new Promise((r) => setTimeout(r, 0));
+    const req = httpMock.expectOne('https://api.example.com/data');
+    req.flush({ ok: true });
+    await expectAsync(promise).toBeResolved();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('PluginHttpService - blockRedirects falls back to HttpClient on native', () => {
+  let service: PluginHttpService;
+  let httpMock: HttpTestingController;
+  let fetchSpy: jasmine.Spy<typeof fetch>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PluginHttpService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PLUGIN_HTTP_IS_NATIVE, useValue: true },
+      ],
+    });
+    service = TestBed.inject(PluginHttpService);
+    httpMock = TestBed.inject(HttpTestingController);
+    fetchSpy = spyOn(window, 'fetch');
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('uses HttpClient (not fetch) on native, since CapacitorHttp ignores redirect:error', async () => {
+    const http = service.createHttpHelper(() => ({}), { blockRedirects: true });
+    const promise = http.get('https://api.example.com/data');
+    await new Promise((r) => setTimeout(r, 0));
+    const req = httpMock.expectOne('https://api.example.com/data');
+    req.flush({ ok: true });
+    await expectAsync(promise).toBeResolved();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
