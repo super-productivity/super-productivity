@@ -1204,6 +1204,7 @@
       },
       "B": {
         "CONTENT_CONFLICT_RESOLVED": "Conflicting edits to {{taskList}} were auto-resolved by keeping the most recent version. Older edits may have been discarded — please double-check.",
+        "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}} (discarded: {{discarded}})",
         "CONTENT_CONFLICT_UNTITLED": "Untitled task"
       },
       "BTN_RESTORE_FROM_HISTORY": "Restore from History",

@@ -70,7 +70,13 @@ describe('findLwwContentConflicts', () => {
       payloadKeyFor,
     );
 
-    expect(result).toEqual([{ entityId: 'task-1', discardedFields: ['title'] }]);
+    expect(result).toEqual([
+      {
+        entityId: 'task-1',
+        discardedFields: ['title'],
+        discardedTitle: 'My local title',
+      },
+    ]);
   });
 
   it('classifies a discarded scheduling edit as routine (no content conflict)', () => {
@@ -216,7 +222,9 @@ describe('findLwwContentConflicts', () => {
       payloadKeyFor,
     );
 
-    expect(result).toEqual([{ entityId: 'task-1', discardedFields: ['title'] }]);
+    expect(result).toEqual([
+      { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'local' },
+    ]);
   });
 
   it('merges distinct discarded content fields for the same task', () => {
@@ -236,6 +244,56 @@ describe('findLwwContentConflicts', () => {
       payloadKeyFor,
     );
 
-    expect(result).toEqual([{ entityId: 'task-1', discardedFields: ['title', 'notes'] }]);
+    expect(result).toEqual([
+      {
+        entityId: 'task-1',
+        discardedFields: ['title', 'notes'],
+        discardedTitle: 'local',
+      },
+    ]);
+  });
+
+  it('omits discardedTitle when the discarded edit did not touch the title', () => {
+    const result = findLwwContentConflicts(
+      [
+        resolution(
+          'remote',
+          [wrappedUpdate({ notes: 'lost note' })],
+          [wrappedUpdate({ dueDay: null })],
+        ),
+      ],
+      payloadKeyFor,
+    );
+
+    expect(result).toEqual([{ entityId: 'task-1', discardedFields: ['notes'] }]);
+    expect('discardedTitle' in result[0]).toBe(false);
+  });
+
+  it('keeps the first non-empty discarded title across a batch', () => {
+    // Two concurrent discarded title edits for the same task: the first
+    // non-empty one is surfaced deterministically.
+    const result = findLwwContentConflicts(
+      [
+        resolution(
+          'remote',
+          [wrappedUpdate({ title: '   ' })],
+          [wrappedUpdate({ dueDay: null })],
+        ),
+        resolution(
+          'remote',
+          [wrappedUpdate({ title: 'real discarded title' })],
+          [wrappedUpdate({ notes: 'x' })],
+        ),
+      ],
+      payloadKeyFor,
+    );
+
+    expect(result).toEqual([
+      {
+        entityId: 'task-1',
+        discardedFields: ['title'],
+        discardedTitle: 'real discarded title',
+      },
+    ]);
   });
 });

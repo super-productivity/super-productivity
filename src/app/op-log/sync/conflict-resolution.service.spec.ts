@@ -551,6 +551,97 @@ describe('ConflictResolutionService', () => {
       expect(taskList).toContain('&lt;img');
     });
 
+    it('names the discarded title when the title itself conflicted (#8694 review)', async () => {
+      const bannerService = TestBed.inject(BannerService);
+      const openBannerSpy = spyOn(bannerService, 'open');
+      // Kept (current) title comes from the store = the winning value; the
+      // discarded value must still be surfaced so double-check is actionable.
+      mockStore.select.and.returnValue(of({ title: 'Remote title' }));
+      const now = Date.now();
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'My local title' } },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-1', 'client-b', now),
+              payload: {
+                actionPayload: {
+                  task: { id: 'task-1', changes: { title: 'Remote title' } },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+        ),
+      ];
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      const taskList = openBannerSpy.calls.mostRecent().args[0].translateParams
+        ?.taskList as string;
+      expect(taskList).toContain('"Remote title"');
+      expect(taskList).toContain('"My local title"');
+    });
+
+    it('escapes the discarded title too (XSS guard on the new field)', async () => {
+      const bannerService = TestBed.inject(BannerService);
+      const openBannerSpy = spyOn(bannerService, 'open');
+      mockStore.select.and.returnValue(of({ title: 'Kept' }));
+      const now = Date.now();
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+              payload: {
+                actionPayload: {
+                  task: {
+                    id: 'task-1',
+                    changes: { title: '<img src=x onerror=alert(1)>' },
+                  },
+                },
+                entityChanges: [],
+              },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-1', 'client-b', now),
+              payload: {
+                actionPayload: { task: { id: 'task-1', changes: { title: 'Kept' } } },
+                entityChanges: [],
+              },
+            },
+          ],
+        ),
+      ];
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      const taskList = openBannerSpy.calls.mostRecent().args[0].translateParams
+        ?.taskList as string;
+      expect(taskList).not.toContain('<img');
+      expect(taskList).toContain('&lt;img');
+    });
+
     it('keeps the quiet count snack (no banner) for routine-only resolutions (#8694)', async () => {
       const bannerService = TestBed.inject(BannerService);
       const openBannerSpy = spyOn(bannerService, 'open');

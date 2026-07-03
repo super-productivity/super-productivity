@@ -25,6 +25,15 @@ export interface LwwContentConflict {
   entityId: string;
   /** The content fields the discarded edit(s) changed. */
   discardedFields: string[];
+  /**
+   * The title value the discarded edit set, when the discarded edit changed the
+   * title. For a title conflict the current (kept) title is the *winning* value,
+   * so naming the task by it alone gives the user nothing to double-check — this
+   * is the value that was dropped, so the banner can show "kept X, discarded Y".
+   * Absent when no discarded edit touched the title. First discarded title in
+   * the batch wins (deterministic given op order). Never logged (#9).
+   */
+  discardedTitle?: string;
 }
 
 /**
@@ -43,7 +52,7 @@ export const findLwwContentConflicts = (
   resolutions: LwwResolvedConflict<Operation, EntityConflict>[],
   payloadKeyFor: (entityType: string) => string,
 ): LwwContentConflict[] => {
-  const fieldsByTask = new Map<string, Set<string>>();
+  const byTask = new Map<string, { fields: Set<string>; discardedTitle?: string }>();
 
   for (const { winner, conflict } of resolutions) {
     if (conflict.entityType !== 'TASK') {
@@ -58,18 +67,31 @@ export const findLwwContentConflicts = (
       if (op.opType !== OpType.Update) {
         continue;
       }
-      for (const field of Object.keys(extractUpdateChanges(op.payload, payloadKey))) {
-        if (TASK_CONTENT_FIELDS.includes(field)) {
-          const fields = fieldsByTask.get(conflict.entityId) ?? new Set<string>();
-          fields.add(field);
-          fieldsByTask.set(conflict.entityId, fields);
+      const changes = extractUpdateChanges(op.payload, payloadKey);
+      for (const field of Object.keys(changes)) {
+        if (!TASK_CONTENT_FIELDS.includes(field)) {
+          continue;
         }
+        const acc = byTask.get(conflict.entityId) ?? { fields: new Set<string>() };
+        acc.fields.add(field);
+        // Keep the first non-empty discarded title so the banner can name what
+        // was dropped (see LwwContentConflict.discardedTitle).
+        if (field === 'title' && acc.discardedTitle === undefined) {
+          const value = (changes as { title?: unknown }).title;
+          if (typeof value === 'string' && value.trim().length) {
+            acc.discardedTitle = value;
+          }
+        }
+        byTask.set(conflict.entityId, acc);
       }
     }
   }
 
-  return [...fieldsByTask].map(([entityId, fields]) => ({
+  return [...byTask].map(([entityId, { fields, discardedTitle }]) => ({
     entityId,
     discardedFields: [...fields],
+    // Omit the key entirely when no title was discarded so routine callers and
+    // tests keep the minimal { entityId, discardedFields } shape.
+    ...(discardedTitle !== undefined ? { discardedTitle } : {}),
   }));
 };
