@@ -151,6 +151,14 @@ export interface UploadResult {
    * or the next download skips them forever. (#8304)
    */
   lastServerSeqToPersist?: number;
+  /**
+   * True when the provider mandates E2E encryption (SuperSync) but no key is configured
+   * yet, so the GHSA-9v8x guard skipped the upload while pending ops remain unsynced.
+   * Lets the caller report an honest "not in sync — encryption required" status instead
+   * of claiming IN_SYNC after what looks like a zero-op upload. Only set when there were
+   * pending ops to upload (the guard fires after the empty-ops check).
+   */
+  encryptionRequiredKeyMissing?: boolean;
 }
 
 /**
@@ -267,6 +275,11 @@ export type UploadOutcome =
       permanentRejectionCount: number;
       hasMorePiggyback: boolean;
       rejectedOps: RejectedOpInfo[];
+      /**
+       * True when the upload was skipped because the provider mandates encryption but no
+       * key is configured, leaving pending ops unsynced. The wrapper must not claim IN_SYNC.
+       */
+      encryptionRequiredKeyMissing?: boolean;
     }
   | {
       /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */

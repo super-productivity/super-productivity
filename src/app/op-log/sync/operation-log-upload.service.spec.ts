@@ -163,14 +163,17 @@ describe('OperationLogUploadService', () => {
           expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
         });
 
-        it('returns an empty upload result', async () => {
+        it('returns a result flagged encryptionRequiredKeyMissing (so the caller does not claim IN_SYNC)', async () => {
           const result = await service.uploadPendingOps(mockApiProvider);
 
+          // Pending ops remained unsynced. The flag distinguishes this from a genuine
+          // "nothing to upload" so the wrapper reports an honest not-in-sync status.
           expect(result).toEqual({
             uploadedCount: 0,
             rejectedCount: 0,
             piggybackedOps: [],
             rejectedOps: [],
+            encryptionRequiredKeyMissing: true,
           });
         });
 

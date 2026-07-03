@@ -73,22 +73,24 @@ export class SuperSyncEncryptionToggleService {
 
       SyncLog.normal(`${LOG_PREFIX}: Encryption enabled successfully!`);
     } catch (error) {
-      // Revert config on failure (server data is already deleted at this point)
-      SyncLog.err(`${LOG_PREFIX}: Failed after deleting server data!`, error);
-
-      // Best-effort revert: restore pre-enable config.
-      // existingCfg was captured before enabling, so it already has isEncryptionEnabled: false
-      // and no encryptKey. The explicit overrides ensure correctness even if the guard above
-      // was bypassed (e.g., existingCfg was partially set).
-      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
-        ...existingCfg,
-        encryptKey: undefined,
-        isEncryptionEnabled: false,
-      } as SuperSyncPrivateCfg);
+      // IMPORTANT: Do NOT revert to a keyless config here.
+      // deleteAndReuploadWithNewEncryption deletes all server data and persists the new
+      // key config BEFORE the upload that just failed, so the server is now empty. Reverting
+      // to `encryptKey: undefined` would leave a mandatory-encryption provider with no key —
+      // the op-log upload guard then skips EVERY future upload, so the wiped server can never
+      // be repopulated and the advertised "Sync Now" recovery is a no-op (account stranded).
+      // Keep the new key (as the password-change flow does) so the next sync re-uploads the
+      // local data, encrypted. If the failure happened before the config was persisted, the
+      // config is simply still the original — nothing to revert either way.
+      SyncLog.err(
+        `${LOG_PREFIX}: Upload failed after deleting server data — keeping new encryption key for retry`,
+        error,
+      );
 
       throw new Error(
         'Failed to upload encrypted snapshot after deleting server data. ' +
-          'Your local data is safe. Encryption has been reverted. Please use "Sync Now" to re-upload your data. ' +
+          'Your local data is safe and encryption stays enabled. ' +
+          'Your data will re-upload (encrypted) on the next sync — or click "Sync Now" to retry now. ' +
           `Reason: ${_friendlyErrorMessage(error)}`,
         { cause: error },
       );

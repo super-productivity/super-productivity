@@ -314,6 +314,33 @@ describe('SyncWrapperService', () => {
       expect(result).toBe(SyncStatus.UpdateRemote);
     });
 
+    // #8731: an encryption-mandatory provider with no key skips upload (GHSA-9v8x
+    // guard) while pending ops remain unsynced. This must NOT be reported as IN_SYNC.
+    it('should report UNKNOWN_OR_CHANGED (not InSync) when upload was skipped for a missing mandatory key', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({ kind: 'no_new_ops' as const }),
+      );
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+          encryptionRequiredKeyMissing: true,
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+    });
+
     it('should return UpdateRemote when remote ops were downloaded', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({

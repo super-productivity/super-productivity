@@ -376,6 +376,9 @@ export class OperationLogSyncService {
       permanentRejectionCount: rejectionResult.permanentRejectionCount,
       hasMorePiggyback: result.hasMorePiggyback ?? false,
       rejectedOps: result.rejectedOps,
+      ...(result.encryptionRequiredKeyMissing
+        ? { encryptionRequiredKeyMissing: true }
+        : {}),
     };
   }
 

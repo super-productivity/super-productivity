@@ -531,6 +531,24 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
 
+      // If the provider mandates encryption but no key is configured yet, the upload was
+      // skipped with pending ops still unsynced (GHSA-9v8x guard). Downloads still ran
+      // (merge-first), but nothing local can be uploaded until encryption is set up — so
+      // this is NOT in sync. Report it honestly instead of falling through to IN_SYNC.
+      // Also short-circuit the LWW loop below: its local-win ops are blocked by the same
+      // missing key and would just spin to the retry cap.
+      if (
+        uploadResult.kind === 'completed' &&
+        uploadResult.encryptionRequiredKeyMissing
+      ) {
+        SyncLog.log(
+          'SyncWrapperService: Upload skipped — encryption required but no key configured. ' +
+            'Reporting UNKNOWN_OR_CHANGED (sync paused until encryption is set up).',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return SyncStatus.UpdateRemote;
+      }
+
       // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
       const downloadLwwOps =
         downloadResult.kind === 'ops_processed' ? downloadResult.localWinOpsCreated : 0;

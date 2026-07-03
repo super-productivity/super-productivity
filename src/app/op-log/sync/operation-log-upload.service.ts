@@ -92,6 +92,9 @@ export class OperationLogUploadService {
     // last-server-seq covering them must be persisted by the caller AFTER those ops are
     // applied — not here. We surface the planned value instead of persisting it.
     let lastServerSeqToPersist: number | undefined;
+    // Set when the mandatory-encryption guard skips the upload with pending ops still
+    // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
+    let encryptionRequiredKeyMissing = false;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
       // Execute pre-upload callback INSIDE the lock, BEFORE checking for pending ops.
@@ -132,6 +135,10 @@ export class OperationLogUploadService {
       // upload. Without this guard the initial setup sync pushes all local ops to
       // the server in cleartext, breaking the E2EE promise even if later deleted.
       if (syncProvider.isEncryptionMandatory && !encryptKey) {
+        // We got past the empty-ops check above, so there ARE pending ops we are
+        // refusing to upload. Flag it so the caller reports an honest not-in-sync
+        // status instead of IN_SYNC (which a plain uploadedCount:0 would look like).
+        encryptionRequiredKeyMissing = true;
         // Expected during the pre-encryption setup window (fires on every
         // auto-sync until a key is set), so log at normal level, not warn.
         OpLog.normal(
@@ -433,6 +440,7 @@ export class OperationLogUploadService {
       ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
       ...(piggybackHasOnlyUnencryptedData ? { piggybackHasOnlyUnencryptedData } : {}),
       ...(lastServerSeqToPersist !== undefined ? { lastServerSeqToPersist } : {}),
+      ...(encryptionRequiredKeyMissing ? { encryptionRequiredKeyMissing: true } : {}),
     };
   }
 

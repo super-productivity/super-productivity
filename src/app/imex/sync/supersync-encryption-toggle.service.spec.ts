@@ -101,7 +101,7 @@ describe('SuperSyncEncryptionToggleService', () => {
       // file-based-encryption.service.ts and encryption-password-change.service.ts.
     });
 
-    it('should revert config on failure using pre-captured config (preserving auth credentials)', async () => {
+    it('should NOT revert to a keyless config on failure (would strand the wiped account)', async () => {
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
         new Error('Upload failed'),
       );
@@ -110,16 +110,11 @@ describe('SuperSyncEncryptionToggleService', () => {
         /Failed to upload encrypted snapshot/,
       );
 
-      // Should revert using the config captured BEFORE the destructive call
-      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
-        SyncProviderId.SuperSync,
-        jasmine.objectContaining({
-          baseUrl: 'https://test.example.com',
-          accessToken: 'test-token',
-          encryptKey: undefined,
-          isEncryptionEnabled: false,
-        }),
-      );
+      // The server is already wiped and the new key persisted by
+      // deleteAndReuploadWithNewEncryption. Reverting to encryptKey:undefined would
+      // block every future upload (mandatory encryption + no key). The toggle service
+      // must keep the key, so it must NOT write a keyless config on failure.
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should throw with descriptive message including reason on failure', async () => {
