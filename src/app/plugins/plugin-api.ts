@@ -624,10 +624,7 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.deleteSecret(key);
   }
 
-  async request<T = unknown>(
-    url: string,
-    options?: PluginRequestOptions,
-  ): Promise<T> {
+  async request<T = unknown>(url: string, options?: PluginRequestOptions): Promise<T> {
     PluginLog.log(
       `Plugin ${this.#pluginId} requested host HTTP ${options?.method ?? 'GET'}`,
     );

@@ -350,10 +350,7 @@ describe('handlePluginMessage()', () => {
           bridgeGeneration: 4,
           method: 'request',
           callId: 17,
-          args: [
-            'https://example.test/api',
-            { method: 'POST', body: { ok: true } },
-          ],
+          args: ['https://example.test/api', { method: 'POST', body: { ok: true } }],
         },
         source: sourceWindow,
       } as unknown as MessageEvent,
@@ -427,7 +424,9 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain('const bridgeGeneration = 4');
     expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
     expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
-    expect(script).toContain("request: (url, options) => callApi('request', [url, options])");
+    expect(script).toContain(
+      "request: (url, options) => callApi('request', [url, options])",
+    );
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
     );
