@@ -537,6 +537,19 @@ describe('LocalRestApiHandlerService', () => {
         });
       });
 
+      it('should return 400 when an allowed field has an invalid type', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', timeEstimate: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should reject subTaskIds in body with 400', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', {
@@ -779,6 +792,44 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.status).toBe(400);
         expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
         expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 (not dispatch) when a field has an invalid type', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { tagIds: 123, timeEstimate: 'abc' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should accept valid typed fields and dispatch them', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { tagIds: ['tag-1'], timeEstimate: 1000, isDone: true },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          tagIds: ['tag-1'],
+          timeEstimate: 1000,
+          isDone: true,
+        });
       });
     });
 

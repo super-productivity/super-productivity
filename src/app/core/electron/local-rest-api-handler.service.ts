@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import typia from 'typia';
 import { TaskService } from '../../features/tasks/task.service';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
@@ -54,6 +55,48 @@ const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
     }
   }
   return result as Partial<Task>;
+};
+
+/**
+ * Value-level types for the fields writable via the REST API. Keys mirror
+ * ALLOWED_TASK_FIELDS; `pickAllowedFields` filters by key only, so this is
+ * where the *values* get checked. Without it a caller could push a wrong-typed
+ * value (e.g. `tagIds: 123`, `timeEstimate: 'abc'`) straight into the store and
+ * the synced op-log, where it corrupts state locally and trips typia-as-corrupt
+ * on other devices when the op replays.
+ */
+interface WritableTaskFields {
+  title?: string;
+  notes?: string;
+  isDone?: boolean;
+  timeEstimate?: number;
+  timeSpent?: number;
+  projectId?: string;
+  tagIds?: string[];
+  dueDay?: string | null;
+  dueWithTime?: number | null;
+  plannedAt?: number;
+}
+
+type FieldTypeError = { path: string; expected: string };
+
+/**
+ * Validates the value types of already-key-filtered task fields. The create
+ * path is separately guarded by `typia.assert<Task>` in the task service (a
+ * bad value throws → generic 500); validating here lets both create and PATCH
+ * reject bad input with a clean 400 before anything is dispatched.
+ */
+const validateWritableFields = (
+  fields: Partial<Task>,
+): { ok: true } | { ok: false; errors: FieldTypeError[] } => {
+  const result = typia.validate<WritableTaskFields>(fields);
+  if (result.success) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    errors: result.errors.map((e) => ({ path: e.path, expected: e.expected })),
+  };
 };
 
 const firstRejectedField = (body: Record<string, unknown>): string | undefined =>
@@ -351,6 +394,17 @@ export class LocalRestApiHandlerService {
     const title = body.title.trim();
     const additionalFields = pickAllowedFields(body);
 
+    const validation = validateWritableFields(additionalFields);
+    if (!validation.ok) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'One or more task fields have an invalid type',
+        validation.errors,
+      );
+    }
+
     if ('parentId' in body) {
       if (typeof body.parentId !== 'string' || !body.parentId) {
         return createErrorResponse(
@@ -441,12 +495,24 @@ export class LocalRestApiHandlerService {
           );
         }
 
+        const changes = pickAllowedFields(body);
+        const validation = validateWritableFields(changes);
+        if (!validation.ok) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            'One or more task fields have an invalid type',
+            validation.errors,
+          );
+        }
+
         const task = await this._getTaskById(taskId);
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
-        this._taskService.update(taskId, pickAllowedFields(body));
+        this._taskService.update(taskId, changes);
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
 

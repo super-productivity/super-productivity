@@ -122,6 +122,20 @@ const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> => {
+  // Reject everything while disabled. server.close() stops accepting new
+  // sockets, but an in-flight keep-alive connection could still be served
+  // during the close window; this makes the off switch immediate.
+  if (!isEnabled) {
+    writeJson(res, 503, {
+      ok: false,
+      error: {
+        code: 'API_DISABLED',
+        message: 'Local REST API is disabled',
+      },
+    });
+    return;
+  }
+
   // Block DNS rebinding: reject requests with unexpected Host headers
   const host = req.headers.host;
   if (!host || !ALLOWED_HOSTS.has(host)) {
@@ -237,8 +251,15 @@ export const initLocalRestApi = (): void => {
     void handleHttpRequest(req, res);
   });
 
-  server.on('error', (error) => {
+  server.on('error', (error: NodeJS.ErrnoException) => {
     isListening = false;
+    if (error.code === 'EADDRINUSE') {
+      warn(
+        `[local-rest-api] Port ${LOCAL_REST_API_PORT} is in use — API could not start. ` +
+          `Another process is holding it; free it and toggle the API off/on to retry.`,
+      );
+      return;
+    }
     warn('[local-rest-api] Server error', error);
   });
 
@@ -267,15 +288,23 @@ const stopServer = (): void => {
     return;
   }
 
+  // Reset eagerly: server.close() only invokes its callback once every socket
+  // has closed, so a lingering keep-alive connection would otherwise leave
+  // isListening=true forever and make a later re-enable a no-op (#7484).
+  isListening = false;
+
   server.close((error) => {
     if (error) {
       warn('[local-rest-api] Failed to stop server', error);
       return;
     }
 
-    isListening = false;
     log('[local-rest-api] Server stopped');
   });
+
+  // Force keep-alive sockets shut so the API stops serving immediately on
+  // disable and close() can actually complete.
+  server.closeAllConnections();
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
