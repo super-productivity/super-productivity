@@ -8,6 +8,11 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import com.superproductivity.superproductivity.App
 
+// NOTE: no per-call db.close() anywhere in this class. SQLiteOpenHelper caches one
+// connection for the process lifetime (the standard pattern); closing it per call
+// defeated that cache and would churn once the home screen widget started reading
+// `widget_data` alongside the JS-bridge writes. All access stays serialized via
+// @Synchronized on the App-level singleton.
 class KeyValStore(private val context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -54,7 +59,6 @@ class KeyValStore(private val context: Context) :
             values.put(KEY_CREATED_AT, System.currentTimeMillis())
             row = db.replace(DATABASE_TABLE, null, values)
             Log.v(TAG, "save db value size: " + value?.length)
-            db.close()
         }
         return row
     }
@@ -94,8 +98,6 @@ class KeyValStore(private val context: Context) :
             // callers can surface "no backup" instead of an opaque invocation error.
             Log.e(TAG, "get failed for key $newKey", e)
             defaultValue
-        } finally {
-            database.close()
         }
     }
 
@@ -105,7 +107,6 @@ class KeyValStore(private val context: Context) :
         if (db != null) {
             db.delete(DATABASE_TABLE, null, null)
             Log.v(TAG, "cleared db ")
-            db.close()
         }
     }
 

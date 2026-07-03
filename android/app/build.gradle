@@ -122,6 +122,9 @@ dependencies {
     }
 
     testImplementation "junit:junit:4.13.2"
+    // Real org.json for JVM unit tests (android.jar only ships stubs); used by
+    // WidgetDataTest to lock the widget_data blob contract.
+    testImplementation "org.json:json:20240303"
 
     androidTestImplementation "androidx.test:rules:1.6.1"
     androidTestImplementation "com.android.support.test:runner:1.0.2"

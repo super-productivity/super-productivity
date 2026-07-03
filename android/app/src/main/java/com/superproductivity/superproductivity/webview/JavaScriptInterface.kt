@@ -26,6 +26,8 @@ import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
+import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
+import com.superproductivity.superproductivity.widget.WidgetDoneQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
 import org.json.JSONObject
 
@@ -370,6 +372,26 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun getWidgetTaskQueue(): String? {
         return WidgetTaskQueue.getAndClearQueue(activity)
+    }
+
+    /**
+     * Get task IDs marked done from the home screen widget and clear the queue.
+     * Returns a JSON array string of task IDs or null if empty.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetDoneQueue(): String? {
+        return WidgetDoneQueue.getAndClear(activity)
+    }
+
+    /**
+     * Re-render the home screen widget from the current `widget_data` KeyValStore
+     * snapshot. Called by Angular after each snapshot push.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateWidget() {
+        TaskListWidgetProvider.notifyDataChanged(activity)
     }
 
     /**

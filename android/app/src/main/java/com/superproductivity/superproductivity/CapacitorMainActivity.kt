@@ -32,6 +32,7 @@ import com.superproductivity.superproductivity.webview.WebViewCompatibilityCheck
 import com.superproductivity.superproductivity.webview.WebViewRecovery
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.StartupOverlayManager
+import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
 import org.json.JSONObject
 
@@ -63,6 +64,7 @@ class CapacitorMainActivity : BridgeActivity() {
 
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
+    private var isWidgetDoneDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -73,6 +75,17 @@ class CapacitorMainActivity : BridgeActivity() {
                 val isBreak = intent.getBooleanExtra(FocusModeForegroundService.EXTRA_IS_BREAK, false)
                 Log.d("SP_FOCUS", "Timer complete broadcast received, isBreak=$isBreak")
                 callJSInterfaceFunctionIfExists("next", "onFocusModeTimerComplete$", isBreak.toString())
+            }
+        }
+    }
+
+    private val widgetDoneDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN) {
+                // Contentless drain signal: Angular pulls the queued IDs itself via
+                // getWidgetDoneQueue(), so there is a single delivery path and no
+                // task data crosses the string-interpolated JS bridge.
+                callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
             }
         }
     }
@@ -224,6 +237,11 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(ForegroundServiceFailure.ACTION)
         )
         isForegroundServiceFailureReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            widgetDoneDrainReceiver,
+            IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN)
+        )
+        isWidgetDoneDrainReceiverRegistered = true
 
         // Show startup overlay for quick task entry while Angular loads.
         // Only on fresh cold start — not on config-change recreation.
@@ -614,6 +632,10 @@ class CapacitorMainActivity : BridgeActivity() {
                 foregroundServiceFailureReceiver
             )
             isForegroundServiceFailureReceiverRegistered = false
+        }
+        if (isWidgetDoneDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneDrainReceiver)
+            isWidgetDoneDrainReceiverRegistered = false
         }
         super.onDestroy()
     }

@@ -174,5 +174,26 @@
       </intent-filter>
     </receiver>
 
+    <!-- Home screen widget. exported="true" is required for APPWIDGET_UPDATE from
+         the launcher; the custom click/done actions are deliberately NOT listed here —
+         they are delivered via explicit-component PendingIntents, and listing them
+         would let any app on the device trigger them. -->
+    <receiver
+      android:name=".widget.TaskListWidgetProvider"
+      android:exported="true"
+      android:label="@string/widget_title">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/appwidget_info" />
+    </receiver>
+
+    <service
+      android:name=".widget.TaskListWidgetService"
+      android:exported="false"
+      android:permission="android.permission.BIND_REMOTEVIEWS" />
+
   </application>
 </manifest>

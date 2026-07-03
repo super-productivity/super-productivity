@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:minHeight="40dp">
+
+    <ImageView
+        android:id="@+id/widget_project_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:layout_marginEnd="8dp"
+        android:background="#2196F3"
+        android:contentDescription="" />
+
+    <ImageView
+        android:id="@+id/widget_done_checkbox"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginEnd="8dp"
+        android:src="@android:drawable/checkbox_off_background"
+        android:scaleType="fitCenter"
+        android:contentDescription="@string/widget_task_done" />
+
+    <TextView
+        android:id="@+id/widget_task_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+</LinearLayout>
