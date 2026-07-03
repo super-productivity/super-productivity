@@ -253,9 +253,21 @@ export class SyncPage extends BasePage {
    * Skip so setup stays unencrypted. No-op if the dialog did not appear.
    */
   private async _skipSetupEncryptionDialogIfPresent(): Promise<void> {
+    // The dialog opens only AFTER save()'s awaited provider-auth/connection check
+    // and a lazy import() of the dialog chunk, so it appears a beat after the
+    // Save click — often after CI load stalls it for a second or more. Use
+    // waitFor(), NOT isVisible(): isVisible() returns the CURRENT state
+    // immediately (its `timeout` never polls), so it raced the dialog and
+    // returned false, leaving the disableClose modal open with its backdrop
+    // blocking the rest of the test. waitFor() actually polls until it appears.
     const skipBtn = this.page.locator('.e2e-setup-encrypt-skip');
-    if (await skipBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const appeared = await skipBtn
+      .waitFor({ state: 'visible', timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
+    if (appeared) {
       await skipBtn.click();
+      await skipBtn.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
     }
   }
 
@@ -269,7 +281,9 @@ export class SyncPage extends BasePage {
     const confirmInput = this.page.locator('.e2e-setup-encrypt-confirm-password');
     const submitBtn = this.page.locator('.e2e-setup-encrypt-submit');
 
-    await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    // The dialog opens only after save()'s awaited auth check + lazy import(),
+    // which can exceed 5s under CI load (see _skipSetupEncryptionDialogIfPresent).
+    await passwordInput.waitFor({ state: 'visible', timeout: 20000 });
     await passwordInput.click();
     await passwordInput.fill(password);
     await expect(passwordInput).toHaveValue(password);
