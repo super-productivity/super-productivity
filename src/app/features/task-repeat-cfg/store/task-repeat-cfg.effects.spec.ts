@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { TaskRepeatCfgEffects } from './task-repeat-cfg.effects';
 import { TaskService } from '../../tasks/task.service';
@@ -94,8 +94,14 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
     const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
       'updateTaskRepeatCfg',
       'getTaskRepeatCfgById$',
+      'getTaskRepeatCfgByIdAllowUndefined$',
       '_getActionsForTaskRepeatCfg',
     ]);
+    // Default: config exists. Individual tests override; the "deleted config"
+    // tests set this to of(undefined) to exercise the #8715 crash-guard.
+    taskRepeatCfgServiceSpy.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+      of(undefined),
+    );
 
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', ['load']);
@@ -1023,7 +1029,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
 
         // repeat cfg with repeatOnComplete true
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({ ...mockRepeatCfg, repeatFromCompletionDate: true }),
         );
 
@@ -1070,7 +1076,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         actions$ = hot('-a', { a: action });
 
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({ ...mockRepeatCfg, repeatFromCompletionDate: false }),
         );
 
@@ -1093,7 +1099,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         actions$ = hot('-a', { a: action });
 
         taskService.getByIdOnce$.and.returnValue(of(oldTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
             repeatFromCompletionDate: true,
@@ -1119,7 +1125,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
         actions$ = hot('-a', { a: action });
         taskService.getByIdOnce$.and.returnValue(of(legacyTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
             repeatFromCompletionDate: true,
@@ -1173,7 +1179,9 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           },
         } as any),
       );
-      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(repeatCfg));
+      taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of(repeatCfg),
+      );
       taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
         Promise.resolve([expectedAction]),
       );
@@ -1216,7 +1224,9 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       actions$ = of(action);
       taskService.getByIdOnce$.and.returnValue(of(oldTask));
-      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(repeatCfg));
+      taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of(repeatCfg),
+      );
       taskRepeatCfgService._getActionsForTaskRepeatCfg.and.returnValue(
         Promise.resolve([expectedAction]),
       );
@@ -1233,6 +1243,32 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         error: done.fail,
       });
     });
+
+    // #8715: a completed instance can reference a repeat config that was
+    // already deleted (e.g. via cross-client sync). The lookup must not throw
+    // ('Missing taskRepeatCfg') and crash the whole app — the effect just skips.
+    it('should not throw when the referenced repeat config was deleted (#8715)', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.updateTask({
+          task: { id: 'parent-task-id', changes: { isDone: true } },
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // task still references the (now missing) config
+        taskService.getByIdOnce$.and.returnValue(of(mockTask));
+        // config no longer exists -> non-throwing selector yields undefined
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of(undefined),
+        );
+        // guard against regressing to the throwing selector (the #8715 root cause)
+        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+          throwError(() => new Error('Missing taskRepeatCfg')),
+        );
+
+        expectObservable(effects.updateStartDateOnComplete$).toBe('--');
+      });
+    });
   });
 
   describe('autoSyncSubtaskTemplatesFromNewest$', () => {
@@ -1246,7 +1282,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         actions$ = hot('-a', { a: action });
 
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
             shouldInheritSubtasks: true,
@@ -1285,7 +1321,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         actions$ = hot('-a', { a: action });
 
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({ ...mockRepeatCfg, shouldInheritSubtasks: false }),
         );
 
@@ -1303,7 +1339,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         actions$ = hot('-a', { a: action });
 
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
             shouldInheritSubtasks: true,
@@ -1330,7 +1366,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         ];
 
         taskService.getByIdOnce$.and.returnValue(of(mockTask));
-        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
             shouldInheritSubtasks: true,
@@ -1339,6 +1375,32 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         taskService.getTasksByRepeatCfgId$.and.returnValue(of([mockTask]));
         taskService.getByIdsLive$.and.returnValue(of([mockSubTask1, mockSubTask2]));
+
+        expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('--');
+      });
+    });
+
+    // #8715: the parent task can reference a repeat config that was already
+    // deleted (e.g. via cross-client sync). The lookup must not throw and
+    // crash the whole app — the effect should simply skip.
+    it('should not throw when the referenced repeat config was deleted (#8715)', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = addSubTask({
+          task: mockSubTask1,
+          parentId: 'parent-task-id',
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        taskService.getByIdOnce$.and.returnValue(of(mockTask));
+        // config no longer exists -> non-throwing selector yields undefined
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of(undefined),
+        );
+        // guard against regressing to the throwing selector (the #8715 root cause)
+        taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
+          throwError(() => new Error('Missing taskRepeatCfg')),
+        );
 
         expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('--');
       });
