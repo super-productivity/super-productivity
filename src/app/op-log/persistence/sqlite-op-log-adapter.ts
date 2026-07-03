@@ -405,6 +405,16 @@ const sqlAdd = async (
 const PUT_BATCH_CHUNK = 500;
 
 /**
+ * Max keys per batched cursor-scan `DELETE … IN (…)` statement. Each statement is
+ * one JS↔native bridge crossing (~2 ms), so per-row deletes made compaction —
+ * which prunes most of the ops table inside a write transaction that serializes
+ * every other op — pay N crossings; chunked IN-lists pay N/500. Kept below
+ * SQLite's conservative bound-parameter floor (SQLITE_MAX_VARIABLE_NUMBER = 999
+ * on older builds).
+ */
+const DELETE_BATCH_CHUNK = 500;
+
+/**
  * The upsert statement + bound params for putting `value` (the single source of
  * truth shared by single {@link sqlPut} and batched {@link sqlPutBatch}, so they
  * can never diverge).
@@ -637,10 +647,17 @@ const sqlIterate = async <T>(
       break;
     }
   }
-  for (const pk of toDelete) {
-    await db.run(`DELETE FROM ${plan.table} WHERE ${plan.pkColumn} = ?`, [
-      toSqlValue(pk),
-    ]);
+  // Chunked IN-list instead of one DELETE per key: same rows, same enclosing
+  // transaction (callers wrap non-readonly scans), but one bridge crossing per
+  // DELETE_BATCH_CHUNK keys rather than per row.
+  for (let i = 0; i < toDelete.length; i += DELETE_BATCH_CHUNK) {
+    const chunk = toDelete.slice(i, i + DELETE_BATCH_CHUNK);
+    await db.run(
+      `DELETE FROM ${plan.table} WHERE ${plan.pkColumn} IN (${chunk
+        .map(() => '?')
+        .join(', ')})`,
+      chunk.map(toSqlValue),
+    );
   }
 };
 

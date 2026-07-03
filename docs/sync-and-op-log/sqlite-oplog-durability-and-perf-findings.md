@@ -239,6 +239,19 @@ durable slow path.
      `UtilsSQLite.getStatementsArray`). Still **validate on-device** that
      `PRAGMA synchronous;` reports `1` (NORMAL) and `journal_mode;` reports `wal`.
   3. ✅ **Android Auto Backup exclusion** — done (§4).
+  4. ✅ **Batched cursor-scan deletes** — done. `sqlIterate` used to issue one
+     `DELETE … WHERE pk = ?` per marked row — one ~2 ms bridge crossing each.
+     Compaction (`deleteOpsWhere`, threshold 500) prunes most of the ops table
+     inside a write transaction that serializes every other op-log statement, so
+     a big prune paid ~1 s+ of pure bridge overhead while appends stalled behind
+     it. Now the marked keys go out as chunked `DELETE … WHERE pk IN (…)`
+     statements (`DELETE_BATCH_CHUNK = 500`, under SQLite's conservative 999
+     bound-parameter floor) — one crossing per 500 rows, same rows, same
+     enclosing transaction. Covered by both-engine specs (chunk-boundary
+     behavior) + a fake-only SQL-emission assertion. The predicate scan itself
+     still ships the table's values across the bridge (the predicate reads
+     decoded fields, so it can't be pushed into SQL) — acceptable because
+     compaction keeps the table near the 500-op threshold between runs.
 - **Stage 1 — measure (the decision gate for Stage 3; needs a device):** the
   shipped hydrator breadcrumbs (`hydrationLoadStateCacheMs`, `…TailReadMs`,
   `…FullReplayReadMs`) report real `loadStateCache` size/time from actual boots.

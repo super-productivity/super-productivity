@@ -184,7 +184,7 @@ class FakeSqliteDb implements SqliteDb {
     return { changes: before - kept.length };
   }
 
-  /** Apply the single `col OP ?` / `a = ? AND b = ?` WHERE shapes we emit. */
+  /** Apply the `col OP ?` / `a = ? AND b = ?` / `col IN (?, …)` WHERE shapes we emit. */
   private applyWhere(rows: Row[], sql: string, params: unknown[], invert = false): Row[] {
     const w = /WHERE (.+?)(?: ORDER BY| LIMIT|$)/i.exec(sql);
     if (!w) return rows;
@@ -196,6 +196,14 @@ class FakeSqliteDb implements SqliteDb {
         const notNull = /^(\w+) IS NOT NULL$/i.exec(cond);
         if (notNull) {
           return r[notNull[1]] != null;
+        }
+        // `col IN (?, ?, …)` — the batched cursor-delete shape.
+        const inList = /^(\w+) IN \(([^)]*)\)$/i.exec(cond);
+        if (inList) {
+          const count = inList[2].split(',').length;
+          const vals = params.slice(pi, pi + count) as (string | number | null)[];
+          pi += count;
+          return vals.includes(r[inList[1]] as string | number | null);
         }
         const mm = /(\w+) (>=|<=|>|<|=) \?/.exec(cond)!;
         const [, col, op] = mm;
@@ -544,6 +552,30 @@ const defineBehavioralContract = (
       ).toEqual(['keep1', 'keep2']);
     });
 
+    it("iterate 'delete' past the batch-chunk boundary removes exactly the marked rows", async () => {
+      // > DELETE_BATCH_CHUNK (500) marked rows force the chunked IN-list path
+      // (2 chunks) — the compaction shape, where per-row deletes used to pay one
+      // bridge crossing each. Keepers are interleaved so chunk membership isn't
+      // contiguous.
+      const keepers: number[] = [];
+      await adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+        for (let i = 0; i < 520; i++) {
+          const seq = await tx.add(STORE_NAMES.OPS, {
+            op: { id: `op${i}` },
+            source: i % 100 === 0 ? 'local' : 'remote',
+          });
+          if (i % 100 === 0) {
+            keepers.push(seq);
+          }
+        }
+      });
+      await adapter.iterate<{ source: string }>(STORE_NAMES.OPS, {}, (v) =>
+        v.source === 'remote' ? 'delete' : 'continue',
+      );
+      const left = await adapter.getAll<{ seq: number }>(STORE_NAMES.OPS);
+      expect(left.map((r) => r.seq)).toEqual(keepers);
+    });
+
     it("iterate 'delete-stop' over an index at an exact key removes one entry", async () => {
       await adapter.add(STORE_NAMES.OPS, makeOpEntry('alpha', 'local'));
       await adapter.add(STORE_NAMES.OPS, makeOpEntry('beta', 'local'));
@@ -857,6 +889,23 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     await adapter.iterate(STORE_NAMES.OPS, { mode: 'readonly', limit: 1 }, () => 'stop');
     const sel = db.log.find((e) => /SELECT .+ FROM ops/i.test(e.sql))!;
     expect(sel.sql).toContain('LIMIT 1');
+  });
+
+  it('cursor-scan deletes are batched into chunked IN statements, not per-row', async () => {
+    await adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (let i = 0; i < 501; i++) {
+        await tx.add(STORE_NAMES.OPS, makeOpEntry(`d${i}`, 'remote'));
+      }
+    });
+    db.log.length = 0;
+    await adapter.iterate(STORE_NAMES.OPS, {}, () => 'delete');
+    const deletes = db.log.filter((e) => /^DELETE FROM ops/i.test(e.sql));
+    // 501 marked rows → one full chunk of 500 + one of 1, not 501 statements
+    // (on the native bridge each statement is a ~2 ms round-trip).
+    expect(deletes.length).toBe(2);
+    expect(deletes[0].sql).toContain('seq IN (');
+    expect(deletes[0].params.length).toBe(500);
+    expect(deletes[1].params.length).toBe(1);
   });
 
   // ── transaction SQL emission (BEGIN/COMMIT/ROLLBACK) ───────────────────────
