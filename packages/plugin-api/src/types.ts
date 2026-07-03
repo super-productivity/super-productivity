@@ -129,6 +129,19 @@ export interface PluginManifest {
    * here is rejected. If omitted or empty, `PluginAPI.request` is disabled for
    * this plugin (fail-closed). Surfaced to the user at install so the plugin's
    * outbound network reach is reviewable. Does not affect issue-provider HTTP.
+   *
+   * Requires the `"http"` capability: `PluginAPI.request` only works if the
+   * plugin ALSO declares `"http"` in `permissions`. Network egress is an
+   * explicit, opt-in capability (like `nodeExecution`) — declaring hosts alone
+   * does not grant it.
+   *
+   * Redirects: on web/desktop, `PluginAPI.request` refuses to follow HTTP
+   * redirects (executes via `fetch` with `redirect: 'error'`), so a declared
+   * host cannot 3xx the request onward to a non-allowlisted or private/metadata
+   * host. On native (Capacitor), the platform HTTP layer still follows redirects
+   * — that hop is not re-checked; treat native redirect-following as a known
+   * limitation. DNS rebinding (hostname matched, not the resolved IP) also
+   * remains out of scope.
    */
   allowedHosts?: string[];
   iFrame?: boolean;
@@ -728,6 +741,9 @@ export interface PluginAPI {
    * Issue a host-side HTTP request through Super Productivity's guarded HTTP bridge.
    * Plugins must provide any Authorization headers themselves; the host only executes
    * the request and applies existing URL/private-network protections.
+   *
+   * Requires both `"http"` in `permissions` (the capability) and the target host
+   * in `allowedHosts` (the scope). Missing either is rejected (fail-closed).
    */
   request<T = unknown>(url: string, options?: PluginRequestOptions): Promise<T>;
 

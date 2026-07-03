@@ -482,11 +482,12 @@ describe('PluginBridgeService - request()', () => {
 
   const boundFor = (
     allowedHosts?: string[],
+    permissions: string[] = ['http'],
   ): { request: <T>(url: string, options?: unknown) => Promise<T> } =>
-    service.createBoundMethods(
-      'test-plugin',
-      allowedHosts ? ({ allowedHosts } as any) : undefined,
-    ) as any;
+    service.createBoundMethods('test-plugin', {
+      allowedHosts,
+      permissions,
+    } as any) as any;
 
   it('routes generic host HTTP requests through PluginHttpService without host auth injection', async () => {
     const bound = boundFor(['example.test']);
@@ -519,6 +520,16 @@ describe('PluginBridgeService - request()', () => {
         responseType: undefined,
       },
     );
+  });
+
+  it('is fail-closed: rejects when the plugin lacks the "http" permission', async () => {
+    // Host is declared, but the http capability is not granted -> blocked before
+    // the host check (network egress is an explicit, opt-in capability).
+    const bound = boundFor(['example.test'], []);
+    await expectAsync(bound.request('https://example.test/x')).toBeRejectedWithError(
+      /does not declare the "http" permission/,
+    );
+    expect(pluginHttpService.createHttpHelper).not.toHaveBeenCalled();
   });
 
   it('rejects a request to a host not in the manifest allowedHosts', async () => {

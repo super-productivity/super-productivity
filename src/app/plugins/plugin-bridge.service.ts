@@ -379,7 +379,7 @@ export class PluginBridgeService implements OnDestroy {
       deleteSecret: (key: string): Promise<void> =>
         this._pluginSecretService.deleteSecret(pluginId, key),
       request: <T = unknown>(url: string, options?: PluginRequestOptions): Promise<T> =>
-        this.request<T>(url, options, manifest?.allowedHosts),
+        this.request<T>(url, options, manifest?.allowedHosts, manifest?.permissions),
 
       // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>
@@ -509,10 +509,11 @@ export class PluginBridgeService implements OnDestroy {
     url: string,
     options?: PluginRequestOptions,
     allowedHosts?: string[],
+    permissions?: string[],
   ): Promise<T> {
-    // Enforce the plugin's manifest-declared host allowlist (exact host, fail-closed)
+    // Enforce the plugin's declared capability + host allowlist (both fail-closed)
     // BEFORE the shared HTTP layer applies its URL/private-network (SSRF) guards.
-    this._assertRequestHostAllowed(url, allowedHosts);
+    this._assertRequestAllowed(url, allowedHosts, permissions);
 
     const { method = 'GET', body } = options ?? {};
     const requestOptions = options
@@ -530,16 +531,33 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
-   * Gate `PluginAPI.request` to the exact hostnames declared in the plugin's
-   * manifest `allowedHosts`. Host-only, case-insensitive, trailing-dot tolerant,
-   * port-agnostic exact match. Fail-closed: an empty/undefined allowlist blocks
-   * every request. This is a security boundary — it must run in the host, never
-   * in plugin code.
+   * Gate `PluginAPI.request`. Two fail-closed checks, both host-enforced (never
+   * in plugin code):
+   *   1. Capability — the plugin must declare `"permissions": ["http"]`. Network
+   *      egress is an opt-in capability, like `nodeExecution`; it is never an
+   *      implicit grant from merely listing hosts.
+   *   2. Host allowlist — the exact hostnames in `allowedHosts`. Host-only,
+   *      case-insensitive, trailing-dot tolerant, port-agnostic exact match.
+   * Either check failing (or an empty/undefined value) blocks the request.
    */
-  private _assertRequestHostAllowed(url: string, allowedHosts?: string[]): void {
+  private _assertRequestAllowed(
+    url: string,
+    allowedHosts?: string[],
+    permissions?: string[],
+  ): void {
+    if (!(permissions ?? []).includes('http')) {
+      throw new Error(
+        '[PluginHttp] PluginAPI.request is blocked: this plugin does not declare the "http" permission. Add "http" to the manifest "permissions".',
+      );
+    }
     let hostname: string;
     try {
       // URL parsing resolves userinfo tricks (https://ok.com@evil.com -> evil.com).
+      // NOTE: unlike PluginHttpService._validateUrl we deliberately do NOT strip
+      // IPv6 brackets here. validatePluginManifest rejects any allowedHosts entry
+      // containing ':' (so no IPv6 literal can ever be declared), which means a
+      // bracketed IPv6 request hostname can never match an allowed entry and is
+      // always fail-closed. Keeping the normalizations distinct on purpose.
       hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, '');
     } catch {
       throw new Error(`[PluginHttp] Invalid URL for PluginAPI.request: ${url}`);

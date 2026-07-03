@@ -71,6 +71,13 @@ export class PluginSecurityService {
       descriptions.push('🔴 Can execute system commands and access files');
     }
 
+    if (manifest.permissions?.includes('http')) {
+      const hosts = manifest.allowedHosts?.length
+        ? manifest.allowedHosts.join(', ')
+        : '(none declared — network disabled)';
+      descriptions.push('🟡 Can make network requests to: ' + hosts);
+    }
+
     if (manifest.iFrame) {
       descriptions.push('🟡 Displays custom user interface');
     }
