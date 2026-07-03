@@ -24,6 +24,10 @@ export class SplitButtonComponent {
   readonly disabled = input<boolean>(false);
   // Translation key used for the trigger's tooltip and aria-label.
   readonly triggerLabel = input<string>('');
+  // Resolved (already translated) label for the main button's tooltip and
+  // aria-label. Use when the projected content is abbreviated (e.g. just a
+  // time) so the full action stays discoverable to screen readers and on hover.
+  readonly mainLabel = input<string>('');
 
   readonly mainClick = output<MouseEvent>();
 }

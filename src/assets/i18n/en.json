@@ -1843,6 +1843,7 @@
         "SCHEDULED_FOR": "Scheduled for",
         "SNOOZE": "Snooze",
         "SNOOZE_FOR": "Snooze {{m}}m",
+        "SNOOZE_FOR_SHORT": "{{m}}m",
         "START": "Start",
         "TASK_REMINDERS": "Task Reminders",
         "UNSCHEDULE": "Unschedule",

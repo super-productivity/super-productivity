@@ -15,6 +15,7 @@ import { SplitButtonComponent } from './split-button.component';
       [menu]="menu"
       [disabled]="disabled()"
       [triggerLabel]="triggerLabel()"
+      [mainLabel]="mainLabel()"
       (mainClick)="onMainClick()"
     >
       <span class="projected-content">Snooze 10m</span>
@@ -27,6 +28,7 @@ import { SplitButtonComponent } from './split-button.component';
 class HostComponent {
   readonly disabled = signal(false);
   readonly triggerLabel = signal('');
+  readonly mainLabel = signal('');
   mainClickCount = 0;
 
   onMainClick(): void {
@@ -93,5 +95,16 @@ describe('SplitButtonComponent', () => {
     host.triggerLabel.set('');
     fixture.detectChanges();
     expect(triggerBtn().getAttribute('aria-label')).toBeNull();
+  });
+
+  it('exposes the resolved mainLabel as the main aria-label, and omits it when empty', () => {
+    // mainLabel is a resolved string (caller translates), so it is bound as-is.
+    host.mainLabel.set('Snooze 10m');
+    fixture.detectChanges();
+    expect(mainBtn().getAttribute('aria-label')).toBe('Snooze 10m');
+
+    host.mainLabel.set('');
+    fixture.detectChanges();
+    expect(mainBtn().getAttribute('aria-label')).toBeNull();
   });
 });

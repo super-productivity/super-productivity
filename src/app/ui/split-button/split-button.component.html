@@ -3,7 +3,10 @@
     class="split-btn-main"
     (click)="mainClick.emit($event)"
     [disabled]="disabled()"
+    [matTooltip]="mainLabel()"
+    [attr.aria-label]="mainLabel() || null"
     color="primary"
+    matTooltipShowDelay="0"
     mat-stroked-button
     type="button"
   >

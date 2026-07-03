@@ -52,11 +52,12 @@
         <split-button
           [disabled]="isDisableControls"
           [menu]="footerMenu"
+          [mainLabel]="T.F.TASK.D_REMINDER_VIEW.SNOOZE_FOR | translate: { m: 10 }"
           [triggerLabel]="T.F.TASK.D_REMINDER_VIEW.MORE_ACTIONS"
           (mainClick)="snoozeAll(10)"
         >
           <mat-icon>snooze</mat-icon>
-          {{ T.F.TASK.D_REMINDER_VIEW.SNOOZE_FOR | translate: { m: 10 } }}
+          {{ T.F.TASK.D_REMINDER_VIEW.SNOOZE_FOR_SHORT | translate: { m: 10 } }}
         </split-button>
         @if (!isMultiple) {
           <button
