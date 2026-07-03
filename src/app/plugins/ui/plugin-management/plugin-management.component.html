@@ -166,7 +166,8 @@
 
       @if (
         (plugin.manifest.hooks && plugin.manifest.hooks.length > 0) ||
-        (plugin.manifest.permissions && plugin.manifest.permissions.length > 0)
+        (plugin.manifest.permissions && plugin.manifest.permissions.length > 0) ||
+        (plugin.manifest.allowedHosts && plugin.manifest.allowedHosts.length > 0)
       ) {
         <collapsible [title]="getPermissionsHooksTitle(plugin)">
           @if (plugin.manifest.permissions && plugin.manifest.permissions.length > 0) {
@@ -175,6 +176,16 @@
               <mat-chip-set>
                 @for (permission of plugin.manifest.permissions; track permission) {
                   <mat-chip>{{ permission }}</mat-chip>
+                }
+              </mat-chip-set>
+            </div>
+          }
+          @if (plugin.manifest.allowedHosts && plugin.manifest.allowedHosts.length > 0) {
+            <div class="plugin-info-section">
+              <div class="label">{{ T.PLUGINS.ALLOWED_HOSTS | translate }}:</div>
+              <mat-chip-set>
+                @for (host of plugin.manifest.allowedHosts; track host) {
+                  <mat-chip>{{ host }}</mat-chip>
                 }
               </mat-chip-set>
             </div>

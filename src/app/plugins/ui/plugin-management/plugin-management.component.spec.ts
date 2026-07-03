@@ -10,7 +10,7 @@ import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCacheService } from '../../plugin-cache.service';
 import { PluginConfigService } from '../../plugin-config.service';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
-import { PluginManifest } from '../../plugin-api.model';
+import { PluginManifest, PluginHooks } from '../../plugin-api.model';
 import { PluginService } from '../../plugin.service';
 import { PluginManagementComponent } from './plugin-management.component';
 
@@ -158,6 +158,35 @@ describe('PluginManagementComponent', () => {
         isEnabled: true,
       }),
     ).toBe(false);
+  });
+
+  it('surfaces declared allowedHosts (with count) in the collapsible title', () => {
+    const title = component.getPermissionsHooksTitle({
+      manifest: {
+        ...baseManifest,
+        permissions: ['nodeExecution'],
+        allowedHosts: ['api.example.com', 'auth.example.com'],
+        hooks: [PluginHooks.TASK_COMPLETE],
+      },
+      loaded: true,
+      isEnabled: true,
+    });
+
+    // instant() echoes the key here (no translations loaded); assert the
+    // allowedHosts part is present with its count, between permissions and hooks.
+    expect(title).toBe(
+      'PLUGINS.PERMISSIONS (1) / PLUGINS.ALLOWED_HOSTS (2) / PLUGINS.HOOKS (1)',
+    );
+  });
+
+  it('omits allowedHosts from the title when none are declared', () => {
+    const title = component.getPermissionsHooksTitle({
+      manifest: { ...baseManifest, hooks: [PluginHooks.TASK_COMPLETE] },
+      loaded: true,
+      isEnabled: true,
+    });
+
+    expect(title).toBe('PLUGINS.HOOKS (1)');
   });
 
   it('navigates to the work view and opens the issue panel', async () => {

@@ -420,9 +420,15 @@ export class PluginManagementComponent {
     const parts: string[] = [];
     const pCount = plugin.manifest.permissions?.length || 0;
     const hCount = plugin.manifest.hooks?.length || 0;
+    const aCount = plugin.manifest.allowedHosts?.length || 0;
 
     if (pCount > 0) {
       parts.push(`${this._translateService.instant(T.PLUGINS.PERMISSIONS)} (${pCount})`);
+    }
+    if (aCount > 0) {
+      parts.push(
+        `${this._translateService.instant(T.PLUGINS.ALLOWED_HOSTS)} (${aCount})`,
+      );
     }
     if (hCount > 0) {
       parts.push(`${this._translateService.instant(T.PLUGINS.HOOKS)} (${hCount})`);
