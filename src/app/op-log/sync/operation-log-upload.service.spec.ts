@@ -1339,9 +1339,9 @@ describe('OperationLogUploadService', () => {
           expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
         });
 
-        it('should detect SYNC_IMPORT_EXISTS from thrown error when exception contains the code', async () => {
-          // When uploadSnapshot throws an error (e.g., from HTTP client), the error message
-          // is parsed to extract errorCode. This tests that code path.
+        it('should detect SYNC_IMPORT_EXISTS from thrown structured error code', async () => {
+          // When uploadSnapshot throws an HTTP error, the provider keeps the server errorCode
+          // on the Error object so handling does not depend on message substrings.
           const entry = createFullStateEntry(
             1,
             'my-import',
@@ -1349,7 +1349,27 @@ describe('OperationLogUploadService', () => {
             OpType.SyncImport,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
-          // Mock throwing an error with SYNC_IMPORT_EXISTS in the message
+          const error = Object.assign(new Error('HTTP 409 Conflict'), {
+            code: 'SYNC_IMPORT_EXISTS',
+            errorCode: 'SYNC_IMPORT_EXISTS',
+          });
+          mockApiProvider.uploadSnapshot.and.rejectWith(error);
+
+          await service.uploadPendingOps(mockApiProvider);
+
+          // Should still be handled gracefully - delete local op, don't mark rejected
+          expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+          expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        });
+
+        it('keeps legacy SYNC_IMPORT_EXISTS message fallback for older providers', async () => {
+          const entry = createFullStateEntry(
+            1,
+            'my-import',
+            'client-1',
+            OpType.SyncImport,
+          );
+          mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           mockApiProvider.uploadSnapshot.and.rejectWith(
             new Error('SYNC_IMPORT_EXISTS: Another client already uploaded'),
           );

@@ -912,6 +912,7 @@ export class SyncWrapperService {
 
     const hasPayloadError = rejectedResult.rejectedOps.some(
       (r) =>
+        r.errorCode === 'PAYLOAD_TOO_LARGE' ||
         r.error?.includes('Payload too complex') ||
         r.error?.includes('Payload too large'),
     );

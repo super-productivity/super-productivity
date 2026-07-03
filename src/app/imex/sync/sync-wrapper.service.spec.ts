@@ -899,6 +899,29 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    it('should set ERROR and return HANDLED_ERROR when upload has PAYLOAD_TOO_LARGE errorCode', async () => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'test-op', errorCode: 'PAYLOAD_TOO_LARGE' }],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockTranslateService.instant).toHaveBeenCalledWith(
+        T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE,
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should set ERROR for non-payload rejected ops', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
