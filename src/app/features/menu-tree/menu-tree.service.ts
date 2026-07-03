@@ -27,6 +27,7 @@ import {
   updateTagTree,
   deleteFolder,
   updateFolder,
+  addItemToFolder,
 } from './store/menu-tree.actions';
 
 @Injectable({ providedIn: 'root' })
@@ -485,5 +486,27 @@ export class MenuTreeService {
     } else {
       this.setTagTree(nextTree);
     }
+  }
+
+  addProjectToFolder(projectId: string, folderId: string | null): void {
+    this._store.dispatch(
+      addItemToFolder({
+        itemId: projectId,
+        itemKind: MenuTreeKind.PROJECT,
+        folderId,
+        treeType: MenuTreeKind.PROJECT,
+      }),
+    );
+  }
+
+  addTagToFolder(tagId: string, folderId: string | null): void {
+    this._store.dispatch(
+      addItemToFolder({
+        itemId: tagId,
+        itemKind: MenuTreeKind.TAG,
+        folderId,
+        treeType: MenuTreeKind.TAG,
+      }),
+    );
   }
 }

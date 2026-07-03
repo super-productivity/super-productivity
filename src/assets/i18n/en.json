@@ -1059,7 +1059,9 @@
         "PLACEHOLDER": "Select folder"
       },
       "TOOLTIP_CREATE": "Create project folder",
-      "TOOLTIP_VISIBILITY": "Show/hide projects"
+      "TOOLTIP_VISIBILITY": "Show/hide projects",
+      "ADD_SUBFOLDER": "Add subfolder",
+      "ADD_PROJECT": "Add project"
     },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
@@ -1675,7 +1677,9 @@
         "NO_PARENT": "No folder (root level)",
         "PLACEHOLDER": "Select folder"
       },
-      "TOOLTIP_CREATE": "Create tag folder"
+      "TOOLTIP_CREATE": "Create tag folder",
+      "ADD_SUBFOLDER": "Add subfolder",
+      "ADD_TAG": "Add tag"
     },
     "TASK": {
       "ADD_TASK_BAR": {

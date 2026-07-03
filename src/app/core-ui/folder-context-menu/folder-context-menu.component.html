@@ -8,6 +8,38 @@
 
 <button
   mat-menu-item
+  (click)="addSubfolder()"
+>
+  <mat-icon>create_new_folder</mat-icon>
+  <span>{{
+    treeKind === MenuTreeKind.PROJECT
+      ? (T.F.PROJECT_FOLDER.ADD_SUBFOLDER | translate)
+      : (T.F.TAG_FOLDER.ADD_SUBFOLDER | translate)
+  }}</span>
+</button>
+
+@if (treeKind === MenuTreeKind.PROJECT) {
+  <button
+    mat-menu-item
+    (click)="addProject()"
+  >
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.PROJECT_FOLDER.ADD_PROJECT | translate }}</span>
+  </button>
+}
+
+@if (treeKind === MenuTreeKind.TAG) {
+  <button
+    mat-menu-item
+    (click)="addTag()"
+  >
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.TAG_FOLDER.ADD_TAG | translate }}</span>
+  </button>
+}
+
+<button
+  mat-menu-item
   (click)="deleteFolder()"
 >
   <mat-icon>delete</mat-icon>

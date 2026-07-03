@@ -9,6 +9,9 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { addTag, deleteTag, deleteTags } from '../../tag/store/tag.actions';
 import { DEFAULT_TAG } from '../../tag/tag.const';
 import { Tag } from '../../tag/tag.model';
+import { addItemToFolder } from './menu-tree.actions';
+import { addProject } from '../../project/store/project.actions';
+import { DEFAULT_PROJECT } from '../../project/project.const';
 
 describe('menuTreeReducer', () => {
   const createFolderNode = (
@@ -198,6 +201,88 @@ describe('menuTreeReducer', () => {
 
       expect(result.tagTree.length).toBe(1);
       expect(result.tagTree[0]).toEqual({ k: MenuTreeKind.TAG, id: 'first-tag' });
+    });
+  });
+
+  describe('addItemToFolder', () => {
+    it('should add a project to a root-level folder', () => {
+      const folder = createFolderNode('folder-1', []);
+      const state: MenuTreeState = {
+        projectTree: [folder],
+        tagTree: [],
+      };
+
+      const result = menuTreeReducer(
+        state,
+        addItemToFolder({
+          itemId: 'p-1',
+          itemKind: MenuTreeKind.PROJECT,
+          folderId: 'folder-1',
+          treeType: MenuTreeKind.PROJECT,
+        }),
+      );
+
+      const updatedFolder = result.projectTree[0] as MenuTreeFolderNode;
+      expect(updatedFolder.children.length).toBe(1);
+      expect(updatedFolder.children[0].id).toBe('p-1');
+      expect(updatedFolder.isExpanded).toBeTrue();
+    });
+
+    it('should add a tag to a deeply nested folder', () => {
+      const targetFolder = createFolderNode('target-folder', []);
+      const parentFolder = createFolderNode('parent-folder', [targetFolder]);
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [parentFolder],
+      };
+
+      const result = menuTreeReducer(
+        state,
+        addItemToFolder({
+          itemId: 't-1',
+          itemKind: MenuTreeKind.TAG,
+          folderId: 'target-folder',
+          treeType: MenuTreeKind.TAG,
+        }),
+      );
+
+      const root = result.tagTree[0] as MenuTreeFolderNode;
+      const child = root.children[0] as MenuTreeFolderNode;
+      expect(child.id).toBe('target-folder');
+      expect(child.children.length).toBe(1);
+      expect(child.children[0].id).toBe('t-1');
+    });
+
+    it('should add to root level if folderId is null', () => {
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [],
+      };
+
+      const result = menuTreeReducer(
+        state,
+        addItemToFolder({
+          itemId: 'p-1',
+          itemKind: MenuTreeKind.PROJECT,
+          folderId: null,
+          treeType: MenuTreeKind.PROJECT,
+        }),
+      );
+
+      expect(result.projectTree.length).toBe(1);
+      expect(result.projectTree[0].id).toBe('p-1');
+    });
+  });
+
+  describe('addProject', () => {
+    it('should add a new project to projectTree when it does not exist', () => {
+      const state: MenuTreeState = { projectTree: [], tagTree: [] };
+      const project = { ...DEFAULT_PROJECT, id: 'p1', title: 'New Project' };
+
+      const result = menuTreeReducer(state, addProject({ project }));
+
+      expect(result.projectTree.length).toBe(1);
+      expect(result.projectTree[0].id).toBe('p1');
     });
   });
 });

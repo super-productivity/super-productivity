@@ -98,6 +98,7 @@ export enum ActionType {
   MENU_TREE_UPDATE_TAG = '[MenuTree] Update Tag Tree',
   MENU_TREE_UPDATE_FOLDER = '[MenuTree] Update Folder',
   MENU_TREE_DELETE_FOLDER = '[MenuTree] Delete Folder',
+  MENU_TREE_ADD_ITEM = '[MenuTree] Add Item to Folder',
 
   // Note actions (N)
   NOTE_ADD = '[Note] Add Note',
