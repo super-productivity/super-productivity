@@ -219,6 +219,49 @@ describe('workContext selectors', () => {
 
       expect(result.taskIds).toEqual(['active']);
     });
+
+    it('should pass through the project icon (regression: header title icon)', () => {
+      const project = {
+        id: 'p1',
+        title: 'P1',
+        icon: 'rocket',
+        taskIds: [],
+        backlogTaskIds: [],
+        theme: { primary: '#fff' },
+      } as any;
+      const result = selectActiveWorkContext.projector(
+        { activeId: 'p1', activeType: WorkContextType.PROJECT } as any,
+        fakeEntityStateFromArray([project]),
+        fakeEntityStateFromArray([TODAY_TAG]),
+        (fakeEntityStateFromArray([]) as any).entities,
+        [],
+        todayStr,
+        0,
+      );
+
+      expect(result.icon).toBe('rocket');
+    });
+
+    it('should default project icon to null when unset', () => {
+      const project = {
+        id: 'p1',
+        title: 'P1',
+        taskIds: [],
+        backlogTaskIds: [],
+        theme: { primary: '#fff' },
+      } as any;
+      const result = selectActiveWorkContext.projector(
+        { activeId: 'p1', activeType: WorkContextType.PROJECT } as any,
+        fakeEntityStateFromArray([project]),
+        fakeEntityStateFromArray([TODAY_TAG]),
+        (fakeEntityStateFromArray([]) as any).entities,
+        [],
+        todayStr,
+        0,
+      );
+
+      expect(result.icon).toBeNull();
+    });
   });
   describe('selectTrackableTasksForActiveContext', () => {
     it('should select tasks for project', () => {

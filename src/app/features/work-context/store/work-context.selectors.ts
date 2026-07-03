@@ -208,7 +208,10 @@ export const selectActiveWorkContext = createSelector(
       }
       return {
         ...project,
-        icon: null,
+        // Keep the project's own icon so consumers (e.g. the header title icon)
+        // match the side nav; fall back to null when unset. `...project` already
+        // carries `icon`, but stay explicit since this used to force null.
+        icon: project.icon ?? null,
         taskIds: project.taskIds || [],
         isEnableBacklog: project.isEnableBacklog,
         backlogTaskIds: project.backlogTaskIds || [],
