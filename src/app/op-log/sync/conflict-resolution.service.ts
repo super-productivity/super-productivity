@@ -606,8 +606,15 @@ export class ConflictResolutionService {
     const kept = `"${escapeHtml(keptTitle)}"`;
     const discardedTitle = conflict.discardedTitle?.trim();
     // Skip the annotation when nothing meaningful to add: no title was
-    // discarded, or the discarded title equals the kept one (both devices set
-    // the same value — no visible divergence to point at).
+    // discarded, or the discarded title equals the current one. The equality
+    // case covers two situations, both correctly silenced: (a) both devices set
+    // the same title; (b) a title edit lost to a concurrent *other-field* remote
+    // win — the winner didn't touch the title, so the current state still shows
+    // the (now-rejected) local title, which equals the discarded value. In both
+    // an annotation would read `"X" (discarded: "X")` — pure noise, no divergence
+    // to point at — so we render just the current title. (For the common
+    // title-vs-title case the current title IS the winning value and differs
+    // from the discarded one, so the annotation shows.)
     if (!discardedTitle || discardedTitle === keptTitle.trim()) {
       return kept;
     }

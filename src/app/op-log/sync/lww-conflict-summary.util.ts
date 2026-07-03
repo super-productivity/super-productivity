@@ -30,8 +30,9 @@ export interface LwwContentConflict {
    * title. For a title conflict the current (kept) title is the *winning* value,
    * so naming the task by it alone gives the user nothing to double-check — this
    * is the value that was dropped, so the banner can show "kept X, discarded Y".
-   * Absent when no discarded edit touched the title. First discarded title in
-   * the batch wins (deterministic given op order). Never logged (#9).
+   * Absent when no discarded edit touched the title (or it only cleared it to
+   * empty). The LAST non-empty discarded title in the batch wins — the user's
+   * final rename (deterministic given op order). Never logged (#9).
    */
   discardedTitle?: string;
 }
@@ -74,9 +75,12 @@ export const findLwwContentConflicts = (
         }
         const acc = byTask.get(conflict.entityId) ?? { fields: new Set<string>() };
         acc.fields.add(field);
-        // Keep the first non-empty discarded title so the banner can name what
-        // was dropped (see LwwContentConflict.discardedTitle).
-        if (field === 'title' && acc.discardedTitle === undefined) {
+        // Keep the LAST non-empty discarded title so the banner names the user's
+        // final rename, not a stale intermediate one (offline A→B→C, all
+        // discarded → show C). Ops are processed in append order, so a later
+        // non-empty value overwrites an earlier one. See
+        // LwwContentConflict.discardedTitle.
+        if (field === 'title') {
           const value = (changes as { title?: unknown }).title;
           if (typeof value === 'string' && value.trim().length) {
             acc.discardedTitle = value;

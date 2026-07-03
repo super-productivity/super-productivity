@@ -269,9 +269,9 @@ describe('findLwwContentConflicts', () => {
     expect('discardedTitle' in result[0]).toBe(false);
   });
 
-  it('keeps the first non-empty discarded title across a batch', () => {
-    // Two concurrent discarded title edits for the same task: the first
-    // non-empty one is surfaced deterministically.
+  it('ignores empty/whitespace discarded titles, keeping the real one', () => {
+    // A concurrent discarded title-clear must not blank out a genuine discarded
+    // rename in the same batch.
     const result = findLwwContentConflicts(
       [
         resolution(
@@ -294,6 +294,30 @@ describe('findLwwContentConflicts', () => {
         discardedFields: ['title'],
         discardedTitle: 'real discarded title',
       },
+    ]);
+  });
+
+  it('surfaces the LAST discarded title (final rename), not the first', () => {
+    // User renamed the task twice offline (A -> B), both discarded on a remote
+    // win. The final value B is what they will look for.
+    const result = findLwwContentConflicts(
+      [
+        resolution(
+          'remote',
+          [wrappedUpdate({ title: 'rename A' })],
+          [wrappedUpdate({ dueDay: null })],
+        ),
+        resolution(
+          'remote',
+          [wrappedUpdate({ title: 'rename B' })],
+          [wrappedUpdate({ notes: 'x' })],
+        ),
+      ],
+      payloadKeyFor,
+    );
+
+    expect(result).toEqual([
+      { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'rename B' },
     ]);
   });
 });
