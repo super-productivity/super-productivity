@@ -40,11 +40,18 @@ class WidgetDataTest {
     }
 
     @Test
-    fun overlaysPendingDoneIds() {
-        val tasks = WidgetData.parse(blob, pendingDoneIds = setOf("t1"))
+    fun overlaysPendingDoneTargets() {
+        val tasks = WidgetData.parse(blob, pendingDoneTargets = mapOf("t1" to true))
         assertTrue(tasks[0].isDone)
         assertTrue(tasks[1].isDone)
         assertEquals(false, tasks[2].isDone)
+    }
+
+    @Test
+    fun overlaysPendingUndoneTargets() {
+        // t2 is done in the blob but has a pending "mark undone" tap
+        val tasks = WidgetData.parse(blob, pendingDoneTargets = mapOf("t2" to false))
+        assertEquals(false, tasks[1].isDone)
     }
 
     @Test

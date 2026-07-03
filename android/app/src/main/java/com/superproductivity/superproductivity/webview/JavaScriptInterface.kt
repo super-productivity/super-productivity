@@ -375,8 +375,8 @@ class JavaScriptInterface(
     }
 
     /**
-     * Get task IDs marked done from the home screen widget and clear the queue.
-     * Returns a JSON array string of task IDs or null if empty.
+     * Get pending done-state changes from the home screen widget and clear the
+     * queue. Returns a JSON object string `{taskId: targetIsDone}` or null if empty.
      */
     @Suppress("unused")
     @JavascriptInterface

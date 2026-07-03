@@ -49,28 +49,41 @@ private class TaskListRemoteViewsFactory(
 
         val task = tasks[position]
         rv.setTextViewText(R.id.widget_task_title, task.title)
+        rv.setTextColor(
+            R.id.widget_task_title,
+            context.getColor(if (task.isDone) R.color.widget_ink_muted else R.color.widget_ink)
+        )
         rv.setImageViewResource(
             R.id.widget_done_checkbox,
-            if (task.isDone) {
-                android.R.drawable.checkbox_on_background
-            } else {
-                android.R.drawable.checkbox_off_background
-            }
+            if (task.isDone) R.drawable.ic_widget_check_done else R.drawable.ic_widget_check_outline
         )
 
-        val color = try {
-            task.projectColor?.let { Color.parseColor(it) } ?: DEFAULT_DOT_COLOR
-        } catch (e: Exception) {
-            DEFAULT_DOT_COLOR
+        // Project dot: tint with the project color, hide entirely for
+        // project-less tasks instead of showing a meaningless default color
+        val color = task.projectColor?.let {
+            try {
+                Color.parseColor(it)
+            } catch (e: Exception) {
+                null
+            }
         }
-        rv.setInt(R.id.widget_project_dot, "setBackgroundColor", color)
+        if (color != null) {
+            rv.setViewVisibility(R.id.widget_project_dot, android.view.View.VISIBLE)
+            rv.setInt(R.id.widget_project_dot, "setColorFilter", color)
+        } else {
+            rv.setViewVisibility(R.id.widget_project_dot, android.view.View.GONE)
+        }
 
+        // Checkbox toggles to the opposite of the DISPLAYED state; anywhere else
+        // on the row opens the app.
         rv.setOnClickFillInIntent(
             R.id.widget_done_checkbox,
-            Intent().putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
+            Intent()
+                .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
+                .putExtra(TaskListWidgetProvider.EXTRA_SET_DONE, !task.isDone)
         )
         rv.setOnClickFillInIntent(
-            R.id.widget_task_title,
+            R.id.widget_task_row,
             Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
         )
 
@@ -85,6 +98,5 @@ private class TaskListRemoteViewsFactory(
     companion object {
         private const val TAG = "TaskListWidget"
         private const val MAX_TASKS = 20
-        private const val DEFAULT_DOT_COLOR = 0xFF2196F3.toInt()
     }
 }

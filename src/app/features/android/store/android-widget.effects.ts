@@ -26,29 +26,32 @@ import { Dictionary } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
 
 /**
- * Decides which queued widget done-taps become setDone() calls: dedupes and
- * skips missing (deleted since the tap) or already-done tasks so stale queue
- * entries never produce redundant update ops. Exported for direct testing —
- * the effect itself is gated by IS_ANDROID_WEB_VIEW.
+ * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
+ * The queue is a last-wins map `{taskId: targetIsDone}`; missing tasks (deleted
+ * since the tap) and tasks already in the target state are skipped so stale
+ * queue entries never produce redundant update ops. Exported for direct
+ * testing — the effect itself is gated by IS_ANDROID_WEB_VIEW.
  */
-export const getTaskIdsToMarkDone = (
+export const getTaskDoneChangesToApply = (
   queueJson: string,
   taskEntities: Dictionary<Task>,
-): string[] => {
-  let taskIds: string[];
+): { id: string; isDone: boolean }[] => {
+  let targets: unknown;
   try {
-    taskIds = JSON.parse(queueJson);
+    targets = JSON.parse(queueJson);
   } catch (e) {
     DroidLog.err('Failed to parse widget done queue', e);
     return [];
   }
-  if (!Array.isArray(taskIds)) {
+  if (typeof targets !== 'object' || targets === null || Array.isArray(targets)) {
     return [];
   }
-  return [...new Set(taskIds)].filter((id) => {
-    const task = taskEntities[id];
-    return !!task && !task.isDone;
-  });
+  return Object.entries(targets as Record<string, unknown>)
+    .filter(([id, isDone]) => {
+      const task = taskEntities[id];
+      return typeof isDone === 'boolean' && !!task && task.isDone !== isDone;
+    })
+    .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
 
 @Injectable()
@@ -127,17 +130,21 @@ export class AndroidWidgetEffects {
     if (!queueJson) {
       return;
     }
-    const idsToMarkDone = getTaskIdsToMarkDone(queueJson, taskEntities);
-    for (const taskId of idsToMarkDone) {
-      this._taskService.setDone(taskId);
+    const changes = getTaskDoneChangesToApply(queueJson, taskEntities);
+    for (const change of changes) {
+      if (change.isDone) {
+        this._taskService.setDone(change.id);
+      } else {
+        this._taskService.setUnDone(change.id);
+      }
     }
-    DroidLog.log('Drained widget done queue', { doneCount: idsToMarkDone.length });
+    DroidLog.log('Drained widget done queue', { changeCount: changes.length });
 
-    if (idsToMarkDone.length > 0) {
+    if (changes.length > 0) {
       this._snackService.open({
         type: 'SUCCESS',
-        msg: T.F.ANDROID.WIDGET_TASKS_DONE,
-        translateParams: { count: idsToMarkDone.length },
+        msg: T.F.ANDROID.WIDGET_TASKS_UPDATED,
+        translateParams: { count: changes.length },
       });
     }
   }

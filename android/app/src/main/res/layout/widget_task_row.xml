@@ -1,40 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_task_row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingStart="4dp"
-    android:paddingEnd="8dp"
-    android:paddingTop="6dp"
-    android:paddingBottom="6dp"
-    android:minHeight="40dp">
+    android:paddingStart="6dp"
+    android:paddingEnd="0dp"
+    android:minHeight="34dp">
 
     <ImageView
         android:id="@+id/widget_project_dot"
-        android:layout_width="6dp"
-        android:layout_height="6dp"
-        android:layout_marginEnd="8dp"
-        android:background="#2196F3"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/widget_project_dot"
         android:contentDescription="" />
-
-    <ImageView
-        android:id="@+id/widget_done_checkbox"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginEnd="8dp"
-        android:src="@android:drawable/checkbox_off_background"
-        android:scaleType="fitCenter"
-        android:contentDescription="@string/widget_task_done" />
 
     <TextView
         android:id="@+id/widget_task_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
+        android:textColor="@color/widget_ink"
+        android:textSize="15sp"
         android:maxLines="2"
         android:ellipsize="end" />
+
+    <ImageView
+        android:id="@+id/widget_done_checkbox"
+        android:layout_width="38dp"
+        android:layout_height="34dp"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:layout_marginStart="4dp"
+        android:src="@drawable/ic_widget_check_outline"
+        android:scaleType="fitCenter"
+        android:contentDescription="@string/widget_task_done" />
 
 </LinearLayout>

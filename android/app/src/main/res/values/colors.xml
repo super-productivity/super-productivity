@@ -8,4 +8,13 @@
     <color name="windowBackground">#f8f8f7</color>
     <color name="webview_block_secondary">#424242</color>
 
+    <!-- Home screen widget — mirrors the web app's theme tokens
+         (light surface #f8f8f7 / dark surface #131314, brand purple).
+         Dark variants live in values-night/colors.xml. -->
+    <color name="widget_bg">#F5F8F8F7</color>
+    <color name="widget_ink">#DE000000</color>
+    <color name="widget_ink_muted">#8A000000</color>
+    <color name="widget_separator">#1F000000</color>
+    <color name="widget_brand">#8B4A9D</color>
+
 </resources>

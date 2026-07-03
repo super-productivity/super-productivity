@@ -41,8 +41,11 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         val taskId = intent.getStringExtra(EXTRA_TASK_ID)
         when {
             taskId != null -> {
-                Log.d(TAG, "Mark done from widget: taskId=$taskId")
-                WidgetDoneQueue.add(context, taskId)
+                // Target state computed at render time from the DISPLAYED state
+                // (incl. pending overlay), so repeated taps toggle back and forth.
+                val setDone = intent.getBooleanExtra(EXTRA_SET_DONE, true)
+                Log.d(TAG, "Toggle done from widget: taskId=$taskId setDone=$setDone")
+                WidgetDoneQueue.setTarget(context, taskId, setDone)
                 // Re-render so the pending-done overlay shows the checked box
                 notifyDataChanged(context)
                 // Contentless "drain now" signal for a live app; Angular always
@@ -75,6 +78,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         const val ACTION_WIDGET_DONE_DRAIN =
             "com.superproductivity.superproductivity.WIDGET_DONE_DRAIN"
         const val EXTRA_TASK_ID = "WIDGET_TASK_ID"
+        const val EXTRA_SET_DONE = "WIDGET_SET_DONE"
         const val EXTRA_OPEN_APP = "WIDGET_OPEN_APP"
 
         fun notifyDataChanged(context: Context) {
@@ -119,6 +123,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_header, openAppPendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

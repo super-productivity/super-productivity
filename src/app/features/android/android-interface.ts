@@ -100,8 +100,8 @@ export interface AndroidInterface {
   // Widget task queue - get queued tasks from home screen widget
   getWidgetTaskQueue?(): string | null;
 
-  // Widget done queue - get task IDs marked done from the home screen widget
-  // (JSON array string) and clear the native queue
+  // Widget done queue - get pending done-state changes from the home screen
+  // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
   getWidgetDoneQueue?(): string | null;
 
   // Re-render the home screen widget from the current widget_data snapshot

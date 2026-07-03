@@ -1,4 +1,4 @@
-import { getTaskIdsToMarkDone } from './android-widget.effects';
+import { getTaskDoneChangesToApply } from './android-widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
 
@@ -7,37 +7,60 @@ import { Dictionary } from '@ngrx/entity';
  * we test the drain decision logic directly (repo convention, see
  * android-sync-bridge.effects.spec.ts).
  */
-describe('AndroidWidgetEffects - getTaskIdsToMarkDone', () => {
+describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
   const entities = (...tasks: { id: string; isDone?: boolean }[]): Dictionary<Task> =>
     Object.fromEntries(
       tasks.map((t) => [t.id, { id: t.id, isDone: !!t.isDone } as Task]),
     );
 
-  it('should mark existing undone tasks done', () => {
-    expect(getTaskIdsToMarkDone('["a","b"]', entities({ id: 'a' }, { id: 'b' }))).toEqual(
-      ['a', 'b'],
-    );
+  it('should mark undone tasks done', () => {
+    expect(
+      getTaskDoneChangesToApply(
+        '{"a":true,"b":true}',
+        entities({ id: 'a' }, { id: 'b' }),
+      ),
+    ).toEqual([
+      { id: 'a', isDone: true },
+      { id: 'b', isDone: true },
+    ]);
   });
 
-  it('should dedupe repeated taps on the same task', () => {
-    expect(getTaskIdsToMarkDone('["a","a","a"]', entities({ id: 'a' }))).toEqual(['a']);
+  it('should mark done tasks undone', () => {
+    expect(
+      getTaskDoneChangesToApply('{"a":false}', entities({ id: 'a', isDone: true })),
+    ).toEqual([{ id: 'a', isDone: false }]);
   });
 
   it('should skip tasks deleted since the tap', () => {
-    expect(getTaskIdsToMarkDone('["gone","a"]', entities({ id: 'a' }))).toEqual(['a']);
+    expect(
+      getTaskDoneChangesToApply('{"gone":true,"a":true}', entities({ id: 'a' })),
+    ).toEqual([{ id: 'a', isDone: true }]);
   });
 
-  it('should skip already-done tasks (no redundant update ops)', () => {
+  it('should skip tasks already in the target state (no redundant update ops)', () => {
     expect(
-      getTaskIdsToMarkDone('["a","b"]', entities({ id: 'a', isDone: true }, { id: 'b' })),
-    ).toEqual(['b']);
+      getTaskDoneChangesToApply(
+        '{"a":true,"b":true}',
+        entities({ id: 'a', isDone: true }, { id: 'b' }),
+      ),
+    ).toEqual([{ id: 'b', isDone: true }]);
+  });
+
+  it('should treat a done→undone round trip as a no-op', () => {
+    // last-wins map: tapping done then undone before the app runs → target false
+    expect(getTaskDoneChangesToApply('{"a":false}', entities({ id: 'a' }))).toEqual([]);
   });
 
   it('should return empty for invalid JSON', () => {
-    expect(getTaskIdsToMarkDone('not json', entities({ id: 'a' }))).toEqual([]);
+    expect(getTaskDoneChangesToApply('not json', entities({ id: 'a' }))).toEqual([]);
   });
 
-  it('should return empty for non-array JSON', () => {
-    expect(getTaskIdsToMarkDone('{"a":1}', entities({ id: 'a' }))).toEqual([]);
+  it('should return empty for non-object JSON', () => {
+    expect(getTaskDoneChangesToApply('["a"]', entities({ id: 'a' }))).toEqual([]);
+    expect(getTaskDoneChangesToApply('null', entities({ id: 'a' }))).toEqual([]);
+  });
+
+  it('should skip non-boolean target values', () => {
+    expect(getTaskDoneChangesToApply('{"a":"true"}', entities({ id: 'a' }))).toEqual([]);
   });
 });

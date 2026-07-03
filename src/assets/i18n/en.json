@@ -103,7 +103,7 @@
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android blocked the persistent focus mode notification. The timer continues in the app, but background alerts may be unavailable. Check notification permission and battery/background restrictions.",
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
       "OPEN_NOTIFICATION_SETTINGS": "Open settings",
-      "WIDGET_TASKS_DONE": "{{count}} task(s) marked done from widget"
+      "WIDGET_TASKS_UPDATED": "{{count}} task(s) updated from widget"
     },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",

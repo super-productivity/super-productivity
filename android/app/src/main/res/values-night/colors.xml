@@ -3,4 +3,11 @@
     <color name="statusBar">#131314</color>
     <color name="navigationBar">#131314</color>
     <color name="windowBackground">#131314</color>
+
+    <!-- Home screen widget (dark) — see values/colors.xml -->
+    <color name="widget_bg">#F5131314</color>
+    <color name="widget_ink">#E6E6E6</color>
+    <color name="widget_ink_muted">#A6EBEBEB</color>
+    <color name="widget_separator">#1AFFFFFF</color>
+    <color name="widget_brand">#A05DB1</color>
 </resources>

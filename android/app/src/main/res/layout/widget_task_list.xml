@@ -3,21 +3,45 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#DD1E1E2E"
-    android:padding="8dp">
+    android:background="@drawable/widget_bg"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="6dp">
 
-    <TextView
+    <LinearLayout
         android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/widget_title"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="10dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_stat_sp"
+            android:tint="@color/widget_brand"
+            android:contentDescription="" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="@string/widget_header_title"
+            android:textColor="@color/widget_ink"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- FrameLayout, not View: plain View is not on the RemoteViews whitelist -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/widget_separator" />
 
     <ListView
         android:id="@+id/widget_task_list"
@@ -26,14 +50,14 @@
         android:layout_weight="1"
         android:divider="@null"
         android:dividerHeight="0dp"
-        android:scrollbars="vertical" />
+        android:scrollbars="none" />
 
     <TextView
         android:id="@+id/widget_empty"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:text="@string/widget_empty"
-        android:textColor="#80FFFFFF"
+        android:textColor="@color/widget_ink_muted"
         android:textSize="14sp"
         android:gravity="center"
         android:visibility="gone" />

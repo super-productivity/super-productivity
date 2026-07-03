@@ -20,11 +20,14 @@ object WidgetData {
     private const val SUPPORTED_VERSION = 1
 
     /**
-     * @param pendingDoneIds IDs queued via [WidgetDoneQueue] but not yet applied by
-     * Angular — overlaid as done so a checkbox tap is reflected immediately even
-     * while the app process is dead.
+     * @param pendingDoneTargets per-task done-state targets queued via
+     * [WidgetDoneQueue] but not yet applied by Angular — overlaid so a checkbox
+     * tap is reflected immediately even while the app process is dead.
      */
-    fun parse(json: String, pendingDoneIds: Set<String> = emptySet()): List<WidgetTask> {
+    fun parse(
+        json: String,
+        pendingDoneTargets: Map<String, Boolean> = emptyMap()
+    ): List<WidgetTask> {
         val root = JSONObject(json)
         if (root.optInt("v", -1) != SUPPORTED_VERSION) {
             return emptyList()
@@ -45,7 +48,7 @@ object WidgetData {
                 WidgetTask(
                     id = id,
                     title = task.getString("title"),
-                    isDone = task.optBoolean("isDone", false) || pendingDoneIds.contains(id),
+                    isDone = pendingDoneTargets[id] ?: task.optBoolean("isDone", false),
                     projectColor = color
                 )
             )
