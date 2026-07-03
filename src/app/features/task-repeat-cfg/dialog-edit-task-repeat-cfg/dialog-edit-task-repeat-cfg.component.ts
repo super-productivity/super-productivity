@@ -282,9 +282,16 @@ export class DialogEditTaskRepeatCfgComponent {
       if (this.isEdit() && this._data.task?.repeatCfgId) {
         this.isLoading.set(true);
         this._taskRepeatCfgService
-          .getTaskRepeatCfgById$(this._data.task.repeatCfgId)
+          .getTaskRepeatCfgByIdAllowUndefined$(this._data.task.repeatCfgId)
           .pipe(first())
           .subscribe((cfg) => {
+            // Repeat config was deleted (e.g. via cross-client sync) but the task
+            // still references it — abort editing instead of crashing. (#8715)
+            if (!cfg) {
+              this.isLoading.set(false);
+              this.close();
+              return;
+            }
             this._setRepeatCfgInitiallyForEditOnly(cfg);
             this._checkCanRemoveInstance();
             this.isLoading.set(false);

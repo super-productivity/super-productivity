@@ -588,7 +588,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
       forkJoin([
         this._taskRepeatCfgService
-          .getTaskRepeatCfgById$(this.task.repeatCfgId)
+          .getTaskRepeatCfgByIdAllowUndefined$(this.task.repeatCfgId)
           .pipe(first()),
         this._taskService
           .getTasksWithSubTasksByRepeatCfgId$(this.task.repeatCfgId)
@@ -609,6 +609,15 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
                 nonArchiveInstancesWithSubTasks,
                 archiveInstances,
               });
+
+              // Repeat config was deleted (e.g. via cross-client sync) but the task
+              // still references it — treat it as a plain task move instead of
+              // crashing on the missing config. (#8715)
+              if (!reminderCfg) {
+                this._taskService.moveToProject(taskWithSubTasks, projectId);
+                this.onClose();
+                return EMPTY;
+              }
 
               // if there is only a single instance (probably just created) than directly update the task repeat cfg
               if (

@@ -1247,7 +1247,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       setTimeout(() => this.focusNext(true));
     } else {
       forkJoin([
-        this._taskRepeatCfgService.getTaskRepeatCfgById$(t.repeatCfgId).pipe(first()),
+        this._taskRepeatCfgService
+          .getTaskRepeatCfgByIdAllowUndefined$(t.repeatCfgId)
+          .pipe(first()),
         this._taskService.getTasksWithSubTasksByRepeatCfgId$(t.repeatCfgId).pipe(first()),
         this._taskService.getArchiveTasksForRepeatCfgId(t.repeatCfgId),
         this._projectService.getByIdOnce$(projectId),
@@ -1265,6 +1267,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
                 nonArchiveInstancesWithSubTasks,
                 archiveInstances,
               });
+
+              // Repeat config was deleted (e.g. via cross-client sync) but the task
+              // still references it — treat it as a plain task move instead of
+              // crashing on the missing config. (#8715)
+              if (!reminderCfg) {
+                this._taskService.moveToProject(this.task(), projectId);
+                setTimeout(() => this.focusNext(true));
+                return EMPTY;
+              }
 
               // if there is only a single instance (probably just created) than directly update the task repeat cfg
               if (

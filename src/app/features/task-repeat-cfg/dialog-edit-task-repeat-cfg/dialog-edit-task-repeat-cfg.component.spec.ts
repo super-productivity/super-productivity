@@ -71,7 +71,9 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       repeatCfg?: TaskRepeatCfg;
       targetDate?: string;
     },
-    getTaskRepeatCfgById$ReturnValue?: Observable<TaskRepeatCfg> | Subject<TaskRepeatCfg>,
+    getRepeatCfgReturnValue?:
+      | Observable<TaskRepeatCfg | undefined>
+      | Subject<TaskRepeatCfg>,
   ): Promise<ComponentFixture<DialogEditTaskRepeatCfgComponent>> => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
@@ -80,6 +82,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     } as any);
     mockTaskRepeatCfgService = jasmine.createSpyObj('TaskRepeatCfgService', [
       'getTaskRepeatCfgById$',
+      'getTaskRepeatCfgByIdAllowUndefined$',
       'updateTaskRepeatCfg',
       'addTaskRepeatCfgToTask',
       'deleteTaskRepeatCfgWithDialog',
@@ -91,10 +94,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     mockDateService.todayStr.and.returnValue(MOCK_TODAY_STR);
     mockDateService.getLogicalTodayDate.and.returnValue(new Date(MOCK_TODAY));
 
-    // Set up the return value for getTaskRepeatCfgById$ before creating the component
-    if (getTaskRepeatCfgById$ReturnValue) {
-      mockTaskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
-        getTaskRepeatCfgById$ReturnValue,
+    // Set up the return value for the repeat-config lookup before creating the component
+    if (getRepeatCfgReturnValue) {
+      mockTaskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        getRepeatCfgReturnValue,
       );
     }
 
@@ -215,6 +218,24 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       // repeatCfgInitial should now be set
       expect(component.repeatCfgInitial()).toBeDefined();
       expect(component.repeatCfgInitial()?.id).toBe('repeat-cfg-123');
+    }));
+
+    // #8715: the task can reference a repeat config that was already deleted
+    // (e.g. via cross-client sync). The lookup must not throw and crash — the
+    // dialog should abort editing and close.
+    it('should close instead of crashing when the repeat config was deleted (#8715)', fakeAsync(async () => {
+      const taskWithRepeatCfg = {
+        ...mockTask,
+        repeatCfgId: 'repeat-cfg-123',
+      } as TaskCopy;
+
+      const fixture = await setupTestBed({ task: taskWithRepeatCfg }, of(undefined));
+      const component = fixture.componentInstance;
+      fixture.detectChanges();
+      tick();
+
+      expect(component.isLoading()).toBe(false);
+      expect(mockDialogRef.close).toHaveBeenCalled();
     }));
   });
 
