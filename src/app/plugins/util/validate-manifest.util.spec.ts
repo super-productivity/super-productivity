@@ -33,4 +33,51 @@ describe('validatePluginManifest', () => {
     expect(result.isValid).toBe(false);
     expect(result.errors).toContain('Plugin ID is required');
   });
+
+  describe('allowedHosts', () => {
+    it('accepts a manifest with valid host-only entries', () => {
+      const result = validatePluginManifest({
+        ...baseManifest,
+        allowedHosts: ['api.example.com', '3.basecampapi.com'],
+      });
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('accepts an omitted allowedHosts (undefined is valid)', () => {
+      const result = validatePluginManifest(baseManifest);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('rejects allowedHosts that is not an array', () => {
+      const result = validatePluginManifest({
+        ...baseManifest,
+        allowedHosts: 'api.example.com' as unknown as string[],
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('allowedHosts must be an array of hostnames');
+    });
+
+    it('rejects entries carrying a scheme, port, or path', () => {
+      const result = validatePluginManifest({
+        ...baseManifest,
+        allowedHosts: ['https://api.example.com'],
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain(
+        'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
+      );
+    });
+
+    it('rejects empty or non-string entries', () => {
+      const result = validatePluginManifest({
+        ...baseManifest,
+        allowedHosts: ['  ', 42 as unknown as string],
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain(
+        'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
+      );
+    });
+  });
 });

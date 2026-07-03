@@ -480,8 +480,16 @@ describe('PluginBridgeService - request()', () => {
     service = TestBed.inject(PluginBridgeService);
   });
 
+  const boundFor = (
+    allowedHosts?: string[],
+  ): { request: <T>(url: string, options?: unknown) => Promise<T> } =>
+    service.createBoundMethods(
+      'test-plugin',
+      allowedHosts ? ({ allowedHosts } as any) : undefined,
+    ) as any;
+
   it('routes generic host HTTP requests through PluginHttpService without host auth injection', async () => {
-    const bound = service.createBoundMethods('test-plugin');
+    const bound = boundFor(['example.test']);
     const options = {
       method: 'POST',
       headers: { Authorization: 'Bearer plugin-token' },
@@ -511,6 +519,44 @@ describe('PluginBridgeService - request()', () => {
         responseType: undefined,
       },
     );
+  });
+
+  it('rejects a request to a host not in the manifest allowedHosts', async () => {
+    const bound = boundFor(['example.test']);
+    await expectAsync(bound.request('https://evil.test/steal')).toBeRejectedWithError(
+      /not in the plugin's declared allowedHosts/,
+    );
+    expect(pluginHttpService.createHttpHelper).not.toHaveBeenCalled();
+  });
+
+  it('is fail-closed: rejects when the plugin declares no allowedHosts', async () => {
+    const bound = boundFor(undefined);
+    await expectAsync(bound.request('https://example.test/x')).toBeRejectedWithError(
+      /declares no "allowedHosts"/,
+    );
+    expect(pluginHttpService.createHttpHelper).not.toHaveBeenCalled();
+  });
+
+  it('is fail-closed: rejects when allowedHosts is empty', async () => {
+    const bound = boundFor([]);
+    await expectAsync(bound.request('https://example.test/x')).toBeRejectedWithError(
+      /declares no "allowedHosts"/,
+    );
+    expect(pluginHttpService.createHttpHelper).not.toHaveBeenCalled();
+  });
+
+  it('matches hosts case-insensitively and tolerates a trailing dot', async () => {
+    const bound = boundFor(['Example.Test']);
+    await bound.request('https://example.test./x');
+    expect(requestSpy).toHaveBeenCalled();
+  });
+
+  it('resolves the real host from userinfo tricks (blocks https://allowed@evil)', async () => {
+    const bound = boundFor(['example.test']);
+    await expectAsync(
+      bound.request('https://example.test@evil.test/x'),
+    ).toBeRejectedWithError(/"evil\.test" is blocked/);
+    expect(pluginHttpService.createHttpHelper).not.toHaveBeenCalled();
   });
 });
 

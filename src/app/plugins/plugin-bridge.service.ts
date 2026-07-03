@@ -378,10 +378,8 @@ export class PluginBridgeService implements OnDestroy {
         this._pluginSecretService.getSecret(pluginId, key),
       deleteSecret: (key: string): Promise<void> =>
         this._pluginSecretService.deleteSecret(pluginId, key),
-      request: <T = unknown>(
-        url: string,
-        options?: PluginRequestOptions,
-      ): Promise<T> => this.request<T>(url, options),
+      request: <T = unknown>(url: string, options?: PluginRequestOptions): Promise<T> =>
+        this.request<T>(url, options, manifest?.allowedHosts),
 
       // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>
@@ -510,7 +508,12 @@ export class PluginBridgeService implements OnDestroy {
   async request<T = unknown>(
     url: string,
     options?: PluginRequestOptions,
+    allowedHosts?: string[],
   ): Promise<T> {
+    // Enforce the plugin's manifest-declared host allowlist (exact host, fail-closed)
+    // BEFORE the shared HTTP layer applies its URL/private-network (SSRF) guards.
+    this._assertRequestHostAllowed(url, allowedHosts);
+
     const { method = 'GET', body } = options ?? {};
     const requestOptions = options
       ? {
@@ -524,6 +527,36 @@ export class PluginBridgeService implements OnDestroy {
     return this._pluginHttpService
       .createHttpHelper(() => ({}))
       .request<T>(method, url, body, requestOptions);
+  }
+
+  /**
+   * Gate `PluginAPI.request` to the exact hostnames declared in the plugin's
+   * manifest `allowedHosts`. Host-only, case-insensitive, trailing-dot tolerant,
+   * port-agnostic exact match. Fail-closed: an empty/undefined allowlist blocks
+   * every request. This is a security boundary — it must run in the host, never
+   * in plugin code.
+   */
+  private _assertRequestHostAllowed(url: string, allowedHosts?: string[]): void {
+    let hostname: string;
+    try {
+      // URL parsing resolves userinfo tricks (https://ok.com@evil.com -> evil.com).
+      hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, '');
+    } catch {
+      throw new Error(`[PluginHttp] Invalid URL for PluginAPI.request: ${url}`);
+    }
+    const allowed = (allowedHosts ?? [])
+      .map((h) => h.trim().toLowerCase().replace(/\.$/, ''))
+      .filter((h) => h.length > 0);
+    if (allowed.length === 0) {
+      throw new Error(
+        '[PluginHttp] PluginAPI.request is blocked: this plugin declares no "allowedHosts" in its manifest. Declare the exact host(s) it needs.',
+      );
+    }
+    if (!allowed.includes(hostname)) {
+      throw new Error(
+        `[PluginHttp] PluginAPI.request to "${hostname}" is blocked: not in the plugin's declared allowedHosts (${allowed.join(', ')}).`,
+      );
+    }
   }
 
   async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {

@@ -122,6 +122,15 @@ export interface PluginManifest {
   description?: string;
   hooks: Hooks[];
   permissions: string[];
+  /**
+   * Exact hostnames this plugin is allowed to reach via `PluginAPI.request`
+   * (e.g. `"api.example.com"`). Host-only, exact match — no wildcards, and the
+   * port is ignored. Enforced by the host: a `request` to any host not listed
+   * here is rejected. If omitted or empty, `PluginAPI.request` is disabled for
+   * this plugin (fail-closed). Surfaced to the user at install so the plugin's
+   * outbound network reach is reviewable. Does not affect issue-provider HTTP.
+   */
+  allowedHosts?: string[];
   iFrame?: boolean;
   isSkipMenuEntry?: boolean;
   type?: 'standard' | 'issueProvider';

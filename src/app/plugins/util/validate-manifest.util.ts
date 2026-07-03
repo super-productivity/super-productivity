@@ -37,6 +37,22 @@ export const validatePluginManifest = (
     errors.push('Plugin version is required');
   }
 
+  // Validate allowedHosts if present (host-only exact allowlist for PluginAPI.request)
+  if (manifest?.allowedHosts !== undefined) {
+    if (!Array.isArray(manifest.allowedHosts)) {
+      errors.push('allowedHosts must be an array of hostnames');
+    } else {
+      const badEntries = manifest.allowedHosts.filter(
+        (h) => typeof h !== 'string' || h.trim().length === 0 || /[/:]/.test(h),
+      );
+      if (badEntries.length > 0) {
+        errors.push(
+          'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
+        );
+      }
+    }
+  }
+
   // Validate i18n configuration if present
   if (manifest?.i18n) {
     if (!Array.isArray(manifest.i18n.languages)) {
