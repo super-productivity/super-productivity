@@ -137,6 +137,31 @@ describe('AddSubtaskInputComponent', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('commits text still held in an active IME/predictive-text composition (#8747)', fakeAsync(() => {
+    // Angular's DefaultValueAccessor buffers ngModelChange during composition,
+    // so titleDraft() stays empty until compositionend (which a predictive
+    // keyboard only fires on a trailing space). Committing on Enter must read
+    // the live input value, otherwise the subtask cannot be added unless the
+    // user types a trailing space first.
+    const input = getInput();
+    input.dispatchEvent(new CompositionEvent('compositionstart'));
+    input.value = 'Composed subtask';
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+    fixture.detectChanges();
+
+    // Buffering leaves the model empty while the DOM already has the text.
+    expect(component.titleDraft()).toBe('');
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    fixture.detectChanges();
+    tick(100);
+
+    expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+      title: 'Composed subtask',
+    });
+    expect(getInput().value).toBe('');
+  }));
+
   it('ignores repeated and composing Enter events', () => {
     setInputValue('New subtask');
 

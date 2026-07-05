@@ -87,13 +87,27 @@ export class AddSubtaskInputComponent {
   }
 
   private _commit(): void {
-    const title = this.titleDraft().trim();
+    // Read the live DOM value rather than the titleDraft signal: Angular's
+    // DefaultValueAccessor buffers ngModelChange during IME / predictive-text
+    // composition, so the signal can still be empty when Enter is pressed
+    // mid-composition (the composition only ends — and the signal only
+    // updates — once a trailing space or punctuation is typed). The input
+    // element itself always holds the current text. Falls back to the signal
+    // if the view child is not available (e.g. in unit tests without a DOM).
+    const inputEl = this.inputEl()?.nativeElement;
+    const title = (inputEl?.value ?? this.titleDraft()).trim();
     if (!title) {
       return;
     }
 
     this._taskService.addSubTaskTo(this.parentId(), { title });
     this.titleDraft.set('');
+    // Clear the element directly too: when composition buffering kept the
+    // signal empty, it is already '' and re-setting it would not write the
+    // cleared value back through the one-way [ngModel] binding.
+    if (inputEl) {
+      inputEl.value = '';
+    }
 
     this._isKeepingOpenAfterSubmit = true;
     afterNextRender(
