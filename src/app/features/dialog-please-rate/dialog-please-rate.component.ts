@@ -6,6 +6,7 @@ import {
   MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../t.const';
+import { IS_APPLE_APP_STORE } from '../../app.constants';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
@@ -46,6 +47,11 @@ export class DialogPleaseRateComponent {
   protected readonly mailtoUrl = buildFeedbackMailto();
   protected readonly discussionsUrl = DISCUSSIONS_URL;
   protected readonly contributingUrl = CONTRIBUTING_URL;
+  // CONTRIBUTING.md links to GitHub Sponsors; Apple App Store builds must not
+  // surface donation paths outside In-App Purchase (Guideline 3.1.1). Mirrors
+  // the gate on the identical Help-menu link. This dialog isn't shown on iOS
+  // (native StoreReview card) but is shown on the Mac App Store (Electron).
+  protected readonly IS_APPLE_APP_STORE = IS_APPLE_APP_STORE;
   // Shown as selectable text under the email option so the channel isn't a dead
   // end when no mail client is registered (common on Linux/web) and the mailto:
   // link silently does nothing.

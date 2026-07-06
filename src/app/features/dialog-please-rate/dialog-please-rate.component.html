@@ -79,20 +79,22 @@
       <!-- Fallback: if no mail client is registered the mailto: link above does
            nothing, so show the address as selectable text (never a dead end). -->
       <small class="feedback-email">{{ maintainerEmail }}</small>
-      <a
-        class="action-item"
-        [href]="contributingUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        (click)="close('feedback')"
-      >
-        <mat-icon class="action-item-icon">volunteer_activism</mat-icon>
-        <span class="action-item-text">
-          <strong>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE | translate }}</strong>
-          <small>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE_DESC | translate }}</small>
-        </span>
-        <mat-icon class="action-item-trailing">open_in_new</mat-icon>
-      </a>
+      @if (!IS_APPLE_APP_STORE) {
+        <a
+          class="action-item"
+          [href]="contributingUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          (click)="close('feedback')"
+        >
+          <mat-icon class="action-item-icon">volunteer_activism</mat-icon>
+          <span class="action-item-text">
+            <strong>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE | translate }}</strong>
+            <small>{{ T.F.D_RATE.FEEDBACK_CONTRIBUTE_DESC | translate }}</small>
+          </span>
+          <mat-icon class="action-item-trailing">open_in_new</mat-icon>
+        </a>
+      }
     </div>
   </mat-dialog-content>
 

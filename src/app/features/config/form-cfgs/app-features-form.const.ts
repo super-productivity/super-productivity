@@ -1,5 +1,6 @@
 import { ConfigFormSection, AppFeaturesConfig } from '../global-config.model';
 import { T } from '../../../t.const';
+import { IS_APPLE_APP_STORE } from '../../../app.constants';
 
 export const EXPERIMENTAL_APP_FEATURE_KEYS: ReadonlyArray<keyof AppFeaturesConfig> = [
   'isEnableUserProfiles',
@@ -93,6 +94,9 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
     {
       key: 'isDonatePageEnabled',
       type: 'slide-toggle',
+      // Donations are fully hidden on Apple App Store builds (Guideline 3.1.1),
+      // so this toggle would be inert there — hide it to avoid a dead control.
+      hideExpression: () => IS_APPLE_APP_STORE,
       templateOptions: {
         label: T.GCF.APP_FEATURES.DONATE_PAGE,
         icon: 'favorite',

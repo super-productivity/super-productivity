@@ -3,6 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
+import { IS_APPLE_APP_STORE } from '../../app.constants';
 
 @Component({
   selector: 'donate-page',
@@ -14,4 +15,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 })
 export class DonatePageComponent {
   readonly T = T;
+  // Hides the whole page body on Apple App Store builds — the route stays
+  // reachable by direct URL even though the nav entry is gone. See IS_APPLE_APP_STORE.
+  readonly IS_APPLE_APP_STORE = IS_APPLE_APP_STORE;
 }

@@ -1,21 +1,23 @@
 <div class="page-wrapper">
   <div class="content">
-    <p>
-      {{ T.DONATE_PAGE.INTRO_1 | translate }}
-    </p>
-    <p>
-      {{ T.DONATE_PAGE.INTRO_2 | translate }}
-    </p>
-    <p>
-      <a
-        href="https://github.com/sponsors/johannesjo"
-        target="_blank"
-        mat-raised-button
-        color="primary"
-      >
-        <mat-icon>favorite</mat-icon>
-        {{ T.DONATE_PAGE.BUTTON_TEXT | translate }}
-      </a>
-    </p>
+    @if (!IS_APPLE_APP_STORE) {
+      <p>
+        {{ T.DONATE_PAGE.INTRO_1 | translate }}
+      </p>
+      <p>
+        {{ T.DONATE_PAGE.INTRO_2 | translate }}
+      </p>
+      <p>
+        <a
+          href="https://github.com/sponsors/johannesjo"
+          target="_blank"
+          mat-raised-button
+          color="primary"
+        >
+          <mat-icon>favorite</mat-icon>
+          {{ T.DONATE_PAGE.BUTTON_TEXT | translate }}
+        </a>
+      </p>
+    }
   </div>
 </div>
