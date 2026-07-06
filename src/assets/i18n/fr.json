@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Par défaut du système",
       "TIME_LOCALE_CS_CZ": "Tchèque - 24 heures",
       "TIME_LOCALE_DE_DE": "Allemand - 24 heures",
-      "TIME_LOCALE_DESCRIPTION": "Choisissez une locale pour le formatage de l'heure. Différentes locales utilisent différentes conventions (format 12h vs 24h)",
+      "TIME_LOCALE_DESCRIPTION": "Définit le format de date et le format horaire 12/24 heures utilisé dans toute l'application. « Par défaut du système » suit la langue/région de votre navigateur — pour forcer le format 12 ou 24 heures, choisissez une locale spécifique. Les noms de mois et de jours de la semaine écrits en toutes lettres suivent également cette locale (par exemple, ISO 8601 affiche des noms suédois).",
       "TIME_LOCALE_EN_GB": "Anglais (RU) - 24 heures",
       "TIME_LOCALE_EN_US": "Anglais (US) - 12 heures AM/PM",
       "TIME_LOCALE_ES_ES": "Espagnol - 24 heures",

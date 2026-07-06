@@ -2440,7 +2440,7 @@
       "TIME_LOCALE_AUTO": "Systemvorgabe",
       "TIME_LOCALE_CS_CZ": "Tschechisch - 24 Stunden",
       "TIME_LOCALE_DE_DE": "Deutsch - 24 Stunden",
-      "TIME_LOCALE_DESCRIPTION": "Wähle ein Gebietsschema für die Zeitformatierung. Verschiedene Gebietsschemata verwenden unterschiedliche Konventionen (12h vs. 24h Format)",
+      "TIME_LOCALE_DESCRIPTION": "Legt das Datumsformat und das 12/24-Stunden-Zeitformat fest, das in der gesamten App verwendet wird. „Systemvorgabe“ richtet sich nach Sprache/Region deines Browsers — um 12- oder 24-Stunden-Zeit zu erzwingen, wähle ein bestimmtes Gebietsschema. Auch ausgeschriebene Monats- und Wochentagsnamen folgen diesem Gebietsschema (zum Beispiel zeigt ISO 8601 schwedische Namen).",
       "TIME_LOCALE_EN_GB": "Englisch (UK) - 24 Stunden",
       "TIME_LOCALE_EN_US": "Englisch (US) - 12 Stunden AM/PM",
       "TIME_LOCALE_ES_ES": "Spanisch - 24 Stunden",

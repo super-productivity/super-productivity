@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Predeterminado del sistema",
       "TIME_LOCALE_CS_CZ": "Checo: 24 horas, DD. MM. AAAA",
       "TIME_LOCALE_DE_DE": "Alemán: 24 horas, DD.MM.AAAA",
-      "TIME_LOCALE_DESCRIPTION": "NOTA: ahora estas opciones no pueden cambiar el formato de entrada de hora (12/24 horas) porque está controlado por tu SO",
+      "TIME_LOCALE_DESCRIPTION": "Establece el formato de fecha y el formato de hora de 12/24 horas usado en toda la aplicación. «Predeterminado del sistema» sigue el idioma/región de tu navegador; para forzar el formato de 12 o 24 horas, elige una configuración regional específica. Los nombres de meses y días de la semana escritos con letras también siguen esta configuración regional (por ejemplo, ISO 8601 muestra nombres en sueco).",
       "TIME_LOCALE_EN_GB": "Inglés (Reino Unido): 24 horas, DD/MM/AAAA",
       "TIME_LOCALE_EN_US": "Inglés (EE.UU.): 12 horas AM/PM, MM/DD/AAAA",
       "TIME_LOCALE_ES_ES": "Español: 24 horas, DD/MM/AAAA",

@@ -2465,7 +2465,7 @@
       "TIME_LOCALE_AUTO": "Systemets standardinställning",
       "TIME_LOCALE_CS_CZ": "Czech - 24-hour",
       "TIME_LOCALE_DE_DE": "German - 24-hour",
-      "TIME_LOCALE_DESCRIPTION": "Välj en lokal för tidsformatering. Olika lokala inställningar använder olika konventioner (12- eller 24-timmarsformat).",
+      "TIME_LOCALE_DESCRIPTION": "Ställer in datumformatet och 12/24-timmarsformatet som används i hela appen. ”Systemets standardinställning” följer webbläsarens språk/region — välj en specifik lokalinställning för att tvinga fram 12- eller 24-timmarstid. Utskrivna månads- och veckodagsnamn följer också denna lokalinställning (till exempel visar ISO 8601 svenska namn).",
       "TIME_LOCALE_EN_GB": "English (UK) - 24-hour",
       "TIME_LOCALE_EN_US": "English (US) - 12-hour AM/PM",
       "TIME_LOCALE_ES_ES": "Spanish - 24-hour",

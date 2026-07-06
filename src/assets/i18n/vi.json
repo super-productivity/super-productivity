@@ -2299,7 +2299,7 @@
       "TIME_LOCALE_AUTO": "Mặc định hệ thống",
       "TIME_LOCALE_CS_CZ": "Tiếng Séc: 24 giờ, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "Tiếng Đức: 24 giờ, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "LƯU Ý: Tùy chọn này không thể thay đổi định dạng nhập thời gian (12/24 giờ) vì nó được kiểm soát bởi hệ điều hành của bạn.",
+      "TIME_LOCALE_DESCRIPTION": "Đặt định dạng ngày và định dạng giờ 12/24 giờ được sử dụng trên toàn ứng dụng. \"Mặc định hệ thống\" tuân theo ngôn ngữ/khu vực của trình duyệt của bạn — để buộc dùng định dạng 12 hoặc 24 giờ, hãy chọn một ngôn ngữ vùng cụ thể. Tên tháng và tên thứ trong tuần viết đầy đủ cũng tuân theo ngôn ngữ vùng này (ví dụ, ISO 8601 hiển thị tên tiếng Thụy Điển).",
       "TIME_LOCALE_EN_GB": "Tiếng Anh (UK): 24 giờ, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "Tiếng Anh (US): 12 giờ AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Tiếng Tây Ban Nha: 24 giờ, DD/MM/YYYY",

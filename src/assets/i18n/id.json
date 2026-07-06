@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Default sistem",
       "TIME_LOCALE_CS_CZ": "Ceko - 24 jam",
       "TIME_LOCALE_DE_DE": "Jerman - 24 jam",
-      "TIME_LOCALE_DESCRIPTION": "Pilih lokal untuk format waktu. Lokal yang berbeda menggunakan konvensi yang berbeda (format 12 jam vs 24 jam)",
+      "TIME_LOCALE_DESCRIPTION": "Mengatur format tanggal dan format waktu 12/24 jam yang digunakan di seluruh aplikasi. \"Default sistem\" mengikuti bahasa/wilayah browser Anda — untuk memaksa format 12 atau 24 jam, pilih lokal tertentu. Nama bulan dan hari yang dieja lengkap juga mengikuti lokal ini (misalnya, ISO 8601 menampilkan nama dalam bahasa Swedia).",
       "TIME_LOCALE_EN_GB": "Inggris (UK) - 24 jam",
       "TIME_LOCALE_EN_US": "Inggris (AS) - 12 jam AM/PM",
       "TIME_LOCALE_ES_ES": "Spanyol - 24 jam",

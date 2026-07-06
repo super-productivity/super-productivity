@@ -2265,7 +2265,7 @@
       "TIME_LOCALE_AUTO": "Domyślny systemowy",
       "TIME_LOCALE_CS_CZ": "Czeski: 24-godzinny, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "Niemiecki: 24-godzinny, DD.MM.RRRR",
-      "TIME_LOCALE_DESCRIPTION": "UWAGA: Obecnie ta opcja nie zezwala na zmianę formatu wprowadzania czasu (notacja 12/24-godzinna), ponieważ jest to kontrolowane przez Twój system operacyjny",
+      "TIME_LOCALE_DESCRIPTION": "Ustawia format daty oraz 12/24-godzinny format czasu używany w całej aplikacji. „Domyślny systemowy” jest zgodny z językiem/regionem przeglądarki — aby wymusić format 12- lub 24-godzinny, wybierz konkretną lokalizację. Zapisane słownie nazwy miesięcy i dni tygodnia również są zgodne z tą lokalizacją (na przykład ISO 8601 pokazuje szwedzkie nazwy).",
       "TIME_LOCALE_EN_GB": "Angielski (UK): 24-godzinny, DD/MM/RRRR",
       "TIME_LOCALE_EN_US": "Angielski (US): 12-godzinny, AM/PM, MM/DD/RRRR",
       "TIME_LOCALE_ES_ES": "Hiszpański: 24-godzinny, DD/MM/RRRR",

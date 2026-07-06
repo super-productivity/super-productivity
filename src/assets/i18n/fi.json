@@ -2132,7 +2132,7 @@
       "TIME_LOCALE_AUTO": "Järjestelmän oletus",
       "TIME_LOCALE_CS_CZ": "Checo: 24-tuntinen, DD. MM. AAAA",
       "TIME_LOCALE_DE_DE": "Saksa - 24-tuntinen",
-      "TIME_LOCALE_DESCRIPTION": "Valitse maa-asetus ajan muotoilua varten. Eri maa-asetukset käyttävät eri käytäntöjä (12h vs 24h muoto)",
+      "TIME_LOCALE_DESCRIPTION": "Määrittää päivämäärämuodon ja 12/24-tunnin aikamuodon, jota käytetään koko sovelluksessa. ”Järjestelmän oletus” noudattaa selaimesi kieltä/aluetta — pakota 12- tai 24-tuntinen aika valitsemalla tietty maa-asetus. Myös kirjoitetut kuukausien ja viikonpäivien nimet noudattavat tätä maa-asetusta (esimerkiksi ISO 8601 näyttää ruotsinkieliset nimet).",
       "TIME_LOCALE_EN_GB": "Englanti (UK) - 24-tuntinen",
       "TIME_LOCALE_EN_US": "Englanti (USA) - 12-tuntinen AM/PM",
       "TIME_LOCALE_ES_ES": "Espanja - 24-tuntinen",

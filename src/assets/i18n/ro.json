@@ -2461,7 +2461,7 @@
       "TIME_LOCALE_AUTO": "Implicit sistem",
       "TIME_LOCALE_CS_CZ": "Cehesc: 24 de ore, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "Nemțesc: 24 de ore, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "NOTĂ: Această opțiune nu poate modifica formatul de intrare pentru timp (12/24 de ore) deoarece este controlat de sistemul de operare.",
+      "TIME_LOCALE_DESCRIPTION": "Setează formatul datei și formatul de oră de 12/24 de ore folosit în întreaga aplicație. „Implicit sistem” urmează limba/regiunea browserului tău — pentru a forța formatul de 12 sau 24 de ore, alege o setare regională specifică. Numele lunilor și ale zilelor săptămânii scrise în litere urmează și ele această setare regională (de exemplu, ISO 8601 afișează nume în suedeză).",
       "TIME_LOCALE_EN_GB": "Englezesc (UK): 24 de ore, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "Englezesc (US): 12 ore AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spaniolesc: 24 de ore, DD/MM/YYYY",

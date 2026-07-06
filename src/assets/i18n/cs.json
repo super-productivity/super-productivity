@@ -2114,7 +2114,7 @@
       "TIME_LOCALE": "Formát národního prostředí data a času",
       "TIME_LOCALE_AUTO": "Výchozí systémové",
       "TIME_LOCALE_DE_DE": "Němčina: 24-hodin, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "POZNÁMKA: Tato možnost nemůže změnit formát zadávání času (12/24 hodin), protože je řízen vaším operačním systémem",
+      "TIME_LOCALE_DESCRIPTION": "Nastavuje formát data a 12/24hodinový formát času používaný v celé aplikaci. „Výchozí systémové“ se řídí jazykem/oblastí vašeho prohlížeče — chcete-li vynutit 12- nebo 24hodinový čas, zvolte konkrétní lokalitu. Podle této lokality se řídí i vypsané názvy měsíců a dnů v týdnu (například ISO 8601 zobrazuje švédské názvy).",
       "TIME_LOCALE_EN_GB": "Angličtina (UK): 24-hodin, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "Angličtina (US): 12-hodin AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Španělština: 24-hodin, DD/MM/YYYY",

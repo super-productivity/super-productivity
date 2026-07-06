@@ -2452,7 +2452,7 @@
       "TIME_LOCALE_AUTO": "Sistem varsayılanı",
       "TIME_LOCALE_CS_CZ": "Czech: 24-saat, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-saat, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "NOT: Bu seçenek saat giriş formatını (12/24 saat) değiştiremez; çünkü bu ayar işletim sisteminiz tarafından kontrol edilmektedir.",
+      "TIME_LOCALE_DESCRIPTION": "Uygulama genelinde kullanılan tarih biçimini ve 12/24 saat biçimini ayarlar. \"Sistem varsayılanı\", tarayıcınızın dilini/bölgesini izler — 12 veya 24 saat biçimini zorlamak için belirli bir yerel ayar seçin. Ayların ve haftanın günlerinin yazıyla adları da bu yerel ayarı izler (örneğin, ISO 8601 İsveççe adları gösterir).",
       "TIME_LOCALE_EN_GB": "English (UK): 24-saat, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-saat AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-saat, DD/MM/YYYY",

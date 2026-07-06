@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Predefinito di sistema",
       "TIME_LOCALE_CS_CZ": "Ceco - 24 ore",
       "TIME_LOCALE_DE_DE": "Tedesco - 24 ore",
-      "TIME_LOCALE_DESCRIPTION": "Scegli un locale per la formattazione dell'orario. Locali diversi usano convenzioni diverse (formato 12h vs 24h)",
+      "TIME_LOCALE_DESCRIPTION": "Imposta il formato della data e il formato dell'ora a 12/24 ore usato in tutta l'app. «Predefinito di sistema» segue la lingua/area geografica del browser; per forzare il formato a 12 o 24 ore, scegli una specifica impostazione locale. Anche i nomi dei mesi e dei giorni della settimana scritti per esteso seguono questa impostazione locale (ad esempio, ISO 8601 mostra i nomi in svedese).",
       "TIME_LOCALE_EN_GB": "Inglese (UK) - 24 ore",
       "TIME_LOCALE_EN_US": "Inglese (US) - 12 ore AM/PM",
       "TIME_LOCALE_ES_ES": "Spagnolo - 24 ore",

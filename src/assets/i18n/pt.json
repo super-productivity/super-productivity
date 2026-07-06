@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Padrão do sistema",
       "TIME_LOCALE_CS_CZ": "Checo - 24 horas",
       "TIME_LOCALE_DE_DE": "Alemão - 24 horas",
-      "TIME_LOCALE_DESCRIPTION": "Escolha uma localidade para a formatação da hora. Diferentes localidades usam convenções diferentes (formato 12h vs 24h)",
+      "TIME_LOCALE_DESCRIPTION": "Define o formato de data e o formato de hora de 12/24 horas usado em toda a aplicação. \"Padrão do sistema\" segue o idioma/região do seu navegador — para forçar o formato de 12 ou 24 horas, escolha uma localização específica. Os nomes de meses e dias da semana por extenso também seguem esta localização (por exemplo, o ISO 8601 mostra nomes em sueco).",
       "TIME_LOCALE_EN_GB": "Inglês (Reino Unido) - 24 horas",
       "TIME_LOCALE_EN_US": "Inglês (EUA) - 12 horas AM/PM",
       "TIME_LOCALE_ES_ES": "Espanhol - 24 horas",

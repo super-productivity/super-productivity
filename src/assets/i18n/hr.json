@@ -2265,7 +2265,7 @@
       "TIME_LOCALE_AUTO": "Zadano sustava",
       "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "NAPOMENA: Ova opcija ne može promijeniti format unosa vremena (12/24 sata) jer ga kontrolira tvoj operacijski sustav.",
+      "TIME_LOCALE_DESCRIPTION": "Postavlja format datuma i 12/24-satni format vremena koji se koristi u cijeloj aplikaciji. „Zadano sustava“ slijedi jezik/regiju vašeg preglednika — da biste nametnuli 12- ili 24-satno vrijeme, odaberite određenu lokalizaciju. Ispisani nazivi mjeseci i dana u tjednu također slijede ovu lokalizaciju (na primjer, ISO 8601 prikazuje švedske nazive).",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",

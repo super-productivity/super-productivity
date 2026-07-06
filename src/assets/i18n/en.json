@@ -2490,7 +2490,7 @@
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "Sets the date format and the 12/24-hour time format used across the app. \"System default\" follows your browser's language/region — to force 12- or 24-hour time, pick a specific locale.",
+      "TIME_LOCALE_DESCRIPTION": "Sets the date format and the 12/24-hour time format used across the app. \"System default\" follows your browser's language/region — to force 12- or 24-hour time, pick a specific locale. Spelled-out month and weekday names follow this locale too (for example, ISO 8601 shows Swedish names).",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",

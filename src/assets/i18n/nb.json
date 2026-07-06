@@ -2132,7 +2132,7 @@
       "TIME_LOCALE_AUTO": "Systemstandard",
       "TIME_LOCALE_CS_CZ": "Tsjekkisk - 24-timers",
       "TIME_LOCALE_DE_DE": "Tysk - 24-timers",
-      "TIME_LOCALE_DESCRIPTION": "Velg et lokalområde for tidsformatering. Ulike lokalområder bruker forskjellige konvensjoner (12-timers vs 24-timers format)",
+      "TIME_LOCALE_DESCRIPTION": "Angir datoformatet og 12/24-timers tidsformat som brukes i hele appen. «Systemstandard» følger nettleserens språk/region — for å tvinge 12- eller 24-timers tid, velg et bestemt område. Utskrevne måneds- og ukedagsnavn følger også dette området (for eksempel viser ISO 8601 svenske navn).",
       "TIME_LOCALE_EN_GB": "Engelsk (UK) - 24-timers",
       "TIME_LOCALE_EN_US": "Engelsk (US) - 12-timers AM/PM",
       "TIME_LOCALE_ES_ES": "Spansk - 24-timers",

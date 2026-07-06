@@ -2214,7 +2214,7 @@
       "TIME_LOCALE_AUTO": "시스템 기본값",
       "TIME_LOCALE_CS_CZ": "체코어: 24시간, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "독일어: 24시간, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "참고: 이 옵션은 시간 입력 형식(12/24시간)을 변경할 수 없습니다. OS에서 제어됩니다.",
+      "TIME_LOCALE_DESCRIPTION": "앱 전체에서 사용되는 날짜 형식과 12/24시간 시간 형식을 설정합니다. \"시스템 기본값\"은 브라우저의 언어/지역을 따릅니다. 12시간 또는 24시간 형식을 강제하려면 특정 로캘을 선택하세요. 월과 요일의 전체 이름도 이 로캘을 따릅니다(예: ISO 8601은 스웨덴어 이름을 표시함).",
       "TIME_LOCALE_EN_GB": "영어 (영국): 24시간, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "영어 (미국): 12시간 AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "스페인어: 24시간, DD/MM/YYYY",

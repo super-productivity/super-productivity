@@ -2275,7 +2275,7 @@
       "TIME_LOCALE_AUTO": "Systeemstandaard",
       "TIME_LOCALE_CS_CZ": "Tsjechisch: 24-uurs, DD. MM. JJJJ",
       "TIME_LOCALE_DE_DE": "Duits: 24 uur, DD.MM.JJJJ",
-      "TIME_LOCALE_DESCRIPTION": "OPMERKING: deze opties kunnen nu het tijdinvoertype (12/24 uur) niet wijzigen omdat dit wordt geregeld door uw besturingssysteem",
+      "TIME_LOCALE_DESCRIPTION": "Stelt de datumnotatie en de 12/24-uurs tijdnotatie in die in de hele app wordt gebruikt. \"Systeemstandaard\" volgt de taal/regio van je browser — kies een specifieke landinstelling om 12- of 24-uurs tijd af te dwingen. Voluit geschreven maand- en weekdagnamen volgen ook deze landinstelling (ISO 8601 toont bijvoorbeeld Zweedse namen).",
       "TIME_LOCALE_EN_GB": "Engels (VK): 24 uur, DD/MM/JJJJ",
       "TIME_LOCALE_EN_US": "Engels (VS): 12 uur AM/PM, MM/DD/JJJJ",
       "TIME_LOCALE_ES_ES": "Spaans: 24 uur, DD/MM/JJJJ",

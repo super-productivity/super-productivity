@@ -2132,7 +2132,7 @@
       "TIME_LOCALE_AUTO": "Predvolené systémové",
       "TIME_LOCALE_CS_CZ": "Český - 24-hodinový",
       "TIME_LOCALE_DE_DE": "Nemecký - 24-hodinový",
-      "TIME_LOCALE_DESCRIPTION": "Vyberte lokalitu pre formátovanie času. Rôzne lokality používajú rôzne konvencie (12h vs 24h formát)",
+      "TIME_LOCALE_DESCRIPTION": "Nastavuje formát dátumu a 12/24-hodinový formát času používaný v celej aplikácii. „Predvolené systémové“ sa riadi jazykom/oblasťou vášho prehliadača — ak chcete vynútiť 12- alebo 24-hodinový čas, vyberte konkrétnu lokalitu. Podľa tejto lokality sa riadia aj vypísané názvy mesiacov a dní v týždni (napríklad ISO 8601 zobrazuje švédske názvy).",
       "TIME_LOCALE_EN_GB": "Anglický (UK) - 24-hodinový",
       "TIME_LOCALE_EN_US": "Anglický (US) - 12-hodinový AM/PM",
       "TIME_LOCALE_ES_ES": "Španielsky - 24-hodinový",

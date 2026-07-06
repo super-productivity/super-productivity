@@ -2277,7 +2277,7 @@
       "TIME_LOCALE_AUTO": "系統預設",
       "TIME_LOCALE_CS_CZ": "捷克文：24 小時制，DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "德文：24 小時制，DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "注意：此選項無法變更時間輸入格式（12/24 小時制），因為它由您的作業系統控制。",
+      "TIME_LOCALE_DESCRIPTION": "設定整個應用程式中使用的日期格式和 12/24 小時制時間格式。「系統預設」會跟隨瀏覽器的語言/地區——若要強制使用 12 或 24 小時制，請選擇特定的地區設定。月份和星期的完整名稱也會跟隨此地區設定（例如，ISO 8601 會顯示瑞典文名稱）。",
       "TIME_LOCALE_EN_GB": "英文（英國）：24 小時制，DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "英文（美國）：12 小時制 AM/PM，MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "西班牙文：24 小時制，DD/MM/YYYY",
