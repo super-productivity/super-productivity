@@ -65,6 +65,20 @@
   --safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
+  // Bottom clearance reserved by the mobile bottom nav and everything stacked
+  // above it (scroll content, snackbars). Half the inset by default: iOS's home
+  // indicator is thin and translucent, so a full inset reads as an oversized gap.
+  // Native Android's system bars (3-button / gesture) are opaque and must be
+  // cleared in full or the nav buttons draw under them (#8792) — overridden to
+  // the full inset for native Android in styles.scss. Reads through the shared
+  // --safe-area-bottom (not raw env()) so this tracks the same source as the
+  // header/side-nav/body insets and all bottom-inset UI behaves uniformly across
+  // SystemBars WebView bands. Caveat: on the narrow API >= 35 / WebView < 140
+  // band the shared source can double-count vs SystemBars' native padding (a
+  // cosmetic gap, not an overlap — see the device-matrix risks in
+  // docs/plans/2026-06-22-android-systembars-migration-corrected.md).
+  --bottom-nav-safe-area: calc(var(--safe-area-bottom) / 2);
+
   // Keyboard height (set dynamically via JS)
   --keyboard-height: 0px;
   --keyboard-overlay-offset: 0px;

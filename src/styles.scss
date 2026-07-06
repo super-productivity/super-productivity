@@ -56,6 +56,12 @@ body.isNativeMobile {
   }
 }
 
+// Native Android's opaque system bars need the full inset, not the iOS half
+// default — see --bottom-nav-safe-area in _css-variables.scss (#8792).
+body.isNativeMobile:not(.isIOS) {
+  --bottom-nav-safe-area: var(--safe-area-bottom);
+}
+
 // iOS-specific adjustments
 body.isIOS {
   // Prevent overscroll bounce effect

@@ -504,14 +504,14 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
   }
   body.hasMobileBottomNav mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2 + 24px
+      var(--bottom-nav-height) + var(--bottom-nav-safe-area) + 24px
     ) !important;
     pointer-events: auto;
     transition: 150ms margin;
   }
   body.hasMobileBottomNav.isAddTaskBarOpen mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2 + 48px
+      var(--bottom-nav-height) + var(--bottom-nav-safe-area) + 48px
     ) !important;
     pointer-events: auto;
   }

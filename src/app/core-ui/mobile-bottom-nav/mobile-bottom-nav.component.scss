@@ -9,7 +9,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2);
+  // Background fills the full height incl. the reserved system-bar area; the
+  // padding-bottom below keeps the buttons above it (see --bottom-nav-safe-area).
+  height: calc(var(--bottom-nav-height) + var(--bottom-nav-safe-area));
   box-sizing: border-box;
   background: var(--bottom-nav-bg);
   border-top: 1px solid var(--separator-color);
@@ -17,7 +19,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--s);
-  padding-bottom: calc(env(safe-area-inset-bottom) / 2);
+  padding-bottom: var(--bottom-nav-safe-area);
   z-index: var(--z-mobile-bottom-nav);
   display: flex;
 
@@ -113,12 +115,6 @@
       pointer-events: none;
     }
   }
-}
-
-// iOS: nav extends its background into the home indicator area,
-// padding keeps buttons above it
-:host-context(.isIOS) .mobile-bottom-nav {
-  padding-bottom: calc(env(safe-area-inset-bottom) / 2);
 }
 
 // Material Design touch target improvements
