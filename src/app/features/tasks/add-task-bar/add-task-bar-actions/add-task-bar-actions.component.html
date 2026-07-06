@@ -1,4 +1,8 @@
 <div class="action-bar">
+  <!-- Slot for controls the parent wants to scroll together with these actions
+       (e.g. the add-to-top/bottom and search toggles on the create-mode bar). -->
+  <ng-content></ng-content>
+
   <button
     #projectMenuTrigger
     mat-button

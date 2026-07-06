@@ -22,7 +22,7 @@ import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
@@ -101,6 +101,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
     MatIcon,
     MatTooltip,
     AsyncPipe,
+    NgTemplateOutlet,
     MentionModule,
     MatAutocomplete,
     MatAutocompleteTrigger,
@@ -184,8 +185,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
   nrOfRightBtns = computed(() => {
-    let count = 2;
-    if (this.stateService.inputTxt().length > 0) {
+    // The overlay only holds the submit (create mode, while typing) and backlog
+    // buttons now; the add-to-bottom/search toggles live in the actions/search
+    // row below the input.
+    let count = 0;
+    if (!this.isSearchMode() && this.stateService.inputTxt().length > 0) {
       count++;
     }
     if (this.currentProject()?.isEnableBacklog) {

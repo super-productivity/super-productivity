@@ -75,14 +75,16 @@
     color: inherit;
     font-family: var(--font-primary-stack);
 
-    padding-right: 84px;
+    // Right padding leaves room for the overlay buttons in .right-button-controls
+    // (submit while typing and/or the backlog toggle).
+    padding-right: var(--s2);
 
-    &.nr-of-btns-3 {
-      padding-right: 126px;
+    &.nr-of-btns-1 {
+      padding-right: 44px;
     }
 
-    &.nr-of-btns-4 {
-      padding-right: 166px;
+    &.nr-of-btns-2 {
+      padding-right: 84px;
     }
 
     &::placeholder {
@@ -105,31 +107,69 @@
     border-color: var(--extra-border-color);
   }
 
-  .switch-add-to-btn,
-  .switch-add-to-bot-btn {
+  .switch-add-to-btn {
     opacity: 0.4;
 
     &:hover {
       opacity: 1;
-    }
-  }
-
-  .search-toggle-btn {
-    opacity: 0.4;
-
-    &:hover {
-      opacity: 1;
-    }
-
-    &.active {
-      opacity: 1;
-      background-color: var(--primary-light);
-      color: var(--primary);
     }
   }
 
   .search-input {
     padding-right: var(--s5); // Make room for spinner
+  }
+}
+
+// Wraps the two toggles so a dashed divider sits to their right, separating them
+// from the action chips / search text that follow in the same row.
+// Wraps the two toggles (projected into the create-mode action bar or the search
+// info row) so a dashed divider sits to their right, separating them from the
+// chips / search text that follow. Nesting the button rules here also lifts their
+// specificity above Material's .mat-mdc-icon-button so the size override wins.
+.inline-action-controls {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-right: 1px dashed var(--extra-border-color);
+  padding-right: var(--s-quarter);
+  margin-right: var(--s-quarter);
+
+  // Match the neighbouring action chips (.action-btn, 36px) instead of the
+  // default 40px icon button, so the whole row lines up at one height.
+  .switch-add-to-bot-btn,
+  .search-toggle-btn {
+    flex-shrink: 0;
+    align-self: center;
+    --mdc-icon-button-state-layer-size: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    opacity: 0.4;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  .search-toggle-btn.active {
+    opacity: 1;
+    background-color: var(--primary-light);
+    color: var(--primary);
+  }
+}
+
+// Search-mode counterpart of the action bar: the toggles are prepended and the
+// info text follows, on one row below the input (mirrors the create-mode bar).
+.search-action-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-top: 1px dashed var(--extra-border-color);
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  @include mq(xs) {
+    gap: var(--s-quarter);
   }
 }
 
@@ -158,10 +198,13 @@
 }
 
 .add-issue-info-text {
+  // Fills the rest of the search row after the prepended toggles; min-width: 0
+  // lets the ellipsis kick in instead of overflowing the flex row.
+  flex: 1;
+  min-width: 0;
   height: 38px;
   padding: 0 var(--s);
   line-height: 38px;
-  border-top: 1px dashed var(--extra-border-color);
   color: var(--text-color-muted);
   @include truncateText();
 

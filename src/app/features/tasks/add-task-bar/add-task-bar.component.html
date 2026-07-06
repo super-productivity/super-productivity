@@ -42,6 +42,29 @@
         </div>
       }
 
+      @if (currentProject()?.isEnableBacklog) {
+        <button
+          mat-icon-button
+          class="switch-add-to-btn"
+          (click)="toggleIsAddToBacklog()"
+          [matTooltip]="
+            isAddToBacklog()
+              ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
+              : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate)
+          "
+          matTooltipPosition="above"
+        >
+          <mat-icon>{{ isAddToBacklog() ? 'inbox' : 'today' }}</mat-icon>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Add-to-top/bottom and search toggles. They are prepended to the actions
+       row (create mode) or the search info row so they scroll together with the
+       rest of that row, instead of overlaying the input. -->
+  <ng-template #inlineActionControls>
+    <div class="inline-action-controls">
       <button
         mat-icon-button
         class="switch-add-to-bot-btn"
@@ -58,22 +81,6 @@
         </mat-icon>
       </button>
 
-      @if (currentProject()?.isEnableBacklog) {
-        <button
-          mat-icon-button
-          class="switch-add-to-btn"
-          (click)="toggleIsAddToBacklog()"
-          [matTooltip]="
-            isAddToBacklog()
-              ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
-              : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate)
-          "
-          matTooltipPosition="above"
-        >
-          <mat-icon>{{ isAddToBacklog() ? 'inbox' : 'today' }}</mat-icon>
-        </button>
-      }
-
       <button
         mat-icon-button
         class="search-toggle-btn"
@@ -89,23 +96,27 @@
         <mat-icon>search</mat-icon>
       </button>
     </div>
-  </div>
+  </ng-template>
 
   @if (isSearchMode()) {
-    @if (activatedIssueTask() && activatedIssueTask()!.issueType === undefined) {
-      <div class="add-issue-info-text bold">
-        <mat-icon>playlist_add</mat-icon>
-        {{
-          T.F.TASK.ADD_TASK_BAR.ADD_EXISTING_TASK
-            | translate: { taskTitle: activatedIssueTask()!.title }
-        }}
-      </div>
-    } @else {
-      <div class="add-issue-info-text">
-        <mat-icon>playlist_add</mat-icon>
-        {{ T.F.TASK.ADD_TASK_BAR.SEARCH_INFO_TEXT | translate }}
-      </div>
-    }
+    <div class="search-action-bar">
+      <ng-container [ngTemplateOutlet]="inlineActionControls"></ng-container>
+
+      @if (activatedIssueTask() && activatedIssueTask()!.issueType === undefined) {
+        <div class="add-issue-info-text bold">
+          <mat-icon>playlist_add</mat-icon>
+          {{
+            T.F.TASK.ADD_TASK_BAR.ADD_EXISTING_TASK
+              | translate: { taskTitle: activatedIssueTask()!.title }
+          }}
+        </div>
+      } @else {
+        <div class="add-issue-info-text">
+          <mat-icon>playlist_add</mat-icon>
+          {{ T.F.TASK.ADD_TASK_BAR.SEARCH_INFO_TEXT | translate }}
+        </div>
+      }
+    </div>
   } @else {
     <add-task-bar-actions
       [isHideTagBtn]="!!planForDay()"
@@ -113,7 +124,9 @@
       (refocus)="focusInput()"
       (toggleNote)="toggleNote()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
-    ></add-task-bar-actions>
+    >
+      <ng-container [ngTemplateOutlet]="inlineActionControls"></ng-container>
+    </add-task-bar-actions>
 
     @if (stateService.isNoteExpanded()) {
       <div class="note-input-section">
