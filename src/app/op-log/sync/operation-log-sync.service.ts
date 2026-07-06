@@ -539,7 +539,6 @@ export class OperationLogSyncService {
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
             lastSyncedVectorClock,
-            null,
           );
         } else {
           // Defer the markRejected call until hydration has succeeded — see
@@ -571,7 +570,6 @@ export class OperationLogSyncService {
             0, // No unsynced ops, but we have meaningful store data
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
-            null,
             null,
           );
         }
@@ -700,7 +698,7 @@ export class OperationLogSyncService {
           `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
         );
         // Wholly fresh client — no prior sync, so no last-synced clock (SPAP-7).
-        throw new LocalDataConflictError(0, {}, undefined, null, null);
+        throw new LocalDataConflictError(0, {}, undefined, null);
       }
 
       OpLog.warn(

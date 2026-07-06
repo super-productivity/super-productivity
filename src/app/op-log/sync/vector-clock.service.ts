@@ -115,6 +115,13 @@ export class VectorClockService {
    * Use this as a fallback when no per-entity frontier exists to prevent
    * false conflicts for entities modified before compaction.
    *
+   * NOTE: this is an APPROXIMATE "last-synced" baseline, not an exact one.
+   * Compaction snapshots the current vector clock — which includes local ops that
+   * were created but not yet synced — while only deleting already-synced ops. So a
+   * `localClock − snapshotClock` delta can UNDER-count real unsynced local changes
+   * (down to zero if compaction ran with unsynced ops pending). Callers should
+   * treat the resulting count as a display heuristic, not an exact figure.
+   *
    * @returns The snapshot vector clock, or undefined if no snapshot exists
    */
   async getSnapshotVectorClock(): Promise<VectorClock | undefined> {
