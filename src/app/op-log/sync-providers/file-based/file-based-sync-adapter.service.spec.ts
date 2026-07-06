@@ -19,12 +19,14 @@ import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.s
 import { ArchiveModel } from '../../../features/time-tracking/time-tracking.model';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
+import { SnackService } from '../../../core/snack/snack.service';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
   let mockProvider: jasmine.SpyObj<FileSyncProvider<SyncProviderId>>;
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
+  let mockSnackService: jasmine.SpyObj<SnackService>;
   let adapter: OperationSyncCapable;
 
   const mockCfg: EncryptAndCompressCfg = {
@@ -150,11 +152,14 @@ describe('FileBasedSyncAdapterService', () => {
       },
     } as any);
 
+    mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+
     TestBed.configureTestingModule({
       providers: [
         FileBasedSyncAdapterService,
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
+        { provide: SnackService, useValue: mockSnackService },
       ],
     });
 
@@ -396,24 +401,38 @@ describe('FileBasedSyncAdapterService', () => {
         UploadRevToMatchMismatchAPIError,
       );
 
-      // Only one upload attempt (no retry loop)
-      expect(mockProvider.uploadFile).toHaveBeenCalledTimes(1);
+      // Only one CONDITIONAL attempt on the MAIN sync file (no retry loop), and it
+      // must never force-overwrite. A separate .bak backup write is allowed.
+      const mainUploads = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter((args) => args[0] === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(mainUploads.length).toBe(1);
+      expect(mainUploads.every((args) => args[3] === false)).toBe(true);
       // Download called twice: initial cache + re-download to check rev
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(2);
     });
 
-    it('should force upload on retry when freshRev equals original revToMatch', async () => {
+    it('retries CONDITIONALLY (never force) when freshRev equals original revToMatch (SPAP-8)', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
-      // Initial download returns rev-1
+      // Every download returns the same rev-1 → server rev inconsistency, NOT a real
+      // concurrent upload. The old code force-overwrote here; the new code must retry
+      // the conditional upload and NEVER pass isForceOverwrite=true.
       mockProvider.downloadFile.and.returnValue(
         Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
       );
 
-      let uploadCalls = 0;
+      const mainUploadForceFlags: (boolean | undefined)[] = [];
+      let mainUploadAttempts = 0;
       mockProvider.uploadFile.and.callFake(
-        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
-          uploadCalls++;
-          if (uploadCalls === 1) {
+        (path: string, _dataStr: string, _rev: string | null, force?: boolean) => {
+          if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+            // Non-fatal backup write — irrelevant to the force assertion.
+            return Promise.resolve({ rev: 'bak-1' });
+          }
+          mainUploadAttempts++;
+          mainUploadForceFlags.push(force);
+          if (mainUploadAttempts === 1) {
+            // First conditional attempt hits a spurious rev mismatch.
             return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
           }
           return Promise.resolve({ rev: 'rev-2' });
@@ -423,18 +442,14 @@ describe('FileBasedSyncAdapterService', () => {
       // Download to populate cache with rev-1
       await adapter.downloadOps(0);
 
-      // Re-download on retry also returns rev-1 (same rev = server timestamp inconsistency)
-      // mockProvider.downloadFile already returns rev-1
-
       const op = createMockSyncOp();
       const result = await adapter.uploadOps([op], 'client1');
 
       expect(result.results[0].accepted).toBe(true);
-      expect(uploadCalls).toBe(2);
-
-      // Retry upload should be called with isForceOverwrite: true
-      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
-      expect(retryCall[3]).toBe(true); // isForceOverwrite
+      // Two attempts on the main file: initial + one conditional retry.
+      expect(mainUploadAttempts).toBe(2);
+      // CRUCIAL (SPAP-8): no attempt on the main sync file used force-overwrite.
+      expect(mainUploadForceFlags.every((f) => f === false)).toBe(true);
     });
 
     it('should clear cache after successful upload', async () => {
@@ -1783,6 +1798,276 @@ describe('FileBasedSyncAdapterService', () => {
 
       const result = await adapter.downloadOps(0);
       expect(result.ops).toEqual([]);
+    });
+  });
+
+  describe('atomic remote writes (SPAP-8)', () => {
+    const compactOp = (id: string, client = 'client1'): Record<string, unknown> => ({
+      id,
+      c: client,
+      a: 'HA',
+      o: 'ADD',
+      e: 'TASK',
+      d: `task-${id}`,
+      v: { [client]: 1 },
+      t: Date.now(),
+      s: 1,
+      p: { title: `Task ${id}` },
+    });
+
+    it('(a) writes .bak with the PREVIOUS remote content before overwriting sync-data.json', async () => {
+      const prevData = createMockSyncData({
+        syncVersion: 3,
+        clientId: 'prev-client',
+        recentOps: [compactOp('prev-op') as never],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(prevData), rev: 'rev-1' }),
+      );
+
+      const uploadOrder: string[] = [];
+      let backupDataStr = '';
+      mockProvider.uploadFile.and.callFake((path: string, dataStr: string) => {
+        uploadOrder.push(path);
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          backupDataStr = dataStr;
+        }
+        return Promise.resolve({ rev: 'rev-2' });
+      });
+
+      // Populate the sync-cycle cache (mirrors a real download→upload cycle).
+      await adapter.downloadOps(0);
+
+      const op = createMockSyncOp();
+      await adapter.uploadOps([op], 'client1');
+
+      const bakIdx = uploadOrder.indexOf(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
+      const mainIdx = uploadOrder.indexOf(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      // Backup must exist AND be written strictly before the main overwrite.
+      expect(bakIdx).toBeGreaterThanOrEqual(0);
+      expect(mainIdx).toBeGreaterThanOrEqual(0);
+      expect(bakIdx).toBeLessThan(mainIdx);
+
+      // The backup must contain the PREVIOUS remote content, not the new upload.
+      const bak = parseWithPrefix(backupDataStr);
+      expect(bak.syncVersion).toBe(3);
+      expect(bak.clientId).toBe('prev-client');
+      expect(bak.recentOps[0].id).toBe('prev-op');
+    });
+
+    it('(a) does NOT write a backup on first sync when no remote file exists yet', async () => {
+      mockProvider.downloadFile.and.throwError(
+        new RemoteFileNotFoundAPIError('sync-data.json'),
+      );
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(mockProvider.uploadFile).not.toHaveBeenCalledWith(
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        jasmine.any(String),
+        jasmine.anything(),
+        jasmine.anything(),
+      );
+    });
+
+    it('(a) backup-write failure is non-fatal — the main upload still succeeds', async () => {
+      const prevData = createMockSyncData({ syncVersion: 2 });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(prevData), rev: 'rev-1' }),
+      );
+      mockProvider.uploadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          // Provider without copy support / transient failure on the backup.
+          return Promise.reject(new Error('backup not supported'));
+        }
+        return Promise.resolve({ rev: 'rev-2' });
+      });
+
+      await adapter.downloadOps(0);
+
+      const result = await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(result.results[0].accepted).toBe(true);
+    });
+
+    it('(b) recovers from .bak when the main file is corrupt and surfaces a recovery snack', async () => {
+      const backupData = createMockSyncData({
+        syncVersion: 2,
+        recentOps: [compactOp('recovered-op') as never],
+      });
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({ dataStr: addPrefix(backupData), rev: 'bak-rev-1' });
+        }
+        return Promise.reject(
+          new SyncDataCorruptedError('corrupt', FILE_BASED_SYNC_CONSTANTS.SYNC_FILE),
+        );
+      });
+
+      const result = await adapter.downloadOps(0);
+
+      expect(result.ops.length).toBe(1);
+      expect(result.ops[0].op.id).toBe('recovered-op');
+      expect(result.latestSeq).toBe(2);
+      // User-visible recovery notice.
+      expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    it('(b) recovers from .bak when the main file is empty (InvalidDataSPError)', async () => {
+      const backupData = createMockSyncData({
+        syncVersion: 4,
+        recentOps: [compactOp('from-empty-recovery') as never],
+      });
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({ dataStr: addPrefix(backupData), rev: 'bak-rev-2' });
+        }
+        return Promise.reject(
+          new InvalidDataSPError('empty body', FILE_BASED_SYNC_CONSTANTS.SYNC_FILE),
+        );
+      });
+
+      const result = await adapter.downloadOps(0);
+
+      expect(result.ops.length).toBe(1);
+      expect(result.latestSeq).toBe(4);
+      expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    it('(b) rethrows the original corruption error when no usable backup exists', async () => {
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.reject(new RemoteFileNotFoundAPIError('no backup'));
+        }
+        return Promise.reject(
+          new SyncDataCorruptedError('corrupt', FILE_BASED_SYNC_CONSTANTS.SYNC_FILE),
+        );
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWith(
+        jasmine.any(SyncDataCorruptedError),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('(c) never issues isForceOverwrite=true on the rev-mismatch retry path', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1 });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      const mainForceFlags: (boolean | undefined)[] = [];
+      let mainAttempts = 0;
+      mockProvider.uploadFile.and.callFake(
+        (path: string, _d: string, _r: string | null, force?: boolean) => {
+          if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+            return Promise.resolve({ rev: 'bak-1' });
+          }
+          mainAttempts++;
+          mainForceFlags.push(force);
+          // Deterministic conditional rejection → exhausts retries → retryable throw.
+          return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
+        },
+      );
+
+      await adapter.downloadOps(0);
+
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+      // Multiple attempts occurred, but NOT ONE forced.
+      expect(mainAttempts).toBeGreaterThan(1);
+      expect(mainForceFlags.every((f) => f === false)).toBe(true);
+    });
+
+    it("(d) interleaved clients: client A's ops survive when B races; B fails retryably without forcing", async () => {
+      // Honest rev model: the remote rev changes whenever its content changes.
+      let remote = {
+        dataStr: addPrefix(createMockSyncData({ syncVersion: 1, recentOps: [] })),
+        rev: 'rev-1',
+      };
+      const aOp = compactOp('op-A', 'client-A');
+
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.reject(new RemoteFileNotFoundAPIError('no bak'));
+        }
+        return Promise.resolve({ dataStr: remote.dataStr, rev: remote.rev });
+      });
+
+      let sawForceOnMain = false;
+      mockProvider.uploadFile.and.callFake(
+        (path: string, dataStr: string, revToMatch: string | null, force?: boolean) => {
+          if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+            return Promise.resolve({ rev: 'bak-1' });
+          }
+          if (force) {
+            sawForceOnMain = true;
+          }
+          // Conditional upload: reject if the expected rev no longer matches remote.
+          if (!force && revToMatch !== null && revToMatch !== remote.rev) {
+            return Promise.reject(new UploadRevToMatchMismatchAPIError('rev changed'));
+          }
+          remote = { dataStr, rev: `rev-${Math.random()}` };
+          return Promise.resolve({ rev: remote.rev });
+        },
+      );
+
+      // Client B downloads (caches rev-1).
+      await adapter.downloadOps(0);
+
+      // Client A concurrently commits op-A → remote advances to rev-2.
+      remote = {
+        dataStr: addPrefix(
+          createMockSyncData({ syncVersion: 2, recentOps: [aOp as never] }),
+        ),
+        rev: 'rev-2',
+      };
+
+      // Client B now uploads its own op; its cached rev-1 is stale.
+      const bOp = createMockSyncOp({ id: 'op-B', clientId: 'client-B' });
+      await expectAsync(adapter.uploadOps([bOp], 'client-B')).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+
+      // A's op must NOT have vanished from the remote, and B must not have forced.
+      const finalRemote = parseWithPrefix(remote.dataStr);
+      expect(finalRemote.recentOps.some((o) => o.id === 'op-A')).toBe(true);
+      expect(sawForceOnMain).toBe(false);
+    });
+
+    it('(guard) reconciles a stale in-memory expected syncVersion that is ahead of remote', async () => {
+      // Establish expected syncVersion = 5.
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({
+          dataStr: addPrefix(createMockSyncData({ syncVersion: 5, recentOps: [] })),
+          rev: 'rev-5',
+        }),
+      );
+      await adapter.downloadOps(0);
+
+      // Remote regresses to syncVersion 2 (e.g. another client's recovery snapshot).
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({
+          dataStr: addPrefix(createMockSyncData({ syncVersion: 2, recentOps: [] })),
+          rev: 'rev-2',
+        }),
+      );
+      const dl = await adapter.downloadOps(1);
+      expect(dl.gapDetected).toBe(true);
+
+      // The next upload must build on the REMOTE version (→ 3), proving the stale
+      // in-memory counter (5) was reconciled rather than trusted.
+      let uploadedMain = '';
+      mockProvider.uploadFile.and.callFake((path: string, dataStr: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) {
+          uploadedMain = dataStr;
+        }
+        return Promise.resolve({ rev: 'rev-new' });
+      });
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(parseWithPrefix(uploadedMain).syncVersion).toBe(3);
     });
   });
 });

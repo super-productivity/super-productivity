@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import { SyncProviderId } from '../provider.const';
 import {
   FileSyncProvider,
@@ -28,11 +28,14 @@ import {
 import { OpLog } from '../../../core/log';
 import {
   InvalidDataSPError,
+  JsonParseError,
   LegacySyncFormatDetectedError,
   RemoteFileNotFoundAPIError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
+import { SnackService } from '../../../core/snack/snack.service';
+import { T } from '../../../t.const';
 import { mergeVectorClocks } from '../../../core/util/vector-clock';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
@@ -77,6 +80,16 @@ export class FileBasedSyncAdapterService {
   private _encryptAndCompressHandler = new EncryptAndCompressHandlerService();
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
   private _stateSnapshotService = inject(StateSnapshotService);
+  // Resolved lazily (not eagerly injected) to avoid a construction-time DI cycle:
+  // SnackService's dependency graph transitively reaches the sync providers. We only
+  // need it for the non-fatal backup-recovery notice, well after construction.
+  private _injector = inject(Injector);
+
+  /**
+   * Max CONDITIONAL upload retries after a rev mismatch before surfacing a
+   * retryable error. The retry path never force-overwrites the primary sync file.
+   */
+  private readonly _MAX_UPLOAD_RETRIES = 2;
 
   /** Expected sync version for optimistic locking, keyed by provider+user */
   private _expectedSyncVersions = new Map<string, number>();
@@ -434,10 +447,22 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Attempts to upload sync data. On revision mismatch, re-downloads once to
-   * distinguish a WebDAV server timestamp inconsistency (same rev → force-upload)
-   * from a genuine concurrent upload (different rev → throw so the next sync cycle
-   * can download the concurrent ops and retry with a consistent snapshot).
+   * Uploads sync data with a CONDITIONAL write (optimistic lock on `revToMatch`).
+   *
+   * On a rev mismatch it re-downloads to classify the failure, but it NEVER
+   * force-overwrites the primary sync file — that would silently clobber a
+   * concurrent client's ops if the rev check is fooled (caching / rev reuse /
+   * eventual consistency). Force-overwrite of `sync-data.json` is reachable ONLY
+   * from explicit user actions (forceUploadLocalState / conflict "Use Local").
+   *
+   * - Same rev after re-download → transient server rev/timestamp inconsistency
+   *   (no real concurrent upload). Retry the CONDITIONAL upload (bounded by
+   *   `_MAX_UPLOAD_RETRIES`); if still failing, surface a retryable error.
+   * - Different rev after re-download → a genuine concurrent upload. Throw a
+   *   retryable error so the next sync cycle downloads the concurrent ops
+   *   (applying them to the store) and rebuilds a consistent snapshot via
+   *   `_buildMergedSyncData()`. Re-uploading here would embed a stale in-memory
+   *   snapshot whose state never saw those ops.
    */
   private async _uploadWithMismatchFallback(
     provider: FileSyncProvider<SyncProviderId>,
@@ -457,53 +482,61 @@ export class FileBasedSyncAdapterService {
       'FileBasedSyncAdapter._uploadWithMismatchFallback',
     );
 
-    try {
-      await provider.uploadFile(
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        uploadData,
-        revToMatch,
-        false,
-      );
-      return { finalSyncVersion: newData.syncVersion };
-    } catch (e) {
-      if (!(e instanceof UploadRevToMatchMismatchAPIError)) {
-        throw e;
+    const maxAttempts = 1 + this._MAX_UPLOAD_RETRIES;
+    let currentRevToMatch = revToMatch;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // CONDITIONAL upload only (isForceOverwrite=false). Never forces.
+        await provider.uploadFile(
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          uploadData,
+          currentRevToMatch,
+          false,
+        );
+        return { finalSyncVersion: newData.syncVersion };
+      } catch (e) {
+        if (!(e instanceof UploadRevToMatchMismatchAPIError)) {
+          throw e;
+        }
       }
-    }
 
-    // Rev mismatch — re-download once to check whether a real concurrent upload occurred.
-    OpLog.normal(
-      'FileBasedSyncAdapter: Rev mismatch detected, re-downloading to check...',
-    );
-    const { rev: freshRev } = await this._downloadSyncFile(provider, cfg, encryptKey);
+      if (attempt === maxAttempts) {
+        break;
+      }
 
-    if (freshRev === revToMatch) {
-      // Rev unchanged after re-download → WebDAV server timestamp/ETag inconsistency
-      // (no real concurrent upload). Reuse the already-built uploadData — the remote
-      // file is confirmed identical to what we were trying to overwrite, so no need
-      // to re-snapshot state, re-merge ops, or re-encrypt.
+      // Rev mismatch — re-download to check whether a real concurrent upload occurred.
+      OpLog.normal(
+        'FileBasedSyncAdapter: Rev mismatch detected, re-downloading to check...',
+      );
+      const { rev: freshRev } = await this._downloadSyncFile(provider, cfg, encryptKey);
+
+      if (freshRev !== currentRevToMatch) {
+        // Genuine concurrent upload: another client wrote between our download and
+        // upload. Do NOT overwrite. Throw retryable so the next sync cycle downloads
+        // the concurrent ops (applying them to the store) and rebuilds a consistent
+        // snapshot. This guarantees the concurrent client's ops are never clobbered.
+        throw new UploadRevToMatchMismatchAPIError(
+          'FileBasedSyncAdapter: Concurrent upload detected. Next sync cycle will ' +
+            'download the concurrent ops and retry with a consistent snapshot.',
+        );
+      }
+
+      // Same rev after re-download → transient server rev/timestamp inconsistency
+      // (the remote is confirmed identical to what we were trying to overwrite).
+      // Retry the CONDITIONAL upload — never force.
       OpLog.warn(
-        'FileBasedSyncAdapter: Rev unchanged after re-download, server has inconsistent ' +
-          'timestamp handling. Force-uploading.',
+        'FileBasedSyncAdapter: Rev unchanged after re-download (server rev/timestamp ' +
+          'inconsistency). Retrying conditional upload without force-overwrite.',
       );
-      await provider.uploadFile(
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        uploadData,
-        freshRev,
-        true,
-      );
-      return { finalSyncVersion: newData.syncVersion };
+      currentRevToMatch = freshRev;
     }
 
-    // Real concurrent upload: another client uploaded between our download and upload.
-    // Re-uploading here would embed a stale NgRx snapshot (their ops were never applied
-    // to our store), creating a recentOps/state inconsistency for fresh-bootstrap clients.
-    // Throw so SyncWrapperService can handle it as a known-transient condition.
-    // The next sync cycle downloads the concurrent ops (applying them to NgRx), then
-    // uploads with a consistent snapshot.
+    // Retries exhausted without a successful conditional upload. Surface a retryable
+    // error rather than silently force-overwriting the primary sync file.
     throw new UploadRevToMatchMismatchAPIError(
-      'FileBasedSyncAdapter: Concurrent upload detected. Next sync cycle will ' +
-        'download the concurrent ops and retry with a consistent snapshot.',
+      'FileBasedSyncAdapter: Upload retries exhausted after repeated rev mismatch. ' +
+        'Sync will retry on the next cycle.',
     );
   }
 
@@ -550,7 +583,16 @@ export class FileBasedSyncAdapterService {
       currentSyncVersion,
     );
 
-    // Step 3: Upload; on rev mismatch re-download once and either force-upload or throw
+    // Step 2.5: Backup-before-overwrite (two-phase write). Copy the CURRENT remote
+    // content to sync-data.json.bak before overwriting the primary file, so an
+    // interrupted/corrupt write can be recovered on the next download. Non-fatal:
+    // a provider without copy support must still be able to sync.
+    if (fileExists && currentData) {
+      await this._backupCurrentRemote(provider, cfg, encryptKey, currentData);
+    }
+
+    // Step 3: Upload conditionally; on rev mismatch re-download and retry
+    // conditionally or throw retryably (never force-overwrite).
     const { finalSyncVersion } = await this._uploadWithMismatchFallback(
       provider,
       cfg,
@@ -618,7 +660,27 @@ export class FileBasedSyncAdapterService {
           latestSeq: 0,
         };
       }
-      throw e;
+      if (this._isRecoverableCorruption(e)) {
+        // Primary sync-data.json is corrupt/empty/unparseable (e.g. interrupted
+        // write). Try to recover from the .bak artifact before failing.
+        const recovered = await this._recoverFromBackup(provider, cfg, encryptKey);
+        if (recovered) {
+          OpLog.warn(
+            'FileBasedSyncAdapter: Primary sync file unreadable; recovered from backup',
+          );
+          // Lazy resolve — absent in some unit harnesses (returns null → no notice).
+          this._injector
+            .get(SnackService, null)
+            ?.open({ msg: T.F.SYNC.S.SYNC_DATA_RECOVERED_FROM_BACKUP });
+          syncData = recovered.data;
+          rev = recovered.rev;
+          this._setCachedSyncData(providerKey, syncData, rev);
+        } else {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
     }
 
     // Detect syncVersion reset (e.g., another client uploaded a snapshot).
@@ -627,6 +689,19 @@ export class FileBasedSyncAdapterService {
     const previousExpectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
     const versionWasReset =
       previousExpectedVersion > 0 && syncData.syncVersion < previousExpectedVersion;
+
+    // Guard against stale in-memory state: if the persisted expected syncVersion is
+    // AHEAD of what the remote file reports, our counter is stale (e.g. after another
+    // client uploaded a lower-version recovery snapshot). Log and reconcile to the
+    // remote's authoritative value rather than trusting the stale counter — the
+    // `_expectedSyncVersions.set(...)` below always adopts the remote version, and
+    // `versionWasReset` drives gap detection so the caller re-downloads from seq 0.
+    if (previousExpectedVersion > syncData.syncVersion) {
+      OpLog.warn(
+        `FileBasedSyncAdapter: Persisted expected syncVersion (${previousExpectedVersion}) is ` +
+          `ahead of remote (${syncData.syncVersion}); reconciling to remote (stale in-memory counter).`,
+      );
+    }
 
     // Also detect snapshot replacement: if client expected ops (sinceSeq > 0) but file has
     // no recent ops AND has a snapshot state, another client uploaded a fresh snapshot.
@@ -899,6 +974,98 @@ export class FileBasedSyncAdapterService {
         `${context}: compressAndEncryptData() produced empty output. ` +
           `This should never happen and indicates a serialization or compression failure.`,
       );
+    }
+  }
+
+  /**
+   * Writes the CURRENT remote content to sync-data.json.bak before the primary
+   * file is overwritten (two-phase write). We re-encode the already-in-hand
+   * `currentData` from `_getCurrentSyncState()` rather than issuing another GET.
+   *
+   * MUST be non-fatal: a provider that cannot write the backup (e.g. no copy
+   * support, transient failure) must still be able to sync. The backup is a
+   * recovery artifact — losing it only degrades recoverability, never sync.
+   *
+   * Force-overwrite is used here because .bak is a disposable recovery artifact,
+   * NOT the source-of-truth sync file — the lost-update guarantee on
+   * sync-data.json is unaffected.
+   */
+  private async _backupCurrentRemote(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    currentData: FileBasedSyncData,
+  ): Promise<void> {
+    try {
+      const backupData = await this._encryptAndCompressHandler.compressAndEncryptData(
+        cfg,
+        encryptKey,
+        currentData,
+        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+      );
+      if (!backupData || backupData.trim().length === 0) {
+        OpLog.warn(
+          'FileBasedSyncAdapter: Skipping backup — encoded backup data was empty',
+        );
+        return;
+      }
+      await provider.uploadFile(
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        backupData,
+        null,
+        true,
+      );
+      OpLog.normal('FileBasedSyncAdapter: Wrote backup before overwrite');
+    } catch (e) {
+      // Non-fatal by design — proceed with the primary upload regardless.
+      OpLog.warn(
+        'FileBasedSyncAdapter: Backup-before-overwrite failed (non-fatal), proceeding',
+        e,
+      );
+    }
+  }
+
+  /**
+   * Whether a download error indicates a corrupt/empty/unparseable primary file
+   * that we should attempt to recover from the .bak artifact. Missing files are
+   * NOT included — that is a legitimate fresh-start signal handled separately.
+   */
+  private _isRecoverableCorruption(e: unknown): boolean {
+    return (
+      e instanceof SyncDataCorruptedError ||
+      // Covers EmptyRemoteBodySPError (empty file) via its InvalidDataSPError base.
+      e instanceof InvalidDataSPError ||
+      e instanceof JsonParseError
+    );
+  }
+
+  /**
+   * Attempts to recover sync data from sync-data.json.bak. Returns null if the
+   * backup is missing, unreadable, or has an unsupported version.
+   */
+  private async _recoverFromBackup(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<{ data: FileBasedSyncData; rev: string } | null> {
+    try {
+      const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
+      const data =
+        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
+          cfg,
+          encryptKey,
+          response.dataStr,
+        );
+      if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
+        OpLog.warn(
+          `FileBasedSyncAdapter: Backup has unsupported version ${data.version}; cannot recover`,
+        );
+        return null;
+      }
+      return { data, rev: response.rev };
+    } catch (e) {
+      OpLog.warn('FileBasedSyncAdapter: Backup recovery failed', e);
+      return null;
     }
   }
 

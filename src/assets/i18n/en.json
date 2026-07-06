@@ -1594,6 +1594,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "SYNC_DATA_RECOVERED_FROM_BACKUP": "Recovered sync data from backup after the main file could not be read.",
         "SYNC_VALIDATION_FAILED": "State validation failed after sync. Some data may be inconsistent.",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
