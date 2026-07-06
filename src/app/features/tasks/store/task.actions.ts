@@ -37,19 +37,25 @@ export const __updateMultipleTaskSimple = createAction(
   }),
 );
 
+// NOTE: despite the "Ui" name this carries _hideSubTasksMode, which is task
+// data that must survive a restart. It is persisted (op-log) like updateTask so
+// the collapse state is not lost on reload. See issue #8781.
 export const updateTaskUi = createAction(
   '[Task] Update Task Ui',
-  props<{ task: Update<Task> }>(),
+  (taskProps: { task: Update<Task> }) => ({
+    ...taskProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TASK',
+      entityId: taskProps.task.id as string,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
 );
 
 export const removeTagsForAllTasks = createAction(
   '[Task] Remove Tags from all Tasks',
   props<{ tagIdsToRemove: string[] }>(),
-);
-
-export const toggleTaskHideSubTasks = createAction(
-  '[Task] Toggle Show Sub Tasks',
-  props<{ taskId: string; isShowLess: boolean; isEndless: boolean }>(),
 );
 
 export const moveSubTask = createAction(

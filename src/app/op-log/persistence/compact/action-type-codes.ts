@@ -193,6 +193,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.TASK_REMOVE_TIME_SPENT]: 'TR',
   [ActionType.TASK_ROUND_TIME_SPENT]: 'TRD',
   [ActionType.TASK_ADD_TAGS_SHORT_SYNTAX]: 'TGS',
+  [ActionType.TASK_UPDATE_UI]: 'TUU',
 
   // Plugin actions (U)
   [ActionType.PLUGIN_UPSERT_USER_DATA]: 'UU',

@@ -76,6 +76,9 @@ export enum ActionType {
   TASK_SHARED_REMOVE_DEADLINE = '[Task Shared] removeDeadline',
   TASK_SHARED_CLEAR_DEADLINE_REMINDER = '[Task Shared] clearDeadlineReminder',
 
+  // Task feature action carrying persisted _hideSubTasksMode (issue #8781)
+  TASK_UPDATE_UI = '[Task] Update Task Ui',
+
   // IssueProvider actions (I)
   ISSUE_PROVIDER_ADD = '[IssueProvider/API] Add IssueProvider',
   ISSUE_PROVIDER_UPDATE = '[IssueProvider/API] Update IssueProvider',

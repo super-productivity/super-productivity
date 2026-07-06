@@ -30,10 +30,10 @@ import {
   setCurrentTask,
   setSelectedTask,
   toggleStart,
-  toggleTaskHideSubTasks,
   unsetCurrentTask,
   updateTaskUi,
 } from './store/task.actions';
+import { getNextHideSubTasksMode } from './util/get-next-hide-sub-tasks-mode';
 import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
@@ -1154,7 +1154,28 @@ export class TaskService {
     isShowLess: boolean = true,
     isEndless: boolean = false,
   ): void {
-    this._store.dispatch(toggleTaskHideSubTasks({ taskId, isShowLess, isEndless }));
+    const entities = this._taskEntities();
+    const task = entities[taskId];
+    if (!task) {
+      return;
+    }
+    const subTasks = task.subTaskIds
+      .map((id) => entities[id])
+      .filter((t): t is Task => !!t);
+    const doneCount = subTasks.filter((t) => t.isDone).length;
+    // Persist the resolved absolute value via updateTaskUi (replay-safe) rather
+    // than a relative toggle command, so the collapse state survives a restart.
+    // Replaying a relative command would recompute from live state and diverge
+    // across devices. See issue #8781.
+    this.updateUi(taskId, {
+      _hideSubTasksMode: getNextHideSubTasksMode(
+        task._hideSubTasksMode,
+        doneCount,
+        subTasks.length,
+        isShowLess,
+        isEndless,
+      ),
+    });
   }
 
   hideSubTasks(id: string): void {

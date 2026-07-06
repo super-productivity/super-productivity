@@ -11,6 +11,7 @@ import {
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { OpType } from '../../../op-log/core/operation.types';
 
 describe('Task Reducer', () => {
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -1112,6 +1113,25 @@ describe('Task Reducer', () => {
       });
 
       expect(() => taskReducer(stateWithUndefined, action)).not.toThrow();
+    });
+  });
+
+  // Regression: subtask collapse state (_hideSubTasksMode) must survive a restart.
+  // It only persists if the action that writes it is captured to the op-log,
+  // which requires isPersistent metadata. `updateTaskUi` carries an absolute
+  // value (replay-safe); toggleSubTaskMode resolves the value and dispatches it.
+  // See issue #8781.
+  describe('updateTaskUi persistence metadata', () => {
+    it('should be a persistent TASK Update action', () => {
+      const action = fromActions.updateTaskUi({
+        task: { id: 'task1', changes: { _hideSubTasksMode: undefined } },
+      });
+
+      expect(action.meta).toBeDefined();
+      expect(action.meta.isPersistent).toBe(true);
+      expect(action.meta.entityType).toBe('TASK');
+      expect(action.meta.entityId).toBe('task1');
+      expect(action.meta.opType).toBe(OpType.Update);
     });
   });
 });
