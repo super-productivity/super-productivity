@@ -194,6 +194,20 @@ describe('FileBasedEncryptionService', () => {
       });
     });
 
+    // GHSA-9544-hjjr-fg8h: intent must be persisted per-provider in privateCfg,
+    // atomically with the key, so it survives a later silent key drop.
+    it('should persist isEncryptionEnabled: true into privateCfg with the key', async () => {
+      await service.enableEncryption('my-password');
+
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
+        jasmine.objectContaining({
+          encryptKey: 'my-password',
+          isEncryptionEnabled: true,
+        }),
+      );
+    });
+
     it('should clear derived key cache', async () => {
       await service.enableEncryption('my-password');
 
@@ -363,6 +377,21 @@ describe('FileBasedEncryptionService', () => {
 
       // Should NOT call setPrivateCfg directly
       expect(mockProvider.setPrivateCfg).not.toHaveBeenCalled();
+    });
+
+    // GHSA-9544-hjjr-fg8h: clearing the key and recording intent=false must be a
+    // single atomic privateCfg write, so a crash before the global flag update
+    // cannot leave "encryption on, key gone" and wrongly block plaintext sync.
+    it('should persist isEncryptionEnabled: false into privateCfg atomically with key removal', async () => {
+      await service.disableEncryption();
+
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
+        jasmine.objectContaining({
+          encryptKey: undefined,
+          isEncryptionEnabled: false,
+        }),
+      );
     });
 
     it('should update global config to disable encryption', async () => {

@@ -36,7 +36,9 @@ import {
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
   WebDavNativeRequestError,
+  EncryptNoPasswordError,
 } from '../../op-log/core/errors/sync-errors';
+import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 
 describe('SyncWrapperService', () => {
@@ -1620,6 +1622,37 @@ describe('SyncWrapperService', () => {
           jasmine.objectContaining({
             type: 'ERROR',
           }),
+        );
+      });
+
+      // GHSA-9544-hjjr-fg8h: USE_LOCAL force-uploads, which refuses to send
+      // plaintext when the key is missing. Route to the enter-password recovery
+      // dialog instead of a dead-end error snack.
+      it('should open the enter-password dialog (not an error snack) when USE_LOCAL hits a missing key', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.rejectWith(new EncryptNoPasswordError('key missing'));
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockMatDialog.open).toHaveBeenCalledWith(
+          DialogEnterEncryptionPasswordComponent,
+          jasmine.anything(),
+        );
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: 'ERROR' }),
         );
       });
 

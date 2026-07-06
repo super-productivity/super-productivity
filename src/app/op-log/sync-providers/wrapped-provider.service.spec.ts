@@ -70,13 +70,14 @@ describe('WrappedProviderService', () => {
 
     mockProviderManager = jasmine.createSpyObj(
       'SyncProviderManager',
-      ['getEncryptAndCompressCfg'],
+      ['getEncryptAndCompressCfg', 'setProviderConfig'],
       { providerConfigChanged$ },
     );
     mockProviderManager.getEncryptAndCompressCfg.and.returnValue({
       isEncrypt: true,
       isCompress: true,
     });
+    mockProviderManager.setProviderConfig.and.returnValue(Promise.resolve());
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
@@ -160,11 +161,39 @@ describe('WrappedProviderService', () => {
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle provider without encryptKey', async () => {
+    // GHSA-9544-hjjr-fg8h: the encrypt decision comes from the durable
+    // per-provider `isEncryptionEnabled` in privateCfg, NOT the global flag.
+    const setPrivateCfg = (
+      provider: jasmine.SpyObj<FileSyncProvider<SyncProviderId>>,
+      cfg: { encryptKey?: string; isEncryptionEnabled?: boolean } | null,
+    ): void => {
+      (provider.privateCfg.load as jasmine.Spy).and.returnValue(Promise.resolve(cfg));
+    };
+
+    it('should keep isEncrypt true when intent is stored true but key is missing', async () => {
       const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
-      (dropboxProvider.privateCfg.load as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
+      setPrivateCfg(dropboxProvider, { isEncryptionEnabled: true });
+      const mockAdapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
+
+      await service.getOperationSyncCapable(dropboxProvider);
+
+      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledWith(
+        dropboxProvider,
+        { isEncrypt: true, isCompress: true },
+        undefined,
       );
+      // Intent already recorded → no backfill write.
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
+    });
+
+    it('should keep isEncrypt false when intent is stored false, even with a stale global flag', async () => {
+      mockProviderManager.getEncryptAndCompressCfg.and.returnValue({
+        isEncrypt: true, // stale global flag (e.g. left over from SuperSync)
+        isCompress: true,
+      });
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
+      setPrivateCfg(dropboxProvider, { isEncryptionEnabled: false });
       const mockAdapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
 
@@ -175,6 +204,72 @@ describe('WrappedProviderService', () => {
         { isEncrypt: false, isCompress: true },
         undefined,
       );
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to key presence for pre-fix configs without stored intent', async () => {
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
+      setPrivateCfg(dropboxProvider, null);
+      const mockAdapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
+
+      await service.getOperationSyncCapable(dropboxProvider);
+
+      // No stored intent + no key → plaintext (legitimate un-encrypted user).
+      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledWith(
+        dropboxProvider,
+        { isEncrypt: false, isCompress: true },
+        undefined,
+      );
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
+    });
+
+    it('should backfill the intent flag for a pre-fix config that has a key', async () => {
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
+      // Pre-fix: key present, intent never recorded.
+      setPrivateCfg(dropboxProvider, { encryptKey: 'legacy-key' });
+      const mockAdapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
+
+      await service.getOperationSyncCapable(dropboxProvider);
+      // The backfill re-loads fresh and writes asynchronously (fire-and-forget);
+      // flush the microtask/macrotask queue so its write has landed.
+      await new Promise((r) => setTimeout(r));
+
+      // Encrypts now (key present) …
+      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledWith(
+        dropboxProvider,
+        { isEncrypt: true, isCompress: true },
+        'legacy-key',
+      );
+      // … and records the intent while the key still proves it, so a later
+      // silent key drop stays detectable. Written by merging onto a FRESH reload
+      // so a concurrent config mutation cannot be clobbered.
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.Dropbox,
+        { encryptKey: 'legacy-key', isEncryptionEnabled: true },
+      );
+    });
+
+    // Regression for the review's stale-snapshot race: if the key was removed
+    // (e.g. a concurrent disable-encryption) by the time the backfill re-reads,
+    // it must NOT resurrect it — skip the write entirely.
+    it('should NOT backfill if the key is gone by the time it re-reads (no clobber)', async () => {
+      const dropboxProvider = createMockFileProvider(SyncProviderId.Dropbox);
+      const load = dropboxProvider.privateCfg.load as jasmine.Spy;
+      // First read (adapter decision) sees the key; the backfill's re-read sees it
+      // already cleared by a concurrent disable.
+      load.and.returnValues(
+        Promise.resolve({ encryptKey: 'legacy-key' }),
+        Promise.resolve({ encryptKey: undefined, isEncryptionEnabled: false }),
+      );
+      const mockAdapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(mockAdapter);
+
+      await service.getOperationSyncCapable(dropboxProvider);
+      await new Promise((r) => setTimeout(r));
+
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
   });
 

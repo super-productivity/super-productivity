@@ -31,7 +31,10 @@ import {
 } from '../core/types/sync-results.types';
 import { isRetryableUploadError } from '@sp/sync-providers/http';
 import { handleStorageQuotaError } from './sync-error-utils';
-import { DecryptNoPasswordError } from '../core/errors/sync-errors';
+import {
+  DecryptNoPasswordError,
+  EncryptNoPasswordError,
+} from '../core/errors/sync-errors';
 import {
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
@@ -146,6 +149,26 @@ export class OperationLogUploadService {
             'no key is configured yet — skipping upload until encryption setup completes.',
         );
         return;
+      }
+
+      // GHSA-9544-hjjr-fg8h: file-based providers encrypt inside the adapter and
+      // hide the key from this service (no getEncryptKey), so the SuperSync guard
+      // above cannot see their missing key. Ask the adapter directly whether
+      // encryption is enabled for this provider but the key is gone (silently
+      // dropped credentials) and fail CLOSED before either upload loop. Throwing
+      // (rather than returning) both leaves the pending ops unsynced for retry —
+      // never permanently rejected via the snapshot path's markRejected — and
+      // routes to the enter-password recovery dialog in SyncWrapperService. Unlike
+      // the mandatory-encryption case above this is never an expected steady
+      // state, so it warrants an error, not a silent skip.
+      if (
+        syncProvider.isEncryptionKeyMissing &&
+        (await syncProvider.isEncryptionKeyMissing())
+      ) {
+        throw new EncryptNoPasswordError(
+          'File-based sync: encryption is enabled for this provider but the ' +
+            'encryption key is missing — refusing to upload until it is restored.',
+        );
       }
 
       // Separate full-state operations (backup imports, repairs) from regular ops

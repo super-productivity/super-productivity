@@ -8,6 +8,7 @@ import {
 } from '../provider.interface';
 import { FILE_BASED_SYNC_CONSTANTS, FileBasedSyncData } from './file-based-sync.types';
 import {
+  EncryptNoPasswordError,
   InvalidDataSPError,
   RemoteFileNotFoundAPIError,
   SyncDataCorruptedError,
@@ -459,6 +460,81 @@ describe('FileBasedSyncAdapterService', () => {
 
       // Download should be called because cache was cleared after first upload
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // GHSA-9544-hjjr-fg8h: encryption enabled but key missing (silently dropped
+  // credentials). Every upload path must refuse to transmit plaintext — the
+  // leak scenario is an absent remote file, where no decrypt error trips first.
+  describe('encryption enabled but key missing', () => {
+    let encryptedAdapter: OperationSyncCapable;
+
+    beforeEach(() => {
+      encryptedAdapter = service.createAdapter(
+        mockProvider,
+        { isEncrypt: true, isCompress: false },
+        undefined,
+      );
+      // Fresh remote — the advisory's exposure scenario
+      mockProvider.downloadFile.and.throwError(
+        new RemoteFileNotFoundAPIError('sync-data.json'),
+      );
+    });
+
+    it('should reject uploadOps and never upload plaintext', async () => {
+      const op = createMockSyncOp();
+
+      await expectAsync(
+        encryptedAdapter.uploadOps([op], 'client1'),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('should reject the no-ops initial file creation and never upload plaintext', async () => {
+      await expectAsync(encryptedAdapter.uploadOps([], 'client1')).toBeRejectedWithError(
+        EncryptNoPasswordError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('should reject uploadSnapshot and never upload plaintext', async () => {
+      await expectAsync(
+        encryptedAdapter.uploadSnapshot(
+          { tasks: [] },
+          'client1',
+          'recovery',
+          { client1: 1 },
+          1,
+          true,
+          'op-id-1',
+        ),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('should report enabled + key-missing via the upload-guard hooks', async () => {
+      expect(await encryptedAdapter.isEncryptionEnabled!()).toBe(true);
+      expect(await encryptedAdapter.isEncryptionKeyMissing!()).toBe(true);
+    });
+  });
+
+  describe('encryption enabled with a key present', () => {
+    it('should report enabled and key NOT missing (no false block)', async () => {
+      const keyedAdapter = service.createAdapter(
+        mockProvider,
+        { isEncrypt: true, isCompress: false },
+        'a-key',
+      );
+      expect(await keyedAdapter.isEncryptionEnabled!()).toBe(true);
+      expect(await keyedAdapter.isEncryptionKeyMissing!()).toBe(false);
+    });
+  });
+
+  describe('encryption disabled (plaintext)', () => {
+    it('should report disabled and key not missing', async () => {
+      // The default `adapter` (outer beforeEach) is created with isEncrypt=false.
+      expect(await adapter.isEncryptionEnabled!()).toBe(false);
+      expect(await adapter.isEncryptionKeyMissing!()).toBe(false);
     });
   });
 

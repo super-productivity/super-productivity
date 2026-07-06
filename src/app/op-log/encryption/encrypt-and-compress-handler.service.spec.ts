@@ -1,6 +1,10 @@
 import { OpLog } from '../../core/log';
 import type { SyncLogger } from '@sp/sync-core';
-import { extractErrorMessage, JsonParseError } from '../core/errors/sync-errors';
+import {
+  EncryptNoPasswordError,
+  extractErrorMessage,
+  JsonParseError,
+} from '../core/errors/sync-errors';
 import { EncryptAndCompressHandlerService } from './encrypt-and-compress-handler.service';
 import { getErrorTxt } from '../../util/get-error-text';
 
@@ -48,6 +52,33 @@ describe('EncryptAndCompressHandlerService', () => {
         isEncrypt: false,
       },
     );
+  });
+
+  describe('compressAndEncrypt', () => {
+    // GHSA-9544-hjjr-fg8h: encryption expected but no key → must throw instead
+    // of silently producing plaintext output.
+    it('should throw EncryptNoPasswordError when isEncrypt is true but no key is set', async () => {
+      await expectAsync(
+        service.compressAndEncrypt({
+          data: { id: 'test-id' },
+          modelVersion: 1,
+          isCompress: false,
+          isEncrypt: true,
+          encryptKey: undefined,
+        }),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+    });
+
+    it('should throw EncryptNoPasswordError when isEncrypt is true but key is empty', async () => {
+      await expectAsync(
+        service.compressAndEncryptData(
+          { isEncrypt: true, isCompress: false },
+          '',
+          { id: 'test-id' },
+          1,
+        ),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+    });
   });
 
   describe('decompressAndDecrypt', () => {

@@ -36,6 +36,7 @@ import {
   ConflictReason,
   DecryptError,
   DecryptNoPasswordError,
+  EncryptNoPasswordError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
   PotentialCorsError,
@@ -800,7 +801,13 @@ export class SyncWrapperService {
           type: 'ERROR',
         });
         return 'HANDLED_ERROR';
-      } else if (error instanceof DecryptNoPasswordError) {
+      } else if (
+        error instanceof DecryptNoPasswordError ||
+        // Upload-side twin (GHSA-9544-hjjr-fg8h): encryption is enabled but the
+        // key is gone (dropped credentials) — same recovery as the download
+        // case: prompt for the password instead of syncing plaintext.
+        error instanceof EncryptNoPasswordError
+      ) {
         this._handleMissingPasswordDialog();
         return 'HANDLED_ERROR';
       } else if (error instanceof DecryptError) {
@@ -994,12 +1001,20 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         SyncLog.log('SyncWrapperService: Force upload complete');
       } catch (error) {
-        SyncLog.err('SyncWrapperService: Force upload failed:', error);
-        const errStr = getSyncErrorStr(error);
-        this._snackService.open({
-          msg: errStr,
-          type: 'ERROR',
-        });
+        // GHSA-9544-hjjr-fg8h: a keyless-but-encryption-enabled provider makes
+        // force upload refuse to send plaintext. Route to the enter-password
+        // recovery dialog like the main sync path, not a dead-end error snack —
+        // otherwise "force overwrite" (offered as the lost-key recovery) loops.
+        if (error instanceof EncryptNoPasswordError) {
+          this._handleMissingPasswordDialog();
+        } else {
+          SyncLog.err('SyncWrapperService: Force upload failed:', error);
+          const errStr = getSyncErrorStr(error);
+          this._snackService.open({
+            msg: errStr,
+            type: 'ERROR',
+          });
+        }
       } finally {
         this._syncCycleGuard.end();
       }
@@ -1286,6 +1301,13 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
     } catch (resolutionError) {
+      // GHSA-9544-hjjr-fg8h: USE_LOCAL force-uploads, which refuses to send
+      // plaintext when the key is missing. Route to the enter-password recovery
+      // dialog instead of a dead-end error snack (mirrors the main sync path).
+      if (resolutionError instanceof EncryptNoPasswordError) {
+        this._handleMissingPasswordDialog();
+        return 'HANDLED_ERROR';
+      }
       // Error during conflict resolution (forceUpload or forceDownload failed)
       SyncLog.err(
         'SyncWrapperService: Error during conflict resolution:',

@@ -7,6 +7,7 @@ import {
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
+import { EncryptNoPasswordError } from '../core/errors/sync-errors';
 import { ActionType, OpType, OperationLogEntry } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
@@ -196,6 +197,58 @@ describe('OperationLogUploadService', () => {
 
           // Guard no longer blocks once a usable key exists; the ops are uploaded
           // (encrypted by the encryption service, covered by its own specs).
+          expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+        });
+      });
+
+      // Regression guard for GHSA-9544-hjjr-fg8h: file-based providers encrypt
+      // inside the adapter (no getEncryptKey), so the mandatory-encryption guard
+      // above cannot see their missing key. When encryption is enabled for the
+      // provider but the key is gone (dropped credentials), the upload must fail
+      // CLOSED before either loop — never plaintext, never a permanent reject.
+      describe('file-based provider with encryption enabled but key missing (GHSA-9544-hjjr-fg8h)', () => {
+        beforeEach(() => {
+          // File-based: no getEncryptKey, not mandatory; exposes the intent hooks.
+          delete (mockApiProvider as any).getEncryptKey;
+          (mockApiProvider as any).isEncryptionMandatory = undefined;
+          (mockApiProvider as any).isEncryptionKeyMissing = jasmine
+            .createSpy('isEncryptionKeyMissing')
+            .and.returnValue(Promise.resolve(true));
+          mockOpLogStore.getUnsynced.and.returnValue(
+            Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
+          );
+        });
+
+        it('throws EncryptNoPasswordError and uploads nothing', async () => {
+          await expectAsync(
+            service.uploadPendingOps(mockApiProvider),
+          ).toBeRejectedWithError(EncryptNoPasswordError);
+
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        });
+
+        it('does NOT permanently reject the pending ops', async () => {
+          await expectAsync(service.uploadPendingOps(mockApiProvider)).toBeRejected();
+
+          // Left unsynced for retry once the key is restored — not markRejected.
+          expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+        });
+
+        it('uploads normally once the key is restored', async () => {
+          (mockApiProvider as any).isEncryptionKeyMissing.and.returnValue(
+            Promise.resolve(false),
+          );
+          mockApiProvider.uploadOps.and.returnValue(
+            Promise.resolve({
+              results: [{ opId: 'op-1', accepted: true }],
+              latestSeq: 1,
+              newOps: [],
+            }),
+          );
+
+          await service.uploadPendingOps(mockApiProvider);
+
           expect(mockApiProvider.uploadOps).toHaveBeenCalled();
         });
       });

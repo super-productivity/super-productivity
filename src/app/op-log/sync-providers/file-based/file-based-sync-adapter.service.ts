@@ -311,6 +311,16 @@ export class FileBasedSyncAdapterService {
       deleteAllData: async (): Promise<{ success: boolean }> => {
         return this._deleteAllData(provider);
       },
+
+      // GHSA-9544-hjjr-fg8h: file-based encryption happens inside this adapter
+      // (the key is never handed to the upload service via getEncryptKey), so
+      // the upload path relies on these hooks to detect the dropped-credential
+      // state. `encryptAndCompressCfg.isEncrypt` carries the durable per-provider
+      // intent resolved in WrappedProviderService.
+      isEncryptionEnabled: async (): Promise<boolean> =>
+        !!encryptAndCompressCfg.isEncrypt,
+      isEncryptionKeyMissing: async (): Promise<boolean> =>
+        !!encryptAndCompressCfg.isEncrypt && !encryptKey,
     };
   }
 

@@ -34,6 +34,7 @@ export {
   ImpossibleError,
   DecryptError,
   DecryptNoPasswordError,
+  EncryptNoPasswordError,
   DataRepairNotPossibleError,
   BackupImportFailedError,
   WebCryptoNotAvailableError,

@@ -151,6 +151,8 @@ describe('SyncConfigService', () => {
           password: 'oldpass', // Preserved from old config
           syncFolderPath: '/old', // Preserved from old config
           encryptKey: 'test-key', // New value from settings
+          // GHSA-9544: durable intent backfilled from the key present at save.
+          isEncryptionEnabled: true,
         },
       );
     });
@@ -180,6 +182,8 @@ describe('SyncConfigService', () => {
         SyncProviderId.LocalFile,
         {
           encryptKey: 'test-key',
+          // GHSA-9544: durable intent backfilled from the key present at save.
+          isEncryptionEnabled: true,
         },
       );
     });
@@ -338,6 +342,8 @@ describe('SyncConfigService', () => {
           accessToken: 'existing-access-token', // Preserved OAuth tokens
           refreshToken: 'existing-refresh-token', // Preserved OAuth tokens
           encryptKey: 'dropbox-key', // Updated from settings
+          // GHSA-9544: durable intent backfilled from the key present at save.
+          isEncryptionEnabled: true,
         },
       );
     });
@@ -809,6 +815,8 @@ describe('SyncConfigService', () => {
           password: 'newpass',
           syncFolderPath: '/new',
           encryptKey: 'new-key',
+          // GHSA-9544: durable intent backfilled from the key present at save.
+          isEncryptionEnabled: true,
         },
       );
     });

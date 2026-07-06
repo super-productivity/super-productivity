@@ -7,6 +7,7 @@ import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import {
   DecryptError,
   DecryptNoPasswordError,
+  EncryptNoPasswordError,
   JsonParseError,
 } from '../core/errors/sync-errors';
 import {
@@ -82,7 +83,14 @@ export class EncryptAndCompressHandlerService {
     }
     if (isEncrypt) {
       if (!encryptKey || encryptKey.length === 0) {
-        throw new Error('No encryption password provided');
+        // GHSA-9544-hjjr-fg8h: this is the single chokepoint every file-based
+        // upload passes through. Encryption expected but key missing (e.g.
+        // silently dropped credentials) must hard-stop here — falling back to
+        // plaintext would leak the full sync data to the remote.
+        // No payload in the error: it is user content.
+        throw new EncryptNoPasswordError(
+          'Encryption is enabled but no encryption password is available',
+        );
       }
 
       dataStr = await encrypt(dataStr, encryptKey);

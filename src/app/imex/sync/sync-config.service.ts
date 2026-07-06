@@ -155,8 +155,13 @@ export class SyncConfigService {
       };
     }
 
+    // File-based providers: prefer the durable per-provider intent flag over key
+    // presence (GHSA-9544-hjjr-fg8h). A silently dropped key must still show the
+    // form as "encryption on" so the user isn't misled into thinking they turned
+    // it off, and so a settings save preserves the intent instead of flipping it
+    // off. Pre-fix configs without the flag fall back to key presence.
     return {
-      isEncryptionEnabled: !!encryptKey,
+      isEncryptionEnabled: privateCfg.isEncryptionEnabled ?? !!encryptKey,
       encryptKey,
     };
   }
@@ -435,10 +440,18 @@ export class SyncConfigService {
     // For SuperSync, isEncryptionEnabled is managed exclusively by dedicated dialogs
     // (EnableEncryption, DisableEncryption, HandleDecryptError), NOT the form.
     // Preserve the saved value to prevent accidental overwrites during config saves.
+    //
+    // For file-based providers, persist the durable per-provider intent flag
+    // (GHSA-9544-hjjr-fg8h): PRESERVE an existing value so a routine save while
+    // the key is missing cannot silently disarm the plaintext-upload guard, and
+    // otherwise backfill from the key present at save time (capturing intent
+    // while the key still proves it, before any later silent drop).
+    const oldIsEncryptionEnabled = (oldConfig as { isEncryptionEnabled?: boolean })
+      ?.isEncryptionEnabled;
     const savedIsEncryptionEnabled =
       providerId === SyncProviderId.SuperSync
-        ? (oldConfig as { isEncryptionEnabled?: boolean })?.isEncryptionEnabled
-        : undefined;
+        ? oldIsEncryptionEnabled
+        : (oldIsEncryptionEnabled ?? !!resolvedEncryptKey);
 
     const configWithDefaults = {
       ...PROVIDER_FIELD_DEFAULTS[providerId],

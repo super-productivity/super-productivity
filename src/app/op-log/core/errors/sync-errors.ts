@@ -110,6 +110,17 @@ export class DecryptNoPasswordError extends AdditionalLogErrorBase {
   override name = 'DecryptNoPasswordError';
 }
 
+/**
+ * Encryption is expected (isEncrypt=true) but no key is available at upload
+ * time — the dropped-credential signature (GHSA-9544-hjjr-fg8h). Uploading
+ * plaintext instead would silently break the E2EE promise, so the upload path
+ * throws this to trigger the enter-password recovery dialog.
+ * NEVER attach the payload that was about to be encrypted (user content).
+ */
+export class EncryptNoPasswordError extends AdditionalLogErrorBase {
+  override name = 'EncryptNoPasswordError';
+}
+
 export class DecryptError extends AdditionalLogErrorBase {
   override name = 'DecryptError';
 }

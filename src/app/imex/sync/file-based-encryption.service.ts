@@ -107,10 +107,16 @@ export class FileBasedEncryptionService {
     try {
       if (isDisable) {
         // Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
-        // to ensure the currentProviderPrivateCfg$ observable is updated
+        // to ensure the currentProviderPrivateCfg$ observable is updated.
+        // GHSA-9544: write the intent flag ATOMICALLY with the key removal in the
+        // single privateCfg write, so a crash before the global updateSection
+        // below cannot leave the durable per-provider state at "encryption on,
+        // key gone" — which would then (correctly) block all uploads for a
+        // provider the user deliberately switched to plaintext.
         await this._providerManager.setProviderConfig(provider.id, {
           ...existingCfg,
           encryptKey: undefined,
+          isEncryptionEnabled: false,
         });
         this._globalConfigService.updateSection('sync', {
           isEncryptionEnabled: false,
@@ -120,6 +126,7 @@ export class FileBasedEncryptionService {
         await this._providerManager.setProviderConfig(provider.id, {
           ...existingCfg,
           encryptKey,
+          isEncryptionEnabled: true,
         });
         this._globalConfigService.updateSection('sync', {
           isEncryptionEnabled: true,

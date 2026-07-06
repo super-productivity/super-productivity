@@ -189,6 +189,16 @@ export interface OperationSyncCapable<
    */
   isEncryptionEnabled?(): Promise<boolean>;
   /**
+   * Whether encryption is enabled for this provider but no usable key is
+   * available — the dropped-credential signature (GHSA-9544-hjjr-fg8h).
+   * File-based providers encrypt inside the adapter and do not expose
+   * `getEncryptKey`, so the upload path cannot infer their missing key from the
+   * `isEncryptionMandatory` guard; it queries this instead and fails closed
+   * (refuses to upload) rather than silently sending plaintext. Providers that
+   * surface their key via `getEncryptKey` (SuperSync) leave this unset.
+   */
+  isEncryptionKeyMissing?(): Promise<boolean>;
+  /**
    * Whether this provider mandates end-to-end encryption and must NEVER transmit
    * plaintext operations. When true, the upload path refuses to push ops while no
    * usable encryption key is configured yet (e.g. first-time setup, before the

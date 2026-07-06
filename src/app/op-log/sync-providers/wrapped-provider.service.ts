@@ -102,21 +102,66 @@ export class WrappedProviderService {
     const baseCfg = this._providerManager.getEncryptAndCompressCfg();
     const privateCfg = await provider.privateCfg.load();
     const encryptKey = privateCfg?.encryptKey;
+    const storedIntent = privateCfg?.isEncryptionEnabled;
 
-    // For file-based providers (Dropbox, WebDAV, LocalFile), the encryptKey
-    // in privateCfg is the source of truth for whether to encrypt.
-    // - If encryptKey exists, encryption is enabled
-    // - If encryptKey is undefined/empty, encryption is disabled
-    // This ensures that when encryption is disabled (encryptKey cleared),
-    // sync works even if the global config update hasn't propagated yet.
+    // Encryption intent for file-based providers (GHSA-9544-hjjr-fg8h) comes from
+    // the PER-PROVIDER `isEncryptionEnabled` persisted in privateCfg — NOT the
+    // global `sync.isEncryptionEnabled` in baseCfg, which is shared across
+    // providers and re-derived from key presence in the settings form, so it is
+    // stale after a provider switch and can be flipped off by an unrelated save.
+    // privateCfg is per-provider, written atomically with the key, and survives
+    // a silent key drop (the dropped-credential failure this fix targets).
+    //   - intent ON + no key → isEncrypt stays true WITHOUT a key, so the adapter
+    //     refuses to upload plaintext instead of leaking (upload-path guard +
+    //     EncryptNoPasswordError chokepoint).
+    //   - pre-fix configs have no stored intent → fall back to key presence, which
+    //     is the exact old behaviour (no regression) and captures existing users
+    //     while their key is still present.
+    const isEncrypt = storedIntent ?? !!encryptKey;
+
+    // Migration: record the intent for pre-fix configs while the key still proves
+    // it, so a later silent key drop becomes detectable. Fire-and-forget — the
+    // adapter below already uses the correct `isEncrypt`; only future loads
+    // benefit. Runs at most once per provider (skips once an explicit value
+    // exists). Self-contained so it re-reads fresh before writing.
+    if (storedIntent === undefined && !!encryptKey) {
+      void this._backfillEncryptionIntent(provider);
+    }
+
     const cfg = {
       ...baseCfg,
-      isEncrypt: !!encryptKey,
+      isEncrypt,
     };
 
     const adapter = this._fileBasedAdapter.createAdapter(provider, cfg, encryptKey);
     this._cache.set(provider.id, adapter);
     return adapter;
+  }
+
+  /**
+   * One-time migration write of the per-provider encryption-intent flag for
+   * pre-fix configs (GHSA-9544-hjjr-fg8h). Re-loads the config immediately before
+   * writing and re-checks on that FRESH state, then merges the flag onto it — so a
+   * concurrent privateCfg mutation that landed since the caller's load (an
+   * explicit disable-encryption that cleared the key, or an OAuth token rotation)
+   * is neither clobbered nor overridden: we skip if the key is gone or an explicit
+   * intent already exists, and preserve every other field at its freshest value.
+   */
+  private async _backfillEncryptionIntent(
+    provider: FileSyncProvider<SyncProviderId>,
+  ): Promise<void> {
+    try {
+      const fresh = await provider.privateCfg.load();
+      if (!fresh || fresh.isEncryptionEnabled !== undefined || !fresh.encryptKey) {
+        return;
+      }
+      await this._providerManager.setProviderConfig(provider.id, {
+        ...fresh,
+        isEncryptionEnabled: true,
+      });
+    } catch (e) {
+      OpLog.warn('WrappedProviderService: encryption-intent backfill failed', e);
+    }
   }
 
   /**
