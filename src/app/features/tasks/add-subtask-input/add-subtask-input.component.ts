@@ -92,8 +92,11 @@ export class AddSubtaskInputComponent {
     // composition, so the signal can still be empty when Enter is pressed
     // mid-composition (the composition only ends — and the signal only
     // updates — once a trailing space or punctuation is typed). The input
-    // element itself always holds the current text. Falls back to the signal
-    // if the view child is not available (e.g. in unit tests without a DOM).
+    // element itself always holds the current text. Enter that instead
+    // *confirms* an IME candidate carries isComposing and is already filtered
+    // out in onKeydown, so this only commits genuinely-entered text. The
+    // signal is a defensive fallback for the impossible case of inputEl being
+    // unresolved (_commit only runs from a keydown on the rendered input).
     const inputEl = this.inputEl()?.nativeElement;
     const title = (inputEl?.value ?? this.titleDraft()).trim();
     if (!title) {
