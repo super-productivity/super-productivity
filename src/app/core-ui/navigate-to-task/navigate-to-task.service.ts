@@ -33,6 +33,11 @@ export class NavigateToTaskService {
         throw new Error(`Task with id ${taskId} not found`);
       }
       const location = await this._getLocation(task, isArchiveTask);
+      if (!location) {
+        // Never fall through with an empty location: `''.startsWith` would make
+        // the same-context check below always true and swallow the navigation.
+        throw new Error(`Could not resolve a location for task ${taskId}`);
+      }
       recordSearchNavDebug('navigateToTask:start', {
         taskId,
         isArchiveTask,
@@ -101,6 +106,12 @@ export class NavigateToTaskService {
       return `/project/${taskToCheck.projectId}/${tasksOrWorklog}`;
     } else if (taskToCheck.tagIds?.length > 0 && taskToCheck.tagIds[0]) {
       return `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`;
+    } else if (!isArchiveTask) {
+      // A non-archived task with neither project nor tags only ever lives in the
+      // Today list — either due today (handled above) or overdue. Route there so
+      // navigation reveals it instead of resolving to '' and silently no-op'ing
+      // (an empty location makes `url.startsWith(location)` always true). (#8780)
+      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
     } else {
       devError("Couldn't find task location");
       return '';
