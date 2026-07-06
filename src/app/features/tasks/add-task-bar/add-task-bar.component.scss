@@ -132,13 +132,21 @@
       align-self: stretch;
       height: auto;
       border-radius: 0;
+      // The submit + is the primary action while composing — full strength and
+      // tinted, not the dimmed treatment the other icons share. Colour the icon
+      // via the MDC token (the icon inherits it) rather than a .mat-*/.mdc-*
+      // selector override.
+      opacity: 1;
+      --mdc-icon-button-icon-color: var(--primary);
+      color: var(--primary);
     }
   }
 
   .switch-add-to-btn {
-    opacity: 0.4;
+    opacity: 0.6;
 
-    &:hover {
+    &:hover,
+    &:focus-visible {
       opacity: 1;
     }
   }
@@ -173,9 +181,10 @@
     width: 36px;
     height: 36px;
     padding: 0;
-    opacity: 0.4;
+    opacity: 0.6;
 
-    &:hover {
+    &:hover,
+    &:focus-visible {
       opacity: 1;
     }
   }

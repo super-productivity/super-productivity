@@ -46,6 +46,8 @@
           class="switch-add-to-btn e2e-add-task-submit add-task-submit-btn"
           (click)="onSubmitBtnClick()"
           type="submit"
+          [disabled]="!isSubmitVisible()"
+          [attr.aria-label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
           [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
           matTooltipPosition="above"
         >
@@ -58,6 +60,11 @@
           mat-icon-button
           class="switch-add-to-btn"
           (click)="toggleIsAddToBacklog()"
+          [attr.aria-label]="
+            isAddToBacklog()
+              ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
+              : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate)
+          "
           [matTooltip]="
             isAddToBacklog()
               ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
@@ -80,7 +87,13 @@
         mat-icon-button
         class="search-toggle-btn"
         [class.active]="isSearchMode()"
+        [attr.aria-pressed]="isSearchMode()"
         (click)="toggleSearchMode()"
+        [attr.aria-label]="
+          isSearchMode()
+            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
+            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate)
+        "
         [matTooltip]="
           isSearchMode()
             ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
@@ -99,13 +112,13 @@
           class="note-toggle-btn"
           data-test="add-task-bar-note-btn"
           [class.active]="stateService.isNoteExpanded()"
+          [attr.aria-pressed]="stateService.isNoteExpanded()"
           (click)="toggleNote()"
+          [attr.aria-label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
           [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
           matTooltipPosition="above"
         >
-          <mat-icon>{{
-            stateService.noteTxt() ? 'chat' : 'chat_bubble_outline'
-          }}</mat-icon>
+          <mat-icon>edit_note</mat-icon>
         </button>
       }
 
@@ -113,6 +126,11 @@
         mat-icon-button
         class="switch-add-to-bot-btn"
         (click)="toggleIsAddToBottom()"
+        [attr.aria-label]="
+          isAddToBottom()
+            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TOP | translate)
+            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BOTTOM | translate)
+        "
         [matTooltip]="
           isAddToBottom()
             ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TOP | translate)

@@ -1698,17 +1698,17 @@
         "TOMORROW": "Tomorrow",
         "TOOLTIP_ADD_TASK": "Add task",
         "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
-        "TOOLTIP_ADD_TO_BOTTOM": "Add to bottom (Ctrl+1)",
+        "TOOLTIP_ADD_TO_BOTTOM": "Add to bottom (Ctrl+3)",
         "TOOLTIP_ADD_TO_TODAY": "Add to today",
-        "TOOLTIP_ADD_TO_TOP": "Add to top (Ctrl+1)",
+        "TOOLTIP_ADD_TO_TOP": "Add to top (Ctrl+3)",
         "TOOLTIP_CLEAR_DATE": "Clear date",
         "TOOLTIP_CLEAR_DEADLINE": "Clear deadline",
         "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
         "TOOLTIP_CLEAR_REPEAT": "Clear repeat setting",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
-        "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)",
-        "TOOLTIP_NOTE": "Add note (Ctrl+Enter)"
+        "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+1)",
+        "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+1)",
+        "TOOLTIP_NOTE": "Note (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",

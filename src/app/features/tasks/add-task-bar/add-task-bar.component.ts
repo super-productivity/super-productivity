@@ -739,6 +739,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
     // Handle Escape key
     if (event.key === 'Escape') {
+      // Progressive dismissal: if the task-suggestion panel is open, let Material
+      // close it first instead of tearing down the whole bar.
+      if (this.taskAutoCompleteEl()?.isOpen) {
+        return;
+      }
       event.preventDefault();
       this.closed.emit();
       return;
@@ -773,10 +778,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private _handleCtrlShortcut(event: KeyboardEvent): void {
+    // Numbers 1-3 match the left-to-right order of the icon toggles below the
+    // input (search · note · add-to-top/bottom); 4-9 are the action chips.
     const shortcutMap: Record<string, () => void> = {
-      ['1']: () => this.toggleIsAddToBottom(),
-      ['2']: () => this.toggleSearchMode(),
-      ['3']: () => this.toggleNote(),
+      ['1']: () => this.toggleSearchMode(),
+      ['2']: () => this.toggleNote(),
+      ['3']: () => this.toggleIsAddToBottom(),
       ['4']: () => this._callActionMethod('openProjectMenu'),
       ['5']: () => this._callActionMethod('openScheduleDialog'),
       ['6']: () => this._callActionMethod('openTagsMenu'),
@@ -789,7 +796,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (action) {
       event.preventDefault();
       // Add stopPropagation for action menu shortcuts (4-9); the local toggles
-      // (add-to-bottom, search, note on 1-3) are harmless to let bubble.
+      // (search, note, add-to-bottom on 1-3) are harmless to let bubble.
       if (['4', '5', '6', '7', '8', '9'].includes(event.key)) {
         event.stopPropagation();
       }
@@ -922,6 +929,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   toggleNote(): void {
+    // The note field only renders in create mode, so the toggle (incl. its
+    // Ctrl+2 shortcut) is a no-op while searching.
+    if (this.isSearchMode()) {
+      return;
+    }
     const willExpand = !this.stateService.isNoteExpanded();
     this.stateService.isNoteExpanded.set(willExpand);
     if (willExpand) {

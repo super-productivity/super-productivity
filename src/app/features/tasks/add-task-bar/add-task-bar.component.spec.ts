@@ -489,14 +489,22 @@ describe('AddTaskBarComponent', () => {
       expect(component.stateService.isNoteExpanded()).toBe(false);
     });
 
-    it('Ctrl+3 on the title input toggles the note', () => {
+    it('Ctrl+2 on the title input toggles the note', () => {
       // _focusNote runs on expand; focusInput on collapse — both irrelevant here.
       spyOn(component, 'focusInput');
       expect(component.stateService.isNoteExpanded()).toBe(false);
 
-      component.onInputKeydown(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }));
+      component.onInputKeydown(new KeyboardEvent('keydown', { key: '2', ctrlKey: true }));
 
       expect(component.stateService.isNoteExpanded()).toBe(true);
+    });
+
+    it('toggleNote is a no-op in search mode (note field is create-mode only)', () => {
+      component.isSearchMode.set(true);
+
+      component.toggleNote();
+
+      expect(component.stateService.isNoteExpanded()).toBe(false);
     });
 
     it('Ctrl+Enter on the title input expands the note without adding a task', () => {
