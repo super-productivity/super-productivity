@@ -38,7 +38,7 @@ import {
 } from '../../core/errors/sync-errors';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
-import { mergeVectorClocks } from '../../../core/util/vector-clock';
+import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vector-clock';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
@@ -95,6 +95,14 @@ export class FileBasedSyncAdapterService {
 
   /** Expected sync version for optimistic locking, keyed by provider+user */
   private _expectedSyncVersions = new Map<string, number>();
+
+  /**
+   * SPAP-9: last-seen remote vector clock per provider+user. Used to tell a
+   * benign (cosmetic) syncVersion reset apart from a genuine one: if the file's
+   * causal clock did not regress, a lower syncVersion counter lost no data and
+   * must not trigger the full-gap resync path.
+   */
+  private _lastSeenVectorClocks = new Map<string, VectorClock>();
 
   /** Local sequence counters (simulates server seq for file-based) */
   private _localSeqCounters = new Map<string, number>();
@@ -720,7 +728,7 @@ export class FileBasedSyncAdapterService {
     // When syncVersion resets to a lower value, we need to signal this to trigger
     // a re-download from seq 0 so the caller can get the snapshotState.
     const previousExpectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
-    const versionWasReset =
+    const syncVersionRegressed =
       previousExpectedVersion > 0 && syncData.syncVersion < previousExpectedVersion;
 
     // Guard against stale in-memory state: if the persisted expected syncVersion is
@@ -734,6 +742,40 @@ export class FileBasedSyncAdapterService {
         `FileBasedSyncAdapter: Persisted expected syncVersion (${previousExpectedVersion}) is ` +
           `ahead of remote (${syncData.syncVersion}); reconciling to remote (stale in-memory counter).`,
       );
+    }
+
+    // SPAP-9: a syncVersion regression only implies data loss if the causal state
+    // also regressed. Compare the file's vector clock against the one we last saw
+    // for this provider. Only an EQUAL clock proves this client already holds the
+    // exact same causal state, so the reset is purely cosmetic (a counter reset
+    // that composed with a snapshot rewrite of identical content) and we can keep
+    // syncing incrementally at the expected version instead of forcing a full
+    // seq-0 resync.
+    //
+    // GREATER_THAN is deliberately NOT treated as cosmetic (review follow-up): it
+    // only proves the writer did strictly more work, not that this client received
+    // the intervening ops. A snapshot can compact ops this client never downloaded
+    // and the writer then make one more op — dominating our last-seen clock — so
+    // suppressing the reset there would silently drop the compacted ops. Anything
+    // that is not EQUAL (GREATER_THAN, behind, or concurrent) is treated as a
+    // genuine reset and triggers a seq-0 resync so the caller re-hydrates the
+    // snapshot. Implemented generally via the last-seen clock — no dependency on
+    // any provider-specific recovery mechanism.
+    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
+    let versionWasReset = syncVersionRegressed;
+    if (syncVersionRegressed && lastSeenClock) {
+      const resetClockComparison = compareVectorClocks(
+        syncData.vectorClock,
+        lastSeenClock,
+      );
+      if (resetClockComparison === 'EQUAL') {
+        versionWasReset = false;
+        OpLog.normal(
+          `FileBasedSyncAdapter: syncVersion regressed ` +
+            `(${previousExpectedVersion} → ${syncData.syncVersion}) but remote vector clock is ` +
+            `EQUAL to last-seen — treating reset as cosmetic (no gap).`,
+        );
+      }
     }
 
     // Also detect snapshot replacement: if client expected ops (sinceSeq > 0) but file has
@@ -760,10 +802,16 @@ export class FileBasedSyncAdapterService {
     // If the oldest surviving op was uploaded AFTER the client's last download,
     // AND the buffer is full (trimming occurred), ops between sinceSeq and
     // oldestOpSyncVersion were trimmed and the client never saw them.
+    // SPAP-9 off-by-one fix: the client already holds every op up to and
+    // including sinceSeq. The oldest surviving op has syncVersion
+    // oldestOpSyncVersion, so the first op the client still needs is sinceSeq+1.
+    // A gap exists only if that op was trimmed away, i.e. the oldest survivor is
+    // at least sinceSeq+2 (oldestOpSyncVersion > sinceSeq + 1). The boundary
+    // oldestOpSyncVersion === sinceSeq + 1 is contiguous and must NOT be a gap.
     const partialTrimGap =
       sinceSeq > 0 &&
       syncData.oldestOpSyncVersion !== undefined &&
-      syncData.oldestOpSyncVersion > sinceSeq &&
+      syncData.oldestOpSyncVersion > sinceSeq + 1 &&
       syncData.recentOps.length >= FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
 
     const needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
@@ -783,6 +831,9 @@ export class FileBasedSyncAdapterService {
 
     // Update expected version for next upload
     this._expectedSyncVersions.set(providerKey, syncData.syncVersion);
+    // SPAP-9: remember this file's causal clock so the next download can decide
+    // whether a syncVersion regression is cosmetic or a genuine reset.
+    this._lastSeenVectorClocks.set(providerKey, syncData.vectorClock);
 
     // Filter ops using operation IDs instead of synthetic seq numbers.
     // Synthetic seq numbers based on array indices shift when the array is trimmed,

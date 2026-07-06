@@ -874,6 +874,59 @@ describe('FileBasedSyncAdapterService', () => {
         // Should NOT detect gap because excludeClient === syncData.clientId
         expect(result.gapDetected).toBe(false);
       });
+
+      it('flags a gap when a dominating-clock reset compacted ops the client had not yet seen', async () => {
+        // Review follow-up (SPAP-9): a syncVersion regression whose remote clock is
+        // only GREATER_THAN last-seen must NOT be treated as cosmetic. GREATER_THAN
+        // proves the writer did more work, not that this client received it.
+
+        // First download: client syncs up to syncVersion 5, last-seen {client1:5}.
+        const compactOp = (
+          id: string,
+          v: number,
+        ): FileBasedSyncData['recentOps'][number] => ({
+          id,
+          c: 'client1',
+          a: 'HA',
+          o: 'ADD',
+          e: 'TASK',
+          d: id,
+          v: { client1: v },
+          t: Date.now(),
+          s: 1,
+          p: {},
+        });
+        const first = createMockSyncData({
+          syncVersion: 5,
+          vectorClock: { client1: 5 },
+          recentOps: [compactOp('op-5', 5)],
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
+        );
+        await adapter.downloadOps(1);
+
+        // Writer made ops 6..10 (client never saw them), took a snapshot compacting
+        // 1..10 into `state` and reset recentOps, then made op 11. The file's clock
+        // {client1:11} is GREATER_THAN last-seen {client1:5}, but ops 6..10 survive
+        // only inside `state` — they are NOT in recentOps.
+        const second = createMockSyncData({
+          syncVersion: 2, // reset to 1 by snapshot, +1 for op 11
+          vectorClock: { client1: 11 }, // GREATER_THAN {client1:5}
+          recentOps: [compactOp('op-11', 11)],
+          oldestOpSyncVersion: 2,
+          state: { tasks: [] },
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(second), rev: 'rev-2' }),
+        );
+
+        const result = await adapter.downloadOps(5); // client's real cursor is 5
+        // The compacted ops 6..10 would be lost without a full seq-0 resync, so the
+        // regression must be reported as a gap (was false under the EQUAL||GREATER_THAN
+        // suppression).
+        expect(result.gapDetected).toBe(true);
+      });
     });
 
     it('should set seq counter to syncVersion after snapshot upload', async () => {
@@ -1679,6 +1732,68 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
+    it('should NOT detect gap at the boundary sinceSeq === oldestOpSyncVersion - 1 (SPAP-9 off-by-one)', async () => {
+      // Boundary: the oldest surviving op has sv = sinceSeq + 1. The client
+      // already has everything up to sinceSeq, and the very next op it needs
+      // (sinceSeq + 1) is present — nothing was trimmed out from under it, so
+      // this must NOT be treated as a gap. The old `> sinceSeq` test flagged it.
+      const maxOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
+      const fullOps = Array.from({ length: maxOps }, (_, i) => ({
+        id: `op-${i}`,
+        c: 'other-client',
+        a: 'HA',
+        o: 'ADD',
+        e: 'TASK',
+        d: `task-${i}`,
+        v: { otherClient: i + 1 },
+        t: Date.now() + i,
+        s: 1,
+        p: {},
+        sv: 6 + Math.floor(i / 10), // oldest sv=6
+      }));
+
+      const data = createMockSyncData({
+        syncVersion: 60,
+        recentOps: fullOps,
+        oldestOpSyncVersion: 6,
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(data), rev: 'rev-1' }),
+      );
+
+      const result = await adapter.downloadOps(5); // sinceSeq=5, oldest=6 → contiguous
+      expect(result.gapDetected).toBeFalsy();
+    });
+
+    it('should still detect gap when oldestOpSyncVersion > sinceSeq + 1 (ops actually trimmed)', async () => {
+      const maxOps = FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
+      const fullOps = Array.from({ length: maxOps }, (_, i) => ({
+        id: `op-${i}`,
+        c: 'other-client',
+        a: 'HA',
+        o: 'ADD',
+        e: 'TASK',
+        d: `task-${i}`,
+        v: { otherClient: i + 1 },
+        t: Date.now() + i,
+        s: 1,
+        p: {},
+        sv: 7 + Math.floor(i / 10), // oldest sv=7
+      }));
+
+      const data = createMockSyncData({
+        syncVersion: 60,
+        recentOps: fullOps,
+        oldestOpSyncVersion: 7,
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(data), rev: 'rev-1' }),
+      );
+
+      const result = await adapter.downloadOps(5); // sinceSeq=5, oldest=7 → op 6 missing
+      expect(result.gapDetected).toBe(true);
+    });
+
     it('should NOT detect gap when recentOps < MAX_RECENT_OPS (not trimmed)', async () => {
       // Even if oldestOpSyncVersion > sinceSeq, buffer not full → no trimming → no gap
       const data = createMockSyncData({
@@ -1824,6 +1939,100 @@ describe('FileBasedSyncAdapterService', () => {
       expect(uploadedData.recentOps[1].sv).toBe(1);
       // oldestOpSyncVersion should be sv of first op = 1
       expect(uploadedData.oldestOpSyncVersion).toBe(1);
+    });
+  });
+
+  describe('benign syncVersion reset gating (SPAP-9)', () => {
+    const opAt = (sv: number): FileBasedSyncData['recentOps'][number] => ({
+      id: `op-${sv}`,
+      c: 'client1',
+      a: 'HA',
+      o: 'ADD',
+      e: 'TASK',
+      d: `task-${sv}`,
+      v: { client1: sv },
+      t: Date.now(),
+      s: 1,
+      p: {},
+      sv,
+    });
+
+    it('does NOT flag a gap when syncVersion regresses but the vector clock is unchanged (cosmetic reset)', async () => {
+      // First download establishes the expected syncVersion (5) and the last-seen
+      // vector clock ({client1:5}).
+      const first = createMockSyncData({
+        syncVersion: 5,
+        vectorClock: { client1: 5 },
+        recentOps: [opAt(5)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(1);
+
+      // Second download: syncVersion regressed 5 -> 2 (would normally look like a
+      // reset), but the causal vector clock is IDENTICAL, so nothing was actually
+      // lost. Must NOT trigger the full-gap resync path.
+      const second = createMockSyncData({
+        syncVersion: 2,
+        vectorClock: { client1: 5 },
+        recentOps: [opAt(5)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(second), rev: 'rev-2' }),
+      );
+      const result = await adapter.downloadOps(1);
+      expect(result.gapDetected).toBeFalsy();
+    });
+
+    it('flags a gap when the reset clock strictly dominates the last-seen clock (GREATER_THAN is not proof the ops were received)', async () => {
+      // Review follow-up: a strictly-dominating (GREATER_THAN) remote clock is NOT
+      // treated as cosmetic. It only proves the writer did more work, not that this
+      // client received the intervening ops — a snapshot can compact ops we never
+      // saw — so the regression must conservatively trigger a seq-0 resync.
+      const first = createMockSyncData({
+        syncVersion: 5,
+        vectorClock: { client1: 5 },
+        recentOps: [opAt(5)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(1);
+
+      const second = createMockSyncData({
+        syncVersion: 2,
+        vectorClock: { client1: 6 }, // GREATER_THAN last-seen — remote strictly ahead
+        recentOps: [opAt(6)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(second), rev: 'rev-2' }),
+      );
+      const result = await adapter.downloadOps(1);
+      expect(result.gapDetected).toBeTruthy();
+    });
+
+    it('STILL flags a gap when the reset clock is causally behind / concurrent (genuine reset)', async () => {
+      const first = createMockSyncData({
+        syncVersion: 5,
+        vectorClock: { client1: 5 },
+        recentOps: [opAt(5)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(1);
+
+      const second = createMockSyncData({
+        syncVersion: 2,
+        vectorClock: { client1: 3 }, // LESS_THAN last-seen — remote regressed
+        recentOps: [opAt(3)],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(second), rev: 'rev-2' }),
+      );
+      const result = await adapter.downloadOps(1);
+      expect(result.gapDetected).toBe(true);
     });
   });
 

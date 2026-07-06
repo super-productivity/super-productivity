@@ -129,4 +129,20 @@ describe('sync provider contracts', () => {
     expect(data.recentOps[0].sv).toBe(7);
     expect(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).toBe('sync-data.json');
   });
+
+  // SPAP-9: shrink the gap window so slow-syncing clients that miss up to
+  // MAX_RECENT_OPS ops can still catch up via incremental download instead of
+  // falling into the snapshot-replacement full-resync path.
+  it('retains 2000 recent ops to shrink the gap window (SPAP-9)', () => {
+    expect(FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS).toBe(2000);
+  });
+
+  // SPAP-9 (review follow-up): concurrent-snapshot auto-merge defaults OFF. The
+  // merge replays only the retained recentOps and never re-hydrates the compacted
+  // snapshotState, so it can silently drop compacted-only entities. It stays opt-in
+  // (behind a gap-covers guard) until validated by a multi-client E2E harness
+  // (SPAP-34); the safe default is the user-recoverable conflict dialog.
+  it('defaults concurrent-snapshot auto-merge OFF (SPAP-9 review follow-up)', () => {
+    expect(FILE_BASED_SYNC_CONSTANTS.AUTO_MERGE_CONCURRENT_SNAPSHOT).toBe(false);
+  });
 });

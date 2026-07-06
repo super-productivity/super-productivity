@@ -1,6 +1,13 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { planSnapshotHydration } from '@sp/sync-core';
+import {
+  VectorClock,
+  compareVectorClocks,
+  isVectorClockEmpty,
+  mergeVectorClocks,
+} from '../../core/util/vector-clock';
+import { FILE_BASED_SYNC_CONSTANTS } from '../sync-providers/file-based/file-based-sync.types';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { BackupService } from '../backup/backup.service';
 import { FULL_STATE_OP_TYPES } from '../core/operation.types';
@@ -520,11 +527,17 @@ export class OperationLogSyncService {
           this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds);
 
         if (hasMeaningfulUserData) {
-          // Client has meaningful user data - show conflict dialog
-          OpLog.warn(
-            `OperationLogSyncService: Client has ${unsyncedOps.length} unsynced local ops ` +
-              'with meaningful user data (pending ops or store data). ' +
-              'Throwing LocalDataConflictError for conflict resolution dialog.',
+          // SPAP-9: before surfacing the binary USE_LOCAL/USE_REMOTE dialog, use
+          // the vector clocks to decide the safe outcome by causality. Only a
+          // client with genuine sync history (a populated local clock) can be
+          // auto-resolved — a missing/empty local clock (provider switch, legacy
+          // store-only data) still falls through to the dialog, preserving the
+          // existing "genuinely can't auto-decide" behaviour.
+          const localClock = await this.opLogStore.getVectorClock();
+          const gate = this._classifySnapshotConflict(
+            localClock,
+            result.snapshotVectorClock,
+            FILE_BASED_SYNC_CONSTANTS.AUTO_MERGE_CONCURRENT_SNAPSHOT,
           );
 
           // The local snapshot's vector clock is this client's last-synced
@@ -534,11 +547,71 @@ export class OperationLogSyncService {
           const lastSyncedVectorClock =
             (await this.vectorClockService.getSnapshotVectorClock()) ?? null;
 
-          throw new LocalDataConflictError(
-            unsyncedOps.length,
-            result.snapshotState as Record<string, unknown>,
-            result.snapshotVectorClock,
-            lastSyncedVectorClock,
+          if (gate === 'keep-local') {
+            // Local strictly dominates the snapshot: keep local, no dialog. The
+            // pending ops are left untouched so the normal upload phase ships them.
+            OpLog.normal(
+              'OperationLogSyncService: Local vector clock strictly ahead of remote snapshot — ' +
+                'keeping local and deferring to the upload phase (no conflict dialog).',
+            );
+            if (result.latestServerSeq !== undefined) {
+              await syncProvider.setLastServerSeq(result.latestServerSeq);
+            }
+            return {
+              kind: 'no_new_ops',
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            };
+          }
+
+          if (gate === 'merge') {
+            const mergeOutcome = await this._tryConcurrentSnapshotMerge(
+              result,
+              syncProvider,
+              localClock,
+            );
+            if (mergeOutcome) {
+              return mergeOutcome;
+            }
+            // Merge could not run (divergence lives only in the compacted
+            // snapshot, no incremental ops to LWW-merge). Surface the dialog
+            // rather than silently picking a side.
+            OpLog.warn(
+              'OperationLogSyncService: CONCURRENT snapshot with no incremental remote ops to merge — ' +
+                'falling back to the conflict resolution dialog.',
+            );
+            throw new LocalDataConflictError(
+              unsyncedOps.length,
+              result.snapshotState as Record<string, unknown>,
+              result.snapshotVectorClock,
+              lastSyncedVectorClock,
+            );
+          }
+
+          if (gate === 'dialog') {
+            // Client has meaningful user data and clocks can't be auto-resolved -
+            // show conflict dialog.
+            OpLog.warn(
+              `OperationLogSyncService: Client has ${unsyncedOps.length} unsynced local ops ` +
+                'with meaningful user data (pending ops or store data). ' +
+                'Throwing LocalDataConflictError for conflict resolution dialog.',
+            );
+
+            throw new LocalDataConflictError(
+              unsyncedOps.length,
+              result.snapshotState as Record<string, unknown>,
+              result.snapshotVectorClock,
+              lastSyncedVectorClock,
+            );
+          }
+
+          // gate === 'apply-snapshot': the remote snapshot strictly dominates the
+          // local clock, so local holds nothing the snapshot lacks. Adopt the
+          // snapshot without a dialog by falling through to hydration below.
+          exampleTaskOpIdsToDiscard = exampleTaskOpIds;
+          OpLog.normal(
+            'OperationLogSyncService: Remote snapshot strictly ahead of local clock — ' +
+              'applying snapshot without conflict dialog.',
           );
         } else {
           // Defer the markRejected call until hydration has succeeded — see
@@ -879,6 +952,128 @@ export class OperationLogSyncService {
     if (opIds.length > 0) {
       await this.opLogStore.markRejected(opIds);
     }
+  }
+
+  /**
+   * SPAP-9: classify a seq-0 file-based snapshot conflict by causality so we can
+   * avoid the binary USE_LOCAL/USE_REMOTE dialog when the vector clocks make the
+   * safe outcome unambiguous.
+   *
+   * Comparison direction is snapshot-vs-local:
+   * - GREATER_THAN / EQUAL → remote strictly ahead (or identical): apply snapshot.
+   * - LESS_THAN            → local strictly ahead: keep local, upload later.
+   * - CONCURRENT           → true divergence: merge if enabled, else dialog.
+   *
+   * A missing or empty local clock means a client with no genuine sync history
+   * (provider switch, legacy store-only data). Such a client cannot be
+   * auto-resolved, so it keeps the existing dialog behaviour — mirroring the
+   * fresh-client throws elsewhere in this method.
+   */
+  private _classifySnapshotConflict(
+    localClock: VectorClock | null | undefined,
+    snapshotClock: Record<string, number> | undefined,
+    mergeEnabled: boolean,
+  ): 'apply-snapshot' | 'keep-local' | 'merge' | 'dialog' {
+    if (
+      !localClock ||
+      isVectorClockEmpty(localClock) ||
+      !snapshotClock ||
+      isVectorClockEmpty(snapshotClock)
+    ) {
+      return 'dialog';
+    }
+
+    switch (compareVectorClocks(snapshotClock, localClock)) {
+      case 'GREATER_THAN':
+      case 'EQUAL':
+        return 'apply-snapshot';
+      case 'LESS_THAN':
+        return 'keep-local';
+      case 'CONCURRENT':
+        return mergeEnabled ? 'merge' : 'dialog';
+    }
+  }
+
+  /**
+   * SPAP-9: attempt an entity-level merge of a CONCURRENT seq-0 snapshot instead
+   * of the conflict dialog. The client already holds the shared base (it has a
+   * populated vector clock), so the only divergent remote work is the file's
+   * incremental recent ops. Routing those through the existing remote-ops
+   * pipeline runs the standard LWW conflict resolution (remote-wins-ties, which
+   * emits LWW_CONFLICTS_AUTO_RESOLVED) and leaves the local pending ops queued
+   * for upload — a genuine merge rather than picking a side.
+   *
+   * Returns null when the merge cannot be proven lossless — either there are no
+   * incremental ops to merge, or the retained ops do not bridge the full gap to
+   * the snapshot (see guard below). The caller then falls back to the dialog so
+   * no data is silently discarded.
+   */
+  private async _tryConcurrentSnapshotMerge(
+    result: Awaited<ReturnType<OperationLogDownloadService['downloadRemoteOps']>>,
+    syncProvider: OperationSyncCapable,
+    localClock: VectorClock | null | undefined,
+  ): Promise<DownloadOutcome | null> {
+    if (result.newOps.length === 0) {
+      return null;
+    }
+
+    // GUARD (review follow-up): this merge replays only the file's retained
+    // `recentOps` (result.newOps) and never re-hydrates the compacted
+    // `snapshotState`. That is lossless ONLY if replaying those ops on top of the
+    // local state reconstructs the snapshot's full causal state — i.e. the local
+    // client already holds the snapshot's compacted base. A populated local clock
+    // proves the client has *its own* history, NOT that it received another
+    // client's ops that were later compacted into the snapshot base.
+    //
+    // Reconstruct the causal state we would reach by replaying the retained ops on
+    // top of local (local ⊔ ⨆ recentOp clocks). If that does not dominate the
+    // snapshot's clock, the snapshot's compacted base contains ops this client
+    // never downloaded; merging only recentOps would silently and permanently drop
+    // those entities. Refuse and fall back to the dialog, which can hydrate the
+    // full snapshot via USE_REMOTE — a user-recoverable choice, not silent loss.
+    const snapshotClock = result.snapshotVectorClock;
+    const bridgedClock = (result.allOpClocks ?? []).reduce<VectorClock>(
+      (acc, opClock) => mergeVectorClocks(acc, opClock),
+      { ...(localClock ?? {}) } as VectorClock,
+    );
+    const bridgeComparison = snapshotClock
+      ? compareVectorClocks(bridgedClock, snapshotClock)
+      : 'GREATER_THAN';
+    if (bridgeComparison !== 'EQUAL' && bridgeComparison !== 'GREATER_THAN') {
+      OpLog.warn(
+        'OperationLogSyncService: CONCURRENT snapshot auto-merge refused — retained recent ops ' +
+          'do not bridge the full gap to the snapshot (local+recentOps is ' +
+          `${bridgeComparison} vs the snapshot clock, so its compacted base holds ops this client ` +
+          'never saw). Falling back to the conflict dialog to avoid silent data loss.',
+      );
+      return null;
+    }
+
+    OpLog.normal(
+      `OperationLogSyncService: CONCURRENT snapshot with ${result.newOps.length} incremental remote op(s) — ` +
+        'auto-merging via LWW conflict resolution instead of the conflict dialog.',
+    );
+
+    const processResult = await this.remoteOpsProcessingService.processRemoteOps(
+      result.newOps,
+    );
+
+    // Persist the cursor only AFTER the ops are applied, matching the normal
+    // incremental path's crash-safety ordering.
+    if (result.latestServerSeq !== undefined) {
+      await syncProvider.setLastServerSeq(result.latestServerSeq);
+    }
+
+    const pendingOps = await this.opLogStore.getUnsynced();
+    this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
+
+    return {
+      kind: 'ops_processed',
+      newOpsCount: result.newOps.length,
+      localWinOpsCreated: processResult.localWinOpsCreated,
+      allOpClocks: result.allOpClocks,
+      snapshotVectorClock: result.snapshotVectorClock,
+    };
   }
 
   /**
