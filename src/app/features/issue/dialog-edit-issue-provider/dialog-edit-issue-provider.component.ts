@@ -254,7 +254,17 @@ export class DialogEditIssueProviderComponent {
   }
 
   formlyModelChange(model: Partial<IssueProvider>): void {
-    this.updateModel(model);
+    // Assign Formly's emitted model by reference. Formly runs in immutable mode
+    // and emits a clone of the full model, short-circuiting its own rebuild only
+    // when it receives that exact reference back (`_modelChangeValue === model`).
+    // Running it through mergeIssueProviderModelUpdates() would create a new
+    // object, defeat that guard, and — because immutable mode re-clones array
+    // field values on every rebuild — spin an infinite
+    // rebuild→patchValue→modelChange loop that freezes the app whenever a
+    // multiSelect field (e.g. "Calendars to display") holds an array value (#8777).
+    // Partial updates from custom cfg components still go through updateModel().
+    this.model = model;
+    this.isConnectionWorks.set(false);
   }
 
   customCfgCmpSave(cfgUpdates: IssueIntegrationCfg): void {
