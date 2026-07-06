@@ -43,7 +43,7 @@
       >
         <button
           mat-icon-button
-          class="switch-add-to-btn e2e-add-task-submit add-task-submit-btn"
+          class="e2e-add-task-submit add-task-submit-btn"
           (click)="onSubmitBtnClick()"
           type="submit"
           [disabled]="!isSubmitVisible()"
@@ -56,20 +56,16 @@
       </div>
 
       @if (currentProject()?.isEnableBacklog) {
+        @let backlogLabel =
+          isAddToBacklog()
+            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
+            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate);
         <button
           mat-icon-button
           class="switch-add-to-btn"
           (click)="toggleIsAddToBacklog()"
-          [attr.aria-label]="
-            isAddToBacklog()
-              ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
-              : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate)
-          "
-          [matTooltip]="
-            isAddToBacklog()
-              ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TODAY | translate)
-              : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BACKLOG | translate)
-          "
+          [attr.aria-label]="backlogLabel"
+          [matTooltip]="backlogLabel"
           matTooltipPosition="above"
         >
           <mat-icon>{{ isAddToBacklog() ? 'inbox' : 'today' }}</mat-icon>
@@ -83,22 +79,18 @@
        rest of that row, instead of overlaying the input. -->
   <ng-template #inlineActionControls>
     <div class="inline-action-controls">
+      @let searchLabel =
+        isSearchMode()
+          ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
+          : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate);
       <button
         mat-icon-button
         class="search-toggle-btn"
         [class.active]="isSearchMode()"
         [attr.aria-pressed]="isSearchMode()"
         (click)="toggleSearchMode()"
-        [attr.aria-label]="
-          isSearchMode()
-            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
-            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate)
-        "
-        [matTooltip]="
-          isSearchMode()
-            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
-            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate)
-        "
+        [attr.aria-label]="searchLabel"
+        [matTooltip]="searchLabel"
         matTooltipPosition="above"
       >
         <mat-icon>search</mat-icon>
@@ -112,6 +104,7 @@
           class="note-toggle-btn"
           data-test="add-task-bar-note-btn"
           [class.active]="stateService.isNoteExpanded()"
+          [class.has-value]="!!stateService.noteTxt()"
           [attr.aria-pressed]="stateService.isNoteExpanded()"
           (click)="toggleNote()"
           [attr.aria-label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
@@ -122,20 +115,16 @@
         </button>
       }
 
+      @let addToBottomLabel =
+        isAddToBottom()
+          ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TOP | translate)
+          : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BOTTOM | translate);
       <button
         mat-icon-button
         class="switch-add-to-bot-btn"
         (click)="toggleIsAddToBottom()"
-        [attr.aria-label]="
-          isAddToBottom()
-            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TOP | translate)
-            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BOTTOM | translate)
-        "
-        [matTooltip]="
-          isAddToBottom()
-            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_TOP | translate)
-            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TO_BOTTOM | translate)
-        "
+        [attr.aria-label]="addToBottomLabel"
+        [matTooltip]="addToBottomLabel"
         matTooltipPosition="above"
       >
         <mat-icon

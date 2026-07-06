@@ -150,18 +150,15 @@
       opacity: 1;
     }
   }
-
-  .search-input {
-    padding-right: var(--s5); // Make room for spinner
-  }
 }
 
-// Wraps the two toggles so a dashed divider sits to their right, separating them
-// from the action chips / search text that follow in the same row.
 // Wraps the two toggles (projected into the create-mode action bar or the search
 // info row) so a dashed divider sits to their right, separating them from the
 // chips / search text that follow. Nesting the button rules here also lifts their
 // specificity above Material's .mat-mdc-icon-button so the size override wins.
+// These rules MUST live in the parent stylesheet: the buttons are projected via
+// <ng-content>, so under emulated encapsulation they keep the parent component's
+// scoping attribute and only the parent's styles match them.
 .inline-action-controls {
   display: flex;
   align-items: center;
@@ -193,6 +190,14 @@
   .note-toggle-btn.active {
     opacity: 1;
     background-color: var(--primary-light);
+    color: var(--primary);
+  }
+
+  // A collapsed note still holds its text — keep the icon undimmed and tinted so
+  // it's clear a note is attached (distinct from the .active pill shown while the
+  // note field is expanded).
+  .note-toggle-btn.has-value:not(.active) {
+    opacity: 1;
     color: var(--primary);
   }
 }

@@ -779,11 +779,16 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private _handleCtrlShortcut(event: KeyboardEvent): void {
     // Numbers 1-3 match the left-to-right order of the icon toggles below the
-    // input (search · note · add-to-top/bottom); 4-9 are the action chips.
-    const shortcutMap: Record<string, () => void> = {
+    // input (search · note · add-to-top/bottom); these are local and harmless to
+    // let bubble.
+    const localToggles: Record<string, () => void> = {
       ['1']: () => this.toggleSearchMode(),
       ['2']: () => this.toggleNote(),
       ['3']: () => this.toggleIsAddToBottom(),
+    };
+    // 4-9 open the action chips' menus/dialogs; stop propagation so the keystroke
+    // doesn't also reach a global handler.
+    const actionShortcuts: Record<string, () => void> = {
       ['4']: () => this._callActionMethod('openProjectMenu'),
       ['5']: () => this._callActionMethod('openScheduleDialog'),
       ['6']: () => this._callActionMethod('openTagsMenu'),
@@ -792,15 +797,15 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       ['9']: () => this._callActionMethod('openDeadlineDialog'),
     };
 
-    const action = shortcutMap[event.key];
-    if (action) {
+    const localToggle = localToggles[event.key];
+    const actionShortcut = actionShortcuts[event.key];
+    if (localToggle) {
       event.preventDefault();
-      // Add stopPropagation for action menu shortcuts (4-9); the local toggles
-      // (search, note, add-to-bottom on 1-3) are harmless to let bubble.
-      if (['4', '5', '6', '7', '8', '9'].includes(event.key)) {
-        event.stopPropagation();
-      }
-      action();
+      localToggle();
+    } else if (actionShortcut) {
+      event.preventDefault();
+      event.stopPropagation();
+      actionShortcut();
     }
   }
 
