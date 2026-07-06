@@ -25,6 +25,7 @@ import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
+import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -90,7 +91,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   templateUrl: './add-task-bar.component.html',
   styleUrls: ['./add-task-bar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [blendInOutAnimation, fadeAnimation],
+  animations: [blendInOutAnimation, fadeAnimation, expandFadeAnimation],
   standalone: true,
   imports: [
     FormsModule,
@@ -182,19 +183,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
-  nrOfRightBtns = computed(() => {
-    // The overlay only holds the submit (create mode, while typing) and backlog
-    // buttons now; the add-to-bottom/search toggles live in the actions/search
-    // row below the input.
-    let count = 0;
-    if (!this.isSearchMode() && this.stateService.inputTxt().length > 0) {
-      count++;
-    }
-    if (this.currentProject()?.isEnableBacklog) {
-      count++;
-    }
-    return count;
-  });
+  // The submit (+) button is always in the layout so its space is reserved; it
+  // is only visually shown while composing a task (hidden via visibility, not
+  // display, so the input width never jumps).
+  isSubmitVisible = computed(
+    () => !this.isSearchMode() && this.stateService.inputTxt().length > 0,
+  );
 
   defaultProject$ = combineLatest([
     this.projects$,
@@ -782,19 +776,21 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const shortcutMap: Record<string, () => void> = {
       ['1']: () => this.toggleIsAddToBottom(),
       ['2']: () => this.toggleSearchMode(),
-      ['3']: () => this._callActionMethod('openProjectMenu'),
-      ['4']: () => this._callActionMethod('openScheduleDialog'),
-      ['5']: () => this._callActionMethod('openTagsMenu'),
-      ['6']: () => this._callActionMethod('openEstimateMenu'),
-      ['7']: () => this._callActionMethod('openRepeatMenu'),
-      ['8']: () => this._callActionMethod('openDeadlineDialog'),
+      ['3']: () => this.toggleNote(),
+      ['4']: () => this._callActionMethod('openProjectMenu'),
+      ['5']: () => this._callActionMethod('openScheduleDialog'),
+      ['6']: () => this._callActionMethod('openTagsMenu'),
+      ['7']: () => this._callActionMethod('openEstimateMenu'),
+      ['8']: () => this._callActionMethod('openRepeatMenu'),
+      ['9']: () => this._callActionMethod('openDeadlineDialog'),
     };
 
     const action = shortcutMap[event.key];
     if (action) {
       event.preventDefault();
-      // Add stopPropagation for action menu shortcuts (3-8)
-      if (['3', '4', '5', '6', '7', '8'].includes(event.key)) {
+      // Add stopPropagation for action menu shortcuts (4-9); the local toggles
+      // (add-to-bottom, search, note on 1-3) are harmless to let bubble.
+      if (['4', '5', '6', '7', '8', '9'].includes(event.key)) {
         event.stopPropagation();
       }
       action();

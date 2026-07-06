@@ -10,7 +10,7 @@
     <div class="main-input-wrap">
       <textarea
         #inputEl
-        class="main-input nr-of-btns-{{ nrOfRightBtns() }}"
+        class="main-input"
         [(ngModel)]="stateService.inputTxt"
         [tabindex]="tabindex()"
         [mention]="tagMentions$ | async"
@@ -35,20 +35,23 @@
     </div>
 
     <div class="right-button-controls">
-      @if (stateService.inputTxt() && !isSearchMode()) {
-        <div class="separator-box">
-          <button
-            mat-icon-button
-            class="switch-add-to-btn e2e-add-task-submit"
-            (click)="onSubmitBtnClick()"
-            type="submit"
-            [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
-            matTooltipPosition="above"
-          >
-            <mat-icon>add</mat-icon>
-          </button>
-        </div>
-      }
+      <!-- Always in the layout so its space is reserved and the input width never
+           jumps; only shown while composing (visibility, not display). -->
+      <div
+        class="separator-box"
+        [class.is-invisible]="!isSubmitVisible()"
+      >
+        <button
+          mat-icon-button
+          class="switch-add-to-btn e2e-add-task-submit add-task-submit-btn"
+          (click)="onSubmitBtnClick()"
+          type="submit"
+          [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
+          matTooltipPosition="above"
+        >
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
 
       @if (currentProject()?.isEnableBacklog) {
         <button
@@ -75,6 +78,39 @@
     <div class="inline-action-controls">
       <button
         mat-icon-button
+        class="search-toggle-btn"
+        [class.active]="isSearchMode()"
+        (click)="toggleSearchMode()"
+        [matTooltip]="
+          isSearchMode()
+            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
+            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate)
+        "
+        matTooltipPosition="above"
+      >
+        <mat-icon>search</mat-icon>
+      </button>
+
+      <!-- Note toggle only makes sense while composing a task (the note field
+           lives in create mode), so it is hidden in search mode. -->
+      @if (!isSearchMode()) {
+        <button
+          mat-icon-button
+          class="note-toggle-btn"
+          data-test="add-task-bar-note-btn"
+          [class.active]="stateService.isNoteExpanded()"
+          (click)="toggleNote()"
+          [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
+          matTooltipPosition="above"
+        >
+          <mat-icon>{{
+            stateService.noteTxt() ? 'chat' : 'chat_bubble_outline'
+          }}</mat-icon>
+        </button>
+      }
+
+      <button
+        mat-icon-button
         class="switch-add-to-bot-btn"
         (click)="toggleIsAddToBottom()"
         [matTooltip]="
@@ -87,21 +123,6 @@
         <mat-icon
           >{{ isAddToBottom() ? 'vertical_align_bottom' : 'vertical_align_top' }}
         </mat-icon>
-      </button>
-
-      <button
-        mat-icon-button
-        class="search-toggle-btn"
-        [class.active]="isSearchMode()"
-        (click)="toggleSearchMode()"
-        [matTooltip]="
-          isSearchMode()
-            ? (T.F.TASK.ADD_TASK_BAR.TOOLTIP_DISABLE_SEARCH | translate)
-            : (T.F.TASK.ADD_TASK_BAR.TOOLTIP_ENABLE_SEARCH | translate)
-        "
-        matTooltipPosition="above"
-      >
-        <mat-icon>search</mat-icon>
       </button>
     </div>
   </ng-template>
@@ -130,14 +151,16 @@
       [isHideTagBtn]="!!planForDay()"
       [isHideDueBtn]="!!planForDay()"
       (refocus)="focusInput()"
-      (toggleNote)="toggleNote()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
     >
       <ng-container [ngTemplateOutlet]="inlineActionControls"></ng-container>
     </add-task-bar-actions>
 
     @if (stateService.isNoteExpanded()) {
-      <div class="note-input-section">
+      <div
+        class="note-input-section"
+        @expandFade
+      >
         <textarea
           #noteEl
           class="note-input"

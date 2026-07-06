@@ -67,8 +67,17 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    // ALL of the input's padding lives here, never on the textarea. Vertical:
+    // cdkTextareaAutosize sizes height to rows*line-height and ignores the
+    // textarea's own padding, so vertical padding there gets clipped. Horizontal
+    // (left gutter + right gap before the + button): the autosize height
+    // measurement strips the textarea's horizontal padding (box-sizing switches
+    // to content-box with 0 side padding) but NOT its width, so padding on the
+    // textarea makes the measured wrap width wider than the rendered one — the
+    // line wraps (clipped, with a scrollbar) a few chars before the field grows.
+    // With a padding-free textarea, measured and rendered wrap widths match and
+    // the height grows exactly when the text wraps.
+    padding: 10px var(--s) 10px var(--s2);
   }
 
   .main-input {
@@ -79,49 +88,51 @@
     border-style: solid;
     border-width: 0;
     outline: 0;
-    padding-left: var(--s2);
-    // No vertical padding: cdkTextareaAutosize sets height to rows*line-height
-    // and ignores padding, so any here would be clipped. Long titles wrap and
-    // the field grows a line at a time (up to maxRows); the wrapper adds the
-    // vertical spacing.
+    // No padding — see .main-input-wrap for why the gutters must live there.
+    padding: 0;
     line-height: 1.4;
-    padding-top: 0;
-    padding-bottom: 0;
     resize: none;
     background: transparent;
     color: inherit;
     font-family: var(--font-primary-stack);
-
-    // Right padding leaves room for the overlay buttons in .right-button-controls
-    // (submit while typing and/or the backlog toggle).
-    padding-right: var(--s2);
-
-    &.nr-of-btns-1 {
-      padding-right: 44px;
-    }
-
-    &.nr-of-btns-2 {
-      padding-right: 84px;
-    }
 
     &::placeholder {
       opacity: 0.6;
     }
   }
 
+  // Buttons sit in-flow next to the input (not absolutely positioned), so the
+  // input flexes to whatever width is left and text can never run under them.
   .right-button-controls {
-    margin-left: auto;
-    z-index: 2;
     display: flex;
-    position: absolute;
-    top: 0;
-    right: 0;
+    align-items: center;
+    flex-shrink: 0;
   }
 
+  // The add (+) button and its dashed separator span the full height of the row
+  // (which grows with the wrapping input); the icon stays vertically centred.
   .separator-box {
+    align-self: stretch;
+    display: flex;
+    align-items: stretch;
     border-right: 1px dashed var(--extra-border-color);
     border-left: 1px dashed var(--extra-border-color);
-    border-color: var(--extra-border-color);
+
+    // Reserve the button's space while the field is empty without letting it
+    // show or take clicks. `visibility:hidden` is not enough here: mat-icon's
+    // anti-FOUC rule re-asserts `visibility:visible` on the glyph, so the `+`
+    // stayed visible. Fading the whole subtree with opacity (which a child
+    // cannot override) hides it while keeping the reserved layout space.
+    &.is-invisible {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .add-task-submit-btn {
+      align-self: stretch;
+      height: auto;
+      border-radius: 0;
+    }
   }
 
   .switch-add-to-btn {
@@ -154,7 +165,8 @@
   // Match the neighbouring action chips (.action-btn, 36px) instead of the
   // default 40px icon button, so the whole row lines up at one height.
   .switch-add-to-bot-btn,
-  .search-toggle-btn {
+  .search-toggle-btn,
+  .note-toggle-btn {
     flex-shrink: 0;
     align-self: center;
     --mdc-icon-button-state-layer-size: 36px;
@@ -168,7 +180,8 @@
     }
   }
 
-  .search-toggle-btn.active {
+  .search-toggle-btn.active,
+  .note-toggle-btn.active {
     opacity: 1;
     background-color: var(--primary-light);
     color: var(--primary);
@@ -192,6 +205,10 @@
 
 .note-input-section {
   border-top: 1px dashed var(--extra-border-color);
+  // Padding lives on the wrapper, not the textarea — same cdkTextareaAutosize
+  // reason as .main-input-wrap (padding on the textarea desyncs the measured
+  // wrap width from the rendered one and clips the height).
+  padding: var(--s) var(--s2);
 }
 
 .note-input {
@@ -200,14 +217,14 @@
   box-sizing: border-box;
   border: 0;
   outline: 0;
-  // cdkTextareaAutosize manages the height
+  // cdkTextareaAutosize manages the height; keep the textarea padding-free.
+  padding: 0;
   resize: none;
   background: transparent;
   color: inherit;
   font-family: var(--font-primary-stack);
   font-size: 14px;
   line-height: 1.5;
-  padding: var(--s) var(--s2);
 
   &::placeholder {
     opacity: 0.6;

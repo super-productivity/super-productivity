@@ -82,7 +82,6 @@ export class AddTaskBarActionsComponent {
   estimateChanged = output<string>();
   refocus = output<void>();
   scheduleDialogOpenChange = output<boolean>();
-  toggleNote = output<void>();
 
   // Menu state
   isProjectMenuOpen = signal<boolean>(false);
