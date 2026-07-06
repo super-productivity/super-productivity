@@ -27,6 +27,8 @@ import {
 } from './file-based-sync.types';
 import { OpLog } from '../../../core/log';
 import {
+  DecompressError,
+  DecryptError,
   InvalidDataSPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
@@ -96,6 +98,13 @@ export class FileBasedSyncAdapterService {
 
   /** Local sequence counters (simulates server seq for file-based) */
   private _localSeqCounters = new Map<string, number>();
+
+  /**
+   * Last corrupt primary rev we surfaced a backup-recovery notice for, keyed by
+   * provider+user. Prevents re-toasting the same corruption every sync cycle for a
+   * download-only client that cannot heal the primary file itself.
+   */
+  private _lastRecoveredCorruptRev = new Map<string, string>();
 
   /** Cache for downloaded sync data within a sync cycle (avoids redundant downloads) */
   private _syncCycleCache = new Map<
@@ -668,13 +677,27 @@ export class FileBasedSyncAdapterService {
           OpLog.warn(
             'FileBasedSyncAdapter: Primary sync file unreadable; recovered from backup',
           );
-          // Lazy resolve — absent in some unit harnesses (returns null → no notice).
-          this._injector
-            .get(SnackService, null)
-            ?.open({ msg: T.F.SYNC.S.SYNC_DATA_RECOVERED_FROM_BACKUP });
           syncData = recovered.data;
-          rev = recovered.rev;
+          // Seed the cache with the CORRUPT PRIMARY file's rev (annotated onto the
+          // error in _downloadSyncFile), not the .bak rev. The next conditional
+          // upload then matches sync-data.json and OVERWRITES (heals) it. Using the
+          // .bak rev would mismatch the primary on every upload, leaving sync stuck
+          // in a re-recover/re-fail loop. Fall back to the .bak rev if the primary
+          // rev is unavailable (a later mismatch just re-recovers — no data loss).
+          const primaryRev =
+            (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
+          rev = primaryRev;
           this._setCachedSyncData(providerKey, syncData, rev);
+          // De-dup the user-facing notice: only surface it the first time we see a
+          // given corrupt primary rev, so a download-only client (which cannot heal
+          // the file itself) does not re-toast on every sync cycle.
+          if (this._lastRecoveredCorruptRev.get(providerKey) !== primaryRev) {
+            this._lastRecoveredCorruptRev.set(providerKey, primaryRev);
+            // Lazy resolve — absent in some unit harnesses (returns null → no notice).
+            this._injector
+              .get(SnackService, null)
+              ?.open({ msg: T.F.SYNC.S.SYNC_DATA_RECOVERED_FROM_BACKUP });
+          }
         } else {
           throw e;
         }
@@ -1035,7 +1058,15 @@ export class FileBasedSyncAdapterService {
       e instanceof SyncDataCorruptedError ||
       // Covers EmptyRemoteBodySPError (empty file) via its InvalidDataSPError base.
       e instanceof InvalidDataSPError ||
-      e instanceof JsonParseError
+      e instanceof JsonParseError ||
+      // A truncated/garbage ENCRYPTED or COMPRESSED primary file fails during the
+      // decrypt/decompress stage rather than JSON parse. Without these, .bak
+      // recovery silently no-ops for exactly the users who enable encryption or
+      // compression — the interrupted-write case this feature targets. Safe to
+      // include: if the .bak is also undecodable, _recoverFromBackup returns null
+      // and the original error still surfaces.
+      e instanceof DecryptError ||
+      e instanceof DecompressError
     );
   }
 
@@ -1113,19 +1144,32 @@ export class FileBasedSyncAdapterService {
       }
       throw e;
     }
-    const data =
-      await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
-        cfg,
-        encryptKey,
-        response.dataStr,
-      );
+    let data: FileBasedSyncData;
+    try {
+      data =
+        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
+          cfg,
+          encryptKey,
+          response.dataStr,
+        );
 
-    // Validate file version
-    if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
-      throw new SyncDataCorruptedError(
-        `Unsupported file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.FILE_VERSION})`,
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-      );
+      // Validate file version
+      if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
+        throw new SyncDataCorruptedError(
+          `Unsupported file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.FILE_VERSION})`,
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        );
+      }
+    } catch (decodeErr) {
+      // Annotate the corrupt primary file's current rev onto the error so the
+      // download-time recovery path can seed the cache with IT (not the .bak rev)
+      // and heal sync-data.json via a matching conditional overwrite, instead of
+      // mismatching forever and re-recovering every cycle. We already hold the rev
+      // here (from the download above), so no extra request is needed.
+      if (decodeErr && typeof decodeErr === 'object' && !('primaryRev' in decodeErr)) {
+        (decodeErr as { primaryRev?: string }).primaryRev = response.rev;
+      }
+      throw decodeErr;
     }
 
     return { data, rev: response.rev };

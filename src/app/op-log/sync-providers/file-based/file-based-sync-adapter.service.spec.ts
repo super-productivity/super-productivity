@@ -1950,6 +1950,72 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
+    it('(b) recovers from .bak when the primary file fails to DECODE (real DecompressError, not an injected error)', async () => {
+      // The tests above inject SyncDataCorruptedError/InvalidDataSPError directly.
+      // This one drives a REAL decode failure end-to-end: the primary file's prefix
+      // claims gzip compression but the body is not valid gzip, so the actual
+      // decompressAndDecryptData path throws DecompressError. The encrypted-file
+      // case (DecryptError) is symmetric. Without both in _isRecoverableCorruption,
+      // recovery silently no-ops for users who enable compression or encryption.
+      const backupData = createMockSyncData({
+        syncVersion: 5,
+        recentOps: [compactOp('recovered-from-decode-failure') as never],
+      });
+      const undecodableMain =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
+        'this-is-not-valid-gzip-base64';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({
+            dataStr: addPrefix(backupData),
+            rev: 'bak-rev-decode',
+          });
+        }
+        return Promise.resolve({ dataStr: undecodableMain, rev: 'corrupt-main-rev' });
+      });
+
+      const result = await adapter.downloadOps(0);
+
+      expect(result.ops.length).toBe(1);
+      expect(result.ops[0].op.id).toBe('recovered-from-decode-failure');
+      expect(result.latestSeq).toBe(5);
+      expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    it('(b) after recovery, the next upload heals the corrupt primary via ITS rev (no revToMatch pollution)', async () => {
+      // Regression for the self-perpetuating degraded state: recovery must seed the
+      // cache with the CORRUPT PRIMARY rev, not the .bak rev, so the follow-up
+      // conditional upload matches sync-data.json and overwrites (heals) it.
+      const backupData = createMockSyncData({ syncVersion: 2 });
+      const CORRUPT_MAIN_REV = 'corrupt-main-rev-42';
+      const undecodableMain =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
+        'not-valid-gzip';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({ dataStr: addPrefix(backupData), rev: 'bak-rev-heal' });
+        }
+        return Promise.resolve({ dataStr: undecodableMain, rev: CORRUPT_MAIN_REV });
+      });
+
+      const mainRevToMatch: (string | null)[] = [];
+      mockProvider.uploadFile.and.callFake(
+        (path: string, _dataStr: string, revToMatch: string | null) => {
+          if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) {
+            mainRevToMatch.push(revToMatch);
+          }
+          return Promise.resolve({ rev: 'healed-rev' });
+        },
+      );
+
+      // Download recovers from .bak; a subsequent upload should heal the primary.
+      await adapter.downloadOps(0);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(mainRevToMatch).toContain(CORRUPT_MAIN_REV);
+      expect(mainRevToMatch).not.toContain('bak-rev-heal');
+    });
+
     it('(c) never issues isForceOverwrite=true on the rev-mismatch retry path', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(
