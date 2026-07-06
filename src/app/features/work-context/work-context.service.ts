@@ -58,6 +58,7 @@ import { selectNotesById } from '../note/store/note.reducer';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { fastArrayCompare } from '../../util/fast-array-compare';
+import { isSameActiveWorkContext } from './is-same-active-work-context.util';
 import { isShallowEqual } from '../../util/is-shallow-equal';
 import { distinctUntilChangedObject } from '../../util/distinct-until-changed-object';
 import { DateService } from 'src/app/core/date/date.service';
@@ -147,6 +148,7 @@ export class WorkContextService {
 
   activeWorkContext$: Observable<WorkContext> = this._afterDataLoadedOnce$.pipe(
     switchMap(() => this._store$.select(selectActiveWorkContext)),
+    distinctUntilChanged(isSameActiveWorkContext),
     shareReplay(1),
   );
 
