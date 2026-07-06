@@ -142,7 +142,7 @@ test.describe('@video keyboard reel', () => {
     const chipAdd = await showKeyChip(page, 'Shift+A');
     await clearShortcutBlockers(page);
     await page.keyboard.press('Shift+A');
-    const globalInput = page.locator('add-task-bar.global input').first();
+    const globalInput = page.locator('add-task-bar.global .main-input').first();
     if (!(await globalInput.isVisible().catch(() => false))) {
       await page.evaluate(() => {
         const helper = (

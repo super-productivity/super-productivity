@@ -76,7 +76,7 @@ test.describe('@video mobile reel', () => {
         helper?.store?.dispatch({ type: '[Layout] Show AddTaskBar' });
       });
     }
-    const globalInput = page.locator('add-task-bar.global input').first();
+    const globalInput = page.locator('add-task-bar.global .main-input').first();
     await globalInput.waitFor({ state: 'visible', timeout: 5_000 });
     await page.waitForTimeout(220);
     await globalInput.pressSequentially(NEW_TASK_TITLE, { delay: 55 });

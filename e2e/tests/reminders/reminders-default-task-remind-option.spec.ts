@@ -119,7 +119,7 @@ test.describe('Default task reminder option', () => {
     await waitForNav();
 
     // Click the add button to reveal the input if it's not already visible
-    const addTaskInput = page.locator('add-task-bar.global input');
+    const addTaskInput = page.locator('add-task-bar.global .main-input');
     const inputCount = await addTaskInput.count();
     if (inputCount === 0) {
       const addBtn = page.locator('.tour-addBtn');

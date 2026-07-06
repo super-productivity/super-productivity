@@ -12,7 +12,7 @@ export class WorkViewPage extends BasePage {
   constructor(page: Page, testPrefix: string = '') {
     super(page, testPrefix);
 
-    this.addTaskGlobalInput = page.locator('add-task-bar.global input');
+    this.addTaskGlobalInput = page.locator('add-task-bar.global .main-input');
     this.addBtn = page.locator('.switch-add-to-btn');
     this.taskList = page.locator('task-list').first();
     this.backdrop = page.locator('.backdrop');

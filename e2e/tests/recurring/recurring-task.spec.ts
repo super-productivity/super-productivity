@@ -79,7 +79,7 @@ const addTaskWithoutWaitingForTodayList = async (
   page: Page,
   rawTaskInput: string,
 ): Promise<void> => {
-  const inputEl = page.locator('add-task-bar.global input');
+  const inputEl = page.locator('add-task-bar.global .main-input');
   const isInputVisible = await inputEl
     .first()
     .isVisible()

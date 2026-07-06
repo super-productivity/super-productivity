@@ -43,7 +43,7 @@ export const safeIsEnabled = async (locator: Locator): Promise<boolean> => {
  * @returns Promise<Locator> - The add task input locator, ready for interaction
  */
 export const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> => {
-  const ADD_TASK_INPUT = 'add-task-bar.global input';
+  const ADD_TASK_INPUT = 'add-task-bar.global .main-input';
   const addTaskInput = page.locator(ADD_TASK_INPUT).first();
   const isVisible = await addTaskInput.isVisible().catch(() => false);
 

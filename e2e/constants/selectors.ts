@@ -48,7 +48,7 @@ export const cssSelectors = {
   // ============================================================================
   // ADD TASK BAR SELECTORS
   // ============================================================================
-  ADD_TASK_INPUT: 'add-task-bar.global input',
+  ADD_TASK_INPUT: 'add-task-bar.global .main-input',
   ADD_TASK_SUBMIT: '.e2e-add-task-submit',
   ADD_BTN: '.tour-addBtn',
   SWITCH_ADD_TO_BTN: '.switch-add-to-btn',

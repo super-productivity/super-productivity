@@ -18,7 +18,6 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { FormsModule } from '@angular/forms';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MentionModule } from '../../../ui/mentions';
-import { MatInput } from '@angular/material/input';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -96,7 +95,6 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   imports: [
     FormsModule,
     CdkTextareaAutosize,
-    MatInput,
     MatIconButton,
     MatIcon,
     MatTooltip,
@@ -684,8 +682,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // UI event handlers
   onInputChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const value = target.value;
+    const target = event.target as HTMLTextAreaElement;
+    // The title is single-line even though the field is now an auto-growing
+    // textarea (so long titles wrap). Enter submits, but a paste can still carry
+    // newlines — collapse them to spaces before they reach the parsed state.
+    const value = target.value.replace(/[\r\n]+/g, ' ');
+    if (value !== target.value) {
+      target.value = value;
+    }
     this.stateService.updateInputTxt(value);
   }
 

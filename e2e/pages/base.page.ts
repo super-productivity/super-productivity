@@ -145,7 +145,7 @@ export abstract class BasePage {
     // Dismiss any blocking dialogs/overlays before interacting
     await this.ensureOverlaysClosed();
 
-    const inputEl = this.page.locator('add-task-bar.global input');
+    const inputEl = this.page.locator('add-task-bar.global .main-input');
 
     // Check if input is visible - if not, try clicking the add button
     const isInputVisible = await inputEl

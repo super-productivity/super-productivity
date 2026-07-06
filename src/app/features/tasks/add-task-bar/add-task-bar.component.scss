@@ -58,19 +58,36 @@
   display: flex;
   color: var(--text-color-most-intense);
 
-  .main-input {
+  // Wrapper is the flex child and holds the vertical breathing room as padding
+  // (a single row lands at the familiar ~42px, and every extra wrapped row keeps
+  // the same top/bottom spacing). The textarea itself has no vertical padding
+  // because cdkTextareaAutosize would otherwise clip it — see below.
+  .main-input-wrap {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .main-input {
     display: block;
     width: 100%;
-    height: 42px;
     font-size: 16px;
     box-sizing: border-box;
     border-style: solid;
     border-width: 0;
     outline: 0;
     padding-left: var(--s2);
-    // enough space for three buttons
-    line-height: 42px;
+    // No vertical padding: cdkTextareaAutosize sets height to rows*line-height
+    // and ignores padding, so any here would be clipped. Long titles wrap and
+    // the field grows a line at a time (up to maxRows); the wrapper adds the
+    // vertical spacing.
+    line-height: 1.4;
+    padding-top: 0;
+    padding-bottom: 0;
+    resize: none;
     background: transparent;
     color: inherit;
     font-family: var(--font-primary-stack);

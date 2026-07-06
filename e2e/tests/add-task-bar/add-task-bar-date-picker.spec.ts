@@ -3,7 +3,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 import { ensureGlobalAddTaskBarOpen } from '../../utils/element-helpers';
 
 const ADD_TASK_BAR = 'add-task-bar.global';
-const ADD_TASK_INPUT = `${ADD_TASK_BAR} input`;
+const ADD_TASK_INPUT = `${ADD_TASK_BAR} .main-input`;
 const DUE_BUTTON = `${ADD_TASK_BAR} [data-test="add-task-bar-due-btn"]`;
 const CLEAR_DUE_BUTTON = `${ADD_TASK_BAR} [data-test="add-task-bar-clear-due-btn"]`;
 const SCHEDULE_DIALOG = 'dialog-schedule-task';

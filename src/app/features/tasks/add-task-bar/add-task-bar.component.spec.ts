@@ -866,12 +866,12 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('IME handling (Integration)', () => {
-    let inputEl: HTMLInputElement;
+    let inputEl: HTMLTextAreaElement;
 
     beforeEach(() => {
       component.stateService.updateInputTxt('New Task');
       fixture.detectChanges();
-      inputEl = fixture.debugElement.nativeElement.querySelector('input');
+      inputEl = fixture.debugElement.nativeElement.querySelector('.main-input');
     });
 
     const dispatchEnterKeydown = (options: {
@@ -904,6 +904,24 @@ describe('AddTaskBarComponent', () => {
     it('should add a task when Enter is pressed and NOT in IME composition', () => {
       dispatchEnterKeydown({ isComposing: false });
       expect(mockTaskService.add).toHaveBeenCalled();
+    });
+  });
+
+  describe('single-line title (auto-growing textarea)', () => {
+    let inputEl: HTMLTextAreaElement;
+
+    beforeEach(() => {
+      fixture.detectChanges();
+      inputEl = fixture.debugElement.nativeElement.querySelector('.main-input');
+    });
+
+    it('collapses newlines from a pasted title so it stays single-line', () => {
+      inputEl.value = 'first line\nsecond\r\nthird';
+      inputEl.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(component.stateService.inputTxt()).toBe('first line second third');
+      expect(inputEl.value).toBe('first line second third');
     });
   });
 });
