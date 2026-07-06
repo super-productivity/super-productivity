@@ -1227,10 +1227,10 @@ export class SyncWrapperService {
           lastUpdateAction: `${error.unsyncedCount} local changes pending`,
           revMap: {},
           crossModelVersion: 1,
-          lastSyncedUpdate: null,
+          lastSyncedUpdate: error.lastSyncedUpdate ?? null,
           metaRev: null,
           vectorClock: localClock,
-          lastSyncedVectorClock: null,
+          lastSyncedVectorClock: error.lastSyncedVectorClock ?? null,
         },
       };
 

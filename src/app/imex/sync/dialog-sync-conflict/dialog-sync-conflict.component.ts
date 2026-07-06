@@ -59,7 +59,7 @@ export class DialogSyncConflictComponent {
   remoteChangeCount = this.getChangeCount('remote');
   localChangeCount = this.getChangeCount('local');
 
-  isHighlightRemoteChanges = this.remoteChangeCount > this.localChangeCount;
+  isHighlightRemoteChanges = (this.remoteChangeCount ?? 0) > (this.localChangeCount ?? 0);
   isHighlightLocalChanges = !this.isHighlightRemoteChanges;
 
   constructor() {
@@ -124,35 +124,48 @@ export class DialogSyncConflictComponent {
     }
   }
 
-  private getChangeCount(side: 'remote' | 'local'): number {
-    // First try vector clock, fall back to Lamport if not available
-    if (this.remote.vectorClock && this.local.vectorClock) {
-      const clock = side === 'remote' ? this.remote.vectorClock : this.local.vectorClock;
-      const lastSyncedClock = this.local.lastSyncedVectorClock;
-
-      if (!clock) return 0;
-
-      // If no last synced clock, return total of all values
-      if (!lastSyncedClock) {
-        return Object.values(clock).reduce((sum, value) => sum + value, 0);
-      }
-
-      // Calculate changes since last sync
-      let changeCount = 0;
-      for (const [clientId, value] of Object.entries(clock)) {
-        const lastSyncedValue = lastSyncedClock[clientId] || 0;
-        changeCount += Math.max(0, value - lastSyncedValue);
-      }
-      return changeCount;
+  /**
+   * Number of changes on the given side since the last successful sync,
+   * computed as a per-client vector-clock delta.
+   *
+   * Returns `null` when no last-synced baseline is available (a
+   * never-synced/fresh client). We deliberately do NOT sum the whole clock as
+   * a fallback: vector-clock counters are per-client LIFETIME totals, so
+   * summing reports total ops ever performed (thousands), not changes since
+   * last sync (SPAP-7). A null result is rendered as "unknown" in the UI.
+   */
+  private getChangeCount(side: 'remote' | 'local'): number | null {
+    if (!this.remote.vectorClock || !this.local.vectorClock) {
+      return null;
     }
 
-    // No vector clock available
-    return 0;
+    const clock = side === 'remote' ? this.remote.vectorClock : this.local.vectorClock;
+    const lastSyncedClock = this.local.lastSyncedVectorClock;
+
+    // No last-synced baseline → changes-since-sync is genuinely unknown.
+    if (!lastSyncedClock) {
+      return null;
+    }
+
+    // Calculate changes since last sync (per-client delta).
+    let changeCount = 0;
+    for (const [clientId, value] of Object.entries(clock)) {
+      const lastSyncedValue = lastSyncedClock[clientId] || 0;
+      changeCount += Math.max(0, value - lastSyncedValue);
+    }
+    return changeCount;
   }
 
   private shouldConfirmOverwrite(resolution: DialogConflictResolutionResult): boolean {
     const remoteChanges = this.getChangeCount('remote');
     const localChanges = this.getChangeCount('local');
+
+    // If we cannot quantify the changes (fresh client, no last-synced
+    // baseline), still show the confirmation — overwriting could discard real
+    // data. The message is worded without a count (see getConfirmationMessage).
+    if (remoteChanges === null || localChanges === null) {
+      return resolution === 'USE_REMOTE' || resolution === 'USE_LOCAL';
+    }
 
     const MIN_CHANGES_DIFFERENCE = 20;
 
@@ -170,10 +183,22 @@ export class DialogSyncConflictComponent {
   private getConfirmationMessage(resolution: DialogConflictResolutionResult): string {
     const remoteChanges = this.getChangeCount('remote');
     const localChanges = this.getChangeCount('local');
-    const [sourceChanges, targetChanges, sourceName, targetName] =
+
+    const [sourceName, targetName] =
+      resolution === 'USE_REMOTE' ? ['remote', 'local'] : ['local', 'remote'];
+
+    // Without a known change count, use the count-free warning wording.
+    if (remoteChanges === null || localChanges === null) {
+      return this._translateService.instant(
+        T.F.SYNC.D_CONFLICT.OVERWRITE_WARNING_UNKNOWN,
+        { targetName, sourceName },
+      );
+    }
+
+    const [sourceChanges, targetChanges] =
       resolution === 'USE_REMOTE'
-        ? [remoteChanges, localChanges, 'remote', 'local']
-        : [localChanges, remoteChanges, 'local', 'remote'];
+        ? [remoteChanges, localChanges]
+        : [localChanges, remoteChanges];
 
     return this._translateService.instant(T.F.SYNC.D_CONFLICT.OVERWRITE_WARNING, {
       targetName,

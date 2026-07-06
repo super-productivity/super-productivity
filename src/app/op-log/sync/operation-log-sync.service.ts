@@ -20,6 +20,7 @@ import { SuperSyncStatusService } from './super-sync-status.service';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { RemoteOpsProcessingService } from './remote-ops-processing.service';
+import { VectorClockService } from './vector-clock.service';
 import {
   DownloadResultForRejection,
   RejectedOpsHandlerService,
@@ -117,6 +118,7 @@ export class OperationLogSyncService {
 
   // Extracted services
   private remoteOpsProcessingService = inject(RemoteOpsProcessingService);
+  private vectorClockService = inject(VectorClockService);
   private rejectedOpsHandlerService = inject(RejectedOpsHandlerService);
   private syncHydrationService = inject(SyncHydrationService);
   private syncImportConflictGateService = inject(SyncImportConflictGateService);
@@ -525,10 +527,19 @@ export class OperationLogSyncService {
               'Throwing LocalDataConflictError for conflict resolution dialog.',
           );
 
+          // The local snapshot's vector clock is this client's last-synced
+          // baseline: unsynced ops sit on top of it, so the dialog can compute
+          // changes-since-last-sync as a per-client delta instead of summing
+          // the whole (lifetime) clock (SPAP-7). Undefined snapshot → null.
+          const lastSyncedVectorClock =
+            (await this.vectorClockService.getSnapshotVectorClock()) ?? null;
+
           throw new LocalDataConflictError(
             unsyncedOps.length,
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
+            lastSyncedVectorClock,
+            null,
           );
         } else {
           // Defer the markRejected call until hydration has succeeded — see
@@ -554,10 +565,14 @@ export class OperationLogSyncService {
               'Throwing LocalDataConflictError for conflict resolution dialog.',
           );
 
+          // Fresh client (no unsynced ops, no prior sync) — there is no
+          // last-synced clock, so pass null explicitly (SPAP-7).
           throw new LocalDataConflictError(
             0, // No unsynced ops, but we have meaningful store data
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
+            null,
+            null,
           );
         }
 
@@ -684,7 +699,8 @@ export class OperationLogSyncService {
         OpLog.warn(
           `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
         );
-        throw new LocalDataConflictError(0, {});
+        // Wholly fresh client — no prior sync, so no last-synced clock (SPAP-7).
+        throw new LocalDataConflictError(0, {}, undefined, null, null);
       }
 
       OpLog.warn(
