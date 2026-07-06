@@ -64,6 +64,22 @@
     gap: var(--s-quarter);
   }
 
+  // On smaller screens, wrap the actions onto multiple rows instead of hiding
+  // them behind a horizontal scroll, so every button stays reachable.
+  @include mq(xs, max) {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: var(--s-quarter);
+  }
+
+  // Keeps an action button and its "clear" button together so a paired button
+  // never wraps away from the button it belongs to.
+  .action-item {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
   .action-btn {
     cursor: pointer;
     opacity: 0.4;
