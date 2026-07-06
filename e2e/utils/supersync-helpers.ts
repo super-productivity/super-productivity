@@ -1088,12 +1088,17 @@ export const markTaskDoneByKey = async (
  */
 export const archiveDoneTasks = async (client: SimulatedE2EClient): Promise<void> => {
   // Click the "Finish Day" button to go to Daily Summary.
-  // Arm waitForURL *before* clicking via Promise.all: if the click lands a hair
-  // before Angular wires up the routerLink (animation/CD timing), a click-then-wait
-  // sequence silently no-ops and only fails 30s later. Racing them removes that gap.
+  // The button is a routerLink inside an @if (hasDoneTasks()) / @else swap, so
+  // marking a task done re-creates the element; a single click can land in the
+  // window before Angular wires up the routerLink and silently no-ops (30s hang).
+  // Racing waitForURL against a one-shot click doesn't cover that gap, so re-issue
+  // the click until navigation actually starts.
   const finishDayBtn = client.page.locator('.e2e-finish-day');
   await finishDayBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
-  await Promise.all([client.page.waitForURL(/daily-summary/), finishDayBtn.click()]);
+  await expect(async () => {
+    await finishDayBtn.click();
+    await client.page.waitForURL(/daily-summary/, { timeout: 2000 });
+  }).toPass({ timeout: UI_VISIBLE_TIMEOUT });
 
   // Click "Save & Go Home" button (has sun icon wb_sunny)
   const saveAndGoHomeBtn = client.page.locator(
