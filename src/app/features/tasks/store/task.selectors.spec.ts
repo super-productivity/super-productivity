@@ -1145,4 +1145,155 @@ describe('Task Selectors', () => {
     expect(ids).not.toContain('overdueInArchived');
     expect(ids).toContain('task6');
   });
+
+  // SPAP-19: per-subscription stable task selector factories
+  // -------------------------------------------------------------------------
+  describe('SPAP-19 stable selector factories', () => {
+    const makeTask = (id: string, over: Partial<Task> = {}): Task =>
+      ({
+        ...DEFAULT_TASK,
+        id,
+        title: id,
+        created: 0,
+        subTaskIds: [],
+        tagIds: [],
+        timeSpentOnDay: {},
+        ...over,
+      }) as Task;
+
+    const makeTaskState = (tasks: Task[]): TaskState => ({
+      ids: tasks.map((t) => t.id),
+      entities: tasks.reduce(
+        (acc, t) => {
+          acc[t.id] = t;
+          return acc;
+        },
+        {} as Record<string, Task>,
+      ),
+      currentTaskId: null,
+      selectedTaskId: null,
+      lastCurrentTaskId: null,
+      isDataLoaded: true,
+      taskDetailTargetPanel: null,
+    });
+
+    // Selectors only read the TASK feature slice, so a minimal root is enough.
+    const wrap = (ts: TaskState): any => ({ [TASK_FEATURE_NAME]: ts });
+
+    describe('selectTasksWithSubTasksByIdsFactory', () => {
+      it('returns identical refs for tasks whose entity ref did not change (only C changed)', () => {
+        const a = makeTask('A');
+        const b = makeTask('B');
+        const c = makeTask('C');
+        const sel = fromSelectors.selectTasksWithSubTasksByIdsFactory(['A', 'B', 'C']);
+
+        const r1 = sel(wrap(makeTaskState([a, b, c])));
+        // Only C's entity ref changes (e.g. a time-tracking tick bumping timeSpent)
+        const c2 = { ...c, timeSpent: 999 };
+        const r2 = sel(wrap(makeTaskState([a, b, c2])));
+
+        expect(r2[0]).toBe(r1[0]); // A: same object
+        expect(r2[1]).toBe(r1[1]); // B: same object
+        expect(r2[2]).not.toBe(r1[2]); // C: rebuilt
+        expect(r2[2].timeSpent).toBe(999);
+      });
+
+      it('rebuilds a parent when only one of its subtask entities changed', () => {
+        const p = makeTask('P', { subTaskIds: ['S'] });
+        const s = makeTask('S', { parentId: 'P', timeSpent: 0 });
+        const sel = fromSelectors.selectTasksWithSubTasksByIdsFactory(['P']);
+
+        const r1 = sel(wrap(makeTaskState([p, s])));
+        const s2 = { ...s, timeSpent: 500 };
+        const r2 = sel(wrap(makeTaskState([p, s2])));
+
+        expect(r2[0]).not.toBe(r1[0]); // parent rebuilt
+        expect(r2[0].subTasks[0]).toBe(s2); // reflects the changed subtask entity
+        expect(r2[0].subTasks[0].timeSpent).toBe(500);
+      });
+
+      it('keeps two concurrent factory instances independent (no cross-eviction)', () => {
+        const a = makeTask('A');
+        const b = makeTask('B');
+        const c = makeTask('C');
+        const d = makeTask('D');
+        const selAB = fromSelectors.selectTasksWithSubTasksByIdsFactory(['A', 'B']);
+        const selCD = fromSelectors.selectTasksWithSubTasksByIdsFactory(['C', 'D']);
+
+        const ab1 = selAB(wrap(makeTaskState([a, b, c, d])));
+        const cd1 = selCD(wrap(makeTaskState([a, b, c, d])));
+        // New state objects (same task refs) force the projectors to re-run;
+        // each instance's own cache must still return identical results.
+        const ab2 = selAB(wrap(makeTaskState([a, b, c, d])));
+        const cd2 = selCD(wrap(makeTaskState([a, b, c, d])));
+
+        expect(ab2[0]).toBe(ab1[0]);
+        expect(ab2[1]).toBe(ab1[1]);
+        expect(cd2[0]).toBe(cd1[0]);
+        expect(cd2[1]).toBe(cd1[1]);
+      });
+
+      it('produces output deep-equal to the legacy selectTasksWithSubTasksByIds (shape parity)', () => {
+        const p = makeTask('P', { subTaskIds: ['S1', 'S2'] });
+        const s1 = makeTask('S1', { parentId: 'P' });
+        const s2 = makeTask('S2', { parentId: 'P' });
+        const state = wrap(makeTaskState([p, s1, s2]));
+
+        const legacy = fromSelectors.selectTasksWithSubTasksByIds(state, {
+          ids: ['P'],
+        });
+        const viaFactory = fromSelectors.selectTasksWithSubTasksByIdsFactory(['P'])(
+          state,
+        );
+
+        expect(viaFactory).toEqual(legacy);
+      });
+
+      it('filters out missing/deleted top-level entities exactly like the legacy selector', () => {
+        const a = makeTask('A');
+        const state = wrap(makeTaskState([a]));
+        const res = fromSelectors.selectTasksWithSubTasksByIdsFactory(['A', 'gone'])(
+          state,
+        );
+        expect(res.length).toBe(1);
+        expect(res[0].id).toBe('A');
+      });
+
+      // Documents WHY the factory is needed: the legacy module-level props-selector
+      // shares ONE memo slot, so interleaving different id-sets forces a full
+      // recompute (new refs) — the exact thrash this ticket fixes.
+      it('CONTRAST: legacy shared props-selector thrashes across interleaved id-sets', () => {
+        const a = makeTask('A');
+        const b = makeTask('B');
+        const c = makeTask('C');
+        const d = makeTask('D');
+        const state = wrap(makeTaskState([a, b, c, d]));
+
+        const first1 = fromSelectors.selectTasksWithSubTasksByIds(state, {
+          ids: ['A', 'B'],
+        });
+        // a "different subscriber" reads a different id-set against the same state
+        fromSelectors.selectTasksWithSubTasksByIds(state, { ids: ['C', 'D'] });
+        const first2 = fromSelectors.selectTasksWithSubTasksByIds(state, {
+          ids: ['A', 'B'],
+        });
+
+        // Interleaving evicted the memo → recomputed → brand-new object refs
+        expect(first2[0]).not.toBe(first1[0]);
+      });
+    });
+
+    describe('selectTasksByIdFactory', () => {
+      it('returns raw entities in order and filters out missing ids', () => {
+        const a = makeTask('A');
+        const b = makeTask('B');
+        const state = wrap(makeTaskState([a, b]));
+        const res = fromSelectors.selectTasksByIdFactory(['A', 'gone', 'B'])(state);
+
+        expect(res.length).toBe(2);
+        expect(res[0]).toBe(a);
+        expect(res[1]).toBe(b);
+      });
+    });
+  });
 });

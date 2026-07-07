@@ -52,7 +52,7 @@ import {
   selectTaskDetailTargetPanel,
   selectTaskEntities,
   selectTaskFeatureState,
-  selectTasksById,
+  selectTasksByIdFactory,
   selectTasksByRepeatConfigId,
   selectTasksByTag,
   selectTaskWithSubTasksByRepeatConfigId,
@@ -1085,7 +1085,9 @@ export class TaskService {
   }
 
   getByIdsLive$(ids: string[]): Observable<Task[]> {
-    return this._store.pipe(select(selectTasksById, { ids }));
+    // SPAP-19: fresh per-call factory selector so concurrent subscribers with
+    // different id-sets don't evict each other's memo.
+    return this._store.pipe(select(selectTasksByIdFactory(ids)));
   }
 
   getByIdWithSubTaskData$(id: string): Observable<TaskWithSubTasks> {

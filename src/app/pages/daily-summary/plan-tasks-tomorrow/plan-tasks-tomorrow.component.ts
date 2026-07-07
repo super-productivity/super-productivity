@@ -13,7 +13,7 @@ import { Store } from '@ngrx/store';
 import { selectUndoneTodayTaskIds } from '../../../features/work-context/store/work-context.selectors';
 import { PlannerActions } from '../../../features/planner/store/planner.actions';
 import { first } from 'rxjs/operators';
-import { selectTasksWithSubTasksByIds } from '../../../features/tasks/store/task.selectors';
+import { selectTasksWithSubTasksByIdsFactory } from '../../../features/tasks/store/task.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -46,7 +46,7 @@ export class PlanTasksTomorrowComponent {
     const tomorrow = await this.plannerService.tomorrow$.pipe(first()).toPromise();
     const ids = await this.leftOverTodayIds$.pipe(first()).toPromise();
     const tasks = await this._store
-      .select(selectTasksWithSubTasksByIds, { ids })
+      .select(selectTasksWithSubTasksByIdsFactory(ids ?? []))
       .pipe(first())
       .toPromise();
     tasks.forEach((task) => {

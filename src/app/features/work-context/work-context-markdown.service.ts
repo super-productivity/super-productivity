@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import { Store } from '@ngrx/store';
-import { selectTasksWithSubTasksByIds } from '../tasks/store/task.selectors';
+import { selectTasksWithSubTasksByIdsFactory } from '../tasks/store/task.selectors';
 import { Task, TaskWithSubTasks } from '../tasks/task.model';
 import { first } from 'rxjs/operators';
 import { Log } from '../../core/log';
@@ -72,7 +72,7 @@ export class WorkContextMarkdownService {
 
     const tasks =
       (await this._store
-        .select(selectTasksWithSubTasksByIds, { ids })
+        .select(selectTasksWithSubTasksByIdsFactory(ids))
         .pipe(first())
         .toPromise()) || [];
 

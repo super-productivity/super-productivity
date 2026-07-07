@@ -36,7 +36,7 @@ import {
   flattenTasks,
   selectAllTasks,
   selectAllTasksWithSubTasks,
-  selectTasksWithSubTasksByIds,
+  selectTasksWithSubTasksByIdsFactory,
 } from '../tasks/store/task.selectors';
 import { ofType } from '@ngrx/effects';
 import { WorklogExportSettings } from '../worklog/worklog.model';
@@ -283,6 +283,10 @@ export class WorkContextService {
   mainListTasks$: Observable<TaskWithSubTasks[]> = this.mainListTaskIds$.pipe(
     // tap((taskIds: string[]) => Log.log('[WorkContext] Today task IDs:', taskIds)),
     switchMap((taskIds: string[]) => this._getTasksByIds$(taskIds)),
+    // SPAP-19: with per-task referential stability upstream, an unchanged list
+    // is length + per-element === equal, so this stops needless re-emissions
+    // (and the OnPush row re-renders they trigger) every time a task ticks.
+    distinctUntilChanged(fastArrayCompare),
     // TODO find out why this is triggered so often
     // tap((tasks: TaskWithSubTasks[]) =>
     //   Log.log('[WorkContext] Today tasks loaded:', tasks.length, 'tasks'),
@@ -320,6 +324,9 @@ export class WorkContextService {
 
   backlogTasks$: Observable<TaskWithSubTasks[]> = this.backlogTaskIds$.pipe(
     switchMap((ids) => this._getTasksByIds$(ids)),
+    // SPAP-19: see mainListTasks$ — suppress no-op re-emissions of an
+    // unchanged (element-wise identical) backlog array.
+    distinctUntilChanged(fastArrayCompare),
   );
 
   allTasksForCurrentContext$: Observable<TaskWithSubTasks[]> = combineLatest([
@@ -724,7 +731,10 @@ export class WorkContextService {
       Log.log({ ids });
       throw new Error('Invalid param provided for getByIds$ :(');
     }
-    return this._store$.select(selectTasksWithSubTasksByIds, { ids });
+    // SPAP-19: mint a fresh per-id-set factory selector (called inside the
+    // switchMap at each call site) so each subscription owns its own memo and
+    // its per-task referential-stability cache.
+    return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids));
   }
 
   private _filterFutureScheduledTasksForToday(

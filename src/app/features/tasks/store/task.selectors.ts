@@ -1,4 +1,4 @@
-import { createFeatureSelector, createSelector } from '@ngrx/store';
+import { createFeatureSelector, createSelector, MemoizedSelector } from '@ngrx/store';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import {
   Task,
@@ -514,6 +514,84 @@ export const selectTasksWithSubTasksByIds = createSelector(
       .filter((task): task is Task => !!task)
       .map((task) => mapSubTasksToTask(task, state) as TaskWithSubTasks),
 );
+
+// SPAP-19: Per-subscription stable selector factories.
+// -----------------------------------------------------
+// The module-level `selectTasksById` / `selectTasksWithSubTasksByIds`
+// props-selectors above keep a SINGLE depth-1 memo slot each, shared across
+// every concurrent subscriber. Different `ids` props mutually evict that slot,
+// so both recompute on every dispatched action. These factories instead mint a
+// FRESH `createSelector` per distinct id-set (create it inside the
+// `switchMap`/`map` at the call site) so each subscription owns its own memo —
+// GC'd together with the subscription.
+export const selectTasksByIdFactory = (ids: string[]): MemoizedSelector<object, Task[]> =>
+  createSelector(selectTaskFeatureState, (state: TaskState): Task[] =>
+    ids ? ids.map((id) => state.entities[id]).filter((task): task is Task => !!task) : [],
+  );
+
+export const selectTasksWithSubTasksByIdsFactory = (
+  ids: string[],
+): MemoizedSelector<object, TaskWithSubTasks[]> => {
+  // Per-selector-instance (per-subscription) cache keyed by task id. Because it
+  // lives in this closure it is naturally isolated from other subscribers and
+  // GC'd with the selector. On a tick where only one task's entity ref changed,
+  // every other task returns its identical previous `TaskWithSubTasks` object.
+  const cache = new Map<
+    string,
+    { task: Task; subTasks: Task[]; result: TaskWithSubTasks }
+  >();
+  return createSelector(
+    selectTaskFeatureState,
+    (state: TaskState): TaskWithSubTasks[] => {
+      const result: TaskWithSubTasks[] = [];
+      const seen = new Set<string>();
+      for (const id of ids) {
+        const task = state.entities[id];
+        // Same filtering as the legacy selector: drop missing/deleted entities.
+        if (!task) {
+          continue;
+        }
+        seen.add(id);
+
+        // Resolve current subtask entities (same shaping as mapSubTasksToTask).
+        const subTasks: Task[] = [];
+        for (const subTaskId of task.subTaskIds) {
+          const subTask = state.entities[subTaskId];
+          if (subTask) {
+            subTasks.push(subTask);
+          } else {
+            devError('Task data not found for ' + subTaskId);
+          }
+        }
+
+        const cached = cache.get(id);
+        if (
+          cached &&
+          cached.task === task &&
+          cached.subTasks.length === subTasks.length &&
+          cached.subTasks.every((st, i) => st === subTasks[i])
+        ) {
+          // Nothing referentially changed → reuse the exact previous object.
+          result.push(cached.result);
+        } else {
+          const built: TaskWithSubTasks = { ...task, subTasks };
+          cache.set(id, { task, subTasks, result: built });
+          result.push(built);
+        }
+      }
+      // Prune entries for ids no longer requested so the cache can't grow
+      // unbounded if the id-set is ever mutated in place.
+      if (cache.size > seen.size) {
+        for (const key of cache.keys()) {
+          if (!seen.has(key)) {
+            cache.delete(key);
+          }
+        }
+      }
+      return result;
+    },
+  );
+};
 
 export const selectTaskByIdWithSubTaskData = createSelector(
   selectTaskFeatureState,
