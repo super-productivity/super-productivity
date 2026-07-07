@@ -1423,6 +1423,7 @@
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync (experimental) – Faster syncing using a split ops/snapshot file layout. Once enabled, all devices syncing this folder must also enable it.",
         "LOCAL_FILE": {
           "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
@@ -1592,6 +1593,7 @@
         "RESTORE_ERROR": "Failed to restore data",
         "RESTORE_SUCCESS": "Data restored successfully",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
+        "SPLIT_FORMAT_ENABLE_SETTING": "This sync folder was upgraded to the split-file format. Turn on Surgical sync in Sync settings to continue.",
         "STORAGE_QUOTA_EXCEEDED": "Sync server storage is full. Your changes are NOT syncing! Please archive old tasks or upgrade your plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",

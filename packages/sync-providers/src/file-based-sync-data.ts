@@ -77,6 +77,80 @@ export interface FileBasedSyncData<
   oldestOpSyncVersion?: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SPAP-11: split-file sync format (opt-in). Two remote files per sync folder:
+//   - sync-ops.json   (small, read+written every sync; the COMMIT POINT)
+//   - sync-state.json  (full snapshot + archives; rewritten only on compaction /
+//                       force-upload / gap-repair / migration)
+// The legacy single `sync-data.json` is NEVER removed; on migration it is
+// overwritten with a small v3 TOMBSTONE so old clients hard-stop instead of
+// silently re-creating a v2 file and diverging.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pointer from `sync-ops.json` to the `sync-state.json` snapshot it was built
+ * against. Readers MUST validate `syncVersion`/`vectorClock` against the
+ * downloaded snapshot; a mismatch is treated as a gap (full re-download).
+ */
+export interface FileBasedSnapshotRef {
+  syncVersion: number;
+  vectorClock: VectorClock;
+  /** Optional provider rev of the referenced snapshot file (best-effort). */
+  rev?: string;
+}
+
+/**
+ * `sync-ops.json` — the small, always-read/always-written commit-point file.
+ * This is the file-based equivalent of `FileBasedSyncData` MINUS the heavy
+ * snapshot/archive payload, plus a `snapshotRef` pointing at `sync-state.json`.
+ */
+export interface FileBasedOpsFile<
+  TCompactOperation extends object = Record<string, unknown>,
+> {
+  version: 3;
+  syncVersion: number;
+  schemaVersion: number;
+  vectorClock: VectorClock;
+  lastModified: number;
+  clientId: string;
+  recentOps: SyncFileCompactOp<TCompactOperation>[];
+  oldestOpSyncVersion?: number;
+  snapshotRef: FileBasedSnapshotRef;
+}
+
+/**
+ * `sync-state.json` — the full snapshot file. Same payload as the legacy
+ * `FileBasedSyncData` MINUS `recentOps` (those live in the ops file), tagged
+ * with schema version 3.
+ */
+export interface FileBasedStateFile<TState = unknown, TArchive = unknown> {
+  version: 3;
+  /** syncVersion this snapshot was built at (matched by ops-file snapshotRef). */
+  syncVersion: number;
+  schemaVersion: number;
+  vectorClock: VectorClock;
+  lastModified: number;
+  clientId: string;
+  state: TState;
+  archiveYoung?: TArchive;
+  archiveOld?: TArchive;
+}
+
+/**
+ * v3 TOMBSTONE written over the legacy `sync-data.json` (and `.bak`) after a
+ * one-way migration to the split format. It is a valid encrypted JSON body so
+ * an up-to-date OFF client can detect it (`version:3`, `format:'split'`) and
+ * surface an actionable "enable Surgical sync" notice instead of diverging. A
+ * truly-old shipped client hits the strict `version !== 2` check and hard-errors
+ * (safe backstop).
+ */
+export interface FileBasedSplitTombstone {
+  version: 3;
+  format: 'split';
+  migratedAt: number;
+  note: string;
+}
+
 export const FILE_BASED_SYNC_CONSTANTS = {
   SYNC_FILE: 'sync-data.json',
   BACKUP_FILE: 'sync-data.json.bak',
@@ -89,6 +163,19 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   // small (~150-250 bytes serialized each), so the extra 1500 retained ops add
   // roughly ~0.3 MB to sync-data.json only when the buffer is actually full.
   MAX_RECENT_OPS: 2000,
+  // SPAP-11: split-file format constants (opt-in via the `isUseSplitSyncFiles`
+  // sync setting). See FileBasedOpsFile / FileBasedStateFile / FileBasedSplitTombstone.
+  OPS_FILE: 'sync-ops.json',
+  STATE_FILE: 'sync-state.json',
+  SPLIT_FILE_VERSION: 3 as const,
+  // Post-compaction RETAINED size for the split ops file (≈ MAX_RECENT_OPS/2).
+  // NOTE: this is the trim target, NOT the trigger — a recompaction fires when the
+  // ops buffer exceeds MAX_RECENT_OPS, then trims sync-ops.json back to this many
+  // ops. Keeping the target strictly below the trigger leaves ~this many cheap
+  // op-only syncs between compactions.
+  SPLIT_COMPACTION_THRESHOLD: 1000,
+  // Marker distinguishing a migration tombstone from other v3 payloads.
+  SPLIT_TOMBSTONE_FORMAT: 'split' as const,
   SYNC_VERSION_STORAGE_KEY_PREFIX: 'FILE_SYNC_VERSION_',
   LEGACY_META_FILE: '__meta_',
   // SPAP-9: when a seq-0 snapshot download has CONCURRENT vector clocks with the

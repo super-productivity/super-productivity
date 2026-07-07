@@ -15,6 +15,7 @@ import { VectorClock } from '../../../core/operation.types';
 import { uuidv7 } from 'uuidv7';
 import { ArchiveDbAdapter } from '../../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../../backup/state-snapshot.service';
+import { GlobalConfigService } from '../../../../features/config/global-config.service';
 
 /**
  * A simulated client in the test harness.
@@ -64,6 +65,14 @@ export interface HarnessConfig {
 
   /** Encryption key (undefined = no encryption) */
   encryptKey?: string;
+
+  /**
+   * SPAP-11: whether the opt-in split-file sync format is enabled. Defaults to
+   * false (OFF), matching production for users who have not opted in, and keeps
+   * the adapter's `GlobalConfigService.sync().isUseSplitSyncFiles` read resolving
+   * to a provided mock instead of the root service (which needs the NgRx Store).
+   */
+  isUseSplitSyncFiles?: boolean;
 }
 
 /**
@@ -217,11 +226,20 @@ export class FileBasedSyncTestHarness {
     const mockArchiveDb = new MockArchiveDbAdapter();
     const mockStateSnapshot = new MockStateSnapshotService();
 
+    // SPAP-11: the adapter reads GlobalConfigService.sync().isUseSplitSyncFiles to
+    // decide the split-file path. The root GlobalConfigService needs the NgRx Store
+    // (not configured in this harness), so provide a lightweight fake — defaulting
+    // split OFF unless the test opts in via config.isUseSplitSyncFiles.
+    const fakeGlobalConfigService = {
+      sync: () => ({ isUseSplitSyncFiles: config.isUseSplitSyncFiles === true }),
+    } as unknown as GlobalConfigService;
+
     // Configure TestBed with mock providers BEFORE inject() is called
     TestBed.configureTestingModule({
       providers: [
         { provide: ArchiveDbAdapter, useValue: mockArchiveDb },
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
+        { provide: GlobalConfigService, useValue: fakeGlobalConfigService },
       ],
     });
 

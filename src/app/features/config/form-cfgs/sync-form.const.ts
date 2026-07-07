@@ -547,6 +547,18 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             label: T.F.SYNC.FORM.L_ENABLE_COMPRESSION,
           },
         },
+        {
+          // SPAP-11: opt-in split-file ("Surgical") sync. Only relevant for
+          // file-based providers (Dropbox, WebDAV, LocalFile, Nextcloud, OneDrive).
+          key: 'isUseSplitSyncFiles',
+          type: 'checkbox',
+          hideExpression: (m, v, field) =>
+            field?.parent?.parent?.model?.syncProvider === null ||
+            field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
+          templateOptions: {
+            label: T.F.SYNC.FORM.L_USE_SPLIT_SYNC_FILES,
+          },
+        },
         // Enable encryption button for file-based providers (shown when encryption is disabled)
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>

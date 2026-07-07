@@ -22,6 +22,9 @@ import {
 } from '../../core/operation.types';
 import {
   FileBasedSyncData,
+  FileBasedOpsFile,
+  FileBasedStateFile,
+  FileBasedSplitTombstone,
   FILE_BASED_SYNC_CONSTANTS,
   SyncFileCompactOp,
 } from './file-based-sync.types';
@@ -33,9 +36,11 @@ import {
   JsonParseError,
   LegacySyncFormatDetectedError,
   RemoteFileNotFoundAPIError,
+  SplitSyncFormatDetectedError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
+import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vector-clock';
@@ -165,6 +170,16 @@ export class FileBasedSyncAdapterService {
 
   /** Cache TTL - 30 seconds (sync cycle should complete within this) */
   private readonly _CACHE_TTL_MS = 30_000;
+
+  /**
+   * SPAP-11: within-cycle cache for the split-format ops file (`sync-ops.json`),
+   * so an upload can reuse the rev fetched by the preceding download in the same
+   * cycle (mirrors `_syncCycleCache` for the single-file path).
+   */
+  private _splitOpsCache = new Map<
+    string,
+    { data: FileBasedOpsFile; rev: string; timestamp: number }
+  >();
 
   /** Tracks whether we've loaded persisted state from localStorage */
   private _persistedStateLoaded = false;
@@ -451,6 +466,12 @@ export class FileBasedSyncAdapterService {
         revToMatch: result.rev,
       };
     } catch (e) {
+      if (e instanceof SplitSyncFormatDetectedError) {
+        // SPAP-11: OFF client uploading against a migrated folder — surface the
+        // notice and abort the upload (no divergence).
+        this._notifySplitFormatDetected();
+        throw e;
+      }
       if (!(e instanceof RemoteFileNotFoundAPIError)) {
         throw e;
       }
@@ -636,6 +657,13 @@ export class FileBasedSyncAdapterService {
   ): Promise<OpUploadResponse> {
     const providerKey = this._getProviderKey(provider);
 
+    // SPAP-11: split-file ("Surgical sync") path is fully separate and only
+    // reached when the opt-in setting is ON. The single-file path below is
+    // byte-for-byte unchanged when the setting is OFF (the default).
+    if (this._isSplitSyncEnabled()) {
+      return this._uploadOpsSplit(provider, cfg, encryptKey, ops, clientId, providerKey);
+    }
+
     // Step 1: Get current sync state
     const { currentData, currentSyncVersion, fileExists, revToMatch } =
       await this._getCurrentSyncState(provider, cfg, encryptKey, providerKey);
@@ -732,6 +760,20 @@ export class FileBasedSyncAdapterService {
   ): Promise<FileSnapshotOpDownloadResponse> {
     const providerKey = this._getProviderKey(provider);
 
+    // SPAP-11: split-file ("Surgical sync") download path (opt-in). When OFF
+    // (default) the single-file path below runs unchanged.
+    if (this._isSplitSyncEnabled()) {
+      return this._downloadOpsSplit(
+        provider,
+        cfg,
+        encryptKey,
+        sinceSeq,
+        excludeClient,
+        limit,
+        providerKey,
+      );
+    }
+
     // SPAP-10: cheap remote-rev pre-check. If we already know the last-seen rev
     // AND nothing in this cycle has cached a fresh download, ask the provider for
     // the current rev WITHOUT downloading the full file. An unchanged rev proves
@@ -798,6 +840,12 @@ export class FileBasedSyncAdapterService {
       // Cache data + rev for use in _uploadOps() (avoids redundant download)
       this._setCachedSyncData(providerKey, syncData, rev);
     } catch (e) {
+      if (e instanceof SplitSyncFormatDetectedError) {
+        // SPAP-11: OFF client hit a migrated (split-format) folder. Surface an
+        // actionable notice and pause safely (no upload, no divergence).
+        this._notifySplitFormatDetected();
+        throw e;
+      }
       if (e instanceof RemoteFileNotFoundAPIError) {
         // No sync file yet - return empty
         return {
@@ -1062,6 +1110,21 @@ export class FileBasedSyncAdapterService {
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
 
+    // SPAP-11: split-file force-upload / recovery / initial — write both files
+    // (state THEN ops) so the ops file's snapshotRef always points at a snapshot
+    // that is already on the remote.
+    if (this._isSplitSyncEnabled()) {
+      return this._uploadSnapshotSplit(
+        provider,
+        cfg,
+        encryptKey,
+        clientId,
+        vectorClock,
+        schemaVersion,
+        providerKey,
+      );
+    }
+
     // For snapshots, we start fresh with syncVersion = 1
     const newSyncVersion = 1;
 
@@ -1178,6 +1241,832 @@ export class FileBasedSyncAdapterService {
       OpLog.err('FileBasedSyncAdapter: Failed to delete all data', e);
       return { success: false };
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SPAP-11: SPLIT-FILE ("SURGICAL SYNC") FORMAT (opt-in)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** State-file backup artifact name (SPAP-8-style recovery for snapshotRef mismatch). */
+  private readonly _STATE_BACKUP_FILE = FILE_BASED_SYNC_CONSTANTS.STATE_FILE + '.bak';
+
+  /**
+   * Whether the opt-in split-file sync setting is ON. Resolved lazily via the
+   * injector (like SnackService) so the single-file unit harness — which does not
+   * provide GlobalConfigService — keeps working and defaults to OFF.
+   */
+  private _isSplitSyncEnabled(): boolean {
+    const svc = this._injector.get(GlobalConfigService, null);
+    return svc?.sync()?.isUseSplitSyncFiles === true;
+  }
+
+  /** True when a decoded sync-data.json body is a v3 split-format tombstone. */
+  private _isSplitTombstone(data: unknown): data is FileBasedSplitTombstone {
+    const d = data as Partial<FileBasedSplitTombstone> | null;
+    return (
+      !!d &&
+      d.version === FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION &&
+      d.format === FILE_BASED_SYNC_CONSTANTS.SPLIT_TOMBSTONE_FORMAT
+    );
+  }
+
+  /** Surfaces the actionable "turn on Surgical sync" notice (non-fatal if no snack). */
+  private _notifySplitFormatDetected(): void {
+    this._injector
+      .get(SnackService, null)
+      ?.open({ type: 'ERROR', msg: T.F.SYNC.S.SPLIT_FORMAT_ENABLE_SETTING });
+  }
+
+  private _getCachedOpsData(
+    providerKey: string,
+  ): { data: FileBasedOpsFile; rev: string } | null {
+    const cached = this._splitOpsCache.get(providerKey);
+    if (!cached) return null;
+    if (Date.now() - cached.timestamp > this._CACHE_TTL_MS) {
+      this._splitOpsCache.delete(providerKey);
+      return null;
+    }
+    return { data: cached.data, rev: cached.rev };
+  }
+
+  private _setCachedOpsData(
+    providerKey: string,
+    data: FileBasedOpsFile,
+    rev: string,
+  ): void {
+    this._splitOpsCache.set(providerKey, { data, rev, timestamp: Date.now() });
+  }
+
+  private _clearCachedOpsData(providerKey: string): void {
+    this._splitOpsCache.delete(providerKey);
+  }
+
+  /** Downloads + decodes `sync-ops.json` and validates its version. */
+  private async _downloadOpsFile(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<{ data: FileBasedOpsFile; rev: string }> {
+    const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.OPS_FILE);
+    const data =
+      await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedOpsFile>(
+        cfg,
+        encryptKey,
+        response.dataStr,
+      );
+    if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
+      throw new SyncDataCorruptedError(
+        `Unsupported ops-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
+        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+      );
+    }
+    return { data, rev: response.rev };
+  }
+
+  /** Downloads + decodes `sync-state.json` and validates its version. */
+  private async _downloadStateFile(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<{ data: FileBasedStateFile; rev: string }> {
+    const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.STATE_FILE);
+    const data =
+      await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedStateFile>(
+        cfg,
+        encryptKey,
+        response.dataStr,
+      );
+    if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
+      throw new SyncDataCorruptedError(
+        `Unsupported state-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
+        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+      );
+    }
+    return { data, rev: response.rev };
+  }
+
+  /**
+   * Writes `sync-state.json`. Force-overwrite: the ops file (commit point) is the
+   * concurrency gate, and readers only trust a snapshot the ops file's snapshotRef
+   * validates against. Returns the written rev for the snapshotRef pointer.
+   */
+  private async _writeStateFile(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    data: FileBasedStateFile,
+  ): Promise<string> {
+    const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
+      cfg,
+      encryptKey,
+      data,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._writeStateFile');
+    const res = await provider.uploadFile(
+      FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+      uploadData,
+      null,
+      true,
+    );
+    return res.rev;
+  }
+
+  /** Copies the current `sync-state.json` to its `.bak` (non-fatal). */
+  private async _backupStateFile(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<void> {
+    try {
+      const current = await this._downloadStateFile(provider, cfg, encryptKey);
+      const backupData = await this._encryptAndCompressHandler.compressAndEncryptData(
+        cfg,
+        encryptKey,
+        current.data,
+        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      );
+      if (!backupData || backupData.trim().length === 0) return;
+      await provider.uploadFile(this._STATE_BACKUP_FILE, backupData, null, true);
+    } catch (e) {
+      // Non-fatal — e.g. first compaction has no existing state file to back up.
+      OpLog.normal('FileBasedSyncAdapter: state-file backup skipped (non-fatal)', e);
+    }
+  }
+
+  /** Recovers the snapshot from `sync-state.json.bak` (null if unusable). */
+  private async _recoverStateFromBackup(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<FileBasedStateFile | null> {
+    try {
+      const response = await provider.downloadFile(this._STATE_BACKUP_FILE);
+      const data =
+        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedStateFile>(
+          cfg,
+          encryptKey,
+          response.dataStr,
+        );
+      if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) return null;
+      return data;
+    } catch (e) {
+      OpLog.warn('FileBasedSyncAdapter: state backup recovery failed', e);
+      return null;
+    }
+  }
+
+  /** True when a downloaded snapshot matches the ops file's snapshotRef. */
+  private _validateSnapshotRef(
+    opsFile: FileBasedOpsFile,
+    state: FileBasedStateFile,
+  ): boolean {
+    return (
+      state.syncVersion === opsFile.snapshotRef.syncVersion &&
+      compareVectorClocks(state.vectorClock, opsFile.snapshotRef.vectorClock) === 'EQUAL'
+    );
+  }
+
+  /**
+   * Loads the snapshot referenced by `opsFile.snapshotRef`, validating it against
+   * the ref. On mismatch (e.g. a crash between the state and ops writes left a
+   * newer, unreferenced `sync-state.json`), falls back to `sync-state.json.bak`.
+   * Returns null when no snapshot validates the ref (caller signals a gap).
+   */
+  private async _loadValidatedSnapshot(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    opsFile: FileBasedOpsFile,
+  ): Promise<FileBasedStateFile | null> {
+    try {
+      const { data } = await this._downloadStateFile(provider, cfg, encryptKey);
+      if (this._validateSnapshotRef(opsFile, data)) return data;
+      OpLog.warn(
+        'FileBasedSyncAdapter: sync-state.json does not match snapshotRef; trying .bak',
+      );
+    } catch (e) {
+      OpLog.warn('FileBasedSyncAdapter: sync-state.json unreadable; trying .bak', e);
+    }
+    const bak = await this._recoverStateFromBackup(provider, cfg, encryptKey);
+    if (bak && this._validateSnapshotRef(opsFile, bak)) return bak;
+    OpLog.warn(
+      'FileBasedSyncAdapter: no snapshot matching snapshotRef; signaling gap for full re-sync.',
+    );
+    return null;
+  }
+
+  /** Builds a full snapshot (`sync-state.json` payload) from the live store. */
+  private async _buildStateFileData(
+    clientId: string,
+    syncVersion: number,
+    vectorClock: VectorClock,
+    schemaVersion: number,
+  ): Promise<FileBasedStateFile> {
+    const state = stripLocalOnlySyncSettingsFromAppData(
+      await this._stateSnapshotService.getStateSnapshot(),
+    );
+    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    return {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      syncVersion,
+      schemaVersion,
+      vectorClock,
+      lastModified: Date.now(),
+      clientId,
+      state,
+      archiveYoung,
+      archiveOld,
+    };
+  }
+
+  /**
+   * Overwrites `sync-data.json` with a v3 split tombstone (NEVER deletes it) and
+   * neutralizes `sync-data.json.bak` so an old client's SPAP-8 `.bak` recovery
+   * cannot resurrect a v2 file and diverge.
+   */
+  private async _writeTombstoneAndNeutralizeBak(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+  ): Promise<void> {
+    const tombstone: FileBasedSplitTombstone = {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      format: FILE_BASED_SYNC_CONSTANTS.SPLIT_TOMBSTONE_FORMAT,
+      migratedAt: Date.now(),
+      note: 'Upgraded to split-file sync; update the app / enable Surgical sync to continue.',
+    };
+    const encoded = await this._encryptAndCompressHandler.compressAndEncryptData(
+      cfg,
+      encryptKey,
+      tombstone,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    // Overwrite the legacy single file in place (never remove it).
+    await provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE, encoded, null, true);
+    // Neutralize the legacy .bak (non-fatal): a leftover v2 .bak could otherwise
+    // let an old client recover + re-upload v2.
+    try {
+      await provider.uploadFile(
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        encoded,
+        null,
+        true,
+      );
+    } catch (e) {
+      OpLog.warn(
+        'FileBasedSyncAdapter: failed to neutralize legacy .bak during migration (non-fatal)',
+        e,
+      );
+    }
+  }
+
+  /**
+   * One-way migration of an existing single-file v2 `sync-data.json` to the split
+   * format. Writes `sync-state.json` FIRST, then `sync-ops.json` (the commit
+   * point), then the v3 tombstone over `sync-data.json` and neutralizes `.bak`.
+   * Returns the freshly-written ops file (+ rev), or null when there is no legacy
+   * file to migrate (truly fresh folder).
+   */
+  private async _maybeMigrateLegacyToSplit(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    clientId: string,
+  ): Promise<{ data: FileBasedOpsFile; rev: string } | null> {
+    let legacy: FileBasedSyncData;
+    try {
+      const r = await this._downloadSyncFile(provider, cfg, encryptKey);
+      legacy = r.data;
+    } catch (e) {
+      if (e instanceof RemoteFileNotFoundAPIError) return null; // truly fresh
+      // Already a tombstone but the ops file is missing (migration crashed before
+      // the ops write, or ops file was deleted): treat as fresh split — there is
+      // no v2 payload left to preserve.
+      if (e instanceof SplitSyncFormatDetectedError) return null;
+      throw e; // legacy pfapi (__meta_) etc. must propagate
+    }
+
+    OpLog.warn(
+      'FileBasedSyncAdapter: migrating legacy single-file sync-data.json to split format',
+    );
+    const schemaVersion = legacy.schemaVersion ?? 1;
+
+    const stateData: FileBasedStateFile = {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      syncVersion: legacy.syncVersion,
+      schemaVersion,
+      vectorClock: legacy.vectorClock,
+      lastModified: Date.now(),
+      clientId,
+      state: legacy.state,
+      archiveYoung: legacy.archiveYoung,
+      archiveOld: legacy.archiveOld,
+    };
+    // 1) state file FIRST
+    const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData);
+
+    const opsData: FileBasedOpsFile = {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      syncVersion: legacy.syncVersion,
+      schemaVersion,
+      vectorClock: legacy.vectorClock,
+      lastModified: Date.now(),
+      clientId,
+      recentOps: legacy.recentOps ?? [],
+      oldestOpSyncVersion: legacy.oldestOpSyncVersion,
+      snapshotRef: {
+        syncVersion: legacy.syncVersion,
+        vectorClock: legacy.vectorClock,
+        rev: stateRev,
+      },
+    };
+    // 2) ops file (commit point) — force-write to establish the new format
+    const opsEncoded = await this._encryptAndCompressHandler.compressAndEncryptData(
+      cfg,
+      encryptKey,
+      opsData,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    this._assertUploadDataNotEmpty(
+      opsEncoded,
+      'FileBasedSyncAdapter._maybeMigrateLegacyToSplit',
+    );
+    const opsRes = await provider.uploadFile(
+      FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+      opsEncoded,
+      null,
+      true,
+    );
+    // 3) tombstone over sync-data.json + neutralize .bak
+    await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey);
+
+    return { data: opsData, rev: opsRes.rev };
+  }
+
+  /**
+   * CONDITIONAL PUT of `sync-ops.json` (the concurrency gate). Mirrors the
+   * single-file `_uploadWithMismatchFallback`: on a rev mismatch it re-downloads
+   * to classify transient vs genuine concurrency and never force-overwrites.
+   */
+  private async _uploadOpsFileWithMismatchFallback(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    newOpsFile: FileBasedOpsFile,
+    revToMatch: string | null,
+  ): Promise<{ finalRev: string }> {
+    const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
+      cfg,
+      encryptKey,
+      newOpsFile,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    this._assertUploadDataNotEmpty(
+      uploadData,
+      'FileBasedSyncAdapter._uploadOpsFileWithMismatchFallback',
+    );
+
+    const maxAttempts = 1 + this._MAX_UPLOAD_RETRIES;
+    let currentRevToMatch = revToMatch;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const uploadRes = await provider.uploadFile(
+          FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+          uploadData,
+          currentRevToMatch,
+          false,
+        );
+        return { finalRev: uploadRes.rev };
+      } catch (e) {
+        if (!(e instanceof UploadRevToMatchMismatchAPIError)) {
+          throw e;
+        }
+      }
+
+      if (attempt === maxAttempts) break;
+
+      const { rev: freshRev } = await this._downloadOpsFile(provider, cfg, encryptKey);
+      if (freshRev !== currentRevToMatch) {
+        throw new UploadRevToMatchMismatchAPIError(
+          'FileBasedSyncAdapter: Concurrent ops-file upload detected. Next sync cycle ' +
+            'will download the concurrent ops and retry with a consistent ops file.',
+        );
+      }
+      currentRevToMatch = freshRev;
+    }
+
+    throw new UploadRevToMatchMismatchAPIError(
+      'FileBasedSyncAdapter: Ops-file upload retries exhausted after repeated rev mismatch.',
+    );
+  }
+
+  /**
+   * Split-format upload. Normal path appends ops to `sync-ops.json` and does a
+   * single conditional PUT — NO snapshot build, NO `sync-state.json` write. When
+   * appending would exceed the compaction threshold (or the folder has no
+   * snapshot yet) it compacts: build snapshot, write `sync-state.json` FIRST,
+   * then the trimmed `sync-ops.json` referencing it via snapshotRef.
+   */
+  private async _uploadOpsSplit(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    ops: SyncOperation[],
+    clientId: string,
+    providerKey: string,
+  ): Promise<OpUploadResponse> {
+    let opsFile: FileBasedOpsFile | null = null;
+    let opsRev: string | null = null;
+
+    const cached = this._getCachedOpsData(providerKey);
+    if (cached) {
+      opsFile = cached.data;
+      opsRev = cached.rev;
+    } else {
+      try {
+        const r = await this._downloadOpsFile(provider, cfg, encryptKey);
+        opsFile = r.data;
+        opsRev = r.rev;
+      } catch (e) {
+        if (e instanceof RemoteFileNotFoundAPIError) {
+          // No ops file yet: migrate a legacy v2 folder in place, or start fresh.
+          const migrated = await this._maybeMigrateLegacyToSplit(
+            provider,
+            cfg,
+            encryptKey,
+            clientId,
+          );
+          if (migrated) {
+            opsFile = migrated.data;
+            opsRev = migrated.rev;
+          }
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    if (ops.length === 0 && opsFile) {
+      return { results: [], latestSeq: this._localSeqCounters.get(providerKey) || 0 };
+    }
+
+    const currentSyncVersion = opsFile?.syncVersion ?? 0;
+    const newSyncVersion = currentSyncVersion + 1;
+
+    const compactOps: SyncFileCompactOp[] = ops.map((op) => ({
+      ...this._syncOpToCompact(op),
+      sv: newSyncVersion,
+    }));
+
+    let mergedClock: VectorClock = opsFile?.vectorClock || {};
+    for (const op of ops) {
+      mergedClock = mergeVectorClocks(mergedClock, op.vectorClock);
+    }
+    const schemaVersion = ops[0]?.schemaVersion || opsFile?.schemaVersion || 1;
+
+    const existingOps: SyncFileCompactOp[] = opsFile?.recentOps || [];
+    const combinedOps = [...existingOps, ...compactOps];
+
+    // Compaction is required when the folder has no snapshot yet (fresh/first
+    // sync) OR appending would push the ops buffer past MAX_RECENT_OPS.
+    //
+    // Review follow-up: the trigger is MAX_RECENT_OPS (the buffer cap), NOT
+    // SPLIT_COMPACTION_THRESHOLD (the post-compaction retained size). Triggering on
+    // the retained size would recompact on every op-bearing sync once the folder
+    // crosses it (rebuild sync-state.json + re-upload the snapshot every time —
+    // worse than the single-file path). Triggering at the cap and trimming back to
+    // the threshold leaves ~SPLIT_COMPACTION_THRESHOLD cheap op-only syncs between
+    // compactions.
+    let snapshotRef = opsFile?.snapshotRef;
+    const needsCompaction =
+      !snapshotRef || combinedOps.length > FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
+
+    let finalOps = combinedOps;
+    if (needsCompaction) {
+      // The ONLY normal path that reads the full store snapshot.
+      const stateData = await this._buildStateFileData(
+        clientId,
+        newSyncVersion,
+        mergedClock,
+        schemaVersion,
+      );
+      // Preserve the pre-compaction snapshot for snapshotRef-mismatch recovery.
+      await this._backupStateFile(provider, cfg, encryptKey);
+      // Atomicity: sync-state.json FIRST, then the ops file that references it.
+      const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData);
+      snapshotRef = {
+        syncVersion: newSyncVersion,
+        vectorClock: mergedClock,
+        rev: stateRev,
+      };
+      finalOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.SPLIT_COMPACTION_THRESHOLD);
+      OpLog.normal(
+        `FileBasedSyncAdapter: split compaction wrote sync-state.json (syncVersion=${newSyncVersion}), ` +
+          `trimmed recentOps ${combinedOps.length} → ${finalOps.length}`,
+      );
+    } else {
+      finalOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS);
+    }
+
+    // Unreachable: `needsCompaction` is true whenever `snapshotRef` was undefined,
+    // and the compaction branch always assigns it. This guard narrows the type.
+    if (!snapshotRef) {
+      throw new InvalidDataSPError(
+        'FileBasedSyncAdapter._uploadOpsSplit: missing snapshotRef after compaction decision',
+      );
+    }
+
+    const newOpsFile: FileBasedOpsFile = {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      syncVersion: newSyncVersion,
+      schemaVersion,
+      vectorClock: mergedClock,
+      lastModified: Date.now(),
+      clientId,
+      recentOps: finalOps,
+      oldestOpSyncVersion: finalOps.length > 0 ? finalOps[0]?.sv : undefined,
+      snapshotRef,
+    };
+
+    // Commit point.
+    const { finalRev } = await this._uploadOpsFileWithMismatchFallback(
+      provider,
+      cfg,
+      encryptKey,
+      newOpsFile,
+      opsRev,
+    );
+
+    this._clearCachedOpsData(providerKey);
+    this._expectedSyncVersions.set(providerKey, newSyncVersion);
+    this._lastSeenRevs.set(providerKey, finalRev);
+    this._lastSeenVectorClocks.set(providerKey, mergedClock);
+    this._persistState();
+
+    const latestSeq = newSyncVersion;
+    const startingSeq = Math.max(0, latestSeq - ops.length);
+    return {
+      results: ops.map((op, i) => ({
+        opId: op.id,
+        accepted: true,
+        serverSeq: startingSeq + i + 1,
+      })),
+      latestSeq,
+    };
+  }
+
+  /**
+   * Split-format download. Normal path reads ONLY `sync-ops.json` (with the
+   * SPAP-10 rev pre-check extended to the ops file). Fetches `sync-state.json`
+   * ONLY when gap detection requires the snapshot or on a fresh seq-0 sync, and
+   * validates it against the ops file's snapshotRef (mismatch ⇒ gap).
+   */
+  private async _downloadOpsSplit(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    sinceSeq: number,
+    excludeClient: string | undefined,
+    limit: number,
+    providerKey: string,
+  ): Promise<FileSnapshotOpDownloadResponse> {
+    // SPAP-10 rev pre-check, extended to the ops file. Gated on `sinceSeq > 0`
+    // (review follow-up): a forceFromSeq0 download (sinceSeq === 0) re-pulls the
+    // full snapshot to REBUILD local state (e.g. USE_REMOTE), so it must never be
+    // short-circuited by an unchanged rev — the same guard as the single-file path.
+    const lastSeenRev = this._lastSeenRevs.get(providerKey);
+    if (
+      sinceSeq > 0 &&
+      lastSeenRev &&
+      !this._getCachedOpsData(providerKey) &&
+      this._REV_PRECHECK_PROVIDERS.has(provider.id)
+    ) {
+      try {
+        const { rev: remoteRev } = await provider.getFileRev(
+          FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+          lastSeenRev,
+        );
+        if (remoteRev === lastSeenRev) {
+          const expectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
+          OpLog.normal(
+            'FileBasedSyncAdapter: ops-file rev unchanged — skipping full download.',
+          );
+          return { ops: [], hasMore: false, latestSeq: expectedVersion };
+        }
+      } catch (e) {
+        OpLog.normal(
+          'FileBasedSyncAdapter: ops-file getFileRev pre-check failed; full download.',
+          e,
+        );
+      }
+    }
+
+    let opsFile: FileBasedOpsFile;
+    let opsRev: string;
+    try {
+      const r = await this._downloadOpsFile(provider, cfg, encryptKey);
+      opsFile = r.data;
+      opsRev = r.rev;
+      this._setCachedOpsData(providerKey, opsFile, opsRev);
+    } catch (e) {
+      if (e instanceof RemoteFileNotFoundAPIError) {
+        // No ops file: read-only bootstrap from a legacy v2 file if present
+        // (migration WRITES happen on the upload path).
+        return this._tryLegacyReadOnlyDownload(provider, cfg, encryptKey, sinceSeq);
+      }
+      throw e;
+    }
+
+    // Gap detection on the ops file (mirrors the single-file logic).
+    const previousExpectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
+    const syncVersionRegressed =
+      previousExpectedVersion > 0 && opsFile.syncVersion < previousExpectedVersion;
+    let versionWasReset = syncVersionRegressed;
+    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
+    if (syncVersionRegressed && lastSeenClock) {
+      const cmp = compareVectorClocks(opsFile.vectorClock, lastSeenClock);
+      if (cmp === 'EQUAL' || cmp === 'GREATER_THAN') {
+        versionWasReset = false;
+      }
+    }
+    const snapshotReplacement =
+      sinceSeq > 0 &&
+      opsFile.recentOps.length === 0 &&
+      (excludeClient !== undefined
+        ? opsFile.clientId !== excludeClient
+        : sinceSeq !== opsFile.syncVersion);
+    const partialTrimGap =
+      sinceSeq > 0 &&
+      opsFile.oldestOpSyncVersion !== undefined &&
+      opsFile.oldestOpSyncVersion > sinceSeq + 1 &&
+      opsFile.recentOps.length >= FILE_BASED_SYNC_CONSTANTS.SPLIT_COMPACTION_THRESHOLD;
+    let needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
+
+    this._expectedSyncVersions.set(providerKey, opsFile.syncVersion);
+    this._lastSeenVectorClocks.set(providerKey, opsFile.vectorClock);
+    // SPAP-10 crash-safety (review follow-up): stage the ops-file rev as PENDING,
+    // mirroring the single-file download path. It is promoted to _lastSeenRevs only
+    // in setLastServerSeq, after the caller has durably applied the ops. Committing
+    // it eagerly here would let a crash before apply strand the rev ahead of
+    // un-applied ops, so the next poll's precheck would skip them for good.
+    this._pendingRevs.set(providerKey, opsRev);
+    this._persistState();
+
+    const isForceFromZero = sinceSeq === 0;
+    const filteredOps: ServerSyncOperation[] = [];
+    opsFile.recentOps.forEach((compactOp, index) => {
+      if (excludeClient && compactOp.c === excludeClient) return;
+      filteredOps.push({
+        serverSeq: index + 1,
+        op: this._compactToSyncOp(compactOp),
+        receivedAt: compactOp.t,
+      });
+    });
+    const limitedOps = filteredOps.slice(0, limit);
+    const hasMore = filteredOps.length > limit;
+    const latestSeq = opsFile.syncVersion;
+
+    let snapshotStateWithArchives: Record<string, unknown> | undefined;
+    if (isForceFromZero || needsGapDetection) {
+      const snap = await this._loadValidatedSnapshot(provider, cfg, encryptKey, opsFile);
+      if (snap) {
+        snapshotStateWithArchives = {
+          ...(snap.state as Record<string, unknown>),
+          ...(snap.archiveYoung ? { archiveYoung: snap.archiveYoung } : {}),
+          ...(snap.archiveOld ? { archiveOld: snap.archiveOld } : {}),
+        };
+      } else {
+        // No snapshot validates the ref ⇒ treat as gap so the caller re-syncs.
+        needsGapDetection = true;
+      }
+    }
+
+    return {
+      ops: limitedOps,
+      hasMore,
+      latestSeq,
+      snapshotVectorClock: opsFile.vectorClock,
+      gapDetected: needsGapDetection,
+      ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
+    };
+  }
+
+  /**
+   * Read-only bootstrap for a split client that finds no `sync-ops.json`. If a
+   * legacy v2 `sync-data.json` exists, returns its snapshot + ops so the client
+   * can hydrate; the actual migration WRITE happens on the next upload. Returns
+   * empty when the folder is truly fresh (or only a tombstone remains).
+   */
+  private async _tryLegacyReadOnlyDownload(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    sinceSeq: number,
+  ): Promise<FileSnapshotOpDownloadResponse> {
+    try {
+      const { data } = await this._downloadSyncFile(provider, cfg, encryptKey);
+      const filteredOps: ServerSyncOperation[] = [];
+      data.recentOps.forEach((compactOp, index) => {
+        filteredOps.push({
+          serverSeq: index + 1,
+          op: this._compactToSyncOp(compactOp),
+          receivedAt: compactOp.t,
+        });
+      });
+      const snapshotStateWithArchives = data.state
+        ? {
+            ...(data.state as Record<string, unknown>),
+            ...(data.archiveYoung ? { archiveYoung: data.archiveYoung } : {}),
+            ...(data.archiveOld ? { archiveOld: data.archiveOld } : {}),
+          }
+        : undefined;
+      return {
+        ops: filteredOps,
+        hasMore: false,
+        latestSeq: data.syncVersion,
+        snapshotVectorClock: data.vectorClock,
+        gapDetected: sinceSeq > 0,
+        ...(snapshotStateWithArchives
+          ? { snapshotState: snapshotStateWithArchives }
+          : {}),
+      };
+    } catch (e) {
+      // Fresh folder, or a tombstone with no ops file yet — nothing to apply.
+      if (
+        e instanceof RemoteFileNotFoundAPIError ||
+        e instanceof SplitSyncFormatDetectedError
+      ) {
+        return { ops: [], hasMore: false, latestSeq: 0 };
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Split-format snapshot upload (force-upload / "Use Local" / recovery). Writes
+   * `sync-state.json` FIRST, then a fresh `sync-ops.json` (empty recentOps,
+   * snapshotRef pointing at the just-written snapshot), then a tombstone over
+   * `sync-data.json` so OFF clients don't diverge.
+   */
+  private async _uploadSnapshotSplit(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    clientId: string,
+    vectorClock: Record<string, number>,
+    schemaVersion: number,
+    providerKey: string,
+  ): Promise<SnapshotUploadResponse> {
+    const newSyncVersion = 1;
+    const clock = vectorClock as VectorClock;
+
+    const stateData = await this._buildStateFileData(
+      clientId,
+      newSyncVersion,
+      clock,
+      schemaVersion,
+    );
+    const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData);
+
+    const opsData: FileBasedOpsFile = {
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      syncVersion: newSyncVersion,
+      schemaVersion,
+      vectorClock: clock,
+      lastModified: Date.now(),
+      clientId,
+      recentOps: [],
+      snapshotRef: { syncVersion: newSyncVersion, vectorClock: clock, rev: stateRev },
+    };
+    const opsEncoded = await this._encryptAndCompressHandler.compressAndEncryptData(
+      cfg,
+      encryptKey,
+      opsData,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    this._assertUploadDataNotEmpty(
+      opsEncoded,
+      'FileBasedSyncAdapter._uploadSnapshotSplit',
+    );
+    const opsRes = await provider.uploadFile(
+      FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+      opsEncoded,
+      null,
+      true,
+    );
+    await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey);
+
+    this._expectedSyncVersions.set(providerKey, newSyncVersion);
+    this._localSeqCounters.set(providerKey, newSyncVersion);
+    this._lastSeenRevs.set(providerKey, opsRes.rev);
+    this._lastSeenVectorClocks.set(providerKey, clock);
+    this._clearCachedOpsData(providerKey);
+    this._persistState();
+
+    return { accepted: true, serverSeq: newSyncVersion };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1346,6 +2235,15 @@ export class FileBasedSyncAdapterService {
           response.dataStr,
         );
 
+      // SPAP-11: if sync-data.json is a v3 SPLIT tombstone, this folder was
+      // migrated to the split format by another client. Signal that specifically
+      // (distinct from generic corruption) so the caller can surface an actionable
+      // "enable Surgical sync" notice and pause without re-creating a v2 file.
+      // Checked before the version gate so a v3 tombstone doesn't read as corrupt.
+      if (this._isSplitTombstone(data)) {
+        throw new SplitSyncFormatDetectedError();
+      }
+
       // Validate file version
       if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
         throw new SyncDataCorruptedError(
@@ -1354,6 +2252,11 @@ export class FileBasedSyncAdapterService {
         );
       }
     } catch (decodeErr) {
+      // A split tombstone is a valid signal, not corruption — let it propagate
+      // by type without being annotated as a corrupt primary.
+      if (decodeErr instanceof SplitSyncFormatDetectedError) {
+        throw decodeErr;
+      }
       // Annotate the corrupt primary file's current rev onto the error so the
       // download-time recovery path can seed the cache with IT (not the .bak rev)
       // and heal sync-data.json via a matching conditional overwrite, instead of
@@ -1363,6 +2266,27 @@ export class FileBasedSyncAdapterService {
         (decodeErr as { primaryRev?: string }).primaryRev = response.rev;
       }
       throw decodeErr;
+    }
+
+    // SPAP-11 (Q4): a valid v2 sync-data.json can still coexist with a
+    // sync-ops.json when a migration crashed after the ops commit but before the
+    // tombstone write. A split-sync-OFF client must NOT proceed on the stale v2
+    // file (it would diverge from the already-committed ops). Probe for the ops
+    // file; if present, treat it exactly like the tombstone case (actionable
+    // notice + pause). Skipped when split-sync is ON, because the migrator
+    // legitimately reads the v2 file here to complete the migration. Best-effort:
+    // any probe failure falls through to the normal single-file path.
+    if (!this._isSplitSyncEnabled()) {
+      let opsFilePresent = false;
+      try {
+        await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, null);
+        opsFilePresent = true;
+      } catch {
+        // absent / probe failed → proceed on the single-file path
+      }
+      if (opsFilePresent) {
+        throw new SplitSyncFormatDetectedError();
+      }
     }
 
     return { data, rev: response.rev };

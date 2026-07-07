@@ -386,3 +386,22 @@ export class LegacySyncFormatDetectedError extends Error {
     );
   }
 }
+
+/**
+ * SPAP-11: thrown when a client with the split-file ("Surgical sync") setting
+ * OFF encounters a sync folder that has already been migrated to the split
+ * format (a v3 tombstone `sync-data.json` and/or a `sync-ops.json`). This is a
+ * SPECIFIC, actionable state — the caller surfaces a "turn on Surgical sync"
+ * notice and pauses safely — distinct from a generic corruption error. No
+ * upload happens, so there is no divergence.
+ */
+export class SplitSyncFormatDetectedError extends Error {
+  override name = 'SplitSyncFormatDetectedError';
+
+  constructor() {
+    super(
+      'This sync folder was upgraded to the split-file format. Enable "Surgical sync" ' +
+        'in Sync settings to continue.',
+    );
+  }
+}
