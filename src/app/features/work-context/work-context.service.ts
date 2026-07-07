@@ -31,7 +31,11 @@ import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
-import { hasTasksToWorkOn, mapEstimateRemainingFromTasks } from './work-context.util';
+import {
+  hasTasksToWorkOn,
+  mapEstimateRemainingFromTasks,
+  sortDoneTasksByDoneDate,
+} from './work-context.util';
 import {
   flattenTasks,
   selectAllTasks,
@@ -432,7 +436,9 @@ export class WorkContextService {
     switchMap((isToday) =>
       isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
     ),
-    map((tasks) => tasks.filter((task) => task && task.isDone)),
+    // Show completed tasks newest-first (by completion time) so the task you
+    // just finished is at the top of the Done list.
+    map((tasks) => sortDoneTasksByDoneDate(tasks.filter((task) => task && task.isDone))),
   );
 
   constructor() {
