@@ -169,11 +169,11 @@ Available as CSS vars (`--layout-xxxs` through `--layout-xl`) and as SCSS mixins
 | Breakpoint | Value  |
 | ---------- | ------ |
 | `xxxs`     | 398px  |
-| `xxs`      | 450px  |
+| `xxs`      | 440px  |
 | `xs`       | 600px  |
-| `s`        | 800px  |
-| `m`        | 1000px |
-| `l`        | 1200px |
+| `sm`       | 960px  |
+| `md`       | 1280px |
+| `lg`       | 1920px |
 | `xl`       | 2000px |
 
 ## Utility Classes
