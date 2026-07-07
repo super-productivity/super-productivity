@@ -6,6 +6,7 @@ import {
 } from '../shared-with-frontend/keyboard-config.model';
 import { getWin } from '../main-window';
 import { toggleTaskWidgetVisibility } from '../task-widget/task-widget';
+import { showQuickAddWindow } from '../quick-add-window';
 import { showOrFocus, toggleWindowVisibility } from '../various-shared';
 import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-inform';
 
@@ -53,6 +54,10 @@ const registerShowAppShortCuts = (cfg: KeyboardConfig): void => {
               // NOTE: delay slightly to make sure app is ready
               mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
             };
+            break;
+
+          case 'globalTaskQuickAdd':
+            actionFn = showQuickAddWindow;
             break;
 
           case 'globalToggleTaskWidget':

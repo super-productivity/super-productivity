@@ -53,6 +53,10 @@
   }
 }
 
+:host-context(.is-fullscreen-shell) .add-task-container.isGlobalBarVariant {
+  background-color: var(--quick-add-hud-bg);
+}
+
 .input-section {
   position: relative;
   display: flex;
