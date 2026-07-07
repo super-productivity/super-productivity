@@ -24,7 +24,9 @@ export class AddTaskBarStateService {
   // Persisted like `inputTxt` so a draft note survives closing/reopening the
   // bar (e.g. an Escape in the title input) and a reload, instead of being lost.
   readonly noteTxt = signal(sessionStorage.getItem(SS.ADD_TASK_BAR_NOTE) || '');
-  readonly isNoteExpanded = signal(false);
+  // Start expanded when reopening with a persisted draft note, so it is visible
+  // rather than hidden behind the collapsed toggle.
+  readonly isNoteExpanded = signal(!!this.noteTxt());
 
   constructor() {
     effect(() => {

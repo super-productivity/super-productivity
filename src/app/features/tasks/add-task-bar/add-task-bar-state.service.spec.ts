@@ -708,7 +708,7 @@ describe('AddTaskBarStateService', () => {
       expect(sessionStorage.getItem(SS.ADD_TASK_BAR_NOTE)).toBe('Draft note');
     });
 
-    it('should restore a persisted draft note on init', () => {
+    it('should restore a persisted draft note on init and start expanded', () => {
       sessionStorage.setItem(SS.ADD_TASK_BAR_NOTE, 'Persisted note');
 
       const freshService = TestBed.runInInjectionContext(
@@ -716,6 +716,8 @@ describe('AddTaskBarStateService', () => {
       );
 
       expect(freshService.noteTxt()).toBe('Persisted note');
+      // A restored draft note starts expanded so it is visible, not hidden.
+      expect(freshService.isNoteExpanded()).toBe(true);
     });
   });
 });

@@ -111,7 +111,11 @@
           [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_NOTE | translate"
           matTooltipPosition="above"
         >
-          <mat-icon>edit_note</mat-icon>
+          <!-- Filled bubble once a note has text, outline while empty — mirrors
+               the detail panel's has-notes / empty-notes icon states. -->
+          <mat-icon>{{
+            stateService.noteTxt() ? 'chat' : 'chat_bubble_outline'
+          }}</mat-icon>
         </button>
       }
 
