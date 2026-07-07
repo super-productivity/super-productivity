@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { Task, TaskDetailTargetPanel, TaskState } from '../task.model';
+import { HideSubTasksMode, Task, TaskDetailTargetPanel, TaskState } from '../task.model';
 import { initialTaskState, taskReducer } from './task.reducer';
+import { convertOpToAction } from '../../../op-log/apply/operation-converter.util';
 import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { INBOX_PROJECT } from '../../project/project.const';
@@ -11,7 +12,7 @@ import {
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { OpType } from '../../../op-log/core/operation.types';
+import { ActionType, OpType, Operation } from '../../../op-log/core/operation.types';
 
 describe('Task Reducer', () => {
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -1132,6 +1133,52 @@ describe('Task Reducer', () => {
       expect(action.meta.entityType).toBe('TASK');
       expect(action.meta.entityId).toBe('task1');
       expect(action.meta.opType).toBe(OpType.Update);
+    });
+
+    // The metadata assertion above proves the change is *eligible* for capture.
+    // This one proves it actually survives the whole op-log path end to end:
+    // dispatch -> capture into an operation payload -> serialize -> convert the
+    // op back to an action -> replay through the reducer. The JSON serialize hop
+    // mirrors the sync transport and the SQLite op-log backend, both of which
+    // round-trip op payloads as JSON, so it is where a lost value would regress.
+    // See issue #8781.
+    it('should round-trip _hideSubTasksMode through capture, serialization and replay', () => {
+      const stateShown: TaskState = {
+        ...initialTaskState,
+        ids: ['task1'],
+        entities: { task1: createTask('task1') },
+      };
+
+      // 1. Dispatch: the persistent action toggleSubTaskMode dispatches on collapse.
+      const action = fromActions.updateTaskUi({
+        task: {
+          id: 'task1',
+          changes: { _hideSubTasksMode: HideSubTasksMode.HideAll },
+        },
+      });
+
+      // 2. Capture: the effects store the action fields under payload.actionPayload.
+      const op: Operation = {
+        id: 'op-8781',
+        actionType: action.type as ActionType,
+        opType: action.meta.opType,
+        entityType: action.meta.entityType,
+        entityId: action.meta.entityId as string,
+        payload: { actionPayload: { task: action.task }, entityChanges: [] },
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 0,
+        schemaVersion: 1,
+      };
+
+      // 3. Serialize over the wire / into the op-log, then read it back.
+      const wireOp = JSON.parse(JSON.stringify(op)) as Operation;
+
+      // 4. Convert the persisted op back into a replayable action and replay it.
+      const replayAction = convertOpToAction(wireOp);
+      const replayed = taskReducer(stateShown, replayAction);
+
+      expect(replayed.entities.task1?._hideSubTasksMode).toBe(HideSubTasksMode.HideAll);
     });
   });
 });
