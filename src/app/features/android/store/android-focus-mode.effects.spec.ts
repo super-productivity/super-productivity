@@ -144,6 +144,76 @@ describe('shouldHandleNativeTimerComplete (native completion guard, #7856)', () 
   });
 });
 
+// A stale/duplicate native completion must not complete a *different* session
+// than the one it was fired for. Landing on the fresh work session the user just
+// advanced into (break -> "next session" arrow) would, in Pomodoro, immediately
+// auto-spawn a break — the reported #8805 symptom.
+describe('shouldHandleNativeTimerComplete (stale/duplicate completion guard, #8805)', () => {
+  const START = 1_000_000;
+  const WORK_DURATION = 25 * MIN;
+  const BREAK_DURATION = 5 * MIN;
+
+  it('ignores a work completion on a work session that only just started (wall clock < duration)', () => {
+    const freshWork = workTimer(0, { startedAt: START });
+    expect(shouldHandleNativeTimerComplete(false, freshWork, START + 500)).toBe(false);
+  });
+
+  it('handles a work completion once the session has reached its duration by wall clock, even with a frozen/stale elapsed (#7856 over-run)', () => {
+    // Backgrounded: stored elapsed frozen at 10 min, but 25 min of real time has
+    // passed since startedAt — the completion is genuine and must be handled.
+    const overrun = workTimer(10 * MIN, { startedAt: START });
+    expect(shouldHandleNativeTimerComplete(false, overrun, START + WORK_DURATION)).toBe(
+      true,
+    );
+  });
+
+  it('handles a work completion delivered slightly early (within tolerance)', () => {
+    const nearlyDone = workTimer(0, { startedAt: START });
+    expect(
+      shouldHandleNativeTimerComplete(false, nearlyDone, START + WORK_DURATION - 500),
+    ).toBe(true);
+  });
+
+  it('ignores a break completion on a break that only just started', () => {
+    const freshBreak = workTimer(0, {
+      startedAt: START,
+      purpose: 'break',
+      duration: BREAK_DURATION,
+    });
+    expect(shouldHandleNativeTimerComplete(true, freshBreak, START + 500)).toBe(false);
+  });
+
+  it('handles a break completion once the break has run its scheduled length', () => {
+    // Break stopped in-app (isRunning false) with the arrow showing; the native
+    // completion still auto-advances because the break reached its duration.
+    const doneBreak = workTimer(0, {
+      startedAt: START,
+      isRunning: false,
+      purpose: 'break',
+      duration: BREAK_DURATION,
+    });
+    expect(shouldHandleNativeTimerComplete(true, doneBreak, START + BREAK_DURATION)).toBe(
+      true,
+    );
+  });
+
+  it('ignores a completion when the timer has no startedAt (defensive)', () => {
+    // A running timer always has a startedAt in practice; guard defensively so a
+    // null can never pass the wall-clock check via `null` arithmetic.
+    const noStart = workTimer(0, { startedAt: null });
+    expect(shouldHandleNativeTimerComplete(false, noStart, START + WORK_DURATION)).toBe(
+      false,
+    );
+  });
+
+  it('ignores a work completion for a Flowtime session (duration 0 never schedules a native completion)', () => {
+    const flowtime = workTimer(0, { startedAt: START, duration: 0 });
+    expect(shouldHandleNativeTimerComplete(false, flowtime, START + WORK_DURATION)).toBe(
+      false,
+    );
+  });
+});
+
 // --- #7855: focus-session recovery helpers (see #7866) ---
 describe('AndroidFocusModeEffects helpers (#7855)', () => {
   describe('parseNativeFocusModeData', () => {

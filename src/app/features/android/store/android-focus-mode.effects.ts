@@ -61,20 +61,63 @@ export const hasFocusNotificationStateChanged = (
 };
 
 /**
+ * Wall-clock slack (ms) for the "session has reached its scheduled end" check
+ * below. The native completion arrives at (or, after bridge/broadcast latency,
+ * just past) `startedAt + duration`, so a small positive slack absorbs latency
+ * and clock jitter without ever admitting the #8805 stale-completion case — a
+ * freshly-started session sits minutes away from its end, not seconds.
+ */
+const NATIVE_COMPLETE_TOLERANCE_MS = 2000;
+
+/**
  * Whether a native timer-complete event should drive a state change. The native
  * foreground service fires this when its countdown reaches 0; we act on it only
- * while the matching session is still active in app state — a break event needs an
- * active break, a work event needs a still-running work session. The work guard is
- * what makes the native completion a no-op once a resume `tick()` has already
- * completed the session on return from the background (#7856), so the two never
- * double-complete. Pure + exported so the `IS_ANDROID_WEB_VIEW`-gated effect's guard
- * is unit-testable.
+ * while the matching session is still active in app state (a break event needs an
+ * active break, a work event a still-running work session) AND that session has
+ * actually reached its scheduled end by the WALL CLOCK (`now - startedAt >=
+ * duration`).
+ *
+ * The purpose/isRunning guard makes a work completion a no-op once a resume
+ * `tick()` has already completed the session on return from the background
+ * (#7856), so the two never double-complete.
+ *
+ * The wall-clock guard additionally rejects a STALE or duplicate native
+ * completion that lands on a *different*, still-running session than the one it
+ * was fired for — e.g. the work session the user just started by advancing from a
+ * break with the "next session" arrow. Without it that fresh session is completed
+ * immediately, and in Pomodoro completing a work session auto-spawns a break, so
+ * the arrow appears to "start another break" instead of the session (#8805). We
+ * compare against the wall clock rather than the stored `timer.elapsed` because a
+ * backgrounded session's `elapsed` is frozen and stale, whereas `now - startedAt`
+ * stays accurate — the same basis the reducer's `tick` uses (`elapsed =
+ * Date.now() - startedAt`), so a genuine over-run completion on resume (#7856)
+ * still passes even though its last in-app tick is far behind.
+ *
+ * `now` is injectable so the guard stays deterministically unit-testable.
  */
 export const shouldHandleNativeTimerComplete = (
   isBreak: boolean,
   timer: TimerState,
-): boolean =>
-  isBreak ? timer.purpose === 'break' : timer.purpose === 'work' && timer.isRunning;
+  now: number = Date.now(),
+): boolean => {
+  // Must match the kind of session the event was fired for.
+  if (isBreak ? timer.purpose !== 'break' : timer.purpose !== 'work') {
+    return false;
+  }
+  // A work completion is void once the in-app tick already stopped the session
+  // (#7856). Breaks keep their prior semantics (no isRunning requirement): a
+  // finished break stays on-screen, stopped, until the user leaves it.
+  if (!isBreak && !timer.isRunning) {
+    return false;
+  }
+  // A running timer always has a startedAt, and fixed-duration timers have
+  // duration > 0 (Flowtime work — duration 0 — never schedules a native
+  // completion, so it never reaches here); guard defensively regardless.
+  if (timer.startedAt == null || timer.duration <= 0) {
+    return false;
+  }
+  return now - timer.startedAt >= timer.duration - NATIVE_COMPLETE_TOLERANCE_MS;
+};
 
 export type NativeFocusModeData = {
   durationMs: number;
