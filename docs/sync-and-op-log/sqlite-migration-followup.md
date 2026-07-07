@@ -157,7 +157,17 @@ captured on the next tick.
   **off**. The factory must hand **both** services' adapters the **same**
   `SqliteDb` (one SQLite file, all tables) — mirroring how they share one IDB
   connection today. Needs B1 (the native `SqliteDb` wrapper) first.
-- **Size:** tiny token flip (init change done). **Risk:** gated by the flag.
+- ✅ **Shared-connection safety (prerequisite for the flip, landed).** With both
+  services on one `SqliteDb`, concurrent op-log operations (capture append vs.
+  archive write vs. compaction) would otherwise interleave `BEGIN`s on the one
+  connection — SQLite has no nested transactions, so a second `BEGIN` throws and
+  a bare statement issued mid-transaction joins (and rolls back with) the foreign
+  transaction. `SqliteOpLogAdapter` now funnels every entry point through an
+  internal FIFO queue (`_serialize`), so a transaction is exclusive on the
+  connection for its whole `BEGIN…COMMIT`; the port contract documents the
+  invariant and a concurrent-transactions contract test runs on both engines.
+  (Closes the H-6/#8746 rollout blocker.)
+- **Size:** tiny token flip (init + serialization done). **Risk:** gated by the flag.
 
 ---
 

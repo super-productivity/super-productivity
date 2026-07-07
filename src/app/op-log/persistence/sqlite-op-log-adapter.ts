@@ -534,12 +534,41 @@ const sqlIterate = async <T>(
  */
 export class SqliteOpLogAdapter implements OpLogDbAdapter {
   private readonly _plans: Map<string, SqlTablePlan>;
+  /** Tail of the FIFO serialization chain (see {@link _serialize}). */
+  private _tail: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly _db: SqliteDb,
     schema: OpLogDbSchema = OP_LOG_DB_SCHEMA,
   ) {
     this._plans = new Map(planTables(schema).map((p) => [p.table, p]));
+  }
+
+  /**
+   * Serialize `fn` after all previously-queued work — one operation touches the
+   * connection at a time. SQLite (unlike IndexedDB) has no nested transactions:
+   * a second `BEGIN` issued while one is open throws, and a bare statement run
+   * mid-transaction silently joins — and rolls back with — that foreign
+   * transaction. The op-log issues genuinely concurrent operations (capture
+   * append vs. archive write vs. compaction), so every entry point funnels
+   * through this chain: a `transaction()` / writable `iterate()` holds it for the
+   * whole `BEGIN…COMMIT`; a single statement holds it for its one call.
+   *
+   * Re-entrancy invariant: work inside a held slot (an {@link OpLogTx} callback,
+   * a `sqlIterate` visitor's deletes) runs its statements directly on `_db`,
+   * never back through these public methods — so the chain never waits on
+   * itself. A transaction callback MUST use its `tx` handle, not the adapter.
+   */
+  private _serialize<T>(fn: () => Promise<T>): Promise<T> {
+    // `.then(fn, fn)` runs `fn` whether the prior slot resolved or rejected.
+    const result = this._tail.then(fn, fn);
+    // Keep the chain alive past a rejection and swallow it so the tail never
+    // becomes an unhandled rejection — the real error still reaches the caller.
+    this._tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private _plan(store: string): SqlTablePlan {
@@ -550,14 +579,16 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     return plan;
   }
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
     // Apply DDL for every store. Idempotent via `IF NOT EXISTS`. Phase C adds
     // the one-time IDB→SQLite data copy ahead of first use.
-    for (const plan of this._plans.values()) {
-      for (const stmt of buildDdl(plan)) {
-        await this._db.run(stmt);
+    return this._serialize(async () => {
+      for (const plan of this._plans.values()) {
+        for (const stmt of buildDdl(plan)) {
+          await this._db.run(stmt);
+        }
       }
-    }
+    });
   }
 
   close(): void {
@@ -565,31 +596,38 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   add(store: string, value: unknown): Promise<number> {
-    return sqlAdd(this._db, this._plan(store), value);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlAdd(this._db, plan, value));
   }
 
   put(store: string, value: unknown, key?: DbKey): Promise<void> {
-    return sqlPut(this._db, this._plan(store), value, key);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlPut(this._db, plan, value, key));
   }
 
   get<T>(store: string, key: DbKey): Promise<T | undefined> {
-    return sqlGet<T>(this._db, this._plan(store), key);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlGet<T>(this._db, plan, key));
   }
 
   getAll<T>(store: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAll<T>(this._db, this._plan(store), range);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlGetAll<T>(this._db, plan, range));
   }
 
   delete(store: string, key: DbKey): Promise<void> {
-    return sqlDelete(this._db, this._plan(store), key);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlDelete(this._db, plan, key));
   }
 
   clear(store: string): Promise<void> {
-    return sqlClear(this._db, this._plan(store));
+    const plan = this._plan(store);
+    return this._serialize(() => sqlClear(this._db, plan));
   }
 
   count(store: string, range?: DbKeyRange): Promise<number> {
-    return sqlCount(this._db, this._plan(store), range);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlCount(this._db, plan, range));
   }
 
   getFromIndex<T>(
@@ -597,7 +635,8 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<T | undefined> {
-    return sqlGetFromIndex<T>(this._db, this._plan(store), index, key);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlGetFromIndex<T>(this._db, plan, index, key));
   }
 
   getKeyFromIndex(
@@ -605,11 +644,13 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     index: string,
     key: DbKey | DbKey[],
   ): Promise<DbKey | undefined> {
-    return sqlGetKeyFromIndex(this._db, this._plan(store), index, key);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlGetKeyFromIndex(this._db, plan, index, key));
   }
 
   getAllFromIndex<T>(store: string, index: string, range?: DbKeyRange): Promise<T[]> {
-    return sqlGetAllFromIndex<T>(this._db, this._plan(store), index, range);
+    const plan = this._plan(store);
+    return this._serialize(() => sqlGetAllFromIndex<T>(this._db, plan, index, range));
   }
 
   countFromIndex(store: string, index: string, range?: DbKeyRange): Promise<number> {
@@ -619,9 +660,11 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
       idx.columns.map((c) => c.column),
       range,
     );
-    return this._db
-      .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
-      .then((rows) => Number(rows[0]?.['n'] ?? 0));
+    return this._serialize(() =>
+      this._db
+        .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
+        .then((rows) => Number(rows[0]?.['n'] ?? 0)),
+    );
   }
 
   async iterate<T>(
@@ -630,9 +673,11 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     visit: DbCursorVisitor<T>,
   ): Promise<void> {
     const plan = this._plan(store);
-    // A delete-capable scan must be atomic; a pure read scan needs no lock.
+    // A delete-capable scan must be atomic; a pure read scan needs no BEGIN —
+    // but both still serialize on the shared connection (`_serialize` /
+    // `_inTransaction`) so they never interleave with another operation.
     if (options.mode === 'readonly') {
-      await sqlIterate(this._db, plan, options, visit);
+      await this._serialize(() => sqlIterate(this._db, plan, options, visit));
       return;
     }
     await this._inTransaction('IMMEDIATE', async () => {
@@ -650,24 +695,30 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     );
   }
 
-  /** BEGIN … COMMIT on resolve, ROLLBACK + rethrow (error-mapped) on throw. */
-  private async _inTransaction<T>(
+  /**
+   * BEGIN … COMMIT on resolve, ROLLBACK + rethrow (error-mapped) on throw.
+   * Runs inside {@link _serialize}, so the whole `BEGIN…COMMIT` is exclusive on
+   * the connection — no other operation can open a second transaction inside it.
+   */
+  private _inTransaction<T>(
     kind: 'IMMEDIATE' | 'DEFERRED',
     fn: () => Promise<T>,
   ): Promise<T> {
-    await this._db.run(`BEGIN ${kind}`);
-    try {
-      const result = await fn();
-      await this._db.run('COMMIT');
-      return result;
-    } catch (e) {
+    return this._serialize(async () => {
+      await this._db.run(`BEGIN ${kind}`);
       try {
-        await this._db.run('ROLLBACK');
-      } catch {
-        // Already rolled back / no active transaction.
+        const result = await fn();
+        await this._db.run('COMMIT');
+        return result;
+      } catch (e) {
+        try {
+          await this._db.run('ROLLBACK');
+        } catch {
+          // Already rolled back / no active transaction.
+        }
+        return mapSqliteError(e);
       }
-      return mapSqliteError(e);
-    }
+    });
   }
 }
 

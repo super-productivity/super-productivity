@@ -69,6 +69,12 @@ class FakeSqliteDb implements SqliteDb {
       return { changes: 0 };
     }
     if (s === 'BEGIN IMMEDIATE' || s === 'BEGIN DEFERRED') {
+      // Real SQLite has no nested transactions — a BEGIN issued while one is
+      // already open throws. Modeling that here lets the fake catch the same
+      // interleaving bug the real sql.js engine does.
+      if (this.snapshot) {
+        throw new Error('cannot start a transaction within a transaction');
+      }
       this.snapshot = new Map(
         [...this.tables].map(([t, rows]) => [t, rows.map((r) => ({ ...r }))]),
       );
@@ -586,6 +592,45 @@ const defineBehavioralContract = (
           await tx.put(STORE_NAMES.VECTOR_CLOCK, { clock: { a: 1 } }, 'current');
         }),
       ).toBeRejectedWithError(/outside this transaction's declared scope/);
+    });
+
+    // ── concurrency: transactions are mutually exclusive per connection ──────────
+    // The shared connection has no nested transactions: a second BEGIN landing
+    // inside the first throws, and a bare statement issued mid-transaction joins
+    // (and rolls back with) that foreign transaction. The adapter must serialize.
+
+    it('serializes concurrent read-write transactions instead of interleaving BEGINs', async () => {
+      const write = (id: string): Promise<number> =>
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOpEntry(id, 'local')),
+        );
+      // Fire both WITHOUT awaiting the first — the bug is a second BEGIN opening
+      // on the shared connection while the first transaction is still in flight.
+      const [s1, s2] = await Promise.all([write('a'), write('b')]);
+      expect(s1).not.toBe(s2);
+      expect(await adapter.count(STORE_NAMES.OPS)).toBe(2);
+      const ids = (await adapter.getAll<{ op: { id: string } }>(STORE_NAMES.OPS)).map(
+        (e) => e.op.id,
+      );
+      expect(ids.sort()).toEqual(['a', 'b']);
+    });
+
+    it('does not let a concurrent bare write join (and roll back with) a failing transaction', async () => {
+      const failing = adapter
+        .transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+          await tx.add(STORE_NAMES.OPS, makeOpEntry('in-tx', 'local'));
+          throw new Error('boom'); // forces ROLLBACK of this transaction
+        })
+        .catch(() => 'rolled-back' as const);
+      // Started while the transaction above is open: it must run in its own unit,
+      // not silently inside — and survive the transaction's rollback.
+      const standalone = adapter.add(STORE_NAMES.OPS, makeOpEntry('standalone', 'local'));
+      await Promise.all([failing, standalone]);
+
+      const ids = (await adapter.getAll<{ op: { id: string } }>(STORE_NAMES.OPS)).map(
+        (e) => e.op.id,
+      );
+      expect(ids).toEqual(['standalone']);
     });
   });
 };

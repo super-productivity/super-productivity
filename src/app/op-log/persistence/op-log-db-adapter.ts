@@ -134,6 +134,14 @@ export interface OpLogTx {
  * Non-transactional methods are convenience single-store operations (each runs
  * in its own implicit transaction); use {@link transaction} whenever two or
  * more writes must be atomic.
+ *
+ * Concurrency: callers may issue operations concurrently — the op-log does
+ * (capture append, archive write and compaction overlap). Transactions are
+ * mutually exclusive per database, and no bare operation may interleave into an
+ * open transaction. IndexedDB provides this natively (independent transactions);
+ * a backend over a single connection with no nested transactions (SQLite) MUST
+ * serialize internally to honor it. Callers therefore never need to lock around
+ * these methods themselves.
  */
 export interface OpLogDbAdapter {
   /**
