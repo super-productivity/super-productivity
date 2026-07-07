@@ -10,6 +10,7 @@ import {
 } from '../task.model';
 import { taskAdapter } from './task.adapter';
 import { devError } from '../../../util/dev-error';
+import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { isDBDateStr } from '../../../util/get-db-date-str';
 import { IssueProvider, isPluginIssueProvider } from '../../issue/issue.model';
 import { selectArchivedProjectIds } from '../../project/store/project.selectors';
@@ -27,35 +28,6 @@ export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
   !!task.issueType &&
   (task.issueType === 'ICAL' || isPluginIssueProvider(task.issueType));
 
-const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
-  // Create a Map for O(1) lookups instead of O(n) find() calls
-  const taskMap = new Map<string, Task>();
-  for (const task of tasksIN) {
-    // Guard against undefined tasks during sync operations
-    if (task?.id) {
-      taskMap.set(task.id, task);
-    }
-  }
-
-  const result: TaskWithSubTasks[] = [];
-  for (const task of tasksIN) {
-    // Guard against undefined tasks during sync operations
-    if (!task) continue;
-    if (task.parentId) continue;
-
-    if (task.subTaskIds && task.subTaskIds.length > 0) {
-      const subTasks: Task[] = [];
-      for (const subTaskId of task.subTaskIds) {
-        const subTask = taskMap.get(subTaskId);
-        if (subTask) subTasks.push(subTask);
-      }
-      result.push({ ...task, subTasks });
-    } else {
-      result.push({ ...task, subTasks: [] });
-    }
-  }
-  return result;
-};
 export const mapSubTasksToTask = (
   task: Task | null,
   s: TaskState,
@@ -171,10 +143,8 @@ export const selectAllTasks = createSelector(
   },
 );
 
-export const selectAllTasksWithSubTasks = createSelector(
-  selectAllTasks,
-  mapSubTasksToTasks,
-);
+// NOTE: selectAllTasksWithSubTasks is defined below, after the scheduling
+// snapshot infrastructure it now depends on (SPAP-20).
 
 export const selectAllTasksInActiveProjects = createSelector(
   selectAllTasks,
@@ -191,25 +161,288 @@ export const selectMapOfAllTasksInActiveProjects = createSelector(
   (activeTasks): Map<string, Task> => new Map(activeTasks.map((t) => [t.id, t])),
 );
 
-export const selectOverdueTasks = createSelector(
+// SPAP-20: Scheduling snapshot boundary.
+// --------------------------------------
+// selectAllTasks(InActiveProjects) returns a NEW array every second while a task
+// tracks time (its `timeSpent` bump replaces the entity ref). Every collection
+// selector derived from it re-ran its O(n) filter/sort + fresh allocations each
+// tick even though NONE of them read `timeSpent`. We interpose a content-stable
+// "scheduling snapshot": a projection holding ONLY the fields those selectors
+// filter/sort on. A `timeSpent`-only tick yields the IDENTICAL snapshot array
+// ref, so every snapshot-derived DECISION selector (which outputs an ordered id
+// list) is skipped by NgRx memoization. The PUBLIC selectors keep their existing
+// output types by re-mapping the stable id list back through the LIVE task
+// entities — so a member task always reflects current data (no staleness) while
+// unchanged members keep referentially-identical objects.
+
+export interface SchedulingSnapshot {
+  readonly id: string;
+  readonly isDone: boolean;
+  readonly dueDay: string | null;
+  readonly dueWithTime: number | null;
+  readonly deadlineDay: string | null;
+  readonly deadlineWithTime: number | null;
+  readonly parentId: string | null;
+  readonly subTaskIds: string[];
+}
+
+export interface SnapshotStructureEntry {
+  readonly id: string;
+  readonly subTaskIds: string[];
+}
+
+interface SchedulingSnapshotCacheEntry {
+  taskRef: Task;
+  snap: SchedulingSnapshot;
+}
+
+const _schedulingSnapEqual = (a: SchedulingSnapshot, b: SchedulingSnapshot): boolean =>
+  a.isDone === b.isDone &&
+  a.dueDay === b.dueDay &&
+  a.dueWithTime === b.dueWithTime &&
+  a.deadlineDay === b.deadlineDay &&
+  a.deadlineWithTime === b.deadlineWithTime &&
+  a.parentId === b.parentId &&
+  fastArrayCompare(a.subTaskIds, b.subTaskIds);
+
+// Builds a scheduling snapshot from an ordered task array. A per-id cache keyed
+// on the task entity ref lets an unchanged task reuse its exact previous `snap`
+// object; when the ref DID change but the scheduling fields did not (e.g. a
+// `timeSpent`-only tick), the field-for-field compare still returns the cached
+// `snap`. When every element is unchanged the PREVIOUS array ref is returned, so
+// downstream memoized selectors are skipped entirely.
+const createSchedulingSnapshotProjector = (): ((
+  tasks: Task[],
+) => SchedulingSnapshot[]) => {
+  const cache = new Map<string, SchedulingSnapshotCacheEntry>();
+  let prevResult: SchedulingSnapshot[] = [];
+  return (tasks: Task[]): SchedulingSnapshot[] => {
+    const result: SchedulingSnapshot[] = [];
+    const seen = new Set<string>();
+    let changed = tasks.length !== prevResult.length;
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      if (!task) {
+        continue;
+      }
+      seen.add(task.id);
+      const cached = cache.get(task.id);
+      let snap: SchedulingSnapshot;
+      if (cached && cached.taskRef === task) {
+        snap = cached.snap;
+      } else {
+        const built: SchedulingSnapshot = {
+          id: task.id,
+          isDone: task.isDone,
+          dueDay: task.dueDay ?? null,
+          dueWithTime: task.dueWithTime ?? null,
+          deadlineDay: task.deadlineDay ?? null,
+          deadlineWithTime: task.deadlineWithTime ?? null,
+          parentId: task.parentId ?? null,
+          subTaskIds: task.subTaskIds,
+        };
+        snap = cached && _schedulingSnapEqual(cached.snap, built) ? cached.snap : built;
+        cache.set(task.id, { taskRef: task, snap });
+      }
+      result.push(snap);
+      if (!changed && prevResult[i] !== snap) {
+        changed = true;
+      }
+    }
+    // Prune entries for ids no longer present so the cache can't grow unbounded.
+    if (cache.size > seen.size) {
+      for (const key of cache.keys()) {
+        if (!seen.has(key)) {
+          cache.delete(key);
+        }
+      }
+    }
+    if (!changed) {
+      return prevResult;
+    }
+    prevResult = result;
+    return result;
+  };
+};
+
+// Snapshot over active-project tasks — matches selectAllTasksInActiveProjects'
+// archived-project filtering AND ordering exactly (it IS its source). Drives the
+// overdue / due-time / deadline / due-day / later-today / today decisions.
+export const selectTaskSchedulingSnapshot = createSelector(
   selectAllTasksInActiveProjects,
+  createSchedulingSnapshotProjector(),
+);
+
+// Snapshot over ALL tasks (incl. archived-project tasks) — mirrors the unfiltered
+// selectAllTasks source that selectAllTasksWithSubTasks intentionally uses.
+export const selectAllTasksSchedulingSnapshot = createSelector(
+  selectAllTasks,
+  createSchedulingSnapshotProjector(),
+);
+
+// The active snapshot re-expressed as a Record keyed by id. selectTodayTaskIds'
+// computeOrderedTaskIdsForToday reads a Record of {id,dueDay,dueWithTime,parentId}
+// — this keeps that projector's input shape (and its spec's `.projector(...)`
+// calls) unchanged while gating its recompute on the stable snapshot.
+export const selectTaskSchedulingSnapshotRecord = createSelector(
+  selectTaskSchedulingSnapshot,
+  (snapshot): Record<string, SchedulingSnapshot> => {
+    const rec: Record<string, SchedulingSnapshot> = {};
+    for (const snap of snapshot) {
+      rec[snap.id] = snap;
+    }
+    return rec;
+  },
+);
+
+// Re-maps an ordered id list back to LIVE task entities, returning the PREVIOUS
+// array ref when every mapped entity is unchanged; only genuinely-changed members
+// (e.g. the tracked task, if it is a member) get a new ref.
+const createStableTaskIdMapper = <T extends Task = Task>(): ((
+  ids: string[],
+  entities: Record<string, Task | undefined>,
+) => T[]) => {
+  let prevResult: T[] = [];
+  return (ids: string[], entities: Record<string, Task | undefined>): T[] => {
+    const result: T[] = [];
+    let changed = ids.length !== prevResult.length;
+    for (let i = 0; i < ids.length; i++) {
+      // Ids come from a snapshot derived from the SAME state as `entities`, so
+      // the entity is always present.
+      const task = entities[ids[i]] as T;
+      result.push(task);
+      if (!changed && prevResult[i] !== task) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return prevResult;
+    }
+    prevResult = result;
+    return result;
+  };
+};
+
+// Re-maps an ordered {id, subTaskIds} structure to TaskWithSubTasks built from
+// LIVE entities, reusing the exact previous TaskWithSubTasks object for any parent
+// whose entity ref AND resolved subtask refs are unchanged (SPAP-19 per-id cache).
+// Missing subtask entities are skipped (parity with legacy mapSubTasksToTasks /
+// subtasksByParentId shaping).
+const createStableWithSubTasksMapper = (): ((
+  structure: readonly SnapshotStructureEntry[],
+  entities: Record<string, Task | undefined>,
+) => TaskWithSubTasks[]) => {
+  const cache = new Map<
+    string,
+    { task: Task; subTasks: Task[]; result: TaskWithSubTasks }
+  >();
+  let prevResult: TaskWithSubTasks[] = [];
+  return (
+    structure: readonly SnapshotStructureEntry[],
+    entities: Record<string, Task | undefined>,
+  ): TaskWithSubTasks[] => {
+    const result: TaskWithSubTasks[] = [];
+    const seen = new Set<string>();
+    let changed = structure.length !== prevResult.length;
+    for (let i = 0; i < structure.length; i++) {
+      const entry = structure[i];
+      const task = entities[entry.id];
+      if (!task) {
+        changed = true;
+        continue;
+      }
+      seen.add(entry.id);
+      const subTasks: Task[] = [];
+      for (const sid of entry.subTaskIds) {
+        const sub = entities[sid];
+        if (sub) {
+          subTasks.push(sub);
+        }
+      }
+      const cached = cache.get(entry.id);
+      let built: TaskWithSubTasks;
+      if (cached && cached.task === task && fastArrayCompare(cached.subTasks, subTasks)) {
+        built = cached.result;
+      } else {
+        built = { ...task, subTasks };
+        cache.set(entry.id, { task, subTasks, result: built });
+      }
+      result.push(built);
+      if (!changed && prevResult[i] !== built) {
+        changed = true;
+      }
+    }
+    if (cache.size > seen.size) {
+      for (const key of cache.keys()) {
+        if (!seen.has(key)) {
+          cache.delete(key);
+        }
+      }
+    }
+    if (!changed) {
+      return prevResult;
+    }
+    prevResult = result;
+    return result;
+  };
+};
+
+// selectAllTasksWithSubTasks (rebased): ordered top-level task ids + their raw
+// subTaskIds from the ALL-tasks snapshot (decision skipped on a timeSpent tick),
+// re-mapped to live TaskWithSubTasks. Mirrors legacy mapSubTasksToTasks: every
+// non-subtask task in order; missing subtasks dropped at re-map.
+export const selectAllTasksWithSubTasksStructure = createSelector(
+  selectAllTasksSchedulingSnapshot,
+  (snapshot): SnapshotStructureEntry[] => {
+    const structure: SnapshotStructureEntry[] = [];
+    for (const snap of snapshot) {
+      if (snap.parentId) {
+        continue;
+      }
+      structure.push({ id: snap.id, subTaskIds: snap.subTaskIds });
+    }
+    return structure;
+  },
+);
+
+const _allTasksWithSubTasksMapper = createStableWithSubTasksMapper();
+export const selectAllTasksWithSubTasks = createSelector(
+  selectAllTasksWithSubTasksStructure,
+  selectTaskEntities,
+  _allTasksWithSubTasksMapper,
+);
+
+// selectOverdueTasks (rebased): decision reads only dueDay/dueWithTime from the
+// snapshot; public re-maps ids to live Task refs.
+export const selectOverdueTaskIds = createSelector(
+  selectTaskSchedulingSnapshot,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (tasks, todayStr, startOfNextDayDiffMs): Task[] => {
+  (snapshot, todayStr, startOfNextDayDiffMs): string[] => {
     const today = dateStrToUtcDate(todayStr);
     today.setHours(0, 0, 0, 0);
     // The logical start of "today" is shifted by the offset
     const todayStartMs = today.getTime() + startOfNextDayDiffMs;
-    return tasks.filter(
-      (task): task is Task =>
-        // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-        // which is lexicographically sortable. This avoids timezone conversion issues.
-        !!(
-          (task.dueDay && isDBDateStr(task.dueDay) && task.dueDay < todayStr) ||
-          (task.dueWithTime && task.dueWithTime < todayStartMs)
-        ),
-    );
+    const ids: string[] = [];
+    for (const snap of snapshot) {
+      // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
+      // which is lexicographically sortable. This avoids timezone conversion issues.
+      if (
+        (snap.dueDay && isDBDateStr(snap.dueDay) && snap.dueDay < todayStr) ||
+        (snap.dueWithTime && snap.dueWithTime < todayStartMs)
+      ) {
+        ids.push(snap.id);
+      }
+    }
+    return ids;
   },
+);
+
+const _overdueTasksMapper = createStableTaskIdMapper();
+export const selectOverdueTasks = createSelector(
+  selectOverdueTaskIds,
+  selectTaskEntities,
+  _overdueTasksMapper,
 );
 
 export const selectUndoneOverdue = createSelector(
@@ -361,11 +594,17 @@ export const selectCurrentTaskParentOrCurrent = createSelector(
 // Uses virtual tag pattern to determine TODAY membership:
 // A task is "in TODAY" if dueDay === today OR dueWithTime is for today
 // PERF: Single-pass iteration instead of multiple passes over all tasks
-export const selectLaterTodayTasksWithSubTasks = createSelector(
-  selectAllTasksInActiveProjects,
+// selectLaterTodayTasksWithSubTasks (rebased): the membership/grouping/sort
+// DECISION runs on the snapshot only (skipped on a timeSpent tick) and emits an
+// ordered {id, subTaskIds} structure; the public selector re-maps it to live
+// TaskWithSubTasks. NOTE: like the original this reads Date.now() for the
+// "later today" cutoff; the snapshot boundary means `now` only advances when a
+// scheduling field (or todayStr/offset) changes rather than on every store tick.
+export const selectLaterTodayStructure = createSelector(
+  selectTaskSchedulingSnapshot,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
-  (allTasks, todayStr, startOfNextDayDiffMs): TaskWithSubTasks[] => {
+  (snapshot, todayStr, startOfNextDayDiffMs): SnapshotStructureEntry[] => {
     if (!todayStr) {
       return [];
     }
@@ -378,45 +617,46 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
 
     // Helper to check if task is "in TODAY" via virtual tag pattern
     // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity)
-    const isInToday = (task: Task): boolean => {
-      if (task.dueWithTime) {
-        return isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
+    const isInToday = (snap: SchedulingSnapshot): boolean => {
+      if (snap.dueWithTime) {
+        return isTodayWithOffset(snap.dueWithTime, todayStr, startOfNextDayDiffMs);
       }
-      return task.dueDay === todayStr;
+      return snap.dueDay === todayStr;
     };
 
     // Helper to check if task is scheduled for later today
-    const isScheduledLaterToday = (task: Task): boolean =>
-      !!task.dueWithTime && task.dueWithTime >= now && task.dueWithTime <= todayEndTime;
+    const isScheduledLaterToday = (snap: SchedulingSnapshot): boolean =>
+      !!snap.dueWithTime && snap.dueWithTime >= now && snap.dueWithTime <= todayEndTime;
 
     // PERF: Single pass to categorize all tasks (was 2 passes before)
-    const scheduledParentTasks: Task[] = [];
-    const scheduledSubtasks: Task[] = [];
-    const unscheduledParentsInToday: Task[] = [];
-    const subtasksByParentId: Record<string, Task[]> = {};
+    const scheduledParentTasks: SchedulingSnapshot[] = [];
+    const scheduledSubtasks: SchedulingSnapshot[] = [];
+    const unscheduledParentsInToday: SchedulingSnapshot[] = [];
+    const subtaskIdsByParentId: Record<string, string[]> = {};
+    const dueWithTimeById = new Map<string, number | null>();
 
-    for (const task of allTasks) {
-      if (task.parentId) {
-        if (!subtasksByParentId.hasOwnProperty(task.parentId)) {
-          subtasksByParentId[task.parentId] = [];
+    for (const snap of snapshot) {
+      dueWithTimeById.set(snap.id, snap.dueWithTime);
+      if (snap.parentId) {
+        if (!subtaskIdsByParentId.hasOwnProperty(snap.parentId)) {
+          subtaskIdsByParentId[snap.parentId] = [];
         }
-
-        subtasksByParentId[task.parentId].push(task);
+        subtaskIdsByParentId[snap.parentId].push(snap.id);
       }
 
-      if (!task || task.isDone || !isInToday(task)) continue;
+      if (snap.isDone || !isInToday(snap)) continue;
 
-      if (task.parentId) {
+      if (snap.parentId) {
         // Subtask - only care about scheduled ones
-        if (isScheduledLaterToday(task)) {
-          scheduledSubtasks.push(task);
+        if (isScheduledLaterToday(snap)) {
+          scheduledSubtasks.push(snap);
         }
       } else {
         // Parent task - categorize by scheduled status
-        if (isScheduledLaterToday(task)) {
-          scheduledParentTasks.push(task);
+        if (isScheduledLaterToday(snap)) {
+          scheduledParentTasks.push(snap);
         } else {
-          unscheduledParentsInToday.push(task);
+          unscheduledParentsInToday.push(snap);
         }
       }
     }
@@ -435,7 +675,7 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     ];
 
     // Get IDs of parents that will be included
-    const parentIdsInLaterToday = new Set(parentsToInclude.map((task) => task.id));
+    const parentIdsInLaterToday = new Set(parentsToInclude.map((snap) => snap.id));
 
     // Find orphaned subtasks (scheduled subtasks whose parents are NOT in Later Today)
     const orphanedScheduledSubtasks = scheduledSubtasks.filter(
@@ -443,27 +683,29 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     );
 
     // Combine parents and orphaned subtasks
-    const allTopLevelTasks = [...parentsToInclude, ...orphanedScheduledSubtasks];
+    const allTopLevel = [...parentsToInclude, ...orphanedScheduledSubtasks];
 
-    // Map to include subtasks for parents and sort by time
-    // PERF: Pre-compute earliest times to avoid recalculating in sort comparator
-    const tasksWithTimes = allTopLevelTasks.map((task) => {
-      const taskWithSubTasks = {
-        ...task,
-        subTasks: subtasksByParentId[task.id] ?? [],
-      } as TaskWithSubTasks;
-
-      // Pre-compute earliest scheduled time for sorting
+    // Sort by earliest scheduled time (parent's own dueWithTime or its subtasks').
+    // PERF: Pre-compute earliest times to avoid recalculating in sort comparator.
+    const withTimes = allTopLevel.map((snap) => {
+      const childIds = subtaskIdsByParentId[snap.id] ?? [];
       const earliestTime = Math.min(
-        taskWithSubTasks.dueWithTime || Infinity,
-        ...(taskWithSubTasks.subTasks || []).map((st) => st.dueWithTime || Infinity),
+        snap.dueWithTime || Infinity,
+        ...childIds.map((cid) => dueWithTimeById.get(cid) || Infinity),
       );
-      return { task: taskWithSubTasks, earliestTime };
+      return { entry: { id: snap.id, subTaskIds: childIds }, earliestTime };
     });
 
-    tasksWithTimes.sort((a, b) => a.earliestTime - b.earliestTime);
-    return tasksWithTimes.map((t) => t.task);
+    withTimes.sort((a, b) => a.earliestTime - b.earliestTime);
+    return withTimes.map((w) => w.entry);
   },
+);
+
+const _laterTodayWithSubTasksMapper = createStableWithSubTasksMapper();
+export const selectLaterTodayTasksWithSubTasks = createSelector(
+  selectLaterTodayStructure,
+  selectTaskEntities,
+  _laterTodayWithSubTasksMapper,
 );
 
 export const selectAllDoneIds = createSelector(
@@ -671,17 +913,32 @@ export const selectAllTasksWithDueTime = createSelector(
   },
 );
 
-export const selectAllTasksWithDueTimeSorted = createSelector(
-  selectAllTasksInActiveProjects,
-  (tasks: Task[]): TaskWithDueTime[] => {
-    return tasks
+// Decision: ids of tasks with a dueWithTime, sorted ascending, from the snapshot.
+export const selectDueTimeSortedTaskIds = createSelector(
+  selectTaskSchedulingSnapshot,
+  (snapshot): string[] =>
+    snapshot
       .filter(
-        (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+        (snap): snap is SchedulingSnapshot & { dueWithTime: number } =>
+          typeof snap.dueWithTime === 'number',
       )
-      .sort((a, b) => a.dueWithTime - b.dueWithTime);
-  },
+      .sort((a, b) => a.dueWithTime - b.dueWithTime)
+      .map((snap) => snap.id),
 );
 
+const _allTasksWithDueTimeSortedMapper = createStableTaskIdMapper<TaskWithDueTime>();
+export const selectAllTasksWithDueTimeSorted = createSelector(
+  selectDueTimeSortedTaskIds,
+  selectTaskEntities,
+  _allTasksWithDueTimeSortedMapper,
+);
+
+// NOTE: selectTimeConflictTaskIds intentionally keeps consuming the PUBLIC
+// selectAllTasksWithDueTimeSorted (LIVE refs) rather than the snapshot decision:
+// getTimeConflictTaskIds → getTimeLeftForTask READS `timeSpent`, so a tracked
+// due-time task's shrinking time-left can genuinely change conflicts each tick.
+// The live re-map yields a new array (with the tracked task's live ref) only when
+// a due-time member actually changed, so conflicts recompute exactly when needed.
 export const selectTimeConflictTaskIds = createSelector(
   selectAllTasksWithDueTimeSorted,
   getTimeConflictTaskIds,
@@ -705,15 +962,13 @@ export const selectAllTasksWithDeadlineReminder = createSelector(
   },
 );
 
-export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
-  selectAllTasksInActiveProjects,
-  (tasks: Task[]): Task[] => {
-    return tasks
+export const selectUndoneDeadlineSortedTaskIds = createSelector(
+  selectTaskSchedulingSnapshot,
+  (snapshot): string[] =>
+    snapshot
       .filter(
-        (task) =>
-          task &&
-          !task.isDone &&
-          (task.deadlineDay || typeof task.deadlineWithTime === 'number'),
+        (snap) =>
+          !snap.isDone && (snap.deadlineDay || typeof snap.deadlineWithTime === 'number'),
       )
       .sort((a, b) => {
         const aTime =
@@ -725,8 +980,15 @@ export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
             ? b.deadlineWithTime
             : dateStrToUtcDate(b.deadlineDay!).getTime();
         return aTime - bTime;
-      });
-  },
+      })
+      .map((snap) => snap.id),
+);
+
+const _allUndoneTasksWithDeadlineSortedMapper = createStableTaskIdMapper();
+export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
+  selectUndoneDeadlineSortedTaskIds,
+  selectTaskEntities,
+  _allUndoneTasksWithDeadlineSortedMapper,
 );
 
 export const selectUndoneTasksWithDueDayNoReminder = createSelector(
@@ -795,13 +1057,19 @@ export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvid
   });
 };
 
+export const selectUndoneDueDayTaskIds = createSelector(
+  selectTaskSchedulingSnapshot,
+  (snapshot): string[] =>
+    snapshot
+      .filter((snap) => !!snap.dueDay && !snap.isDone)
+      // Sort by dueDay (YYYY-MM-DD format is lexicographically sortable)
+      .sort((a, b) => a.dueDay!.localeCompare(b.dueDay!))
+      .map((snap) => snap.id),
+);
+
+const _allUndoneTasksWithDueDayMapper = createStableTaskIdMapper<TaskWithDueDay>();
 export const selectAllUndoneTasksWithDueDay = createSelector(
-  selectAllTasksInActiveProjects,
-  (tasks): TaskWithDueDay[] => {
-    const tasksWithDueDay = tasks.filter(
-      (t): t is TaskWithDueDay => !!t.dueDay && !t.isDone,
-    );
-    // Sort by dueDay (YYYY-MM-DD format is lexicographically sortable)
-    return tasksWithDueDay.sort((a, b) => a.dueDay.localeCompare(b.dueDay));
-  },
+  selectUndoneDueDayTaskIds,
+  selectTaskEntities,
+  _allUndoneTasksWithDueDayMapper,
 );

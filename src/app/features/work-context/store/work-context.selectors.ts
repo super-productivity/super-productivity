@@ -11,6 +11,7 @@ import {
   selectTaskEntities,
   selectTaskEntitiesInActiveProjects,
   selectTaskFeatureState,
+  selectTaskSchedulingSnapshotRecord,
 } from '../../tasks/store/task.selectors';
 import { Task, TaskWithDueTime, TaskWithSubTasks } from '../../tasks/task.model';
 import { devError } from '../../../util/dev-error';
@@ -330,9 +331,13 @@ export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
  *
  * See: docs/ai/today-tag-architecture.md
  */
+// SPAP-20: fed by the scheduling snapshot (as a Record) instead of the full
+// active-project task entities, so a `timeSpent`-only tick — which does not
+// change any field computeOrderedTaskIdsForToday reads (id/dueDay/dueWithTime/
+// parentId) — leaves the snapshot ref stable and this selector is skipped.
 export const selectTodayTaskIds = createSelector(
   selectTagFeatureState,
-  selectTaskEntitiesInActiveProjects,
+  selectTaskSchedulingSnapshotRecord,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   (tagState, activeTaskEntities, todayStr, startOfNextDayDiffMs): string[] => {
