@@ -716,6 +716,24 @@ describe('TaskListComponent', () => {
       expect(sectionServiceMock.addTaskToSection).not.toHaveBeenCalled();
       expect(sectionServiceMock.removeTaskFromSection).not.toHaveBeenCalled();
     });
+
+    it('skips a reorder WITHIN the Done list (auto-sorted) so no moveTaskInTodayList op is emitted', () => {
+      callMove('task1', 'DONE', 'DONE', 'PARENT', 'PARENT');
+
+      const dispatched = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0]);
+      expect(dispatched.some((a) => a.type === moveTaskInTodayList.type)).toBe(false);
+    });
+
+    it('still moves a task OUT of Done (DONE -> UNDONE) via moveTaskInTodayList', () => {
+      callMove('task1', 'DONE', 'UNDONE', 'PARENT', 'PARENT');
+
+      const dispatched = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0]);
+      expect(dispatched.some((a) => a.type === moveTaskInTodayList.type)).toBe(true);
+    });
   });
 
   // The public drop() handler turns a CdkDragDrop event into the right action,

@@ -24,4 +24,17 @@ describe('sortDoneTasksByDoneDate', () => {
     sortDoneTasksByDoneDate(input);
     expect(input.map((t) => t.id)).toEqual(['A', 'B']);
   });
+
+  it('preserves input order for equal completion timestamps (stable sort)', () => {
+    const sorted = sortDoneTasksByDoneDate([
+      task('A', 1000),
+      task('B', 1000),
+      task('C', 1000),
+    ]);
+    expect(sorted.map((t) => t.id)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('returns an empty array unchanged', () => {
+    expect(sortDoneTasksByDoneDate([])).toEqual([]);
+  });
 });
