@@ -94,8 +94,12 @@ export class StartupOverlayService {
    * Polls for the AddTaskBar input element using a MutationObserver,
    * with a safety timeout to prevent leaks.
    */
-  private _waitForInput(callback: (input: HTMLInputElement) => void): void {
-    const input = document.querySelector<HTMLInputElement>('add-task-bar.global input');
+  private _waitForInput(callback: (input: HTMLTextAreaElement) => void): void {
+    // The title field is a <textarea class="main-input"> — an `input` type
+    // selector would not match it, so target the class (mirrors the e2e locator).
+    const input = document.querySelector<HTMLTextAreaElement>(
+      'add-task-bar.global .main-input',
+    );
     if (input) {
       callback(input);
       return;
@@ -104,7 +108,9 @@ export class StartupOverlayService {
     let resolved = false;
     const observer = new MutationObserver(() => {
       if (resolved) return;
-      const el = document.querySelector<HTMLInputElement>('add-task-bar.global input');
+      const el = document.querySelector<HTMLTextAreaElement>(
+        'add-task-bar.global .main-input',
+      );
       if (el) {
         resolved = true;
         observer.disconnect();

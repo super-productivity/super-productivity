@@ -24,7 +24,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
@@ -91,7 +90,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   templateUrl: './add-task-bar.component.html',
   styleUrls: ['./add-task-bar.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [blendInOutAnimation, fadeAnimation, expandFadeAnimation],
+  animations: [blendInOutAnimation, expandFadeAnimation],
   standalone: true,
   imports: [
     FormsModule,
@@ -266,7 +265,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   mentionCfg$ = inject(MentionConfigService).mentionConfig$;
 
   // View children
-  inputEl = viewChild<ElementRef>('inputEl');
+  inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('inputEl');
   noteEl = viewChild<ElementRef<HTMLTextAreaElement>>('noteEl');
   taskAutoCompleteEl = viewChild<MatAutocomplete>('taskAutoCompleteEl');
   actionsComponent = viewChild(AddTaskBarActionsComponent);
@@ -949,6 +948,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   expandNote(): void {
+    // The note field only renders in create mode; guard like toggleNote() so
+    // Ctrl+Enter while searching cannot leave isNoteExpanded stuck on.
+    if (this.isSearchMode()) {
+      return;
+    }
     this.stateService.isNoteExpanded.set(true);
     this._focusNote();
   }

@@ -507,6 +507,14 @@ describe('AddTaskBarComponent', () => {
       expect(component.stateService.isNoteExpanded()).toBe(false);
     });
 
+    it('expandNote is a no-op in search mode (Ctrl+Enter cannot strand the flag)', () => {
+      component.isSearchMode.set(true);
+
+      component.expandNote();
+
+      expect(component.stateService.isNoteExpanded()).toBe(false);
+    });
+
     it('Ctrl+Enter on the title input expands the note without adding a task', () => {
       const addTaskSpy = spyOn(component, 'addTask');
 
