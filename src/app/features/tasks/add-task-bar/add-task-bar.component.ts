@@ -462,8 +462,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onSubmitBtnClick(): void {
+    const isCustomRepeat = this.stateService.state().repeatQuickSetting === 'CUSTOM';
     if (this.isSubmitVisible()) {
       void this.addTask();
+    }
+    if (!isCustomRepeat) {
+      this.focusInput();
     }
   }
 
@@ -507,8 +511,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // UI event handlers
   onInputChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const value = target.value;
+    const target = event.target as HTMLTextAreaElement;
+    const value = target.value.replace(/\s*[\r\n]+\s*/g, ' ');
+    if (value !== target.value) {
+      target.value = value;
+    }
     this.stateService.updateInputTxt(value);
     if (value && this.successPlaceholderMsg()) {
       this._clearSuccessPlaceholder();
@@ -603,7 +610,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _handleCtrlShortcut(event: KeyboardEvent): void {
     const shortcutMap: Record<string, () => void> = {
       ['1']: () => this.toggleIsAddToBottom(),
-      ['2']: () => this.toggleSearchMode(),
+      ['2']: () => this.toggleNote(),
       ['3']: () => this._callActionMethod('openProjectMenu'),
       ['4']: () => this._callActionMethod('openScheduleDialog'),
       ['5']: () => this._callActionMethod('openTagsMenu'),
@@ -724,6 +731,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   toggleNote(): void {
+    if (this.isSearchMode()) {
+      this.focusInput();
+      return;
+    }
     const willExpand = !this.stateService.isNoteExpanded();
     this.stateService.isNoteExpanded.set(willExpand);
     if (willExpand) {
@@ -734,6 +745,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   expandNote(): void {
+    if (this.isSearchMode()) {
+      this.focusInput();
+      return;
+    }
     this.stateService.isNoteExpanded.set(true);
     this._focusNote();
   }
