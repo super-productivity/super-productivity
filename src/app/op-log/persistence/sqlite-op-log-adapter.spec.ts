@@ -632,6 +632,31 @@ const defineBehavioralContract = (
       );
       expect(ids).toEqual(['standalone']);
     });
+
+    it('serializes across TWO adapters that share one connection (native op-log+archive topology)', async () => {
+      // The B3 rollout hands the op-log store and the archive store separate
+      // adapter instances over the SAME SqliteDb. A queue keyed to the adapter
+      // instance would let their BEGINs interleave on the shared connection; the
+      // queue must be keyed to the connection.
+      const shared = await makeDb();
+      const opLog = new SqliteOpLogAdapter(shared);
+      const archive = new SqliteOpLogAdapter(shared);
+      await opLog.init(); // one DDL pass; both adapters see the same tables
+
+      const [s1, s2] = await Promise.all([
+        opLog.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOpEntry('from-oplog', 'local')),
+        ),
+        archive.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOpEntry('from-archive', 'local')),
+        ),
+      ]);
+      expect(s1).not.toBe(s2);
+      const ids = (await opLog.getAll<{ op: { id: string } }>(STORE_NAMES.OPS)).map(
+        (e) => e.op.id,
+      );
+      expect(ids.sort()).toEqual(['from-archive', 'from-oplog']);
+    });
   });
 };
 

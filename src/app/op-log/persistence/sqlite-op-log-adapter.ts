@@ -528,14 +528,37 @@ const sqlIterate = async <T>(
 // ── adapter ──────────────────────────────────────────────────────────────────
 
 /**
+ * One FIFO serialization chain **per physical `SqliteDb` connection**, keyed by
+ * the connection object — NOT per adapter instance.
+ *
+ * The native rollout hands the op-log store and the archive store TWO separate
+ * `SqliteOpLogAdapter` instances that share ONE `SqliteDb` (one file, all
+ * tables — see docs/sync-and-op-log/sqlite-migration-followup.md B3). A queue
+ * living on the adapter instance would only serialize each store against
+ * itself, leaving an op-log `BEGIN` free to interleave with a concurrent
+ * archive `BEGIN` on the shared connection — the exact corruption this guards
+ * against. Keying the chain to the connection makes every adapter over that
+ * connection share one queue. `WeakMap` so a closed connection's queue is
+ * collected with it.
+ */
+const CONNECTION_QUEUES = new WeakMap<SqliteDb, { tail: Promise<unknown> }>();
+
+const connectionQueue = (db: SqliteDb): { tail: Promise<unknown> } => {
+  let q = CONNECTION_QUEUES.get(db);
+  if (!q) {
+    q = { tail: Promise.resolve() };
+    CONNECTION_QUEUES.set(db, q);
+  }
+  return q;
+};
+
+/**
  * SQLite-backed {@link OpLogDbAdapter}. `adoptConnection` is intentionally
  * absent — SQLite self-manages its handle; the stores' `adoptConnection?.()`
  * calls are no-ops here.
  */
 export class SqliteOpLogAdapter implements OpLogDbAdapter {
   private readonly _plans: Map<string, SqlTablePlan>;
-  /** Tail of the FIFO serialization chain (see {@link _serialize}). */
-  private _tail: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly _db: SqliteDb,
@@ -545,29 +568,37 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   /**
-   * Serialize `fn` after all previously-queued work — one operation touches the
-   * connection at a time. SQLite (unlike IndexedDB) has no nested transactions:
-   * a second `BEGIN` issued while one is open throws, and a bare statement run
-   * mid-transaction silently joins — and rolls back with — that foreign
-   * transaction. The op-log issues genuinely concurrent operations (capture
-   * append vs. archive write vs. compaction), so every entry point funnels
-   * through this chain: a `transaction()` / writable `iterate()` holds it for the
-   * whole `BEGIN…COMMIT`; a single statement holds it for its one call.
+   * Serialize `fn` after all previously-queued work on this connection — one
+   * operation touches the connection at a time. SQLite (unlike IndexedDB) has no
+   * nested transactions: a second `BEGIN` issued while one is open throws, and a
+   * bare statement run mid-transaction silently joins — and rolls back with —
+   * that foreign transaction. The op-log issues genuinely concurrent operations
+   * (capture append vs. archive write vs. compaction, potentially from two
+   * adapters over the same connection), so every entry point funnels through the
+   * shared {@link connectionQueue}: a `transaction()` / writable `iterate()`
+   * holds it for the whole `BEGIN…COMMIT`; a single statement holds it for its
+   * one call.
    *
-   * Re-entrancy invariant: work inside a held slot (an {@link OpLogTx} callback,
-   * a `sqlIterate` visitor's deletes) runs its statements directly on `_db`,
-   * never back through these public methods — so the chain never waits on
-   * itself. A transaction callback MUST use its `tx` handle, not the adapter.
+   * Re-entrancy precondition (unenforced — callers MUST honor it): work inside a
+   * held slot (an {@link OpLogTx} callback, a `sqlIterate` visitor's deletes)
+   * runs its statements directly on `_db`, never back through these public
+   * methods. A `transaction()` callback that instead `await`s an adapter method
+   * (e.g. `this._adapter.get(...)` rather than `tx.get(...)`) would enqueue
+   * behind the very slot it runs in and deadlock. Enforcement belongs in a lint
+   * rule, not a runtime guard: a runtime "in a slot" flag cannot distinguish an
+   * illegal re-entrant call from a legal concurrent one (both arrive while a
+   * slot executes), so it would reject the concurrency this queue exists to
+   * serialize.
    */
   private _serialize<T>(fn: () => Promise<T>): Promise<T> {
-    // `.then(fn, fn)` runs `fn` whether the prior slot resolved or rejected.
-    const result = this._tail.then(fn, fn);
+    const q = connectionQueue(this._db);
+    // `.then(fn, fn)` runs `fn` whether the prior slot resolved or rejected
+    // (defensive — the tail below never rejects).
+    const result = q.tail.then(fn, fn);
     // Keep the chain alive past a rejection and swallow it so the tail never
-    // becomes an unhandled rejection — the real error still reaches the caller.
-    this._tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
+    // becomes an unhandled rejection — the real error still reaches the caller
+    // via the returned `result`.
+    q.tail = result.catch(() => undefined);
     return result;
   }
 

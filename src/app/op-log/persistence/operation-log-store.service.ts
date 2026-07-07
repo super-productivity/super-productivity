@@ -1174,7 +1174,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._adapter.iterate<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
       // Pure read on the hottest path (getUnsynced/getAppliedOpIds); readonly
-      // so it doesn't take an exclusive write lock that serializes appends.
+      // so it takes no exclusive write lock. On IndexedDB it runs concurrently
+      // with appends; on the single-connection SQLite backend it queues in the
+      // shared serializer but holds it only for one SELECT (no BEGIN…COMMIT).
       { direction: 'prev', mode: 'readonly' },
       (_value, key) => {
         lastSeq = key as number;

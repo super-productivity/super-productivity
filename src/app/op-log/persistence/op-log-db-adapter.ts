@@ -145,8 +145,10 @@ export interface OpLogTx {
  */
 export interface OpLogDbAdapter {
   /**
-   * Open/create the database against {@link OpLogDbSchema}. Idempotent: safe to
-   * call concurrently; implementations dedupe via an in-flight promise.
+   * Open/create the database against {@link OpLogDbSchema}. Idempotent and safe
+   * to call concurrently — implementations either dedupe via an in-flight
+   * promise (IndexedDB) or serialize idempotent `CREATE … IF NOT EXISTS` DDL
+   * (SQLite).
    */
   init(): Promise<void>;
 

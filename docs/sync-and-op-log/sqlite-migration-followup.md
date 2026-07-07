@@ -162,11 +162,18 @@ captured on the next tick.
   archive write vs. compaction) would otherwise interleave `BEGIN`s on the one
   connection — SQLite has no nested transactions, so a second `BEGIN` throws and
   a bare statement issued mid-transaction joins (and rolls back with) the foreign
-  transaction. `SqliteOpLogAdapter` now funnels every entry point through an
-  internal FIFO queue (`_serialize`), so a transaction is exclusive on the
-  connection for its whole `BEGIN…COMMIT`; the port contract documents the
-  invariant and a concurrent-transactions contract test runs on both engines.
-  (Closes the H-6/#8746 rollout blocker.)
+  transaction. `SqliteOpLogAdapter` now funnels every entry point through a FIFO
+  queue keyed to the **shared connection** (`WeakMap<SqliteDb, …>`, not the
+  adapter instance) — so the op-log store's and archive store's separate adapters
+  over the one `SqliteDb` serialize against **each other**, and a transaction is
+  exclusive on the connection for its whole `BEGIN…COMMIT`. The port contract
+  documents the invariant; contract tests cover concurrent transactions on both
+  engines **and** the two-adapters-one-connection topology. (Closes the H-6/#8746
+  rollout blocker.) Residual: the re-entrancy precondition (a `transaction()`
+  callback must use its `tx` handle, never re-enter an adapter method, or it
+  deadlocks on the queue) is documented but unenforced — a lint rule is the right
+  future guard (a runtime flag can't tell a re-entrant call from a legal
+  concurrent one).
 - **Size:** tiny token flip (init + serialization done). **Risk:** gated by the flag.
 
 ---
