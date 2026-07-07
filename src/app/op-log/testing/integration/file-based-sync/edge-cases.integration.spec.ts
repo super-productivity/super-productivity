@@ -210,69 +210,6 @@ describe('File-Based Sync Integration - Edge Cases', () => {
     });
   });
 
-  describe('Sync Cycle Cache', () => {
-    it('should use cached data when downloading then uploading in same cycle', async () => {
-      const clientA = harness.createClient('client-a');
-      const clientB = harness.createClient('client-b');
-      const provider = harness.getProvider();
-
-      // Client A creates initial file
-      const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
-        title: 'A',
-      });
-      await clientA.uploadOps([opA]);
-
-      // Clear call history
-      provider.clearHistory();
-
-      // Client B downloads (caches the data)
-      await clientB.downloadOps(0);
-
-      // Get download call count
-      const downloadCallsAfterDownload = provider.getCallsTo('downloadFile').length;
-      expect(downloadCallsAfterDownload).toBe(1);
-
-      // Client B immediately uploads (should use cached data)
-      const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
-        title: 'B',
-      });
-      await clientB.uploadOps([opB]);
-
-      // Should not have made another download call (cache was used)
-      const totalDownloadCalls = provider.getCallsTo('downloadFile').length;
-      expect(totalDownloadCalls).toBe(1); // Same as before, cache was used
-    });
-
-    it('should invalidate cache after upload', async () => {
-      const clientA = harness.createClient('client-a');
-      const clientB = harness.createClient('client-b');
-      const provider = harness.getProvider();
-
-      // Client A creates initial file
-      const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
-        title: 'A',
-      });
-      await clientA.uploadOps([opA]);
-
-      // Client B downloads (caches data)
-      await clientB.downloadOps(0);
-
-      // Client B uploads (invalidates cache)
-      const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
-        title: 'B',
-      });
-      await clientB.uploadOps([opB]);
-
-      provider.clearHistory();
-
-      // Client B downloads again (should fetch fresh, not use stale cache)
-      await clientB.downloadOps(0);
-
-      // Should have made a new download call
-      expect(provider.getCallsTo('downloadFile').length).toBe(1);
-    });
-  });
-
   describe('Operation Schema', () => {
     it('should preserve all operation fields through sync', async () => {
       const clientA = harness.createClient('client-a');
@@ -484,6 +421,96 @@ describe('File-Based Sync Integration - Edge Cases', () => {
       expect(result.filteringImport).toBe(syncedImportOp);
       expect(result.isLocalUnsyncedImport).toBe(false);
     });
+  });
+});
+
+describe('File-Based Sync Integration - Sync Cycle Cache', () => {
+  let harness: FileBasedSyncTestHarness;
+  let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
+
+  // Uses the LocalFile provider on purpose: these assertions exercise the in-cycle
+  // _syncCycleCache invalidation, which is a DIFFERENT layer from the SPAP-10 rev
+  // precheck. On a rev-precheck provider (Dropbox/WebDAV) an unchanged rev correctly
+  // short-circuits the redundant download, so a client re-reading its own just-
+  // uploaded write makes 0 download calls (expected), and covered by the adapter's
+  // own specs. LocalFile is excluded from the precheck, keeping the cache behaviour
+  // observable here.
+  beforeEach(() => {
+    opLogStoreSpy = jasmine.createSpyObj<OperationLogStoreService>(
+      'OperationLogStoreService',
+      ['getLatestFullStateOpEntry'],
+    );
+    opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
+    TestBed.configureTestingModule({
+      providers: [{ provide: OperationLogStoreService, useValue: opLogStoreSpy }],
+    });
+
+    harness = FileBasedSyncTestHarness.create({ providerId: SyncProviderId.LocalFile });
+  });
+
+  afterEach(() => {
+    harness.reset();
+  });
+
+  it('should use cached data when downloading then uploading in same cycle', async () => {
+    const clientA = harness.createClient('client-a');
+    const clientB = harness.createClient('client-b');
+    const provider = harness.getProvider();
+
+    // Client A creates initial file
+    const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
+      title: 'A',
+    });
+    await clientA.uploadOps([opA]);
+
+    // Clear call history
+    provider.clearHistory();
+
+    // Client B downloads (caches the data)
+    await clientB.downloadOps(0);
+
+    // Get download call count
+    const downloadCallsAfterDownload = provider.getCallsTo('downloadFile').length;
+    expect(downloadCallsAfterDownload).toBe(1);
+
+    // Client B immediately uploads (should use cached data)
+    const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
+      title: 'B',
+    });
+    await clientB.uploadOps([opB]);
+
+    // Should not have made another download call (cache was used)
+    const totalDownloadCalls = provider.getCallsTo('downloadFile').length;
+    expect(totalDownloadCalls).toBe(1); // Same as before, cache was used
+  });
+
+  it('should invalidate cache after upload', async () => {
+    const clientA = harness.createClient('client-a');
+    const clientB = harness.createClient('client-b');
+    const provider = harness.getProvider();
+
+    // Client A creates initial file
+    const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
+      title: 'A',
+    });
+    await clientA.uploadOps([opA]);
+
+    // Client B downloads (caches data)
+    await clientB.downloadOps(0);
+
+    // Client B uploads (invalidates cache)
+    const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
+      title: 'B',
+    });
+    await clientB.uploadOps([opB]);
+
+    provider.clearHistory();
+
+    // Client B downloads again (should fetch fresh, not use stale cache)
+    await clientB.downloadOps(0);
+
+    // Should have made a new download call
+    expect(provider.getCallsTo('downloadFile').length).toBe(1);
   });
 });
 

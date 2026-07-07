@@ -114,6 +114,45 @@ export class FileBasedSyncAdapterService {
    */
   private _lastRecoveredCorruptRev = new Map<string, string>();
 
+  /**
+   * SPAP-10: last-seen remote file rev per provider+user. Lets a poll skip the
+   * full `sync-data.json` download when the provider's cheap `getFileRev` reports
+   * the same rev we already processed (the file is byte-identical → nothing new).
+   */
+  private _lastSeenRevs = new Map<string, string>();
+
+  /**
+   * SPAP-10: rev of the file downloaded in the current cycle, not yet confirmed
+   * durably applied by the caller. Promoted to `_lastSeenRevs` (and persisted) only
+   * in setLastServerSeq — the same after-apply ordering as the seq cursor — so a
+   * throw/crash between download and apply can't strand a rev ahead of un-applied
+   * ops and skip them on the next poll's pre-check.
+   */
+  private _pendingRevs = new Map<string, string>();
+
+  /**
+   * SPAP-10: providers whose `getFileRev` is BOTH cheap (a metadata-only call, so
+   * the pre-check actually saves the full-file download) AND returns a rev that
+   * changes IFF the file content changes (so an unchanged rev is a sound "nothing
+   * new" signal):
+   * - Dropbox: content rev from files/get_metadata (metadata-only).
+   * - OneDrive: eTag from item metadata (metadata-only).
+   *
+   * WebDAV and LocalFile are deliberately excluded: their `getFileRev` performs a
+   * FULL-body read (no bandwidth saved on an unchanged rev, and a changed rev would
+   * download the file twice), and the rev can be a weak/coarse validator that may
+   * not change on a same-second write, so short-circuiting there risks missing a
+   * remote update. Re-adding WebDAV behind a strong-ETag / PROPFIND `getetag` check
+   * is tracked in SPAP-29. A provider-id allowlist is used rather than a capability
+   * flag on `FileSyncProvider` because the flag would have to be threaded through
+   * every provider implementation and the shared package interface for a purely
+   * adapter-local optimization.
+   */
+  private readonly _REV_PRECHECK_PROVIDERS: ReadonlySet<SyncProviderId> = new Set([
+    SyncProviderId.Dropbox,
+    SyncProviderId.OneDrive,
+  ]);
+
   /** Cache for downloaded sync data within a sync cycle (avoids redundant downloads) */
   private _syncCycleCache = new Map<
     string,
@@ -153,6 +192,12 @@ export class FileBasedSyncAdapterService {
         }
         if (state.seqCounters) {
           this._localSeqCounters = new Map(Object.entries(state.seqCounters));
+        }
+        // SPAP-10: back-compat — older persisted state has no `revs`; the map
+        // simply stays empty and the pre-check no-ops until the next download
+        // learns a rev.
+        if (state.revs) {
+          this._lastSeenRevs = new Map(Object.entries(state.revs));
         }
         this._persistedStateLoaded = true;
         return;
@@ -205,6 +250,8 @@ export class FileBasedSyncAdapterService {
       const state = {
         syncVersions: Object.fromEntries(this._expectedSyncVersions),
         seqCounters: Object.fromEntries(this._localSeqCounters),
+        // SPAP-10: last-seen remote rev per provider, for the cheap download pre-check.
+        revs: Object.fromEntries(this._lastSeenRevs),
       };
       localStorage.setItem(this._STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -311,6 +358,16 @@ export class FileBasedSyncAdapterService {
 
       setLastServerSeq: async (seq: number): Promise<void> => {
         this._localSeqCounters.set(providerKey, seq);
+        // SPAP-10: the caller invokes this only after the downloaded ops are
+        // durably applied, so it's the correct point to promote the rev staged in
+        // _downloadOps to last-seen and persist it — same ordering as the seq
+        // cursor. A crash before this leaves _lastSeenRevs unchanged, so the next
+        // poll re-downloads instead of skipping un-applied ops.
+        const pendingRev = this._pendingRevs.get(providerKey);
+        if (pendingRev !== undefined) {
+          this._lastSeenRevs.set(providerKey, pendingRev);
+          this._pendingRevs.delete(providerKey);
+        }
         this._persistState();
       },
 
@@ -497,7 +554,7 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
     newData: FileBasedSyncData,
     revToMatch: string | null,
-  ): Promise<{ finalSyncVersion: number }> {
+  ): Promise<{ finalSyncVersion: number; finalRev: string }> {
     const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
       encryptKey,
@@ -515,13 +572,15 @@ export class FileBasedSyncAdapterService {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         // CONDITIONAL upload only (isForceOverwrite=false). Never forces.
-        await provider.uploadFile(
+        const uploadRes = await provider.uploadFile(
           FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
           uploadData,
           currentRevToMatch,
           false,
         );
-        return { finalSyncVersion: newData.syncVersion };
+        // SPAP-10: the upload response carries the new rev — return it so the
+        // caller can record it as the last-seen rev for the next poll's pre-check.
+        return { finalSyncVersion: newData.syncVersion, finalRev: uploadRes.rev };
       } catch (e) {
         if (!(e instanceof UploadRevToMatchMismatchAPIError)) {
           throw e;
@@ -620,7 +679,7 @@ export class FileBasedSyncAdapterService {
 
     // Step 3: Upload conditionally; on rev mismatch re-download and retry
     // conditionally or throw retryably (never force-overwrite).
-    const { finalSyncVersion } = await this._uploadWithMismatchFallback(
+    const { finalSyncVersion, finalRev } = await this._uploadWithMismatchFallback(
       provider,
       cfg,
       encryptKey,
@@ -631,6 +690,10 @@ export class FileBasedSyncAdapterService {
     // Step 4: Post-upload processing
     this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, finalSyncVersion);
+    // SPAP-10: the remote is now exactly what we just uploaded, so its rev is the
+    // fresh last-seen rev. Recording it lets the next poll short-circuit if no
+    // other client writes in between. Persisted via _persistState() below.
+    this._lastSeenRevs.set(providerKey, finalRev);
 
     // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.
     // mergedOps.length is the total ops count, which can be much larger than syncVersion
@@ -668,6 +731,62 @@ export class FileBasedSyncAdapterService {
     limit: number = 500,
   ): Promise<FileSnapshotOpDownloadResponse> {
     const providerKey = this._getProviderKey(provider);
+
+    // SPAP-10: cheap remote-rev pre-check. If we already know the last-seen rev
+    // AND nothing in this cycle has cached a fresh download, ask the provider for
+    // the current rev WITHOUT downloading the full file. An unchanged rev proves
+    // the remote `sync-data.json` is byte-identical to what we last processed, so
+    // there are provably no new ops — and, crucially, NO gap can exist: every gap
+    // signal (syncVersion reset, snapshot replacement, partial trimming) requires
+    // the file to have CHANGED, which an identical rev rules out. We therefore
+    // safely bypass the gap-detection block below.
+    //
+    // Gating on cache absence is a correctness guard, not just an optimization:
+    // during multi-page pagination `_downloadOps` is called repeatedly with the
+    // same rev and a fresh cache, and short-circuiting mid-pagination would drop
+    // the remaining pages.
+    //
+    // Strictly best-effort: ANY error (including RemoteFileNotFoundAPIError) falls
+    // through to the full-download path below — the sync must never fail because
+    // the cheap check failed.
+    //
+    // Gated on `sinceSeq > 0` (review follow-up): a `forceFromSeq0` download
+    // (sinceSeq === 0) is used to REBUILD local state from the remote snapshot
+    // (e.g. USE_REMOTE conflict resolution, which first clears local state). There
+    // "remote rev unchanged" does NOT mean "nothing to do" — the caller needs the
+    // full snapshotState even when the rev matches, so a seq-0 download must never
+    // short-circuit.
+    const lastSeenRev = this._lastSeenRevs.get(providerKey);
+    if (
+      sinceSeq > 0 &&
+      lastSeenRev &&
+      !this._getCachedSyncData(providerKey) &&
+      this._REV_PRECHECK_PROVIDERS.has(provider.id)
+    ) {
+      try {
+        const { rev: remoteRev } = await provider.getFileRev(
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          lastSeenRev,
+        );
+        if (remoteRev === lastSeenRev) {
+          // latestSeq mirrors the last-known expected syncVersion so the caller
+          // (operation-log-download.service) sees "nothing new" without a seq
+          // regression (rev unchanged ⇒ same file ⇒ same syncVersion).
+          const expectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
+          OpLog.normal(
+            'FileBasedSyncAdapter: Remote rev unchanged — skipping full download (nothing new).',
+          );
+          return { ops: [], hasMore: false, latestSeq: expectedVersion };
+        }
+      } catch (e) {
+        // Best-effort: never fail the sync on the cheap check. Fall through to the
+        // full download, which handles missing/corrupt files authoritatively.
+        OpLog.normal(
+          'FileBasedSyncAdapter: getFileRev pre-check failed; falling back to full download.',
+          e,
+        );
+      }
+    }
 
     let syncData: FileBasedSyncData;
     let rev: string;
@@ -834,6 +953,13 @@ export class FileBasedSyncAdapterService {
     // SPAP-9: remember this file's causal clock so the next download can decide
     // whether a syncVersion regression is cosmetic or a genuine reset.
     this._lastSeenVectorClocks.set(providerKey, syncData.vectorClock);
+    // SPAP-10 (review follow-up): stage this file's rev as PENDING rather than
+    // committing it to `_lastSeenRevs` here. It is promoted to last-seen (and
+    // persisted) only once the caller confirms the ops were durably applied, via
+    // setLastServerSeq — the same ordering as the seq cursor. Committing it eagerly
+    // here would let a throw/crash between download and apply strand a rev ahead of
+    // un-applied ops, so the next poll's cheap pre-check would skip them for good.
+    this._pendingRevs.set(providerKey, rev);
 
     // Filter ops using operation IDs instead of synthetic seq numbers.
     // Synthetic seq numbers based on array indices shift when the array is trimmed,
@@ -974,7 +1100,7 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
-    await provider.uploadFile(
+    const snapshotUploadRes = await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
       uploadData,
       null,
@@ -984,6 +1110,9 @@ export class FileBasedSyncAdapterService {
     // Reset local state
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
     this._localSeqCounters.set(providerKey, newSyncVersion);
+    // SPAP-10: record the rev of the snapshot we just wrote as the last-seen rev
+    // so the next poll can skip a redundant full download.
+    this._lastSeenRevs.set(providerKey, snapshotUploadRes.rev);
     this._persistState();
 
     OpLog.warn(
@@ -1038,6 +1167,9 @@ export class FileBasedSyncAdapterService {
       // Reset local state
       this._expectedSyncVersions.delete(providerKey);
       this._localSeqCounters.delete(providerKey);
+      // SPAP-10: drop the last-seen rev so a stale value can't drive a false
+      // "nothing new" short-circuit after the remote file has been deleted.
+      this._lastSeenRevs.delete(providerKey);
       this._clearCachedSyncData(providerKey);
       this._persistState();
 

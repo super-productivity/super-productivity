@@ -2421,4 +2421,267 @@ describe('FileBasedSyncAdapterService', () => {
       expect(parseWithPrefix(uploadedMain).syncVersion).toBe(3);
     });
   });
+
+  describe('remote-rev pre-check (SPAP-10)', () => {
+    const STATE_KEY = FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 'state';
+
+    // Simulate crossing a poll boundary: the intra-cycle cache is only meant to
+    // dedupe the download+upload of a SINGLE sync cycle. On the next poll it is
+    // stale/absent. Clearing it here reproduces that cross-poll condition without
+    // waiting out the real 30s TTL.
+    const crossPollBoundary = (): void => {
+      (
+        service as unknown as { _syncCycleCache: Map<string, unknown> }
+      )._syncCycleCache.clear();
+    };
+
+    // The rev pre-check is enabled for providers with a cheap, content-stable rev.
+    // WebDAV (the default mock) is deliberately NOT one of them, so exercise the
+    // optimization on Dropbox. Re-create the adapter AFTER switching the id so the
+    // provider key captured by the adapter's closures matches.
+    beforeEach(() => {
+      mockProvider.id = SyncProviderId.Dropbox;
+      adapter = service.createAdapter(mockProvider, mockCfg, mockEncryptKey);
+    });
+
+    it('(a) skips the full download when the remote rev is unchanged (zero downloadFile calls)', async () => {
+      const syncData = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      // First poll: seeds last-seen rev = 'rev-1' and expected syncVersion = 2.
+      await adapter.downloadOps(0);
+      // Simulate the caller durably applying the ops: this promotes the rev staged
+      // during download to last-seen (same ordering as the seq cursor).
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+      // getFileRev reports the SAME rev → remote is byte-identical → nothing new.
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-1' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      // No full download happened.
+      expect(mockProvider.downloadFile).not.toHaveBeenCalled();
+      // Empty, non-regressing "nothing new" response.
+      expect(result.ops).toEqual([]);
+      expect(result.hasMore).toBe(false);
+      expect(result.latestSeq).toBe(2);
+      expect(result.gapDetected).toBeFalsy();
+    });
+
+    it('(b) proceeds with the full download when the remote rev changed', async () => {
+      const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(seed), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(0);
+      // Simulate the caller durably applying the ops: this promotes the rev staged
+      // during download to last-seen (same ordering as the seq cursor).
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+
+      // Remote rev advanced → must NOT short-circuit.
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-2' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+      const changed = createMockSyncData({
+        syncVersion: 3,
+        recentOps: [
+          {
+            id: 'op-new',
+            c: 'client2',
+            a: 'HA',
+            o: 'ADD',
+            e: 'TASK',
+            d: 'task-new',
+            v: { client2: 1 },
+            t: Date.now(),
+            s: 1,
+            p: {},
+          },
+        ],
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(changed), rev: 'rev-2' }),
+      );
+
+      const result = await adapter.downloadOps(2);
+
+      expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+      expect(result.ops.length).toBe(1);
+      expect(result.latestSeq).toBe(3);
+    });
+
+    it('(c) falls through to the full download when getFileRev throws (generic error)', async () => {
+      const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(seed), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(0);
+      // Simulate the caller durably applying the ops: this promotes the rev staged
+      // during download to last-seen (same ordering as the seq cursor).
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+
+      mockProvider.getFileRev.and.callFake(async () => {
+        throw new Error('network blip');
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      // The cheap check failed but the sync did NOT fail — full download ran.
+      expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+      expect(result.latestSeq).toBe(2);
+    });
+
+    it('(c2) falls through to the full download when getFileRev throws RemoteFileNotFoundAPIError', async () => {
+      const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(seed), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(0);
+      // Simulate the caller durably applying the ops: this promotes the rev staged
+      // during download to last-seen (same ordering as the seq cursor).
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+
+      mockProvider.getFileRev.and.callFake(async () => {
+        throw new RemoteFileNotFoundAPIError('gone');
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+      expect(result.latestSeq).toBe(2);
+    });
+
+    it('(d) persists the upload rev so the very next poll short-circuits', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-up' }));
+
+      // Poll 1: download (seeds cache + rev) then upload (clears cache, records upload rev).
+      await adapter.downloadOps(0);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      // Persisted state carries the upload rev.
+      const persisted = JSON.parse(localStorage.getItem(STATE_KEY) as string);
+      expect(persisted.revs[SyncProviderId.Dropbox]).toBe('rev-up');
+
+      // Poll 2: the cache was cleared by the upload → pre-check is eligible.
+      mockProvider.downloadFile.calls.reset();
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-up' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      expect(mockProvider.downloadFile).not.toHaveBeenCalled();
+      expect(result.ops).toEqual([]);
+      // expected syncVersion after the upload was 2 → no seq regression.
+      expect(result.latestSeq).toBe(2);
+    });
+
+    it('(e) does NOT skip on the next poll when the ops were never durably applied (no setLastServerSeq)', async () => {
+      // Blocking-1 regression: the download stages the rev as pending; it becomes
+      // the last-seen rev only after the caller confirms the ops were applied
+      // (setLastServerSeq). If processing throws before that, the next poll MUST
+      // re-download rather than short-circuit and skip the un-applied ops forever.
+      const syncData = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      // Poll 1: download only. Crucially setLastServerSeq is NOT called (simulating
+      // a crash/throw while applying the downloaded ops).
+      await adapter.downloadOps(0);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+      // Same rev as poll 1 — a buggy eager-persist would treat this as "nothing new".
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-1' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      // The rev was never promoted, so there is no last-seen rev to match and the
+      // full download runs — the un-applied ops are re-fetched, not skipped.
+      expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+      expect(result.latestSeq).toBe(2);
+    });
+
+    it('does NOT pre-check for LocalFile (mtime revs cannot guarantee change detection)', async () => {
+      const localMock = jasmine.createSpyObj<FileSyncProvider<SyncProviderId>>(
+        'LocalFileProvider',
+        ['downloadFile', 'uploadFile', 'removeFile', 'getFileRev'],
+      );
+      localMock.id = SyncProviderId.LocalFile;
+      const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      localMock.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(seed), rev: 'rev-1' }),
+      );
+      localMock.getFileRev.and.callFake(async () => ({ rev: 'rev-1' }));
+
+      const localAdapter = service.createAdapter(localMock, mockCfg, mockEncryptKey);
+      await localAdapter.downloadOps(0);
+
+      (
+        service as unknown as { _syncCycleCache: Map<string, unknown> }
+      )._syncCycleCache.clear();
+      localMock.downloadFile.calls.reset();
+
+      await localAdapter.downloadOps(2);
+
+      // LocalFile is gated out → the full download still runs even though the rev matches.
+      expect(localMock.downloadFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('(f) forceFromSeq0 (sinceSeq=0) still full-downloads and returns snapshotState when the rev is unchanged', async () => {
+      // Review follow-up: a seq-0 download rebuilds local state FROM the remote
+      // snapshot (e.g. USE_REMOTE, which first clears local state), so it must NOT
+      // be short-circuited by the rev pre-check even when remoteRev === lastSeenRev
+      // — otherwise the cleared local state is never repopulated (silent loss).
+      const syncData = createMockSyncData({
+        syncVersion: 2,
+        recentOps: [],
+        state: { tasks: [{ id: 'remote-task' }] },
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      // Seed last-seen rev = 'rev-1' via a completed cycle (download + durable apply).
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary(); // empty cache — no warm-cache bypass of the precheck
+      mockProvider.downloadFile.calls.reset();
+      // Remote rev is UNCHANGED — a sinceSeq-blind precheck would wrongly skip.
+      mockProvider.getFileRev.and.callFake(async () => ({ rev: 'rev-1' }));
+
+      const result = await adapter.downloadOps(0); // forceFromSeq0
+
+      // Must perform the full download and return the snapshot used to rebuild local.
+      expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
+      expect(result.snapshotState).toBeDefined();
+    });
+  });
 });
