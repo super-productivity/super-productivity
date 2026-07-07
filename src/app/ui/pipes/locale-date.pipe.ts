@@ -10,7 +10,6 @@ import { Log } from '../../core/log';
 @Pipe({
   name: 'localeDate',
   standalone: true,
-  pure: false, // Need to be impure to react to locale changes
 })
 export class LocaleDatePipe implements PipeTransform {
   private _dateTimeFormatService = inject(DateTimeFormatService);

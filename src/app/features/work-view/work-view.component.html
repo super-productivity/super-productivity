@@ -137,7 +137,7 @@
                 track groupKey
               ) {
                 <collapsible
-                  [title]="groupKey | scheduledDateGroup"
+                  [title]="groupKey | scheduledDateGroup: todayStr()"
                   [isIconBefore]="true"
                   [isExpanded]="!customizerService.collapsedGroupIds().includes(groupKey)"
                   (isExpandedChange)="customizerService.toggleGroupExpansion(groupKey)"

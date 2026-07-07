@@ -9,8 +9,8 @@
         @if (day === todayDateStr()) {
           <mat-icon>wb_sunny</mat-icon>
         }
-        <div class="day-num">{{ day | localeDate: 'd' }}</div>
-        <div class="day-day">{{ day | localeDate: 'EEE' }}</div>
+        <div class="day-num">{{ dayHeaderLabels()[day].num }}</div>
+        <div class="day-day">{{ dayHeaderLabels()[day].day }}</div>
         @if (beyondBudgetStats()[$index].count > 0) {
           <span
             class="over-budget-badge"

@@ -26,8 +26,8 @@ import { T } from '../../../t.const';
 import { isTouchActive } from '../../../util/input-intent';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { safeFormatDate } from '../../../util/safe-format-date';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
@@ -59,7 +59,6 @@ interface ScheduleTaskDataLike {
     MatIcon,
     TranslatePipe,
     MatTooltip,
-    LocaleDatePipe,
   ],
   templateUrl: './schedule-week.component.html',
   styleUrl: './schedule-week.component.scss',
@@ -132,6 +131,24 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
       return formatter.format(date);
     });
   });
+
+  // Precompute the day-number ('d') and weekday ('EEE') header labels for each
+  // visible day, keyed on the day list + current locale. Replaces two per-column
+  // `| localeDate` pipes so no date formatting runs during change detection;
+  // recomputes only when the days or the locale change.
+  readonly dayHeaderLabels = computed<Record<string, { num: string; day: string }>>(
+    () => {
+      const locale = this._dateTimeFormatService.currentLocale();
+      const map: Record<string, { num: string; day: string }> = {};
+      for (const day of this.daysToShow()) {
+        map[day] = {
+          num: safeFormatDate(day, 'd', locale),
+          day: safeFormatDate(day, 'EEE', locale),
+        };
+      }
+      return map;
+    },
+  );
 
   endOfDayColRowStart = signal<number>(D_HOURS * 0.5 * FH);
   totalRows: number = D_HOURS * FH;

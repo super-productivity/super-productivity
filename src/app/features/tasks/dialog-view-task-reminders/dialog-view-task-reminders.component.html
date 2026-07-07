@@ -226,11 +226,11 @@
           [class.emphasized]="(task.dueWithTime || 0) < overdueThreshold"
         >
           @if (task.isDeadlineReminder && task.deadlineWithTime) {
-            {{ task.deadlineWithTime | localeDate: 'short' }}
+            {{ task.deadlineWithTime | localeDate: 'short' : undefined : locale() }}
           } @else if (task.isDeadlineReminder && task.deadlineDay) {
             {{ task.deadlineDay | localDateStr: '' }}
           } @else {
-            {{ task.dueWithTime | localeDate: 'short' }}
+            {{ task.dueWithTime | localeDate: 'short' : undefined : locale() }}
           }
         </div>
         @if (shouldShowDeadlineScheduleHint(task)) {
@@ -239,7 +239,7 @@
             <span>
               {{ T.F.TASK.D_REMINDER_VIEW.SCHEDULED_FOR | translate }}
               @if (task.dueWithTime) {
-                {{ task.dueWithTime | localeDate: 'short' }}
+                {{ task.dueWithTime | localeDate: 'short' : undefined : locale() }}
               } @else {
                 {{ task.dueDay | localDateStr: '' }}
               }

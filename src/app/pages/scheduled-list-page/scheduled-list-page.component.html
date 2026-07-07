@@ -81,11 +81,13 @@
             >
               <div class="date-and-time-left">
                 <div class="date hide-xs">
-                  {{ task.dueWithTime | localeDate: 'EE, d MMM, ' }}
+                  {{
+                    task.dueWithTime | localeDate: 'EE, d MMM, ' : undefined : locale()
+                  }}
                   {{ task.dueWithTime | shortTime }}
                 </div>
                 <div class="date show-xs-only">
-                  {{ task.dueWithTime | localeDate: 'd MMM, ' }},
+                  {{ task.dueWithTime | localeDate: 'd MMM, ' : undefined : locale() }},
                   {{ task.dueWithTime | shortTime }}
                 </div>
                 <div class="time-left">({{ task.dueWithTime | humanizeTimestamp }})</div>
@@ -126,7 +128,9 @@
               mat-ripple
             >
               <div class="date-and-time-left">
-                <div class="date">{{ task.dueDay | localeDate: 'EE, d MMM' }}</div>
+                <div class="date">
+                  {{ task.dueDay | localeDate: 'EE, d MMM' : undefined : locale() }}
+                </div>
               </div>
               <mat-icon>today</mat-icon>
             </div>
@@ -158,11 +162,17 @@
                 <div class="date-and-time-left">
                   @if (task.deadlineWithTime) {
                     <div class="date hide-xs">
-                      {{ task.deadlineWithTime | localeDate: 'EE, d MMM, ' }}
+                      {{
+                        task.deadlineWithTime
+                          | localeDate: 'EE, d MMM, ' : undefined : locale()
+                      }}
                       {{ task.deadlineWithTime | shortTime }}
                     </div>
                     <div class="date show-xs-only">
-                      {{ task.deadlineWithTime | localeDate: 'd MMM, ' }},
+                      {{
+                        task.deadlineWithTime
+                          | localeDate: 'd MMM, ' : undefined : locale()
+                      }},
                       {{ task.deadlineWithTime | shortTime }}
                     </div>
                     <div class="time-left">
@@ -170,7 +180,9 @@
                     </div>
                   } @else if (task.deadlineDay) {
                     <div class="date">
-                      {{ task.deadlineDay | localeDate: 'EE, d MMM' }}
+                      {{
+                        task.deadlineDay | localeDate: 'EE, d MMM' : undefined : locale()
+                      }}
                     </div>
                   }
                 </div>

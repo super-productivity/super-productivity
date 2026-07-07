@@ -45,6 +45,7 @@ import { DateService } from '../../../core/date/date.service';
 import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -101,9 +102,14 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
   private _elementRef = inject(ElementRef);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   data = inject<{
     reminders: TaskWithReminderData[];
   }>(MAT_DIALOG_DATA);
+
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
 
   T: typeof T = T;
   isDisableControls: boolean = false;

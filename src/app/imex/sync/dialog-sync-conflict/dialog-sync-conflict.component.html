@@ -16,7 +16,7 @@
     <tr [class.isHighlight]="isHighlightRemote">
       <td>{{ T.F.SYNC.D_CONFLICT.REMOTE | translate }}</td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.DATE | translate">
-        {{ remote.lastUpdate | localeDate: 'shortDate' }}
+        {{ remote.lastUpdate | localeDate: 'shortDate' : undefined : locale() }}
       </td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.TIME | translate">
         {{ remote.lastUpdate | shortTime }}
@@ -32,7 +32,7 @@
     <tr [class.isHighlight]="isHighlightLocal">
       <td>{{ T.F.SYNC.D_CONFLICT.LOCAL | translate }}</td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.DATE | translate">
-        {{ local.lastUpdate | localeDate: 'shortDate' }}
+        {{ local.lastUpdate | localeDate: 'shortDate' : undefined : locale() }}
       </td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.TIME | translate">
         {{ local.lastUpdate | shortTime }}
@@ -50,7 +50,7 @@
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.DATE | translate">
         {{
           local.lastSyncedUpdate
-            ? (local.lastSyncedUpdate | localeDate: 'shortDate')
+            ? (local.lastSyncedUpdate | localeDate: 'shortDate' : undefined : locale())
             : (T.F.SYNC.D_CONFLICT.NEVER | translate)
         }}
       </td>

@@ -13,7 +13,7 @@
         style="grid-row: {{ weekIndex + 2 }}; grid-column: {{ dayIndex + 1 }}"
       >
         <div class="month-day-header">
-          <span class="month-day-number">{{ day | localeDate: 'd' }}</span>
+          <span class="month-day-number">{{ dayNumberByDay()[day] }}</span>
         </div>
         <div class="month-day-events">
           @for (ev of getEventsForDay(day); track ev.id) {

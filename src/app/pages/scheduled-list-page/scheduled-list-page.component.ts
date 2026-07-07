@@ -65,6 +65,9 @@ export class ScheduledListPageComponent {
   private _translateService = inject(TranslateService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
   T: typeof T = T;
   TODAY_TAG: Tag = TODAY_TAG;
   taskRepeatCfgs$ = this._store.select(selectTaskRepeatCfgsSortedByTitleAndProject);

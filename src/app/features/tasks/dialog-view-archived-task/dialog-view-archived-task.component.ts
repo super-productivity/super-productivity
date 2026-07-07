@@ -62,6 +62,10 @@ export class DialogViewArchivedTaskComponent {
   private _taskArchiveService = inject(TaskArchiveService);
   readonly data = inject<ViewArchivedTaskData>(MAT_DIALOG_DATA);
 
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
+
   T: typeof T = T;
   subTasks = signal<Task[]>([]);
   repeatCfgLabel = signal<string | null>(null);

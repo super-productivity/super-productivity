@@ -145,6 +145,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
 
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
+
   // Inputs
   task = input.required<TaskWithSubTasks>();
   isOver = input<boolean>(false);

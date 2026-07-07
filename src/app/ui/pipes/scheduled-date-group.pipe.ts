@@ -15,13 +15,12 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 @Pipe({
   name: 'scheduledDateGroup',
   standalone: true,
-  pure: false,
 })
 export class ScheduledDateGroupPipe implements PipeTransform {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
 
-  transform(value: unknown): string | null {
+  transform(value: unknown, today?: string): string | null {
     if (value === null || value === undefined) {
       return null;
     }
@@ -37,7 +36,7 @@ export class ScheduledDateGroupPipe implements PipeTransform {
       return value;
     }
 
-    const todayStr = getDbDateStr();
+    const todayStr = today ?? getDbDateStr();
     if (value === todayStr) {
       return this._translateService.instant(T.G.TODAY_TAG_TITLE);
     }

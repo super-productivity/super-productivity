@@ -39,7 +39,7 @@
         >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.IMPORT_DATE | translate }}:</span
       >
       <span class="value">
-        {{ data.localImportTimestamp | localeDate: 'shortDate' }}
+        {{ data.localImportTimestamp | localeDate: 'shortDate' : undefined : locale() }}
         {{ data.localImportTimestamp | shortTime }}
       </span>
     </div>

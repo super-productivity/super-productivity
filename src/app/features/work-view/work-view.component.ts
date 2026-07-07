@@ -220,6 +220,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _todayStr = toSignal(this._store.select(selectTodayStr), {
     initialValue: '',
   });
+  // Exposed for the `scheduledDateGroup` pipe (now pure): passing today as an
+  // arg lets the pipe stay pure while still resolving the "Today" group label.
+  readonly todayStr = this._todayStr;
   private _startOfNextDayDiffMs = toSignal(
     this._store.select(selectStartOfNextDayDiffMs),
     { initialValue: 0 },

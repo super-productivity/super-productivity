@@ -21,7 +21,7 @@
   <div class="agenda">
     @for (day of agendaItems(); track day.dayStr) {
       <div class="agenda-day">
-        <h4>{{ day.dayStr | localeDate: 'shortDate' }}</h4>
+        <h4>{{ day.dayStr | localeDate: 'shortDate' : undefined : locale() }}</h4>
         <div
           class="item-list"
           [@standardList]="day.itemsForDay.length"

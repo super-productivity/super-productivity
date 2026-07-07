@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, Input } from '@angular/core';
+import { Component, Input, signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
 import { ScheduleMonthComponent } from './schedule-month.component';
 import { ScheduleService } from '../schedule.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -420,6 +422,99 @@ describe('ScheduleMonthComponent', () => {
       // Act & Assert
       expect(component.firstDayOfWeek()).toBe(1);
     });
+  });
+});
+
+/**
+ * SPAP-26: the month grid previously formatted up to 42 day-number cells with a
+ * per-cell impure `localeDate` pipe on every change-detection cycle. It now uses
+ * a single `dayNumberByDay` computed keyed on (daysToShow + currentLocale), so
+ * no date formatting runs during CD. These tests verify that computed builder in
+ * isolation: correct labels + recompute-only-when-days/locale-change. This is the
+ * "isolated computed" verification of the 42->0 win (documented in the report).
+ */
+describe('ScheduleMonthComponent dayNumberByDay (SPAP-26)', () => {
+  const localeSig = signal<string>('en-US');
+
+  beforeAll(() => {
+    // DatePipe/formatDate needs locale data registered for non-default locales.
+    registerLocaleData(localeDe, 'de-DE');
+  });
+
+  beforeEach(async () => {
+    localeSig.set('en-US');
+    const scheduleServiceStub = jasmine.createSpyObj('ScheduleService', [
+      'getDayClass',
+      'getEventsForDay',
+      'getEventDayStr',
+    ]);
+
+    await TestBed.configureTestingModule({
+      imports: [ScheduleMonthComponent],
+      providers: [
+        { provide: ScheduleService, useValue: scheduleServiceStub },
+        { provide: DateTimeFormatService, useValue: { currentLocale: localeSig } },
+      ],
+    })
+      .overrideComponent(ScheduleMonthComponent, {
+        remove: { imports: [ScheduleEventComponent] },
+        add: { imports: [ScheduleEventStubComponent] },
+      })
+      .compileComponents();
+  });
+
+  const create = (): {
+    comp: ScheduleMonthComponent;
+    setDays: (days: string[]) => void;
+  } => {
+    const fixture = TestBed.createComponent(ScheduleMonthComponent);
+    return {
+      comp: fixture.componentInstance,
+      setDays: (days: string[]) => fixture.componentRef.setInput('daysToShow', days),
+    };
+  };
+
+  it('produces the correct day-of-month label for each visible day', () => {
+    const { comp, setDays } = create();
+    setDays(['2024-01-05', '2024-01-06', '2024-02-28']);
+
+    const map = comp.dayNumberByDay();
+    expect(map['2024-01-05']).toBe('5');
+    expect(map['2024-01-06']).toBe('6');
+    expect(map['2024-02-28']).toBe('28');
+  });
+
+  it('memoizes: re-reading without a dependency change does not recompute', () => {
+    const { comp, setDays } = create();
+    setDays(['2024-01-05']);
+
+    const first = comp.dayNumberByDay();
+    const second = comp.dayNumberByDay();
+    expect(second).toBe(first); // same object reference => not recomputed
+  });
+
+  it('recomputes when the days input changes', () => {
+    const { comp, setDays } = create();
+    setDays(['2024-01-05']);
+    const first = comp.dayNumberByDay();
+
+    setDays(['2024-01-05', '2024-01-06']);
+    const second = comp.dayNumberByDay();
+
+    expect(second).not.toBe(first);
+    expect(second['2024-01-06']).toBe('6');
+  });
+
+  it('recomputes when the locale changes (reactivity preserved)', () => {
+    const { comp, setDays } = create();
+    setDays(['2024-01-05']);
+    const first = comp.dayNumberByDay();
+
+    localeSig.set('de-DE');
+    const second = comp.dayNumberByDay();
+
+    expect(second).not.toBe(first); // locale dependency changed => recomputed
+    expect(second['2024-01-05']).toBe('5');
   });
 });
 

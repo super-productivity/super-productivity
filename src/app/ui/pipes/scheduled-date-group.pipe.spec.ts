@@ -34,6 +34,31 @@ describe('ScheduledDateGroupPipe', () => {
     expect(pipe).toBeTruthy();
   });
 
+  it('should be a pure pipe (SPAP-26)', () => {
+    const def = (ScheduledDateGroupPipe as unknown as { ɵpipe?: { pure?: boolean } })
+      .ɵpipe;
+    expect(def).toBeTruthy();
+    expect(def?.pure).toBe(true);
+  });
+
+  it('should return "Today" when value equals the passed today arg', () => {
+    const result = pipe.transform('2025-06-01', '2025-06-01');
+    expect(result).toBe('Today');
+    expect(mockTranslateService.instant).toHaveBeenCalled();
+  });
+
+  it('should format a non-today date (vs passed today) with the weekday', () => {
+    // today = 2025-01-16, value = 2025-01-15 (a Wednesday) -> weekday string
+    const result = pipe.transform('2025-01-15', '2025-01-16');
+    expect(result).toMatch(/Wed/i);
+    expect(result).toContain('15');
+  });
+
+  it('should pass through non-date strings even when a today arg is given', () => {
+    const result = pipe.transform('No date', '2025-01-16');
+    expect(result).toBe('No date');
+  });
+
   it('should format date string with weekday', () => {
     // Wednesday, January 15, 2025
     const result = pipe.transform('2025-01-15');

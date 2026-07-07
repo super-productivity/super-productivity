@@ -104,7 +104,10 @@
                     }}</span>
                     <span class="when">
                       {{ T.F.ISSUE.ISSUE_CONTENT.AT | translate }}
-                      {{ getCommentCreated(lastComment(), cfg) | localeDate: 'short' }}
+                      {{
+                        getCommentCreated(lastComment(), cfg)
+                          | localeDate: 'short' : undefined : locale()
+                      }}
                     </span>
                   </div>
                   @if (getCommentBody(lastComment(), cfg); as body) {
@@ -137,7 +140,10 @@
                     <span class="author-name">{{ getCommentAuthor(comment, cfg) }}</span>
                     <span class="when">
                       {{ T.F.ISSUE.ISSUE_CONTENT.AT | translate }}
-                      {{ getCommentCreated(comment, cfg) | localeDate: 'short' }}
+                      {{
+                        getCommentCreated(comment, cfg)
+                          | localeDate: 'short' : undefined : locale()
+                      }}
                     </span>
                   </div>
                   @if (getCommentBody(comment, cfg); as body) {

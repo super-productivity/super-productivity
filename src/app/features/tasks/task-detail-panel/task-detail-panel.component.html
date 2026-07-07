@@ -130,7 +130,7 @@
           class="reminder-value"
           matTooltipPosition="left"
         >
-          {{ task().dueWithTime | localeDate: 'short' }}
+          {{ task().dueWithTime | localeDate: 'short' : undefined : locale() }}
         </div>
       }
       @if (task().dueDay) {
@@ -139,7 +139,7 @@
             <mat-icon>wb_sunny</mat-icon>
             {{ T.G.TODAY_TAG_TITLE | translate }}
           } @else {
-            {{ task().dueDay | localeDate: 'shortDate' }}
+            {{ task().dueDay | localeDate: 'shortDate' : undefined : locale() }}
           }
         </div>
       }
@@ -160,7 +160,7 @@
     <ng-container input-value>
       @if (task().deadlineWithTime) {
         <div class="reminder-value">
-          {{ task().deadlineWithTime | localeDate: 'short' }}
+          {{ task().deadlineWithTime | localeDate: 'short' : undefined : locale() }}
         </div>
       } @else if (task().deadlineDay) {
         <div class="reminder-value">
@@ -362,7 +362,7 @@
       [title]="T.G.EDIT | translate"
       (click)="editCreated()"
     >
-      Created on {{ task().created | localeDate: 'short' }}
+      Created on {{ task().created | localeDate: 'short' : undefined : locale() }}
     </div>
     @if (task().doneOn) {
       <div
@@ -370,7 +370,7 @@
         [title]="T.G.EDIT | translate"
         (click)="editCompleted()"
       >
-        Completed on {{ task().doneOn | localeDate: 'short' }}
+        Completed on {{ task().doneOn | localeDate: 'short' : undefined : locale() }}
       </div>
     }
   </div>

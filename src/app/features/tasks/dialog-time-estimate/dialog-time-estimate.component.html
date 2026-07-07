@@ -47,7 +47,8 @@
             <mat-form-field>
               <mat-label>{{
                 T.F.TASK.D_TIME.TIME_SPENT_ON
-                  | translate: { date: strDate | localeDate: 'shortDate' }
+                  | translate
+                    : { date: strDate | localeDate: 'shortDate' : undefined : locale() }
               }}</mat-label>
               <input
                 [(ngModel)]="timeSpentOnDayCopy[strDate]"

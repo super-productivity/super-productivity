@@ -3,7 +3,7 @@
     @if (day.isToday) {
       <mat-icon inline="true">wb_sunny</mat-icon>
     }
-    {{ day.dayDate | localeDate: 'EEE' }}
+    {{ dayLabel() }}
     <span class="date">{{ day.dayDate | shortDate2 }}</span>
   </div>
   <!--<div class="day-estimate">{{ day.timeEstimate |roundDuration|msToString }}</div>-->

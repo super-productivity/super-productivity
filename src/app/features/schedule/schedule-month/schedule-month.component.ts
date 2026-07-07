@@ -10,13 +10,12 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { safeFormatDate } from 'src/app/util/safe-format-date';
 import { T } from '../../../t.const';
 import { ScheduleService } from '../schedule.service';
-import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
 
 @Component({
   selector: 'schedule-month',
-  imports: [ScheduleEventComponent, LocaleDatePipe, LocaleDatePipe],
+  imports: [ScheduleEventComponent],
   templateUrl: './schedule-month.component.html',
   styleUrl: './schedule-month.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -51,6 +50,19 @@ export class ScheduleMonthComponent {
     }
 
     return headers;
+  });
+
+  // Precompute the day-of-month label for every visible day, keyed on the day
+  // list + current locale. Replaces a per-cell `| localeDate: 'd'` pipe (up to
+  // 42 cells) so no date formatting happens during change detection; the map
+  // only recomputes when the days or the locale change.
+  readonly dayNumberByDay = computed<Record<string, string>>(() => {
+    const locale = this._dateTimeFormatService.currentLocale();
+    const map: Record<string, string> = {};
+    for (const day of this.daysToShow()) {
+      map[day] = safeFormatDate(day, 'd', locale);
+    }
+    return map;
   });
 
   // Determine the reference month from the displayed days

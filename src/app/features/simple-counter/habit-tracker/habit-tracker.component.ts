@@ -58,6 +58,10 @@ export class HabitTrackerComponent {
   private _dateService = inject(DateService);
   private _matDialog = inject(MatDialog);
 
+  // Exposed so templates can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
+
   showDisabled = signal(false);
 
   T = T;

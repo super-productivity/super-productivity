@@ -14,6 +14,7 @@ import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { ShortTimePipe } from '../../../ui/pipes/short-time.pipe';
 import type { SyncImportReason } from '../../core/operation.types';
 import { confirmDialog } from '../../../util/native-dialogs';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 export interface SyncImportConflictData {
   filteredOpCount: number;
@@ -51,7 +52,12 @@ export class DialogSyncImportConflictComponent {
   private _matDialogRef =
     inject<MatDialogRef<DialogSyncImportConflictComponent>>(MatDialogRef);
   private _translateService = inject(TranslateService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   data = inject<SyncImportConflictData>(MAT_DIALOG_DATA);
+
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
 
   T: typeof T = T;
 

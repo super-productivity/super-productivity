@@ -47,6 +47,10 @@ export class DialogAddTimeEstimateForOtherDayComponent {
   private _matDialogRef =
     inject<MatDialogRef<DialogAddTimeEstimateForOtherDayComponent>>(MatDialogRef);
 
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this.dateTimeFormatService.currentLocale;
+
   T: typeof T = T;
   newEntry: NewTimeEntry = {
     date: null,

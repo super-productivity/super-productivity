@@ -32,6 +32,7 @@ import { SortPipe } from '../../../ui/pipes/sort.pipe';
 import { T } from '../../../t.const';
 import { devError } from '../../../util/dev-error';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 @Component({
   selector: 'issue-content',
@@ -57,7 +58,12 @@ import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provi
 export class IssueContentComponent {
   private _taskService = inject(TaskService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   protected readonly T = T;
+
+  // Exposed so the template can pass the reactive locale to the now-pure
+  // `localeDate` pipe, preserving re-render on a locale change.
+  readonly locale = this._dateTimeFormatService.currentLocale;
 
   readonly IssueFieldType = IssueFieldType;
 

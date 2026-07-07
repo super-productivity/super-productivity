@@ -113,12 +113,12 @@
   <section class="section date-info">
     <div>
       {{ T.F.TASK.ADDITIONAL_INFO.CREATED_ON | translate }}
-      {{ task.created | localeDate: 'short' }}
+      {{ task.created | localeDate: 'short' : undefined : locale() }}
     </div>
     @if (task.doneOn) {
       <div>
         {{ T.F.TASK.ADDITIONAL_INFO.COMPLETED_ON | translate }}
-        {{ task.doneOn | localeDate: 'short' }}
+        {{ task.doneOn | localeDate: 'short' : undefined : locale() }}
       </div>
     }
   </section>
