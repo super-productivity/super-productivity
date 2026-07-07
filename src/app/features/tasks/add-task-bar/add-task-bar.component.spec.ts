@@ -26,6 +26,7 @@ import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
+import { SS } from '../../../core/persistence/storage-keys.const';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -165,6 +166,12 @@ describe('AddTaskBarComponent', () => {
   mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
 
   beforeEach(async () => {
+    // The state service seeds its note draft (and thus isNoteExpanded) from
+    // sessionStorage, which persists across the whole Karma run. Clear it so a
+    // note left behind by another test can't make the note panel start expanded.
+    sessionStorage.removeItem(SS.ADD_TASK_BAR_TXT);
+    sessionStorage.removeItem(SS.ADD_TASK_BAR_NOTE);
+
     // Create spies
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
