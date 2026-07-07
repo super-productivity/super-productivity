@@ -597,18 +597,21 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#pluginI18nService.getCurrentLanguage();
   }
 
-  async startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult> {
+  async startOAuthFlow(
+    config: OAuthFlowConfig,
+    tokenKey?: string,
+  ): Promise<OAuthTokenResult> {
     PluginLog.log(`Plugin ${this.#pluginId} requested OAuth flow`);
-    return this.#boundMethods.startOAuthFlow(config);
+    return this.#boundMethods.startOAuthFlow(config, tokenKey);
   }
 
-  async getOAuthToken(): Promise<string | null> {
-    return this.#boundMethods.getOAuthToken();
+  async getOAuthToken(tokenKey?: string): Promise<string | null> {
+    return this.#boundMethods.getOAuthToken(tokenKey);
   }
 
-  async clearOAuthToken(): Promise<void> {
+  async clearOAuthToken(tokenKey?: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested OAuth token clear`);
-    return this.#boundMethods.clearOAuthToken();
+    return this.#boundMethods.clearOAuthToken(tokenKey);
   }
 
   async setSecret(key: string, value: string): Promise<void> {

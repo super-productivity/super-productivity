@@ -40,6 +40,7 @@ export class IssueSyncAdapterResolverService {
           allowPrivateNetwork: provider.allowPrivateNetwork,
         }),
       this._tagService,
+      provider.pluginId,
     );
 
     this._adapterRegistry.register(issueType, adapter);

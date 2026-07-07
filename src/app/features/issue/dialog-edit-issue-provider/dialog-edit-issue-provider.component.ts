@@ -73,6 +73,10 @@ import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import {
+  PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
+  shouldScopePluginOAuth,
+} from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -360,9 +364,12 @@ export class DialogEditIssueProviderComponent {
       return;
     }
     const effectiveOAuthConfig = this._withPluginOAuthOverrides(oauthConfig);
+    const tokenKey = shouldScopePluginOAuth(pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
     this.isOAuthConnecting.set(true);
     try {
-      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig);
+      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig, tokenKey);
     } catch (e) {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
@@ -392,7 +399,10 @@ export class DialogEditIssueProviderComponent {
     if (!pluginId) {
       return;
     }
-    await this._pluginBridge.clearOAuthTokens(pluginId);
+    const tokenKey = shouldScopePluginOAuth(pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
+    await this._pluginBridge.clearOAuthToken(pluginId, tokenKey);
     this.isOAuthConnected.set(false);
   }
 
@@ -423,19 +433,16 @@ export class DialogEditIssueProviderComponent {
       return true;
     }
 
-    const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
+    const pluginConfig = this._getPluginConfigForOAuth();
     const http = this._pluginHttp.createHttpHelper(
-      () => provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+      () => provider.definition.getHeaders(pluginConfig),
       { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
 
     let anyFailed = false;
     for (const field of dynamicFields) {
       try {
-        const options = await field.loadOptions!(
-          pluginConfig as Record<string, unknown>,
-          http,
-        );
+        const options = await field.loadOptions!(pluginConfig, http);
         const formlyField = this._findFormlyField(
           this.fields as FormlyFieldConfig[],
           'pluginConfig.' + field.key,
@@ -728,6 +735,33 @@ export class DialogEditIssueProviderComponent {
     };
   }
 
+  private _getPluginConfigForOAuth(): Record<string, unknown> {
+    const pluginConfig = ((this.model as Record<string, unknown>)['pluginConfig'] ||
+      {}) as Record<string, unknown>;
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const tokenKey =
+      provider && shouldScopePluginOAuth(provider.pluginId)
+        ? this._getOAuthTokenKey()
+        : undefined;
+    return tokenKey
+      ? { ...pluginConfig, [PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY]: tokenKey }
+      : pluginConfig;
+  }
+
+  private _getOAuthTokenKey(): string | undefined {
+    if (!this.oauthButtons.length) {
+      return undefined;
+    }
+    const id = this.model.id || nanoid();
+    if (!this.model.id) {
+      this.model = {
+        ...this.model,
+        id,
+      };
+    }
+    return id;
+  }
+
   private _withPluginOAuthOverrides(oauthConfig: OAuthFlowConfig): OAuthFlowConfig {
     return applyPluginOAuthOverrides(
       oauthConfig,
@@ -757,9 +791,22 @@ export class DialogEditIssueProviderComponent {
     if (!provider) {
       return;
     }
-    const hasTokens = await this._pluginBridge.restoreAndCheckOAuthTokens(
-      provider.pluginId,
-    );
+    const tokenKey = shouldScopePluginOAuth(provider.pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
+    let hasTokens = false;
+    if (tokenKey) {
+      hasTokens = await this._pluginBridge.migrateLegacyOAuthTokenToScopedKey(
+        provider.pluginId,
+        tokenKey,
+      );
+    }
+    if (!hasTokens) {
+      hasTokens = await this._pluginBridge.restoreAndCheckOAuthTokens(
+        provider.pluginId,
+        tokenKey,
+      );
+    }
     this.isOAuthConnected.set(hasTokens);
     if (hasTokens) {
       await this._loadDynamicOptions();
