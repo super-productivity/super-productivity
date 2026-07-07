@@ -1,7 +1,14 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { filter, map, switchMap, withLatestFrom } from 'rxjs/operators';
+import {
+  concatMap,
+  distinctUntilChanged,
+  filter,
+  first,
+  map,
+  switchMap,
+} from 'rxjs/operators';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { EMPTY, Observable } from 'rxjs';
@@ -33,22 +40,36 @@ export class TaskRelatedModelEffects {
     this.ifAutoAddTodayEnabled$(
       this._actions$.pipe(
         ofType(TimeTrackingActions.addTimeSpent),
-        // PERF: Skip during hydration/sync to avoid selector evaluation overhead
+        // PERF: Skip during hydration/sync before any further work.
         filter(() => !this._hydrationState.isApplyingRemoteOps()),
-        withLatestFrom(this._store.select(selectTodayTaskIds)),
-        filter(
-          ([{ task }, todayTaskIds]) =>
-            !task.dueDay &&
-            typeof task.dueWithTime !== 'number' &&
-            !todayTaskIds.includes(task.id) &&
-            (!task.parentId || !todayTaskIds.includes(task.parentId)),
-        ),
-        map(([{ task }]) =>
-          TaskSharedActions.planTasksForToday({
-            taskIds: [task.id],
-            today: this._dateService.todayStr(),
-            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-          }),
+        // Cheap field checks first: a task with its own due date is already
+        // handled by dueDay-based TODAY membership, so it can never need
+        // auto-adding here. Running these before any store read means the
+        // common "already-scheduled" tick short-circuits immediately.
+        filter(({ task }) => !task.dueDay && typeof task.dueWithTime !== 'number'),
+        // addTimeSpent fires every second while tracking; only (re)evaluate when
+        // the tracked task actually changes, not per tick.
+        distinctUntilChanged((a, b) => a.task.id === b.task.id),
+        // PERF: read TODAY membership lazily on-demand for the rare qualifying
+        // action instead of a continuously-subscribed withLatestFrom, which would
+        // recompute the O(n) selectTodayTaskIds scan every tick as task entities
+        // churn. Semantics are identical: the current value is read synchronously.
+        concatMap((action) =>
+          this._store.select(selectTodayTaskIds).pipe(
+            first(),
+            filter(
+              (todayTaskIds) =>
+                !todayTaskIds.includes(action.task.id) &&
+                (!action.task.parentId || !todayTaskIds.includes(action.task.parentId)),
+            ),
+            map(() =>
+              TaskSharedActions.planTasksForToday({
+                taskIds: [action.task.id],
+                today: this._dateService.todayStr(),
+                startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+              }),
+            ),
+          ),
         ),
       ),
     ),

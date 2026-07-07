@@ -139,5 +139,117 @@ describe('TaskRelatedModelEffects', () => {
       expect(emitted).toBe(false);
       subscription.unsubscribe();
     }));
+
+    describe('autoAddTodayTagOnTracking - perf/membership', () => {
+      const countTodaySelectCalls = (
+        selectSpy: jasmine.Spy<MockStore['select']>,
+      ): number =>
+        selectSpy.calls.all().filter((c) => c.args[0] === selectTodayTaskIds).length;
+
+      it('should NOT read the Today selector per tick for a task already scheduled (dueDay)', () => {
+        // Default selectTodayTaskIds override is [].
+        const task = createTask('task-1', {
+          dueDay: '2026-05-16',
+          dueWithTime: undefined,
+        });
+        const emissions: Action[] = [];
+        const selectSpy = spyOn(store, 'select').and.callThrough();
+        const subscription = effects.autoAddTodayTagOnTracking.subscribe((action) =>
+          emissions.push(action),
+        );
+
+        for (let i = 0; i < 10; i++) {
+          dispatchAddTimeSpent(task);
+        }
+
+        expect(emissions.length).toBe(0);
+        expect(countTodaySelectCalls(selectSpy)).toBe(0);
+        subscription.unsubscribe();
+      });
+
+      it('should dispatch exactly once across 10 ticks for the same unscheduled task and read the Today selector only once', () => {
+        // Default selectTodayTaskIds override is [].
+        const task = createTask('task-1', {
+          dueDay: undefined,
+          dueWithTime: undefined,
+        });
+        const emissions: Action[] = [];
+        const selectSpy = spyOn(store, 'select').and.callThrough();
+        const subscription = effects.autoAddTodayTagOnTracking.subscribe((action) =>
+          emissions.push(action),
+        );
+
+        for (let i = 0; i < 10; i++) {
+          dispatchAddTimeSpent(task);
+        }
+
+        expect(emissions.length).toBe(1);
+        expect(emissions[0]).toEqual(
+          jasmine.objectContaining({
+            taskIds: ['task-1'],
+          }),
+        );
+        expect(countTodaySelectCalls(selectSpy)).toBe(1);
+        subscription.unsubscribe();
+      });
+
+      it('should NOT dispatch when the parent is already in Today', () => {
+        store.overrideSelector(selectTodayTaskIds, ['parent-1']);
+        store.refreshState();
+        const task = createTask('task-1', {
+          dueDay: undefined,
+          dueWithTime: undefined,
+          parentId: 'parent-1',
+        });
+        const emissions: Action[] = [];
+        const subscription = effects.autoAddTodayTagOnTracking.subscribe((action) =>
+          emissions.push(action),
+        );
+
+        dispatchAddTimeSpent(task);
+
+        expect(emissions.length).toBe(0);
+        subscription.unsubscribe();
+      });
+
+      it('should NOT dispatch when the task itself is already in Today', () => {
+        store.overrideSelector(selectTodayTaskIds, ['task-1']);
+        store.refreshState();
+        const task = createTask('task-1', {
+          dueDay: undefined,
+          dueWithTime: undefined,
+        });
+        const emissions: Action[] = [];
+        const subscription = effects.autoAddTodayTagOnTracking.subscribe((action) =>
+          emissions.push(action),
+        );
+
+        dispatchAddTimeSpent(task);
+
+        expect(emissions.length).toBe(0);
+        subscription.unsubscribe();
+      });
+
+      it('should NOT dispatch while hydration/remote ops are being applied', () => {
+        (
+          TestBed.inject(HydrationStateService).isApplyingRemoteOps as jasmine.Spy<
+            () => boolean
+          >
+        ).and.returnValue(true);
+        const task = createTask('task-1', {
+          dueDay: undefined,
+          dueWithTime: undefined,
+        });
+        const emissions: Action[] = [];
+        const subscription = effects.autoAddTodayTagOnTracking.subscribe((action) =>
+          emissions.push(action),
+        );
+
+        dispatchAddTimeSpent(task);
+
+        expect(emissions.length).toBe(0);
+        subscription.unsubscribe();
+      });
+    });
   });
 });
