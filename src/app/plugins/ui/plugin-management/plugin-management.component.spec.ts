@@ -160,8 +160,31 @@ describe('PluginManagementComponent', () => {
     ).toBe(false);
   });
 
-  it('surfaces declared allowedHosts (with count) in the collapsible title', () => {
-    const title = component.getPermissionsHooksTitle({
+  it('surfaces allowedHosts (with count) only when the "http" capability is declared', () => {
+    const plugin = {
+      manifest: {
+        ...baseManifest,
+        permissions: ['http'],
+        allowedHosts: ['api.example.com', 'auth.example.com'],
+        hooks: [PluginHooks.TASK_COMPLETE],
+      },
+      loaded: true,
+      isEnabled: true,
+    };
+
+    expect(component.getNetworkReachHosts(plugin)).toEqual([
+      'api.example.com',
+      'auth.example.com',
+    ]);
+    // instant() echoes the key here (no translations loaded); the allowedHosts part
+    // appears with its count, between permissions and hooks.
+    expect(component.getPermissionsHooksTitle(plugin)).toBe(
+      'PLUGINS.PERMISSIONS (1) / PLUGINS.ALLOWED_HOSTS (2) / PLUGINS.HOOKS (1)',
+    );
+  });
+
+  it('hides allowedHosts when the plugin lacks the "http" capability (bridge would reject request)', () => {
+    const plugin = {
       manifest: {
         ...baseManifest,
         permissions: ['nodeExecution'],
@@ -170,12 +193,12 @@ describe('PluginManagementComponent', () => {
       },
       loaded: true,
       isEnabled: true,
-    });
+    };
 
-    // instant() echoes the key here (no translations loaded); assert the
-    // allowedHosts part is present with its count, between permissions and hooks.
-    expect(title).toBe(
-      'PLUGINS.PERMISSIONS (1) / PLUGINS.ALLOWED_HOSTS (2) / PLUGINS.HOOKS (1)',
+    expect(component.getNetworkReachHosts(plugin)).toEqual([]);
+    // No "ALLOWED_HOSTS" segment — network reach is not advertised without "http".
+    expect(component.getPermissionsHooksTitle(plugin)).toBe(
+      'PLUGINS.PERMISSIONS (1) / PLUGINS.HOOKS (1)',
     );
   });
 

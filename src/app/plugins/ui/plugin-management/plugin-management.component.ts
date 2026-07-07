@@ -416,11 +416,21 @@ export class PluginManagementComponent {
       : this._translateService.instant(T.PLUGINS.NO_ADDITIONAL_INFO);
   }
 
+  /**
+   * Hosts the plugin can actually reach via `PluginAPI.request`. `allowedHosts` only takes
+   * effect when the plugin also declares the `http` capability — the bridge rejects `request`
+   * without it — so the UI must not advertise "network access" for `allowedHosts` alone.
+   */
+  getNetworkReachHosts(plugin: PluginInstance): string[] {
+    const hosts = plugin.manifest.allowedHosts;
+    return plugin.manifest.permissions?.includes('http') && hosts?.length ? hosts : [];
+  }
+
   getPermissionsHooksTitle(plugin: PluginInstance): string {
     const parts: string[] = [];
     const pCount = plugin.manifest.permissions?.length || 0;
     const hCount = plugin.manifest.hooks?.length || 0;
-    const aCount = plugin.manifest.allowedHosts?.length || 0;
+    const aCount = this.getNetworkReachHosts(plugin).length;
 
     if (pCount > 0) {
       parts.push(`${this._translateService.instant(T.PLUGINS.PERMISSIONS)} (${pCount})`);
