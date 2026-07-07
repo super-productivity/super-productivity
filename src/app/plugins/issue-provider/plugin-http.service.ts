@@ -302,6 +302,11 @@ export class PluginHttpService {
    * depend on: query params, timeout (via `AbortController`), text/json parsing,
    * and — critically — a non-2xx rejects with an error carrying `.status` and
    * `.error` (the parsed body), matching `HttpErrorResponse`.
+   *
+   * Trade-off: `fetch` bypasses Angular's `HTTP_INTERCEPTORS`, so this path does NOT
+   * get `NetworkRetryInterceptorService`'s single status-0 retry (WebView socket
+   * warm-up after Android/Electron resume) that the `HttpClient` paths keep. This is
+   * inherent to the redirect requirement — XHR/`HttpClient` cannot do `redirect: 'error'`.
    */
   private async _requestNoRedirect<T>(
     method: string,
