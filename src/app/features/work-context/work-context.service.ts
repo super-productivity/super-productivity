@@ -31,14 +31,17 @@ import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
-import { hasTasksToWorkOn, mapEstimateRemainingFromTasks } from './work-context.util';
+import {
+  hasTasksToWorkOn,
+  mapEstimateRemainingFromTasks,
+  sortDoneTasksByDoneDate,
+} from './work-context.util';
 import {
   flattenTasks,
   selectAllTasks,
   selectAllTasksWithSubTasks,
   selectTasksWithSubTasksByIds,
 } from '../tasks/store/task.selectors';
-import { selectTasksConfig } from '../config/store/global-config.reducer';
 import { ofType } from '@ngrx/effects';
 import { WorklogExportSettings } from '../worklog/worklog.model';
 import { updateProjectAdvancedCfg } from '../project/store/project.actions';
@@ -71,10 +74,6 @@ import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
-
-/** Order completed tasks by when they were completed, newest first. */
-export const sortDoneTasksByDoneDate = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] =>
-  [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
 
 @Injectable({
   providedIn: 'root',
@@ -433,21 +432,13 @@ export class WorkContextService {
     ),
   );
 
-  doneTasks$: Observable<TaskWithSubTasks[]> = combineLatest([
-    this.isTodayList$.pipe(
-      switchMap((isToday) =>
-        isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
-      ),
+  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
+    switchMap((isToday) =>
+      isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
     ),
-    this._store$.select(selectTasksConfig),
-  ]).pipe(
-    map(([tasks, tasksCfg]) => {
-      const doneTasks = tasks.filter((task) => task && task.isDone);
-      // Optionally order completed tasks by when they were completed (newest first).
-      return tasksCfg.isSortDoneTasksByDoneDate
-        ? sortDoneTasksByDoneDate(doneTasks)
-        : doneTasks;
-    }),
+    // Show completed tasks newest-first (by completion time) so the task you
+    // just finished is at the top of the Done list.
+    map((tasks) => sortDoneTasksByDoneDate(tasks.filter((task) => task && task.isDone))),
   );
 
   constructor() {

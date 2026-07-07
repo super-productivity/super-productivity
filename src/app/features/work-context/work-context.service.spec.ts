@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { WorkContextService, sortDoneTasksByDoneDate } from './work-context.service';
+import { WorkContextService } from './work-context.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -368,31 +368,6 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       const result = await service.getTimeWorkedForDayForTasksInArchiveYoung(DAY);
       expect(result).toBe(3000);
     });
-  });
-});
-
-describe('sortDoneTasksByDoneDate', () => {
-  const task = (id: string, doneOn?: number): TaskWithSubTasks =>
-    ({ id, isDone: true, doneOn }) as TaskWithSubTasks;
-
-  it('orders completed tasks by completion date, newest first', () => {
-    const sorted = sortDoneTasksByDoneDate([
-      task('OLD', 1000),
-      task('NEW', 3000),
-      task('MID', 2000),
-    ]);
-    expect(sorted.map((t) => t.id)).toEqual(['NEW', 'MID', 'OLD']);
-  });
-
-  it('treats a missing completion timestamp as oldest', () => {
-    const sorted = sortDoneTasksByDoneDate([task('NO_DATE'), task('HAS_DATE', 5000)]);
-    expect(sorted.map((t) => t.id)).toEqual(['HAS_DATE', 'NO_DATE']);
-  });
-
-  it('does not mutate the input array', () => {
-    const input = [task('A', 1000), task('B', 2000)];
-    sortDoneTasksByDoneDate(input);
-    expect(input.map((t) => t.id)).toEqual(['A', 'B']);
   });
 });
 

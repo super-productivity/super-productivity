@@ -557,6 +557,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    // The Done list is always ordered by completion date, so reordering within
+    // it can't take effect (the view re-sorts on the next emission). Skip the
+    // move to avoid emitting a spurious taskIds-reorder op that would sync to
+    // other devices. Dragging a task OUT of Done (DONE -> UNDONE) still falls
+    // through below.
+    if (src === 'DONE' && target === 'DONE') {
+      return;
+    }
+
     if (
       srcListId === 'SUB' &&
       targetListId === 'PARENT' &&

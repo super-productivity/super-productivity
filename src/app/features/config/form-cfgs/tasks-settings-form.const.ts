@@ -41,13 +41,6 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
-      key: 'isSortDoneTasksByDoneDate',
-      type: 'checkbox',
-      templateOptions: {
-        label: T.GCF.TASKS.IS_SORT_DONE_TASKS_BY_DONE_DATE,
-      },
-    },
-    {
       key: 'defaultProjectId',
       type: 'project-select',
       templateOptions: {
