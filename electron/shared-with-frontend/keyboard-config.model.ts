@@ -59,6 +59,14 @@ export type KeyboardConfig = Readonly<{
   [key: `plugin_${string}`]: string | null;
 }>;
 
+/** Shared frozen empty keyboard config so the "no shortcuts" path returns a
+ * referentially-stable value instead of allocating a fresh {} every CD pass. */
+export const EMPTY_KEYBOARD_CONFIG: KeyboardConfig = Object.freeze({}) as KeyboardConfig;
+
+export const keyboardConfigOrEmpty = (
+  keyboard: KeyboardConfig | undefined,
+): KeyboardConfig => keyboard ?? EMPTY_KEYBOARD_CONFIG;
+
 export const GLOBAL_KEY_CFG_KEYS: (keyof KeyboardConfig)[] = [
   'globalShowHide',
   'globalToggleTaskStart',

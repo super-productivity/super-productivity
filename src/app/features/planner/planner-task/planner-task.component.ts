@@ -3,12 +3,11 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  computed,
   DestroyRef,
   ElementRef,
-  HostBinding,
   HostListener,
   inject,
-  Input,
   input,
   OnDestroy,
   OnInit,
@@ -49,21 +48,26 @@ import { TranslatePipe } from '@ngx-translate/core';
     SwipeBlockComponent,
     TranslatePipe,
   ],
+  /* eslint-disable @typescript-eslint/naming-convention */
+  host: {
+    '[class.isDone]': 'task().isDone',
+    '[class.isDragReady]': 'isDragReady()',
+    '[class.isCurrent]': 'isCurrent()',
+  },
+  /* eslint-enable @typescript-eslint/naming-convention */
 })
 export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _taskService = inject(TaskService);
   private _cd = inject(ChangeDetectorRef);
   private _destroyRef = inject(DestroyRef);
   private _elementRef = inject(ElementRef);
-  get titleHasLinks(): boolean {
-    const title = this.task?.title;
-    return !!title && hasLinkHints(title);
-  }
 
-  // TODO: Skipped for migration because:
-  //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
-  //  and migrating would break narrowing currently.
-  @Input({ required: true }) task!: TaskCopy;
+  readonly task = input.required<TaskCopy>();
+
+  readonly titleHasLinks = computed<boolean>(() => {
+    const title = this.task().title;
+    return !!title && hasLinkHints(title);
+  });
 
   // TODO remove
   readonly day = input<string | undefined>();
@@ -84,20 +88,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     read: TaskContextMenuComponent,
   });
 
-  @HostBinding('class.isDone')
-  get isDone(): boolean {
-    return this.task.isDone;
-  }
-
-  @HostBinding('class.isDragReady')
-  get isDragReadyClass(): boolean {
-    return this.isDragReady();
-  }
-
-  @HostBinding('class.isCurrent')
-  get isCurrent(): boolean {
-    return this.task.id === this._taskService.currentTaskId();
-  }
+  readonly isCurrent = computed<boolean>(
+    () => this.task().id === this._taskService.currentTaskId(),
+  );
 
   @HostListener('contextmenu', ['$event'])
   onContextMenu(event: MouseEvent): void {
@@ -114,25 +107,24 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (target?.tagName === 'A' || target?.closest('a')) {
       return;
     }
-    if (this.task) {
-      // Use bottom panel on mobile, dialog on desktop
-      this._taskService.setSelectedId(this.task.id);
-    }
+    // Use bottom panel on mobile, dialog on desktop
+    this._taskService.setSelectedId(this.task().id);
   }
 
-  get timeEstimate(): number {
-    const t = this.task;
-    return this.task.subTaskIds
+  readonly timeEstimate = computed<number>(() => {
+    const t = this.task();
+    return t.subTaskIds
       ? t.timeEstimate
       : t.timeEstimate - t.timeSpent > 0
         ? t.timeEstimate - t.timeSpent
         : 0;
-  }
+  });
 
   ngOnInit(): void {
-    if (this.task.parentId) {
+    const parentId = this.task().parentId;
+    if (parentId) {
       this._taskService
-        .getByIdLive$(this.task.parentId)
+        .getByIdLive$(parentId)
         .pipe(takeUntilDestroyed(this._destroyRef))
         .subscribe((parentTask) => {
           this.parentTitle = parentTask && parentTask.title;
@@ -179,7 +171,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onSwipeRightTriggered(isTriggered: boolean): void {
-    if (this.task.isDone) {
+    if (this.task().isDone) {
       this.showUndoneAnimation.set(isTriggered);
     } else {
       this.showDoneAnimation.set(isTriggered);
@@ -188,9 +180,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleTaskDone(): void {
     window.clearTimeout(this._doneAnimationTimeout);
+    const t = this.task();
     this._doneAnimationTimeout = this._taskService.toggleDoneWithAnimation(
-      this.task.id,
-      this.task.isDone,
+      t.id,
+      t.isDone,
       (v) => this.showDoneAnimation.set(v),
     );
   }
@@ -216,7 +209,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   updateTimeEstimate(val: number): void {
-    this._taskService.update(this.task.id, {
+    this._taskService.update(this.task().id, {
       timeEstimate: val,
     });
   }

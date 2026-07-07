@@ -1,7 +1,7 @@
 <ng-content></ng-content>
 
 <swipe-block
-  [isDone]="task.isDone"
+  [isDone]="task().isDone"
   (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
@@ -9,8 +9,8 @@
 >
   <div class="task-content">
     <done-toggle
-      [isDone]="task.isDone"
-      [isCurrent]="isCurrent"
+      [isDone]="task().isDone"
+      [isCurrent]="isCurrent()"
       [showDoneAnimation]="showDoneAnimation()"
       [showUndoneAnimation]="showUndoneAnimation()"
       [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
@@ -23,38 +23,38 @@
           <div class="parent-title">{{ parentTitle }}</div>
         }
 
-        @if (titleHasLinks) {
+        @if (titleHasLinks()) {
           <div
             class="title"
-            [innerHTML]="task.title | renderLinks"
+            [innerHTML]="task().title | renderLinks"
           ></div>
         } @else {
-          <div class="title">{{ task.title }}</div>
+          <div class="title">{{ task().title }}</div>
         }
 
         <tag-list
           [isShowProjectTagAlways]="true"
           [tagsToHide]="tagsToHide()"
-          [task]="task"
+          [task]="task()"
         ></tag-list>
       </div>
 
       <div
         (click)="estimateTimeClick($event)"
-        [class.hasNoTimeSpentOrEstimate]="!task.timeSpent && !task.timeEstimate"
-        [style.pointer-events]="task.subTaskIds?.length && 'none'"
+        [class.hasNoTimeSpentOrEstimate]="!task().timeSpent && !task().timeEstimate"
+        [style.pointer-events]="task().subTaskIds?.length && 'none'"
         class="planner-time-remaining-shared"
       >
         <inline-input
           (changed)="updateTimeEstimate($event)"
-          [displayValue]="timeEstimate | msToString"
+          [displayValue]="timeEstimate() | msToString"
           [type]="'duration'"
-          [value]="timeEstimate"
+          [value]="timeEstimate()"
         >
         </inline-input>
-        @if (task.subTaskIds?.length) {
+        @if (task().subTaskIds?.length) {
           <span class="sub-task-count">
-            <mat-icon inline="true">account_tree</mat-icon>{{ task.subTaskIds.length }}
+            <mat-icon inline="true">account_tree</mat-icon>{{ task().subTaskIds?.length }}
           </span>
         }
       </div>
@@ -65,6 +65,6 @@
 @if (isContextMenuLoaded()) {
   <task-context-menu
     #taskContextMenu
-    [task]="task"
+    [task]="task()"
   ></task-context-menu>
 }
