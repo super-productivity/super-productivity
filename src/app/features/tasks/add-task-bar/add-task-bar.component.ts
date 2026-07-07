@@ -383,7 +383,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private _setupHudWindowLifecycle(): void {
     const unsubscribeQuickAddOpened = this._dataFacade.onHudOpened(() => {
-      this.stateService.collapseTransientPanels();
+      this._collapseTransientPanels();
       this.focusInput(true);
     });
     this._destroyRef.onDestroy(unsubscribeQuickAddOpened);
@@ -640,9 +640,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private _resetAfterAdd(): void {
-    this.stateService.resetAfterAdd({
-      isCollapseNote: this._dataFacade.isSubmitDelegated,
-    });
+    this.stateService.resetAfterAdd();
+    if (this._dataFacade.isSubmitDelegated) {
+      this.stateService.isNoteExpanded.set(false);
+    }
     if (this._defaultTagIds.length > 0) {
       this.stateService.updateTagIds(this._defaultTagIds);
     }
@@ -669,6 +670,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _clearSuccessPlaceholder(): void {
     window.clearTimeout(this._successPlaceholderTimeout);
     this.successPlaceholderMsg.set(null);
+  }
+
+  private _collapseTransientPanels(): void {
+    this.isSearchMode.set(false);
+    this.isScheduleDialogOpen.set(false);
+    if (!this.stateService.noteTxt()) {
+      this.stateService.isNoteExpanded.set(false);
+    }
   }
 
   private _getDefaultTagIdsForWorkContext(
