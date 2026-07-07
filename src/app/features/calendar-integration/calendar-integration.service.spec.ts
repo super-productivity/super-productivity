@@ -29,6 +29,7 @@ import { Subscription } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.service';
+import { IssueProviderPluginDefinition } from '../../plugins/issue-provider/plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../issue/issue.model';
 import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 // Static import forces ical.js into the main test bundle so the dynamic
@@ -2283,5 +2284,105 @@ END:VCALENDAR`;
       expect(allDay).toEqual(jasmine.objectContaining({ id: 'evt-without-time' }));
       expect(allDay.dueWithTime).toBeUndefined();
     });
+  });
+
+  // Regression: plugin issue-provider calendars (e.g. the Google Calendar plugin) register
+  // asynchronously AFTER the issue-provider store is hydrated. calendarEvents$ must react to
+  // that registration (via PluginIssueProviderRegistryService.registrationChanges$) and surface
+  // the plugin's events WITHOUT needing a re-subscription — otherwise agenda events only appear
+  // after navigating away and back to the Today view.
+  describe('plugin registering after subscription', () => {
+    it('surfaces plugin calendar events once the plugin registers (no re-subscribe)', fakeAsync(() => {
+      const PLUGIN_KEY = 'plugin:gcal';
+      const pluginProvider = {
+        id: 'gcal-provider-id',
+        issueProviderKey: PLUGIN_KEY,
+        isEnabled: true,
+        pluginConfig: {},
+      } as unknown as IssueProviderPluginType;
+
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+      const futureStart = Date.now() + twoHoursMs;
+      const getNewIssuesForBacklog = jasmine
+        .createSpy('getNewIssuesForBacklog')
+        .and.returnValue(
+          Promise.resolve([
+            {
+              id: 'gcal-evt-1',
+              title: 'Standup',
+              start: futureStart,
+              dueWithTime: futureStart,
+              duration: 30 * 60 * 1000,
+            },
+          ]),
+        );
+      const mockPluginHttp = {
+        createHttpHelper: jasmine.createSpy('createHttpHelper').and.returnValue({}),
+      };
+
+      TestBed.resetTestingModule();
+      localStorage.clear();
+      TestBed.configureTestingModule({
+        imports: [HttpClientTestingModule],
+        providers: [
+          CalendarIntegrationService,
+          provideMockStore({
+            selectors: [
+              { selector: selectCalendarProviders, value: [] },
+              // The provider config is already hydrated in the store before the plugin
+              // (which supplies `useAgendaView`) has registered.
+              { selector: selectEnabledIssueProviders, value: [pluginProvider] },
+              { selector: selectAllCalendarTaskEventIds, value: [] },
+            ],
+          }),
+          { provide: SnackService, useValue: mockSnackService },
+          { provide: PluginHttpService, useValue: mockPluginHttp },
+          { provide: TaskArchiveService, useValue: mockTaskArchiveService },
+        ],
+      });
+
+      const freshService = TestBed.inject(CalendarIntegrationService);
+      const registry = TestBed.inject(PluginIssueProviderRegistryService);
+
+      const emissions: string[][] = [];
+      const sub = freshService.calendarEvents$.subscribe((entries) =>
+        emissions.push(entries.flatMap((e) => e.items.map((i) => i.id))),
+      );
+
+      // Before registration `getUseAgendaView` is false → the provider is not treated as a
+      // calendar source and nothing is fetched.
+      tick(0);
+      flushMicrotasks();
+      expect(emissions.flat()).not.toContain('gcal-evt-1');
+      expect(getNewIssuesForBacklog).not.toHaveBeenCalled();
+
+      // Plugin finishes loading and registers as an agenda-view calendar provider.
+      registry.register({
+        pluginId: 'gcal',
+        issueProviderKey: PLUGIN_KEY,
+        definition: {
+          getHeaders: () => ({}),
+          getNewIssuesForBacklog,
+        } as unknown as IssueProviderPluginDefinition,
+        name: 'Google Calendar',
+        humanReadableName: 'Google Calendar',
+        icon: 'calendar',
+        pollIntervalMs: 60000,
+        issueStrings: { singular: 'Event', plural: 'Events' },
+        useAgendaView: true,
+      });
+
+      // Without any re-subscription, the plugin's event must now appear.
+      tick(0);
+      flushMicrotasks();
+      tick(100);
+      flushMicrotasks();
+
+      expect(getNewIssuesForBacklog).toHaveBeenCalled();
+      expect(emissions[emissions.length - 1]).toContain('gcal-evt-1');
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
+    }));
   });
 });

@@ -1,4 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { BehaviorSubject, Observable } from 'rxjs';
 import {
   RegisteredPluginIssueProvider,
   IssueProviderPluginDefinition,
@@ -16,8 +18,21 @@ export class PluginIssueProviderRegistryService {
   /** Maps pluginId → registeredKey for cleanup */
   private _pluginIdToKey = new Map<string, string>();
 
-  /** Signal that increments on each registration/unregistration, so computed signals can react */
-  readonly registrationVersion = signal(0);
+  /**
+   * Single source of truth for "a plugin (un)registered", exposed two ways so signal-
+   * and stream-based consumers react to the same event without drifting:
+   * - `registrationChanges$` (RxJS) for observable pipelines that must re-run without an
+   *   effect/CD flush AND emit synchronously on subscribe — e.g.
+   *   `CalendarIntegrationService.calendarEvents$`. (A `toObservable(signal)` only emits
+   *   once its effect runs, delaying even the initial value; a `BehaviorSubject` does not.)
+   * - `registrationVersion` (signal) for `computed()` consumers, e.g. `tag-list`.
+   */
+  private readonly _registrationVersion$ = new BehaviorSubject(0);
+  readonly registrationChanges$: Observable<number> =
+    this._registrationVersion$.asObservable();
+  readonly registrationVersion = toSignal(this._registrationVersion$, {
+    requireSync: true,
+  });
 
   register(opts: {
     pluginId: string;
@@ -53,7 +68,7 @@ export class PluginIssueProviderRegistryService {
       allowPrivateNetwork: opts.allowPrivateNetwork,
     });
     this._pluginIdToKey.set(opts.pluginId, key);
-    this.registrationVersion.update((v) => v + 1);
+    this._bumpRegistrationVersion();
   }
 
   unregister(pluginId: string): void {
@@ -61,8 +76,14 @@ export class PluginIssueProviderRegistryService {
     if (key) {
       this._providers.delete(key);
       this._pluginIdToKey.delete(pluginId);
-      this.registrationVersion.update((v) => v + 1);
+      this._bumpRegistrationVersion();
     }
+  }
+
+  /** Advance the single registration counter; both `registrationChanges$` and the
+   * derived `registrationVersion` signal update from it. */
+  private _bumpRegistrationVersion(): void {
+    this._registrationVersion$.next(this._registrationVersion$.value + 1);
   }
 
   /** Get the registered key for a pluginId (e.g. 'GITHUB' or 'plugin:my-plugin') */

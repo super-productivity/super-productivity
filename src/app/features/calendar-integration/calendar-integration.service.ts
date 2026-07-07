@@ -120,8 +120,18 @@ export class CalendarIntegrationService {
     this._store
       .select(selectCalendarProviders)
       .pipe(distinctUntilChanged(fastArrayCompare)),
-    this._store.select(selectEnabledIssueProviders).pipe(
-      map((providers) =>
+    // `registrationChanges$` emits when a plugin (un)registers. Plugins load
+    // asynchronously after bootstrap, while the issue-provider store is hydrated
+    // early — so without this trigger `getUseAgendaView` is read once (before the
+    // plugin registers, returning false), the store never re-emits, and the
+    // plugin's calendar events stay absent until a re-subscription forces a
+    // re-projection (e.g. navigating away and back). Re-run the filter on
+    // registration so agenda-view plugin events surface without navigation.
+    combineLatest([
+      this._store.select(selectEnabledIssueProviders),
+      this._pluginRegistry.registrationChanges$,
+    ]).pipe(
+      map(([providers]) =>
         providers.filter(
           (p): p is IssueProviderPluginType =>
             isPluginIssueProvider(p.issueProviderKey) &&
