@@ -38,6 +38,7 @@ import {
   selectAllTasksWithSubTasks,
   selectTasksWithSubTasksByIds,
 } from '../tasks/store/task.selectors';
+import { selectTasksConfig } from '../config/store/global-config.reducer';
 import { ofType } from '@ngrx/effects';
 import { WorklogExportSettings } from '../worklog/worklog.model';
 import { updateProjectAdvancedCfg } from '../project/store/project.actions';
@@ -70,6 +71,10 @@ import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+
+/** Order completed tasks by when they were completed, newest first. */
+export const sortDoneTasksByDoneDate = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] =>
+  [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
 
 @Injectable({
   providedIn: 'root',
@@ -428,11 +433,21 @@ export class WorkContextService {
     ),
   );
 
-  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
-    switchMap((isToday) =>
-      isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
+  doneTasks$: Observable<TaskWithSubTasks[]> = combineLatest([
+    this.isTodayList$.pipe(
+      switchMap((isToday) =>
+        isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
+      ),
     ),
-    map((tasks) => tasks.filter((task) => task && task.isDone)),
+    this._store$.select(selectTasksConfig),
+  ]).pipe(
+    map(([tasks, tasksCfg]) => {
+      const doneTasks = tasks.filter((task) => task && task.isDone);
+      // Optionally order completed tasks by when they were completed (newest first).
+      return tasksCfg.isSortDoneTasksByDoneDate
+        ? sortDoneTasksByDoneDate(doneTasks)
+        : doneTasks;
+    }),
   );
 
   constructor() {

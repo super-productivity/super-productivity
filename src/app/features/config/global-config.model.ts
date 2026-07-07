@@ -74,6 +74,7 @@ export type TasksConfig = Readonly<{
   isConfirmBeforeDelete?: boolean;
   isTrayShowCurrent: boolean;
   isMarkdownFormattingInNotesEnabled: boolean;
+  isSortDoneTasksByDoneDate?: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
   notesTemplate: string;
 }>;
