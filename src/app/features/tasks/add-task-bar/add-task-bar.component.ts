@@ -732,7 +732,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   toggleNote(): void {
     if (this.isSearchMode()) {
-      this.focusInput();
       return;
     }
     const willExpand = !this.stateService.isNoteExpanded();
@@ -746,7 +745,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   expandNote(): void {
     if (this.isSearchMode()) {
-      this.focusInput();
       return;
     }
     this.stateService.isNoteExpanded.set(true);
