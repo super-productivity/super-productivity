@@ -118,7 +118,7 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.MENU_TREE_UPDATE_TAG]: 'MG',
   [ActionType.MENU_TREE_UPDATE_FOLDER]: 'MU',
   [ActionType.MENU_TREE_DELETE_FOLDER]: 'MD',
-  [ActionType.MENU_TREE_ADD_ITEM]: 'MT_AI',
+  [ActionType.MENU_TREE_ADD_ITEM]: 'MA',
 
   // Note actions (N)
   [ActionType.NOTE_ADD]: 'NA',
