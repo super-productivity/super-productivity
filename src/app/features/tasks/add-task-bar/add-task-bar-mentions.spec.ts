@@ -23,6 +23,8 @@ import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_TAG_COLOR,
 } from '../../work-context/work-context.const';
+import { ADD_TASK_BAR_DATA_FACADE } from './add-task-bar-data-facade.token';
+import { FullAddTaskBarDataFacadeService } from './add-task-bar-data-facade.service';
 
 @Component({
   template: `<add-task-bar></add-task-bar>`,
@@ -161,6 +163,10 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: Store, useValue: storeSpy },
         { provide: DateTimeFormatService, useValue: dateTimeFormatServiceSpy },
+        {
+          provide: ADD_TASK_BAR_DATA_FACADE,
+          useExisting: FullAddTaskBarDataFacadeService,
+        },
       ],
     }).compileComponents();
 
