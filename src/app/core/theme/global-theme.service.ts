@@ -60,6 +60,7 @@ import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { LS } from '../persistence/storage-keys.const';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { sanitizeIosKeyboardHeight } from './sanitize-ios-keyboard-height.util';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -167,6 +168,10 @@ export class GlobalThemeService {
   private _iosKeyboardHeight = 0;
   private _iosViewportHeightBeforeKeyboard = 0;
   private _iosViewportChangeRaf: number | null = null;
+  // True only when the plugin reported an implausible keyboard frame (the clamp
+  // had to correct it). Gates the measured-viewport override so well-behaved
+  // keyboards keep their exact pre-existing behaviour (#8778).
+  private _iosKeyboardFrameUnreliable = false;
 
   private _isCustomWindowTitleBarEnabled(): boolean {
     // The main process (main-window.ts) force-disables the custom title bar on
@@ -626,12 +631,24 @@ export class GlobalThemeService {
       if (!this.document.body.classList.contains(BodyClass.isKeyboardVisible)) {
         this._iosViewportHeightBeforeKeyboard = window.innerHeight;
       }
-      this._iosKeyboardHeight = info.keyboardHeight;
+      // Some third-party keyboards (e.g. Sogou) report a bogus near-full-screen
+      // keyboard frame here; clamp it so it can't fling the fixed add-task bar
+      // to the top of the screen (#8778).
+      const referenceHeight = this._iosViewportHeightBeforeKeyboard || window.innerHeight;
+      const keyboardHeight = sanitizeIosKeyboardHeight(
+        info.keyboardHeight,
+        referenceHeight,
+      );
+      // Only a frame the clamp had to correct opts into the measured-viewport
+      // override in _updateIOSKeyboardViewportVars; well-behaved keyboards keep
+      // the exact pre-existing behaviour, so this cannot regress them.
+      this._iosKeyboardFrameUnreliable = keyboardHeight !== info.keyboardHeight;
+      this._iosKeyboardHeight = keyboardHeight;
       this.document.body.classList.add(BodyClass.isKeyboardVisible);
       // Set CSS variable for keyboard height to adjust layout
       this.document.documentElement.style.setProperty(
         CSS_VAR_KEYBOARD_HEIGHT,
-        `${info.keyboardHeight}px`,
+        `${keyboardHeight}px`,
       );
       this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
@@ -646,6 +663,7 @@ export class GlobalThemeService {
       Log.log('iOS keyboard will hide');
       this._iosKeyboardHeight = 0;
       this._iosViewportHeightBeforeKeyboard = 0;
+      this._iosKeyboardFrameUnreliable = false;
       this.document.body.classList.remove(BodyClass.isKeyboardVisible);
       this.document.documentElement.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, '0px');
       this.document.documentElement.style.setProperty(
@@ -709,6 +727,27 @@ export class GlobalThemeService {
       CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
       `${isKeyboardVisible && !isVisualViewportAlreadyResized ? this._iosKeyboardHeight : 0}px`,
     );
+
+    // For a keyboard whose reported frame was implausible, once the viewport has
+    // actually shrunk its measured obscured area (`baseHeight -
+    // visualViewportHeight`) is a far more reliable keyboard height than the
+    // bogus plugin frame (#8778), and is correct under both `resize: 'native'`
+    // and non-resizing modes. Correct `--keyboard-height` to the measurement
+    // (still clamped as a safety net). Well-behaved keyboards skip this entirely
+    // and keep the plugin value set in keyboardWillShow — no behaviour change.
+    if (
+      this._iosKeyboardFrameUnreliable &&
+      this._isVisualViewportResizedForKeyboard(
+        isKeyboardVisible,
+        baseHeight,
+        visualViewportHeight,
+      )
+    ) {
+      root.style.setProperty(
+        CSS_VAR_KEYBOARD_HEIGHT,
+        `${sanitizeIosKeyboardHeight(baseHeight - visualViewportHeight, baseHeight)}px`,
+      );
+    }
     this._notifyIOSViewportChange();
   }
 
