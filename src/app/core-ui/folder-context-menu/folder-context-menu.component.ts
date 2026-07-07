@@ -17,7 +17,6 @@ import {
   MenuTreeFolderNode,
   MenuTreeKind,
 } from '../../features/menu-tree/store/menu-tree.model';
-import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { Router } from '@angular/router';
 
@@ -33,7 +32,6 @@ export class FolderContextMenuComponent {
   private readonly _matDialog = inject(MatDialog);
   private readonly _translateService = inject(TranslateService);
   private readonly _menuTreeService = inject(MenuTreeService);
-  private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _router = inject(Router);
 
@@ -147,33 +145,25 @@ export class FolderContextMenuComponent {
       });
   }
 
-  addProject(): void {
-    const dialogRef = this._matDialog.open(DialogPromptComponent, {
-      restoreFocus: true,
-      data: {
-        placeholder: this._translateService.instant('F.PROJECT.D_CREATE.CREATE'),
-      },
-    });
-
-    dialogRef
+  async addProject(): Promise<void> {
+    const { DialogCreateProjectComponent } =
+      await import('../../features/project/dialogs/create-project/dialog-create-project.component');
+    this._matDialog
+      .open(DialogCreateProjectComponent, {
+        restoreFocus: true,
+      })
       .afterClosed()
       .pipe(take(1))
-      .subscribe((title) => {
-        if (!title) return;
-        const trimmed = title.trim();
-        if (!trimmed) return;
+      .subscribe((newProjectId: string | undefined) => {
+        if (newProjectId) {
+          const cleanParentId = this.folderId.startsWith('folder-')
+            ? this.folderId.substring(7)
+            : this.folderId;
 
-        const cleanParentId = this.folderId.startsWith('folder-')
-          ? this.folderId.substring(7)
-          : this.folderId;
+          this._menuTreeService.addProjectToFolder(newProjectId, cleanParentId);
 
-        const newProjectId = this._projectService.add({
-          title: trimmed,
-        });
-
-        this._menuTreeService.addProjectToFolder(newProjectId, cleanParentId);
-
-        this._router.navigate([`project/${newProjectId}/tasks`]);
+          this._router.navigate([`project/${newProjectId}/tasks`]);
+        }
       });
   }
 

@@ -60,6 +60,7 @@ describe('UpdateCheckService', () => {
 
   describe('checkForUpdate()', () => {
     it('should open a banner when a newer version is available', async () => {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v99.0.0' });
       expect(bannerService.open).toHaveBeenCalledTimes(1);
       const banner: Banner = bannerService.open.calls.mostRecent().args[0];
@@ -69,18 +70,21 @@ describe('UpdateCheckService', () => {
     });
 
     it('should do nothing when already on the latest version', async () => {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: `v${environment.version}` });
       expect(bannerService.open).not.toHaveBeenCalled();
       expect(snackService.open).not.toHaveBeenCalled();
     });
 
     it('should do nothing when the latest release is older (dev build)', async () => {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v0.0.1' });
       expect(bannerService.open).not.toHaveBeenCalled();
     });
 
     it('should show an up-to-date snack for a user-triggered check', async () => {
       await checkAndRespond(
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         { tag_name: `v${environment.version}` },
         { isUserTriggered: true },
       );
@@ -92,21 +96,21 @@ describe('UpdateCheckService', () => {
 
     it('should not re-show the banner for a dismissed version', async () => {
       localStorage.setItem(LS.UPDATE_CHECK_DISMISSED_VERSION, 'v99.0.0');
-
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v99.0.0' });
       expect(bannerService.open).not.toHaveBeenCalled();
     });
 
     it('should show the banner for a dismissed version when user-triggered', async () => {
       localStorage.setItem(LS.UPDATE_CHECK_DISMISSED_VERSION, 'v99.0.0');
-
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v99.0.0' }, { isUserTriggered: true });
       expect(bannerService.open).toHaveBeenCalledTimes(1);
     });
 
     it('should show the banner again for a newer version than the dismissed one', async () => {
       localStorage.setItem(LS.UPDATE_CHECK_DISMISSED_VERSION, 'v99.0.0');
-
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v99.0.1' });
       expect(bannerService.open).toHaveBeenCalledTimes(1);
     });
@@ -155,7 +159,7 @@ describe('UpdateCheckService', () => {
     it('should reject a tag that is not strictly a version tag', async () => {
       // lenient parsing is fine for the LOCAL version, but remote tags are
       // untrusted input and must match exactly
-
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: '99.0.0<img src=x>' }, { isUserTriggered: true });
       expect(bannerService.open).not.toHaveBeenCalled();
       expect(snackService.open).toHaveBeenCalledWith(
@@ -167,7 +171,7 @@ describe('UpdateCheckService', () => {
       const p1 = service.checkForUpdate();
       const p2 = service.checkForUpdate();
       // expectOne throws if the guard failed and two requests were made
-      httpMock.expectOne(RELEASES_API_URL).flush({ tag_name: 'v99.0.0' });
+      httpMock.expectOne(RELEASES_API_URL).flush({ tag_name: 'v99.0.0' }); // eslint-disable-line @typescript-eslint/naming-convention
       await Promise.all([p1, p2]);
       expect(bannerService.open).toHaveBeenCalledTimes(1);
     });
@@ -196,7 +200,7 @@ describe('UpdateCheckService', () => {
       expect(localStorage.getItem(LS.UPDATE_CHECK_DISMISSED_VERSION)).toBe('v99.0.0');
 
       bannerService.open.calls.reset();
-
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       await checkAndRespond({ tag_name: 'v99.0.0' });
       expect(bannerService.open).not.toHaveBeenCalled();
     });

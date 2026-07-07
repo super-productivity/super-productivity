@@ -265,15 +265,19 @@ export const menuTreeReducer = createReducer(
       ],
     };
   }),
-  on(addItemToFolder, (state, { itemId, itemKind, folderId, treeType }) => ({
-    ...state,
-    projectTree:
-      treeType === MenuTreeKind.PROJECT
-        ? _insertItemIntoFolder(state.projectTree, itemId, itemKind, folderId)
-        : state.projectTree,
-    tagTree:
-      treeType === MenuTreeKind.TAG
-        ? _insertItemIntoFolder(state.tagTree, itemId, itemKind, folderId)
-        : state.tagTree,
-  })),
+  on(addItemToFolder, (state, { itemId, itemKind, folderId, treeType }) => {
+    const insert = (tree: MenuTreeTreeNode[]): MenuTreeTreeNode[] =>
+      _insertItemIntoFolder(
+        _deleteItemFromTree(tree, itemId, itemKind),
+        itemId,
+        itemKind,
+        folderId,
+      );
+    return {
+      ...state,
+      projectTree:
+        treeType === MenuTreeKind.PROJECT ? insert(state.projectTree) : state.projectTree,
+      tagTree: treeType === MenuTreeKind.TAG ? insert(state.tagTree) : state.tagTree,
+    };
+  }),
 );

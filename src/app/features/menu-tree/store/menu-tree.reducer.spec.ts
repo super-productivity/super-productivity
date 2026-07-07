@@ -272,6 +272,60 @@ describe('menuTreeReducer', () => {
       expect(result.projectTree.length).toBe(1);
       expect(result.projectTree[0].id).toBe('p-1');
     });
+
+    it('should move project from root to folder (avoid duplication) when project is added first', () => {
+      const folder = createFolderNode('folder-1', []);
+      const state: MenuTreeState = {
+        projectTree: [folder, { k: MenuTreeKind.PROJECT, id: 'p-1' }],
+        tagTree: [],
+      };
+
+      const result = menuTreeReducer(
+        state,
+        addItemToFolder({
+          itemId: 'p-1',
+          itemKind: MenuTreeKind.PROJECT,
+          folderId: 'folder-1',
+          treeType: MenuTreeKind.PROJECT,
+        }),
+      );
+
+      // It should be removed from root
+      expect(result.projectTree.length).toBe(1);
+      expect(result.projectTree[0].id).toBe('folder-1');
+
+      // And it should be inside the folder
+      const updatedFolder = result.projectTree[0] as MenuTreeFolderNode;
+      expect(updatedFolder.children.length).toBe(1);
+      expect(updatedFolder.children[0].id).toBe('p-1');
+    });
+
+    it('should move tag from root to folder (avoid duplication) when tag is added first', () => {
+      const folder = createFolderNode('folder-1', []);
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [folder, { k: MenuTreeKind.TAG, id: 't-1' }],
+      };
+
+      const result = menuTreeReducer(
+        state,
+        addItemToFolder({
+          itemId: 't-1',
+          itemKind: MenuTreeKind.TAG,
+          folderId: 'folder-1',
+          treeType: MenuTreeKind.TAG,
+        }),
+      );
+
+      // It should be removed from root
+      expect(result.tagTree.length).toBe(1);
+      expect(result.tagTree[0].id).toBe('folder-1');
+
+      // And it should be inside the folder
+      const updatedFolder = result.tagTree[0] as MenuTreeFolderNode;
+      expect(updatedFolder.children.length).toBe(1);
+      expect(updatedFolder.children[0].id).toBe('t-1');
+    });
   });
 
   describe('addProject', () => {
