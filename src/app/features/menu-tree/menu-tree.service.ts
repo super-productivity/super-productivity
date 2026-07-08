@@ -27,7 +27,6 @@ import {
   updateTagTree,
   deleteFolder,
   updateFolder,
-  addItemToFolder,
 } from './store/menu-tree.actions';
 
 @Injectable({ providedIn: 'root' })
@@ -399,24 +398,43 @@ export class MenuTreeService {
     return result;
   }
 
-  private _insertFolderNode(
+  private _insertNodeIntoFolder(
     tree: MenuTreeTreeNode[],
-    folder: MenuTreeFolderNode,
+    node: MenuTreeTreeNode,
     parentId: string | null,
   ): MenuTreeTreeNode[] {
     const cloned = this._cloneTree(tree);
+    // Append at root when no parent is given or the target folder no longer
+    // exists (e.g. it was deleted on another device) — never drop the node.
     if (!parentId) {
-      return [...cloned, folder];
+      return [...cloned, node];
     }
 
     const target = this._findFolder(cloned, parentId);
     if (!target) {
-      return [...cloned, folder];
+      return [...cloned, node];
     }
 
-    target.children = [...target.children, folder];
+    target.children = [...target.children, node];
     target.isExpanded = true;
     return cloned;
+  }
+
+  private _removeItemFromTree(
+    tree: MenuTreeTreeNode[],
+    itemId: string,
+    itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG,
+  ): MenuTreeTreeNode[] {
+    return tree
+      .filter((node) => !(node.k === itemKind && node.id === itemId))
+      .map((node) =>
+        node.k === MenuTreeKind.FOLDER
+          ? {
+              ...node,
+              children: this._removeItemFromTree(node.children, itemId, itemKind),
+            }
+          : node,
+      );
   }
 
   private _cloneTree(tree: MenuTreeTreeNode[]): MenuTreeTreeNode[] {
@@ -475,7 +493,7 @@ export class MenuTreeService {
 
     const currentTree =
       options.treeKind === MenuTreeKind.PROJECT ? this.projectTree() : this.tagTree();
-    const nextTree = this._insertFolderNode(
+    const nextTree = this._insertNodeIntoFolder(
       currentTree,
       newFolder,
       options.parentFolderId,
@@ -489,24 +507,39 @@ export class MenuTreeService {
   }
 
   addProjectToFolder(projectId: string, folderId: string | null): void {
-    this._store.dispatch(
-      addItemToFolder({
-        itemId: projectId,
-        itemKind: MenuTreeKind.PROJECT,
+    this.setProjectTree(
+      this._placeItemInFolder(
+        this.projectTree(),
+        projectId,
+        MenuTreeKind.PROJECT,
         folderId,
-        treeType: MenuTreeKind.PROJECT,
-      }),
+      ),
     );
   }
 
   addTagToFolder(tagId: string, folderId: string | null): void {
-    this._store.dispatch(
-      addItemToFolder({
-        itemId: tagId,
-        itemKind: MenuTreeKind.TAG,
-        folderId,
-        treeType: MenuTreeKind.TAG,
-      }),
+    this.setTagTree(
+      this._placeItemInFolder(this.tagTree(), tagId, MenuTreeKind.TAG, folderId),
+    );
+  }
+
+  /**
+   * Move an item into a folder by rewriting the whole tree, then persist via the
+   * existing `updateProjectTree`/`updateTagTree` op. Reuses the same op old
+   * clients already understand (avoids a new op type) and matches how folder
+   * creation and drag-reorder already persist. Removes any prior placement first
+   * so `addTag`'s root insertion (or a re-add) does not duplicate the item.
+   */
+  private _placeItemInFolder(
+    tree: MenuTreeTreeNode[],
+    itemId: string,
+    itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG,
+    folderId: string | null,
+  ): MenuTreeTreeNode[] {
+    return this._insertNodeIntoFolder(
+      this._removeItemFromTree(tree, itemId, itemKind),
+      { k: itemKind, id: itemId } as MenuTreeProjectNode | MenuTreeTagNode,
+      folderId,
     );
   }
 }

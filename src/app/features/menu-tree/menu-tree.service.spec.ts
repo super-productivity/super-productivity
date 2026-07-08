@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { MenuTreeService } from './menu-tree.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { MenuTreeKind, MenuTreeTreeNode } from './store/menu-tree.model';
+import {
+  MenuTreeFolderNode,
+  MenuTreeKind,
+  MenuTreeTreeNode,
+} from './store/menu-tree.model';
 import { menuTreeFeatureKey } from './store/menu-tree.reducer';
 import {
   selectMenuTreeProjectTree,
@@ -319,6 +323,78 @@ describe('MenuTreeService', () => {
         'tag-2',
         'tag-1',
       ]);
+    });
+  });
+
+  describe('addProjectToFolder / addTagToFolder', () => {
+    const folderNode = (
+      id: string,
+      children: MenuTreeTreeNode[] = [],
+    ): MenuTreeTreeNode => ({
+      id,
+      k: MenuTreeKind.FOLDER,
+      name: `Folder ${id}`,
+      isExpanded: false,
+      children,
+    });
+
+    let dispatchSpy: jasmine.Spy;
+    beforeEach(() => {
+      dispatchSpy = spyOn(store, 'dispatch');
+    });
+
+    const lastTree = (): MenuTreeTreeNode[] =>
+      (dispatchSpy.calls.mostRecent().args[0] as { tree: MenuTreeTreeNode[] }).tree;
+
+    it('inserts a project into the target folder and persists via updateProjectTree', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, [folderNode('folder-1')]);
+      store.refreshState();
+
+      service.addProjectToFolder('p-1', 'folder-1');
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const action = dispatchSpy.calls.mostRecent().args[0] as { type: string };
+      expect(action.type).toBe('[MenuTree] Update Project Tree');
+      const folder = lastTree()[0] as MenuTreeFolderNode;
+      expect(folder.id).toBe('folder-1');
+      expect(folder.children.map((c) => c.id)).toEqual(['p-1']);
+      expect(folder.isExpanded).toBeTrue();
+    });
+
+    it('appends the project at root when folderId is null', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, []);
+      store.refreshState();
+
+      service.addProjectToFolder('p-1', null);
+
+      expect(lastTree().map((n) => n.id)).toEqual(['p-1']);
+    });
+
+    it('falls back to a root append when the target folder no longer exists', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, []);
+      store.refreshState();
+
+      service.addProjectToFolder('p-1', 'missing-folder');
+
+      expect(lastTree().map((n) => n.id)).toEqual(['p-1']);
+      expect(lastTree()[0].k).toBe(MenuTreeKind.PROJECT);
+    });
+
+    it('moves a tag already at root into the folder without duplicating it', () => {
+      store.overrideSelector(selectMenuTreeTagTree, [
+        folderNode('folder-1'),
+        { id: 't-1', k: MenuTreeKind.TAG },
+      ]);
+      store.refreshState();
+
+      service.addTagToFolder('t-1', 'folder-1');
+
+      const action = dispatchSpy.calls.mostRecent().args[0] as { type: string };
+      expect(action.type).toBe('[MenuTree] Update Tag Tree');
+      // removed from root, present only inside the folder
+      expect(lastTree().map((n) => n.id)).toEqual(['folder-1']);
+      const folder = lastTree()[0] as MenuTreeFolderNode;
+      expect(folder.children.map((c) => c.id)).toEqual(['t-1']);
     });
   });
 });

@@ -1,22 +1,14 @@
 import { createReducer, on } from '@ngrx/store';
-import {
-  MenuTreeKind,
-  MenuTreeProjectNode,
-  MenuTreeTagNode,
-  MenuTreeState,
-  MenuTreeTreeNode,
-} from './menu-tree.model';
+import { MenuTreeKind, MenuTreeState, MenuTreeTreeNode } from './menu-tree.model';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import {
   updateProjectTree,
   updateTagTree,
   deleteFolder,
   updateFolder,
-  addItemToFolder,
 } from './menu-tree.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { addTag, deleteTag, deleteTags } from '../../tag/store/tag.actions';
-import { addProject } from '../../project/store/project.actions';
 
 export const menuTreeFeatureKey = 'menuTree';
 
@@ -135,45 +127,6 @@ const _itemExistsInTree = (
   return false;
 };
 
-const _insertItemIntoFolder = (
-  tree: MenuTreeTreeNode[],
-  itemId: string,
-  itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG,
-  folderId: string | null,
-): MenuTreeTreeNode[] => {
-  // 1. Root level insertion
-  if (!folderId) {
-    return [
-      ...tree,
-      { k: itemKind, id: itemId } as MenuTreeProjectNode | MenuTreeTagNode,
-    ];
-  }
-
-  // 2. Recursive search and update
-  return tree.map((node): MenuTreeTreeNode => {
-    // If it's a folder, check if it's the target, otherwise recurse into its children
-    if (node.k === MenuTreeKind.FOLDER) {
-      if (node.id === folderId) {
-        return {
-          ...node,
-          isExpanded: true,
-          children: [
-            ...node.children,
-            { k: itemKind, id: itemId } as MenuTreeProjectNode | MenuTreeTagNode,
-          ],
-        };
-      }
-
-      // Recurse into children
-      return {
-        ...node,
-        children: _insertItemIntoFolder(node.children, itemId, itemKind, folderId),
-      };
-    }
-    return node;
-  });
-};
-
 export const menuTreeReducer = createReducer(
   menuTreeInitialState,
   on(loadAllData, (_state, { appDataComplete }) => {
@@ -247,37 +200,6 @@ export const menuTreeReducer = createReducer(
           id: tag.id,
         },
       ],
-    };
-  }),
-  on(addProject, (state, { project }) => {
-    // Only add to tree if project doesn't already exist
-    if (_itemExistsInTree(state.projectTree, project.id, MenuTreeKind.PROJECT)) {
-      return state;
-    }
-    return {
-      ...state,
-      projectTree: [
-        ...state.projectTree,
-        {
-          k: MenuTreeKind.PROJECT as const,
-          id: project.id,
-        },
-      ],
-    };
-  }),
-  on(addItemToFolder, (state, { itemId, itemKind, folderId, treeType }) => {
-    const insert = (tree: MenuTreeTreeNode[]): MenuTreeTreeNode[] =>
-      _insertItemIntoFolder(
-        _deleteItemFromTree(tree, itemId, itemKind),
-        itemId,
-        itemKind,
-        folderId,
-      );
-    return {
-      ...state,
-      projectTree:
-        treeType === MenuTreeKind.PROJECT ? insert(state.projectTree) : state.projectTree,
-      tagTree: treeType === MenuTreeKind.TAG ? insert(state.tagTree) : state.tagTree,
     };
   }),
 );

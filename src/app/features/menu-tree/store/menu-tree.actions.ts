@@ -56,21 +56,3 @@ export const updateFolder = createAction(
     } satisfies PersistentActionMeta,
   }),
 );
-
-export const addItemToFolder = createAction(
-  '[MenuTree] Add Item to Folder',
-  (itemProps: {
-    itemId: string;
-    itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG;
-    folderId: string | null;
-    treeType: MenuTreeKind.PROJECT | MenuTreeKind.TAG;
-  }) => ({
-    ...itemProps,
-    meta: {
-      isPersistent: true,
-      entityType: 'MENU_TREE',
-      entityId: itemProps.itemId,
-      opType: OpType.Create,
-    } satisfies PersistentActionMeta,
-  }),
-);
