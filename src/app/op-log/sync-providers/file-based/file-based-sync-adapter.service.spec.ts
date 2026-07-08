@@ -725,7 +725,13 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result2.ops.length).toBe(3);
     });
 
-    it('should limit results and indicate hasMore', async () => {
+    // File-based providers have no server-side cursor (they re-download the whole
+    // file each call and ignore sinceSeq), so a caller-supplied `limit` below the
+    // buffer size must NOT truncate — otherwise the caller loops on hasMore and can
+    // never advance past the oldest slice, stranding a behind client short of its
+    // newest ops. The buffer is bounded by MAX_RECENT_OPS, so the whole buffer is
+    // returned in a single page (hasMore=false).
+    it('returns the whole buffer in one page even when limit is below buffer size', async () => {
       const manyOps = Array.from({ length: 10 }, (_, i) => ({
         id: `op-${i}`,
         c: 'client1',
@@ -746,8 +752,41 @@ describe('FileBasedSyncAdapterService', () => {
 
       const result = await adapter.downloadOps(0, undefined, 5);
 
-      expect(result.ops.length).toBe(5);
-      expect(result.hasMore).toBe(true);
+      // All 10 ops returned in one page despite limit=5; no second page needed.
+      expect(result.ops.length).toBe(10);
+      expect(result.hasMore).toBe(false);
+    });
+
+    // Regression: a buffer larger than the real DOWNLOAD_PAGE_SIZE must still
+    // deliver the NEWEST ops. Previously the download returned only the oldest
+    // `limit` ops and set hasMore=true, so the caller (which advances sinceSeq by
+    // the returned index-based serverSeq while this method ignores sinceSeq) kept
+    // re-fetching the same oldest slice and never received op-600.
+    it('delivers the newest ops when the buffer exceeds the page size (single-file)', async () => {
+      const PAGE = 500;
+      const total = 600;
+      const manyOps = Array.from({ length: total }, (_, i) => ({
+        id: `op-${i + 1}`,
+        c: 'client1',
+        a: 'HA',
+        o: 'ADD',
+        e: 'TASK',
+        d: `task-${i + 1}`,
+        v: { client1: i + 1 },
+        t: Date.now(),
+        s: 1,
+        p: {},
+      }));
+      const syncData = createMockSyncData({ syncVersion: total, recentOps: manyOps });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      const result = await adapter.downloadOps(1, 'client2', PAGE);
+
+      expect(result.ops.length).toBe(total);
+      expect(result.hasMore).toBe(false);
+      expect(result.ops.some((o) => o.op.id === 'op-600')).toBe(true);
     });
 
     it('should throw SyncDataCorruptedError for wrong file version', async () => {
@@ -2827,6 +2866,38 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockStateSnapshotService.getStateSnapshot).not.toHaveBeenCalled();
     });
 
+    // (a2) Regression: the split ops buffer floor is SPLIT_COMPACTION_THRESHOLD
+    // (1000), so it routinely exceeds DOWNLOAD_PAGE_SIZE (500). A behind client
+    // must receive the NEWEST ops in a single page — the old code returned only
+    // the oldest `limit` ops with hasMore=true, and since the caller advances
+    // sinceSeq by the returned index-based serverSeq while the adapter ignores
+    // sinceSeq, it kept re-fetching the same oldest slice and never converged.
+    it('(a2) split download delivers the newest ops when buffer exceeds the page size', async () => {
+      const PAGE = 500;
+      const total = 600;
+      const recentOps = Array.from({ length: total }, (_, i) =>
+        makeCompactOp({
+          id: `op-${i + 1}`,
+          d: `task-${i + 1}`,
+          v: { client1: i + 1 },
+          sv: i + 1,
+        }),
+      );
+      const opsFile = makeOpsFile({
+        syncVersion: total,
+        vectorClock: { client1: total },
+        recentOps,
+        oldestOpSyncVersion: 1,
+      });
+      routeDownloads({ [C.OPS_FILE]: addPrefix(opsFile, 3) });
+
+      const result = await adapter.downloadOps(1, 'client2', PAGE);
+
+      expect(result.ops.length).toBe(total);
+      expect(result.hasMore).toBe(false);
+      expect(result.ops.some((o) => o.op.id === 'op-600')).toBe(true);
+    });
+
     // (b) compaction triggers when the buffer exceeds MAX_RECENT_OPS, writing
     // state THEN ops.
     it('(b) compaction past MAX_RECENT_OPS writes sync-state.json BEFORE sync-ops.json', async () => {
@@ -3051,9 +3122,8 @@ describe('FileBasedSyncAdapterService', () => {
         [C.OPS_FILE]: addPrefix(opsFile, 3),
         [C.STATE_FILE]: addPrefix(makeStateFile({ syncVersion: 1 }), 3),
       });
-      const lastSeen = (
-        service as unknown as { _lastSeenRevs: Map<string, string> }
-      )._lastSeenRevs;
+      const lastSeen = (service as unknown as { _lastSeenRevs: Map<string, string> })
+        ._lastSeenRevs;
 
       await adapter.downloadOps(5, 'client2'); // ops downloaded, not yet applied
 
@@ -3078,9 +3148,10 @@ describe('FileBasedSyncAdapterService', () => {
         ),
       });
       // Seed a matching last-seen rev so an INCREMENTAL poll would short-circuit.
-      (
-        service as unknown as { _lastSeenRevs: Map<string, string> }
-      )._lastSeenRevs.set('Dropbox', `${C.OPS_FILE}-rev`);
+      (service as unknown as { _lastSeenRevs: Map<string, string> })._lastSeenRevs.set(
+        'Dropbox',
+        `${C.OPS_FILE}-rev`,
+      );
       mockProvider.getFileRev.and.callFake(async () => ({ rev: `${C.OPS_FILE}-rev` }));
 
       await adapter.downloadOps(0, 'client2'); // forceFromSeq0

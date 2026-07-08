@@ -160,6 +160,12 @@ export interface OperationSyncCapable<
     clientId: string,
     lastKnownServerSeq?: number,
   ): Promise<OpUploadResponse>;
+  /**
+   * @param limit Best-effort page-size hint. Cursor-based providers (SuperSync)
+   * honor it and paginate; cursorless file-based providers cannot paginate (they
+   * re-download the whole file each call) and ignore it, returning their whole
+   * write-bounded ops buffer in a single page (`hasMore` is always `false`).
+   */
   downloadOps(
     sinceSeq: number,
     excludeClient?: string,

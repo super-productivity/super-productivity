@@ -1038,9 +1038,18 @@ export class FileBasedSyncAdapterService {
       });
     });
 
-    // Apply limit
-    const limitedOps = filteredOps.slice(0, limit);
-    const hasMore = filteredOps.length > limit;
+    // File-based providers re-download the whole file each call and have no
+    // server-side cursor, so there is no "next page": this method returns ops by
+    // array index and ignores `sinceSeq`, and the buffer is bounded on write by
+    // MAX_RECENT_OPS. Return it WHOLE with hasMore=false and let the caller's
+    // appliedOpIds dedup decide what is actually new. `limit` (the caller's
+    // DOWNLOAD_PAGE_SIZE) is deliberately not applied — truncating below the buffer
+    // would strand a behind client on the oldest slice, because the caller loops on
+    // hasMore but the ignored `sinceSeq` never advances. Returning everything (not
+    // slicing to a cap) also stays safe for an over-cap buffer from a future
+    // higher-MAX_RECENT_OPS client: it converges instead of re-spinning.
+    const limitedOps = filteredOps;
+    const hasMore = false;
 
     // Calculate latestSeq using syncVersion (NOT recentOps.length).
     // Using recentOps.length causes a bug after snapshot upload:
@@ -1925,8 +1934,14 @@ export class FileBasedSyncAdapterService {
         receivedAt: compactOp.t,
       });
     });
-    const limitedOps = filteredOps.slice(0, limit);
-    const hasMore = filteredOps.length > limit;
+    // Whole bounded ops buffer in one page (hasMore=false) — see the single-file
+    // _downloadOps note. File-based providers have no server cursor, so there is no
+    // next page; `limit` is not applied and the caller's appliedOpIds dedup filters
+    // already-applied ops. The split buffer routinely exceeds DOWNLOAD_PAGE_SIZE
+    // (it grows to MAX_RECENT_OPS between compactions), so truncating would break
+    // normal catch-up.
+    const limitedOps = filteredOps;
+    const hasMore = false;
     const latestSeq = opsFile.syncVersion;
 
     let snapshotStateWithArchives: Record<string, unknown> | undefined;
