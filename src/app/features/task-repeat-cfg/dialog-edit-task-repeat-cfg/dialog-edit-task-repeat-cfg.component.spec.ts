@@ -11,7 +11,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, Subject } from 'rxjs';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 // FormlyConfigModule (not FormlyModule) is needed here to register custom
 // field types and validation within the TestBed injector.
 import { FormlyConfigModule } from '../../../ui/formly-config.module';
@@ -682,6 +682,54 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
       expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
       expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('skipOverdue default seeding (#8644)', () => {
+    const savedCfg = (): TaskRepeatCfg =>
+      mockTaskRepeatCfgService.addTaskRepeatCfgToTask.calls.mostRecent()
+        .args[2] as TaskRepeatCfg;
+
+    it('seeds skipOverdue ON for a new Daily config (the default schedule)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // A new config defaults to the Daily quick setting; no user interaction.
+      component.save();
+
+      expect(mockTaskRepeatCfgService.addTaskRepeatCfgToTask).toHaveBeenCalledTimes(1);
+      expect(savedCfg().skipOverdue).toBe(true);
+    });
+
+    it('seeds skipOverdue OFF when the final schedule is Monthly', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // User switched the preset to monthly without touching the checkbox.
+      component.repeatCfg.update((c) => ({ ...c, quickSetting: 'MONTHLY_FIRST_DAY' }));
+      component.save();
+
+      expect(savedCfg().skipOverdue).toBe(false);
+    });
+
+    it('respects an explicit user toggle over the schedule-derived default', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const component = fixture.componentInstance;
+
+      // User opened Advanced and ticked skipOverdue ON for a monthly task;
+      // a dirty control means the derived OFF default must not override it.
+      const ctrl = new FormControl(true);
+      ctrl.markAsDirty();
+      component.formGroup2().addControl('skipOverdue', ctrl);
+      component.repeatCfg.update((c) => ({
+        ...c,
+        quickSetting: 'MONTHLY_FIRST_DAY',
+        skipOverdue: true,
+      }));
+
+      component.save();
+
+      expect(savedCfg().skipOverdue).toBe(true);
     });
   });
 });

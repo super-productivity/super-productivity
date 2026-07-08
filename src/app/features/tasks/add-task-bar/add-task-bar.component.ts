@@ -72,6 +72,7 @@ import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
+import { getDefaultSkipOverdue } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
@@ -545,7 +546,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           const referenceDate = dateStrToUtcDate(startDate);
           const quickSettingUpdates =
             getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
-          this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
+          const newRepeatCfg = {
             ...DEFAULT_TASK_REPEAT_CFG,
             startDate,
             ...quickSettingUpdates,
@@ -555,6 +556,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             defaultEstimate: state.estimate || 0,
             startTime: state.time || undefined,
             remindAt: state.time ? resolvedRemindOption : undefined,
+          };
+          // Seed the skipOverdue default from the chosen schedule, same as the
+          // repeat dialog (there is no advanced toggle in the inline add-bar).
+          this._taskRepeatCfgService.addTaskRepeatCfgToTask(taskId, state.projectId, {
+            ...newRepeatCfg,
+            skipOverdue: getDefaultSkipOverdue(newRepeatCfg),
           });
         }
       }
