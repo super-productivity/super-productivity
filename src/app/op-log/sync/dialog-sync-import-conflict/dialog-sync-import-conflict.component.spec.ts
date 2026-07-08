@@ -39,6 +39,10 @@ describe('DialogSyncImportConflictComponent', () => {
           provide: TranslateService,
           useValue: { instant: (key: string) => key },
         },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'en-US', formatTime: () => '00:00' },
+        },
       ],
     });
     // Avoid rendering the template (translate pipes etc.) — we only test close() logic.

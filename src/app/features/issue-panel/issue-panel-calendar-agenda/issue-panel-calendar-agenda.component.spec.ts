@@ -10,6 +10,7 @@ import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 import { IssueProviderCalendar, SearchResultItem } from '../../issue/issue.model';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { saveToRealLs } from '../../../core/persistence/local-storage';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 describe('IssuePanelCalendarAgendaComponent', () => {
   let fixture: ComponentFixture<IssuePanelCalendarAgendaComponent>;
@@ -55,6 +56,10 @@ describe('IssuePanelCalendarAgendaComponent', () => {
       providers: [
         { provide: IssueService, useValue: issueService },
         { provide: DropListService, useValue: {} },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'en-US', formatTime: () => '00:00' },
+        },
       ],
     })
       .overrideComponent(IssuePanelCalendarAgendaComponent, {
