@@ -1,0 +1,90 @@
+import { TestBed } from '@angular/core/testing';
+import { EmlDropService } from './eml-drop.service';
+import { TaskService } from 'src/app/features/tasks/task.service';
+import { SnackService } from '../snack/snack.service';
+import { Log } from '../log';
+import { T } from 'src/app/t.const';
+
+const makeFile = (content: string, name = 'mail.eml'): File =>
+  new File([content], name, { type: '' });
+
+const VALID_EML = [
+  'From: Alice Example <alice@example.com>',
+  'Subject: Hello World',
+  '',
+  'body',
+  '',
+].join('\n');
+
+const NO_SUBJECT_EML = ['From: Alice Example <alice@example.com>', '', 'body', ''].join(
+  '\n',
+);
+
+const NO_FROM_EML = ['Subject: Hello World', '', 'body', ''].join('\n');
+
+const EMPTY_EML = ['', 'body', ''].join('\n');
+
+describe('EmlDropService', () => {
+  let service: EmlDropService;
+  let taskService: jasmine.SpyObj<TaskService>;
+  let snackService: jasmine.SpyObj<SnackService>;
+
+  beforeEach(() => {
+    taskService = jasmine.createSpyObj('TaskService', ['add']);
+    snackService = jasmine.createSpyObj('SnackService', ['open']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        EmlDropService,
+        { provide: TaskService, useValue: taskService },
+        { provide: SnackService, useValue: snackService },
+      ],
+    });
+
+    service = TestBed.inject(EmlDropService);
+  });
+
+  it('should add a task titled "sender: subject" for a valid eml', async () => {
+    await service.createTaskFromEml(makeFile(VALID_EML));
+
+    expect(taskService.add).toHaveBeenCalledWith('Alice Example: Hello World');
+    expect(snackService.open).not.toHaveBeenCalled();
+  });
+
+  it('should not add a leading ": " when there is no sender', async () => {
+    await service.createTaskFromEml(makeFile(NO_FROM_EML));
+
+    expect(taskService.add).toHaveBeenCalledWith('Hello World');
+  });
+
+  it('should not add a trailing ": " when there is no subject', async () => {
+    await service.createTaskFromEml(makeFile(NO_SUBJECT_EML));
+
+    expect(taskService.add).toHaveBeenCalledWith('Alice Example');
+  });
+
+  it('should show a warning snack and not add a task when both sender and subject are empty', async () => {
+    await service.createTaskFromEml(makeFile(EMPTY_EML));
+
+    expect(taskService.add).not.toHaveBeenCalled();
+    expect(snackService.open).toHaveBeenCalledWith({
+      type: 'WARNING',
+      msg: T.MH.EML_EMPTY,
+    });
+  });
+
+  it('should log and show an error snack without adding a task when parsing fails', async () => {
+    const logErrSpy = spyOn(Log, 'err');
+    const file = makeFile(VALID_EML);
+    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
+
+    await service.createTaskFromEml(file);
+
+    expect(taskService.add).not.toHaveBeenCalled();
+    expect(logErrSpy).toHaveBeenCalled();
+    expect(snackService.open).toHaveBeenCalledWith({
+      type: 'ERROR',
+      msg: T.MH.EML_PARSE_ERROR,
+    });
+  });
+});
