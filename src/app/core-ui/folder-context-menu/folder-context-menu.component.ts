@@ -65,9 +65,7 @@ export class FolderContextMenuComponent {
         if (!trimmed || trimmed === folder.name) {
           return;
         }
-        const cleanId = this.folderId.startsWith('folder-')
-          ? this.folderId.substring(7)
-          : this.folderId;
+        const cleanId = this._cleanFolderId(this.folderId);
 
         if (this.treeKind === MenuTreeKind.PROJECT) {
           this._menuTreeService.updateFolderInProject(cleanId, trimmed);
@@ -100,9 +98,7 @@ export class FolderContextMenuComponent {
       .pipe(take(1))
       .subscribe((result: boolean) => {
         if (result) {
-          const cleanId = this.folderId.startsWith('folder-')
-            ? this.folderId.substring(7)
-            : this.folderId;
+          const cleanId = this._cleanFolderId(this.folderId);
 
           if (this.treeKind === MenuTreeKind.PROJECT) {
             this._menuTreeService.deleteFolderFromProject(cleanId);
@@ -133,9 +129,7 @@ export class FolderContextMenuComponent {
         const trimmed = title.trim();
         if (!trimmed) return;
 
-        const cleanParentId = this.folderId.startsWith('folder-')
-          ? this.folderId.substring(7)
-          : this.folderId;
+        const cleanParentId = this._cleanFolderId(this.folderId);
 
         if (this.treeKind === MenuTreeKind.PROJECT) {
           this._menuTreeService.createProjectFolder(trimmed, cleanParentId);
@@ -156,9 +150,7 @@ export class FolderContextMenuComponent {
       .pipe(take(1))
       .subscribe((newProjectId: string | undefined) => {
         if (newProjectId) {
-          const cleanParentId = this.folderId.startsWith('folder-')
-            ? this.folderId.substring(7)
-            : this.folderId;
+          const cleanParentId = this._cleanFolderId(this.folderId);
 
           this._menuTreeService.addProjectToFolder(newProjectId, cleanParentId);
 
@@ -183,17 +175,20 @@ export class FolderContextMenuComponent {
             color: result.color,
           });
 
-          const cleanParentId = this.folderId.startsWith('folder-')
-            ? this.folderId.substring(7)
-            : this.folderId;
+          const cleanParentId = this._cleanFolderId(this.folderId);
 
           this._menuTreeService.addTagToFolder(newTagId, cleanParentId);
         }
       });
   }
 
+  // Tree node ids are prefixed with 'folder-'; store/service APIs expect the raw id.
+  private _cleanFolderId(id: string): string {
+    return id.startsWith('folder-') ? id.substring(7) : id;
+  }
+
   private _loadFolder(folderId: string): MenuTreeFolderNode | null {
-    const cleanId = folderId.startsWith('folder-') ? folderId.substring(7) : folderId;
+    const cleanId = this._cleanFolderId(folderId);
 
     const projectTree = this._menuTreeService.projectTree();
     const tagTree = this._menuTreeService.tagTree();
