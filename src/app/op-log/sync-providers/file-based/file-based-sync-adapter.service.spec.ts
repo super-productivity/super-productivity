@@ -1853,8 +1853,13 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBe(true);
     });
 
-    it('should NOT detect gap when recentOps < MAX_RECENT_OPS (not trimmed)', async () => {
-      // Even if oldestOpSyncVersion > sinceSeq, buffer not full → no trimming → no gap
+    // SPAP-33: a gap is proven by oldestOpSyncVersion > sinceSeq+1 alone — the
+    // buffer does NOT have to be full. Here the client is at sinceSeq=1 while the
+    // oldest retained op is sv=5, so the ops at sv 2..4 (which provably existed —
+    // syncVersion reached 10) were trimmed away. The client must fall back to the
+    // snapshot; suppressing the gap just because recentOps is short (as the old
+    // `recentOps.length >= MAX_RECENT_OPS` clause did) would silently diverge.
+    it('detects gap when oldestOpSyncVersion > sinceSeq+1 even if recentOps is short (SPAP-33)', async () => {
       const data = createMockSyncData({
         syncVersion: 10,
         recentOps: [
@@ -1878,8 +1883,8 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.resolve({ dataStr: addPrefix(data), rev: 'rev-1' }),
       );
 
-      const result = await adapter.downloadOps(1); // sinceSeq=1 < sv=5, but not full
-      expect(result.gapDetected).toBeFalsy();
+      const result = await adapter.downloadOps(1); // sinceSeq=1, oldest=5 → sv 2..4 trimmed
+      expect(result.gapDetected).toBe(true);
     });
 
     it('should NOT detect gap when oldestOpSyncVersion is undefined (backward compat)', async () => {
@@ -2896,6 +2901,32 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.ops.length).toBe(total);
       expect(result.hasMore).toBe(false);
       expect(result.ops.some((o) => o.op.id === 'op-600')).toBe(true);
+    });
+
+    // (a3) SPAP-33: a short ops buffer (fewer than SPLIT_COMPACTION_THRESHOLD ops)
+    // still signals a gap and loads the snapshot when the oldest retained op is
+    // past sinceSeq+1. The old `recentOps.length >= SPLIT_COMPACTION_THRESHOLD`
+    // clause suppressed this, so a behind client applied ops without the snapshot
+    // base and silently diverged.
+    it('(a3) split download detects gap + loads snapshot for a short trimmed buffer', async () => {
+      const shortOps = Array.from({ length: 3 }, (_, i) =>
+        makeCompactOp({ id: `op-${i + 1}`, d: `task-${i + 1}`, sv: 10 }),
+      );
+      const opsFile = makeOpsFile({
+        syncVersion: 20,
+        vectorClock: { client1: 20 },
+        recentOps: shortOps,
+        oldestOpSyncVersion: 10, // oldest sv=10, far past sinceSeq+1
+      });
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(opsFile, 3),
+        [C.STATE_FILE]: addPrefix(makeStateFile({ syncVersion: 1 }), 3),
+      });
+
+      const result = await adapter.downloadOps(2, 'client2'); // sinceSeq=2, oldest=10
+
+      expect(result.gapDetected).toBe(true);
+      expect(result.snapshotState).toBeDefined();
     });
 
     // (b) compaction triggers when the buffer exceeds MAX_RECENT_OPS, writing

@@ -964,22 +964,26 @@ export class FileBasedSyncAdapterService {
         ? syncData.clientId !== excludeClient
         : sinceSeq !== syncData.syncVersion);
 
-    // Detect partial trimming: when recentOps hits MAX_RECENT_OPS and oldest ops
-    // were trimmed, a slow-syncing client compares oldestOpSyncVersion against sinceSeq.
-    // If the oldest surviving op was uploaded AFTER the client's last download,
-    // AND the buffer is full (trimming occurred), ops between sinceSeq and
-    // oldestOpSyncVersion were trimmed and the client never saw them.
-    // SPAP-9 off-by-one fix: the client already holds every op up to and
-    // including sinceSeq. The oldest surviving op has syncVersion
-    // oldestOpSyncVersion, so the first op the client still needs is sinceSeq+1.
-    // A gap exists only if that op was trimmed away, i.e. the oldest survivor is
-    // at least sinceSeq+2 (oldestOpSyncVersion > sinceSeq + 1). The boundary
-    // oldestOpSyncVersion === sinceSeq + 1 is contiguous and must NOT be a gap.
+    // Detect a trimming gap. The client already holds every op up to and including
+    // sinceSeq, so the first op it still needs is sinceSeq+1. syncVersion is
+    // contiguous and every bump carries at least one op, so if the oldest op still
+    // retained has syncVersion > sinceSeq+1, the op at sinceSeq+1 provably existed
+    // and has since been trimmed away — a genuine gap that requires the snapshot.
+    // The boundary oldestOpSyncVersion === sinceSeq + 1 is contiguous (SPAP-9
+    // off-by-one fix) and must NOT be treated as a gap.
+    //
+    // SPAP-33: `oldestOpSyncVersion > sinceSeq + 1` is sufficient on its own and
+    // never false-positives, so the previous `recentOps.length >= MAX_RECENT_OPS`
+    // clause was redundant AND harmful — it silently SUPPRESSED a real gap whenever
+    // the buffer was trimmed at a smaller floor than the current cap: a legacy
+    // buffer written by an old client with a lower MAX_RECENT_OPS, or (in the split
+    // format) a buffer trimmed to SPLIT_COMPACTION_THRESHOLD. Dropping it lets a
+    // behind client correctly fall back to the snapshot instead of silently
+    // diverging.
     const partialTrimGap =
       sinceSeq > 0 &&
       syncData.oldestOpSyncVersion !== undefined &&
-      syncData.oldestOpSyncVersion > sinceSeq + 1 &&
-      syncData.recentOps.length >= FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
+      syncData.oldestOpSyncVersion > sinceSeq + 1;
 
     const needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
 
@@ -1907,11 +1911,15 @@ export class FileBasedSyncAdapterService {
       (excludeClient !== undefined
         ? opsFile.clientId !== excludeClient
         : sinceSeq !== opsFile.syncVersion);
+    // SPAP-33: `oldestOpSyncVersion > sinceSeq + 1` alone proves the op at
+    // sinceSeq+1 was trimmed (see the single-file _downloadOps note). The old
+    // `recentOps.length >= SPLIT_COMPACTION_THRESHOLD` clause suppressed a real gap
+    // for a migrated/short buffer, so the behind client would apply ops without the
+    // snapshot and silently diverge. Dropped.
     const partialTrimGap =
       sinceSeq > 0 &&
       opsFile.oldestOpSyncVersion !== undefined &&
-      opsFile.oldestOpSyncVersion > sinceSeq + 1 &&
-      opsFile.recentOps.length >= FILE_BASED_SYNC_CONSTANTS.SPLIT_COMPACTION_THRESHOLD;
+      opsFile.oldestOpSyncVersion > sinceSeq + 1;
     let needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
 
     this._expectedSyncVersions.set(providerKey, opsFile.syncVersion);
