@@ -1,4 +1,4 @@
-import { TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
+import type { TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 
 /**
  * Default value for `skipOverdue` ("Don't let overdue instances pile up") when a
