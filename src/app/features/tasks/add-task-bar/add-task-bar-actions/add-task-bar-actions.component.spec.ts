@@ -21,6 +21,7 @@ import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
 import { TaskReminderOptionId } from '../../task.model';
 import { INBOX_PROJECT } from '../../../project/project.const';
+import { ADD_TASK_BAR_DATA_FACADE } from '../add-task-bar-data-facade.token';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -40,6 +41,7 @@ describe('AddTaskBarActionsComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let mockDateService: jasmine.SpyObj<DateService>;
   let mockProjectsSignal: WritableSignal<Project[]>;
+  let mockTagsSignal: WritableSignal<Tag[]>;
 
   const mockProject: Project = {
     id: '1',
@@ -97,6 +99,37 @@ describe('AddTaskBarActionsComponent', () => {
       minute: 'numeric',
     }),
   );
+  const mockAddTaskBarDataFacade = (locale = 'en-US'): unknown => ({
+    isSubmitDelegated: false,
+    projects: mockProjectsSignal.asReadonly(),
+    projects$: of(mockProjectsSignal()),
+    tags$: of(mockTagsSignal()),
+    tagsNoMyDayAndNoListSorted$: of(mockTagsSignal()),
+    tagsNoMyDayAndNoListInTreeOrder: mockTagsSignal.asReadonly(),
+    activeWorkContext$: of(null),
+    tasksConfig$: of({}),
+    shortSyntax$: of({}),
+    mentionConfig$: of({ mentions: [], triggerChar: undefined }),
+    projectFolderMap: signal(new Map<string, string>()).asReadonly(),
+    tagFolderMap: signal(new Map<string, string>()).asReadonly(),
+    defaultTaskRemindOption: () => TaskReminderOptionId.AtStart,
+    todayStr: () => mockDateService.todayStr(),
+    getLogicalTodayDate: () => mockDateService.getLogicalTodayDate(),
+    currentLocale: () => locale,
+    formatTime: (timestamp: number) =>
+      new Date(timestamp).toLocaleTimeString(locale, {
+        hour: 'numeric',
+        minute: 'numeric',
+      }),
+    submitTask: async () => 'task-id',
+    createNewTags: async () => [],
+    isMarkdownTaskList: () => false,
+    handleMarkdownPaste: async () => undefined,
+    getIssueIcon: () => undefined,
+    getFilteredIssueSuggestions$: () => of([]),
+    handleSuggestionSelected: async () => null,
+    onHudOpened: () => () => undefined,
+  });
 
   beforeEach(async () => {
     // Create proper signal mocks
@@ -158,6 +191,7 @@ describe('AddTaskBarActionsComponent', () => {
       tagsNoMyDayAndNoListSorted: signal([mockTag]),
       tagsNoMyDayAndNoListInTreeOrder: signal([earlierTreeTag, mockTag]),
     });
+    mockTagsSignal = signal([earlierTreeTag, mockTag]);
 
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['afterClosed']);
     mockDialogRef.afterClosed.and.returnValue(of(false));
@@ -189,6 +223,7 @@ describe('AddTaskBarActionsComponent', () => {
           useValue: mockConfigService(DateTimeLocales.en_us),
         },
         { provide: Store, useValue: mockStore },
+        { provide: ADD_TASK_BAR_DATA_FACADE, useValue: mockAddTaskBarDataFacade() },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
         { provide: MatDialog, useValue: mockMatDialog },
@@ -505,6 +540,10 @@ describe('AddTaskBarActionsComponent', () => {
           { provide: Store, useValue: mockStore },
           { provide: AddTaskBarStateService, useValue: mockStateService },
           { provide: AddTaskBarParserService, useValue: mockParserService },
+          {
+            provide: ADD_TASK_BAR_DATA_FACADE,
+            useValue: mockAddTaskBarDataFacade('de-de'),
+          },
           { provide: ProjectService, useValue: mockProjectService },
           { provide: TagService, useValue: mockTagService },
           { provide: MatDialog, useValue: mockMatDialog },
