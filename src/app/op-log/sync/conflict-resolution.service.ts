@@ -16,6 +16,7 @@ import {
   partitionLwwResolutions,
   planLwwConflictResolutions,
   suggestConflictResolution,
+  type LwwConflictResolutionPlan,
   type LwwResolvedConflict,
 } from '@sp/sync-core';
 import {
@@ -63,6 +64,8 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
+import { ConflictJournalService } from './conflict-journal.service';
+import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
@@ -115,6 +118,18 @@ export class ConflictResolutionService {
   private syncLogger = inject(SYNC_LOGGER);
   private entityRegistry = inject(ENTITY_REGISTRY);
   private injector = inject(Injector);
+  private conflictJournal = inject(ConflictJournalService);
+
+  /**
+   * SPAP-13 (observe-only): conflicts whose CONCURRENT status was FORCED by
+   * `_adjustForClockCorruption` escalation. Tagged here at detection time and
+   * read at resolution time so the journal can attribute those resolutions to
+   * `clock-corruption-suspected`. Keyed by the live EntityConflict object (the
+   * same reference flows detection → autoResolveConflictsLWW), so a WeakSet
+   * both avoids mutating the shared type and cannot leak across sync cycles.
+   * Purely a side-channel: it never changes which op resolution picks.
+   */
+  private readonly _corruptionSuspectedConflicts = new WeakSet<EntityConflict>();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LWW OPERATION FACTORY METHODS
@@ -672,6 +687,12 @@ export class ConflictResolutionService {
         localWinOp,
       });
 
+      // SPAP-13 (observe-only): journal this auto-resolution so the discarded
+      // side is preserved and reviewable. Reads `plan`/`conflict` only — never
+      // mutates the resolution. Journal failures are swallowed inside
+      // `_journalResolution`, so they cannot affect what LWW picked.
+      await this._journalResolution(plan);
+
       if (
         plan.reason === 'remote-archive' ||
         plan.reason === 'local-archive' ||
@@ -696,6 +717,35 @@ export class ConflictResolutionService {
     }
 
     return resolutions;
+  }
+
+  /**
+   * SPAP-13 (observe-only): builds and records one conflict-journal entry for an
+   * already-decided LWW plan. Classification is pure (see
+   * `buildConflictJournalEntry`); `conflictJournal.record` swallows its own
+   * errors. This method therefore cannot alter which op resolution picks — it
+   * only logs the outcome (and preserves the discarded side's field values).
+   */
+  private async _journalResolution(
+    plan: LwwConflictResolutionPlan<EntityConflict>,
+  ): Promise<void> {
+    // Belt-and-suspenders observe-only guard: neither classification nor the
+    // DB write may ever throw back into resolution and change what LWW picked.
+    try {
+      const entry = buildConflictJournalEntry({
+        entityType: plan.conflict.entityType,
+        entityId: plan.conflict.entityId,
+        winner: plan.winner,
+        planReason: plan.reason,
+        localOps: plan.conflict.localOps,
+        remoteOps: plan.conflict.remoteOps,
+        isCorruptionSuspected: this._corruptionSuspectedConflicts.has(plan.conflict),
+        resolvePayloadKey: (entityType) => this._resolvePayloadKey(entityType),
+      });
+      await this.conflictJournal.record(entry);
+    } catch (err) {
+      OpLog.err('ConflictResolutionService: conflict-journal hook failed (ignored)', err);
+    }
   }
 
   /**
@@ -1070,14 +1120,21 @@ export class ConflictResolutionService {
       return { isSupersededOrDuplicate: false, conflict: null };
     }
 
-    let vcComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
+    const rawComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
 
     // Handle potential per-entity clock corruption
-    vcComparison = this._adjustForClockCorruption(vcComparison, entityKey, {
+    const vcComparison = this._adjustForClockCorruption(rawComparison, entityKey, {
       localOpsForEntity: ctx.localOpsForEntity,
       hasNoSnapshotClock: ctx.hasNoSnapshotClock,
       localFrontierIsEmpty,
     });
+
+    // SPAP-13 (observe-only): remember when the ONLY reason this became a
+    // conflict is that clock-corruption escalation flipped a non-CONCURRENT
+    // comparison to CONCURRENT. Does not affect the returned comparison.
+    const corruptionEscalated =
+      rawComparison !== VectorClockComparison.CONCURRENT &&
+      vcComparison === VectorClockComparison.CONCURRENT;
 
     // Skip superseded operations (local already has newer state)
     if (vcComparison === VectorClockComparison.GREATER_THAN) {
@@ -1118,16 +1175,17 @@ export class ConflictResolutionService {
 
     // CONCURRENT = true conflict
     if (vcComparison === VectorClockComparison.CONCURRENT) {
-      return {
-        isSupersededOrDuplicate: false,
-        conflict: {
-          entityType: remoteOp.entityType,
-          entityId,
-          localOps: ctx.localOpsForEntity,
-          remoteOps: [remoteOp],
-          suggestedResolution: this._suggestResolution(ctx.localOpsForEntity, [remoteOp]),
-        },
+      const conflict: EntityConflict = {
+        entityType: remoteOp.entityType,
+        entityId,
+        localOps: ctx.localOpsForEntity,
+        remoteOps: [remoteOp],
+        suggestedResolution: this._suggestResolution(ctx.localOpsForEntity, [remoteOp]),
       };
+      if (corruptionEscalated) {
+        this._corruptionSuspectedConflicts.add(conflict);
+      }
+      return { isSupersededOrDuplicate: false, conflict };
     }
 
     return { isSupersededOrDuplicate: false, conflict: null };

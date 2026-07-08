@@ -64,6 +64,7 @@ import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
+import { ConflictJournalService } from './app/op-log/sync/conflict-journal.service';
 import { EncryptionPasswordDialogOpenerService } from './app/imex/sync/encryption-password-dialog-opener.service';
 import { DataInitService } from './app/core/data-init/data-init.service';
 import { EffectsModule } from '@ngrx/effects';
@@ -303,6 +304,20 @@ bootstrapApplication(AppComponent, {
         return () => {};
       },
       deps: [OAuthCallbackHandlerService],
+      multi: true,
+    },
+    // SPAP-13: prune the device-local conflict journal to its retention bound
+    // (14 days / 200 entries) on app start. Fire-and-forget — pruneOnStart opens
+    // its own IndexedDB lazily and swallows its own errors, so it can never block
+    // or fail bootstrap.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (journal: ConflictJournalService) => {
+        return () => {
+          void journal.pruneOnStart();
+        };
+      },
+      deps: [ConflictJournalService],
       multi: true,
     },
     // Note: ImmediateUploadService now initializes itself in constructor
