@@ -515,6 +515,8 @@ export const startApp = (): void => {
     // Orphaned locks from unclean session shutdowns block the backing store open.
     await clearStaleLevelDbLocks(app.getPath('userData'));
 
+    initQuickAddWindow(IS_DEV, customUrl);
+
     mainWin = await createWindow({
       app,
       IS_DEV,
@@ -522,7 +524,6 @@ export const startApp = (): void => {
       quitApp,
       customUrl,
     });
-    initQuickAddWindow(IS_DEV, customUrl);
 
     initPluginOAuth(mainWin);
 

@@ -36,7 +36,7 @@ import { QuickAddHudDataFacadeService } from './quick-add-hud-data-facade.servic
 
         min-width: 100vw;
         min-height: 100vh;
-        background: color-mix(in srgb, var(--bg) 15%, transparent);
+        background: transparent;
       }
 
       :host(.is-fullscreen-shell) add-task-bar.global {

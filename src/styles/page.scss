@@ -121,6 +121,12 @@ html {
   }
 }
 
+html.isQuickAddHud,
+html.isQuickAddHud body,
+html.isQuickAddHud app-root {
+  background: transparent !important;
+}
+
 body {
   // to fix older android web view
   position: absolute;

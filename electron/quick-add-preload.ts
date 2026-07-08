@@ -24,3 +24,11 @@ const quickAdd: QuickAddElectronApi = {
 };
 
 contextBridge.exposeInMainWorld('quickAdd', quickAdd);
+contextBridge.exposeInMainWorld('ea', {
+  on: (): void => undefined,
+  off: (): void => undefined,
+  isGnomeWayland: (): boolean => false,
+  isWayland: (): boolean => false,
+  isAppleSilicon: (): boolean => process.arch === 'arm64',
+  getDistChannel: (): string | null => (process.mas ? 'mac-store' : null),
+});
