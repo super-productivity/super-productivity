@@ -12,12 +12,13 @@ export class EmlDropDirective {
   async onDrop(ev: DragEvent): Promise<void> {
     ev.preventDefault();
     ev.stopPropagation();
+    const files = ev.dataTransfer?.files ?? [];
 
-    const file = ev.dataTransfer?.files[0];
-
-    // Adds a task with the information inside the eml
-    if (file !== undefined && isFileEml(file)) {
-      await this._emlDropService.createTaskFromEml(file);
+    for (const file of Array.from(files)) {
+      // Adds a task with the information inside the eml
+      if (isFileEml(file)) {
+        await this._emlDropService.createTaskFromEml(file);
+      }
     }
   }
 }

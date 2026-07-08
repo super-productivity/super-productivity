@@ -28,8 +28,8 @@ export class EmlDropService {
       const message = [sender, subject].filter(Boolean).join(': ');
       this._taskService.add(message);
       // TODO: add attachment to task
-    } catch {
-      Log.err('Failed to parse EML file');
+    } catch (e) {
+      Log.err('Failed to parse EML file', e);
       this._snackService.open({ type: 'ERROR', msg: T.MH.EML_PARSE_ERROR });
     }
   }
