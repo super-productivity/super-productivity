@@ -136,5 +136,9 @@ export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   notes: undefined,
   shouldInheritSubtasks: false,
   disableAutoUpdateSubtasks: false,
+  // Safe baseline only. New configs get a schedule-aware default at creation
+  // (ON for a plain everyday schedule) via getDefaultSkipOverdue — see
+  // dialog-edit-task-repeat-cfg/get-default-skip-overdue.ts. Keep this false so
+  // fixtures and any non-dialog spread inherit the conservative value.
   skipOverdue: false,
 };

@@ -471,10 +471,10 @@ export class DialogEditTaskRepeatCfgComponent {
       // Seed skipOverdue from the FINAL schedule (the initial default assumed
       // Daily; the user may have switched to e.g. Monthly). Skip this only when
       // the user explicitly toggled the Advanced checkbox, so an opt-in/out is
-      // honoured. If Advanced was opened on a Daily config and then the schedule
-      // was switched, the still-pristine checkbox may visibly show the old ON
-      // while we persist the safe re-derived value — an accepted, conservative
-      // display gap in a rarely-opened panel (never persists the wrong value).
+      // honoured. For any new non-Daily config whose Advanced panel is opened
+      // but left untouched, the checkbox may visibly show the seeded ON while we
+      // persist the safe re-derived value — an accepted, conservative display
+      // gap in a rarely-opened panel (never persists the wrong value).
       const skipOverdueTouched = this.formGroup2().get('skipOverdue')?.dirty ?? false;
       const newRepeatCfg = skipOverdueTouched
         ? finalRepeatCfg
