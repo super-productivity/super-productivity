@@ -373,6 +373,11 @@ export class WorkContextService {
     map((id) => id === TODAY_TAG.id),
     shareReplay(1),
   );
+  // Signal mirror of `isTodayList$`. The `isTodayList` boolean above is a plain
+  // mutable field kept in sync via subscribe, so reading it inside a `computed()`
+  // never invalidates the computed (a non-signal is not a producer, #8843). Reactive
+  // consumers should read this signal instead; the boolean stays for synchronous reads.
+  readonly isTodayListSignal = toSignal(this.isTodayList$, { initialValue: false });
 
   isHasTasksToWorkOn$: Observable<boolean> = combineLatest([
     this.mainListTasks$,

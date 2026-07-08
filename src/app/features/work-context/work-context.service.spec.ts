@@ -13,7 +13,10 @@ import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContext, WorkContextType } from './work-context.model';
-import { selectActiveWorkContext } from './store/work-context.selectors';
+import {
+  selectActiveContextId,
+  selectActiveWorkContext,
+} from './store/work-context.selectors';
 import { allDataWasLoaded } from '../../root-store/meta/all-data-was-loaded.actions';
 
 describe('WorkContextService - undoneTasks$ filtering', () => {
@@ -640,5 +643,81 @@ describe('WorkContextService - activeWorkContext$ distinctUntilChanged', () => {
 
     ttSub.unsubscribe();
     sub.unsubscribe();
+  });
+});
+
+// #8843: `task.component.ts` read `workContextService.isTodayList` (a plain
+// mutable boolean) inside a `computed()`, so the computed had no signal producer
+// and never invalidated. `isTodayListSignal` is a `toSignal(isTodayList$)` mirror
+// that must reactively track the active work context.
+describe('WorkContextService - isTodayListSignal reactivity', () => {
+  let store: MockStore;
+  let service: WorkContextService;
+
+  beforeEach(() => {
+    const tagServiceMock = jasmine.createSpyObj('TagService', ['getTagById$']);
+    tagServiceMock.getTagById$.and.returnValue(of(TODAY_TAG));
+
+    const globalTrackingIntervalServiceMock = jasmine.createSpyObj(
+      'GlobalTrackingIntervalService',
+      [],
+      { todayDateStr$: of('2026-04-06') },
+    );
+
+    const dateServiceMock = jasmine.createSpyObj('DateService', ['todayStr']);
+    dateServiceMock.todayStr.and.returnValue('2026-04-06');
+
+    const timeTrackingServiceMock = jasmine.createSpyObj('TimeTrackingService', [
+      'getWorkStartEndForWorkContext$',
+    ]);
+    timeTrackingServiceMock.getWorkStartEndForWorkContext$.and.returnValue(of({}));
+
+    const taskArchiveServiceMock = jasmine.createSpyObj('TaskArchiveService', [
+      'loadYoung',
+    ]);
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({ ids: [], entities: {} }),
+    );
+
+    TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
+      providers: [
+        provideMockStore({
+          initialState: {
+            workContext: { activeId: TODAY_TAG.id, activeType: 'TAG' },
+            tag: { entities: {}, ids: [] },
+            project: { entities: {}, ids: [] },
+            task: { entities: {}, ids: [] },
+          },
+        }),
+        // activeWorkContextId$ is gated behind the allDataWasLoaded action.
+        provideMockActions(() => of(allDataWasLoaded())),
+        { provide: Router, useValue: { events: of(), url: '/' } },
+        { provide: TagService, useValue: tagServiceMock },
+        {
+          provide: GlobalTrackingIntervalService,
+          useValue: globalTrackingIntervalServiceMock,
+        },
+        { provide: DateService, useValue: dateServiceMock },
+        { provide: TimeTrackingService, useValue: timeTrackingServiceMock },
+        { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
+        WorkContextService,
+      ],
+    });
+
+    store = TestBed.inject(MockStore);
+    store.overrideSelector(selectActiveContextId, TODAY_TAG.id);
+    store.refreshState();
+
+    service = TestBed.inject(WorkContextService);
+  });
+
+  it('is true on the Today list and flips to false when the context changes', () => {
+    expect(service.isTodayListSignal()).toBe(true);
+
+    store.overrideSelector(selectActiveContextId, 'some-other-context');
+    store.refreshState();
+
+    expect(service.isTodayListSignal()).toBe(false);
   });
 });
