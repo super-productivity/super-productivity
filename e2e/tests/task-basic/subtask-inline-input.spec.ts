@@ -107,7 +107,10 @@ test.describe('Subtask inline input', () => {
     await expect(subTask).toBeFocused();
   });
 
-  test('does not create a subtask when a typed draft loses focus', async ({
+  // On desktop (this suite runs mouse-primary Chrome), click-away cancels the
+  // draft — commit-on-blur is scoped to touch (#8791/#8856), where the
+  // soft-keyboard Enter is unreliable. Desktop commits via Enter or the button.
+  test('discards a typed draft when it loses focus on desktop', async ({
     page,
     workViewPage,
     taskPage,

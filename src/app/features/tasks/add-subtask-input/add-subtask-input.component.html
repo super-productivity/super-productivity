@@ -1,12 +1,33 @@
-<input
-  #inputEl
-  class="add-subtask-input e2e-add-subtask-input"
-  [ngModel]="titleDraft()"
-  (ngModelChange)="titleDraft.set($event)"
-  [placeholder]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
-  [attr.aria-label]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
-  (blur)="onBlur()"
-  (keydown)="onKeydown($event)"
-  matInput
-  spellcheck="false"
-/>
+<div class="add-subtask-wrapper">
+  <input
+    #inputEl
+    class="add-subtask-input e2e-add-subtask-input"
+    [ngModel]="titleDraft()"
+    (ngModelChange)="titleDraft.set($event)"
+    [placeholder]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
+    [attr.aria-label]="T.F.TASK.CMP.ADD_SUB_TASK_PLACEHOLDER | translate"
+    (blur)="onBlur()"
+    (keydown)="onKeydown($event)"
+    matInput
+    spellcheck="false"
+  />
+
+  <!-- Visible commit target (accessibility + discoverability + touch tap target).
+       mousedown is preventDefaulted so a desktop click does not blur the input
+       away before onSubmitClick commits — on touch the tap commits via onBlur
+       instead (see onSubmitClick). No pointerdown/focus trickery beyond that. -->
+  <!-- tabindex=-1: keyboard users commit with Enter in the field — tabbing to
+       the button would blur the input and cancel the draft on desktop. The
+       button stays in the a11y tree for pointer and screen-reader-by-touch use. -->
+  <button
+    type="button"
+    mat-icon-button
+    tabindex="-1"
+    class="submit-btn e2e-add-subtask-submit"
+    (click)="onSubmitClick()"
+    (mousedown)="$event.preventDefault()"
+    [attr.aria-label]="T.F.TASK.CMP.ADD_SUB_TASK | translate"
+  >
+    <mat-icon>add</mat-icon>
+  </button>
+</div>

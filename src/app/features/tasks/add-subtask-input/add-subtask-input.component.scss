@@ -3,12 +3,18 @@
   margin-top: var(--s-quarter);
 }
 
+.add-subtask-wrapper {
+  position: relative;
+}
+
 .add-subtask-input {
   display: block;
   width: 100%;
   min-height: 40px;
   box-sizing: border-box;
-  padding: 0 var(--s2);
+  // Right padding reserves room for the absolutely-positioned submit button
+  // (40px icon-button at a 2px offset) so typed text never slides under it.
+  padding: 0 44px 0 var(--s2);
   border: 1px solid var(--extra-border-color);
   border-radius: var(--task-border-radius);
   outline: 0;
@@ -21,4 +27,11 @@
   &:focus {
     border-color: var(--palette-primary-500);
   }
+}
+
+.submit-btn {
+  position: absolute;
+  top: 50%;
+  right: var(--s-quarter);
+  transform: translateY(-50%);
 }

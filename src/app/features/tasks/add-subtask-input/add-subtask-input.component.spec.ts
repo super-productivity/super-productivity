@@ -31,11 +31,24 @@ describe('AddSubtaskInputComponent', () => {
   const getInput = (): HTMLInputElement =>
     fixture.nativeElement.querySelector('input') as HTMLInputElement;
 
+  const getSubmitBtn = (): HTMLButtonElement =>
+    fixture.nativeElement.querySelector('.e2e-add-subtask-submit') as HTMLButtonElement;
+
   const setInputValue = (value: string): void => {
     const input = getInput();
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.detectChanges();
+  };
+
+  // The test env is mouse-primary (detect-it deviceType 'mouseOnly'), so
+  // _shouldCommitOnBlur() is false by default — force it on to exercise the
+  // touch commit-on-blur path (#8791).
+  const forceTouch = (): void => {
+    spyOn(
+      component as unknown as { _shouldCommitOnBlur: () => boolean },
+      '_shouldCommitOnBlur',
+    ).and.returnValue(true);
   };
 
   beforeEach(async () => {
@@ -112,10 +125,12 @@ describe('AddSubtaskInputComponent', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('closes without creating a subtask on blur with content', () => {
+  it('discards a typed draft on blur on desktop (mouse-primary) and closes', () => {
+    // Desktop keeps click-away-to-cancel: Enter and the submit button are the
+    // reliable commit paths there, so blur must not silently create a task.
     const closeSpy = jasmine.createSpy('closed');
     component.closed.subscribe(closeSpy);
-    setInputValue('Blurred subtask');
+    setInputValue('Discarded on desktop');
 
     getInput().dispatchEvent(new FocusEvent('blur'));
     fixture.detectChanges();
@@ -174,5 +189,93 @@ describe('AddSubtaskInputComponent', () => {
     getInput().dispatchEvent(composingEvent);
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+  });
+
+  describe('commit on blur — touch only (#8791)', () => {
+    it('commits a typed draft on blur when touch is active', () => {
+      forceTouch();
+      const closeSpy = jasmine.createSpy('closed');
+      component.closed.subscribe(closeSpy);
+      setInputValue('Touch blur subtask');
+
+      getInput().dispatchEvent(new FocusEvent('blur'));
+      fixture.detectChanges();
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+        title: 'Touch blur subtask',
+      });
+      expect(closeSpy).toHaveBeenCalledOnceWith('blur');
+    });
+
+    it('commits composition-buffered text on blur, not just Enter', () => {
+      // The reporting device (GrapheneOS/Vanadium) never delivered a usable
+      // Enter, and blur must read the live input value so IME-buffered text is
+      // still saved.
+      forceTouch();
+      const input = getInput();
+      input.dispatchEvent(new CompositionEvent('compositionstart'));
+      input.value = 'Composed on blur';
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+      fixture.detectChanges();
+      expect(component.titleDraft()).toBe('');
+
+      input.dispatchEvent(new FocusEvent('blur'));
+      fixture.detectChanges();
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+        title: 'Composed on blur',
+      });
+    });
+  });
+
+  describe('submit button (#8856)', () => {
+    it('always renders a submit button (desktop included, for accessibility)', () => {
+      expect(getSubmitBtn()).toBeTruthy();
+    });
+
+    it('keeps the submit button out of the tab order (Enter is the keyboard path)', () => {
+      // Tabbing to the button would blur + cancel the draft on desktop; keyboard
+      // users commit with Enter, so the button is pointer/screen-reader-only.
+      expect(getSubmitBtn().getAttribute('tabindex')).toBe('-1');
+    });
+
+    it('commits the draft and keeps the input open when the button is clicked', fakeAsync(() => {
+      const closeSpy = jasmine.createSpy('closed');
+      component.closed.subscribe(closeSpy);
+      setInputValue('  Button subtask  ');
+
+      getSubmitBtn().click();
+      fixture.detectChanges();
+      tick(100);
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+        title: 'Button subtask',
+      });
+      expect(getInput().value).toBe('');
+      expect(document.activeElement).toBe(getInput());
+      expect(closeSpy).not.toHaveBeenCalled();
+    }));
+
+    it('preventDefaults the button mousedown so a desktop click keeps input focus', () => {
+      const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      getSubmitBtn().dispatchEvent(ev);
+
+      expect(ev.defaultPrevented).toBe(true);
+    });
+
+    it('adds exactly one sub-task when a touch blur and the submit click both fire', () => {
+      // Real touch tap ordering: the tap blurs the input (commit + close) before
+      // the button click dispatches onSubmitClick. The synchronous value-clear
+      // in _addSubtaskFromInput must keep this to a single add.
+      forceTouch();
+      setInputValue('Once only');
+
+      getInput().dispatchEvent(new FocusEvent('blur'));
+      component.onSubmitClick();
+
+      expect(taskServiceSpy.addSubTaskTo).toHaveBeenCalledOnceWith('parent-1', {
+        title: 'Once only',
+      });
+    });
   });
 });
