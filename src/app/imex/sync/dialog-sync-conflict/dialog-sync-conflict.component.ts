@@ -57,7 +57,7 @@ export class DialogSyncConflictComponent {
   isHighlightLocal = !this.isHighlightRemote;
 
   remoteChangeCount = this.getChangeCount('remote');
-  localChangeCount = this.getChangeCount('local');
+  localChangeCount = this.getLocalChangeCount();
 
   isHighlightRemoteChanges = (this.remoteChangeCount ?? 0) > (this.localChangeCount ?? 0);
   isHighlightLocalChanges = !this.isHighlightRemoteChanges;
@@ -156,9 +156,22 @@ export class DialogSyncConflictComponent {
     return changeCount;
   }
 
+  /**
+   * Local change count. Prefers the EXACT pending-op count measured from the
+   * op log over the vector-clock delta: compaction can fold still-unsynced ops
+   * into the last-synced baseline clock, so the delta can under-count real
+   * pending changes (e.g. report 0 while N unsynced ops exist — which also
+   * wrongly skipped the secondary overwrite confirmation). The measured count
+   * is precisely "what USE_REMOTE would discard", so it is the decision-relevant
+   * figure; the delta remains the fallback for producers that don't supply it.
+   */
+  private getLocalChangeCount(): number | null {
+    return this.data.localUnsyncedOpsCount ?? this.getChangeCount('local');
+  }
+
   private shouldConfirmOverwrite(resolution: DialogConflictResolutionResult): boolean {
-    const remoteChanges = this.getChangeCount('remote');
-    const localChanges = this.getChangeCount('local');
+    const remoteChanges = this.remoteChangeCount;
+    const localChanges = this.localChangeCount;
 
     // If we cannot quantify the changes (fresh client, no last-synced
     // baseline), still show the confirmation — overwriting could discard real
@@ -181,8 +194,8 @@ export class DialogSyncConflictComponent {
   }
 
   private getConfirmationMessage(resolution: DialogConflictResolutionResult): string {
-    const remoteChanges = this.getChangeCount('remote');
-    const localChanges = this.getChangeCount('local');
+    const remoteChanges = this.remoteChangeCount;
+    const localChanges = this.localChangeCount;
 
     const [sourceName, targetName] =
       resolution === 'USE_REMOTE' ? ['remote', 'local'] : ['local', 'remote'];

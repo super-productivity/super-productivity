@@ -1249,6 +1249,7 @@ export class SyncWrapperService {
           vectorClock: localClock,
           lastSyncedVectorClock: error.lastSyncedVectorClock ?? null,
         },
+        localUnsyncedOpsCount: error.unsyncedCount,
       };
 
       SyncLog.log(

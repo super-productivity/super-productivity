@@ -2924,6 +2924,56 @@ describe('OperationLogSyncService', () => {
         expect(conflictError.unsyncedCount).toBe(0); // No unsynced ops
         expect(conflictError.remoteSnapshotState).toEqual(remoteSnapshot);
         expect(conflictError.remoteVectorClock).toEqual(remoteVectorClock);
+        // Fresh client has no prior sync — the last-synced baseline must be
+        // explicitly null (SPAP-7), not undefined or a clock.
+        expect(conflictError.lastSyncedVectorClock).toBeNull();
+      }
+    });
+
+    it('passes a null last-synced clock when fresh client with store data receives remote ops (no snapshot)', async () => {
+      // Covers the second fresh-client throw site: incremental ops without a
+      // snapshotState. The error must carry an explicit null baseline (SPAP-7).
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [
+          {
+            id: 'remote-op-1',
+            clientId: 'clientB',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: {},
+            vectorClock: { clientB: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      try {
+        await service.downloadRemoteOps(mockProvider);
+        fail('Expected LocalDataConflictError to be thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(LocalDataConflictError);
+        const conflictError = error as LocalDataConflictError;
+        expect(conflictError.unsyncedCount).toBe(0);
+        expect(conflictError.lastSyncedVectorClock).toBeNull();
       }
     });
 
