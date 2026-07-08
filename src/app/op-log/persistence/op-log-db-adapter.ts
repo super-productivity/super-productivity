@@ -137,11 +137,13 @@ export interface OpLogTx {
  *
  * Concurrency: callers may issue operations concurrently — the op-log does
  * (capture append, archive write and compaction overlap). Transactions are
- * mutually exclusive per database, and no bare operation may interleave into an
- * open transaction. IndexedDB provides this natively (independent transactions);
- * a backend over a single connection with no nested transactions (SQLite) MUST
- * serialize internally to honor it. Callers therefore never need to lock around
- * these methods themselves.
+ * mutually exclusive per overlapping store scope, and no bare operation may
+ * interleave into an open transaction. IndexedDB provides this natively
+ * (transactions with overlapping scopes are serialized; disjoint-scope ones may
+ * run concurrently); a backend over a single connection with no nested
+ * transactions (SQLite) MUST serialize internally and provides the stronger
+ * whole-connection exclusion via its FIFO queue. Callers therefore never need
+ * to lock around these methods themselves.
  */
 export interface OpLogDbAdapter {
   /**

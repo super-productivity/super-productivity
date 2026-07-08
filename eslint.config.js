@@ -224,17 +224,26 @@ module.exports = tseslint.config(
       'local-rules/no-multi-entity-effect': 'warn',
     },
   },
+  // Op-log persistence: inside an adapter.transaction() callback only the tx
+  // handle may be used — adapter methods enqueue behind the transaction's own
+  // FIFO queue slot on the SQLite backend and deadlock (see
+  // SqliteOpLogAdapter._serialize()).
+  {
+    files: ['src/app/op-log/**/*.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/no-adapter-in-tx': 'error',
+    },
+  },
   // App code must route logging through Log/SyncLog/OpLog/... helpers.
   // Direct console.* calls bypass the exportable log history users attach
   // to bug reports. The Log implementation itself, tests, and benchmarks
   // (which intentionally dump timing numbers to stdout) are exempt.
   {
     files: ['src/app/**/*.ts'],
-    ignores: [
-      'src/app/**/*.spec.ts',
-      'src/app/**/*.benchmark.ts',
-      'src/app/core/log.ts',
-    ],
+    ignores: ['src/app/**/*.spec.ts', 'src/app/**/*.benchmark.ts', 'src/app/core/log.ts'],
     rules: {
       'no-console': 'error',
     },
