@@ -66,11 +66,32 @@ import { SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 import { ConflictJournalService } from './conflict-journal.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
+import {
+  isDisjointMergeEligible,
+  mergeChangedFields,
+  synthesizeMergedEntity,
+} from './conflict-disjoint-merge.util';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
  */
 type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
+
+/**
+ * SPAP-14: one conflict resolved by a disjoint-field auto-merge. `mergedOp` is a
+ * synthetic LWW Update carrying the UNION of both sides' changes; it is applied
+ * locally AND uploaded, and both original sides are rejected (superseded).
+ */
+interface MergedResolution {
+  conflict: EntityConflict;
+  mergedOp: Operation;
+}
+
+/** Result of `_resolveConflictsWithLWW`: LWW winners plus disjoint merges. */
+interface ResolvedConflicts {
+  lwwResolutions: LWWResolution[];
+  mergedResolutions: MergedResolution[];
+}
 
 interface AutoResolveConflictsLwwOptions {
   callerHoldsOperationLogLock?: boolean;
@@ -307,7 +328,8 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Resolve each conflict using LWW
     // ─────────────────────────────────────────────────────────────────────────
-    const resolutions = await this._resolveConflictsWithLWW(conflicts);
+    const { lwwResolutions: resolutions, mergedResolutions } =
+      await this._resolveConflictsWithLWW(conflicts);
 
     const allOpsToApply: Operation[] = [];
     const allStoredOps: Array<{ id: string; seq: number }> = [];
@@ -410,6 +432,41 @@ export class ConflictResolutionService {
         allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
         allOpsToApply.push(result.ops[i]);
       }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3b (SPAP-14): Process disjoint-field merges.
+    //
+    // For each merge we: (1) reject BOTH original sides (the merged op
+    // supersedes them); (2) persist the original remote ops as rejected so they
+    // are recorded-as-seen but not applied (mirrors the local-wins remote-op
+    // bookkeeping); (3) append the synthesized merged op as a PENDING LOCAL op
+    // (so it uploads on next sync) AND queue it into the apply batch (so THIS
+    // client's state picks up the remote side's fields — local's are already
+    // optimistically applied). The op stays unsynced+not-rejected → it uploads.
+    // ─────────────────────────────────────────────────────────────────────────
+    for (const merged of mergedResolutions) {
+      for (const op of merged.conflict.localOps) {
+        if (!localOpsToRejectSet.has(op.id)) {
+          localOpsToReject.push(op.id);
+          localOpsToRejectSet.add(op.id);
+        }
+      }
+      if (merged.conflict.remoteOps.length > 0) {
+        await this._filterAndAppendOpsWithRetry(merged.conflict.remoteOps, 'remote');
+        remoteOpsToReject.push(...merged.conflict.remoteOps.map((op) => op.id));
+      }
+
+      const seq = await this.opLogStore.appendWithVectorClockUpdate(
+        merged.mergedOp,
+        'local',
+      );
+      allStoredOps.push({ id: merged.mergedOp.id, seq });
+      allOpsToApply.push(merged.mergedOp);
+      OpLog.normal(
+        `ConflictResolutionService: Appended disjoint-merge op ${merged.mergedOp.id} for ` +
+          `${merged.mergedOp.entityType}:${merged.mergedOp.entityId}`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -663,8 +720,9 @@ export class ConflictResolutionService {
    */
   private async _resolveConflictsWithLWW(
     conflicts: EntityConflict[],
-  ): Promise<LWWResolution[]> {
+  ): Promise<ResolvedConflicts> {
     const resolutions: LWWResolution[] = [];
+    const mergedResolutions: MergedResolution[] = [];
 
     const plans = planLwwConflictResolutions(conflicts, {
       isArchiveAction: (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
@@ -673,6 +731,22 @@ export class ConflictResolutionService {
     });
 
     for (const plan of plans) {
+      // SPAP-14: BEFORE the whole-entity LWW plan, try a disjoint-field merge —
+      // when both sides edited the same entity but DIFFERENT real fields, keep
+      // BOTH instead of discarding the loser. Delete/archive and same-field
+      // (overlapping) conflicts are NOT eligible and fall through to the exact
+      // LWW + SPAP-13 path below, byte-unchanged.
+      const mergedOp = await this._tryCreateDisjointMergeOp(plan);
+      if (mergedOp) {
+        mergedResolutions.push({ conflict: plan.conflict, mergedOp });
+        await this._journalMergedResolution(plan);
+        OpLog.normal(
+          `ConflictResolutionService: Disjoint-field merge for ` +
+            `${plan.conflict.entityType}:${plan.conflict.entityId} (kept both sides)`,
+        );
+        continue;
+      }
+
       let localWinOp: Operation | undefined;
 
       if (plan.localWinOperationKind === 'archive-win') {
@@ -716,7 +790,7 @@ export class ConflictResolutionService {
       }
     }
 
-    return resolutions;
+    return { lwwResolutions: resolutions, mergedResolutions };
   }
 
   /**
@@ -745,6 +819,141 @@ export class ConflictResolutionService {
       await this.conflictJournal.record(entry);
     } catch (err) {
       OpLog.err('ConflictResolutionService: conflict-journal hook failed (ignored)', err);
+    }
+  }
+
+  /**
+   * SPAP-14: whether this plan is an archive plan. Archive/delete-wins semantics
+   * are left 100% untouched by disjoint-merge — the archive must win the whole
+   * entity, never be partially merged with a concurrent edit.
+   */
+  private _isArchivePlan(plan: LwwConflictResolutionPlan<EntityConflict>): boolean {
+    return (
+      plan.reason === 'remote-archive' ||
+      plan.reason === 'local-archive' ||
+      plan.reason === 'local-archive-sibling' ||
+      plan.localWinOperationKind === 'archive-win'
+    );
+  }
+
+  /**
+   * SPAP-14: if this conflict is a disjoint-field merge, synthesize the merged
+   * UPDATE op; otherwise return undefined so the caller uses the whole-entity LWW
+   * path unchanged.
+   *
+   * The merged op is deterministic and CONVERGENT: both clients synthesize the
+   * byte-identical merged entity (union of both sides' disjoint real fields, with
+   * noise fields resolved by a deterministic `(timestamp, clientId)` tiebreak —
+   * see `synthesizeMergedEntity`) and a vector clock that DOMINATES both sides
+   * (via `mergeAndIncrementClocks`, mirroring `_createLocalWinUpdateOp`). The op
+   * uses the standard LWW Update action type and the max timestamp across both
+   * sides, so when two independently-synthesized merged ops meet they carry
+   * identical payloads and resolve by ordinary LWW — never re-merging.
+   *
+   * Returns undefined (→ fall back to LWW) if the conflict is not merge-eligible,
+   * the current entity state is unavailable, or there is no client id.
+   */
+  private async _tryCreateDisjointMergeOp(
+    plan: LwwConflictResolutionPlan<EntityConflict>,
+  ): Promise<Operation | undefined> {
+    if (this._isArchivePlan(plan)) {
+      return undefined;
+    }
+
+    const { conflict } = plan;
+    const payloadKey = this._resolvePayloadKey(conflict.entityType);
+
+    if (
+      !isDisjointMergeEligible({
+        localOps: conflict.localOps,
+        remoteOps: conflict.remoteOps,
+        payloadKey,
+      })
+    ) {
+      return undefined;
+    }
+
+    // The merged entity is built on THIS client's current state (= base + local
+    // changes). If it is unavailable, we cannot merge safely → fall back to LWW.
+    const currentEntityState = await this.getCurrentEntityState(
+      conflict.entityType,
+      conflict.entityId,
+    );
+    if (currentEntityState === undefined || currentEntityState === null) {
+      OpLog.warn(
+        `ConflictResolutionService: Cannot disjoint-merge - entity state unavailable: ` +
+          `${conflict.entityType}:${conflict.entityId}. Falling back to LWW.`,
+      );
+      return undefined;
+    }
+
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err('ConflictResolutionService: Cannot disjoint-merge - no client ID');
+      return undefined;
+    }
+
+    const localChanges = mergeChangedFields(conflict.localOps, payloadKey);
+    const remoteChanges = mergeChangedFields(conflict.remoteOps, payloadKey);
+    const localTs = Math.max(...conflict.localOps.map((op) => op.timestamp));
+    const remoteTs = Math.max(...conflict.remoteOps.map((op) => op.timestamp));
+
+    const mergedEntity = synthesizeMergedEntity(
+      currentEntityState as Record<string, unknown>,
+      localChanges,
+      remoteChanges,
+      { timestamp: localTs, clientId: conflict.localOps[0]?.clientId ?? clientId },
+      { timestamp: remoteTs, clientId: conflict.remoteOps[0]?.clientId ?? '' },
+    );
+
+    // Clock dominates BOTH sides so the merged op supersedes them and propagates
+    // through normal sync. No client-side pruning (mirrors _createLocalWinUpdateOp).
+    const allClocks = [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ];
+    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
+
+    // Deterministic timestamp both clients agree on (max across both sides), so
+    // two independently-synthesized merged ops tie under LWW and converge.
+    const mergedTimestamp = Math.max(localTs, remoteTs);
+
+    return this.createLWWUpdateOp(
+      conflict.entityType,
+      conflict.entityId,
+      mergedEntity,
+      clientId,
+      newClock,
+      mergedTimestamp,
+    );
+  }
+
+  /**
+   * SPAP-14 (observe-only): journal a disjoint-field merge as `merged` /
+   * `disjoint-merge` / `info`. Nothing was discarded, so it must NOT count toward
+   * the unreviewed count. Like `_journalResolution`, any failure is swallowed and
+   * can never affect resolution.
+   */
+  private async _journalMergedResolution(
+    plan: LwwConflictResolutionPlan<EntityConflict>,
+  ): Promise<void> {
+    try {
+      const entry = buildConflictJournalEntry({
+        entityType: plan.conflict.entityType,
+        entityId: plan.conflict.entityId,
+        winner: 'merged',
+        planReason: plan.reason,
+        localOps: plan.conflict.localOps,
+        remoteOps: plan.conflict.remoteOps,
+        isCorruptionSuspected: this._corruptionSuspectedConflicts.has(plan.conflict),
+        resolvePayloadKey: (entityType) => this._resolvePayloadKey(entityType),
+      });
+      await this.conflictJournal.record(entry);
+    } catch (err) {
+      OpLog.err(
+        'ConflictResolutionService: disjoint-merge journal hook failed (ignored)',
+        err,
+      );
     }
   }
 

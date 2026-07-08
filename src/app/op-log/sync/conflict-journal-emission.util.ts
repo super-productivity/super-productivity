@@ -10,11 +10,7 @@
 
 import { OpType } from '../core/operation.types';
 import type { EntityType, Operation } from '../core/operation.types';
-import {
-  extractActionPayload,
-  extractEntityFromPayload,
-  extractUpdateChanges,
-} from '@sp/sync-core';
+import { extractActionPayload, extractEntityFromPayload } from '@sp/sync-core';
 import type { LwwConflictResolutionReason } from '@sp/sync-core';
 import { uuidv7 } from '../../util/uuid-v7';
 import {
@@ -22,14 +18,19 @@ import {
   ConflictJournalFieldDiff,
   ConflictJournalReason,
   ConflictJournalStatus,
+  ConflictJournalWinner,
   NOISE_FIELDS,
 } from './conflict-journal.model';
+import {
+  buildMergedFieldDiffs,
+  mergeChangedFields,
+} from './conflict-disjoint-merge.util';
 
 /** Everything the classifier needs about one resolved conflict. */
 export interface ConflictJournalClassificationInput {
   entityType: EntityType;
   entityId: string;
-  winner: 'local' | 'remote';
+  winner: ConflictJournalWinner;
   /** The plan reason from `planLwwConflictResolutions` (archive detection etc.). */
   planReason: LwwConflictResolutionReason;
   localOps: Operation[];
@@ -48,26 +49,6 @@ const ARCHIVE_PLAN_REASONS: ReadonlySet<LwwConflictResolutionReason> = new Set([
   'local-archive',
   'local-archive-sibling',
 ]);
-
-/** Union of changed-field maps across a set of ops on one side. */
-const mergeChangedFields = (
-  ops: Operation[],
-  payloadKey: string,
-): Record<string, unknown> => {
-  const merged: Record<string, unknown> = {};
-  for (const op of ops) {
-    // DELETE ops carry no meaningful field changes; skip them so a delete on the
-    // winning side doesn't drown out the loser's real edits.
-    if (op.opType === OpType.Delete) {
-      continue;
-    }
-    const changes = extractUpdateChanges(op.payload, payloadKey);
-    for (const [key, value] of Object.entries(changes)) {
-      merged[key] = value;
-    }
-  }
-  return merged;
-};
 
 const firstString = (...vals: unknown[]): string | undefined => {
   for (const v of vals) {
@@ -138,6 +119,39 @@ export const buildConflictJournalEntry = (
 
   const localTs = maxTimestamp(localOps);
   const remoteTs = maxTimestamp(remoteOps);
+
+  // SPAP-14: disjoint-field auto-merge. Nothing was discarded — BOTH sides'
+  // changes survive in the synthesized merged op — so this is informational,
+  // never counts toward the unreviewed count, and records per-field which side
+  // supplied each value. Early-return keeps the LWW classification below (which
+  // narrows `winner` to 'local' | 'remote') completely unchanged.
+  if (winner === 'merged') {
+    const localClientId = localOps[0]?.clientId ?? '';
+    const remoteClientId = remoteOps[0]?.clientId ?? '';
+    const mergedTitle =
+      extractEntityTitle(localOps, localChanges, payloadKey) ||
+      extractEntityTitle(remoteOps, remoteChanges, payloadKey);
+    return {
+      id: uuidv7(),
+      entityType,
+      entityId,
+      entityTitle: mergedTitle,
+      resolvedAt: Date.now(),
+      winner: 'merged',
+      reason: 'disjoint-merge',
+      fieldDiffs: buildMergedFieldDiffs(
+        localChanges,
+        remoteChanges,
+        { timestamp: localTs, clientId: localClientId },
+        { timestamp: remoteTs, clientId: remoteClientId },
+      ),
+      localClientId,
+      remoteClientId,
+      localTs,
+      remoteTs,
+      status: 'info',
+    };
+  }
 
   // fieldDiffs: union of changed fields on both sides, capturing each side's
   // value VERBATIM so the loser's discarded values are preserved.

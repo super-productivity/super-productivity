@@ -1,0 +1,194 @@
+/**
+ * SPAP-14 — Pure disjoint-field auto-merge logic.
+ *
+ * When two clients concurrently edit the SAME entity but DIFFERENT (non-noise)
+ * fields, whole-entity LWW would discard one side's real edit. SPAP-14 instead
+ * KEEPS BOTH by synthesizing a single merged UPDATE whose delta is the union of
+ * both sides' changed fields.
+ *
+ * No Angular, no I/O — deterministic, so the merge decision and the synthesized
+ * entity are unit-testable in isolation. Determinism is the whole point: both
+ * clients must arrive at the byte-identical merged entity regardless of which
+ * one performs the merge (see `synthesizeMergedEntity`).
+ */
+
+import { OpType } from '../core/operation.types';
+import type { Operation } from '../core/operation.types';
+import { extractUpdateChanges } from '@sp/sync-core';
+import { ConflictJournalFieldDiff, NOISE_FIELDS } from './conflict-journal.model';
+
+/** Identity of one side of the conflict for the deterministic noise tiebreak. */
+export interface MergeSideMeta {
+  /** Max timestamp across that side's ops. */
+  timestamp: number;
+  /** The client that authored that side. */
+  clientId: string;
+}
+
+/**
+ * Union of the changed-field maps across a set of ops on one side.
+ *
+ * Mirrors the SPAP-13 `mergeChangedFields` pattern (was private to the journal
+ * emission util). DELETE ops carry no meaningful field changes and are skipped —
+ * though disjoint-merge eligibility already excludes any side with a DELETE.
+ */
+export const mergeChangedFields = (
+  ops: Operation[],
+  payloadKey: string,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = {};
+  for (const op of ops) {
+    if (op.opType === OpType.Delete) {
+      continue;
+    }
+    const changes = extractUpdateChanges(op.payload, payloadKey);
+    for (const [key, value] of Object.entries(changes)) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+};
+
+/** The non-NOISE keys of a changed-field map. */
+const nonNoiseKeys = (changes: Record<string, unknown>): string[] =>
+  Object.keys(changes).filter((field) => !NOISE_FIELDS.has(field));
+
+/**
+ * Deterministic tiebreak for a field both sides changed: the side with the
+ * greater `(timestamp, clientId)`. Both clients compute the SAME global winner
+ * because the comparison is over the two sides' identities, independent of which
+ * side happens to be "local" on a given client.
+ */
+export const noiseTiebreakSide = (
+  local: MergeSideMeta,
+  remote: MergeSideMeta,
+): 'local' | 'remote' => {
+  if (local.timestamp !== remote.timestamp) {
+    return local.timestamp > remote.timestamp ? 'local' : 'remote';
+  }
+  if (local.clientId !== remote.clientId) {
+    return local.clientId > remote.clientId ? 'local' : 'remote';
+  }
+  // Same identity on both — value is identical either way; pick 'local'.
+  return 'local';
+};
+
+/**
+ * True iff this conflict is safe to resolve by a disjoint-field merge.
+ *
+ * Field-level conditions only (the caller separately excludes archive plans):
+ *  - neither side has a DELETE op;
+ *  - BOTH sides changed at least one real (non-noise) field — if one side only
+ *    bumped noise, nothing real is lost by LWW, so leave it to SPAP-13's `noise`
+ *    classification;
+ *  - the two sides' non-noise changed-field sets are DISJOINT.
+ */
+export const isDisjointMergeEligible = (params: {
+  localOps: Operation[];
+  remoteOps: Operation[];
+  payloadKey: string;
+}): boolean => {
+  const { localOps, remoteOps, payloadKey } = params;
+
+  if (localOps.some((op) => op.opType === OpType.Delete)) return false;
+  if (remoteOps.some((op) => op.opType === OpType.Delete)) return false;
+
+  const localNonNoise = nonNoiseKeys(mergeChangedFields(localOps, payloadKey));
+  const remoteNonNoise = nonNoiseKeys(mergeChangedFields(remoteOps, payloadKey));
+  if (localNonNoise.length === 0 || remoteNonNoise.length === 0) return false;
+
+  const remoteSet = new Set(remoteNonNoise);
+  return !localNonNoise.some((field) => remoteSet.has(field));
+};
+
+/**
+ * Synthesizes the merged entity — the SINGLE source of truth both clients must
+ * converge on.
+ *
+ * `currentEntity` is THIS client's current entity state, i.e. `base + localChanges`.
+ * We overlay the OTHER side's non-noise changed fields (guaranteed disjoint from
+ * local's, so nothing local is clobbered), then resolve every noise field either
+ * side changed via the deterministic `(timestamp, clientId)` tiebreak.
+ *
+ * Convergence: client A starts from `base+A` and overlays B's fields; client B
+ * starts from `base+B` and overlays A's fields. For every non-noise field the
+ * value is the same (disjoint sets → each field owned by exactly one side); for
+ * every unchanged field the value is `base` on both; for every noise field both
+ * pick the same global tiebreak winner. Therefore `mergedA === mergedB`.
+ */
+export const synthesizeMergedEntity = (
+  currentEntity: Record<string, unknown>,
+  localChanges: Record<string, unknown>,
+  remoteChanges: Record<string, unknown>,
+  localMeta: MergeSideMeta,
+  remoteMeta: MergeSideMeta,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = { ...currentEntity };
+
+  // Overlay the remote side's real (non-noise) fields. Local's real fields are
+  // already present in `currentEntity` and are disjoint from these.
+  for (const [key, value] of Object.entries(remoteChanges)) {
+    if (!NOISE_FIELDS.has(key)) {
+      merged[key] = value;
+    }
+  }
+
+  // Resolve every noise field either side changed, deterministically, so both
+  // clients write the identical value (not each their own).
+  const winner = noiseTiebreakSide(localMeta, remoteMeta);
+  const noiseFields = new Set<string>(
+    [...Object.keys(localChanges), ...Object.keys(remoteChanges)].filter((field) =>
+      NOISE_FIELDS.has(field),
+    ),
+  );
+  for (const field of noiseFields) {
+    const localHas = field in localChanges;
+    const remoteHas = field in remoteChanges;
+    if (localHas && remoteHas) {
+      merged[field] = winner === 'local' ? localChanges[field] : remoteChanges[field];
+    } else if (localHas) {
+      merged[field] = localChanges[field];
+    } else {
+      merged[field] = remoteChanges[field];
+    }
+  }
+
+  return merged;
+};
+
+/**
+ * Per-field journal diffs for a merged resolution. Each field records which
+ * side's value the merge kept: `local` for local-changed fields, `remote` for
+ * remote-changed fields, and the deterministic tiebreak winner for a noise field
+ * both sides changed.
+ */
+export const buildMergedFieldDiffs = (
+  localChanges: Record<string, unknown>,
+  remoteChanges: Record<string, unknown>,
+  localMeta: MergeSideMeta,
+  remoteMeta: MergeSideMeta,
+): ConflictJournalFieldDiff[] => {
+  const winner = noiseTiebreakSide(localMeta, remoteMeta);
+  const fieldNames = Array.from(
+    new Set([...Object.keys(localChanges), ...Object.keys(remoteChanges)]),
+  );
+  return fieldNames.map((field) => {
+    const localHas = field in localChanges;
+    const remoteHas = field in remoteChanges;
+    let pickedSide: 'local' | 'remote';
+    if (localHas && remoteHas) {
+      // Only NOISE fields can be on both sides (real fields are disjoint).
+      pickedSide = winner;
+    } else if (localHas) {
+      pickedSide = 'local';
+    } else {
+      pickedSide = 'remote';
+    }
+    return {
+      field,
+      localVal: localChanges[field],
+      remoteVal: remoteChanges[field],
+      pickedSide,
+    };
+  });
+};
