@@ -11,6 +11,7 @@ const originalModuleLoad = Module._load;
 
 let showOrFocusCalls = [];
 let toggleVisibilityCalls = [];
+let showQuickAddCalls = [];
 let logCalls = [];
 
 const installMocks = () => {
@@ -26,6 +27,11 @@ const installMocks = () => {
       return {
         showOrFocus: (win) => showOrFocusCalls.push(win),
         toggleWindowVisibility: (win) => toggleVisibilityCalls.push(win),
+      };
+    }
+    if (request === './quick-add-window') {
+      return {
+        showQuickAddWindow: () => showQuickAddCalls.push(true),
       };
     }
     return originalModuleLoad.call(this, request, parent, isMain);
@@ -59,6 +65,7 @@ const makeWin = () => {
 test.beforeEach(() => {
   showOrFocusCalls = [];
   toggleVisibilityCalls = [];
+  showQuickAddCalls = [];
   logCalls = [];
 });
 
@@ -90,6 +97,17 @@ test('toggle-visibility delegates to the shared toggle helper without sending IP
 
   assert.equal(toggleVisibilityCalls.length, 1);
   assert.equal(toggleVisibilityCalls[0], win);
+  assert.deepEqual(win.sent, []);
+});
+
+test('quick-add opens the dedicated Quick Add HUD without focusing the main window', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://quick-add', win);
+
+  assert.equal(showQuickAddCalls.length, 1);
+  assert.equal(showOrFocusCalls.length, 0);
   assert.deepEqual(win.sent, []);
 });
 
@@ -177,6 +195,18 @@ test('second-instance does NOT pre-focus for toggle-visibility (reads pre-press 
   // hide it again (#7114) — so it must be skipped for this action.
   assert.equal(showOrFocusCalls.length, 0, 'must not pre-focus before toggling');
   assert.equal(toggleVisibilityCalls.length, 1, 'toggle still runs');
+});
+
+test('second-instance does NOT pre-focus for quick-add (the HUD manages focus)', () => {
+  const { initializeProtocolHandling } = loadModule();
+  const win = makeWin();
+  const app = makeFakeApp();
+
+  initializeProtocolHandling(false, app, () => win);
+  app.handlers['second-instance']({}, ['/path/to/app', 'superproductivity://quick-add']);
+
+  assert.equal(showOrFocusCalls.length, 0);
+  assert.equal(showQuickAddCalls.length, 1);
 });
 
 test('second-instance pre-focuses for a plain launch and for non-toggle actions', () => {

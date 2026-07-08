@@ -3,9 +3,11 @@ import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { showOrFocus, toggleWindowVisibility } from './various-shared';
+import { showQuickAddWindow } from './quick-add-window';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
+export const QUICK_ADD_PROTOCOL_URL = `${PROTOCOL_PREFIX}quick-add`;
 
 // Store pending URLs to process after window is ready
 let pendingUrls: string[] = [];
@@ -108,6 +110,9 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
         showOrFocus(mainWin);
         mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
         break;
+      case 'quick-add':
+        showQuickAddWindow();
+        break;
       default:
         log('Unknown protocol action:', action);
     }
@@ -164,7 +169,8 @@ export const initializeProtocolHandling = (
     // must observe the *pre-press* window state — pre-focusing here would make the toggle
     // always read "visible" and hide the window the user actually asked to show (#7114),
     // so let that action manage visibility itself.
-    if (mainWin && getProtocolAction(url) !== 'toggle-visibility') {
+    const action = getProtocolAction(url);
+    if (mainWin && action !== 'toggle-visibility' && action !== 'quick-add') {
       showOrFocus(mainWin);
     }
 

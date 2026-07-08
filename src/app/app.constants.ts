@@ -20,6 +20,7 @@ export const IS_WEB_BROWSER = !IS_ELECTRON && !IS_ANDROID_WEB_VIEW;
 // and main process agree. See global-theme.service.ts / main-window.ts.
 // (window.ea.isGnomeDesktop() still exists on the bridge for plugin use.)
 export const IS_GNOME_WAYLAND = IS_ELECTRON && window.ea.isGnomeWayland();
+export const IS_WAYLAND = IS_ELECTRON && window.ea.isWayland();
 // True only inside the Electron build — preload exposes process.arch.
 // Web builds can't reliably distinguish Apple Silicon from Intel and stay false.
 export const IS_APPLE_SILICON = IS_ELECTRON && window.ea.isAppleSilicon();

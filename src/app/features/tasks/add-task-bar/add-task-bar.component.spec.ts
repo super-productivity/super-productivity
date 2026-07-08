@@ -27,6 +27,8 @@ import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
+import { ADD_TASK_BAR_DATA_FACADE } from './add-task-bar-data-facade.token';
+import { FullAddTaskBarDataFacadeService } from './add-task-bar-data-facade.service';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -245,6 +247,10 @@ describe('AddTaskBarComponent', () => {
         {
           provide: AddTaskBarIssueSearchService,
           useValue: mockAddTaskBarIssueSearchService,
+        },
+        {
+          provide: ADD_TASK_BAR_DATA_FACADE,
+          useExisting: FullAddTaskBarDataFacadeService,
         },
       ],
     }).compileComponents();
@@ -796,6 +802,10 @@ describe('AddTaskBarComponent', () => {
           {
             provide: AddTaskBarIssueSearchService,
             useValue: mockAddTaskBarIssueSearchService,
+          },
+          {
+            provide: ADD_TASK_BAR_DATA_FACADE,
+            useExisting: FullAddTaskBarDataFacadeService,
           },
         ],
       }).compileComponents();

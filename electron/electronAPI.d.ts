@@ -16,6 +16,18 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import type {
+  AddTaskPayload,
+  AddTaskSubmitResult,
+} from '../src/app/features/tasks/add-task-bar/add-task-payload-builder';
+import type { QuickAddSnapshotResult } from '../src/app/features/tasks/add-task-bar/quick-add-hud.model';
+
+export interface QuickAddElectronApi {
+  closeQuickAdd(): void;
+  submitQuickAddTask(payload: AddTaskPayload): Promise<AddTaskSubmitResult>;
+  requestQuickAddSnapshot(): Promise<QuickAddSnapshotResult>;
+  onQuickAddOpened(listener: () => void): () => void;
+}
 
 export interface ElectronAPI {
   on(
@@ -125,6 +137,8 @@ export interface ElectronAPI {
 
   isGnomeWayland(): boolean;
 
+  isWayland(): boolean;
+
   isMacOS(): boolean;
 
   isAppleSilicon(): boolean;
@@ -183,6 +197,8 @@ export interface ElectronAPI {
 
   showEmojiPanel(): void;
 
+  openSystemKeyboardSettings(): void;
+
   relaunch(): void;
 
   exit(exitCode: number): void;
@@ -196,6 +212,18 @@ export interface ElectronAPI {
   lockScreen(): void;
 
   informAboutAppReady(): void;
+
+  informQuickAddBridgeReady(): void;
+
+  informQuickAddTaskSubmitBridgeReady(): void;
+
+  showQuickAdd(): void;
+
+  closeQuickAdd(): void;
+
+  submitQuickAddTask(payload: AddTaskPayload): Promise<AddTaskSubmitResult>;
+
+  requestQuickAddSnapshot(): Promise<QuickAddSnapshotResult>;
 
   scheduleRegisterBeforeClose(id: string): void;
 
@@ -249,6 +277,18 @@ export interface ElectronAPI {
   ): void;
 
   onSwitchTask(listener: (taskId: string) => void): void;
+
+  onQuickAddOpened(listener: () => void): () => void;
+
+  onQuickAddTaskSubmitRequest(
+    listener: (requestId: string, payload: AddTaskPayload) => void,
+  ): () => void;
+
+  sendQuickAddTaskSubmitResponse(requestId: string, result: AddTaskSubmitResult): void;
+
+  onQuickAddSnapshotRequest(listener: (requestId: string) => void): () => void;
+
+  sendQuickAddSnapshotResponse(requestId: string, result: QuickAddSnapshotResult): void;
 
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
