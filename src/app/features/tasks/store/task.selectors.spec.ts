@@ -236,6 +236,10 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasks.clearResult();
     fromSelectors.selectAllTasksInActiveProjects.clearResult();
     fromSelectors.selectOverdueTasks.clearResult();
+    // dialog-schedule-task.* and time-block-sync.effects specs overrideSelector
+    // selectAllTasksWithDueTimeSorted (setResult persists across files), which
+    // would leak into selectAllTasksWithDueTimeSorted(mockState) here.
+    fromSelectors.selectAllTasksWithDueTimeSorted.clearResult();
     // work-view.component.spec overrides these via overrideSelector (setResult);
     // selectOverdueTasks reads them, so the leaked "today"/offset must be cleared too.
     selectTodayStr.clearResult();
@@ -255,6 +259,7 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasks.release();
     fromSelectors.selectAllTasksInActiveProjects.release();
     fromSelectors.selectOverdueTasks.release();
+    fromSelectors.selectAllTasksWithDueTimeSorted.release();
     selectTodayStr.release();
     selectStartOfNextDayDiffMs.release();
     selectProjectFeatureState.release();
