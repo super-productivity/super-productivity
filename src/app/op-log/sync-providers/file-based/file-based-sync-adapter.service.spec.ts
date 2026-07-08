@@ -861,11 +861,22 @@ describe('FileBasedSyncAdapterService', () => {
       expect(uploadedData.recentOps).toEqual([]); // Fresh start
     });
 
-    it('should upload snapshot directly without backup (snapshots replace state completely)', async () => {
+    it('writes the SAME snapshot payload to .bak BEFORE the primary (rotation-safe replace)', async () => {
+      // A snapshot replaces the remote wholesale, so the pre-snapshot .bak must
+      // not survive it: after an E2EE password rotation a stale old-key .bak
+      // would be silently "recovered" by a still-old-key client (suppressing its
+      // wrong-password prompt) and heal-uploaded back over the new-key primary.
       mockProvider.downloadFile.and.throwError(
         new RemoteFileNotFoundAPIError('sync-data.json'),
       );
-      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+      const uploads: { path: string; data: string }[] = [];
+      mockProvider.uploadFile.and.callFake(
+        async (path: string, data: string, _rev: string | null, force?: boolean) => {
+          uploads.push({ path, data });
+          expect(force).toBe(true);
+          return { rev: `${path}-rev` };
+        },
+      );
 
       await adapter.uploadSnapshot(
         {},
@@ -877,20 +888,17 @@ describe('FileBasedSyncAdapterService', () => {
         'test-op-id-2', // opId
       );
 
-      // Should upload to main sync file with force overwrite (no backup created)
-      expect(mockProvider.uploadFile).toHaveBeenCalledWith(
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        jasmine.any(String),
-        null,
-        true, // Force overwrite - snapshots replace state completely
-      );
-      // Should NOT create backup file
-      expect(mockProvider.uploadFile).not.toHaveBeenCalledWith(
-        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-        jasmine.any(String),
-        jasmine.anything(),
-        jasmine.anything(),
-      );
+      const paths = uploads.map((u) => u.path);
+      const bakIdx = paths.indexOf(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
+      const mainIdx = paths.indexOf(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(bakIdx).toBeGreaterThanOrEqual(0);
+      expect(mainIdx).toBeGreaterThanOrEqual(0);
+      // .bak first, then the primary — a crash in between leaves a valid old
+      // primary + already-refreshed .bak (nothing recoverable, nothing stale).
+      expect(bakIdx).toBeLessThan(mainIdx);
+      // Identical payload: the .bak is the snapshot itself, not the pre-snapshot
+      // remote it deliberately replaces.
+      expect(uploads[bakIdx].data).toBe(uploads[mainIdx].data);
     });
 
     describe('uploadSnapshot gap detection', () => {
@@ -2331,6 +2339,80 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockSnackService.open).toHaveBeenCalled();
     });
 
+    it('(b) recovers from .bak when the primary fails to DECRYPT (real DecryptError)', async () => {
+      // Same shape as the DecompressError case, driven through a REAL decrypt
+      // failure: the adapter holds a key, the primary claims encryption but its
+      // body is garbage. Safe against key rotation because uploadSnapshot
+      // refreshes .bak with the same payload/key as the primary, so a
+      // primary/.bak key mismatch cannot exist on a healthy remote.
+      const encAdapter = service.createAdapter(mockProvider, mockCfg, 'test-password');
+      const backupData = createMockSyncData({
+        syncVersion: 5,
+        recentOps: [compactOp('recovered-from-decrypt-failure') as never],
+      });
+      const undecryptableMain =
+        getSyncFilePrefix({ isCompress: false, isEncrypt: true, modelVersion: 2 }) +
+        'bm90LXZhbGlkLWNpcGhlcnRleHQ=';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({
+            dataStr: addPrefix(backupData),
+            rev: 'bak-rev-decrypt',
+          });
+        }
+        return Promise.resolve({ dataStr: undecryptableMain, rev: 'corrupt-enc-rev' });
+      });
+
+      const result = await encAdapter.downloadOps(0);
+
+      expect(result.ops.length).toBe(1);
+      expect(result.ops[0].op.id).toBe('recovered-from-decrypt-failure');
+      expect(result.latestSeq).toBe(5);
+      expect(mockSnackService.open).toHaveBeenCalled();
+    });
+
+    it('(b) refuses a PLAINTEXT .bak when encryption is expected (key-suppression vector)', async () => {
+      // A plaintext .bak decodes via its own prefix flags even under a
+      // wrong/rotated key. Accepting it would suppress the wrong-password
+      // dialog and let the heal upload clobber the encrypted primary — the
+      // same class as the E2EE-rotation revert. Recovery must refuse it and
+      // surface the ORIGINAL DecryptError instead.
+      const encAdapter = service.createAdapter(
+        mockProvider,
+        { isEncrypt: true, isCompress: false },
+        'test-password',
+      );
+      const backupData = createMockSyncData({ syncVersion: 5 });
+      const undecryptableMain =
+        getSyncFilePrefix({ isCompress: false, isEncrypt: true, modelVersion: 2 }) +
+        'bm90LXZhbGlkLWNpcGhlcnRleHQ=';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          // addPrefix uses mockCfg (plaintext) → a plaintext-prefixed .bak.
+          return Promise.resolve({ dataStr: addPrefix(backupData), rev: 'plain-bak' });
+        }
+        return Promise.resolve({ dataStr: undecryptableMain, rev: 'corrupt-enc-rev' });
+      });
+
+      await expectAsync(encAdapter.downloadOps(0)).toBeRejected();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    it('(b) rethrows the ORIGINAL error when both primary and .bak are undecodable', async () => {
+      const garbage =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
+        'not-valid-gzip';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({ dataStr: garbage, rev: 'bak-corrupt-too' });
+        }
+        return Promise.resolve({ dataStr: garbage, rev: 'main-corrupt' });
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejected();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
     it('(b) after recovery, the next upload heals the corrupt primary via ITS rev (no revToMatch pollution)', async () => {
       // Regression for the self-perpetuating degraded state: recovery must seed the
       // cache with the CORRUPT PRIMARY rev, not the .bak rev, so the follow-up
@@ -2759,6 +2841,47 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(1);
       expect(result.snapshotState).toBeDefined();
     });
+
+    it('(g) .bak recovery never promotes the corrupt primary rev to last-seen (heal cannot wedge)', async () => {
+      // Regression: recovery serves the CORRUPT primary's rev (for the in-cycle
+      // heal), and setLastServerSeq promotes staged revs. If the corrupt rev were
+      // promoted, every later poll's pre-check would read "unchanged" and skip the
+      // full download while the upload path (no .bak recovery) keeps failing on the
+      // corrupt primary — sync wedged until another client rewrites the file.
+      const CORRUPT_MAIN_REV = 'corrupt-main-rev-wedge';
+      const backupData = createMockSyncData({ syncVersion: 2, recentOps: [] });
+      const undecodableMain =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
+        'not-valid-gzip';
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({ dataStr: addPrefix(backupData), rev: 'bak-rev' });
+        }
+        return Promise.resolve({ dataStr: undecodableMain, rev: CORRUPT_MAIN_REV });
+      });
+
+      // Recovery download (nothing new to apply) + the caller persisting the
+      // cursor — the promotion point that previously committed the corrupt rev.
+      await adapter.downloadOps(2);
+      await adapter.setLastServerSeq(2);
+
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+      // The remote is still the same corrupt file.
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) {
+          return { rev: CORRUPT_MAIN_REV };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      const result = await adapter.downloadOps(2);
+
+      // Must NOT short-circuit on the corrupt rev: the full download re-recovers
+      // and re-seeds the heal cache so a later upload can still heal the primary.
+      expect(mockProvider.downloadFile).toHaveBeenCalled();
+      expect(result.latestSeq).toBe(2);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2841,10 +2964,11 @@ describe('FileBasedSyncAdapterService', () => {
 
       // Never builds a snapshot on the op-only path.
       expect(mockStateSnapshotService.getStateSnapshot).not.toHaveBeenCalled();
-      // Every upload targeted the ops file only.
+      // Every upload targeted the ops file or its SPAP-8 backup — never the
+      // snapshot (sync-state.json) or legacy (sync-data.json) files.
       const paths = uploadedPaths();
-      expect(paths.length).toBeGreaterThan(0);
-      paths.forEach((p) => expect(p).toBe(C.OPS_FILE));
+      expect(paths).toContain(C.OPS_FILE);
+      paths.forEach((p) => expect([C.OPS_FILE, C.OPS_BACKUP_FILE]).toContain(p as never));
       // Only the ops file was downloaded.
       mockProvider.downloadFile.calls.allArgs().forEach((args) => {
         expect(args[0]).toBe(C.OPS_FILE);
@@ -2929,6 +3053,50 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.snapshotState).toBeDefined();
     });
 
+    // (a4) Same review follow-up as the single-file path: a strictly-dominating
+    // (GREATER_THAN) remote clock is NOT proof this client received the ops that
+    // a snapshot reset compacted into sync-state.json, so a syncVersion
+    // regression must flag a gap. The split fork originally suppressed on
+    // EQUAL || GREATER_THAN and silently diverged.
+    it('(a4) split download flags a gap when a dominating-clock reset compacted ops the client had not yet seen', async () => {
+      // First download establishes expected syncVersion (5) + last-seen clock.
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(
+          makeOpsFile({
+            syncVersion: 5,
+            vectorClock: { client1: 5 },
+            recentOps: [makeCompactOp({ sv: 5, v: { client1: 5 } })],
+            oldestOpSyncVersion: 5,
+          }),
+          3,
+        ),
+      });
+      await adapter.downloadOps(5, 'client2');
+
+      // A strictly-ahead client snapshot-reset the folder (compacting ops this
+      // client never saw into the snapshot) and then made one more edit.
+      const stateFile = makeStateFile({
+        syncVersion: 1,
+        vectorClock: { client1: 6 },
+      });
+      const opsFile = makeOpsFile({
+        syncVersion: 2,
+        vectorClock: { client1: 7 }, // GREATER_THAN last-seen {client1: 5}
+        recentOps: [makeCompactOp({ id: 'op-post-reset', sv: 2, v: { client1: 7 } })],
+        oldestOpSyncVersion: 2,
+        snapshotRef: { syncVersion: 1, vectorClock: { client1: 6 }, rev: 'state-rev-x' },
+      });
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(opsFile, 3),
+        [C.STATE_FILE]: addPrefix(stateFile, 3),
+      });
+
+      const result = await adapter.downloadOps(5, 'client2');
+
+      expect(result.gapDetected).toBe(true);
+      expect(result.snapshotState).toBeDefined();
+    });
+
     // (b) compaction triggers when the buffer exceeds MAX_RECENT_OPS, writing
     // state THEN ops.
     it('(b) compaction past MAX_RECENT_OPS writes sync-state.json BEFORE sync-ops.json', async () => {
@@ -2999,7 +3167,7 @@ describe('FileBasedSyncAdapterService', () => {
           }),
           3,
         ),
-        [C.STATE_FILE + '.bak']: addPrefix(
+        [C.STATE_BACKUP_FILE]: addPrefix(
           makeStateFile({
             syncVersion: 1,
             vectorClock: { client1: 1 },
@@ -3075,11 +3243,16 @@ describe('FileBasedSyncAdapterService', () => {
       expect(tomb.version).toBe(C.SPLIT_FILE_VERSION);
       expect(tomb.format).toBe(C.SPLIT_TOMBSTONE_FORMAT);
 
-      // .bak neutralized to a v3 tombstone too.
+      // .bak neutralized to a v3 tombstone too — and BEFORE the tombstone write,
+      // so a crash in between leaves a valid v2 primary (nothing stale to
+      // recover) instead of a tombstone + live v2 .bak that an OFF client's
+      // SPAP-8 recovery would resurrect over the tombstone.
+      const bakIdx = paths.indexOf(C.BACKUP_FILE);
+      expect(bakIdx).toBeGreaterThanOrEqual(0);
+      expect(bakIdx).toBeLessThan(tombIdx);
       const bakCall = mockProvider.uploadFile.calls
         .allArgs()
         .find((a) => a[0] === C.BACKUP_FILE);
-      expect(bakCall).toBeDefined();
       const bak = parseWithPrefix(bakCall![1] as string) as unknown as {
         version: number;
       };
@@ -3192,6 +3365,151 @@ describe('FileBasedSyncAdapterService', () => {
         .map((a) => a[0] as string);
       expect(downloaded).toContain(C.OPS_FILE);
       expect(downloaded).toContain(C.STATE_FILE);
+    });
+
+    it('(i) op upload backs up the current sync-ops.json to .bak BEFORE overwriting it', async () => {
+      // sync-ops.json is the hot file (rewritten on every op-bearing sync) — it
+      // gets the same SPAP-8 backup-before-overwrite as the single-file format.
+      const existing = makeOpsFile({
+        syncVersion: 3,
+        recentOps: [makeCompactOp({ id: 'op-existing' })],
+      });
+      routeDownloads({ [C.OPS_FILE]: addPrefix(existing, 3) });
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      const paths = uploadedPaths();
+      const bakIdx = paths.indexOf(C.OPS_BACKUP_FILE);
+      const opsIdx = paths.lastIndexOf(C.OPS_FILE);
+      expect(bakIdx).toBeGreaterThanOrEqual(0);
+      expect(bakIdx).toBeLessThan(opsIdx);
+      // The .bak preserves the PRE-overwrite remote (syncVersion 3, not the new 4).
+      const bakCall = mockProvider.uploadFile.calls
+        .allArgs()
+        .find((a) => a[0] === C.OPS_BACKUP_FILE);
+      const bak = parseWithPrefix(bakCall![1] as string) as unknown as FileBasedOpsFile;
+      expect(bak.syncVersion).toBe(3);
+    });
+
+    it('(i) recovers a corrupt sync-ops.json from .bak and heals it via ITS rev', async () => {
+      const bakOps = makeOpsFile({
+        syncVersion: 4,
+        recentOps: [makeCompactOp({ id: 'op-from-bak' })],
+      });
+      const garbage =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 3 }) +
+        'not-valid-gzip';
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) return { dataStr: garbage, rev: 'corrupt-ops-rev' };
+        if (path === C.OPS_BACKUP_FILE) {
+          return { dataStr: addPrefix(bakOps, 3), rev: 'ops-bak-rev' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      const result = await adapter.downloadOps(1, 'client2');
+
+      expect(result.ops.some((o) => o.op.id === 'op-from-bak')).toBe(true);
+      expect(mockSnackService.open).toHaveBeenCalled();
+
+      // The next upload heals the corrupt primary via a conditional PUT matching
+      // ITS rev (not the .bak rev, which would mismatch forever).
+      const opsRevToMatch: (string | null)[] = [];
+      mockProvider.uploadFile.and.callFake(
+        async (path: string, _d: string, revToMatch: string | null) => {
+          if (path === C.OPS_FILE) opsRevToMatch.push(revToMatch);
+          return { rev: `${path}-newrev` };
+        },
+      );
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(opsRevToMatch).toContain('corrupt-ops-rev');
+      expect(opsRevToMatch).not.toContain('ops-bak-rev');
+    });
+
+    it('(i) split .bak recovery never promotes the corrupt ops rev to last-seen (heal cannot wedge)', async () => {
+      mockProvider.id = SyncProviderId.Dropbox;
+      adapter = service.createAdapter(mockProvider, mockCfg, mockEncryptKey);
+      const bakOps = makeOpsFile({ syncVersion: 4, recentOps: [] });
+      const garbage =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 3 }) +
+        'not-valid-gzip';
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) return { dataStr: garbage, rev: 'corrupt-ops-rev' };
+        if (path === C.OPS_BACKUP_FILE) {
+          return { dataStr: addPrefix(bakOps, 3), rev: 'ops-bak-rev' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      await adapter.downloadOps(1, 'client2');
+      await adapter.setLastServerSeq(4); // the promotion point
+
+      const lastSeen = (service as unknown as { _lastSeenRevs: Map<string, string> })
+        ._lastSeenRevs;
+      expect(lastSeen.get('Dropbox')).toBeUndefined();
+    });
+
+    it('(i) snapshot upload refreshes the OPS .bak (not the ref-validated state .bak) before the primary', async () => {
+      // Rotation-safe replace: sync-ops.json.bak feeds UNVALIDATED recovery, so
+      // a pre-snapshot (possibly rotated-key) copy must not survive a snapshot
+      // upload. sync-state.json.bak is deliberately NOT refreshed — its adoption
+      // is ref-validated (EQUAL clock vs snapshotRef), so a stale copy is inert,
+      // and it must keep serving the compaction crash window it was made for.
+      routeDownloads({});
+
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'recovery',
+        { client1: 1 },
+        1,
+        undefined,
+        'op-id-split-snap',
+      );
+
+      const paths = uploadedPaths();
+      const oBak = paths.indexOf(C.OPS_BACKUP_FILE);
+      const oMain = paths.indexOf(C.OPS_FILE);
+      expect(oBak).toBeGreaterThanOrEqual(0);
+      expect(oMain).toBeGreaterThanOrEqual(0);
+      expect(oBak).toBeLessThan(oMain);
+      // Identical payloads: the ops .bak IS the fresh snapshot-reset ops file.
+      const argAt = (i: number): string =>
+        mockProvider.uploadFile.calls.allArgs()[i][1] as string;
+      expect(argAt(oBak)).toBe(argAt(oMain));
+      // State .bak untouched.
+      expect(paths).not.toContain(C.STATE_BACKUP_FILE);
+      expect(paths).toContain(C.STATE_FILE);
+    });
+
+    it('(i) deleteAllData removes the split files (BEFORE the tombstone) and their .baks', async () => {
+      mockProvider.removeFile.and.returnValue(Promise.resolve(undefined as never));
+
+      await adapter.deleteAllData();
+
+      const removed = mockProvider.removeFile.calls.allArgs().map((a) => a[0] as string);
+      expect(removed).toContain(C.OPS_FILE);
+      expect(removed).toContain(C.STATE_FILE);
+      expect(removed).toContain(C.OPS_BACKUP_FILE);
+      expect(removed).toContain(C.STATE_BACKUP_FILE);
+      // Split source-of-truth files go before sync-data.json: a partial failure
+      // must not leave a deleted tombstone next to live split data (an OFF
+      // client would fresh-start a v2 file against it).
+      expect(removed.indexOf(C.OPS_FILE)).toBeLessThan(removed.indexOf(C.SYNC_FILE));
+      expect(removed.indexOf(C.STATE_FILE)).toBeLessThan(removed.indexOf(C.SYNC_FILE));
+    });
+
+    it('(i) deleteAllData FAILS when a split source-of-truth file cannot be deleted', async () => {
+      // Reporting success while sync-ops.json still holds user data on the
+      // remote would be a lie — only .bak/lock artifacts are best-effort.
+      mockProvider.removeFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) throw new Error('server error');
+        return undefined as never;
+      });
+
+      const res = await adapter.deleteAllData();
+
+      expect(res.success).toBe(false);
     });
   });
 });

@@ -167,6 +167,10 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   // sync setting). See FileBasedOpsFile / FileBasedStateFile / FileBasedSplitTombstone.
   OPS_FILE: 'sync-ops.json',
   STATE_FILE: 'sync-state.json',
+  // SPAP-8-style recovery artifacts for the split files. Remote-format surface:
+  // old and new clients must agree on these names forever.
+  OPS_BACKUP_FILE: 'sync-ops.json.bak',
+  STATE_BACKUP_FILE: 'sync-state.json.bak',
   SPLIT_FILE_VERSION: 3 as const,
   // Post-compaction RETAINED size for the split ops file (≈ MAX_RECENT_OPS/2).
   // NOTE: this is the trim target, NOT the trigger — a recompaction fires when the

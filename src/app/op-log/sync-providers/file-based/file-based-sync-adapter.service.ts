@@ -11,6 +11,7 @@ import {
   RestorePointType,
 } from '../provider.interface';
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
+import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
 import {
   Operation,
@@ -699,10 +700,17 @@ export class FileBasedSyncAdapterService {
 
     // Step 2.5: Backup-before-overwrite (two-phase write). Copy the CURRENT remote
     // content to sync-data.json.bak before overwriting the primary file, so an
-    // interrupted/corrupt write can be recovered on the next download. Non-fatal:
-    // a provider without copy support must still be able to sync.
+    // interrupted/corrupt write can be recovered on the next download. We re-encode
+    // the already-in-hand `currentData` rather than issuing another GET.
     if (fileExists && currentData) {
-      await this._backupCurrentRemote(provider, cfg, encryptKey, currentData);
+      await this._writeBakFile(
+        provider,
+        cfg,
+        encryptKey,
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        currentData,
+        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+      );
     }
 
     // Step 3: Upload conditionally; on rev mismatch re-download and retry
@@ -721,7 +729,7 @@ export class FileBasedSyncAdapterService {
     // SPAP-10: the remote is now exactly what we just uploaded, so its rev is the
     // fresh last-seen rev. Recording it lets the next poll short-circuit if no
     // other client writes in between. Persisted via _persistState() below.
-    this._lastSeenRevs.set(providerKey, finalRev);
+    this._commitLastSeenRev(providerKey, finalRev);
 
     // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.
     // mergedOps.length is the total ops count, which can be much larger than syncVersion
@@ -832,6 +840,7 @@ export class FileBasedSyncAdapterService {
 
     let syncData: FileBasedSyncData;
     let rev: string;
+    let recoveredFromBackup = false;
     try {
       const result = await this._downloadSyncFile(provider, cfg, encryptKey);
       syncData = result.data;
@@ -857,8 +866,15 @@ export class FileBasedSyncAdapterService {
       if (this._isRecoverableCorruption(e)) {
         // Primary sync-data.json is corrupt/empty/unparseable (e.g. interrupted
         // write). Try to recover from the .bak artifact before failing.
-        const recovered = await this._recoverFromBackup(provider, cfg, encryptKey);
+        const recovered = await this._readBakFile<FileBasedSyncData>(
+          provider,
+          cfg,
+          encryptKey,
+          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+          FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+        );
         if (recovered) {
+          recoveredFromBackup = true;
           OpLog.warn(
             'FileBasedSyncAdapter: Primary sync file unreadable; recovered from backup',
           );
@@ -873,16 +889,7 @@ export class FileBasedSyncAdapterService {
             (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
           rev = primaryRev;
           this._setCachedSyncData(providerKey, syncData, rev);
-          // De-dup the user-facing notice: only surface it the first time we see a
-          // given corrupt primary rev, so a download-only client (which cannot heal
-          // the file itself) does not re-toast on every sync cycle.
-          if (this._lastRecoveredCorruptRev.get(providerKey) !== primaryRev) {
-            this._lastRecoveredCorruptRev.set(providerKey, primaryRev);
-            // Lazy resolve — absent in some unit harnesses (returns null → no notice).
-            this._injector
-              .get(SnackService, null)
-              ?.open({ msg: T.F.SYNC.S.SYNC_DATA_RECOVERED_FROM_BACKUP });
-          }
+          this._notifyRecoveredCorruptPrimaryOnce(providerKey, primaryRev);
         } else {
           throw e;
         }
@@ -1005,13 +1012,7 @@ export class FileBasedSyncAdapterService {
     // SPAP-9: remember this file's causal clock so the next download can decide
     // whether a syncVersion regression is cosmetic or a genuine reset.
     this._lastSeenVectorClocks.set(providerKey, syncData.vectorClock);
-    // SPAP-10 (review follow-up): stage this file's rev as PENDING rather than
-    // committing it to `_lastSeenRevs` here. It is promoted to last-seen (and
-    // persisted) only once the caller confirms the ops were durably applied, via
-    // setLastServerSeq — the same ordering as the seq cursor. Committing it eagerly
-    // here would let a throw/crash between download and apply strand a rev ahead of
-    // un-applied ops, so the next poll's cheap pre-check would skip them for good.
-    this._pendingRevs.set(providerKey, rev);
+    this._stageOrDropDownloadedRev(providerKey, rev, recoveredFromBackup);
 
     // Filter ops using operation IDs instead of synthetic seq numbers.
     // Synthetic seq numbers based on array indices shift when the array is trimmed,
@@ -1168,7 +1169,6 @@ export class FileBasedSyncAdapterService {
       recentOps: [], // Fresh start - no recent ops
     };
 
-    // Upload snapshot (no backup - snapshots replace state completely)
     const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
       encryptKey,
@@ -1176,11 +1176,11 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
-    const snapshotUploadRes = await provider.uploadFile(
+    const snapshotUploadRes = await this._forceUploadWithBakFirst(
+      provider,
       FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+      FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
       uploadData,
-      null,
-      true,
     );
 
     // Reset local state
@@ -1188,7 +1188,7 @@ export class FileBasedSyncAdapterService {
     this._localSeqCounters.set(providerKey, newSyncVersion);
     // SPAP-10: record the rev of the snapshot we just wrote as the last-seen rev
     // so the next poll can skip a redundant full download.
-    this._lastSeenRevs.set(providerKey, snapshotUploadRes.rev);
+    this._commitLastSeenRev(providerKey, snapshotUploadRes.rev);
     this._persistState();
 
     OpLog.warn(
@@ -1213,30 +1213,40 @@ export class FileBasedSyncAdapterService {
     OpLog.normal('FileBasedSyncAdapter: Deleting all sync data');
 
     try {
-      // Delete main sync file — re-throw real errors (not "file not found")
-      try {
-        await provider.removeFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
-      } catch (e) {
-        if (!(e instanceof RemoteFileNotFoundAPIError)) {
-          throw e;
+      // Source-of-truth files: a failed deletion MUST fail the whole operation
+      // (outer catch → success:false) — reporting success while user data
+      // remains on the remote would be a lie. The split files go FIRST so a
+      // partial failure can't leave a deleted tombstone next to live split data
+      // (an OFF client would then fresh-start a v2 file against it). "Not
+      // found" is fine — most users are on the single-file format.
+      for (const dataFile of [
+        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+      ]) {
+        try {
+          await provider.removeFile(dataFile);
+        } catch (e) {
+          if (!(e instanceof RemoteFileNotFoundAPIError)) {
+            throw e;
+          }
         }
       }
 
-      // Delete backup file
-      try {
-        await provider.removeFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
-      } catch (e) {
-        if (!(e instanceof RemoteFileNotFoundAPIError)) {
-          OpLog.warn('FileBasedSyncAdapter: Unexpected error deleting backup file', e);
-        }
-      }
-
-      // Delete migration lock if exists
-      try {
-        await provider.removeFile(FILE_BASED_SYNC_CONSTANTS.MIGRATION_LOCK_FILE);
-      } catch (e) {
-        if (!(e instanceof RemoteFileNotFoundAPIError)) {
-          OpLog.warn('FileBasedSyncAdapter: Unexpected error deleting migration lock', e);
+      // Disposable artifacts: best-effort — leaving one behind degrades nothing
+      // (recovery only triggers on a corrupt primary, never on a missing one).
+      for (const artifact of [
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+        FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
+        FILE_BASED_SYNC_CONSTANTS.MIGRATION_LOCK_FILE,
+      ]) {
+        try {
+          await provider.removeFile(artifact);
+        } catch (e) {
+          if (!(e instanceof RemoteFileNotFoundAPIError)) {
+            OpLog.warn(`FileBasedSyncAdapter: Unexpected error deleting ${artifact}`, e);
+          }
         }
       }
 
@@ -1246,7 +1256,10 @@ export class FileBasedSyncAdapterService {
       // SPAP-10: drop the last-seen rev so a stale value can't drive a false
       // "nothing new" short-circuit after the remote file has been deleted.
       this._lastSeenRevs.delete(providerKey);
+      this._pendingRevs.delete(providerKey);
+      this._lastSeenVectorClocks.delete(providerKey);
       this._clearCachedSyncData(providerKey);
+      this._clearCachedOpsData(providerKey);
       this._persistState();
 
       return { success: true };
@@ -1259,9 +1272,6 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
   // SPAP-11: SPLIT-FILE ("SURGICAL SYNC") FORMAT (opt-in)
   // ═══════════════════════════════════════════════════════════════════════════
-
-  /** State-file backup artifact name (SPAP-8-style recovery for snapshotRef mismatch). */
-  private readonly _STATE_BACKUP_FILE = FILE_BASED_SYNC_CONSTANTS.STATE_FILE + '.bak';
 
   /**
    * Whether the opt-in split-file sync setting is ON. Resolved lazily via the
@@ -1321,19 +1331,25 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedOpsFile; rev: string }> {
     const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.OPS_FILE);
-    const data =
-      await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedOpsFile>(
-        cfg,
-        encryptKey,
-        response.dataStr,
-      );
-    if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
-      throw new SyncDataCorruptedError(
-        `Unsupported ops-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
-        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
-      );
+    try {
+      const data =
+        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedOpsFile>(
+          cfg,
+          encryptKey,
+          response.dataStr,
+        );
+      if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
+        throw new SyncDataCorruptedError(
+          `Unsupported ops-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
+          FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+        );
+      }
+      return { data, rev: response.rev };
+    } catch (decodeErr) {
+      // Annotate the corrupt file's rev so the .bak recovery path can seed the
+      // heal cache with IT (mirrors _downloadSyncFile).
+      throw this._annotatePrimaryRev(decodeErr, response.rev);
     }
-    return { data, rev: response.rev };
   }
 
   /** Downloads + decodes `sync-state.json` and validates its version. */
@@ -1391,20 +1407,22 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<void> {
+    let current: { data: FileBasedStateFile };
     try {
-      const current = await this._downloadStateFile(provider, cfg, encryptKey);
-      const backupData = await this._encryptAndCompressHandler.compressAndEncryptData(
-        cfg,
-        encryptKey,
-        current.data,
-        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
-      );
-      if (!backupData || backupData.trim().length === 0) return;
-      await provider.uploadFile(this._STATE_BACKUP_FILE, backupData, null, true);
+      current = await this._downloadStateFile(provider, cfg, encryptKey);
     } catch (e) {
       // Non-fatal — e.g. first compaction has no existing state file to back up.
       OpLog.normal('FileBasedSyncAdapter: state-file backup skipped (non-fatal)', e);
+      return;
     }
+    await this._writeBakFile(
+      provider,
+      cfg,
+      encryptKey,
+      FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
+      current.data,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
   }
 
   /** Recovers the snapshot from `sync-state.json.bak` (null if unusable). */
@@ -1413,20 +1431,14 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<FileBasedStateFile | null> {
-    try {
-      const response = await provider.downloadFile(this._STATE_BACKUP_FILE);
-      const data =
-        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedStateFile>(
-          cfg,
-          encryptKey,
-          response.dataStr,
-        );
-      if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) return null;
-      return data;
-    } catch (e) {
-      OpLog.warn('FileBasedSyncAdapter: state backup recovery failed', e);
-      return null;
-    }
+    const recovered = await this._readBakFile<FileBasedStateFile>(
+      provider,
+      cfg,
+      encryptKey,
+      FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
+      FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    );
+    return recovered?.data ?? null;
   }
 
   /** True when a downloaded snapshot matches the ops file's snapshotRef. */
@@ -1495,9 +1507,10 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Overwrites `sync-data.json` with a v3 split tombstone (NEVER deletes it) and
-   * neutralizes `sync-data.json.bak` so an old client's SPAP-8 `.bak` recovery
-   * cannot resurrect a v2 file and diverge.
+   * Neutralizes `sync-data.json.bak` and then overwrites `sync-data.json` with a
+   * v3 split tombstone (NEVER deletes it), so an old client's SPAP-8 `.bak`
+   * recovery cannot resurrect a v2 file and diverge. Order matters — see the
+   * inline comment.
    */
   private async _writeTombstoneAndNeutralizeBak(
     provider: FileSyncProvider<SyncProviderId>,
@@ -1516,23 +1529,28 @@ export class FileBasedSyncAdapterService {
       tombstone,
       FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
     );
+    // Neutralize the legacy .bak FIRST, then the tombstone. In the old order
+    // (tombstone first, .bak best-effort) a crash/failure between the two left a
+    // live v2 .bak next to the tombstone: an OFF client reading the tombstone
+    // gets SyncDataCorruptedError → SPAP-8 recovery adopts the v2 .bak → its
+    // next upload heals v2 back OVER the tombstone, forking the folder into two
+    // sync worlds. Neutralize-first is crash-safe (a crash in between leaves a
+    // valid v2 primary + tombstone .bak — nothing recoverable, nothing stale)
+    // and the failure is deliberately FATAL: better a missing tombstone (OFF
+    // clients are still caught by the ops-file probe in _downloadSyncFile) than
+    // a tombstone with a resurrectable v2 .bak beside it.
+    //
+    // Retry caveat: at the _uploadSnapshotSplit call site a throw fails the
+    // whole snapshot upload, which the user/caller retries. At the MIGRATION
+    // call site the split files are already committed before this runs, and
+    // migration is only re-entered while sync-ops.json is missing — so a
+    // failure here leaves a live v2 sync-data.json until the next snapshot
+    // upload rewrites the tombstone. Accepted residual (needs a transient PUT
+    // failure right after two successful PUTs); a periodic tombstone re-assert
+    // during split compaction would close it if it ever shows up in practice.
+    await provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE, encoded, null, true);
     // Overwrite the legacy single file in place (never remove it).
     await provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE, encoded, null, true);
-    // Neutralize the legacy .bak (non-fatal): a leftover v2 .bak could otherwise
-    // let an old client recover + re-upload v2.
-    try {
-      await provider.uploadFile(
-        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-        encoded,
-        null,
-        true,
-      );
-    } catch (e) {
-      OpLog.warn(
-        'FileBasedSyncAdapter: failed to neutralize legacy .bak during migration (non-fatal)',
-        e,
-      );
-    }
   }
 
   /**
@@ -1804,6 +1822,21 @@ export class FileBasedSyncAdapterService {
       snapshotRef,
     };
 
+    // Backup-before-overwrite (SPAP-8, same as the single-file path): preserve
+    // the CURRENT remote ops file in .bak so an interrupted/corrupt write of the
+    // hot file (rewritten on every op-bearing sync — the highest torn-write
+    // exposure of any sync file) can be recovered on the next download.
+    if (opsFile) {
+      await this._writeBakFile(
+        provider,
+        cfg,
+        encryptKey,
+        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+        opsFile,
+        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      );
+    }
+
     // Commit point.
     const { finalRev } = await this._uploadOpsFileWithMismatchFallback(
       provider,
@@ -1815,7 +1848,7 @@ export class FileBasedSyncAdapterService {
 
     this._clearCachedOpsData(providerKey);
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
-    this._lastSeenRevs.set(providerKey, finalRev);
+    this._commitLastSeenRev(providerKey, finalRev);
     this._lastSeenVectorClocks.set(providerKey, mergedClock);
     this._persistState();
 
@@ -1879,6 +1912,7 @@ export class FileBasedSyncAdapterService {
 
     let opsFile: FileBasedOpsFile;
     let opsRev: string;
+    let recoveredFromBackup = false;
     try {
       const r = await this._downloadOpsFile(provider, cfg, encryptKey);
       opsFile = r.data;
@@ -1890,7 +1924,30 @@ export class FileBasedSyncAdapterService {
         // (migration WRITES happen on the upload path).
         return this._tryLegacyReadOnlyDownload(provider, cfg, encryptKey, sinceSeq);
       }
-      throw e;
+      if (this._isRecoverableCorruption(e)) {
+        // Corrupt/torn sync-ops.json (the hot file, rewritten every op-bearing
+        // sync): recover from .bak — same SPAP-8 semantics as the single-file
+        // path, including seeding the heal cache with the CORRUPT primary's rev
+        // so this cycle's upload conditionally matches and heals it.
+        const recovered = await this._readBakFile<FileBasedOpsFile>(
+          provider,
+          cfg,
+          encryptKey,
+          FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+          FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+        );
+        if (!recovered) throw e;
+        recoveredFromBackup = true;
+        OpLog.warn(
+          'FileBasedSyncAdapter: Primary ops file unreadable; recovered from backup',
+        );
+        opsFile = recovered.data;
+        opsRev = (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
+        this._setCachedOpsData(providerKey, opsFile, opsRev);
+        this._notifyRecoveredCorruptPrimaryOnce(providerKey, opsRev);
+      } else {
+        throw e;
+      }
     }
 
     // Gap detection on the ops file (mirrors the single-file logic).
@@ -1901,7 +1958,12 @@ export class FileBasedSyncAdapterService {
     const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
     if (syncVersionRegressed && lastSeenClock) {
       const cmp = compareVectorClocks(opsFile.vectorClock, lastSeenClock);
-      if (cmp === 'EQUAL' || cmp === 'GREATER_THAN') {
+      // EQUAL only — same rationale as the single-file path above: GREATER_THAN
+      // proves the writer did strictly more work, NOT that this client received
+      // the intervening ops. A dominating client's snapshot reset compacts ops
+      // this client never saw into sync-state.json; suppressing the reset here
+      // would skip the snapshot hydration and silently diverge.
+      if (cmp === 'EQUAL') {
         versionWasReset = false;
       }
     }
@@ -1924,12 +1986,7 @@ export class FileBasedSyncAdapterService {
 
     this._expectedSyncVersions.set(providerKey, opsFile.syncVersion);
     this._lastSeenVectorClocks.set(providerKey, opsFile.vectorClock);
-    // SPAP-10 crash-safety (review follow-up): stage the ops-file rev as PENDING,
-    // mirroring the single-file download path. It is promoted to _lastSeenRevs only
-    // in setLastServerSeq, after the caller has durably applied the ops. Committing
-    // it eagerly here would let a crash before apply strand the rev ahead of
-    // un-applied ops, so the next poll's precheck would skip them for good.
-    this._pendingRevs.set(providerKey, opsRev);
+    this._stageOrDropDownloadedRev(providerKey, opsRev, recoveredFromBackup);
     this._persistState();
 
     const isForceFromZero = sinceSeq === 0;
@@ -2052,6 +2109,11 @@ export class FileBasedSyncAdapterService {
       clock,
       schemaVersion,
     );
+    // sync-state.json.bak is deliberately NOT refreshed here: its adoption is
+    // ref-validated (_loadValidatedSnapshot requires an EQUAL clock against the
+    // ops file's snapshotRef), so a stale — even rotated-key — state .bak is
+    // inert, and it must keep serving the COMPACTION crash window (state
+    // written, ops not yet) it was backed up for.
     const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData);
 
     const opsData: FileBasedOpsFile = {
@@ -2074,17 +2136,17 @@ export class FileBasedSyncAdapterService {
       opsEncoded,
       'FileBasedSyncAdapter._uploadSnapshotSplit',
     );
-    const opsRes = await provider.uploadFile(
+    const opsRes = await this._forceUploadWithBakFirst(
+      provider,
       FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+      FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
       opsEncoded,
-      null,
-      true,
     );
     await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey);
 
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
     this._localSeqCounters.set(providerKey, newSyncVersion);
-    this._lastSeenRevs.set(providerKey, opsRes.rev);
+    this._commitLastSeenRev(providerKey, opsRes.rev);
     this._lastSeenVectorClocks.set(providerKey, clock);
     this._clearCachedOpsData(providerKey);
     this._persistState();
@@ -2106,51 +2168,188 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Writes the CURRENT remote content to sync-data.json.bak before the primary
-   * file is overwritten (two-phase write). We re-encode the already-in-hand
-   * `currentData` from `_getCurrentSyncState()` rather than issuing another GET.
+   * Writes `data` to a `.bak` recovery artifact before its primary file is
+   * overwritten (two-phase write).
    *
    * MUST be non-fatal: a provider that cannot write the backup (e.g. no copy
    * support, transient failure) must still be able to sync. The backup is a
    * recovery artifact — losing it only degrades recoverability, never sync.
    *
    * Force-overwrite is used here because .bak is a disposable recovery artifact,
-   * NOT the source-of-truth sync file — the lost-update guarantee on
-   * sync-data.json is unaffected.
+   * NOT a source-of-truth sync file — the lost-update guarantee on the primary
+   * (conditional PUT) is unaffected.
    */
-  private async _backupCurrentRemote(
+  private async _writeBakFile<T>(
     provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
-    currentData: FileBasedSyncData,
+    bakPath: string,
+    data: T,
+    fileVersion: number,
   ): Promise<void> {
     try {
       const backupData = await this._encryptAndCompressHandler.compressAndEncryptData(
         cfg,
         encryptKey,
-        currentData,
-        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+        data,
+        fileVersion,
       );
       if (!backupData || backupData.trim().length === 0) {
         OpLog.warn(
-          'FileBasedSyncAdapter: Skipping backup — encoded backup data was empty',
+          `FileBasedSyncAdapter: Skipping ${bakPath} — encoded backup data was empty`,
         );
         return;
       }
-      await provider.uploadFile(
-        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-        backupData,
-        null,
-        true,
-      );
-      OpLog.normal('FileBasedSyncAdapter: Wrote backup before overwrite');
+      await provider.uploadFile(bakPath, backupData, null, true);
+      OpLog.normal(`FileBasedSyncAdapter: Wrote ${bakPath} before overwrite`);
     } catch (e) {
       // Non-fatal by design — proceed with the primary upload regardless.
       OpLog.warn(
-        'FileBasedSyncAdapter: Backup-before-overwrite failed (non-fatal), proceeding',
+        `FileBasedSyncAdapter: ${bakPath} write failed (non-fatal), proceeding`,
         e,
       );
     }
+  }
+
+  /**
+   * Downloads + decodes a `.bak` recovery artifact. Returns null when the backup
+   * is missing, undecodable, mode-mismatched, or has an unsupported version — the
+   * caller then surfaces its ORIGINAL corruption error.
+   */
+  private async _readBakFile<T extends { version: number }>(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    bakPath: string,
+    expectedVersion: number,
+  ): Promise<{ data: T; rev: string } | null> {
+    try {
+      const response = await provider.downloadFile(bakPath);
+      // Security: when encryption is expected, refuse a PLAINTEXT .bak. Decoding
+      // trusts the file's own prefix flags, so a plaintext .bak decodes even
+      // under a wrong/rotated key — silently suppressing the wrong-password
+      // dialog and letting the heal upload clobber the encrypted primary (same
+      // class as the E2EE-rotation revert).
+      if (
+        cfg.isEncrypt &&
+        !extractSyncFileStateFromPrefix(response.dataStr).isEncrypted
+      ) {
+        OpLog.warn(
+          `FileBasedSyncAdapter: ${bakPath} is plaintext but encryption is expected — refusing recovery`,
+        );
+        return null;
+      }
+      const data = await this._encryptAndCompressHandler.decompressAndDecryptData<T>(
+        cfg,
+        encryptKey,
+        response.dataStr,
+      );
+      if (data.version !== expectedVersion) {
+        OpLog.warn(
+          `FileBasedSyncAdapter: ${bakPath} has unsupported version ${data.version}; cannot recover`,
+        );
+        return null;
+      }
+      return { data, rev: response.rev };
+    } catch (e) {
+      OpLog.warn(`FileBasedSyncAdapter: ${bakPath} recovery failed`, e);
+      return null;
+    }
+  }
+
+  /**
+   * Force-writes the SAME payload to the `.bak` FIRST, then the primary. Used by
+   * snapshot uploads (force-upload / "Use Local" / E2EE re-encryption): a
+   * snapshot replaces the remote wholesale, so the pre-snapshot .bak must not
+   * survive it — a stale .bak encrypted with a ROTATED-AWAY key would otherwise
+   * be silently "recovered" by a still-old-key client (suppressing its
+   * wrong-password prompt) and heal-uploaded back over the new-key primary,
+   * reverting the rotation. Unlike the op-path backup, the .bak write here is
+   * deliberately FATAL: leaving the stale artifact behind breaks the snapshot's
+   * replace-everything contract, and aborting BEFORE the primary write leaves the
+   * remote fully consistent for a retry. (.bak-first also means a crash between
+   * the writes leaves a valid old primary + new .bak — nothing stale to recover.)
+   */
+  private async _forceUploadWithBakFirst(
+    provider: FileSyncProvider<SyncProviderId>,
+    primaryPath: string,
+    bakPath: string,
+    encoded: string,
+  ): Promise<{ rev: string }> {
+    await provider.uploadFile(bakPath, encoded, null, true);
+    return provider.uploadFile(primaryPath, encoded, null, true);
+  }
+
+  /**
+   * Commits a freshly-written remote rev as last-seen and drops any rev still
+   * staged by an earlier download whose apply never completed (e.g. a conflict
+   * dialog aborted it) — promoting a stale staged rev later would clobber the
+   * fresh one and re-open the SPAP-10 precheck to a wrong "unchanged" answer.
+   */
+  private _commitLastSeenRev(providerKey: string, rev: string): void {
+    this._lastSeenRevs.set(providerKey, rev);
+    this._pendingRevs.delete(providerKey);
+  }
+
+  /**
+   * SPAP-10 (review follow-up): stage a downloaded file's rev as PENDING rather
+   * than committing it to `_lastSeenRevs`. It is promoted to last-seen (and
+   * persisted) only once the caller confirms the ops were durably applied, via
+   * setLastServerSeq — the same ordering as the seq cursor. Committing it eagerly
+   * would let a throw/crash between download and apply strand a rev ahead of
+   * un-applied ops, so the next poll's cheap pre-check would skip them for good.
+   *
+   * EXCEPTION — .bak recovery: `rev` is then the CORRUPT primary's rev (kept in
+   * the sync-cycle cache so this cycle's upload can heal it via a matching
+   * conditional overwrite). It must NEVER reach `_lastSeenRevs`: promoting it
+   * would make every later poll's pre-check read "unchanged" and skip the full
+   * download, while the upload path (which has no .bak recovery) keeps failing
+   * on the corrupt primary — wedging sync until another client rewrites the
+   * file. Dropping both entries instead forces each poll to re-download,
+   * re-recover, and re-seed the heal cache until the primary is actually healed.
+   */
+  private _stageOrDropDownloadedRev(
+    providerKey: string,
+    rev: string,
+    recoveredFromBackup: boolean,
+  ): void {
+    if (recoveredFromBackup) {
+      this._pendingRevs.delete(providerKey);
+      this._lastSeenRevs.delete(providerKey);
+    } else {
+      this._pendingRevs.set(providerKey, rev);
+    }
+  }
+
+  /**
+   * De-dups the user-facing "recovered from backup" notice per corrupt primary
+   * rev, so a download-only client (which cannot heal the file itself) does not
+   * re-toast on every sync cycle.
+   */
+  private _notifyRecoveredCorruptPrimaryOnce(
+    providerKey: string,
+    corruptRev: string,
+  ): void {
+    if (this._lastRecoveredCorruptRev.get(providerKey) !== corruptRev) {
+      this._lastRecoveredCorruptRev.set(providerKey, corruptRev);
+      // Lazy resolve — absent in some unit harnesses (returns null → no notice).
+      this._injector
+        .get(SnackService, null)
+        ?.open({ msg: T.F.SYNC.S.SYNC_DATA_RECOVERED_FROM_BACKUP });
+    }
+  }
+
+  /**
+   * Annotates a decode error with the corrupt primary file's rev so the .bak
+   * recovery path can seed the heal cache with IT (not the .bak rev) and heal
+   * the primary via a matching conditional overwrite. Returns the error for
+   * rethrowing.
+   */
+  private _annotatePrimaryRev(e: unknown, rev: string): unknown {
+    if (e && typeof e === 'object' && !('primaryRev' in e)) {
+      (e as { primaryRev?: string }).primaryRev = rev;
+    }
+    return e;
   }
 
   /**
@@ -2168,41 +2367,16 @@ export class FileBasedSyncAdapterService {
       // decrypt/decompress stage rather than JSON parse. Without these, .bak
       // recovery silently no-ops for exactly the users who enable encryption or
       // compression — the interrupted-write case this feature targets. Safe to
-      // include: if the .bak is also undecodable, _recoverFromBackup returns null
-      // and the original error still surfaces.
+      // include: if the .bak is also undecodable, _readBakFile returns null
+      // and the original error still surfaces. DecryptError is only safe here
+      // because snapshot uploads refresh .bak with the same payload/key as the
+      // primary (see _forceUploadWithBakFirst) — a primary/.bak KEY mismatch
+      // cannot exist on a remote whose snapshots were all written by fixed
+      // clients. Mixed-fleet caveat: a pre-fix client's snapshot still leaves a
+      // stale-key .bak behind until its first op-bearing sync refreshes it.
       e instanceof DecryptError ||
       e instanceof DecompressError
     );
-  }
-
-  /**
-   * Attempts to recover sync data from sync-data.json.bak. Returns null if the
-   * backup is missing, unreadable, or has an unsupported version.
-   */
-  private async _recoverFromBackup(
-    provider: FileSyncProvider<SyncProviderId>,
-    cfg: EncryptAndCompressCfg,
-    encryptKey: string | undefined,
-  ): Promise<{ data: FileBasedSyncData; rev: string } | null> {
-    try {
-      const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
-      const data =
-        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
-          cfg,
-          encryptKey,
-          response.dataStr,
-        );
-      if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
-        OpLog.warn(
-          `FileBasedSyncAdapter: Backup has unsupported version ${data.version}; cannot recover`,
-        );
-        return null;
-      }
-      return { data, rev: response.rev };
-    } catch (e) {
-      OpLog.warn('FileBasedSyncAdapter: Backup recovery failed', e);
-      return null;
-    }
   }
 
   /**
@@ -2280,15 +2454,9 @@ export class FileBasedSyncAdapterService {
       if (decodeErr instanceof SplitSyncFormatDetectedError) {
         throw decodeErr;
       }
-      // Annotate the corrupt primary file's current rev onto the error so the
-      // download-time recovery path can seed the cache with IT (not the .bak rev)
-      // and heal sync-data.json via a matching conditional overwrite, instead of
-      // mismatching forever and re-recovering every cycle. We already hold the rev
-      // here (from the download above), so no extra request is needed.
-      if (decodeErr && typeof decodeErr === 'object' && !('primaryRev' in decodeErr)) {
-        (decodeErr as { primaryRev?: string }).primaryRev = response.rev;
-      }
-      throw decodeErr;
+      // We already hold the corrupt primary's rev (from the download above), so
+      // no extra request is needed to enable the heal-via-conditional-overwrite.
+      throw this._annotatePrimaryRev(decodeErr, response.rev);
     }
 
     // SPAP-11 (Q4): a valid v2 sync-data.json can still coexist with a
