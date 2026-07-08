@@ -82,10 +82,11 @@ export class ArchiveCompressionService {
     const newArchiveYoung = this._compressArchiveData(archiveYoung, oneYearAgoTimestamp);
     const newArchiveOld = this._compressArchiveData(archiveOld, oneYearAgoTimestamp);
 
-    await Promise.all([
-      this._archiveDbAdapter.saveArchiveYoung(newArchiveYoung),
-      this._archiveDbAdapter.saveArchiveOld(newArchiveOld),
-    ]);
+    // Atomic write: both archives written in a single IndexedDB transaction.
+    // Two independent writes could tear on a crash between them, and since
+    // compression is op-replayed on other clients a half-compressed local
+    // result would diverge from replicas (#8843).
+    await this._archiveDbAdapter.saveArchivesAtomic(newArchiveYoung, newArchiveOld);
   }
 
   private _compressArchiveData(
