@@ -81,6 +81,7 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
+import { isTaskOverdue } from '../util/is-task-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -1362,11 +1363,32 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToToday(): void {
     const t = this.task();
-    if (t.projectId) {
-      // Moving to the regular list is a list-position change only; it must not
-      // schedule the task for today (#8592).
-      this._projectService.moveTaskToTodayList(t.id, t.projectId);
+    if (!t.projectId) {
+      return;
     }
+    // An overdue task is never in the backlog, so the position-only move below
+    // early-returns for it (moveProjectTaskToRegularListAuto) and Shift+T would
+    // no-op. Schedule it for today instead — the same thing the "Add to My Day"
+    // button and Schedule → Today do (#8851). Overdue vs. backlog→regular are
+    // cleanly separated because overdue tasks are never in the backlog. Exclude
+    // done tasks: a done task with a stale past dueDay can still sit in the
+    // backlog, and it should take the position-only move, not be re-added to
+    // Today. (isTaskOverdue stays done-agnostic — selectOverdueTasks needs
+    // done tasks included.)
+    if (
+      !t.isDone &&
+      isTaskOverdue(
+        t,
+        this._dateService.todayStr(),
+        this._dateService.getStartOfNextDayDiffMs(),
+      )
+    ) {
+      this.addToMyDay();
+      return;
+    }
+    // Moving to the regular list is a list-position change only; it must not
+    // schedule the task for today (#8592).
+    this._projectService.moveTaskToTodayList(t.id, t.projectId);
   }
 
   trackByProjectId(i: number, project: Project): string {

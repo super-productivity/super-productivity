@@ -50,6 +50,13 @@ import { TranslatePipe } from '@ngx-translate/core';
   ],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
+    // data-task-id is unconditional (inert without focus) so the id-based
+    // schedule-today shortcut can resolve this task generically (#8851).
+    '[attr.data-task-id]': 'task().id',
+    // Focusable only where the shortcut needs it (the Planner overdue list),
+    // not on every planner-day/scheduled card — those would add dozens of Tab
+    // stops board-wide.
+    '[attr.tabindex]': 'focusable() ? "0" : null',
     '[class.isDone]': 'task().isDone',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isCurrent]': 'isCurrent()',
@@ -72,6 +79,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   // TODO remove
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
+  // Opt-in DOM focusability (only the Planner overdue list needs it, for the
+  // schedule-today shortcut). Off everywhere else to avoid stray Tab stops.
+  readonly focusable = input<boolean>(false);
 
   readonly T = T;
   readonly isTouchActive = isTouchActive;
