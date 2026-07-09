@@ -267,6 +267,72 @@ describe('parseSyncResponse', () => {
     });
   });
 
+  describe('hostile / malformed payloads', () => {
+    it('rejects shape-valid but impossible calendar dates', () => {
+      const raw = baseFixture();
+      raw.items = [
+        { id: 't1', project_id: 'p1', content: 'a', due: { date: '2026-99-99' } },
+        { id: 't2', project_id: 'p1', content: 'b', deadline: { date: '0000-00-00' } },
+      ];
+      const [t1, t2] = parseSyncResponse(raw).tasks;
+      expect(t1.dueDay).toBeNull();
+      expect(t2.dueDay).toBeNull();
+    });
+
+    it('treats a parent in another project as missing (child becomes root)', () => {
+      const raw = baseFixture();
+      raw.items = [
+        { id: 'other', project_id: 'p2', content: 'x' },
+        { id: 'child', project_id: 'p1', content: 'y', parent_id: 'other' },
+      ];
+      const child = parseSyncResponse(raw).tasks.find((t) => t.extId === 'child');
+      expect(child?.parentExtId).toBeNull();
+    });
+
+    it('drops non-http(s) attachment URLs from notes', () => {
+      const raw = baseFixture();
+      raw.items = [{ id: 't1', project_id: 'p1', content: 'a' }];
+      raw.notes = [
+        {
+          id: 'n1',
+          item_id: 't1',
+          content: 'evil',
+          file_attachment: { file_name: 'x', file_url: 'javascript:alert(1)' },
+        },
+      ];
+      const [taskParsed] = parseSyncResponse(raw).tasks;
+      expect(taskParsed.notes).toBe('Comments:\n- evil');
+    });
+
+    it('clamps oversized titles and notes', () => {
+      const raw = baseFixture();
+      raw.items = [
+        {
+          id: 't1',
+          project_id: 'p1',
+          content: 'x'.repeat(5000),
+          description: 'y'.repeat(100_000),
+        },
+      ];
+      const [taskParsed] = parseSyncResponse(raw).tasks;
+      expect(taskParsed.title.length).toBeLessThanOrEqual(1001);
+      expect(taskParsed.notes.length).toBeLessThanOrEqual(50_001);
+    });
+  });
+
+  it('orders nested projects parent-first (children directly after their parent)', () => {
+    const raw = baseFixture();
+    // child_order is per-parent in Todoist: a flat sort would interleave
+    raw.projects = [
+      { id: 'a', name: 'A', child_order: 1 },
+      { id: 'b', name: 'B', child_order: 2 },
+      { id: 'a1', name: 'A1', parent_id: 'a', child_order: 1 },
+      { id: 'b1', name: 'B1', parent_id: 'b', child_order: 1 },
+    ];
+    const model = parseSyncResponse(raw);
+    expect(model.projects.map((p) => p.extId)).toEqual(['a', 'a1', 'b', 'b1']);
+  });
+
   it('captures labels and assignee flag', () => {
     const raw = baseFixture();
     raw.items = [

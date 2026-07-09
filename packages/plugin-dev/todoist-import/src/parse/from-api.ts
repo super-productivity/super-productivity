@@ -73,10 +73,33 @@ interface RawNote {
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Everything below lands in synced state that every client must replay —
+// clamp remote-controlled sizes and reject nonsense dates instead of
+// trusting the payload (shared-project collaborators control much of it).
+const MAX_TITLE_LEN = 1000;
+const MAX_LABEL_LEN = 200;
+const MAX_NOTES_LEN = 50_000;
+const MIN_DUE_MS = 0; // 1970
+const MAX_DUE_MS = 32_503_680_000_000; // year 3000
+
 const asId = (v: string | number | null | undefined): string | null =>
   v === null || v === undefined || v === '' ? null : String(v);
 
+const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
+
 const isTruthyFlag = (v: boolean | number | undefined): boolean => !!v;
+
+const clamp = (s: string, maxLen: number): string =>
+  s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+
+/** Shape AND calendar validity (rejects e.g. 2026-99-99). */
+const isValidDayStr = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !DATE_ONLY_RE.test(s)) {
+    return false;
+  }
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 
 /**
  * `new Date('YYYY-MM-DDTHH:MM:SS')` is local time per spec; a trailing `Z`
@@ -86,14 +109,16 @@ const parseDue = (
   due: RawDue | null | undefined,
 ): { dueDay: string | null; dueWithTime: number | null } => {
   const date = due?.date;
-  if (!date) {
+  if (!date || typeof date !== 'string') {
     return { dueDay: null, dueWithTime: null };
   }
   if (DATE_ONLY_RE.test(date)) {
-    return { dueDay: date, dueWithTime: null };
+    return isValidDayStr(date)
+      ? { dueDay: date, dueWithTime: null }
+      : { dueDay: null, dueWithTime: null };
   }
   const ts = new Date(date).getTime();
-  return Number.isNaN(ts)
+  return Number.isNaN(ts) || ts < MIN_DUE_MS || ts > MAX_DUE_MS
     ? { dueDay: null, dueWithTime: null }
     : { dueDay: null, dueWithTime: ts };
 };
@@ -104,13 +129,13 @@ const buildNotes = (
   deadlineNoted: string | null,
 ): string => {
   const parts: string[] = [];
-  const description = (item.description || '').trim();
+  const description = asStr(item.description).trim();
   if (description) {
     parts.push(description);
   }
   const extras: string[] = [];
-  if (item.due?.is_recurring && item.due.string) {
-    extras.push(`Repeats: ${item.due.string}`);
+  if (item.due?.is_recurring && asStr(item.due.string)) {
+    extras.push(`Repeats: ${asStr(item.due.string)}`);
   }
   if (deadlineNoted) {
     extras.push(`Deadline: ${deadlineNoted}`);
@@ -120,14 +145,18 @@ const buildNotes = (
   }
   if (comments.length) {
     const lines = comments.map((c) => {
-      const content = (c.content || '').trim();
+      const content = asStr(c.content).trim();
       const att = c.file_attachment;
-      const attLine = att?.file_url ? ` ${att.file_name || 'file'}: ${att.file_url}` : '';
+      // scheme-filter remote URLs before they land in markdown-rendered notes
+      const url = asStr(att?.file_url);
+      const attLine = /^https?:\/\//i.test(url)
+        ? ` ${asStr(att?.file_name) || 'file'}: ${url}`
+        : '';
       return `- ${content}${attLine}`.trimEnd();
     });
     parts.push(`Comments:\n${lines.join('\n')}`);
   }
-  return parts.join('\n\n');
+  return clamp(parts.join('\n\n'), MAX_NOTES_LEN);
 };
 
 /**
@@ -151,13 +180,40 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
     keptProjectIds.add(extId);
     projects.push({
       extId,
-      title: (p.name || '').trim() || 'Untitled project',
+      title: clamp(asStr(p.name).trim(), MAX_TITLE_LEN) || 'Untitled project',
       parentExtId: asId(p.parent_id),
       isInbox: !!p.inbox_project,
       childOrder: p.child_order ?? 0,
     });
   }
-  projects.sort((a, b) => a.childOrder - b.childOrder);
+  // parent-first DFS: `child_order` is per-parent in Todoist, so a flat sort
+  // would interleave unrelated siblings; this keeps children next to their
+  // (flattened-away) parent in the SP sidebar
+  const orderedProjects: TodoistProject[] = [];
+  const projectChildren = new Map<string | null, TodoistProject[]>();
+  for (const p of projects) {
+    const parentKey =
+      p.parentExtId && keptProjectIds.has(p.parentExtId) ? p.parentExtId : null;
+    const list = projectChildren.get(parentKey) || [];
+    list.push(p);
+    projectChildren.set(parentKey, list);
+  }
+  projectChildren.forEach((list) => list.sort((a, b) => a.childOrder - b.childOrder));
+  const visitedProjects = new Set<string>();
+  const visitProject = (p: TodoistProject): void => {
+    if (visitedProjects.has(p.extId)) {
+      return;
+    }
+    visitedProjects.add(p.extId);
+    orderedProjects.push(p);
+    (projectChildren.get(p.extId) || []).forEach(visitProject);
+  };
+  (projectChildren.get(null) || []).forEach(visitProject);
+  // a parent-cycle in a hostile payload would skip its members entirely —
+  // append anything unvisited so no project is silently lost
+  for (const p of projects) {
+    visitProject(p);
+  }
 
   const sections: TodoistSection[] = [];
   const sectionOrderById = new Map<string, number>();
@@ -174,7 +230,7 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
       continue;
     }
     sectionOrderById.set(extId, s.section_order ?? 0);
-    sections.push({ extId, projectExtId, title: (s.name || '').trim() });
+    sections.push({ extId, projectExtId, title: asStr(s.name).trim() });
   }
 
   const commentsByItemId = new Map<string, RawNote[]>();
@@ -206,12 +262,21 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
     keptItemIds.add(extId);
   }
 
-  // parent missing (completed/deleted/filtered) → treat as root
+  // parent missing (completed/deleted/filtered) OR in another project (a
+  // shape Todoist shouldn't produce — its temp ID could never resolve in this
+  // project's batch) → treat as root
+  const projectByItemId = new Map<string, string>(
+    keptItems.map((i) => [asId(i.id) as string, asId(i.project_id) as string]),
+  );
   const childrenByParent = new Map<string, RawItem[]>();
   const roots: RawItem[] = [];
   for (const item of keptItems) {
     const parentId = asId(item.parent_id);
-    if (parentId && keptItemIds.has(parentId)) {
+    if (
+      parentId &&
+      keptItemIds.has(parentId) &&
+      projectByItemId.get(parentId) === asId(item.project_id)
+    ) {
       const list = childrenByParent.get(parentId) || [];
       list.push(item);
       childrenByParent.set(parentId, list);
@@ -223,7 +288,7 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
     list.sort((a, b) => (a.child_order ?? 0) - (b.child_order ?? 0)),
   );
 
-  const projectOrder = new Map(projects.map((p, i) => [p.extId, i]));
+  const projectOrder = new Map(orderedProjects.map((p, i) => [p.extId, i]));
   const rootSortKey = (item: RawItem): [number, number, number] => {
     const sectionId = asId(item.section_id);
     // section-less tasks come first in Todoist, like sections with order -1
@@ -247,10 +312,7 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
   ): TodoistTask => {
     const extId = asId(item.id) as string;
     const { dueDay: parsedDueDay, dueWithTime } = parseDue(item.due);
-    const deadlineDay =
-      item.deadline?.date && DATE_ONLY_RE.test(item.deadline.date)
-        ? item.deadline.date
-        : null;
+    const deadlineDay = isValidDayStr(item.deadline?.date) ? item.deadline!.date! : null;
     const hasDue = !!parsedDueDay || !!dueWithTime;
     // deadline fills in as dueDay when there is no due date; otherwise it is
     // preserved as a notes line so nothing is silently dropped
@@ -266,9 +328,11 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
       extId,
       projectExtId: asId(item.project_id) as string,
       parentExtId: rootExtId,
-      title: (item.content || '').trim() || 'Untitled task',
+      title: clamp(asStr(item.content).trim(), MAX_TITLE_LEN) || 'Untitled task',
       notes: buildNotes(item, commentsByItemId.get(extId) || [], deadlineNoted),
-      labels: (item.labels || []).filter((l) => typeof l === 'string' && l.trim() !== ''),
+      labels: (item.labels || [])
+        .filter((l) => typeof l === 'string' && l.trim() !== '')
+        .map((l) => clamp(l, MAX_LABEL_LEN)),
       apiPriority: item.priority ?? 1,
       dueDay,
       dueWithTime,
@@ -284,27 +348,37 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
   };
 
   const tasks: TodoistTask[] = [];
-  for (const root of roots) {
+  const emittedIds = new Set<string>();
+  const emitFamily = (root: RawItem): void => {
     const rootExtId = asId(root.id) as string;
+    emittedIds.add(rootExtId);
     tasks.push(toTask(root, null, 0));
     // all descendants become direct sub-tasks of the root, DFS keeps reading order
-    const stack = [...(childrenByParent.get(rootExtId) || [])].reverse();
-    const depthById = new Map<string, number>(
-      (childrenByParent.get(rootExtId) || []).map((c) => [asId(c.id) as string, 1]),
-    );
+    const stack = (childrenByParent.get(rootExtId) || [])
+      .map((item) => ({ item, depth: 1 }))
+      .reverse();
     while (stack.length) {
-      const item = stack.pop() as RawItem;
+      const { item, depth } = stack.pop() as { item: RawItem; depth: number };
       const itemId = asId(item.id) as string;
-      const depth = depthById.get(itemId) ?? 1;
+      if (emittedIds.has(itemId)) {
+        continue; // parent-cycle guard in a hostile payload
+      }
+      emittedIds.add(itemId);
       tasks.push(toTask(item, rootExtId, depth));
       const children = childrenByParent.get(itemId) || [];
       for (let i = children.length - 1; i >= 0; i--) {
-        const childId = asId(children[i].id) as string;
-        depthById.set(childId, depth + 1);
-        stack.push(children[i]);
+        stack.push({ item: children[i], depth: depth + 1 });
       }
+    }
+  };
+  roots.forEach(emitFamily);
+  // members of a parent-cycle have no root — emit them as roots so nothing
+  // in the payload is silently dropped
+  for (const item of keptItems) {
+    if (!emittedIds.has(asId(item.id) as string)) {
+      emitFamily(item);
     }
   }
 
-  return { projects, sections, tasks };
+  return { projects: orderedProjects, sections, tasks };
 };

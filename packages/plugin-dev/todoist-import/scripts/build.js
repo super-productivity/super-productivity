@@ -34,7 +34,9 @@ const buildPlugin = async () => {
   if (!htmlTemplate.includes(marker)) {
     throw new Error(`index.html is missing the ${marker} marker`);
   }
-  const html = htmlTemplate.replace(marker, `<script>\n${bundle}\n</script>`);
+  // function replacer: a literal replacement string would corrupt the bundle
+  // if the minified JS ever contains `$&`/`$'`-style replacement patterns
+  const html = htmlTemplate.replace(marker, () => `<script>\n${bundle}\n</script>`);
   fs.writeFileSync(path.join(DIST_DIR, 'index.html'), html);
 
   for (const file of ['manifest.json', 'plugin.js', 'icon.svg']) {

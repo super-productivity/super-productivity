@@ -303,19 +303,26 @@ export class FileImexComponent implements OnInit {
   }
 
   async openTodoistImport(): Promise<void> {
-    if (!this._pluginService.isInitialized()) {
-      await this._pluginService.initializePlugins();
+    try {
+      if (!this._pluginService.isInitialized()) {
+        await this._pluginService.initializePlugins();
+      }
+      // In-memory activation only (not persisted): the importer is a one-time
+      // tool and should be dormant again after a restart.
+      const instance = await this._pluginService.activatePlugin(
+        TODOIST_IMPORT_PLUGIN_ID,
+        true,
+      );
+      if (!instance) {
+        throw new Error('Plugin activation returned no instance');
+      }
+      await this._router.navigate(['/plugins', TODOIST_IMPORT_PLUGIN_ID, 'index']);
+    } catch (e) {
+      Log.err('Failed to open Todoist importer', e);
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.FILE_IMEX.S_ERR_TODOIST_IMPORT_OPEN,
+      });
     }
-    // In-memory activation only (not persisted): the importer is a one-time
-    // tool and should be dormant again after a restart.
-    const instance = await this._pluginService.activatePlugin(
-      TODOIST_IMPORT_PLUGIN_ID,
-      true,
-    );
-    if (!instance) {
-      this._snackService.open({ type: 'ERROR', msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED });
-      return;
-    }
-    await this._router.navigate(['/plugins', TODOIST_IMPORT_PLUGIN_ID, 'index']);
   }
 }

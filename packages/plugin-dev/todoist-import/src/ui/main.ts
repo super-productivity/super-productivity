@@ -1,7 +1,12 @@
 import { PluginAPI as PluginApiType, Project } from '@super-productivity/plugin-api';
 import { parseSyncResponse, RawSyncResponse } from '../parse/from-api';
 import { TodoistImportModel } from '../parse/normalized-model';
-import { planImport } from '../map/plan-import';
+import {
+  buildProjectTitles,
+  groupTasksByProject,
+  ImportPlan,
+  planImport,
+} from '../map/plan-import';
 import { runImport, ImportResult } from '../map/run-import';
 
 declare global {
@@ -42,16 +47,17 @@ const render = (...children: HTMLElement[]): void => {
 // Step 1 — token input
 // ---------------------------------------------------------------------------
 
-const renderTokenStep = (errorMsg?: string): void => {
+const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
   const tokenInput = el('input', {
     type: 'password',
     placeholder: 'Todoist API token',
     autocomplete: 'off',
+    value: tokenValue || '',
   });
   const fetchBtn = el('button', { text: 'Load preview' });
   const errorLine = errorMsg ? [el('p', { className: 'error', text: errorMsg })] : [];
 
-  fetchBtn.addEventListener('click', async () => {
+  const submit = async (): Promise<void> => {
     const token = tokenInput.value.trim();
     if (!token) {
       renderTokenStep('Please paste your Todoist API token first.');
@@ -62,9 +68,10 @@ const renderTokenStep = (errorMsg?: string): void => {
       el('p', { text: 'Loading your Todoist data…' }),
     );
     try {
-      const body =
-        'sync_token=*&resource_types=' +
-        encodeURIComponent('["projects","items","labels","sections","notes"]');
+      const body = new URLSearchParams({
+        sync_token: '*',
+        resource_types: JSON.stringify(['projects', 'items', 'sections', 'notes']),
+      }).toString();
       const raw = await api().request<RawSyncResponse>(SYNC_URL, {
         method: 'POST',
         headers: {
@@ -75,7 +82,7 @@ const renderTokenStep = (errorMsg?: string): void => {
       });
       const model = parseSyncResponse(raw || {});
       if (!model.projects.length) {
-        renderTokenStep('No active projects found for this Todoist account.');
+        renderTokenStep('No active projects found for this Todoist account.', token);
         return;
       }
       const existingProjects = await api().getAllProjects();
@@ -83,8 +90,16 @@ const renderTokenStep = (errorMsg?: string): void => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       renderTokenStep(
-        `Could not load data from Todoist: ${msg} — check the token and your connection.`,
+        `Could not load data from Todoist: ${msg} — check the token and your ` +
+          'connection. If this keeps failing in the browser, try the desktop app.',
+        tokenInput.value,
       );
+    }
+  };
+  fetchBtn.addEventListener('click', () => void submit());
+  tokenInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      void submit();
     }
   });
 
@@ -164,6 +179,10 @@ const renderPreviewStep = (
   existingProjects: Project[],
 ): void => {
   const existingTitles = new Set(existingProjects.map((p) => p.title.toLowerCase()));
+  // the exact titles the import will create (Inbox rename, `Parent / Child`
+  // disambiguation, `(2)` suffixes) — preview and collision check must match
+  const titleByExtId = buildProjectTitles(model);
+  const tasksByProject = groupTasksByProject(model);
   const checkboxByExtId = new Map<string, HTMLInputElement>();
   const lossyList = el('ul');
   const priorityCheckbox = el('input', { type: 'checkbox' });
@@ -185,10 +204,10 @@ const renderPreviewStep = (
   };
 
   const projectRows = model.projects.map((project) => {
-    const tasks = model.tasks.filter((t) => t.projectExtId === project.extId);
+    const tasks = tasksByProject.get(project.extId) || [];
     const rootCount = tasks.filter((t) => !t.parentExtId).length;
     const subCount = tasks.length - rootCount;
-    const title = project.isInbox ? 'Inbox (Todoist)' : project.title;
+    const title = titleByExtId.get(project.extId) as string;
     const collides = existingTitles.has(title.toLowerCase());
     const checkbox = el('input', { type: 'checkbox', checked: !collides });
     checkbox.addEventListener('change', refreshLossyList);
@@ -221,7 +240,7 @@ const renderPreviewStep = (
       isMapPriorityToTags: priorityCheckbox.checked,
       selectedProjectExtIds: selected,
     });
-    void executeImport(plan);
+    void executeImport(plan, buildLossyNotes(model, selected));
   });
 
   refreshLossyList();
@@ -243,33 +262,69 @@ const renderPreviewStep = (
 // Step 3 + 4 — import progress and summary
 // ---------------------------------------------------------------------------
 
-const executeImport = async (plan: ReturnType<typeof planImport>): Promise<void> => {
+const executeImport = async (plan: ImportPlan, lossyNotes: string[]): Promise<void> => {
   const progressLine = el('p', { text: 'Starting…' });
   render(el('h2', { text: 'Importing…' }), progressLine);
 
   const result = await runImport(api(), plan, (progress) => {
-    progressLine.textContent = `Project ${progress.projectIndex + 1} of ${progress.totalProjects}: ${progress.projectTitle} (${progress.phase})`;
+    const detail =
+      progress.phase === 'details' && progress.detailTotal
+        ? ` — applying dates & tags ${progress.detailIndex}/${progress.detailTotal}`
+        : ` (${progress.phase})`;
+    progressLine.textContent = `Project ${progress.projectIndex + 1} of ${progress.totalProjects}: ${progress.projectTitle}${detail}`;
   });
-  renderSummaryStep(result);
+  renderSummaryStep(result, lossyNotes);
 };
 
-const renderSummaryStep = (result: ImportResult): void => {
-  const items = result.imported.map((p) =>
-    el('li', { text: `${p.title}: ${p.landedTaskCount} tasks` }),
-  );
+const projectSummaryLine = (p: ImportResult['imported'][number]): HTMLElement => {
+  const subText = p.plannedSubTaskCount
+    ? `, ${p.landedSubTaskCount} of ${p.plannedSubTaskCount} sub-tasks`
+    : '';
+  const isShortfall =
+    p.landedTaskCount < p.plannedTaskCount ||
+    p.landedSubTaskCount < p.plannedSubTaskCount;
+  return el('li', {
+    className: isShortfall ? 'warn' : '',
+    text:
+      `${p.title}: ${p.landedTaskCount} of ${p.plannedTaskCount} tasks${subText}` +
+      (isShortfall ? ' — some items did not land, please review' : ''),
+  });
+};
+
+const renderSummaryStep = (result: ImportResult, lossyNotes: string[]): void => {
+  const items = result.imported.map(projectSummaryLine);
   const failure = result.errorMessage
     ? [
         el('p', {
           className: 'error',
           text: result.failedProjectTitle
             ? `Import stopped at “${result.failedProjectTitle}”: ${result.errorMessage}. ` +
-              'Projects listed above were imported completely; re-run and select only the rest.'
+              `That project was created only partially — delete “${result.failedProjectTitle}” ` +
+              'before re-running, then select it and the remaining projects again.'
             : `Import failed: ${result.errorMessage}`,
+        }),
+      ]
+    : [];
+  const unverified = result.isCountUnverified
+    ? [
+        el('p', {
+          className: 'warn',
+          text: 'Could not verify the imported counts — the numbers above show 0 but the import itself succeeded.',
         }),
       ]
     : [];
   const tagLine = result.createdTagTitles.length
     ? [el('p', { text: `Created tags: ${result.createdTagTitles.join(', ')}` })]
+    : [];
+  const lossy = lossyNotes.length
+    ? [
+        el('h3', { text: 'Not carried over' }),
+        el(
+          'ul',
+          {},
+          lossyNotes.map((text) => el('li', { text })),
+        ),
+      ]
     : [];
 
   if (!result.errorMessage) {
@@ -278,8 +333,10 @@ const renderSummaryStep = (result: ImportResult): void => {
   render(
     el('h2', { text: result.errorMessage ? 'Import incomplete' : 'Import finished' }),
     el('ul', {}, items),
+    ...unverified,
     ...tagLine,
     ...failure,
+    ...lossy,
     el('p', {
       className: 'muted',
       text: 'The import is additive — to undo it, delete the created projects.',

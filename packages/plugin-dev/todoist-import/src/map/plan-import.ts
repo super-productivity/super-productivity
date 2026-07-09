@@ -50,6 +50,18 @@ export interface PlanImportOptions {
   selectedProjectExtIds?: ReadonlySet<string>;
 }
 
+export const groupTasksByProject = (
+  model: TodoistImportModel,
+): Map<string, TodoistTask[]> => {
+  const byProject = new Map<string, TodoistTask[]>();
+  for (const t of model.tasks) {
+    const list = byProject.get(t.projectExtId) || [];
+    list.push(t);
+    byProject.set(t.projectExtId, list);
+  }
+  return byProject;
+};
+
 const taskTagTitles = (task: TodoistTask, isMapPriorityToTags: boolean): string[] => {
   // SP sub-tasks cannot hold tags (host model) — the plugin must enforce this
   if (task.parentExtId) {
@@ -70,8 +82,11 @@ const taskTagTitles = (task: TodoistTask, isMapPriorityToTags: boolean): string[
  * keep their plain name unless it collides, then `Parent / Child`; remaining
  * duplicates get a numeric suffix. The Todoist Inbox becomes `Inbox (Todoist)`
  * so it never shadows SP's own Inbox.
+ *
+ * Exported so the preview shows (and collision-checks) exactly the titles the
+ * import will create.
  */
-const buildProjectTitles = (model: TodoistImportModel): Map<string, string> => {
+export const buildProjectTitles = (model: TodoistImportModel): Map<string, string> => {
   const byExtId = new Map(model.projects.map((p) => [p.extId, p]));
   const titles = new Map<string, string>();
   const counts = new Map<string, number>();
@@ -111,6 +126,7 @@ export const planImport = (
   const titles = buildProjectTitles(model);
   const tagTitles = new Set<string>();
   const projects: ProjectImportPlan[] = [];
+  const tasksByProject = groupTasksByProject(model);
 
   for (const project of model.projects) {
     if (
@@ -119,7 +135,7 @@ export const planImport = (
     ) {
       continue;
     }
-    const tasks = model.tasks.filter((t) => t.projectExtId === project.extId);
+    const tasks = tasksByProject.get(project.extId) || [];
     const operations: BatchOperation[] = tasks.map((t) => ({
       type: 'create',
       tempId: tempId(t.extId),

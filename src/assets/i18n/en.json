@@ -2236,6 +2236,7 @@
     "S_ERR_INVALID_DATA": "Import failed: Invalid JSON",
     "S_ERR_INVALID_URL": "Import failed: Invalid URL provided",
     "S_ERR_NETWORK": "Import failed: Network error while fetching data from URL",
+    "S_ERR_TODOIST_IMPORT_OPEN": "Could not open the Todoist importer",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Error: Could not decode the URL parameter for import. Please ensure it is correctly formatted.",
     "URL_PLACEHOLDER": "Enter URL to import from"
   },

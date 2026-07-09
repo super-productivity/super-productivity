@@ -67,9 +67,15 @@ Verified in `plugin-bridge.service.ts:1209` + `task-shared-meta-reducers/task-ba
     is its own postMessage round-trip, so this keeps one dispatch per tick (sync rule
     #6) even for 5k-task projects, where the bridge's internal `forEach` chunking would
     dispatch 100 actions in one tick;
+  - **ordering alone is NOT enough across self-chunked calls** (caught by the
+    post-implementation multi-review): the bridge builds `createdTaskIds` **per call**,
+    so a child sent in a later call cannot resolve a `temp-` parent from an earlier
+    call — the executor must **rewrite already-created parents to their real IDs**
+    before sending each chunk (`resolveKnownParents` in `run-import.ts`; real IDs are
+    explicitly supported in `BatchTaskCreate.parentId`);
   - the result is fire-and-forget (`success: true` always, `errors` never populated) —
-    the **post-import summary re-reads state** (`getTasks`) and counts what actually
-    landed instead of trusting the return value.
+    the **post-import summary re-reads state** (`getTasks`) and compares landed vs
+    planned counts instead of trusting the return value.
 
 ### Key correction #2: what the plugin API actually can't do (verified)
 
@@ -91,7 +97,10 @@ Verified in `plugin-bridge.service.ts:1209` + `task-shared-meta-reducers/task-ba
 `addTaskRepeatCfg` and/or plugin-visible section/folder creation. Deferring is
 deliberate (YAGNI): public plugin-API surface is hard to reverse. The bulk-import
 primitive from the first draft is **no longer needed** — `batchUpdateForProject`
-already folds structure into few ops.
+already folds structure into few ops. One more v2 candidate (from the perf review):
+extend `BatchTaskUpdate` with `dueDay`/`dueWithTime`/`tagIds` — the per-task
+`updateTask` follow-ups are the dominant import cost (one op each; O(k²) planner-day
+scans at 5k dated tasks) and today there is no cheaper path.
 
 ## Input source
 
