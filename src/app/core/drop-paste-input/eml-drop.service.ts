@@ -44,7 +44,13 @@ export class EmlDropService {
       // let ShortSyntaxEffects parse #tag/@date/+project tokens out of it.
       this._taskService.add(title, false, { notes }, false, true);
     } catch (e) {
-      Log.err('Failed to parse EML file', e);
+      // Log a bounded reason, not the raw error: the source is untrusted email
+      // content and log history is exportable (rule #9). postal-mime's throw
+      // messages are structural (no message content), so the reason is safe to keep.
+      Log.err(
+        'Failed to parse EML file',
+        e instanceof Error ? e.message : 'Unknown error',
+      );
       this._snackService.open({ type: 'ERROR', msg: T.MH.EML_PARSE_ERROR });
     }
   }
