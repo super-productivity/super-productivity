@@ -1,5 +1,10 @@
 <div
   (click)="toggle()"
+  (keydown.enter)="toggle()"
+  (keydown.space)="$event.preventDefault(); toggle()"
+  role="button"
+  tabindex="0"
+  [attr.aria-expanded]="isExpanded()"
   class="collapsible-header sub-section-heading"
 >
   <mat-icon class="collapsible-expand-icon">expand_more</mat-icon>

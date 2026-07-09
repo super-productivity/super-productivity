@@ -128,7 +128,7 @@ import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.s
   host: {
     '[id]': 'taskIdWithPrefix()',
     '[attr.data-task-id]': 'task().id',
-    '[tabindex]': '1',
+    '[tabindex]': '0',
     '[class.isDone]': 'task().isDone',
     '[class.isCurrent]': 'isCurrent()',
     '[class.isSelected]': 'isSelected()',

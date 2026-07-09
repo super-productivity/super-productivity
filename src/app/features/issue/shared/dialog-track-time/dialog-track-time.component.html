@@ -56,12 +56,14 @@
           <button
             mat-icon-button
             type="button"
+            [attr.aria-label]="T.G.ADD | translate"
           >
             <mat-icon class="suffix-icon">add</mat-icon>
           </button>
           <button
             mat-icon-button
             type="button"
+            [attr.aria-label]="data.t.timeSpentTooltip | translate"
           >
             <mat-icon class="suffix-icon">timer</mat-icon>
           </button>
