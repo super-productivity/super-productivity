@@ -93,7 +93,7 @@ const maxTimestamp = (ops: Operation[]): number =>
 /**
  * Classifies one already-resolved LWW conflict into a journal entry.
  *
- * Precedence: clock-corruption → delete-wins → noise → newer/tie.
+ * Precedence: clock-corruption → delete-wins → delete-lost → noise → newer/tie.
  *
  * `noise` fires when the DISCARDED (losing) side changed only NOISE_FIELDS — i.e.
  * nothing real was lost. This is the data-safety-correct reading of "only NOISE
@@ -166,6 +166,7 @@ export const buildConflictJournalEntry = (
   }));
 
   const winnerOps = winner === 'local' ? localOps : remoteOps;
+  const loserOps = winner === 'local' ? remoteOps : localOps;
   const loserChanges = winner === 'local' ? remoteChanges : localChanges;
   const loserRealFields = Object.keys(loserChanges).filter(
     (field) => !NOISE_FIELDS.has(field),
@@ -175,6 +176,14 @@ export const buildConflictJournalEntry = (
     ARCHIVE_PLAN_REASONS.has(planReason) ||
     winnerOps.some((op) => op.opType === OpType.Delete);
 
+  // Inverse of delete-wins: the LOSER side is a pure DELETE — a delete that lost
+  // to a concurrent newer edit, so LWW resurrected the entity and the user's
+  // delete was silently overridden. Because a DELETE op carries no field changes,
+  // `loserChanges` is empty, which would otherwise misclassify this as `noise`.
+  // Must be checked BEFORE the noise fallthrough. (delete-wins takes precedence
+  // when the winner is also a delete, e.g. delete-vs-delete.)
+  const isDeleteLost = loserOps.some((op) => op.opType === OpType.Delete);
+
   let reason: ConflictJournalReason;
   let status: ConflictJournalStatus;
   if (isCorruptionSuspected) {
@@ -182,6 +191,9 @@ export const buildConflictJournalEntry = (
     status = 'unreviewed';
   } else if (isDeleteWin) {
     reason = 'delete-wins';
+    status = 'unreviewed';
+  } else if (isDeleteLost) {
+    reason = 'delete-lost';
     status = 'unreviewed';
   } else if (loserRealFields.length === 0) {
     reason = 'noise';

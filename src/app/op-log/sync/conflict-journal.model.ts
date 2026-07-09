@@ -24,6 +24,10 @@ export type ConflictJournalWinner = 'local' | 'remote' | 'merged';
  * - `newer`: both edited the same real field, newer timestamp won.
  * - `tie`: both edited the same real field, timestamps equal → remote won.
  * - `delete-wins`: an edit lost to a delete/archive of the same entity.
+ * - `delete-lost`: the inverse — a delete lost to a concurrent newer edit, so the
+ *   entity was resurrected and the user's delete was silently overridden. The
+ *   loser side is a pure DELETE op (no field changes), so without this reason it
+ *   would fall through to `noise`/`info` and never surface for review.
  * - `disjoint-merge`: disjoint-field auto-merge (SPAP-14 — reserved, NOT emitted
  *   by SPAP-13; the value exists so downstream code can already switch on it).
  * - `noise`: the discarded side only touched NOISE_FIELDS (no real content lost).
@@ -34,6 +38,7 @@ export type ConflictJournalReason =
   | 'newer'
   | 'tie'
   | 'delete-wins'
+  | 'delete-lost'
   | 'disjoint-merge'
   | 'noise'
   | 'clock-corruption-suspected';

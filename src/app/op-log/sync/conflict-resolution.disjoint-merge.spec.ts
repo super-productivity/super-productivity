@@ -327,6 +327,53 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(mergedOpArgs()).toBeUndefined();
   });
 
+  // ── (d2) archive vs disjoint edit → archive wins whole entity, NO merge ─────
+  it('(d2) never merges an archive-vs-disjoint-edit conflict (archive-plan guard, not eligibility, blocks it)', async () => {
+    // An archive is an UPDATE op (not a Delete), so `isDisjointMergeEligible`
+    // does NOT reject it: an archive that carries its own disjoint non-noise
+    // field alongside a concurrent disjoint edit is field-level merge-eligible.
+    // The ONLY thing preventing a partial-resurrection merge is the
+    // `_isArchivePlan` guard in `_tryCreateDisjointMergeOp`. This asserts
+    // eligibility is TRUE yet no merged op is synthesized — so a regression that
+    // dropped the guard would fail here (and nowhere else).
+    const localEdit = op({
+      id: 'local-1',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteArchive = op({
+      id: 'remote-1',
+      clientId: 'B',
+      actionType: '[Task Shared] moveToArchive' as ActionType,
+      vectorClock: { B: 1 },
+      timestamp: 2000, // archive newer → wins
+      payload: { task: { id: 'task-1', changes: { isDone: true } } },
+    });
+
+    // Field-level eligibility PASSES (disjoint non-noise fields, no Delete op):
+    // the archive-plan guard is the sole reason the merge must not happen.
+    expect(
+      isDisjointMergeEligible({
+        localOps: [localEdit],
+        remoteOps: [remoteArchive],
+        payloadKey: 'task',
+      }),
+    ).toBe(true);
+
+    await service.autoResolveConflictsLWW([conflictOf([localEdit], [remoteArchive])]);
+
+    // No synthesized merged UPDATE op — the archive wins the WHOLE entity.
+    expect(mergedOpArgs()).toBeUndefined();
+
+    const entries = await journal.list('history');
+    expect(entries.length).toBe(1);
+    expect(entries[0].reason).toBe('delete-wins');
+    expect(entries[0].reason).not.toBe('disjoint-merge');
+    expect(entries[0].winner).toBe('remote');
+  });
+
   // ── (e) two-client convergence ─────────────────────────────────────────────
   describe('(e) two-client convergence', () => {
     const base = { id: 'task-1', title: 'base', notes: 'base', modified: 100 };

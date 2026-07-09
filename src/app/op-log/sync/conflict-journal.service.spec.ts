@@ -271,6 +271,40 @@ describe('buildConflictJournalEntry (taxonomy)', () => {
     expect(entry.reason).toBe('delete-wins');
   });
 
+  it('delete vs edit (edit wins, delete lost) → reason "delete-lost", status "unreviewed"', () => {
+    // Local deleted the task; remote edited it concurrently and newer, so LWW
+    // resurrects the entity and the local DELETE is discarded. The loser side is
+    // a pure Delete op (no field changes) — without the delete-lost branch this
+    // would fall through to `noise`/`info` and never surface for review.
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-1',
+      winner: 'remote', // the edit side won
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          opType: OpType.Delete,
+          actionType: '[Task] Delete' as ActionType,
+          payload: { task: { id: 'task-1' } },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          payload: { task: { id: 'task-1', title: 'Remote' } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    expect(entry.reason).toBe('delete-lost');
+    expect(entry.status).toBe('unreviewed');
+    expect(entry.winner).toBe('remote');
+  });
+
   it('loser changed only NOISE fields → reason "noise", status "info"', () => {
     const entry = buildConflictJournalEntry({
       entityType: 'TASK' as EntityType,

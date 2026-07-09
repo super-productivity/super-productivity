@@ -105,7 +105,7 @@
   white-space: nowrap;
 
   &--winner {
-    background: var(--color-warning, #e6a817);
+    background: var(--color-warning);
     color: #000;
   }
 
@@ -169,14 +169,14 @@
   }
 
   td.is-won {
-    background: rgba(76, 175, 80, 0.14);
+    background: color-mix(in srgb, var(--color-success) 14%, transparent);
 
     .won-ico {
       font-size: 16px;
       width: 16px;
       height: 16px;
       vertical-align: middle;
-      color: #4caf50;
+      color: var(--color-success);
     }
   }
 

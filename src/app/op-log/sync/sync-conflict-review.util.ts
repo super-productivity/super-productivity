@@ -93,6 +93,7 @@ const REASON_KEYS: ReadonlyMap<ConflictJournalReason, string> = new Map([
   ['newer', CR.REASON_NEWER],
   ['tie', CR.REASON_TIE],
   ['delete-wins', CR.REASON_DELETE_WINS],
+  ['delete-lost', CR.REASON_DELETE_LOST],
   ['disjoint-merge', CR.REASON_DISJOINT_MERGE],
   ['noise', CR.REASON_NOISE],
   ['clock-corruption-suspected', CR.REASON_CLOCK_CORRUPTION],

@@ -76,10 +76,19 @@ export class ConflictJournalService {
       return this._db;
     }
     if (!this._initPromise) {
-      this._initPromise = this._openDb().then((db) => {
-        this._db = db;
-        return db;
-      });
+      this._initPromise = this._openDb().then(
+        (db) => {
+          this._db = db;
+          return db;
+        },
+        (err) => {
+          // Don't poison the service: a transient open failure must not leave a
+          // permanently-rejected `_initPromise` cached (every later call would
+          // then reject). Clear it so the next `_ensureDb` retries the open.
+          this._initPromise = undefined;
+          throw err;
+        },
+      );
     }
     return this._initPromise;
   }
@@ -148,39 +157,48 @@ export class ConflictJournalService {
    * other. Returns the number of entries deleted.
    */
   async pruneOnStart(now: number = Date.now()): Promise<number> {
-    const db = await this._ensureDb();
-    // Ascending by resolvedAt (oldest first).
-    const ascending = await db.getAllFromIndex(
-      CONFLICT_JOURNAL_STORE,
-      CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
-    );
+    // Observe-only, like record(): pruneOnStart is the sole app-start seeder of
+    // the badge count (its _refreshUnreviewedCount), and its main.ts caller
+    // relies on it swallowing its own errors. A transient IndexedDB failure must
+    // return 0, not reject — and _ensureDb already resets its poisoned promise.
+    try {
+      const db = await this._ensureDb();
+      // Ascending by resolvedAt (oldest first).
+      const ascending = await db.getAllFromIndex(
+        CONFLICT_JOURNAL_STORE,
+        CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
+      );
 
-    const retentionWindowMs = JOURNAL_RETENTION_DAYS * DAY_MS;
-    const cutoff = now - retentionWindowMs;
-    const idsToDelete = new Set<string>();
+      const retentionWindowMs = JOURNAL_RETENTION_DAYS * DAY_MS;
+      const cutoff = now - retentionWindowMs;
+      const idsToDelete = new Set<string>();
 
-    for (const entry of ascending) {
-      if (entry.resolvedAt < cutoff) {
-        idsToDelete.add(entry.id);
+      for (const entry of ascending) {
+        if (entry.resolvedAt < cutoff) {
+          idsToDelete.add(entry.id);
+        }
       }
-    }
 
-    // Count bound applies to the survivors of the age prune; drop the oldest
-    // overflow so only the newest JOURNAL_MAX_ENTRIES remain.
-    const survivors = ascending.filter((entry) => !idsToDelete.has(entry.id));
-    const overflow = survivors.length - JOURNAL_MAX_ENTRIES;
-    for (let i = 0; i < overflow; i++) {
-      idsToDelete.add(survivors[i].id);
-    }
+      // Count bound applies to the survivors of the age prune; drop the oldest
+      // overflow so only the newest JOURNAL_MAX_ENTRIES remain.
+      const survivors = ascending.filter((entry) => !idsToDelete.has(entry.id));
+      const overflow = survivors.length - JOURNAL_MAX_ENTRIES;
+      for (let i = 0; i < overflow; i++) {
+        idsToDelete.add(survivors[i].id);
+      }
 
-    if (idsToDelete.size > 0) {
-      const tx = db.transaction(CONFLICT_JOURNAL_STORE, 'readwrite');
-      await Promise.all(Array.from(idsToDelete, (id) => tx.store.delete(id)));
-      await tx.done;
-    }
+      if (idsToDelete.size > 0) {
+        const tx = db.transaction(CONFLICT_JOURNAL_STORE, 'readwrite');
+        await Promise.all(Array.from(idsToDelete, (id) => tx.store.delete(id)));
+        await tx.done;
+      }
 
-    await this._refreshUnreviewedCount(db);
-    return idsToDelete.size;
+      await this._refreshUnreviewedCount(db);
+      return idsToDelete.size;
+    } catch (err) {
+      OpLog.err('ConflictJournalService: pruneOnStart failed (ignored)', err);
+      return 0;
+    }
   }
 
   private async _refreshUnreviewedCount(

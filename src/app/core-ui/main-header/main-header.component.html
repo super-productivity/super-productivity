@@ -52,15 +52,16 @@
           class="sync-btn"
           [matBadge]="unreviewedConflictCount()"
           [matBadgeHidden]="unreviewedConflictCount() === 0"
-          matBadgeColor="warn"
+          matBadgeColor="accent"
           matBadgeSize="small"
           matBadgeOverlap="true"
-          [attr.aria-label]="
+          [matBadgeDescription]="
             unreviewedConflictCount() > 0
               ? (T.F.SYNC.CONFLICT_REVIEW.BADGE_TOOLTIP
                 | translate: { count: unreviewedConflictCount() })
               : null
           "
+          [attr.aria-label]="syncTooltip() | translate"
           matTooltip="{{ syncTooltip() | translate }}"
           (click)="onSyncButtonClick()"
           (longPress)="setupSync()"
