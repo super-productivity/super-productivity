@@ -2729,6 +2729,7 @@
     "DUPLICATE_PROJECT": "Duplicate",
     "EML_EMPTY": "The dropped email has no sender or subject",
     "EML_PARSE_ERROR": "Sorry, we couldn't read that email file. It may be corrupted or unsupported.",
+    "EML_TOO_LARGE": "That email file is too large to import.",
     "ENTER_FOCUS_MODE": "Enter focus mode",
     "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" disabled. Re-enable in App Features settings.",
     "GO_TO_TASK_LIST": "Go to task list",

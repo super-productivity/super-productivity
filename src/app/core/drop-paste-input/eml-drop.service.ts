@@ -5,6 +5,11 @@ import { Log } from '../log';
 import { parseEml } from '../../util/eml-parser';
 import { T } from '../../t.const';
 
+// postal-mime parses synchronously on the main thread, and the body becomes a
+// note that syncs to every device. Bound the untrusted input so a pathological
+// .eml can't freeze the UI or balloon the op-log.
+const MAX_EML_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 @Injectable({
   providedIn: 'root',
 })
@@ -13,11 +18,16 @@ export class EmlDropService {
   private readonly _snackService = inject(SnackService);
 
   async createTaskFromEml(file: File): Promise<void> {
+    if (file.size > MAX_EML_FILE_SIZE) {
+      this._snackService.open({ type: 'ERROR', msg: T.MH.EML_TOO_LARGE });
+      return;
+    }
+
     try {
       const data = await parseEml(file);
 
-      const sender = data.from?.name || data.from?.address || '';
-      const subject = data.subject || '';
+      const sender = (data.from?.name || data.from?.address || '').trim();
+      const subject = (data.subject || '').trim();
 
       // If both are empty, no point in making an empty task.
       if (!sender && !subject) {
@@ -30,8 +40,9 @@ export class EmlDropService {
       // title. Use the plain-text part only (never data.html) — notes render as
       // markdown, so injecting untrusted email HTML would be an XSS vector.
       const notes = data.text?.trim() || undefined;
-      this._taskService.add(title, false, { notes });
-      // TODO: add attachment to task
+      // isIgnoreShortSyntax: the subject is untrusted external content — don't
+      // let ShortSyntaxEffects parse #tag/@date/+project tokens out of it.
+      this._taskService.add(title, false, { notes }, false, true);
     } catch (e) {
       Log.err('Failed to parse EML file', e);
       this._snackService.open({ type: 'ERROR', msg: T.MH.EML_PARSE_ERROR });

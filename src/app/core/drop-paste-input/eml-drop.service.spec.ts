@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { EmlDropService } from './eml-drop.service';
-import { TaskService } from 'src/app/features/tasks/task.service';
+import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../snack/snack.service';
 import { Log } from '../log';
-import { T } from 'src/app/t.const';
+import { T } from '../../t.const';
 
 const makeFile = (content: string, name = 'mail.eml'): File =>
   new File([content], name, { type: '' });
@@ -44,27 +44,43 @@ describe('EmlDropService', () => {
     service = TestBed.inject(EmlDropService);
   });
 
-  it('should add a task titled "sender: subject" for a valid eml', async () => {
+  it('should add a task titled "sender: subject" for a valid eml, ignoring short syntax', async () => {
     await service.createTaskFromEml(makeFile(VALID_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Alice Example: Hello World', false, {
-      notes: 'body',
-    });
+    // 5th arg `true` = isIgnoreShortSyntax: email subjects are untrusted and must
+    // not have #tag/@date/+project tokens parsed out of the title.
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice Example: Hello World',
+      false,
+      { notes: 'body' },
+      false,
+      true,
+    );
     expect(snackService.open).not.toHaveBeenCalled();
   });
 
   it('should not add a leading ": " when there is no sender', async () => {
     await service.createTaskFromEml(makeFile(NO_FROM_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Hello World', false, { notes: 'body' });
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Hello World',
+      false,
+      { notes: 'body' },
+      false,
+      true,
+    );
   });
 
   it('should not add a trailing ": " when there is no subject', async () => {
     await service.createTaskFromEml(makeFile(NO_SUBJECT_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Alice Example', false, {
-      notes: 'body',
-    });
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice Example',
+      false,
+      { notes: 'body' },
+      false,
+      true,
+    );
   });
 
   it('should leave notes undefined when the email has no body', async () => {
@@ -74,8 +90,26 @@ describe('EmlDropService', () => {
 
     await service.createTaskFromEml(makeFile(noBodyEml));
 
-    expect(taskService.add).toHaveBeenCalledWith('Alice: Hi', false, {
-      notes: undefined,
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Hi',
+      false,
+      { notes: undefined },
+      false,
+      true,
+    );
+  });
+
+  it('should not parse a valid eml or add a task when the file exceeds the size limit', async () => {
+    const bigFile = makeFile(VALID_EML);
+    // Report an oversized file without allocating 10MB.
+    Object.defineProperty(bigFile, 'size', { value: 11 * 1024 * 1024 });
+
+    await service.createTaskFromEml(bigFile);
+
+    expect(taskService.add).not.toHaveBeenCalled();
+    expect(snackService.open).toHaveBeenCalledWith({
+      type: 'ERROR',
+      msg: T.MH.EML_TOO_LARGE,
     });
   });
 

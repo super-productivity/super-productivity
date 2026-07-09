@@ -398,6 +398,11 @@ export class TaskService {
     isAddToBacklog: boolean = false,
     additional: Partial<Task> = {},
     isAddToBottom: boolean = false,
+    // Set for tasks built from untrusted/external content (e.g. an imported
+    // email subject) so the ShortSyntaxEffects don't parse #tag/@date/+project
+    // tokens out of the title. Only spread when true to keep the dispatched
+    // action byte-identical for all existing callers.
+    isIgnoreShortSyntax: boolean = false,
   ): string {
     const workContextId = this._workContextService.activeWorkContextId as string;
     const workContextType = this._workContextService
@@ -418,6 +423,7 @@ export class TaskService {
         workContextType,
         isAddToBacklog,
         isAddToBottom,
+        ...(isIgnoreShortSyntax ? { isIgnoreShortSyntax: true } : {}),
         ...getDeadlineAutoPlanFields(
           this._dateService,
           task.deadlineDay,
