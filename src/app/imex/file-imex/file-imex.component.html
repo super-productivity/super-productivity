@@ -1,58 +1,75 @@
-<button
-  (click)="downloadBackup()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>file_upload</mat-icon>
-  {{ T.FILE_IMEX.EXPORT_DATA | translate }}
-</button>
+<section class="export-section">
+  <mat-slide-toggle
+    color="primary"
+    [checked]="includeImages"
+    (change)="includeImages = $event.checked"
+    [matTooltip]="T.FILE_IMEX.INCLUDE_IMAGES_IN_EXPORT_DESCRIPTION | translate"
+  >
+    {{ T.FILE_IMEX.INCLUDE_IMAGES_IN_EXPORT | translate }}
+  </mat-slide-toggle>
 
-<button
-  (click)="privacyAppDataDownload()"
-  color="primary"
-  mat-stroked-button
-  type="button"
-  [matTooltip]="T.FILE_IMEX.PRIVACY_EXPORT_DESCRIPTION | translate"
->
-  <mat-icon>code</mat-icon>
-  {{ T.FILE_IMEX.PRIVACY_EXPORT | translate }}
-</button>
+  <div class="btn-group">
+    <button
+      (click)="downloadBackup()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>file_upload</mat-icon>
+      {{ T.FILE_IMEX.EXPORT_DATA | translate }}
+    </button>
 
-<button
-  (click)="fileInput.click()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>file_download</mat-icon>
-  {{ T.FILE_IMEX.IMPORT_FROM_FILE | translate }}
-</button>
+    <button
+      (click)="privacyAppDataDownload()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+      [matTooltip]="T.FILE_IMEX.PRIVACY_EXPORT_DESCRIPTION | translate"
+    >
+      <mat-icon>code</mat-icon>
+      {{ T.FILE_IMEX.PRIVACY_EXPORT | translate }}
+    </button>
+  </div>
+</section>
 
-<input
-  #fileInput
-  (change)="handleFileInput($event)"
-  hidden
-  id="file"
-  type="file"
-/>
+<section class="import-section">
+  <div class="btn-group">
+    <button
+      (click)="fileInput.click()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>file_download</mat-icon>
+      {{ T.FILE_IMEX.IMPORT_FROM_FILE | translate }}
+    </button>
 
-<button
-  (click)="openUrlImportDialog()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>cloud_download</mat-icon>
-  {{ T.FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG | translate }}
-</button>
+    <input
+      #fileInput
+      (change)="handleFileInput($event)"
+      hidden
+      id="file"
+      type="file"
+    />
 
-<button
-  (click)="openArchiveCompression()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>compress</mat-icon>
-  {{ T.FILE_IMEX.BTN_COMPRESS_ARCHIVE | translate }}
-</button>
+    <button
+      (click)="openUrlImportDialog()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>cloud_download</mat-icon>
+      {{ T.FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG | translate }}
+    </button>
+
+    <button
+      (click)="openArchiveCompression()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>compress</mat-icon>
+      {{ T.FILE_IMEX.BTN_COMPRESS_ARCHIVE | translate }}
+    </button>
+  </div>
+</section>
