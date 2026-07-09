@@ -17,6 +17,7 @@ export enum BannerId {
   SuperSyncEncryptionMigration = 'SuperSyncEncryptionMigration',
   RatePrompt = 'RatePrompt',
   SyncConflictContentResolved = 'SyncConflictContentResolved',
+  SyncConflictsAutoResolved = 'SyncConflictsAutoResolved',
   UpdateAvailable = 'UpdateAvailable',
 }
 
@@ -37,6 +38,7 @@ export const BANNER_SORT_PRIO_MAP = {
   [BannerId.SuperSyncEncryptionMigration]: 0,
   [BannerId.RatePrompt]: 0,
   [BannerId.SyncConflictContentResolved]: 1,
+  [BannerId.SyncConflictsAutoResolved]: 0,
   [BannerId.UpdateAvailable]: 0,
 } as const;
 

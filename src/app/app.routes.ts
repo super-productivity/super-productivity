@@ -44,6 +44,13 @@ export const APP_ROUTES: Routes = [
     canActivate: [FocusOverlayOpenGuard],
   },
   {
+    path: 'sync-conflicts',
+    loadComponent: () =>
+      import('./routes/pages.routes').then((m) => m.SyncConflictsPageComponent),
+    data: { page: 'sync-conflicts' },
+    canActivate: [FocusOverlayOpenGuard],
+  },
+  {
     path: 'search',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.SearchPageComponent),

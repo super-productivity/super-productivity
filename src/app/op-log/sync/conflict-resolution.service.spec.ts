@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
@@ -433,8 +434,10 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
-      // Snack should be shown
-      expect(mockSnackService.open).toHaveBeenCalled();
+      // SPAP-15: the generic count snack was replaced by the journal-driven
+      // summary banner. These ops carry no real field changes (noise), so
+      // nothing unreviewed is journaled and no snack fires.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
     it('should auto-resolve conflict as local when local timestamp is newer', async () => {
@@ -458,8 +461,9 @@ describe('ConflictResolutionService', () => {
         undefined,
       );
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
-      // Snack should show local wins
-      expect(mockSnackService.open).toHaveBeenCalled();
+      // SPAP-15: count snack replaced by the journal-driven summary banner;
+      // noise-only resolutions journal nothing unreviewed, so no snack fires.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
     it('shows a content-conflict banner (not the generic snack) when a discarded edit touched task content (#8694)', async () => {
@@ -642,7 +646,7 @@ describe('ConflictResolutionService', () => {
       expect(taskList).toContain('&lt;img');
     });
 
-    it('keeps the quiet count snack (no banner) for routine-only resolutions (#8694)', async () => {
+    it('surfaces the journal-driven summary banner (not the content banner or count snack) for routine field resolutions (SPAP-15)', async () => {
       const bannerService = TestBed.inject(BannerService);
       const openBannerSpy = spyOn(bannerService, 'open');
       const now = Date.now();
@@ -679,8 +683,13 @@ describe('ConflictResolutionService', () => {
 
       await service.autoResolveConflictsLWW(conflicts);
 
-      expect(mockSnackService.open).toHaveBeenCalled();
-      expect(openBannerSpy).not.toHaveBeenCalled();
+      // A dueDay reschedule is a real (non-noise) discarded edit → journaled
+      // unreviewed → the summary banner (NOT the named content banner) surfaces
+      // it, and the old count snack is gone.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(openBannerSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: BannerId.SyncConflictsAutoResolved }),
+      );
     });
 
     it('should auto-resolve as remote when timestamps are equal (tie-breaker)', async () => {
@@ -787,15 +796,10 @@ describe('ConflictResolutionService', () => {
         undefined,
       );
 
-      // Snack notification should reflect both outcomes
-      expect(mockSnackService.open).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          translateParams: {
-            localWins: 1,
-            remoteWins: 1,
-          },
-        }),
-      );
+      // SPAP-15: the generic count snack was removed. Both conflicts here carry
+      // no real field changes (noise), so nothing unreviewed is journaled and
+      // neither the snack nor the summary banner fires.
+      expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
     it('should piggyback non-conflicting ops with conflict resolution', async () => {
@@ -1507,6 +1511,11 @@ describe('ConflictResolutionService', () => {
           appliedOps: [conflicts[0].remoteOps[0], conflicts[2].remoteOps[0]],
         });
 
+        const bannerSpy = spyOn(
+          TestBed.inject(SyncConflictBannerService),
+          'maybeShowSummaryBanner',
+        ).and.resolveTo();
+
         await service.autoResolveConflictsLWW(conflicts);
 
         // Task: remote wins (newer), Tag: remote wins (tie goes to remote)
@@ -1530,15 +1539,10 @@ describe('ConflictResolutionService', () => {
         // Project: local wins - remote op rejected separately
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-project']);
 
-        // Notification should show mixed results
-        expect(mockSnackService.open).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            translateParams: {
-              localWins: 1,
-              remoteWins: 2,
-            },
-          }),
-        );
+        // SPAP-15: the mixed-result count notification is now the journal-driven
+        // summary banner (win-count VALUES are covered by
+        // sync-conflict-banner.service.spec).
+        expect(bannerSpy).toHaveBeenCalled();
       });
     });
 

@@ -1,0 +1,239 @@
+<div class="page-wrapper sync-conflicts-page">
+  <header class="page-header">
+    <h1>{{ T.F.SYNC.CONFLICT_REVIEW.PAGE_TITLE | translate }}</h1>
+    <p class="subtitle">{{ T.F.SYNC.CONFLICT_REVIEW.PAGE_SUBTITLE | translate }}</p>
+  </header>
+
+  <mat-tab-group
+    class="conflict-tabs"
+    animationDuration="200ms"
+    [selectedIndex]="selectedTabIndex()"
+    (selectedIndexChange)="onTabIndexChange($event)"
+  >
+    <!-- ── Unreviewed ─────────────────────────────────────────────────── -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        {{
+          T.F.SYNC.CONFLICT_REVIEW.TAB_UNREVIEWED
+            | translate: { count: unreviewedCount() }
+        }}
+      </ng-template>
+
+      <div class="tab-content">
+        @if (unreviewed().length === 0) {
+          <p class="empty-state">
+            {{ T.F.SYNC.CONFLICT_REVIEW.EMPTY_UNREVIEWED | translate }}
+          </p>
+        } @else {
+          <div class="bulk-actions">
+            <button
+              mat-stroked-button
+              (click)="keepAll()"
+            >
+              {{ T.F.SYNC.CONFLICT_REVIEW.BULK_KEEP_ALL | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              (click)="flipAll('local')"
+            >
+              {{ T.F.SYNC.CONFLICT_REVIEW.BULK_FLIP_LOCAL | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              (click)="flipAll('remote')"
+            >
+              {{ T.F.SYNC.CONFLICT_REVIEW.BULK_FLIP_REMOTE | translate }}
+            </button>
+          </div>
+
+          @for (group of unreviewedGroups(); track group.entityType) {
+            <section class="entity-group">
+              <h2 class="group-title">
+                {{ group.labelKey | translate }} ({{ group.entries.length }})
+              </h2>
+              @for (entry of group.entries; track entry.id) {
+                <ng-container
+                  [ngTemplateOutlet]="rowTpl"
+                  [ngTemplateOutletContext]="{ $implicit: entry, actionable: true }"
+                ></ng-container>
+              }
+            </section>
+          }
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ── History ────────────────────────────────────────────────────── -->
+    <mat-tab [label]="T.F.SYNC.CONFLICT_REVIEW.TAB_HISTORY | translate">
+      <div class="tab-content">
+        @if (history().length === 0) {
+          <p class="empty-state">
+            {{ T.F.SYNC.CONFLICT_REVIEW.EMPTY_HISTORY | translate }}
+          </p>
+        } @else {
+          @for (group of historyGroups(); track group.entityType) {
+            <section class="entity-group">
+              <h2 class="group-title">
+                {{ group.labelKey | translate }} ({{ group.entries.length }})
+              </h2>
+              @for (entry of group.entries; track entry.id) {
+                <ng-container
+                  [ngTemplateOutlet]="rowTpl"
+                  [ngTemplateOutletContext]="{ $implicit: entry, actionable: false }"
+                ></ng-container>
+              }
+            </section>
+          }
+        }
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>
+
+<!-- ── Shared conflict row ──────────────────────────────────────────────── -->
+<ng-template
+  #rowTpl
+  let-entry
+  let-actionable="actionable"
+>
+  <div
+    class="conflict-row"
+    [class.is-expanded]="isExpanded(entry)"
+  >
+    <div
+      class="row-head"
+      role="button"
+      tabindex="0"
+      [attr.aria-expanded]="isExpanded(entry)"
+      (click)="toggleExpand(entry)"
+      (keydown.enter)="toggleExpand(entry)"
+      (keydown.space)="$event.preventDefault(); toggleExpand(entry)"
+    >
+      <mat-icon class="expand-ico">{{
+        isExpanded(entry) ? 'expand_less' : 'expand_more'
+      }}</mat-icon>
+      <span class="row-title">{{ entry.entityTitle }}</span>
+      <span class="row-age">{{ entry.resolvedAt | date: 'short' }}</span>
+      <span
+        class="chip chip--winner"
+        [class.chip--merged]="entry.winner === 'merged'"
+        >{{ winnerKey(entry) | translate }}</span
+      >
+      <span class="chip chip--reason">{{ reasonKey(entry) | translate }}</span>
+      @if (!actionable) {
+        <span class="chip chip--status">{{ statusKey(entry) | translate }}</span>
+      }
+    </div>
+
+    @if (isExpanded(entry)) {
+      <div class="row-body">
+        @if (entry.winner === 'merged') {
+          <div class="merged-chips">
+            @for (diff of entry.fieldDiffs; track diff.field) {
+              <span class="chip chip--merged-field">{{
+                T.F.SYNC.CONFLICT_REVIEW.MERGED_FIELD_CHIP
+                  | translate
+                    : { field: diff.field, side: mergedSideKey(diff) | translate }
+              }}</span>
+            }
+          </div>
+        } @else {
+          <div class="diff-table-wrap">
+            <table class="diff-table">
+              <thead>
+                <tr>
+                  <th>{{ T.F.SYNC.CONFLICT_REVIEW.COL_FIELD | translate }}</th>
+                  <th>
+                    {{ T.F.SYNC.CONFLICT_REVIEW.COL_LOCAL | translate }}
+                    <small class="device"
+                      >{{
+                        isThisDevice(entry.localClientId)
+                          ? (T.F.SYNC.CONFLICT_REVIEW.THIS_DEVICE | translate)
+                          : (T.F.SYNC.CONFLICT_REVIEW.DEVICE_LABEL
+                            | translate: { id: shortId(entry.localClientId) })
+                      }}
+                      · {{ entry.localTs | date: 'short' }}</small
+                    >
+                  </th>
+                  <th>
+                    {{ T.F.SYNC.CONFLICT_REVIEW.COL_REMOTE | translate }}
+                    <small class="device"
+                      >{{
+                        isThisDevice(entry.remoteClientId)
+                          ? (T.F.SYNC.CONFLICT_REVIEW.THIS_DEVICE | translate)
+                          : (T.F.SYNC.CONFLICT_REVIEW.DEVICE_LABEL
+                            | translate: { id: shortId(entry.remoteClientId) })
+                      }}
+                      · {{ entry.remoteTs | date: 'short' }}</small
+                    >
+                  </th>
+                  @if (isStale(entry)) {
+                    <th>{{ T.F.SYNC.CONFLICT_REVIEW.COL_CURRENT | translate }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (diff of entry.fieldDiffs; track diff.field) {
+                  <tr>
+                    <td class="field-name">{{ diff.field }}</td>
+                    <td [class.is-won]="isFieldWonBy(diff, 'local')">
+                      <span class="val">{{ display(diff.localVal) }}</span>
+                      @if (isFieldWonBy(diff, 'local')) {
+                        <mat-icon
+                          class="won-ico"
+                          [matTooltip]="T.F.SYNC.CONFLICT_REVIEW.WINNING_SIDE | translate"
+                          >check</mat-icon
+                        >
+                      }
+                    </td>
+                    <td [class.is-won]="isFieldWonBy(diff, 'remote')">
+                      <span class="val">{{ display(diff.remoteVal) }}</span>
+                      @if (isFieldWonBy(diff, 'remote')) {
+                        <mat-icon
+                          class="won-ico"
+                          [matTooltip]="T.F.SYNC.CONFLICT_REVIEW.WINNING_SIDE | translate"
+                          >check</mat-icon
+                        >
+                      }
+                    </td>
+                    @if (isStale(entry)) {
+                      <td class="current-val">
+                        <span class="val">{{
+                          display(currentValue(entry, diff.field))
+                        }}</span>
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (actionable) {
+          <div class="row-actions">
+            <button
+              mat-stroked-button
+              (click)="keep(entry)"
+            >
+              {{ T.F.SYNC.CONFLICT_REVIEW.ACTION_KEEP | translate }}
+            </button>
+            <button
+              mat-flat-button
+              color="primary"
+              [disabled]="!canFlip(entry)"
+              [matTooltip]="
+                canFlip(entry)
+                  ? ''
+                  : (T.F.SYNC.CONFLICT_REVIEW.FLIP_UNSUPPORTED | translate)
+              "
+              (click)="flip(entry)"
+            >
+              {{ T.F.SYNC.CONFLICT_REVIEW.ACTION_FLIP | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</ng-template>

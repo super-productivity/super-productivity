@@ -65,6 +65,7 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 import { ConflictJournalService } from './conflict-journal.service';
+import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   isDisjointMergeEligible,
@@ -140,6 +141,7 @@ export class ConflictResolutionService {
   private entityRegistry = inject(ENTITY_REGISTRY);
   private injector = inject(Injector);
   private conflictJournal = inject(ConflictJournalService);
+  private syncConflictBanner = inject(SyncConflictBannerService);
 
   /**
    * SPAP-13 (observe-only): conflicts whose CONCURRENT status was FORCED by
@@ -619,13 +621,10 @@ export class ConflictResolutionService {
     );
 
     if (contentConflicts.length === 0) {
-      this.snackService.open({
-        msg: T.F.SYNC.S.LWW_CONFLICTS_AUTO_RESOLVED,
-        translateParams: {
-          localWins: localWinsCount,
-          remoteWins: remoteWinsCount,
-        },
-      });
+      // SPAP-15: no named content loss to surface here. If the sync journaled
+      // any (non-content) unreviewed conflicts, the summary banner names the
+      // count + REVIEW link; otherwise it stays silent (replaces the old snack).
+      await this.syncConflictBanner.maybeShowSummaryBanner();
       return;
     }
 
@@ -660,6 +659,11 @@ export class ConflictResolutionService {
       ico: 'sync_problem',
       msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
       translateParams: { taskList },
+      // SPAP-15: REVIEW opens the conflicts page; DISMISS auto-renders (no action2).
+      action: {
+        label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
+        fn: () => this.syncConflictBanner.navigateToReview(),
+      },
     });
   }
 

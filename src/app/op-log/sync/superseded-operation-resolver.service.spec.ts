@@ -470,7 +470,7 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.actionType).toBe('[PROJECT] LWW Update');
     });
 
-    it('should show snack notification when ops are created', async () => {
+    it('no longer fires the bare count snack when merge ops are created (SPAP-15)', async () => {
       const supersededOp = createMockOperation('op-1', 'TASK', 'task-1', { clientA: 1 });
       const entityState = { id: 'task-1' };
 
@@ -481,7 +481,10 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      expect(mockSnackService.open).toHaveBeenCalledWith(
+      // SPAP-15: the LWW_CONFLICTS_AUTO_RESOLVED snack was replaced by the
+      // journal-driven summary banner. Superseded-merge ops are self-healing
+      // local wins and are not journaled, so no count snack fires here.
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
         jasmine.objectContaining({
           translateParams: { localWins: 1, remoteWins: 0 },
         }),
@@ -1064,7 +1067,7 @@ describe('SupersededOperationResolverService', () => {
         expect(updateOp?.opType).toBe(OpType.Update);
       });
 
-      it('should show conflict resolution snack for DELETE ops', async () => {
+      it('no longer emits a bare count snack for DELETE ops (SPAP-15 journal-driven banner)', async () => {
         const supersededDeleteOp = createMockDeleteOperation('op-1', 'TASK', 'task-1', {
           clientA: 1,
         });
@@ -1075,7 +1078,10 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-1', op: supersededDeleteOp },
         ]);
 
-        expect(mockSnackService.open).toHaveBeenCalledWith(
+        // SPAP-15: the bare count snack was replaced by the journal-driven summary
+        // banner. Superseded self-heals are not journaled, so no count notification
+        // fires for them (behavior change — flagged for review).
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
           jasmine.objectContaining({
             translateParams: { localWins: 1, remoteWins: 0 },
           }),

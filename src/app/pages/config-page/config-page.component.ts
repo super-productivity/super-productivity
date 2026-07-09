@@ -7,7 +7,7 @@ import {
   inject,
   OnInit,
 } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
@@ -86,6 +86,7 @@ import { LocalBackupService } from '../../imex/local-backup/local-backup.service
     MatIcon,
     MatTooltip,
     MatButton,
+    RouterLink,
   ],
 })
 export class ConfigPageComponent implements OnInit {
