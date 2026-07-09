@@ -25,6 +25,10 @@
       "CHANGE_PROJECT_SETTINGS": "Change Project Settings",
       "CHANGE_TAG_SETTINGS": "Change Tag Settings"
     },
+    "DROP_LINK": {
+      "SNACK": "Task created from dropped link",
+      "TASK_TITLE": "Check {{url}}"
+    },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
     "UPDATE_CHECK": {
       "ERROR": "Could not check for updates. Please try again later.",

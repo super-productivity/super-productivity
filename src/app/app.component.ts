@@ -52,7 +52,7 @@ import { DOCUMENT } from '@angular/common';
 import { RightPanelComponent } from './features/right-panel/right-panel.component';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
 import { Store } from '@ngrx/store';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
@@ -70,6 +70,7 @@ import { DialogPromptComponent } from './ui/dialog-prompt/dialog-prompt.componen
 import { TODAY_TAG } from './features/tag/tag.const';
 import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
+import { getDroppedUrl } from './core/drop-paste-input/drop-paste-input';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
@@ -133,6 +134,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _destroyRef = inject(DestroyRef);
@@ -503,9 +505,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         ev.preventDefault();
       };
 
-      // Ensure accidental file drops don’t replace the SPA with the dropped file
+      // Ensure accidental file drops don’t replace the SPA with the dropped file,
+      // and turn a web link dropped on empty app chrome into a "Check <url>" task.
       const onDrop = (ev: DragEvent): void => {
         ev.preventDefault();
+        this._createTaskFromDroppedLink(ev);
       };
 
       const onKeyDown = (ev: KeyboardEvent): void => {
@@ -528,6 +532,30 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
+  }
+
+  // Drops onto tasks/notes/panels stopPropagation in their own handlers, so this
+  // document-level drop only sees links dropped on empty app chrome — mirroring
+  // the Android "share a link" flow by creating a "Check <url>" task.
+  private _createTaskFromDroppedLink(ev: DragEvent): void {
+    if (isInputElement(ev.target as HTMLElement)) {
+      return;
+    }
+    const url = getDroppedUrl(ev);
+    if (!url) {
+      return;
+    }
+    // Re-enter Angular: the drop listener runs outside the zone (see above).
+    this._ngZone.run(() => {
+      this._taskService.add(
+        this._translateService.instant(T.APP.DROP_LINK.TASK_TITLE, { url }),
+      );
+      this._snackService.open({
+        type: 'SUCCESS',
+        ico: 'add_task',
+        msg: T.APP.DROP_LINK.SNACK,
+      });
+    });
   }
 
   /**

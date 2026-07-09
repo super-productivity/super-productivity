@@ -9,6 +9,17 @@ export const createFromDrop = (ev: DragEvent): null | DropPasteInput => {
   return text ? _createTextBookmark(text) : _createFileBookmark(ev.dataTransfer);
 };
 
+/**
+ * Extract a single http(s) web link from a drag event, or null when the drop
+ * isn't a shareable link (files, plain-text selections, or non-web schemes).
+ * A dragged hyperlink has no inner whitespace, which cleanly rejects dropped
+ * multi-line text selections that merely start with "http".
+ */
+export const getDroppedUrl = (ev: DragEvent): string | null => {
+  const url = ev.dataTransfer?.getData('text')?.trim();
+  return url && !/\s/.test(url) && /^https?:\/\//i.test(url) ? url : null;
+};
+
 export const createFromPaste = (ev: ClipboardEvent): null | DropPasteInput => {
   if (ev.target && (ev.target as HTMLElement).getAttribute('contenteditable')) {
     return null;

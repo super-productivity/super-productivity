@@ -1,4 +1,4 @@
-import { createFromDrop } from './drop-paste-input';
+import { createFromDrop, getDroppedUrl } from './drop-paste-input';
 
 // Minimal DragEvent stub: only the bits createFromDrop reads.
 const dropEventWithFile = (file: File, text = ''): DragEvent =>
@@ -6,6 +6,14 @@ const dropEventWithFile = (file: File, text = ''): DragEvent =>
     dataTransfer: {
       getData: (type: string) => (type === 'text' ? text : ''),
       files: [file] as unknown as FileList,
+    },
+  }) as unknown as DragEvent;
+
+const dropEventWithText = (text: string): DragEvent =>
+  ({
+    dataTransfer: {
+      getData: (type: string) => (type === 'text' ? text : ''),
+      files: [] as unknown as FileList,
     },
   }) as unknown as DragEvent;
 
@@ -70,5 +78,42 @@ describe('createFromDrop', () => {
 
     expect(result?.type).toBe('LINK');
     expect(result?.path).toBe('https://example.com');
+  });
+});
+
+describe('getDroppedUrl', () => {
+  it('should return a dropped http(s) link', () => {
+    expect(getDroppedUrl(dropEventWithText('https://example.com/foo'))).toBe(
+      'https://example.com/foo',
+    );
+    expect(getDroppedUrl(dropEventWithText('http://example.com'))).toBe(
+      'http://example.com',
+    );
+  });
+
+  it('should trim surrounding whitespace', () => {
+    expect(getDroppedUrl(dropEventWithText('  https://example.com  '))).toBe(
+      'https://example.com',
+    );
+  });
+
+  it('should ignore plain-text selections that are not links', () => {
+    expect(getDroppedUrl(dropEventWithText('just some text'))).toBeNull();
+    expect(getDroppedUrl(dropEventWithText(''))).toBeNull();
+  });
+
+  it('should ignore non-web schemes', () => {
+    expect(getDroppedUrl(dropEventWithText('ftp://example.com'))).toBeNull();
+    expect(getDroppedUrl(dropEventWithText('file:///etc/hosts'))).toBeNull();
+    expect(getDroppedUrl(dropEventWithText('javascript:alert(1)'))).toBeNull();
+  });
+
+  it('should reject multi-line / whitespace-containing text that merely starts with http', () => {
+    expect(getDroppedUrl(dropEventWithText('https://example.com\nmore text'))).toBeNull();
+    expect(getDroppedUrl(dropEventWithText('https://example.com and more'))).toBeNull();
+  });
+
+  it('should return null when there is no dataTransfer', () => {
+    expect(getDroppedUrl({} as DragEvent)).toBeNull();
   });
 });
