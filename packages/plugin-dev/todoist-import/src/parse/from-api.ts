@@ -320,8 +320,14 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
     const deadlineNoted = hasDue && deadlineDay ? deadlineDay : null;
 
     const duration = item.duration;
+    // Number.isFinite guards a hostile `1e999` → Infinity, which would diverge
+    // across clients (Infinity JSON-serializes to null in the op-log)
     const isMinuteDuration =
-      !!duration && duration.unit === 'minute' && (duration.amount ?? 0) > 0;
+      !!duration &&
+      duration.unit === 'minute' &&
+      Number.isFinite(duration.amount) &&
+      (duration.amount as number) > 0 &&
+      (duration.amount as number) <= 525_600; // 1 year in minutes
     const isDayDurationSkipped = !!duration && duration.unit === 'day';
 
     return {

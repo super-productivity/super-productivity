@@ -107,8 +107,9 @@ scans at 5k dated tasks) and today there is no cheaper path.
 **API token only in v1.** The user pastes a Todoist personal token (Settings →
 Integrations → Developer); the plugin makes one
 `POST https://api.todoist.com/api/v1/sync` with `sync_token=*`,
-`resource_types=["projects","items","labels","sections","notes"]` (`notes` = task
-comments, folded into SP task notes) via the gated `PluginAPI.request`
+`resource_types=["projects","items","sections","notes"]` (`notes` = task comments,
+folded into SP task notes; the `labels` resource is deliberately NOT requested —
+item labels arrive as names on the items themselves) via the gated `PluginAPI.request`
 (`permissions:["http"]` + `allowedHosts:["api.todoist.com"]`). The old Sync **v9**
 endpoint is deprecated — use unified **v1**.
 

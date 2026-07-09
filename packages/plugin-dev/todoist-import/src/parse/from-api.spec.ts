@@ -304,6 +304,27 @@ describe('parseSyncResponse', () => {
       expect(taskParsed.notes).toBe('Comments:\n- evil');
     });
 
+    it('rejects non-finite or absurd durations', () => {
+      const raw = baseFixture();
+      raw.items = [
+        {
+          id: 't1',
+          project_id: 'p1',
+          content: 'a',
+          duration: { amount: Infinity, unit: 'minute' },
+        },
+        {
+          id: 't2',
+          project_id: 'p1',
+          content: 'b',
+          duration: { amount: 9_999_999, unit: 'minute' },
+        },
+      ];
+      const [t1, t2] = parseSyncResponse(raw).tasks;
+      expect(t1.timeEstimate).toBeNull();
+      expect(t2.timeEstimate).toBeNull();
+    });
+
     it('clamps oversized titles and notes', () => {
       const raw = baseFixture();
       raw.items = [

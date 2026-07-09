@@ -269,7 +269,7 @@ const executeImport = async (plan: ImportPlan, lossyNotes: string[]): Promise<vo
   const result = await runImport(api(), plan, (progress) => {
     const detail =
       progress.phase === 'details' && progress.detailTotal
-        ? ` — applying dates & tags ${progress.detailIndex}/${progress.detailTotal}`
+        ? ` — applying dates & tags ${Math.min((progress.detailIndex ?? 0) + 1, progress.detailTotal)}/${progress.detailTotal}`
         : ` (${progress.phase})`;
     progressLine.textContent = `Project ${progress.projectIndex + 1} of ${progress.totalProjects}: ${progress.projectTitle}${detail}`;
   });
@@ -309,7 +309,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: string[]): void => 
     ? [
         el('p', {
           className: 'warn',
-          text: 'Could not verify the imported counts — the numbers above show 0 but the import itself succeeded.',
+          text: 'Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.',
         }),
       ]
     : [];
