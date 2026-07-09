@@ -57,9 +57,9 @@ class CapacitorMainActivity : BridgeActivity() {
     // path) to avoid allocating an IntArray on every pass while the IME is up.
     private val webViewLocationOnScreen = IntArray(2)
 
-    // SDK < 30 status-bar overlap workaround: last value pushed to JS, to dedupe
+    // SDK < 35 status-bar overlap workaround: last value pushed to JS, to dedupe
     // the per-layout-pass listener. -1 = nothing pushed yet.
-    // See pushStatusBarOverlapBelowApi30.
+    // See pushStatusBarOverlapBelowApi35.
     private var lastStatusBarOverlapCssPx: Int = -1
 
     private var isTimerCompleteReceiverRegistered = false
@@ -223,7 +223,7 @@ class CapacitorMainActivity : BridgeActivity() {
                 if (isKeyboardOpen) "true" else "false"
             )
             adjustWebViewHeightForKeyboardBelowApi30(rect, isKeyboardOpen)
-            pushStatusBarOverlapBelowApi30(rect)
+            pushStatusBarOverlapBelowApi35(rect)
         }
 
         // Register broadcast receiver for focus mode timer completion
@@ -348,8 +348,8 @@ class CapacitorMainActivity : BridgeActivity() {
         // re-enters here, but it also wipes the inline --android-status-bar-overlap
         // off the fresh document. Re-arm the dedupe so the next layout pass
         // re-publishes it; otherwise the unchanged value is skipped and the
-        // header overlaps the status bar again on the WebView < 140 / API < 30
-        // tail. See pushStatusBarOverlapBelowApi30.
+        // header overlaps the status bar again on the WebView < 140 / API < 35
+        // tail. See pushStatusBarOverlapBelowApi35.
         lastStatusBarOverlapCssPx = -1
         pendingShareIntent?.let {
             Log.d("SP_SHARE", "Flushing pending share intent: $it")
@@ -549,37 +549,39 @@ class CapacitorMainActivity : BridgeActivity() {
 
     /**
      * Status-bar overlap workaround for the web header drawing BEHIND the status
-     * bar on the WebView < 140 tail (#8508 / #8283 follow-up, Android 9 / API 28).
+     * bar on the WebView < 140 tail (#8508 / #8283, Android 9 / API 28 through
+     * Android 14 / API 34).
      *
      * Edge-to-edge insets are owned by Capacitor's built-in SystemBars now. On
      * **API >= 35** it injects the real `--safe-area-inset-*` px, and on
      * **WebView >= 140** the WebView's own `env(safe-area-inset-*)` is correct
-     * (passthrough). But on the **WebView < 140** tail under enforced edge-to-edge
-     * the WebView extends under the status bar while `env(safe-area-inset-top)`
-     * resolves to 0 (old WebViews map only display cutouts into safe-area insets,
-     * not the status bar) — so the web side has no top inset and content overlaps
-     * the status bar.
+     * (passthrough). But on the **WebView < 140 / API < 35** tail under enforced
+     * edge-to-edge the WebView extends under the status bar while
+     * `env(safe-area-inset-top)` resolves to 0 (old WebViews map only display
+     * cutouts into safe-area insets, not the status bar) — so the web side has no
+     * top inset and content overlaps the status bar.
      *
      * We measure the overlap natively and publish it as the `--android-status-bar-
      * overlap` CSS var, which the web side folds into `--safe-area-top` via
      * `var(--safe-area-inset-top, max(env(...), var(--android-status-bar-overlap)))`.
      * The overlap is how much of the status bar covers the WebView: `rect.top`
-     * (top of the visible display frame = status-bar height, reliable on API 28,
+     * (top of the visible display frame = status-bar height, reliable API 28–34,
      * the same frame the keyboard path uses) minus the WebView's top on screen
      * (`getLocationOnScreen`: 0 when edge-to-edge, == status-bar height once
      * inset). So it is the status-bar height when the WebView is NOT inset and 0
      * once it is — `max()` never double-counts. Physical px → CSS px via display
      * density; deduped so the per-layout listener does not spam evaluateJavascript.
      *
-     * Gated to **SDK < 30 AND WebView < 140** (mirrors
-     * adjustWebViewHeightForKeyboardBelowApi30) so it never fights SystemBars; on
-     * API >= 35 the injected --safe-area-inset-top wins via var() precedence and
-     * the published var is ignored regardless. (Known small gap: an API 30–34
-     * device on an old WebView < 140 also has env()==0; rare, since WebView
-     * auto-updates above API 30 — broaden the gate if it ever surfaces.)
+     * Gated to **SDK < 35 AND WebView < 140** so it never fights SystemBars: on
+     * API >= 35 SystemBars injects --safe-area-inset-top (wins via var()
+     * precedence), and WebView >= 140 has correct env() passthrough. The full
+     * API < 35 range (not just < 30) is required because API 30–34 devices on an
+     * un-updated WebView < 140 — e.g. de-Googled ROMs where the system WebView is
+     * not refreshed via Play — also report env()==0 (#8283, Pixel 7a / Android 14
+     * / LineageOS-microG).
      */
-    private fun pushStatusBarOverlapBelowApi30(rect: Rect) {
-        if (android.os.Build.VERSION.SDK_INT >= 30) return
+    private fun pushStatusBarOverlapBelowApi35(rect: Rect) {
+        if (android.os.Build.VERSION.SDK_INT >= 35) return
         // Skip when SystemBars/env() already give the correct top inset (WebView
         // >= 140 passthrough). Unknown version (null) -> run it, the safe default.
         val wvMajor = webViewCompatibility?.majorVersion
