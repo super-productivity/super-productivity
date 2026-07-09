@@ -50,12 +50,12 @@ import { TranslatePipe } from '@ngx-translate/core';
   ],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
-    // data-task-id is unconditional (inert without focus) so the id-based
-    // schedule-today shortcut can resolve this task generically (#8851).
-    '[attr.data-task-id]': 'task().id',
-    // Focusable only where the shortcut needs it (the Planner overdue list),
-    // not on every planner-day/scheduled card — those would add dozens of Tab
-    // stops board-wide.
+    // data-task-id + tabindex only where the id-based schedule-today shortcut
+    // needs them (the Planner overdue list, #8851). Elsewhere data-task-id
+    // must stay absent: the e2e page object (e2e/pages/task.page.ts) picks its
+    // done-confirmation strategy based on its presence, and tabindex would add
+    // a Tab stop to every planner-day/scheduled card board-wide.
+    '[attr.data-task-id]': 'focusable() ? task().id : null',
     '[attr.tabindex]': 'focusable() ? "0" : null',
     '[class.isDone]': 'task().isDone',
     '[class.isDragReady]': 'isDragReady()',
