@@ -2224,6 +2224,7 @@
     },
     "EXPORT_DATA": "Export Data",
     "IMPORT_FROM_FILE": "Import from File",
+    "IMPORT_FROM_TODOIST": "Import from Todoist",
     "IMPORT_FROM_URL": "Import from URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file to import.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Import from URL",
