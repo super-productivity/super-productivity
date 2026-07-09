@@ -1,9 +1,9 @@
 import { inject, Injectable } from '@angular/core';
-import { TaskService } from 'src/app/features/tasks/task.service';
+import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../snack/snack.service';
 import { Log } from '../log';
-import { parseEml } from 'src/app/util/eml-parser';
-import { T } from 'src/app/t.const';
+import { parseEml } from '../../util/eml-parser';
+import { T } from '../../t.const';
 
 @Injectable({
   providedIn: 'root',
@@ -25,8 +25,12 @@ export class EmlDropService {
         return;
       }
 
-      const message = [sender, subject].filter(Boolean).join(': ');
-      this._taskService.add(message);
+      const title = [sender, subject].filter(Boolean).join(': ');
+      // Keep the email body as notes so the task retains context, not just a
+      // title. Use the plain-text part only (never data.html) — notes render as
+      // markdown, so injecting untrusted email HTML would be an XSS vector.
+      const notes = data.text?.trim() || undefined;
+      this._taskService.add(title, false, { notes });
       // TODO: add attachment to task
     } catch (e) {
       Log.err('Failed to parse EML file', e);

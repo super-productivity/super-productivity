@@ -48,7 +48,7 @@ import { DateService } from '../../core/date/date.service';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { EmlDropDirective } from 'src/app/core/drop-paste-input/eml-drop.directive';
+import { EmlDropDirective } from '../../core/drop-paste-input/eml-drop.directive';
 
 @Component({
   selector: 'main-header',

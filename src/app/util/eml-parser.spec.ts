@@ -95,7 +95,8 @@ describe('parseEml', () => {
 
   it('should throw if the file cannot be read', async () => {
     const file = makeFile('', 'unreadable.eml');
-    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
+    // postal-mime reads a Blob via arrayBuffer(), so that's the read to fail.
+    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('read failed'));
 
     await expectAsync(parseEml(file)).toBeRejected();
   });

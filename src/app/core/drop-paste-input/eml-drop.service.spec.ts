@@ -47,20 +47,36 @@ describe('EmlDropService', () => {
   it('should add a task titled "sender: subject" for a valid eml', async () => {
     await service.createTaskFromEml(makeFile(VALID_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Alice Example: Hello World');
+    expect(taskService.add).toHaveBeenCalledWith('Alice Example: Hello World', false, {
+      notes: 'body',
+    });
     expect(snackService.open).not.toHaveBeenCalled();
   });
 
   it('should not add a leading ": " when there is no sender', async () => {
     await service.createTaskFromEml(makeFile(NO_FROM_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Hello World');
+    expect(taskService.add).toHaveBeenCalledWith('Hello World', false, { notes: 'body' });
   });
 
   it('should not add a trailing ": " when there is no subject', async () => {
     await service.createTaskFromEml(makeFile(NO_SUBJECT_EML));
 
-    expect(taskService.add).toHaveBeenCalledWith('Alice Example');
+    expect(taskService.add).toHaveBeenCalledWith('Alice Example', false, {
+      notes: 'body',
+    });
+  });
+
+  it('should leave notes undefined when the email has no body', async () => {
+    const noBodyEml = ['From: Alice <alice@example.com>', 'Subject: Hi', '', ''].join(
+      '\n',
+    );
+
+    await service.createTaskFromEml(makeFile(noBodyEml));
+
+    expect(taskService.add).toHaveBeenCalledWith('Alice: Hi', false, {
+      notes: undefined,
+    });
   });
 
   it('should show a warning snack and not add a task when both sender and subject are empty', async () => {
@@ -76,7 +92,8 @@ describe('EmlDropService', () => {
   it('should log and show an error snack without adding a task when parsing fails', async () => {
     const logErrSpy = spyOn(Log, 'err');
     const file = makeFile(VALID_EML);
-    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
+    // postal-mime reads a Blob via arrayBuffer(), so that's the read to fail.
+    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('read failed'));
 
     await service.createTaskFromEml(file);
 

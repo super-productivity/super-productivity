@@ -1,5 +1,5 @@
 import { Directive, HostListener, inject } from '@angular/core';
-import { isFileEml } from 'src/app/util/eml-parser';
+import { isFileEml } from '../../util/eml-parser';
 import { EmlDropService } from './eml-drop.service';
 
 @Directive({
@@ -8,6 +8,11 @@ import { EmlDropService } from './eml-drop.service';
 export class EmlDropDirective {
   private readonly _emlDropService = inject(EmlDropService);
 
+  // NOTE: the `drop` event only fires because AppComponent registers a global
+  // `dragover` preventDefault() (to block file-drop navigation), which makes the
+  // whole document — including this button — a valid drop target. We don't add a
+  // per-host `dragover` listener on purpose: it would fire on every pointer move
+  // during a drag and force change detection each time.
   @HostListener('drop', ['$event'])
   async onDrop(ev: DragEvent): Promise<void> {
     ev.preventDefault();
