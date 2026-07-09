@@ -92,7 +92,7 @@ describe('ProjectService', () => {
   };
 
   const initialSectionState: SectionState = {
-    ids: ['section-1', 'section-2'],
+    ids: ['section-1', 'section-2', 'section-other', 'section-today'],
     entities: {
       'section-1': {
         id: 'section-1',
@@ -109,6 +109,23 @@ describe('ProjectService', () => {
         title: 'Section 2',
         isExpanded: true,
         taskIds: ['task-2'],
+      },
+      // Foreign-context sections must NOT be copied when duplicating project-1
+      'section-other': {
+        id: 'section-other',
+        contextId: 'project-2',
+        contextType: WorkContextType.PROJECT,
+        title: 'Other Project Section',
+        isExpanded: true,
+        taskIds: [],
+      },
+      'section-today': {
+        id: 'section-today',
+        contextId: 'TODAY',
+        contextType: WorkContextType.TAG,
+        title: 'Today Section',
+        isExpanded: true,
+        taskIds: [],
       },
     },
   };
@@ -418,7 +435,11 @@ describe('ProjectService', () => {
       const addSectionCalls = dispatchSpy.calls
         .allArgs()
         .filter((args: any) => args[0]?.type === '[Section] Add Section');
+      // Only project-1's sections — not project-2's or the TODAY section
       expect(addSectionCalls.length).toBe(2);
+      const copiedTitles = addSectionCalls.map((args: any) => args[0].section.title);
+      expect(copiedTitles).not.toContain('Other Project Section');
+      expect(copiedTitles).not.toContain('Today Section');
       // task-1 -> new-task-1 (first parent duplicated)
       // task-2 -> new-task-3 (after task-1's subtask new-task-2)
       expect((addSectionCalls[0][0] as any).section).toEqual(

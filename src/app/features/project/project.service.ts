@@ -50,7 +50,7 @@ import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { addNote } from '../note/store/note.actions';
 import { Section } from '../section/section.model';
 import { addSection } from '../section/store/section.actions';
-import { selectSectionFeatureState } from '../section/store/section.selectors';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
@@ -505,12 +505,10 @@ export class ProjectService {
     const newNoteIds = this._duplicateNotesToProject(notesToCopy, newProjectId);
     this.update(newProjectId, { noteIds: newNoteIds });
 
-    const sectionState = await firstValueFrom(
-      this._store$.select(selectSectionFeatureState),
+    const sectionsMap = await firstValueFrom(
+      this._store$.select(selectSectionsByContextIdMap),
     );
-    const sectionsToCopy = sectionState.ids
-      .map((id) => sectionState.entities[id])
-      .filter((s): s is Section => !!s);
+    const sectionsToCopy = sectionsMap.get(templateProjectId) ?? [];
 
     const taskIdMap = new Map<string, string>();
     this._duplicateTasksToProject(parentTasks, newProjectId, false, taskState, taskIdMap);
@@ -640,7 +638,7 @@ export class ProjectService {
             contextId: newProjectId,
             contextType: WorkContextType.PROJECT,
             title: section.title,
-            isExpanded: section.isExpanded ?? true,
+            isExpanded: section.isExpanded,
             taskIds: newTaskIds,
           },
         }),
