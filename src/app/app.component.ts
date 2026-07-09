@@ -56,6 +56,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
+import { TaskAttachmentService } from './features/tasks/task-attachment/task-attachment.service';
 import { MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
@@ -71,6 +72,7 @@ import { TODAY_TAG } from './features/tag/tag.const';
 import { openWorkContextSettingsDialog } from './features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { isInputElement } from './util/dom-element';
 import { getDroppedUrl } from './core/drop-paste-input/drop-paste-input';
+import { readableUrl } from './util/readable-url';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
@@ -134,6 +136,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _taskAttachmentService = inject(TaskAttachmentService);
   private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
@@ -547,9 +550,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
     // Re-enter Angular: the drop listener runs outside the zone (see above).
     this._ngZone.run(() => {
-      this._taskService.add(
-        this._translateService.instant(T.APP.DROP_LINK.TASK_TITLE, { url }),
+      // Mirror the Android share flow: a readable title plus the raw URL as a
+      // clickable attachment (so the task stays legible and the link opens).
+      const taskId = this._taskService.add(
+        this._translateService.instant(T.APP.DROP_LINK.TASK_TITLE, {
+          url: readableUrl(url),
+        }),
       );
+      this._taskAttachmentService.addAttachment(taskId, {
+        id: null,
+        type: 'LINK',
+        path: url,
+        title: url,
+        icon: 'link',
+      });
       this._snackService.open({
         type: 'SUCCESS',
         ico: 'add_task',
