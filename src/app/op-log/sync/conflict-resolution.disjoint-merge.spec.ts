@@ -188,6 +188,38 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect((await journal.list('unreviewed')).length).toBe(0);
   });
 
+  // ── (a2) merge-only sync counts the synthesized op for re-upload ────────────
+  it('(a2) counts the synthesized merged op in localWinOpsCreated (drives re-upload)', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Local title', notes: 'base notes' }),
+    );
+
+    const localOp = op({
+      id: 'local-1',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-1',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { notes: 'Remote notes' } } },
+    });
+
+    const result = await service.autoResolveConflictsLWW([
+      conflictOf([localOp], [remoteOp]),
+    ]);
+
+    // No LWW local-win ops here — the single synthesized merged op is the sole
+    // pending-local op. It MUST be counted or the caller's immediate re-upload
+    // is skipped and the sync falsely reports IN_SYNC while the merge is unsynced.
+    expect(mergedOpArgs()).toBeDefined();
+    expect(result.localWinOpsCreated).toBe(1);
+  });
+
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
   it('(b) leaves same-field (title-vs-title) conflicts to LWW (journal unreviewed)', async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));

@@ -151,6 +151,12 @@ export class ConflictResolutionService {
    * same reference flows detection → autoResolveConflictsLWW), so a WeakSet
    * both avoids mutating the shared type and cannot leak across sync cycles.
    * Purely a side-channel: it never changes which op resolution picks.
+   *
+   * FRAGILE: attribution depends on the SAME EntityConflict reference surviving
+   * from detection (`.add`) to resolution (`.has`). A future refactor that
+   * clones or rebuilds the conflict object between those points would silently
+   * drop the `clock-corruption-suspected` classification (no error, just wrong
+   * journal reason). Keep the reference stable or switch to an explicit flag.
    */
   private readonly _corruptionSuspectedConflicts = new WeakSet<EntityConflict>();
 
@@ -597,7 +603,15 @@ export class ConflictResolutionService {
     const isValid = await this._validateAndRepairAfterResolution();
     if (!isValid) this.sessionValidation.setFailed();
 
-    return { localWinOpsCreated: newLocalWinOps.length };
+    // Count both LWW local-win ops AND disjoint-merge ops (STEP 3b): each merge
+    // appended a synthesized pending-local op that still needs uploading. The
+    // caller uses this count to trigger the immediate re-upload
+    // (immediate-upload.service.ts) — omitting merges lets a merge-only sync
+    // report IN_SYNC while its merged op sits unsynced until a later cycle.
+    // Mirrors the rejection-handler path (operation-log-sync.service.ts:361).
+    return {
+      localWinOpsCreated: newLocalWinOps.length + mergedResolutions.length,
+    };
   }
 
   /**
