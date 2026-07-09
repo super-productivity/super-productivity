@@ -19,6 +19,8 @@ import { WorkContextType } from '../work-context/work-context.model';
 import { T } from '../../t.const';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { NoteState } from '../note/note.model';
+import { selectSectionFeatureState } from '../section/store/section.selectors';
+import { SectionState } from '../section/section.model';
 import { DateService } from '../../core/date/date.service';
 import {
   selectUnarchivedProjects,
@@ -87,6 +89,28 @@ describe('ProjectService', () => {
       },
     },
     todayOrder: [],
+  };
+
+  const initialSectionState: SectionState = {
+    ids: ['section-1', 'section-2'],
+    entities: {
+      'section-1': {
+        id: 'section-1',
+        contextId: 'project-1',
+        contextType: WorkContextType.PROJECT,
+        title: 'Section 1',
+        isExpanded: true,
+        taskIds: ['task-1'],
+      },
+      'section-2': {
+        id: 'section-2',
+        contextId: 'project-1',
+        contextType: WorkContextType.PROJECT,
+        title: 'Section 2',
+        isExpanded: true,
+        taskIds: ['task-2'],
+      },
+    },
   };
   /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -191,6 +215,7 @@ describe('ProjectService', () => {
     store = TestBed.inject(Store) as MockStore<any>;
     store.overrideSelector(selectTaskFeatureState, initialTaskState);
     store.overrideSelector(selectNoteFeatureState, initialNoteState);
+    store.overrideSelector(selectSectionFeatureState, initialSectionState);
   });
 
   afterEach(() => {
@@ -378,6 +403,39 @@ describe('ProjectService', () => {
         .filter((args: any) => args[0]?.type === '[Note] Add Note');
       expect(addNoteCalls.length).toBe(1);
       expect((addNoteCalls[0][0] as any).note.isPinnedToToday).toBe(false);
+    }));
+
+    it('should duplicate sections and remap their task membership', fakeAsync(() => {
+      const project = createProject({
+        id: 'project-1',
+        title: 'Project 1',
+        taskIds: ['task-1', 'task-2'],
+      });
+      spyOn(service, 'getByIdOnce$').and.returnValue(of(project));
+      const dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+      service.duplicateProject('project-1');
+      tick();
+      const addSectionCalls = dispatchSpy.calls
+        .allArgs()
+        .filter((args: any) => args[0]?.type === '[Section] Add Section');
+      expect(addSectionCalls.length).toBe(2);
+      // task-1 -> new-task-1 (first parent duplicated)
+      // task-2 -> new-task-3 (after task-1's subtask new-task-2)
+      expect((addSectionCalls[0][0] as any).section).toEqual(
+        jasmine.objectContaining({
+          contextId: 'new-project-id',
+          contextType: WorkContextType.PROJECT,
+          title: 'Section 1',
+          taskIds: ['new-task-1'],
+        }),
+      );
+      expect((addSectionCalls[1][0] as any).section).toEqual(
+        jasmine.objectContaining({
+          contextId: 'new-project-id',
+          title: 'Section 2',
+          taskIds: ['new-task-3'],
+        }),
+      );
     }));
   });
 
