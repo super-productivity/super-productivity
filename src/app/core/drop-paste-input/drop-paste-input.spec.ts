@@ -9,10 +9,13 @@ const dropEventWithFile = (file: File, text = ''): DragEvent =>
     },
   }) as unknown as DragEvent;
 
-const dropEventWithText = (text: string): DragEvent =>
+// Stub whose dataTransfer serves the `text/plain` and `text/uri-list` payloads
+// a real drop provides.
+const dropEvent = (opts: { plain?: string; uriList?: string }): DragEvent =>
   ({
     dataTransfer: {
-      getData: (type: string) => (type === 'text' ? text : ''),
+      getData: (type: string) =>
+        (type === 'text/uri-list' ? opts.uriList : opts.plain) ?? '',
       files: [] as unknown as FileList,
     },
   }) as unknown as DragEvent;
@@ -82,38 +85,66 @@ describe('createFromDrop', () => {
 });
 
 describe('getDroppedUrl', () => {
-  it('should return a dropped http(s) link', () => {
-    expect(getDroppedUrl(dropEventWithText('https://example.com/foo'))).toBe(
+  it('should return a plain-text http(s) link', () => {
+    expect(getDroppedUrl(dropEvent({ plain: 'https://example.com/foo' }))).toBe(
       'https://example.com/foo',
     );
-    expect(getDroppedUrl(dropEventWithText('http://example.com'))).toBe(
+    expect(getDroppedUrl(dropEvent({ plain: 'http://example.com' }))).toBe(
       'http://example.com',
     );
   });
 
+  it('should read the URL from text/uri-list when text/plain has none', () => {
+    // Some browsers/Electron cross-app drops deliver the URL only here.
+    expect(
+      getDroppedUrl(dropEvent({ uriList: 'https://example.com/from-uri-list' })),
+    ).toBe('https://example.com/from-uri-list');
+  });
+
+  it('should extract the URL when text/plain is "<url>\\n<title>" (common link drag)', () => {
+    expect(
+      getDroppedUrl(dropEvent({ plain: 'https://example.com/a\nSome Page Title' })),
+    ).toBe('https://example.com/a');
+  });
+
+  it('should skip comment lines in a uri-list', () => {
+    expect(
+      getDroppedUrl(dropEvent({ uriList: '# a comment\r\nhttps://example.com/x' })),
+    ).toBe('https://example.com/x');
+  });
+
   it('should trim surrounding whitespace', () => {
-    expect(getDroppedUrl(dropEventWithText('  https://example.com  '))).toBe(
+    expect(getDroppedUrl(dropEvent({ plain: '  https://example.com  ' }))).toBe(
       'https://example.com',
     );
   });
 
   it('should ignore plain-text selections that are not links', () => {
-    expect(getDroppedUrl(dropEventWithText('just some text'))).toBeNull();
-    expect(getDroppedUrl(dropEventWithText(''))).toBeNull();
+    expect(getDroppedUrl(dropEvent({ plain: 'just some text' }))).toBeNull();
+    expect(getDroppedUrl(dropEvent({ plain: '' }))).toBeNull();
   });
 
   it('should ignore non-web schemes', () => {
-    expect(getDroppedUrl(dropEventWithText('ftp://example.com'))).toBeNull();
-    expect(getDroppedUrl(dropEventWithText('file:///etc/hosts'))).toBeNull();
-    expect(getDroppedUrl(dropEventWithText('javascript:alert(1)'))).toBeNull();
+    expect(getDroppedUrl(dropEvent({ plain: 'ftp://example.com' }))).toBeNull();
+    expect(getDroppedUrl(dropEvent({ plain: 'file:///etc/hosts' }))).toBeNull();
+    expect(getDroppedUrl(dropEvent({ plain: 'javascript:alert(1)' }))).toBeNull();
   });
 
-  it('should reject multi-line / whitespace-containing text that merely starts with http', () => {
-    expect(getDroppedUrl(dropEventWithText('https://example.com\nmore text'))).toBeNull();
-    expect(getDroppedUrl(dropEventWithText('https://example.com and more'))).toBeNull();
+  it('should reject a single line that contains inner whitespace (a text selection)', () => {
+    expect(
+      getDroppedUrl(dropEvent({ plain: 'https://example.com and more' })),
+    ).toBeNull();
   });
 
   it('should return null when there is no dataTransfer', () => {
     expect(getDroppedUrl({} as DragEvent)).toBeNull();
+  });
+
+  it('should work with a real DataTransfer object (integration)', () => {
+    const dt = new DataTransfer();
+    dt.setData('text/uri-list', 'https://example.com/real');
+    dt.setData('text/plain', 'https://example.com/real\nReal Title');
+    const ev = new DragEvent('drop', { dataTransfer: dt });
+    expect(getDroppedUrl(ev)).toBe('https://example.com/real');
   });
 });
