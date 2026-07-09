@@ -294,8 +294,7 @@ button[mat-menu-item].nav-link.active {
 
 :host-context(.nav-sidenav.compactMode) {
   .nav-link {
-    justify-content: center;
-    padding: 12px;
+    justify-content: flex-start;
 
     &:focus,
     &:hover {
@@ -305,7 +304,7 @@ button[mat-menu-item].nav-link.active {
 
     ::ng-deep .mat-mdc-menu-item-text {
       display: flex;
-      justify-content: center;
+      justify-content: flex-start;
       width: 100%;
       padding: 0;
 

@@ -12,11 +12,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: derekprior/add-autoresponse@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          respondableId: ${{ github.event.issue.node_id }}
-          response: "Thank you very much for opening up this issue! I am currently a bit overwhelmed by the many requests that arrive each week, so please forgive me, if I fail to respond personally. I am still very likely to at least skim read your request and I'll probably try to fix all (real) bugs if possible and I will likely review every single PR being made (please, give me a heads up if you intent to do so) and I will try to work on popular requests (please upvote via thumbs up on the original issue) whenever possible, but trying to respond to every single issue over the last years has been kind of draining and I need to adjust my approach for this project to remain fun for me and to make any progress with actually coding new stuff. Thanks for your understanding!"
-          author: ${{ github.event.issue.user.login }}
-          exemptedAuthors: 'johannesjo'
+          script: |
+            const exemptedAuthors = ['johannesjo'];
+            if (!context.payload.issue) {
+              core.warning("No issue payload found. This likely indicates this Action is misconfigured.");
+              return;
+            }
+
+            const author = context.payload.issue.user.login;
+            if (exemptedAuthors.includes(author)) {
+              core.info(`Author ${author} is exempted; skipping auto-response.`);
+              return;
+            }
+
+            const response = "Thank you very much for opening up this issue! I am currently a bit overwhelmed by the many requests that arrive each week, so please forgive me, if I fail to respond personally. I am still very likely to at least skim read your request and I'll probably try to fix all (real) bugs if possible and I will likely review every single PR being made (please, give me a heads up if you intent to do so) and I will try to work on popular requests (please upvote via thumbs up on the original issue) whenever possible, but trying to respond to every single issue over the last years has been kind of draining and I need to adjust my approach for this project to remain fun for me and to make any progress with actually coding new stuff. Thanks for your understanding!";
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: response,
+            });

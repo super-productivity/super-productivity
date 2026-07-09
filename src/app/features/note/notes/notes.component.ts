@@ -79,6 +79,12 @@ export class NotesComponent implements OnInit {
 
   @HostListener('drop', ['$event']) onDrop(ev: DragEvent): void {
     this.isDragOver = false;
+    // This panel owns drops that land on it: claim the event synchronously so
+    // the document-level "link → task" handler (AppComponent) doesn't ALSO fire
+    // and create a duplicate task. createFromDrop's own stop/preventDefault run
+    // after an `await` inside NoteService, which is too late to stop propagation.
+    ev.preventDefault();
+    ev.stopPropagation();
     this.noteService.createFromDrop(ev);
   }
 

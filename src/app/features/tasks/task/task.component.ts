@@ -234,7 +234,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return 'chat';
   });
 
-  isTodayListActive = computed(() => this.workContextService.isTodayList);
+  isTodayListActive = computed(() => this.workContextService.isTodayListSignal());
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
     () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),

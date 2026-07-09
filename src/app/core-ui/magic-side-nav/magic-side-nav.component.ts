@@ -39,7 +39,9 @@ import { HISTORY_STATE } from '../../app.constants';
 import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 
-const COLLAPSED_WIDTH = 64;
+// 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
+// nav icons sit centered in the collapsed rail.
+const COLLAPSED_WIDTH = 56;
 const MOBILE_NAV_WIDTH = 300;
 const FOCUS_DELAY_MS = 10;
 const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;

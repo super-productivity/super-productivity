@@ -9,6 +9,31 @@ export const createFromDrop = (ev: DragEvent): null | DropPasteInput => {
   return text ? _createTextBookmark(text) : _createFileBookmark(ev.dataTransfer);
 };
 
+/**
+ * Extract a single http(s) web link from a drag event, or null when the drop
+ * isn't a shareable link (files, plain-text selections, or non-web schemes).
+ *
+ * Reads both `text/uri-list` and `text/plain` because sources disagree on where
+ * the URL lives: browsers dragging a hyperlink populate `text/uri-list` with the
+ * bare URL, while `text/plain` is often `"<url>\n<page title>"` (and Electron
+ * cross-app drops may fill only one of them). We scan every line and take the
+ * first that is exactly an http(s) URL — a line with inner whitespace is a text
+ * selection, not a link, so it's skipped.
+ */
+export const getDroppedUrl = (ev: DragEvent): string | null => {
+  const dt = ev.dataTransfer;
+  if (!dt) {
+    return null;
+  }
+  const lines = `${dt.getData('text/uri-list')}\n${dt.getData('text/plain')}`.split(
+    /[\r\n]+/,
+  );
+  return (
+    lines.map((line) => line.trim()).find((line) => /^https?:\/\/\S+$/i.test(line)) ??
+    null
+  );
+};
+
 export const createFromPaste = (ev: ClipboardEvent): null | DropPasteInput => {
   if (ev.target && (ev.target as HTMLElement).getAttribute('contenteditable')) {
     return null;

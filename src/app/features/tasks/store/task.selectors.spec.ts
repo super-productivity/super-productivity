@@ -236,6 +236,10 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasks.clearResult();
     fromSelectors.selectAllTasksInActiveProjects.clearResult();
     fromSelectors.selectOverdueTasks.clearResult();
+    // dialog-schedule-task.* and time-block-sync.effects specs overrideSelector
+    // selectAllTasksWithDueTimeSorted (setResult persists across files), which
+    // would leak into selectAllTasksWithDueTimeSorted(mockState) here.
+    fromSelectors.selectAllTasksWithDueTimeSorted.clearResult();
     // work-view.component.spec overrides these via overrideSelector (setResult);
     // selectOverdueTasks reads them, so the leaked "today"/offset must be cleared too.
     selectTodayStr.clearResult();
@@ -255,6 +259,7 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasks.release();
     fromSelectors.selectAllTasksInActiveProjects.release();
     fromSelectors.selectOverdueTasks.release();
+    fromSelectors.selectAllTasksWithDueTimeSorted.release();
     selectTodayStr.release();
     selectStartOfNextDayDiffMs.release();
     selectProjectFeatureState.release();
@@ -1033,10 +1038,28 @@ describe('Task Selectors', () => {
     });
   });
 
+  // SPAP-20: these selectors were split into a snapshot-based decision (ids) +
+  // a live-entity re-map, so `.projector(tasks)` no longer applies. Exercise the
+  // full public selectors against real state instead (same observable behavior).
+  const withArchivedProject1 = (): any => ({
+    ...mockState,
+    [PROJECT_FEATURE_NAME]: {
+      ...mockState[PROJECT_FEATURE_NAME],
+      entities: {
+        ...mockState[PROJECT_FEATURE_NAME].entities,
+        project1: {
+          id: 'project1',
+          title: 'Project 1',
+          isHiddenFromMenu: false,
+          isArchived: true,
+        },
+      },
+    },
+  });
+
   describe('selectAllTasksWithDueTimeSorted', () => {
     it('should return only tasks with dueWithTime, sorted ascending', () => {
-      const allTasks = Object.values(mockTasks);
-      const result = fromSelectors.selectAllTasksWithDueTimeSorted.projector(allTasks);
+      const result = fromSelectors.selectAllTasksWithDueTimeSorted(mockState);
       expect(result.map((t) => t.id)).toContain('task5');
       expect(result.every((t) => typeof t.dueWithTime === 'number')).toBe(true);
     });
@@ -1044,28 +1067,23 @@ describe('Task Selectors', () => {
 
   describe('selectAllUndoneTasksWithDueDay', () => {
     it('should exclude tasks from archived projects', () => {
-      const activeTasks = Object.values(mockTasks).filter(
-        (t) => t.projectId !== 'project1',
-      );
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(activeTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay(withArchivedProject1());
+      // task3 lives in project1 which is now archived
       expect(result.map((t) => t.id)).not.toContain('task3');
     });
 
     it('should include tasks when project is not archived', () => {
-      const allTasks = Object.values(mockTasks);
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay(mockState);
       expect(result.map((t) => t.id)).toContain('task3');
     });
 
     it('should exclude done tasks', () => {
-      const allTasks = Object.values(mockTasks);
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay(mockState);
       expect(result.every((t) => !t.isDone)).toBeTrue();
     });
 
     it('should sort results by dueDay chronologically', () => {
-      const allTasks = Object.values(mockTasks);
-      const result = fromSelectors.selectAllUndoneTasksWithDueDay.projector(allTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay(mockState);
       const dueDays = result.map((t) => t.dueDay);
       for (let i = 1; i < dueDays.length; i++) {
         expect(dueDays[i - 1].localeCompare(dueDays[i])).toBeLessThanOrEqual(0);
@@ -1088,18 +1106,22 @@ describe('Task Selectors', () => {
         timeSpent: 0,
         attachments: [],
       };
-      const tasksWithSubtask = [...Object.values(mockTasks), subtaskWithDueDay];
-      const result =
-        fromSelectors.selectAllUndoneTasksWithDueDay.projector(tasksWithSubtask);
+      const stateWithSubtask: any = {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: [...mockTaskState.ids, 'subtaskWithDue'],
+          entities: { ...mockTaskState.entities, subtaskWithDue: subtaskWithDueDay },
+        },
+      };
+      const result = fromSelectors.selectAllUndoneTasksWithDueDay(stateWithSubtask);
       expect(result.map((t) => t.id)).toContain('subtaskWithDue');
     });
   });
 
   describe('selectAllUndoneTasksWithDeadlineSorted', () => {
     it('should return only undone tasks with deadline, sorted', () => {
-      const allTasks = Object.values(mockTasks);
-      const result =
-        fromSelectors.selectAllUndoneTasksWithDeadlineSorted.projector(allTasks);
+      const result = fromSelectors.selectAllUndoneTasksWithDeadlineSorted(mockState);
       expect(result.map((t) => t.id)).toContain('task9');
       expect(result.every((t) => !t.isDone)).toBe(true);
     });
@@ -1146,7 +1168,6 @@ describe('Task Selectors', () => {
     expect(ids).toContain('task6');
   });
 
-  // SPAP-19: per-subscription stable task selector factories
   // -------------------------------------------------------------------------
   describe('SPAP-19 stable selector factories', () => {
     const makeTask = (id: string, over: Partial<Task> = {}): Task =>
@@ -1293,6 +1314,158 @@ describe('Task Selectors', () => {
         expect(res.length).toBe(2);
         expect(res[0]).toBe(a);
         expect(res[1]).toBe(b);
+      });
+    });
+  });
+
+  // SPAP-20: content-stable scheduling snapshot boundary.
+  describe('SPAP-20 scheduling snapshot', () => {
+    // Simulate a real "time tracking tick": replace ONLY the ticked task's entity
+    // (bump timeSpent), keeping every other task's ref intact.
+    const bumpTimeSpent = (taskId: string): any => {
+      const prev = mockTaskState.entities[taskId] as Task;
+      return {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          entities: {
+            ...mockTaskState.entities,
+            [taskId]: { ...prev, timeSpent: (prev.timeSpent || 0) + 1000 },
+          },
+        },
+      };
+    };
+    const patchTask = (taskId: string, patch: Partial<Task>): any => {
+      const prev = mockTaskState.entities[taskId] as Task;
+      return {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          entities: {
+            ...mockTaskState.entities,
+            [taskId]: { ...prev, ...patch },
+          },
+        },
+      };
+    };
+
+    describe('selectTaskSchedulingSnapshot', () => {
+      it('returns the IDENTICAL array ref (and element refs) on a timeSpent-only tick', () => {
+        const r1 = fromSelectors.selectTaskSchedulingSnapshot(mockState);
+        // task3 is a member (due today); its timeSpent bump must not change the snapshot
+        const r2 = fromSelectors.selectTaskSchedulingSnapshot(bumpTimeSpent('task3'));
+        expect(r2).toBe(r1);
+        r1.forEach((el, i) => expect(r2[i]).toBe(el));
+      });
+
+      it('returns a NEW array + changed element when a scheduling field (dueDay) changes', () => {
+        const r1 = fromSelectors.selectTaskSchedulingSnapshot(mockState);
+        const idx = r1.findIndex((s) => s.id === 'task4');
+        const r2 = fromSelectors.selectTaskSchedulingSnapshot(
+          patchTask('task4', { dueDay: today }),
+        );
+        expect(r2).not.toBe(r1);
+        expect(r2[idx]).not.toBe(r1[idx]);
+        expect(r2[idx].dueDay).toBe(today);
+      });
+    });
+
+    describe('decision selectors skipped on a timeSpent tick (identical output ref)', () => {
+      it('selectOverdueTaskIds + selectOverdueTasks are referentially stable', () => {
+        const ids1 = fromSelectors.selectOverdueTaskIds(mockState);
+        const r1 = fromSelectors.selectOverdueTasks(mockState);
+        // task3 is due today (NOT overdue) → not a member of overdue
+        const ticked = bumpTimeSpent('task3');
+        expect(fromSelectors.selectOverdueTaskIds(ticked)).toBe(ids1);
+        expect(fromSelectors.selectOverdueTasks(ticked)).toBe(r1);
+      });
+
+      it('selectAllTasksWithDueTimeSorted is referentially stable', () => {
+        const r1 = fromSelectors.selectAllTasksWithDueTimeSorted(mockState);
+        // task3 has no dueWithTime → not a member
+        expect(
+          fromSelectors.selectAllTasksWithDueTimeSorted(bumpTimeSpent('task3')),
+        ).toBe(r1);
+      });
+
+      it('selectTimeConflictTaskIds is stable when a non-due-time task ticks', () => {
+        const r1 = fromSelectors.selectTimeConflictTaskIds(mockState);
+        expect(fromSelectors.selectTimeConflictTaskIds(bumpTimeSpent('task3'))).toBe(r1);
+      });
+
+      it('selectAllUndoneTasksWithDeadlineSorted is referentially stable', () => {
+        const r1 = fromSelectors.selectAllUndoneTasksWithDeadlineSorted(mockState);
+        // task3 has no deadline → not a member
+        expect(
+          fromSelectors.selectAllUndoneTasksWithDeadlineSorted(bumpTimeSpent('task3')),
+        ).toBe(r1);
+      });
+
+      it('selectAllUndoneTasksWithDueDay is referentially stable', () => {
+        const r1 = fromSelectors.selectAllUndoneTasksWithDueDay(mockState);
+        // bump task5 (dueWithTime, not dueDay) → not a dueDay member
+        expect(fromSelectors.selectAllUndoneTasksWithDueDay(bumpTimeSpent('task5'))).toBe(
+          r1,
+        );
+      });
+    });
+
+    describe('selectAllTasksWithSubTasks (per-id live re-map)', () => {
+      it('keeps unchanged parents identical but updates the ticked member with live data', () => {
+        const r1 = fromSelectors.selectAllTasksWithSubTasks(mockState);
+        const r2 = fromSelectors.selectAllTasksWithSubTasks(bumpTimeSpent('task3'));
+        // task1 (unchanged parent) → exact same object
+        expect(r2.find((t) => t.id === 'task1')).toBe(r1.find((t) => t.id === 'task1'));
+        // task3 (ticked, top-level) → new object reflecting LIVE timeSpent
+        const t3a = r1.find((t) => t.id === 'task3')!;
+        const t3b = r2.find((t) => t.id === 'task3')!;
+        expect(t3b).not.toBe(t3a);
+        expect(t3b.timeSpent).toBe((mockTasks.task3.timeSpent || 0) + 1000);
+      });
+
+      it('rebuilds a parent when its subtask ref changes', () => {
+        const r1 = fromSelectors.selectAllTasksWithSubTasks(mockState);
+        // subtask1's parent is task1 → task1 must get a new object with live subtask
+        const r2 = fromSelectors.selectAllTasksWithSubTasks(bumpTimeSpent('subtask1'));
+        expect(r2.find((t) => t.id === 'task1')).not.toBe(
+          r1.find((t) => t.id === 'task1'),
+        );
+      });
+    });
+
+    describe('recompute + live-ref correctness on a real scheduling change', () => {
+      it('selectOverdueTasks recomputes and reflects a newly-overdue task', () => {
+        const r1 = fromSelectors.selectOverdueTasks(mockState);
+        expect(r1.map((t) => t.id)).not.toContain('task4');
+        const r2 = fromSelectors.selectOverdueTasks(
+          patchTask('task4', { dueDay: yesterday }),
+        );
+        expect(r2).not.toBe(r1);
+        expect(r2.map((t) => t.id)).toContain('task4');
+      });
+
+      it('a member task with a non-scheduling change is served with its LIVE ref', () => {
+        // task6 is overdue. Change its title only (not a scheduling field): the
+        // decision (ids) is unchanged, but the public selector re-maps live so the
+        // returned task6 carries the new title.
+        const r2 = fromSelectors.selectOverdueTasks(
+          patchTask('task6', { title: 'renamed' }),
+        );
+        const t6 = r2.find((t) => t.id === 'task6')!;
+        expect(t6.title).toBe('renamed');
+      });
+    });
+
+    describe('shape parity with the pre-refactor logic', () => {
+      it('selectAllUndoneTasksWithDueDay returns the expected ids in the expected order', () => {
+        const result = fromSelectors.selectAllUndoneTasksWithDueDay(mockState);
+        // undone + has dueDay, sorted lexically: task6 (yesterday) < task3 (today) < task4 (tomorrow)
+        expect(result.map((t) => t.id)).toEqual(['task6', 'task3', 'task4']);
+      });
+
+      it('selectOverdueTasks returns exactly the overdue members', () => {
+        const result = fromSelectors.selectOverdueTasks(mockState);
+        expect(result.map((t) => t.id)).toEqual(['task6']);
       });
     });
   });

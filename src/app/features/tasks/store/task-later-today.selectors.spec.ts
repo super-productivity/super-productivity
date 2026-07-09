@@ -1,6 +1,42 @@
-import { selectLaterTodayTasksWithSubTasks } from './task.selectors';
-import { Task } from '../task.model';
+import { selectLaterTodayStructure, SchedulingSnapshot } from './task.selectors';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+
+// SPAP-20: selectLaterTodayTasksWithSubTasks was split into a snapshot-based
+// decision (selectLaterTodayStructure → ordered {id, subTaskIds}) + a live-entity
+// re-map. This helper reproduces the old single-projector output shape from a raw
+// task array so the existing behavioral assertions below stay unchanged.
+const runLaterToday = (
+  tasks: (Task | undefined)[],
+  todayStr: string,
+  offset: number = 0,
+): TaskWithSubTasks[] => {
+  const snapshot: SchedulingSnapshot[] = tasks
+    .filter((t): t is Task => !!t)
+    .map((t) => ({
+      id: t.id,
+      isDone: t.isDone,
+      dueDay: t.dueDay ?? null,
+      dueWithTime: t.dueWithTime ?? null,
+      deadlineDay: t.deadlineDay ?? null,
+      deadlineWithTime: t.deadlineWithTime ?? null,
+      parentId: t.parentId ?? null,
+      subTaskIds: t.subTaskIds,
+    }));
+  const structure = selectLaterTodayStructure.projector(snapshot, todayStr, offset);
+  const entities: Record<string, Task | undefined> = {};
+  tasks.forEach((t) => {
+    if (t) {
+      entities[t.id] = t;
+    }
+  });
+  return structure.map(
+    (e): TaskWithSubTasks => ({
+      ...(entities[e.id] as Task),
+      subTasks: e.subTaskIds.map((id) => entities[id]).filter((t): t is Task => !!t),
+    }),
+  );
+};
 
 describe('selectLaterTodayTasksWithSubTasks', () => {
   const now = new Date();
@@ -151,7 +187,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
   it('should select tasks scheduled for later today', () => {
     // Virtual tag pattern: tasks are "in TODAY" because of dueDay or dueWithTime for today
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     // The result includes main tasks and their subtasks (for display purposes)
@@ -172,28 +208,28 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should not include tasks scheduled for earlier today', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('EARLIER_TODAY');
   });
 
   it('should not include tasks scheduled for tomorrow', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('TOMORROW_TASK');
   });
 
   it('should not include unscheduled tasks', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('UNSCHEDULED_TODAY');
   });
 
   it('should not include done tasks', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('DONE_LATER_TODAY');
@@ -222,18 +258,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       dueDay: tomorrowStr,
     });
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      [...mockAllTasks, taskForTomorrow],
-      todayStr,
-      0,
-    );
+    const result = runLaterToday([...mockAllTasks, taskForTomorrow], todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('SCHEDULED_FOR_TOMORROW');
   });
 
   it('should include parent tasks with all their subtasks (not as separate items)', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockAllTasks, todayStr, 0);
+    const result = runLaterToday(mockAllTasks, todayStr, 0);
 
     const parentIndex = result.findIndex((t) => t.id === 'PARENT_LATER');
     expect(parentIndex).toBeGreaterThan(-1);
@@ -258,11 +290,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     });
 
     const tasksWithCurrent = [...mockAllTasks, taskAtCurrentTime];
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      tasksWithCurrent,
-      todayStr,
-      0,
-    );
+    const result = runLaterToday(tasksWithCurrent, todayStr, 0);
 
     // Task scheduled at exactly current time should be included
     const taskIds = result.map((t) => t.id);
@@ -283,11 +311,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     });
 
     const tasksWithMidnight = [...mockAllTasks, taskAtMidnight];
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      tasksWithMidnight,
-      todayStr,
-      0,
-    );
+    const result = runLaterToday(tasksWithMidnight, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).toContain('MIDNIGHT_TASK');
@@ -307,21 +331,13 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       }),
     ];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      noMatchingTasks,
-      todayStr,
-      0,
-    );
+    const result = runLaterToday(noMatchingTasks, todayStr, 0);
 
     expect(result.length).toBe(0);
   });
 
   it('should return empty array when todayStr is null', () => {
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      mockAllTasks,
-      null as any,
-      0,
-    );
+    const result = runLaterToday(mockAllTasks, null as any, 0);
 
     expect(result.length).toBe(0);
   });
@@ -345,7 +361,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentWithScheduledSubtask, scheduledSubtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Should include parent (because it has scheduled subtask) - not the subtask as separate item
     expect(result.length).toBe(1);
@@ -373,7 +389,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentTask, scheduledSubtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     // Parent SHOULD be included because it has scheduled subtask
@@ -424,7 +440,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parent1, sub1, parent2, sub2];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Should be sorted by earliest time: Parent 1 (has subtask at 2 PM), then Parent 2 (has subtask at 3 PM)
     expect(result.length).toBe(2);
@@ -465,7 +481,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentUnscheduled, subUnscheduled, subPast];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Should not include any tasks
     expect(result.length).toBe(0);
@@ -490,7 +506,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentTask, subtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     const taskIds = result.map((t) => t.id);
     // Only parent should appear as top-level
@@ -534,7 +550,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentNotToday, orphanedSubtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Only orphaned subtask should appear (parent is for tomorrow)
     expect(result.length).toBe(1);
@@ -556,11 +572,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     // Parent 'MISSING_PARENT' is absent from state entirely —
     // only the subtask exists in the flat task list.
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      [orphanedSubtask],
-      todayStr,
-      0,
-    );
+    const result = runLaterToday([orphanedSubtask], todayStr, 0);
 
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('ORPHANED_SUB');
@@ -593,7 +605,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentTask, scheduledSubtask, unscheduledSubtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Parent should be included because it has a scheduled subtask
     expect(result.length).toBe(1);
@@ -634,7 +646,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [grandparent, parent, child];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('CHILD_SCHEDULED');
@@ -651,11 +663,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       dueDay: undefined, // No dueDay set - this was the bug scenario
     });
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(
-      [taskWithTimeOnly],
-      todayStr,
-      0,
-    );
+    const result = runLaterToday([taskWithTimeOnly], todayStr, 0);
 
     // Task should be included because dueWithTime is for today
     expect(result.length).toBe(1);
@@ -691,7 +699,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     const mockTasks = [parentTask, doneSubtask, notDoneSubtask];
 
-    const result = selectLaterTodayTasksWithSubTasks.projector(mockTasks, todayStr, 0);
+    const result = runLaterToday(mockTasks, todayStr, 0);
 
     // Parent should be included
     expect(result.length).toBe(1);
@@ -734,11 +742,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: null,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt2amFeb16],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt2amFeb16], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('TASK_2AM_FEB16');
@@ -755,11 +759,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: null,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt5amFeb16],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt5amFeb16], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(0);
     });
@@ -776,11 +776,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: null,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt359amFeb16],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt359amFeb16], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('TASK_359AM_FEB16');
@@ -798,11 +794,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: null,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt401amFeb16],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt401amFeb16], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(0);
     });
@@ -816,11 +808,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: feb15Str,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt3pmFeb15],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt3pmFeb15], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(1);
       expect(result[0].id).toBe('TASK_3PM_FEB15');
@@ -835,11 +823,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
         dueDay: feb15Str,
       });
 
-      const result = selectLaterTodayTasksWithSubTasks.projector(
-        [taskAt8amFeb15],
-        feb15Str,
-        FOUR_HOURS_MS,
-      );
+      const result = runLaterToday([taskAt8amFeb15], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(0);
     });
