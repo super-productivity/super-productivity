@@ -128,7 +128,7 @@ export const cssSelectors = {
   // TASK DETAIL PANEL SELECTORS
   // ============================================================================
   RIGHT_PANEL: '.right-panel',
-  DETAIL_PANEL: 'dialog-task-detail-panel, task-detail-panel',
+  DETAIL_PANEL: 'task-detail-panel',
   DETAIL_PANEL_BTN: '.show-additional-info-btn',
   SCHEDULE_TASK_ITEM:
     'task-detail-item:has(mat-icon:text("alarm")), task-detail-item:has(mat-icon:text("today")), task-detail-item:has(mat-icon:text("schedule"))',

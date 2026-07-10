@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "18.13.1",
+  "version": "18.14.0",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -193,7 +193,6 @@
     "hash-wasm": "^4.12.0",
     "https-proxy-agent": "^7.0.0",
     "node-fetch": "^2.7.0",
-    "postal-mime": "^2.7.4",
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {
@@ -361,7 +360,9 @@
       "owner": "johannesjo"
     }
   ],
+  "packageManager": "npm@11.7.0",
   "volta": {
-    "node": "22.18.0"
+    "node": "22.18.0",
+    "npm": "11.7.0"
   }
 }

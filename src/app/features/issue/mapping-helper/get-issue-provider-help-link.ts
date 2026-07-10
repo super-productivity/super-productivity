@@ -9,8 +9,11 @@ export const getIssueProviderHelpLink = (
     //   return 'https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/';
     case 'GITHUB':
       return 'https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests';
+    // NOTE: the GitLab search box hits the Issues API `search=` param (plain
+    // substring match), not Advanced Search — so link the issues endpoint, not
+    // the advanced-search syntax page (#8884).
     case 'GITLAB':
-      return 'https://docs.gitlab.com/ee/user/search/advanced_search.html';
+      return 'https://docs.gitlab.com/api/issues/#list-project-issues';
     // case 'GITEA':
     // case 'CALDAV':
     // case 'REDMINE':

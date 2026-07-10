@@ -1,0 +1,29 @@
+{
+  "id": "todoist-import",
+  "manifestVersion": 1,
+  "name": "Todoist Import",
+  "version": "1.0.0",
+  "minSupVersion": "18.0.0",
+  "description": "One-time import of your active Todoist projects, tasks, sub-tasks, labels and due dates. Additive — your existing Super Productivity data is never touched.",
+  "author": "SuperProductivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "hooks": [],
+  "permissions": [
+    "http",
+    "getTasks",
+    "getAllProjects",
+    "addProject",
+    "getAllTags",
+    "addTag",
+    "batchUpdateForProject",
+    "updateTask",
+    "showSnack"
+  ],
+  "allowedHosts": ["api.todoist.com"],
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "i18n": {
+    "languages": ["en"]
+  },
+  "icon": "icon.svg"
+}

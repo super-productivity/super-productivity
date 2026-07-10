@@ -86,6 +86,27 @@ describe('taskBatchUpdateMetaReducer', () => {
       expect(task.isDone).toBe(false);
     });
 
+    it('should use the timestamp captured in the persistent batch action', () => {
+      const action = TaskSharedActions.batchUpdateForProject({
+        projectId: 'project1',
+        operations: [
+          {
+            type: 'create',
+            tempId: 'temp-stable-time',
+            data: { title: 'Replay-safe task' },
+          } as BatchTaskCreate,
+        ],
+        createdTaskIds: { 'temp-stable-time': 'stable-time-task' },
+        createdTaskTimestamp: 1_752_124_200_000,
+      });
+
+      const result = metaReducer(baseState, action);
+
+      expect(result[TASK_FEATURE_NAME].entities['stable-time-task']?.created).toBe(
+        1_752_124_200_000,
+      );
+    });
+
     it('should skip task creation if title is empty', () => {
       const operations: BatchOperation[] = [
         {

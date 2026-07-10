@@ -22,6 +22,10 @@ import {
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
+import {
+  getLogicalTodayStartMs,
+  isTaskOverdueByThreshold,
+} from '../util/is-task-overdue';
 
 export const isCalendarIssueTask = (task: Task | undefined): task is Task =>
   !!task &&
@@ -413,24 +417,18 @@ export const selectAllTasksWithSubTasks = createSelector(
 );
 
 // selectOverdueTasks (rebased): decision reads only dueDay/dueWithTime from the
-// snapshot; public re-maps ids to live Task refs.
+// snapshot; public re-maps ids to live Task refs. Shares the overdue comparison
+// with the isTaskOverdue util (Shift+T path) via isTaskOverdueByThreshold so the
+// two definitions cannot drift; the threshold is computed once per recompute.
 export const selectOverdueTaskIds = createSelector(
   selectTaskSchedulingSnapshot,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   (snapshot, todayStr, startOfNextDayDiffMs): string[] => {
-    const today = dateStrToUtcDate(todayStr);
-    today.setHours(0, 0, 0, 0);
-    // The logical start of "today" is shifted by the offset
-    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
+    const todayStartMs = getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs);
     const ids: string[] = [];
     for (const snap of snapshot) {
-      // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
-      // which is lexicographically sortable. This avoids timezone conversion issues.
-      if (
-        (snap.dueDay && isDBDateStr(snap.dueDay) && snap.dueDay < todayStr) ||
-        (snap.dueWithTime && snap.dueWithTime < todayStartMs)
-      ) {
+      if (isTaskOverdueByThreshold(snap, todayStr, todayStartMs)) {
         ids.push(snap.id);
       }
     }

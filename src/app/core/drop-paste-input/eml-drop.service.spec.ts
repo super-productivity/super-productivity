@@ -52,7 +52,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Alice Example: Hello World',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -65,7 +65,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Hello World',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -77,7 +77,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Alice Example',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -99,6 +99,67 @@ describe('EmlDropService', () => {
     );
   });
 
+  it('should create a title-only task when the body encoding is unsupported', async () => {
+    const encodedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Encoded',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'Ym9keQ==',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(encodedEml));
+
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Encoded',
+      false,
+      { notes: undefined },
+      false,
+      true,
+    );
+  });
+
+  it('should store imported plain text literally so remote content stays inert', async () => {
+    const remoteImageEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Remote image',
+      '',
+      '![pixel](https://attacker.example/pixel)',
+      '\\![already escaped](https://attacker.example/pixel)',
+      '![reference image][pixel]',
+      '[pixel]: https://attacker.example/pixel',
+      '`C:\\tmp`',
+      '<strong>ordinary markup</strong>',
+      '<img src="https://attacker.example/pixel">',
+      '```',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(remoteImageEml));
+
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Remote image',
+      false,
+      {
+        notes:
+          '~~~\n' +
+          '![pixel](https://attacker.example/pixel)\n' +
+          '\\![already escaped](https://attacker.example/pixel)\n' +
+          '![reference image][pixel]\n' +
+          '[pixel]: https://attacker.example/pixel\n' +
+          '`C:\\tmp`\n' +
+          '<strong>ordinary markup</strong>\n' +
+          '<img src="https://attacker.example/pixel">\n' +
+          '```\n' +
+          '~~~',
+      },
+      false,
+      true,
+    );
+  });
+
   it('should not parse a valid eml or add a task when the file exceeds the size limit', async () => {
     const bigFile = makeFile(VALID_EML);
     // Report an oversized file without allocating 10MB.
@@ -111,6 +172,39 @@ describe('EmlDropService', () => {
       type: 'ERROR',
       msg: T.MH.EML_TOO_LARGE,
     });
+  });
+
+  it('should cap an oversized body so the synced note stays bounded', async () => {
+    const maxBodyLength = 100_000;
+    const longBody = 'a'.repeat(maxBodyLength + 50);
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Long',
+      '',
+      longBody,
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(eml));
+
+    const notes = taskService.add.calls.mostRecent().args[2]?.notes;
+    expect(notes).toBe('```\n' + 'a'.repeat(maxBodyLength) + '…\n```');
+  });
+
+  it('should cap an oversized title', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: ' + 'S'.repeat(350),
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(eml));
+
+    const title = taskService.add.calls.mostRecent().args[0];
+    expect(title).toBe('Alice: ' + 'S'.repeat(293) + '…');
+    expect(title?.length).toBe(301);
   });
 
   it('should show a warning snack and not add a task when both sender and subject are empty', async () => {
@@ -126,13 +220,12 @@ describe('EmlDropService', () => {
   it('should log and show an error snack without adding a task when parsing fails', async () => {
     const logErrSpy = spyOn(Log, 'err');
     const file = makeFile(VALID_EML);
-    // postal-mime reads a Blob via arrayBuffer(), so that's the read to fail.
-    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('read failed'));
+    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
 
     await service.createTaskFromEml(file);
 
     expect(taskService.add).not.toHaveBeenCalled();
-    expect(logErrSpy).toHaveBeenCalled();
+    expect(logErrSpy).toHaveBeenCalledOnceWith('Failed to parse EML file');
     expect(snackService.open).toHaveBeenCalledWith({
       type: 'ERROR',
       msg: T.MH.EML_PARSE_ERROR,

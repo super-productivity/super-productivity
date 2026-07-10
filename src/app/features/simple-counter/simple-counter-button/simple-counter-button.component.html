@@ -10,6 +10,7 @@
         (longPress)="edit()"
         [color]="sc.isOn ? 'accent' : ''"
         [class.isOn]="sc.isOn"
+        [attr.aria-label]="sc.title"
         class="main-btn stopwatch"
         mat-icon-button
       >
@@ -34,6 +35,7 @@
         (click)="toggleCounter()"
         (contextmenu)="edit($event)"
         (longPress)="edit()"
+        [attr.aria-label]="sc.title"
         class="main-btn"
         color=""
         mat-icon-button
@@ -68,6 +70,7 @@
         [color]="sc.isOn && !isTimeUp() ? 'accent' : ''"
         [class.isOn]="sc.isOn && !isTimeUp()"
         [class.isTimeUp]="isTimeUp()"
+        [attr.aria-label]="sc.title"
         class="main-btn repeated-countdown"
         mat-icon-button
       >

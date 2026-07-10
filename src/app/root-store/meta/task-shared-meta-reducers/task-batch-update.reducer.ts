@@ -42,9 +42,8 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
 ): ActionReducer<T> => {
   return (state: T | undefined, action: Action) => {
     if (action.type === TaskSharedActions.batchUpdateForProject.type) {
-      const { projectId, operations, createdTaskIds } = action as ReturnType<
-        typeof TaskSharedActions.batchUpdateForProject
-      >;
+      const { projectId, operations, createdTaskIds, createdTaskTimestamp } =
+        action as ReturnType<typeof TaskSharedActions.batchUpdateForProject>;
 
       // Ensure state has required properties
       const rootState = state as unknown as RootState;
@@ -144,7 +143,9 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
               notes: createOp.data.notes || '',
               parentId,
               timeEstimate: createOp.data.timeEstimate || 0,
-              created: Date.now(),
+              // New actions capture this before dispatch so replay is deterministic.
+              // The fallback keeps legacy operations and direct test callers valid.
+              created: createdTaskTimestamp ?? Date.now(),
             };
 
             tasksToAdd.push(newTask);

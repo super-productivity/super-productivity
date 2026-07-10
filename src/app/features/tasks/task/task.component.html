@@ -56,6 +56,13 @@
       <div class="all-controls-wrapper">
         <div
           (click)="estimateTime()"
+          (keydown.enter)="estimateTime()"
+          (keydown.space)="$event.preventDefault(); estimateTime()"
+          [attr.role]="!t.subTasks?.length ? 'button' : null"
+          [attr.tabindex]="!t.subTasks?.length ? 0 : null"
+          [attr.aria-label]="
+            !t.subTasks?.length ? (T.F.TASK.CMP.ESTIMATE | translate) : null
+          "
           [class.hasNoTimeSpentOrEstimate]="!t.timeSpent && !t.timeEstimate"
           [class.isEditable]="!t.subTasks?.length"
           class="time-wrapper"

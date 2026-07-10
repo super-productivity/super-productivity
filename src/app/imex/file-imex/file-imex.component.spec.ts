@@ -18,6 +18,7 @@ import { ConfirmUrlImportDialogComponent } from '../dialog-confirm-url-import/di
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
+import { PluginService } from '../../plugins/plugin.service';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -52,6 +53,13 @@ describe('FileImexComponent', () => {
     importEncryptionHandlerSpy.checkEncryptionStateChange.and.returnValue(
       Promise.resolve({ willChange: false }),
     );
+    const pluginServiceSpy = jasmine.createSpyObj('PluginService', [
+      'isInitialized',
+      'initializePlugins',
+      'activatePlugin',
+    ]);
+    pluginServiceSpy.isInitialized.and.returnValue(true);
+    pluginServiceSpy.activatePlugin.and.returnValue(Promise.resolve(null));
     importEncryptionHandlerSpy.handleImportEncryptionIfNeeded.and.returnValue(
       Promise.resolve(null),
     );
@@ -77,6 +85,7 @@ describe('FileImexComponent', () => {
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: ImportEncryptionHandlerService, useValue: importEncryptionHandlerSpy },
+        { provide: PluginService, useValue: pluginServiceSpy },
       ],
     }).compileComponents();
 

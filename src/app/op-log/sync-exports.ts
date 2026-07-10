@@ -34,6 +34,7 @@ export {
   ImpossibleError,
   DecryptError,
   DecryptNoPasswordError,
+  OperationIntegrityError,
   EncryptNoPasswordError,
   DataRepairNotPossibleError,
   BackupImportFailedError,
