@@ -12,6 +12,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { getVisibleDaySequence } from '../../util/get-visible-day-sequence';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { getDiffInDays } from '../../util/get-diff-in-days';
 import { selectActiveTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
@@ -66,32 +67,8 @@ export class PlannerService {
   ]).pipe(
     tap(([count, todayStr]) => Log.log('daysToShow$', { count, todayStr })),
     map(([count, _, includedWeekDays]) => {
-      // Guard against empty includedWeekDays to prevent infinite loop
-      if (includedWeekDays.length === 0) {
-        return [];
-      }
-
       const today = new Date().getTime();
-      const daysToShow: string[] = [];
-
-      // CRITICAL FIX: Loop until we have the required count of days
-      // (not just iterate N times which produces fewer days if weekends are excluded)
-      let daysAdded = 0;
-      let offset = 0;
-      while (daysAdded < count) {
-        // eslint-disable-next-line no-mixed-operators
-        const dayOfWeek = new Date(today + offset * 24 * 60 * 60 * 1000).getDay();
-        if (includedWeekDays.includes(dayOfWeek)) {
-          daysToShow.push(
-            // eslint-disable-next-line no-mixed-operators
-            this._dateService.todayStr(today + offset * 24 * 60 * 60 * 1000),
-          );
-          daysAdded++;
-        }
-        offset++;
-      }
-
-      return daysToShow;
+      return getVisibleDaySequence(today, count, includedWeekDays);
     }),
   );
 

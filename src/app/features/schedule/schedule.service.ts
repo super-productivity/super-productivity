@@ -25,6 +25,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { getVisibleDaySequence } from '../../util/get-visible-day-sequence';
 
 @Injectable({
   providedIn: 'root',
@@ -154,12 +155,7 @@ export class ScheduleService {
 
   getDaysToShow(nrOfDaysToShow: number, referenceDate: Date | null = null): string[] {
     const today = referenceDate ? referenceDate.getTime() : new Date().getTime();
-    const daysToShow: string[] = [];
-    for (let i = 0; i < nrOfDaysToShow; i++) {
-      // eslint-disable-next-line no-mixed-operators
-      daysToShow.push(this._dateService.todayStr(today + i * 24 * 60 * 60 * 1000));
-    }
-    return daysToShow;
+    return getVisibleDaySequence(today, nrOfDaysToShow);
   }
 
   getMonthDaysToShow(
