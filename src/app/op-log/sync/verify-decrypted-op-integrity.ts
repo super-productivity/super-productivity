@@ -34,13 +34,11 @@ import { SyncLog } from '../../core/log';
  * path), so unencrypted ops — where neither side is authenticated and the
  * #7330 producer-drift coercion still legitimately applies — are unaffected.
  *
- * NOTE: interim hardening only — several tamper vectors from the same root cause
- * remain OPEN pending the durable fix (bind metadata as GCM AAD behind an
- * envelope-versioned migration):
- *  - Plaintext-injection downgrade: a forged op with `isPayloadEncrypted=false`
- *    skips decryption AND this check entirely and is applied as-is. This is a
- *    strictly more powerful bypass; the companion fix is a download-side
- *    mandatory-encryption guard (symmetric to the GHSA-9544 upload guard).
+ * NOTE: interim hardening only. The plaintext-injection downgrade (a forged op
+ * with `isPayloadEncrypted=false` that would skip decryption AND this check) is
+ * handled separately by `assertOpsEncryptedWhenExpected` at the download
+ * boundary. Still OPEN pending the durable fix (bind metadata as GCM AAD behind
+ * an envelope-versioned migration):
  *  - `opType` promotion to a full-state (`loadAllData`) op.
  *  - Within-LWW `entityType`/`actionType` swap (ids left equal so this passes).
  *  - `vectorClock`/`timestamp` reorder/replay.

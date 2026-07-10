@@ -1574,6 +1574,7 @@
         "INCOMPLETE_OP_SYNC": "Sync incomplete: {{count}} operation file(s) failed to download",
         "INITIAL_SYNC_ERROR": "Initial Sync failed",
         "INTEGRITY_CHECK_FAILED": "Data integrity issue detected. Auto-repair attempted. If you experience issues, please reload the app.",
+        "INTEGRITY_TAMPER_DETECTED": "Sync stopped: the server returned data that failed a security integrity check. Your local data is safe. This can indicate a tampered or misconfigured sync server.",
         "INVALID_AUTH_CODE": "The authorization code was rejected. Please try authenticating again and make sure to copy the code exactly.",
         "INVALID_OPERATION_PAYLOAD": "Invalid operation detected. Changes may not be saved - please reload.",
         "LEGACY_FORMAT_DETECTED": "Sync format mismatch: the remote storage was last written by an older app version (v16.x or earlier) that uses a different sync format. Please update all your devices to the same app version. \"Force overwrite\" unblocks this device by writing the new format alongside the legacy files; only use it if no older device will sync to this remote anymore, otherwise they will silently diverge from this device.",

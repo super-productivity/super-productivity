@@ -241,21 +241,37 @@ privateCfg: {
 > `schemaVersion`, `syncImportReason`, **and the `isPayloadEncrypted` flag
 > itself** — travels as **plaintext** and is **not** bound as Additional
 > Authenticated Data (AAD), so a malicious/compromised sync server or a TLS MITM
-> can tamper with it. As **defense-in-depth**, the client rejects an *encrypted*
-> LWW-update op whose authenticated `payload.id` does not equal `op.entityId`
-> (`verify-decrypted-op-integrity.ts`, fail-closed), closing one retarget vector.
+> can tamper with it. As **defense-in-depth**, the client fails closed on two
+> tamper vectors:
 >
-> This is **not** full integrity. Notably still open pending the durable fix:
+> - **Plaintext-injection downgrade:** a forged op with `isPayloadEncrypted=false`
+>   would skip decryption *and* the payload check and be applied as-is — arbitrary
+>   op forgery on an encryption-mandatory client. `assertOpsEncryptedWhenExpected`
+>   rejects any inbound plaintext op (download + piggyback) when encryption is
+>   **enabled in config** (`isEncryptionMandatory && isEncryptionEnabled()` —
+>   config intent, not key presence, so it also fails closed in the
+>   dropped-credential state). Safe because enabling encryption deletes +
+>   re-uploads all data encrypted, so no legitimate plaintext op remains — this
+>   rests on the server contract that `deleteAllData()` removes every downloadable
+>   plaintext op. This is the SuperSync op-level twin of the file-based GHSA-vrc7
+>   download guard and the GHSA-9544 *upload* guard.
+> - **LWW `entityId` retarget:** the client rejects an *encrypted* LWW-update op
+>   whose authenticated `payload.id` does not equal `op.entityId`
+>   (`verify-decrypted-op-integrity.ts`).
 >
-> - **Plaintext-injection downgrade (highest impact):** a forged op with
->   `isPayloadEncrypted=false` skips decryption *and* the check above and is
->   applied as-is — arbitrary op forgery on an encryption-mandatory client. The
->   companion fix is a download-side mandatory-encryption guard (reject inbound
->   plaintext ops when encryption is active), symmetric to the existing
->   GHSA-9544 *upload* guard.
+> This is **not** full integrity. Still open pending the durable fix:
+>
 > - `opType` promotion to a full-state (`loadAllData`) op.
 > - Within-LWW `entityType`/`actionType` swap (ids left equal, so it passes).
 > - `vectorClock`/`timestamp` reorder/replay.
+> - The restore-to-point path (`getStateAtSeq` → `importCompleteBackup`) applies
+>   server-reconstructed state without this guard; it is server-authored by
+>   nature and the server blocks it for encrypted accounts, but E2EE cannot
+>   authenticate it.
+>
+> Known limitation: a peer running an app version that predates the GHSA-9544
+> *upload* guard can still push plaintext ops; a keyed client then fails closed
+> here with the tamper message. Recovery is to update the old peer.
 >
 > Full protection — binding the metadata (and the encryption flag) as GCM AAD
 > behind an envelope-version migration, with a monotonic "encryption floor" to
