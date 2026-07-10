@@ -4025,7 +4025,7 @@ describe('OperationLogSyncService', () => {
   // GHSA-vrc7-775g-ggqc: a remote saying "I'm unencrypted" is attacker-
   // controllable, so the mismatch handler must NEVER silently disable the user's
   // local encryption to match it.
-  describe('handleEncryptionStateMismatch', () => {
+  describe('warnOnEncryptionStateMismatch', () => {
     it('never auto-disables encryption to match a plaintext server', async () => {
       const setPrivateCfg = jasmine.createSpy('setPrivateCfg').and.resolveTo();
       const mockProvider = {
@@ -4040,7 +4040,7 @@ describe('OperationLogSyncService', () => {
         setPrivateCfg,
       } as any;
 
-      await service.handleEncryptionStateMismatch(mockProvider, true);
+      await service.warnOnEncryptionStateMismatch(mockProvider, true);
 
       // Config is left untouched and no "encryption disabled" snack is shown.
       expect(setPrivateCfg).not.toHaveBeenCalled();
@@ -4051,7 +4051,7 @@ describe('OperationLogSyncService', () => {
       const getEncryptKey = jasmine.createSpy('getEncryptKey');
       const mockProvider = { id: 'WebDAV', getEncryptKey } as any;
 
-      await service.handleEncryptionStateMismatch(mockProvider, false);
+      await service.warnOnEncryptionStateMismatch(mockProvider, false);
 
       // Bails out before even checking the local key.
       expect(getEncryptKey).not.toHaveBeenCalled();

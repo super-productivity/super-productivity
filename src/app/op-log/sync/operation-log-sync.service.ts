@@ -366,7 +366,7 @@ export class OperationLogSyncService {
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
     // Detect (warn-only) an encryption-state mismatch in piggybacked ops — never auto-disable
-    await this.handleEncryptionStateMismatch(
+    await this.warnOnEncryptionStateMismatch(
       syncProvider,
       result.piggybackHasOnlyUnencryptedData,
     );
@@ -918,7 +918,7 @@ export class OperationLogSyncService {
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
     // Detect (warn-only) an encryption-state mismatch — never auto-disable local encryption
-    await this.handleEncryptionStateMismatch(
+    await this.warnOnEncryptionStateMismatch(
       syncProvider,
       result.serverHasOnlyUnencryptedData,
     );
@@ -1319,7 +1319,7 @@ export class OperationLogSyncService {
    * @param syncProvider - The sync provider to check
    * @param serverHasOnlyUnencryptedData - Whether all downloaded/piggybacked ops were unencrypted
    */
-  async handleEncryptionStateMismatch(
+  async warnOnEncryptionStateMismatch(
     syncProvider: OperationSyncCapable,
     serverHasOnlyUnencryptedData: boolean | undefined,
   ): Promise<void> {
