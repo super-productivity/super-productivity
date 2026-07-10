@@ -7,6 +7,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
+import { MatFormFieldHarness } from '@angular/material/form-field/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
@@ -186,6 +187,11 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
 
     const loader = TestbedHarnessEnvironment.loader(fixture);
     const selects = await loader.getAllHarnesses(MatSelectHarness);
+    const formFieldsBeforeSwitch = await loader.getAllHarnesses(MatFormFieldHarness);
+    const labelsBeforeSwitch = await Promise.all(
+      formFieldsBeforeSwitch.map((formField) => formField.getLabel()),
+    );
+    expect(labelsBeforeSwitch).toContain(T.F.TASK_REPEAT.F.WEEKDAY);
     let monthlyPatternSelect: MatSelectHarness | undefined;
     let dayOfMonthOptionText = '';
 
@@ -205,6 +211,25 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
 
     expect(monthlyPatternSelect).toBeDefined();
     expect(await monthlyPatternSelect!.getValueText()).toBe(dayOfMonthOptionText);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.repeatCfg().monthlyWeekOfMonth).toBeNull();
+    const formFieldsAfterSwitch = await loader.getAllHarnesses(MatFormFieldHarness);
+    const labelsAfterSwitch = await Promise.all(
+      formFieldsAfterSwitch.map((formField) => formField.getLabel()),
+    );
+    expect(labelsAfterSwitch).not.toContain(T.F.TASK_REPEAT.F.WEEKDAY);
+
+    fixture.componentInstance.save();
+
+    const changes =
+      mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent().args[1];
+    expect(
+      Object.prototype.hasOwnProperty.call(changes, 'monthlyWeekOfMonth'),
+    ).toBeTrue();
+    expect(changes.monthlyWeekOfMonth).toBeUndefined();
   });
 
   describe('isLoading signal', () => {
