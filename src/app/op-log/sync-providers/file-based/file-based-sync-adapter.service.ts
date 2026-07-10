@@ -2230,6 +2230,12 @@ export class FileBasedSyncAdapterService {
       // under a wrong/rotated key — silently suppressing the wrong-password
       // dialog and letting the heal upload clobber the encrypted primary (same
       // class as the E2EE-rotation revert).
+      // Intentional defense-in-depth: decompressAndDecryptData below ALSO refuses
+      // via PlaintextWhenEncryptionExpectedError (GHSA-vrc7-775g-ggqc), which this
+      // try/catch would convert to the same null. This explicit check is kept for
+      // its specific "refusing recovery" log and to make the .bak path's
+      // soft-skip an intentional decision — do not remove one guard without the
+      // other.
       if (
         cfg.isEncrypt &&
         !extractSyncFileStateFromPrefix(response.dataStr).isEncrypted

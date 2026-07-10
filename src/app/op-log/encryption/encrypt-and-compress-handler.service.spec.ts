@@ -1,9 +1,11 @@
 import { OpLog } from '../../core/log';
 import type { SyncLogger } from '@sp/sync-core';
 import {
+  DecryptNoPasswordError,
   EncryptNoPasswordError,
   extractErrorMessage,
   JsonParseError,
+  PlaintextWhenEncryptionExpectedError,
 } from '../core/errors/sync-errors';
 import { EncryptAndCompressHandlerService } from './encrypt-and-compress-handler.service';
 import { getErrorTxt } from '../../util/get-error-text';
@@ -90,6 +92,7 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof testData>({
         dataStr,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result.data).toEqual(testData);
@@ -104,6 +107,7 @@ describe('EncryptAndCompressHandlerService', () => {
         service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         }),
       ).toBeRejectedWithError(JsonParseError);
     });
@@ -116,6 +120,7 @@ describe('EncryptAndCompressHandlerService', () => {
         await service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         });
         fail('Expected JsonParseError to be thrown');
       } catch (e) {
@@ -134,6 +139,7 @@ describe('EncryptAndCompressHandlerService', () => {
         await service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         });
         fail('Expected JsonParseError to be thrown');
       } catch (e) {
@@ -151,6 +157,7 @@ describe('EncryptAndCompressHandlerService', () => {
         service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         }),
       ).toBeRejectedWithError(JsonParseError);
     });
@@ -166,10 +173,89 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof complexData>({
         dataStr,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result.data).toEqual(complexData);
       expect(result.modelVersion).toBe(2);
+    });
+
+    // GHSA-vrc7-775g-ggqc: the prefix flags live OUTSIDE the AEAD envelope, so a
+    // remote attacker can strip the `E` flag and serve plaintext. When encryption
+    // is expected the decode must fail closed instead of accepting the plaintext.
+    describe('plaintext-when-encryption-expected guard', () => {
+      // "pf_1__" (no E flag) is a plaintext blob.
+      const plaintextBlob = (): string =>
+        `${makePrefix(1)}${JSON.stringify({ secret: 'value' })}`;
+      // "pf_E1__" declares encryption in the prefix.
+      const encryptedPrefixBlob = (): string => 'pf_E1__ciphertext';
+
+      it('throws PlaintextWhenEncryptionExpectedError when isEncryptExpected but blob is plaintext', async () => {
+        await expectAsync(
+          service.decompressAndDecrypt({
+            dataStr: plaintextBlob(),
+            encryptKey: 'the-key',
+            isEncryptExpected: true,
+          }),
+        ).toBeRejectedWithError(PlaintextWhenEncryptionExpectedError);
+      });
+
+      it('refuses via decompressAndDecryptData when cfg.isEncrypt but remote is plaintext', async () => {
+        await expectAsync(
+          service.decompressAndDecryptData(
+            { isEncrypt: true, isCompress: false },
+            'the-key',
+            plaintextBlob(),
+          ),
+        ).toBeRejectedWithError(PlaintextWhenEncryptionExpectedError);
+      });
+
+      it('does NOT attach the payload to the error (privacy)', async () => {
+        try {
+          await service.decompressAndDecrypt({
+            dataStr: plaintextBlob(),
+            encryptKey: 'the-key',
+            isEncryptExpected: true,
+          });
+          fail('Expected PlaintextWhenEncryptionExpectedError');
+        } catch (e) {
+          expect(e instanceof PlaintextWhenEncryptionExpectedError).toBeTrue();
+          const err = e as PlaintextWhenEncryptionExpectedError;
+          expect(err.additionalLog).toEqual({ isCompressed: false, modelVersion: 1 });
+          expect(JSON.stringify(err.additionalLog)).not.toContain('secret');
+        }
+      });
+
+      it('still accepts plaintext when encryption is NOT expected', async () => {
+        const result = await service.decompressAndDecryptData<{ secret: string }>(
+          { isEncrypt: false, isCompress: false },
+          undefined,
+          plaintextBlob(),
+        );
+        expect(result).toEqual({ secret: 'value' });
+      });
+
+      it('accepts plaintext when isEncryptExpected is explicitly false', async () => {
+        const result = await service.decompressAndDecrypt<{ secret: string }>({
+          dataStr: plaintextBlob(),
+          encryptKey: undefined,
+          isEncryptExpected: false,
+        });
+        expect(result.data).toEqual({ secret: 'value' });
+      });
+
+      it('does NOT block a genuinely-encrypted blob (guard passes, reaches decrypt path)', async () => {
+        // Prefix declares encryption, so the guard is skipped and the normal
+        // "encrypted but no key" path throws instead — proving the guard only
+        // rejects the plaintext-downgrade case.
+        await expectAsync(
+          service.decompressAndDecrypt({
+            dataStr: encryptedPrefixBlob(),
+            encryptKey: undefined,
+            isEncryptExpected: true,
+          }),
+        ).toBeRejectedWithError(DecryptNoPasswordError);
+      });
     });
 
     it('should round-trip compressed unencrypted sync data', async () => {
@@ -192,6 +278,7 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof testData>({
         dataStr: compressed,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result).toEqual({
