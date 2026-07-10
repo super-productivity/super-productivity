@@ -52,7 +52,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Alice Example: Hello World',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -65,7 +65,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Hello World',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -77,7 +77,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Alice Example',
       false,
-      { notes: 'body' },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );
@@ -94,6 +94,67 @@ describe('EmlDropService', () => {
       'Alice: Hi',
       false,
       { notes: undefined },
+      false,
+      true,
+    );
+  });
+
+  it('should create a title-only task when the body encoding is unsupported', async () => {
+    const encodedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Encoded',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'Ym9keQ==',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(encodedEml));
+
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Encoded',
+      false,
+      { notes: undefined },
+      false,
+      true,
+    );
+  });
+
+  it('should store imported plain text literally so remote content stays inert', async () => {
+    const remoteImageEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Remote image',
+      '',
+      '![pixel](https://attacker.example/pixel)',
+      '\\![already escaped](https://attacker.example/pixel)',
+      '![reference image][pixel]',
+      '[pixel]: https://attacker.example/pixel',
+      '`C:\\tmp`',
+      '<strong>ordinary markup</strong>',
+      '<img src="https://attacker.example/pixel">',
+      '```',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(remoteImageEml));
+
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Remote image',
+      false,
+      {
+        notes:
+          '~~~\n' +
+          '![pixel](https://attacker.example/pixel)\n' +
+          '\\![already escaped](https://attacker.example/pixel)\n' +
+          '![reference image][pixel]\n' +
+          '[pixel]: https://attacker.example/pixel\n' +
+          '`C:\\tmp`\n' +
+          '<strong>ordinary markup</strong>\n' +
+          '<img src="https://attacker.example/pixel">\n' +
+          '```\n' +
+          '~~~',
+      },
       false,
       true,
     );
@@ -131,7 +192,7 @@ describe('EmlDropService', () => {
     await service.createTaskFromEml(file);
 
     expect(taskService.add).not.toHaveBeenCalled();
-    expect(logErrSpy).toHaveBeenCalled();
+    expect(logErrSpy).toHaveBeenCalledOnceWith('Failed to parse EML file');
     expect(snackService.open).toHaveBeenCalledWith({
       type: 'ERROR',
       msg: T.MH.EML_PARSE_ERROR,

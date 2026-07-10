@@ -9,10 +9,6 @@ export interface ParsedEml {
   text?: string;
 }
 
-export const isFileEml = (file: File): boolean => {
-  return file.name.toLowerCase().endsWith('.eml') || file.type === 'message/rfc822';
-};
-
 export const parseEml = async (file: File): Promise<ParsedEml> => {
   const content = (await file.text()).replace(/\r\n?/g, '\n');
   const separatorIndex = content.startsWith('\n') ? 0 : content.indexOf('\n\n');
@@ -24,16 +20,25 @@ export const parseEml = async (file: File): Promise<ParsedEml> => {
   const headers = _parseHeaders(content.slice(0, separatorIndex));
   const bodyStart = separatorIndex === 0 ? 1 : separatorIndex + 2;
   const body = content.slice(bodyStart);
-  const mediaType = headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  const contentType = headers.get('content-type');
+  const mediaType = contentType?.split(';', 1)[0].trim().toLowerCase();
+  const charsetMatch = /(?:^|;)\s*charset\s*=\s*(?:"([^"]*)"|([^;\s]*))/i.exec(
+    contentType || '',
+  );
+  const charset = charsetMatch
+    ? (charsetMatch[1] ?? charsetMatch[2] ?? '').toLowerCase()
+    : undefined;
   const transferEncoding = headers.get('content-transfer-encoding')?.toLowerCase();
   const isPlainText = !mediaType || mediaType === 'text/plain';
   const isUnencoded =
     !transferEncoding || transferEncoding === '7bit' || transferEncoding === '8bit';
+  const isSupportedCharset =
+    charset === undefined || charset === 'us-ascii' || charset === 'utf-8';
 
   return {
     from: _parseAddress(headers.get('from')),
     subject: headers.get('subject')?.trim() || undefined,
-    text: isPlainText && isUnencoded ? body : undefined,
+    text: isPlainText && isUnencoded && isSupportedCharset ? body : undefined,
   };
 };
 

@@ -1,4 +1,4 @@
-import { isFileEml, parseEml } from './eml-parser';
+import { parseEml } from './eml-parser';
 
 const makeFile = (content: string, name: string, type = ''): File =>
   new File([content], name, { type });
@@ -35,25 +35,6 @@ const NO_SUBJECT_EML = [
   'body',
   '',
 ].join('\n');
-
-describe('isFileEml', () => {
-  it('should return true if file ends with .eml', () => {
-    expect(isFileEml(makeFile('', 'mail.eml'))).toBeTrue();
-  });
-
-  it('should be case-insensitive about the extension', () => {
-    expect(isFileEml(makeFile('', 'MAIL.EML'))).toBeTrue();
-  });
-
-  it('should return true if file type is message/rfc822', () => {
-    expect(isFileEml(makeFile('', 'mail', 'message/rfc822'))).toBeTrue();
-  });
-
-  it('should return false if file ending is not .eml and file type is not message/rfc822', () => {
-    expect(isFileEml(makeFile('', 'doc.pdf', 'application/pdf'))).toBeFalse();
-    expect(isFileEml(makeFile('', 'notes.txt', 'text/plain'))).toBeFalse();
-  });
-});
 
 describe('parseEml', () => {
   it('should parse sender and subject from a valid eml file', async () => {
@@ -129,6 +110,8 @@ describe('parseEml', () => {
 
     const data = await parseEml(makeFile(multipartEml, 'multipart.eml'));
 
+    expect(data.from?.address).toBe('alice@example.com');
+    expect(data.subject).toBe('Multipart');
     expect(data.text).toBeUndefined();
   });
 
@@ -145,7 +128,96 @@ describe('parseEml', () => {
 
     const data = await parseEml(makeFile(encodedEml, 'encoded.eml'));
 
+    expect(data.from?.address).toBe('alice@example.com');
+    expect(data.subject).toBe('Encoded');
     expect(data.text).toBeUndefined();
+  });
+
+  it('should omit HTML bodies while preserving sender and subject', async () => {
+    const htmlEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: HTML',
+      'Content-Type: text/html',
+      '',
+      '<p>HTML body</p>',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(htmlEml, 'html.eml'));
+
+    expect(data.from?.address).toBe('alice@example.com');
+    expect(data.subject).toBe('HTML');
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should omit quoted-printable bodies while preserving sender and subject', async () => {
+    const quotedPrintableEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Quoted printable',
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      'encoded=20body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(quotedPrintableEml, 'quoted-printable.eml'));
+
+    expect(data.from?.address).toBe('alice@example.com');
+    expect(data.subject).toBe('Quoted printable');
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should omit bodies with a declared unsupported charset', async () => {
+    const file = new File(
+      [
+        [
+          'From: Alice <alice@example.com>',
+          'Subject: Windows charset',
+          'Content-Type: text/plain; charset=windows-1252',
+          '',
+          '',
+        ].join('\r\n'),
+        new Uint8Array([0xe9]),
+      ],
+      'windows-1252.eml',
+    );
+
+    const data = await parseEml(file);
+
+    expect(data.from?.address).toBe('alice@example.com');
+    expect(data.subject).toBe('Windows charset');
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should keep an explicitly UTF-8 plain-text body', async () => {
+    const utf8Eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: UTF-8',
+      'Content-Type: text/plain; charset="UTF-8"',
+      '',
+      'Grüße',
+      '',
+    ].join('\r\n');
+
+    const data = await parseEml(makeFile(utf8Eml, 'utf8.eml'));
+
+    expect(data.text).toBe('Grüße\n');
+  });
+
+  it('should keep an explicitly US-ASCII plain-text body', async () => {
+    const asciiEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: ASCII',
+      'Content-Type: text/plain; charset=us-ascii',
+      '',
+      'ASCII body',
+      '',
+    ].join('\r\n');
+
+    const data = await parseEml(makeFile(asciiEml, 'ascii.eml'));
+
+    expect(data.text).toBe('ASCII body\n');
   });
 
   it('should only treat the exact text/plain media type as plain text', async () => {
