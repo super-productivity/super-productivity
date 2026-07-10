@@ -11,6 +11,9 @@ import {
  * from API drift degrade gracefully instead of crashing the import.
  */
 export interface RawSyncResponse {
+  sync_token?: string;
+  full_sync?: boolean;
+  full_sync_date_utc?: string;
   projects?: RawProject[];
   items?: RawItem[];
   sections?: RawSection[];
@@ -84,6 +87,42 @@ const MAX_DUE_MS = 32_503_680_000_000; // year 3000
 
 const asId = (v: string | number | null | undefined): string | null =>
   v === null || v === undefined || v === '' ? null : String(v);
+
+const mergeResources = <T extends { id?: string | number }>(
+  full: T[] | undefined,
+  incremental: T[] | undefined,
+): T[] | undefined => {
+  if (!incremental?.length) {
+    return full;
+  }
+  const changedIds = new Set(
+    incremental.map((resource) => asId(resource.id)).filter((id): id is string => !!id),
+  );
+  return [
+    ...incremental,
+    ...(full || []).filter((resource) => {
+      const id = asId(resource.id);
+      return !id || !changedIds.has(id);
+    }),
+  ];
+};
+
+/**
+ * Apply the delta returned by a Todoist incremental sync to its initial full
+ * snapshot. Incremental tombstones intentionally replace the old resource so
+ * the normal parser filters deletions instead of resurrecting stale data.
+ */
+export const mergeSyncResponses = (
+  full: RawSyncResponse,
+  incremental: RawSyncResponse,
+): RawSyncResponse => ({
+  ...full,
+  ...incremental,
+  projects: mergeResources(full.projects, incremental.projects),
+  items: mergeResources(full.items, incremental.items),
+  sections: mergeResources(full.sections, incremental.sections),
+  notes: mergeResources(full.notes, incremental.notes),
+});
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
 

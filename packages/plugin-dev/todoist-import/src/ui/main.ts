@@ -1,5 +1,6 @@
 import { PluginAPI as PluginApiType, Project } from '@super-productivity/plugin-api';
-import { parseSyncResponse, RawSyncResponse } from '../parse/from-api';
+import { parseSyncResponse } from '../parse/from-api';
+import { loadTodoistData } from '../parse/load-todoist-data';
 import { TodoistImportModel } from '../parse/normalized-model';
 import {
   buildProjectTitles,
@@ -15,8 +16,6 @@ declare global {
     PluginAPI: PluginApiType;
   }
 }
-
-const SYNC_URL = 'https://api.todoist.com/api/v1/sync';
 
 const api = (): PluginApiType => window.PluginAPI;
 
@@ -69,18 +68,7 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
       el('p', { text: 'Loading your Todoist data…' }),
     );
     try {
-      const body = new URLSearchParams({
-        sync_token: '*',
-        resource_types: JSON.stringify(['projects', 'items', 'sections', 'notes']),
-      }).toString();
-      const raw = await api().request<RawSyncResponse>(SYNC_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body,
-      });
+      const raw = await loadTodoistData(api(), token);
       const model = parseSyncResponse(raw || {});
       if (!model.projects.length) {
         renderTokenStep('No active projects found for this Todoist account.', token);

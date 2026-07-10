@@ -168,6 +168,25 @@ describe('planImport', () => {
         { tempId: 'temp-root', tagTitles: ['errand', 'urgent', 'important'] },
       ]);
     });
+
+    it('does not duplicate matrix tags already present as Todoist labels', () => {
+      const plan = planImport(
+        model({
+          tasks: [
+            task({
+              extId: 'root',
+              apiPriority: 4,
+              labels: ['Urgent', 'important'],
+            }),
+          ],
+        }),
+        { priorityMapping: 'eisenhower' },
+      );
+
+      expect(plan.projects[0].followUps).toEqual([
+        { tempId: 'temp-root', tagTitles: ['Urgent', 'important'] },
+      ]);
+    });
   });
 
   describe('project selection and titles', () => {
@@ -248,6 +267,27 @@ describe('planImport', () => {
         { priorityMapping: 'none' },
       );
       expect(plan.projects.map((p) => p.title)).toEqual(['X', 'X (2)']);
+    });
+
+    it('never generates a suffix that collides with another project title', () => {
+      const plan = planImport(
+        model({
+          projects: [
+            { extId: 'a', title: 'X', parentExtId: null, isInbox: false, childOrder: 1 },
+            { extId: 'b', title: 'X', parentExtId: null, isInbox: false, childOrder: 2 },
+            {
+              extId: 'c',
+              title: 'X (2)',
+              parentExtId: null,
+              isInbox: false,
+              childOrder: 3,
+            },
+          ],
+        }),
+        { priorityMapping: 'none' },
+      );
+
+      expect(plan.projects.map((p) => p.title)).toEqual(['X', 'X (3)', 'X (2)']);
     });
   });
 

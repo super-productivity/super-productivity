@@ -101,7 +101,15 @@ const taskTagTitles = (task: TodoistTask, priorityMapping: PriorityMapping): str
       titles.push(...emTags);
     }
   }
-  return titles;
+  const seen = new Set<string>();
+  return titles.filter((title) => {
+    const key = title.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 
 /**
@@ -115,27 +123,40 @@ const taskTagTitles = (task: TodoistTask, priorityMapping: PriorityMapping): str
  */
 export const buildProjectTitles = (model: TodoistImportModel): Map<string, string> => {
   const byExtId = new Map(model.projects.map((p) => [p.extId, p]));
-  const titles = new Map<string, string>();
+  const preferredTitles = new Map<string, string>();
   const counts = new Map<string, number>();
   for (const p of model.projects) {
     const base = p.isInbox ? 'Inbox (Todoist)' : p.title;
-    counts.set(base, (counts.get(base) || 0) + 1);
-    titles.set(p.extId, base);
+    const key = base.toLowerCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+    preferredTitles.set(p.extId, base);
   }
-  const used = new Map<string, number>();
   for (const p of model.projects) {
-    let title = titles.get(p.extId) as string;
-    if ((counts.get(title) || 0) > 1 && p.parentExtId) {
+    let title = preferredTitles.get(p.extId) as string;
+    if ((counts.get(title.toLowerCase()) || 0) > 1 && p.parentExtId) {
       const parent = byExtId.get(p.parentExtId);
       if (parent) {
         title = `${parent.title} / ${title}`;
       }
     }
-    const seen = used.get(title) || 0;
-    used.set(title, seen + 1);
-    if (seen > 0) {
-      title = `${title} (${seen + 1})`;
+    preferredTitles.set(p.extId, title);
+  }
+
+  const reserved = new Set(
+    [...preferredTitles.values()].map((title) => title.toLowerCase()),
+  );
+  const used = new Set<string>();
+  const titles = new Map<string, string>();
+  for (const p of model.projects) {
+    const base = preferredTitles.get(p.extId) as string;
+    let title = base;
+    let suffix = 2;
+    while (used.has(title.toLowerCase())) {
+      do {
+        title = `${base} (${suffix++})`;
+      } while (reserved.has(title.toLowerCase()) || used.has(title.toLowerCase()));
     }
+    used.add(title.toLowerCase());
     titles.set(p.extId, title);
   }
   return titles;

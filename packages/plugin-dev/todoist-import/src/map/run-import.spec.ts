@@ -40,6 +40,7 @@ const createFakeApi = (
   opts: {
     existingTags?: Partial<Tag>[];
     failNthBatch?: number;
+    failNthTag?: number;
     failGetTasks?: boolean;
   } = {},
 ): {
@@ -54,10 +55,15 @@ const createFakeApi = (
   const createdTasks: Task[] = [];
   let idCounter = 0;
   let batchCounter = 0;
+  let tagCounter = 0;
 
   const api: Parameters<typeof runImport>[0] = {
     getAllTags: async () => (opts.existingTags || []) as Tag[],
     addTag: async (tagData) => {
+      tagCounter++;
+      if (opts.failNthTag === tagCounter) {
+        throw new Error('tag failed');
+      }
       createdTags.push(tagData.title as string);
       return `tag-${createdTags.length}`;
     },
@@ -165,6 +171,18 @@ describe('runImport', () => {
     await runImport(api, plan, () => {});
     expect(createdTags).toEqual([]);
     expect(updates[0].changes.tagIds).toEqual(['tag-existing']);
+  });
+
+  it('reports tags created before a later tag creation fails', async () => {
+    const plan = planImport(model([task({ extId: 'a', labels: ['first', 'second'] })]), {
+      priorityMapping: 'none',
+    });
+    const { api } = createFakeApi({ failNthTag: 2 });
+
+    const result = await runImport(api, plan, () => {});
+
+    expect(result.createdTagTitles).toEqual(['first']);
+    expect(result.errorMessage).toBe('tag failed');
   });
 
   it('records the failed project as partial and keeps earlier projects', async () => {

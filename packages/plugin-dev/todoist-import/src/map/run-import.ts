@@ -52,7 +52,8 @@ type ImportApi = Pick<
 const ensureTags = async (
   api: ImportApi,
   tagTitles: string[],
-): Promise<{ tagIdByTitle: Map<string, string>; createdTagTitles: string[] }> => {
+  createdTagTitles: string[],
+): Promise<Map<string, string>> => {
   const tagIdByTitle = new Map<string, string>();
   const existing = await api.getAllTags();
   for (const tag of existing) {
@@ -63,7 +64,6 @@ const ensureTags = async (
     }
     tagIdByTitle.set(tag.title.toLowerCase(), tag.id);
   }
-  const createdTagTitles: string[] = [];
   for (const title of tagTitles) {
     const key = title.toLowerCase();
     if (!tagIdByTitle.has(key)) {
@@ -71,7 +71,7 @@ const ensureTags = async (
       createdTagTitles.push(title);
     }
   }
-  return { tagIdByTitle, createdTagTitles };
+  return tagIdByTitle;
 };
 
 /**
@@ -181,8 +181,7 @@ export const runImport = async (
   };
 
   try {
-    const { tagIdByTitle, createdTagTitles } = await ensureTags(api, plan.tagTitles);
-    result.createdTagTitles = createdTagTitles;
+    const tagIdByTitle = await ensureTags(api, plan.tagTitles, result.createdTagTitles);
 
     for (let i = 0; i < plan.projects.length; i++) {
       const projectPlan = plan.projects[i];

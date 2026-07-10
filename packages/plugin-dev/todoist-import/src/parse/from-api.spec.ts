@@ -1,4 +1,4 @@
-import { parseSyncResponse, RawSyncResponse } from './from-api';
+import { mergeSyncResponses, parseSyncResponse, RawSyncResponse } from './from-api';
 
 const baseFixture = (): RawSyncResponse => ({
   projects: [
@@ -8,6 +8,46 @@ const baseFixture = (): RawSyncResponse => ({
   items: [],
   sections: [],
   notes: [],
+});
+
+describe('mergeSyncResponses', () => {
+  it('applies incremental additions, replacements, and tombstones to a full sync', () => {
+    const full: RawSyncResponse = {
+      sync_token: 'full-token',
+      projects: [
+        { id: 'p1', name: 'Old name' },
+        { id: 'p2', name: 'Deleted later' },
+        { id: 'p4', name: 'Unchanged project' },
+      ],
+      items: [{ id: 't1', project_id: 'p1', content: 'Old task title' }],
+      sections: [],
+      notes: [],
+    };
+    const incremental: RawSyncResponse = {
+      sync_token: 'incremental-token',
+      projects: [
+        { id: 'p1', name: 'New name' },
+        { id: 'p2', is_deleted: true },
+        { id: 'p3', name: 'New project' },
+      ],
+      items: [{ id: 't1', project_id: 'p1', content: 'New task title' }],
+    };
+
+    const merged = mergeSyncResponses(full, incremental);
+
+    expect(merged.sync_token).toBe('incremental-token');
+    expect(merged.projects).toEqual([
+      ...incremental.projects!,
+      { id: 'p4', name: 'Unchanged project' },
+    ]);
+    expect(merged.items).toEqual(incremental.items);
+    expect(parseSyncResponse(merged).projects.map((project) => project.extId)).toEqual([
+      'p1',
+      'p3',
+      'p4',
+    ]);
+    expect(parseSyncResponse(merged).tasks[0].title).toBe('New task title');
+  });
 });
 
 describe('parseSyncResponse', () => {
