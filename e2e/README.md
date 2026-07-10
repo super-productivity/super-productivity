@@ -83,7 +83,6 @@ e2e/
 │   ├── settings.page.ts
 │   ├── dialog.page.ts
 │   ├── planner.page.ts
-│   ├── schedule.page.ts
 │   ├── side-nav.page.ts
 │   ├── sync.page.ts
 │   ├── tag.page.ts

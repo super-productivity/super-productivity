@@ -16,7 +16,6 @@ const filesToFix = [
   'src/app/features/schedule/map-schedule-data/map-to-schedule-days.ts',
   'src/app/features/task-repeat-cfg/sort-repeatable-task-cfg.ts',
   'src/app/features/work-context/store/work-context-meta.helper.ts',
-  'src/app/root-store/index.ts',
   'src/app/ui/duration/input-duration-formly/input-duration-formly.component.ts',
   'src/app/ui/inline-markdown/inline-markdown.component.ts',
   'src/app/util/is-touch-only.ts',
