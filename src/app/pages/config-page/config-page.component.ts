@@ -25,6 +25,7 @@ import {
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
+  GenericConfigFormSection,
   GlobalConfigFormSectionKey,
   GlobalConfigSectionKey,
   GlobalConfigState,
@@ -67,6 +68,7 @@ import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
+import { NgTemplateOutlet } from '@angular/common';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 
 @Component({
@@ -86,6 +88,7 @@ import { LocalBackupService } from '../../imex/local-backup/local-backup.service
     MatIcon,
     MatTooltip,
     MatButton,
+    NgTemplateOutlet,
   ],
 })
 export class ConfigPageComponent implements OnInit {
@@ -417,6 +420,14 @@ export class ConfigPageComponent implements OnInit {
       },
     });
     return !!(await firstValueFrom(dialogRef.afterClosed()));
+  }
+
+  /** Shared `[isExpanded]` check for the `config-section` repeated across every tab. */
+  isSectionExpanded(section: GenericConfigFormSection): boolean {
+    return (
+      section.key === this.expandedSection ||
+      section.customSection === this.expandedSection
+    );
   }
 
   getGlobalCfgSection(

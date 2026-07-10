@@ -20,6 +20,7 @@ import {
 import { updateGlobalConfigSection } from './global-config.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { GlobalConfigState } from '../global-config.model';
+import { MemoizedSelector } from '@ngrx/store';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
@@ -1053,124 +1054,63 @@ describe('GlobalConfigReducer', () => {
   });
 
   describe('Selectors', () => {
-    describe('selectLocalizationConfig', () => {
+    // Shared contract of every `createConfigSectionSelector` output: falls back to
+    // the baked-in default when state is undefined, otherwise passes the slice
+    // through unchanged. Keeps the per-selector blocks below to only what's
+    // beyond that shared contract (e.g. selectFocusModeConfig's extra regression).
+    const itBehavesLikeConfigSectionSelector = <K extends keyof GlobalConfigState>(
+      selector: MemoizedSelector<object, GlobalConfigState[K]>,
+      key: K,
+    ): void => {
       it('should return default config when state is undefined', () => {
-        const result = selectLocalizationConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.localization);
+        const result = selector.projector(undefined as any);
+        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG[key]);
       });
 
-      it('should return localization config when state is defined', () => {
-        const result = selectLocalizationConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.localization);
+      it(`should return ${key} config when state is defined`, () => {
+        const result = selector.projector(initialGlobalConfigState);
+        expect(result).toEqual(initialGlobalConfigState[key]);
       });
+    };
+
+    describe('selectLocalizationConfig', () => {
+      itBehavesLikeConfigSectionSelector(selectLocalizationConfig, 'localization');
     });
 
     describe('selectMiscConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectMiscConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.misc);
-      });
-
-      it('should return misc config when state is defined', () => {
-        const result = selectMiscConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.misc);
-      });
+      itBehavesLikeConfigSectionSelector(selectMiscConfig, 'misc');
     });
 
     describe('selectShortSyntaxConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectShortSyntaxConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.shortSyntax);
-      });
-
-      it('should return shortSyntax config when state is defined', () => {
-        const result = selectShortSyntaxConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.shortSyntax);
-      });
+      itBehavesLikeConfigSectionSelector(selectShortSyntaxConfig, 'shortSyntax');
     });
 
     describe('selectSoundConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectSoundConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.sound);
-      });
-
-      it('should return sound config when state is defined', () => {
-        const result = selectSoundConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.sound);
-      });
+      itBehavesLikeConfigSectionSelector(selectSoundConfig, 'sound');
     });
 
     describe('selectEvaluationConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectEvaluationConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.evaluation);
-      });
-
-      it('should return evaluation config when state is defined', () => {
-        const result = selectEvaluationConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.evaluation);
-      });
+      itBehavesLikeConfigSectionSelector(selectEvaluationConfig, 'evaluation');
     });
 
     describe('selectIdleConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectIdleConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.idle);
-      });
-
-      it('should return idle config when state is defined', () => {
-        const result = selectIdleConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.idle);
-      });
+      itBehavesLikeConfigSectionSelector(selectIdleConfig, 'idle');
     });
 
     describe('selectSyncConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectSyncConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.sync);
-      });
-
-      it('should return sync config when state is defined', () => {
-        const result = selectSyncConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.sync);
-      });
+      itBehavesLikeConfigSectionSelector(selectSyncConfig, 'sync');
     });
 
     describe('selectTakeABreakConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectTakeABreakConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.takeABreak);
-      });
-
-      it('should return takeABreak config when state is defined', () => {
-        const result = selectTakeABreakConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.takeABreak);
-      });
+      itBehavesLikeConfigSectionSelector(selectTakeABreakConfig, 'takeABreak');
     });
 
     describe('selectTimelineConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectTimelineConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.schedule);
-      });
-
-      it('should return schedule config when state is defined', () => {
-        const result = selectTimelineConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.schedule);
-      });
+      itBehavesLikeConfigSectionSelector(selectTimelineConfig, 'schedule');
     });
 
     describe('selectIsDominaModeConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectIsDominaModeConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.dominaMode);
-      });
-
-      it('should return dominaMode config when state is defined', () => {
-        const result = selectIsDominaModeConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.dominaMode);
-      });
+      itBehavesLikeConfigSectionSelector(selectIsDominaModeConfig, 'dominaMode');
     });
 
     describe('selectFocusModeConfig', () => {
@@ -1180,39 +1120,15 @@ describe('GlobalConfigReducer', () => {
         expect(DEFAULT_GLOBAL_CONFIG.focusMode.isPauseTrackingDuringBreak).toBe(true);
       });
 
-      it('should return default config when state is undefined', () => {
-        const result = selectFocusModeConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.focusMode);
-      });
-
-      it('should return focusMode config when state is defined', () => {
-        const result = selectFocusModeConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.focusMode);
-      });
+      itBehavesLikeConfigSectionSelector(selectFocusModeConfig, 'focusMode');
     });
 
     describe('selectPomodoroConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectPomodoroConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.pomodoro);
-      });
-
-      it('should return pomodoro config when state is defined', () => {
-        const result = selectPomodoroConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.pomodoro);
-      });
+      itBehavesLikeConfigSectionSelector(selectPomodoroConfig, 'pomodoro');
     });
 
     describe('selectReminderConfig', () => {
-      it('should return default config when state is undefined', () => {
-        const result = selectReminderConfig.projector(undefined as any);
-        expect(result).toEqual(DEFAULT_GLOBAL_CONFIG.reminder);
-      });
-
-      it('should return reminder config when state is defined', () => {
-        const result = selectReminderConfig.projector(initialGlobalConfigState);
-        expect(result).toEqual(initialGlobalConfigState.reminder);
-      });
+      itBehavesLikeConfigSectionSelector(selectReminderConfig, 'reminder');
     });
 
     describe('selectIsFocusModeEnabled', () => {
