@@ -21,6 +21,21 @@ const PRIORITY_TAG_BY_API_VALUE: Record<number, string> = {
   2: 'p3',
 };
 
+/**
+ * Opt-in alternative to the p1–p3 tags: map Todoist's single priority axis onto
+ * Super Productivity's built-in Eisenhower-matrix tags. The two tags are reused
+ * by title (`ensureTags` matches case-insensitively), so imported tasks land in
+ * the existing `EM_URGENT`/`EM_IMPORTANT` quadrants instead of spawning new
+ * tags. Collapsing one axis onto the 2-D matrix is inherently opinionated; this
+ * is the conventional split and only ever applies when the user explicitly
+ * chooses it. API 1 (default p4) stays untagged.
+ */
+const EISENHOWER_TAGS_BY_API_VALUE: Record<number, readonly string[]> = {
+  4: ['urgent', 'important'],
+  3: ['important'],
+  2: ['urgent'],
+};
+
 export interface TaskFollowUp {
   tempId: string;
   dueDay?: string;
@@ -44,8 +59,15 @@ export interface ImportPlan {
   tagTitles: string[];
 }
 
+/**
+ * How Todoist task priority is carried over — mutually exclusive (one UI
+ * control): `none` leaves priority off, `priorityTags` adds the p1–p3 tags,
+ * `eisenhower` adds SP's built-in urgent/important tags.
+ */
+export type PriorityMapping = 'none' | 'priorityTags' | 'eisenhower';
+
 export interface PlanImportOptions {
-  isMapPriorityToTags: boolean;
+  priorityMapping: PriorityMapping;
   /** omit to import everything */
   selectedProjectExtIds?: ReadonlySet<string>;
 }
@@ -62,17 +84,22 @@ export const groupTasksByProject = (
   return byProject;
 };
 
-const taskTagTitles = (task: TodoistTask, isMapPriorityToTags: boolean): string[] => {
+const taskTagTitles = (task: TodoistTask, priorityMapping: PriorityMapping): string[] => {
   // SP sub-tasks cannot hold tags (host model) — the plugin must enforce this
   if (task.parentExtId) {
     return [];
   }
   const titles = [...task.labels];
-  const priorityTag = isMapPriorityToTags
-    ? PRIORITY_TAG_BY_API_VALUE[task.apiPriority]
-    : undefined;
-  if (priorityTag) {
-    titles.push(priorityTag);
+  if (priorityMapping === 'priorityTags') {
+    const priorityTag = PRIORITY_TAG_BY_API_VALUE[task.apiPriority];
+    if (priorityTag) {
+      titles.push(priorityTag);
+    }
+  } else if (priorityMapping === 'eisenhower') {
+    const emTags = EISENHOWER_TAGS_BY_API_VALUE[task.apiPriority];
+    if (emTags) {
+      titles.push(...emTags);
+    }
   }
   return titles;
 };
@@ -160,7 +187,7 @@ export const planImport = (
       } else if (t.dueWithTime) {
         followUp.dueWithTime = t.dueWithTime;
       }
-      const titlesForTask = taskTagTitles(t, options.isMapPriorityToTags);
+      const titlesForTask = taskTagTitles(t, options.priorityMapping);
       if (titlesForTask.length) {
         followUp.tagTitles = titlesForTask;
         titlesForTask.forEach((title) => tagTitles.add(title));

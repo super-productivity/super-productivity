@@ -6,6 +6,7 @@ import {
   groupTasksByProject,
   ImportPlan,
   planImport,
+  PriorityMapping,
 } from '../map/plan-import';
 import { runImport, ImportResult } from '../map/run-import';
 
@@ -185,7 +186,19 @@ const renderPreviewStep = (
   const tasksByProject = groupTasksByProject(model);
   const checkboxByExtId = new Map<string, HTMLInputElement>();
   const lossyList = el('ul');
-  const priorityCheckbox = el('input', { type: 'checkbox' });
+  // Priority → tags is a single mutually-exclusive choice (radios): off, the
+  // p1–p3 tags, or SP's built-in Eisenhower urgent/important tags.
+  const priorityRadio = (value: PriorityMapping, checked = false): HTMLInputElement =>
+    el('input', { type: 'radio', name: 'todoist-priority-mapping', value, checked });
+  const priorityNoneRadio = priorityRadio('none', true);
+  const priorityTagsRadio = priorityRadio('priorityTags');
+  const priorityEisenhowerRadio = priorityRadio('eisenhower');
+  const selectedPriorityMapping = (): PriorityMapping =>
+    priorityTagsRadio.checked
+      ? 'priorityTags'
+      : priorityEisenhowerRadio.checked
+        ? 'eisenhower'
+        : 'none';
 
   const selectedIds = (): Set<string> => {
     const ids = new Set<string>();
@@ -237,7 +250,7 @@ const renderPreviewStep = (
       return;
     }
     const plan = planImport(model, {
-      isMapPriorityToTags: priorityCheckbox.checked,
+      priorityMapping: selectedPriorityMapping(),
       selectedProjectExtIds: selected,
     });
     void executeImport(plan, buildLossyNotes(model, selected));
@@ -248,9 +261,14 @@ const renderPreviewStep = (
     el('h2', { text: 'Preview' }),
     el('p', { text: 'Choose the projects to import:' }),
     el('div', {}, projectRows),
-    el('label', {}, [
-      priorityCheckbox,
-      ' Map Todoist priorities p1–p3 to tags (p4 is the default and stays untagged)',
+    el('div', {}, [
+      el('p', { text: 'Map Todoist priorities to:' }),
+      el('label', {}, [priorityNoneRadio, ' Nothing']),
+      el('label', {}, [priorityTagsRadio, ' p1–p3 tags (p4 stays untagged)']),
+      el('label', {}, [
+        priorityEisenhowerRadio,
+        ' Eisenhower matrix — urgent / important tags',
+      ]),
     ]),
     el('h3', { text: 'What will not survive the move' }),
     lossyList,

@@ -39,7 +39,7 @@ describe('planImport', () => {
           task({ extId: 'b', parentExtId: 'a', title: 'sub' }),
         ],
       }),
-      { isMapPriorityToTags: false },
+      { priorityMapping: 'none' },
     );
     const ops = plan.projects[0].batchChunks[0] as BatchTaskCreate[];
     expect(ops.map((o) => [o.tempId, o.data.parentId])).toEqual([
@@ -54,7 +54,7 @@ describe('planImport', () => {
       tasks.push(task({ extId: `root-${i}`, title: `t${i}` }));
       tasks.push(task({ extId: `sub-${i}`, parentExtId: `root-${i}`, title: `s${i}` }));
     }
-    const plan = planImport(model({ tasks }), { isMapPriorityToTags: false });
+    const plan = planImport(model({ tasks }), { priorityMapping: 'none' });
     const chunks = plan.projects[0].batchChunks;
     expect(chunks.length).toBe(Math.ceil(120 / BATCH_CHUNK_SIZE));
     chunks.forEach((chunk) => expect(chunk.length).toBeLessThanOrEqual(BATCH_CHUNK_SIZE));
@@ -79,7 +79,7 @@ describe('planImport', () => {
           task({ extId: 'timed', dueWithTime: 123456, dueDay: null }),
         ],
       }),
-      { isMapPriorityToTags: false },
+      { priorityMapping: 'none' },
     );
     expect(plan.projects[0].followUps).toEqual([
       { tempId: 'temp-dated', dueDay: '2026-07-15' },
@@ -95,7 +95,7 @@ describe('planImport', () => {
           task({ extId: 'b', parentExtId: 'a', labels: ['dropped'] }),
         ],
       }),
-      { isMapPriorityToTags: false },
+      { priorityMapping: 'none' },
     );
     expect(plan.tagTitles).toEqual(['errand']);
     expect(plan.projects[0].followUps).toEqual([
@@ -114,7 +114,7 @@ describe('planImport', () => {
             task({ extId: 'default', apiPriority: 1 }),
           ],
         }),
-        { isMapPriorityToTags: true },
+        { priorityMapping: 'priorityTags' },
       );
       expect(plan.tagTitles.sort()).toEqual(['p1', 'p2', 'p3']);
       expect(plan.projects[0].followUps).toEqual([
@@ -126,9 +126,47 @@ describe('planImport', () => {
 
     it('is off by default', () => {
       const plan = planImport(model({ tasks: [task({ extId: 'a', apiPriority: 4 })] }), {
-        isMapPriorityToTags: false,
+        priorityMapping: 'none',
       });
       expect(plan.tagTitles).toEqual([]);
+    });
+  });
+
+  describe('eisenhower priority mapping (opt-in)', () => {
+    it('maps 4→urgent+important, 3→important, 2→urgent, leaving default 1 untagged', () => {
+      const plan = planImport(
+        model({
+          tasks: [
+            task({ extId: 'p1', apiPriority: 4 }),
+            task({ extId: 'p2', apiPriority: 3 }),
+            task({ extId: 'p3', apiPriority: 2 }),
+            task({ extId: 'p4', apiPriority: 1 }),
+          ],
+        }),
+        { priorityMapping: 'eisenhower' },
+      );
+      // reused by title → lands in SP's existing EM_URGENT / EM_IMPORTANT tags
+      expect(plan.tagTitles.sort()).toEqual(['important', 'urgent']);
+      expect(plan.projects[0].followUps).toEqual([
+        { tempId: 'temp-p1', tagTitles: ['urgent', 'important'] },
+        { tempId: 'temp-p2', tagTitles: ['important'] },
+        { tempId: 'temp-p3', tagTitles: ['urgent'] },
+      ]);
+    });
+
+    it('merges the matrix tags after existing labels and never tags sub-tasks', () => {
+      const plan = planImport(
+        model({
+          tasks: [
+            task({ extId: 'root', apiPriority: 4, labels: ['errand'] }),
+            task({ extId: 'sub', parentExtId: 'root', apiPriority: 4, labels: ['x'] }),
+          ],
+        }),
+        { priorityMapping: 'eisenhower' },
+      );
+      expect(plan.projects[0].followUps).toEqual([
+        { tempId: 'temp-root', tagTitles: ['errand', 'urgent', 'important'] },
+      ]);
     });
   });
 
@@ -142,7 +180,7 @@ describe('planImport', () => {
           ],
           tasks: [task({ extId: 'a', projectExtId: 'p2' })],
         }),
-        { isMapPriorityToTags: false, selectedProjectExtIds: new Set(['p2']) },
+        { priorityMapping: 'none', selectedProjectExtIds: new Set(['p2']) },
       );
       expect(plan.projects.map((p) => p.extId)).toEqual(['p2']);
     });
@@ -188,7 +226,7 @@ describe('planImport', () => {
             },
           ],
         }),
-        { isMapPriorityToTags: false },
+        { priorityMapping: 'none' },
       );
       expect(plan.projects.map((p) => p.title)).toEqual([
         'Inbox (Todoist)',
@@ -207,7 +245,7 @@ describe('planImport', () => {
             { extId: 'b', title: 'X', parentExtId: null, isInbox: false, childOrder: 2 },
           ],
         }),
-        { isMapPriorityToTags: false },
+        { priorityMapping: 'none' },
       );
       expect(plan.projects.map((p) => p.title)).toEqual(['X', 'X (2)']);
     });
@@ -222,7 +260,7 @@ describe('planImport', () => {
           task({ extId: 'c' }),
         ],
       }),
-      { isMapPriorityToTags: false },
+      { priorityMapping: 'none' },
     );
     expect(plan.projects[0].taskCount).toBe(2);
     expect(plan.projects[0].subTaskCount).toBe(1);

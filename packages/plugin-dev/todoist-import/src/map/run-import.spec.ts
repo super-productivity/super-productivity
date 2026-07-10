@@ -115,7 +115,7 @@ describe('runImport', () => {
     for (let i = 0; i < 3; i++) {
       tasks.push(task({ extId: `family-sub-${i}`, parentExtId: 'family-root' }));
     }
-    const plan = planImport(model(tasks), { isMapPriorityToTags: false });
+    const plan = planImport(model(tasks), { priorityMapping: 'none' });
     expect(plan.projects[0].batchChunks.length).toBe(2);
 
     const { api, sentBatches } = createFakeApi();
@@ -135,7 +135,7 @@ describe('runImport', () => {
   it('keeps temp- parent refs within the same chunk (bridge resolves those)', async () => {
     const plan = planImport(
       model([task({ extId: 'a' }), task({ extId: 'b', parentExtId: 'a' })]),
-      { isMapPriorityToTags: false },
+      { priorityMapping: 'none' },
     );
     const { api, sentBatches } = createFakeApi();
     await runImport(api, plan, () => {});
@@ -145,7 +145,7 @@ describe('runImport', () => {
 
   it('never maps a label onto the virtual TODAY tag', async () => {
     const plan = planImport(model([task({ extId: 'a', labels: ['Today'] })]), {
-      isMapPriorityToTags: false,
+      priorityMapping: 'none',
     });
     const { api, updates, createdTags } = createFakeApi({
       existingTags: [{ id: 'TODAY', title: 'Today' }],
@@ -157,7 +157,7 @@ describe('runImport', () => {
 
   it('reuses existing tags by title, case-insensitively', async () => {
     const plan = planImport(model([task({ extId: 'a', labels: ['Errand'] })]), {
-      isMapPriorityToTags: false,
+      priorityMapping: 'none',
     });
     const { api, updates, createdTags } = createFakeApi({
       existingTags: [{ id: 'tag-existing', title: 'errand' }],
@@ -179,7 +179,7 @@ describe('runImport', () => {
         task({ extId: 'b', projectExtId: 'p2' }),
       ],
     };
-    const plan = planImport(m, { isMapPriorityToTags: false });
+    const plan = planImport(m, { priorityMapping: 'none' });
     const { api } = createFakeApi({ failNthBatch: 2 });
     const result = await runImport(api, plan, () => {});
     expect(result.imported.map((p) => p.title)).toEqual(['A']);
@@ -189,7 +189,7 @@ describe('runImport', () => {
 
   it('does not let a failed recount mask a successful import', async () => {
     const plan = planImport(model([task({ extId: 'a' })]), {
-      isMapPriorityToTags: false,
+      priorityMapping: 'none',
     });
     const { api } = createFakeApi({ failGetTasks: true });
     const result = await runImport(api, plan, () => {});
@@ -203,7 +203,7 @@ describe('runImport', () => {
     for (let i = 0; i < 30; i++) {
       tasks.push(task({ extId: `t-${i}`, dueDay: '2026-07-15' }));
     }
-    const plan = planImport(model(tasks), { isMapPriorityToTags: false });
+    const plan = planImport(model(tasks), { priorityMapping: 'none' });
     const { api } = createFakeApi();
     const detailReports: (number | undefined)[] = [];
     await runImport(api, plan, (p) => {
