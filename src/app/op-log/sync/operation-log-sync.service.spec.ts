@@ -4021,4 +4021,40 @@ describe('OperationLogSyncService', () => {
       });
     });
   });
+
+  // GHSA-vrc7-775g-ggqc: a remote saying "I'm unencrypted" is attacker-
+  // controllable, so the mismatch handler must NEVER silently disable the user's
+  // local encryption to match it.
+  describe('handleEncryptionStateMismatch', () => {
+    it('never auto-disables encryption to match a plaintext server', async () => {
+      const setPrivateCfg = jasmine.createSpy('setPrivateCfg').and.resolveTo();
+      const mockProvider = {
+        id: 'WebDAV',
+        // A key is present locally (encryption enabled) — the pre-condition for
+        // the removed auto-disable path.
+        getEncryptKey: () => Promise.resolve('local-key'),
+        privateCfg: {
+          load: () =>
+            Promise.resolve({ encryptKey: 'local-key', isEncryptionEnabled: true }),
+        },
+        setPrivateCfg,
+      } as any;
+
+      await service.handleEncryptionStateMismatch(mockProvider, true);
+
+      // Config is left untouched and no "encryption disabled" snack is shown.
+      expect(setPrivateCfg).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the server has encrypted data', async () => {
+      const getEncryptKey = jasmine.createSpy('getEncryptKey');
+      const mockProvider = { id: 'WebDAV', getEncryptKey } as any;
+
+      await service.handleEncryptionStateMismatch(mockProvider, false);
+
+      // Bails out before even checking the local key.
+      expect(getEncryptKey).not.toHaveBeenCalled();
+    });
+  });
 });

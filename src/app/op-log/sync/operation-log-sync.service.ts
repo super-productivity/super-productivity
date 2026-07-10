@@ -12,11 +12,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { BackupService } from '../backup/backup.service';
 import { FULL_STATE_OP_TYPES } from '../core/operation.types';
 import { OpLog } from '../../core/log';
-import {
-  OperationSyncCapable,
-  SyncProviderBase,
-} from '../sync-providers/provider.interface';
-import { SyncProviderId } from '../sync-providers/provider.const';
+import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { DownloadOutcome, UploadOutcome } from '../core/types/sync-results.types';
 import { OperationLogDownloadService } from './operation-log-download.service';
@@ -39,7 +35,6 @@ import {
   SyncImportConflictResolution,
 } from './dialog-sync-import-conflict/dialog-sync-import-conflict.component';
 import { SyncImportConflictGateService } from './sync-import-conflict-gate.service';
-import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { getDefaultMainModelData } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { SyncLocalStateService } from './sync-local-state.service';
@@ -131,7 +126,6 @@ export class OperationLogSyncService {
   private syncImportConflictGateService = inject(SyncImportConflictGateService);
   private syncLocalStateService = inject(SyncLocalStateService);
   private syncImportConflictCoordinator = inject(SyncImportConflictCoordinatorService);
-  private providerManager = inject(SyncProviderManager);
 
   /**
    * Checks if this client is "wholly fresh" - meaning it has never synced before
@@ -1340,77 +1334,22 @@ export class OperationLogSyncService {
       return;
     }
 
-    // Mismatch detected: server has only unencrypted data but local has encryption enabled
+    // Mismatch detected: server has only unencrypted data but local has encryption enabled.
+    //
+    // GHSA-vrc7-775g-ggqc: NEVER auto-disable encryption to match a plaintext
+    // server. The "server is unencrypted" signal is attacker-controllable — a
+    // compromised remote or a MITM can strip encryption — so silently flipping
+    // the user's encryption setting off to match it is a downgrade that would
+    // leak subsequent uploads as plaintext. Encryption reflects the user's
+    // explicit intent; adopting a plaintext remote must be a deliberate action
+    // in Sync settings, never an automatic reaction. This was already the
+    // behavior for SuperSync (mandatory encryption); it now applies to every
+    // provider. The download path additionally fails closed on the plaintext
+    // blob itself (PlaintextWhenEncryptionExpectedError).
     OpLog.warn(
-      'OperationLogSyncService: Encryption state mismatch detected. ' +
-        'Server has only unencrypted data but local config has encryption enabled.',
-    );
-
-    // SuperSync: encryption is mandatory — never auto-disable it.
-    // An older unencrypted client or stale server must not downgrade encryption.
-    const activeProvider = this.providerManager.getActiveProvider();
-    if (activeProvider?.id === SyncProviderId.SuperSync) {
-      OpLog.warn(
-        'OperationLogSyncService: SuperSync requires encryption — ' +
-          'NOT auto-disabling. Server has stale unencrypted data.',
-      );
-      return;
-    }
-
-    // Non-SuperSync providers: allow auto-disable
-    OpLog.warn(
-      'OperationLogSyncService: Non-SuperSync provider — ' +
-        'updating local config to match server (disabling encryption).',
-    );
-
-    // Check if provider supports config updates using type guard
-    if (!this._isSyncProviderWithConfig(syncProvider)) {
-      OpLog.warn(
-        'OperationLogSyncService: Cannot update encryption config - ' +
-          'provider does not support privateCfg or setPrivateCfg.',
-      );
-      return;
-    }
-
-    // Load existing config
-    const existingCfg = await syncProvider.privateCfg.load();
-    if (!existingCfg) {
-      OpLog.warn(
-        'OperationLogSyncService: Cannot update encryption config - ' +
-          'failed to load existing config.',
-      );
-      return;
-    }
-
-    // Update config via providerManager to ensure currentProviderPrivateCfg$ observable is updated
-    await this.providerManager.setProviderConfig(syncProvider.id, {
-      ...existingCfg,
-      encryptKey: undefined,
-      isEncryptionEnabled: false,
-    });
-
-    OpLog.normal(
-      'OperationLogSyncService: Local encryption config updated to match server state.',
-    );
-
-    // Notify user - use WARNING since this is a security-relevant change
-    this.snackService.open({
-      type: 'WARNING',
-      msg: T.F.SYNC.S.ENCRYPTION_DISABLED_ON_OTHER_DEVICE,
-    });
-  }
-
-  /**
-   * Type guard to check if a sync provider supports config updates.
-   * Returns true if the provider has both privateCfg.load() and setPrivateCfg().
-   */
-  private _isSyncProviderWithConfig(
-    provider: OperationSyncCapable,
-  ): provider is OperationSyncCapable & SyncProviderBase<SyncProviderId> {
-    const providerWithCfg = provider as Partial<SyncProviderBase<SyncProviderId>>;
-    return (
-      typeof providerWithCfg.privateCfg?.load === 'function' &&
-      typeof providerWithCfg.setPrivateCfg === 'function'
+      'OperationLogSyncService: Encryption state mismatch detected — server has ' +
+        'only unencrypted data but local encryption is enabled. NOT auto-disabling; ' +
+        'the user must change this in Sync settings if intended.',
     );
   }
 }
