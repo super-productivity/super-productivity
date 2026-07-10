@@ -28,6 +28,7 @@ import { updateGlobalConfigSection } from './global-config.actions';
 import {
   selectConfigFeatureState,
   selectLocalizationConfig,
+  selectMiscConfig,
 } from './global-config.reducer';
 import { mapKeyboardConfigToQwerty } from '../keyboard-shortcut.util';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
@@ -37,6 +38,8 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
+import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
+import { FULL_STATE_OP_TYPES } from '../../../op-log/core/operation.types';
 
 const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
 
@@ -217,6 +220,34 @@ export class GlobalConfigEffects {
           startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
         }),
       ),
+    ),
+  );
+
+  // Bulk replay intentionally hides its inner actions from effects. Reconcile this
+  // local, non-persistent runtime state after reducers finish, but keep the persistent
+  // dueDay migration in the direct local-change effect above.
+  setStartOfNextDayDiffOnBulkApply = createEffect(() =>
+    this._actions$.pipe(
+      ofType(bulkApplyOperations),
+      filter(({ operations }) =>
+        operations.some(
+          (op) =>
+            (op.entityType === 'GLOBAL_CONFIG' && op.entityId === 'misc') ||
+            FULL_STATE_OP_TYPES.has(op.opType),
+        ),
+      ),
+      withLatestFrom(this._store.select(selectMiscConfig)),
+      map(([, misc]) => {
+        const normalizedMisc = normalizeStartOfNextDayConfig(misc);
+        this._dateService.setStartOfNextDayDiff(
+          normalizedMisc.startOfNextDayTime,
+          normalizedMisc.startOfNextDay,
+        );
+        return AppStateActions.setTodayString({
+          todayStr: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+        });
+      }),
     ),
   );
 
