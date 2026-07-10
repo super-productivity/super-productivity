@@ -21,8 +21,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { EntityType } from '../core/operation.types';
 import { getEntityConfig, isAdapterEntity } from '../core/entity-registry';
+import { PropsStateSelector } from '../core/entity-registry-host.types';
 import { ConflictJournalService } from './conflict-journal.service';
-import { ConflictJournalEntry } from './conflict-journal.model';
+import { ConflictJournalEntry, ConflictJournalReason } from './conflict-journal.model';
 import { loserChangesFor, winnerChangesFor } from './sync-conflict-review.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
@@ -53,6 +54,32 @@ const FLIP_SUPPORTED_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'TAG',
 ]);
 
+/**
+ * Reasons whose flip needs delete/restore semantics that a normal update op
+ * cannot express: `delete-lost` would have to re-apply a delete, `delete-wins`
+ * would have to resurrect a deleted entity. Both are DEFERRED — until then the
+ * entry stays reviewable but flip is refused instead of falsely succeeding.
+ */
+const FLIP_UNSUPPORTED_REASONS: ReadonlySet<ConflictJournalReason> =
+  new Set<ConflictJournalReason>(['delete-lost', 'delete-wins']);
+
+/**
+ * Relationship-bearing fields kept consistent across entities by meta-reducers
+ * (e.g. moving a task rewrites BOTH `task.projectId` and the project's
+ * `taskIds`). Re-applying one side of such a pair via a bare adapter update
+ * would corrupt the other entity's membership list, so flips touching these
+ * fields are refused until domain-specific handling exists.
+ */
+const FLIP_RELATIONSHIP_FIELDS: ReadonlySet<string> = new Set<string>([
+  'projectId',
+  'parentId',
+  'subTaskIds',
+  'tagIds',
+  'taskIds',
+  'backlogTaskIds',
+  'noteIds',
+]);
+
 @Injectable({ providedIn: 'root' })
 export class SyncConflictUiService {
   private readonly _store = inject(Store);
@@ -60,9 +87,23 @@ export class SyncConflictUiService {
   private readonly _snack = inject(SnackService);
   private readonly _matDialog = inject(MatDialog);
 
-  /** Whether FLIP can be applied for this entry's entity type. */
+  /**
+   * Whether FLIP can be applied for this entry. Requires a supported entity
+   * type, a reason expressible as a normal update op (not delete/restore), and
+   * at least one discarded field value that is safe to re-apply (relationship
+   * fields are excluded — see FLIP_RELATIONSHIP_FIELDS).
+   */
   canFlip(entry: ConflictJournalEntry): boolean {
-    return FLIP_SUPPORTED_TYPES.has(entry.entityType);
+    if (!FLIP_SUPPORTED_TYPES.has(entry.entityType)) {
+      return false;
+    }
+    if (FLIP_UNSUPPORTED_REASONS.has(entry.reason)) {
+      return false;
+    }
+    const fields = Object.keys(loserChangesFor(entry));
+    return (
+      fields.length > 0 && !fields.some((field) => FLIP_RELATIONSHIP_FIELDS.has(field))
+    );
   }
 
   /** KEEP — confirm the auto-resolution. */
@@ -79,6 +120,10 @@ export class SyncConflictUiService {
     entry: ConflictJournalEntry,
     opts: { skipStaleConfirm?: boolean } = {},
   ): Promise<FlipResult> {
+    if (!this.canFlip(entry)) {
+      this._snack.open({ msg: CR.FLIP_UNSUPPORTED, type: 'ERROR' });
+      return 'unsupported';
+    }
     const changes = loserChangesFor(entry);
     const action = this._buildUpdateAction(entry.entityType, entry.entityId, changes);
     if (!action) {
@@ -103,11 +148,9 @@ export class SyncConflictUiService {
       }
     }
 
-    // Empty changes (nothing was actually discarded) → skip the op but still
-    // record the user's decision so the entry leaves the unreviewed list.
-    if (Object.keys(changes).length > 0) {
-      this._store.dispatch(action);
-    }
+    // canFlip guarantees non-empty changes, so the op is always dispatched —
+    // an entry is only ever marked flipped when something was actually applied.
+    this._store.dispatch(action);
     await this._journal.markFlipped(entry.id);
     return 'applied';
   }
@@ -199,13 +242,11 @@ export class SyncConflictUiService {
     if (!config || !isAdapterEntity(config) || !config.selectById) {
       return undefined;
     }
-    // Only the standard props-based `selectById` shape is used here; the flip-
-    // supported types (TASK/PROJECT/NOTE/TAG) all use it. The `as any` mirrors
-    // ConflictResolutionService.getCurrentEntityState — EntityConfig.selectById
-    // is a union NgRx cannot narrow to a props selector (known typing limit).
-    const entity = await firstValueFrom(
-      this._store.select(config.selectById as any, { id: entityId }),
-    );
+    // `SelectById` is a union across the registry's selector shapes; every
+    // flip-supported type (TASK/PROJECT/NOTE/TAG) registers the standard
+    // props-based selector, so narrowing to that union member is safe here.
+    const selectById = config.selectById as PropsStateSelector<{ id: string }>;
+    const entity = await firstValueFrom(this._store.select(selectById, { id: entityId }));
     return (entity as Record<string, unknown> | undefined) ?? undefined;
   }
 

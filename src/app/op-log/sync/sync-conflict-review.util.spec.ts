@@ -83,11 +83,100 @@ describe('sync-conflict-review.util', () => {
       const merged = makeEntry({
         winner: 'merged',
         fieldDiffs: [
+          // pickedSide 'local' but remote never changed the field → no loser value
           { field: 'title', localVal: 'L', remoteVal: undefined, pickedSide: 'local' },
           { field: 'x', localVal: 1, remoteVal: 2 }, // no pickedSide
         ],
       });
-      expect(loserChangesFor(merged)).toEqual({ title: undefined });
+      expect(loserChangesFor(merged)).toEqual({});
+    });
+
+    it('loserChangesFor omits fields the losing side never changed', () => {
+      // local (loser) changed only title; remote (winner) changed title + notes.
+      // Emitting notes: undefined would CLEAR the winner-only field on flip.
+      const e = makeEntry({
+        winner: 'remote',
+        fieldDiffs: [
+          {
+            field: 'title',
+            localVal: 'Local title',
+            remoteVal: 'Remote title',
+            localChanged: true,
+            remoteChanged: true,
+            pickedSide: 'remote',
+          },
+          {
+            field: 'notes',
+            localVal: undefined,
+            remoteVal: 'Remote notes',
+            localChanged: false,
+            remoteChanged: true,
+            pickedSide: 'remote',
+          },
+        ],
+      });
+      const changes = loserChangesFor(e);
+      expect(changes).toEqual({ title: 'Local title' });
+      expect(Object.prototype.hasOwnProperty.call(changes, 'notes')).toBe(false);
+    });
+
+    it('loserChangesFor falls back to value-presence for legacy diffs without flags', () => {
+      const e = makeEntry({
+        winner: 'remote',
+        fieldDiffs: [
+          {
+            field: 'notes',
+            localVal: undefined,
+            remoteVal: 'Remote notes',
+            pickedSide: 'remote',
+          },
+        ],
+      });
+      expect(Object.prototype.hasOwnProperty.call(loserChangesFor(e), 'notes')).toBe(
+        false,
+      );
+    });
+
+    it('excludes action-payload diffs from both loser and winner changes', () => {
+      // kind: 'action' diffs carry a raw action payload, not an entity field —
+      // dispatching or stale-comparing them would corrupt the entity.
+      const e = makeEntry({
+        winner: 'remote',
+        fieldDiffs: [
+          {
+            field: '[Task] Convert to sub task',
+            localVal: { taskId: 'task-1', targetParentId: 'parent-1' },
+            remoteVal: undefined,
+            localChanged: true,
+            remoteChanged: false,
+            pickedSide: 'remote',
+            kind: 'action',
+          },
+        ],
+      });
+      expect(loserChangesFor(e)).toEqual({});
+      expect(winnerChangesFor(e)).toEqual({});
+    });
+
+    it('winnerChangesFor omits fields the winning side never changed', () => {
+      // Loser-only field: leaking winner-side undefined into the stale compare
+      // would flag EVERY such entry stale (undefined never equals current value).
+      const e = makeEntry({
+        winner: 'local',
+        fieldDiffs: [
+          {
+            field: 'notes',
+            localVal: undefined,
+            remoteVal: 'Remote notes',
+            localChanged: false,
+            remoteChanged: true,
+            pickedSide: 'local',
+          },
+        ],
+      });
+      expect(Object.prototype.hasOwnProperty.call(winnerChangesFor(e), 'notes')).toBe(
+        false,
+      );
     });
   });
 

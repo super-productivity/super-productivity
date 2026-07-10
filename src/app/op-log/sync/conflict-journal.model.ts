@@ -67,8 +67,29 @@ export interface ConflictJournalFieldDiff {
   field: string;
   localVal: unknown;
   remoteVal: unknown;
+  /**
+   * Whether each side's ops actually changed this field. Distinguishes "this
+   * side never touched the field" from "this side set it to a value" — without
+   * the flags a union diff stores the untouched side as `undefined`, and a flip
+   * would then dispatch `{ field: undefined }`, clearing a winner-only field.
+   * Optional because entries persisted before the flags existed lack them;
+   * readers fall back to value-presence (`val !== undefined`), which is exact
+   * for legacy data since op payloads are pure JSON and cannot encode a real
+   * `undefined`.
+   */
+  localChanged?: boolean;
+  remoteChanged?: boolean;
   /** Which side's value LWW kept for this field. Absent for `merged`. */
   pickedSide?: 'local' | 'remote';
+  /**
+   * `action`: not an entity field — `field` is the ACTION TYPE and the side
+   * values are the raw action payload of a non-adapter op whose field-level
+   * delta could not be extracted (e.g. `convertToSubTask`'s
+   * `{ taskId, targetParentId, afterTaskId }`). Preserved verbatim so the
+   * discarded change stays reviewable; excluded from flip / stale-guard
+   * computations, which only operate on real entity fields. Absent = `field`.
+   */
+  kind?: 'action';
 }
 
 /**

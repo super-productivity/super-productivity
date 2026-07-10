@@ -86,6 +86,19 @@ describe('ConflictJournalService (store)', () => {
     expect(await firstValueFrom(service.unreviewedCount$)).toBe(0);
   });
 
+  it('clearAll() removes every entry and resets the unreviewed count (profile switch)', async () => {
+    await service.record(makeEntry({ id: 'a', status: 'unreviewed' }));
+    await service.record(makeEntry({ id: 'b', status: 'kept' }));
+    expect(await firstValueFrom(service.unreviewedCount$)).toBe(1);
+
+    await service.clearAll();
+
+    expect(await service.getEntry('a')).toBeUndefined();
+    expect(await service.getEntry('b')).toBeUndefined();
+    expect((await service.list('history')).length).toBe(0);
+    expect(await firstValueFrom(service.unreviewedCount$)).toBe(0);
+  });
+
   describe('retention (pruneOnStart)', () => {
     it('prunes an entry older than JOURNAL_RETENTION_DAYS and keeps a fresh one', async () => {
       const now = Date.now();
@@ -190,8 +203,132 @@ describe('buildConflictJournalEntry (taxonomy)', () => {
       field: 'title',
       localVal: 'Local',
       remoteVal: 'Remote',
+      localChanged: true,
+      remoteChanged: true,
       pickedSide: 'local',
     });
+  });
+
+  it('classifies a lost non-adapter structural action as a real loss, not noise', () => {
+    // Production shape of convertToSubTask: the mutation lives in
+    // { taskId, targetParentId, afterTaskId } (no adapter { task: { changes } })
+    // and OperationCaptureService emits entityChanges: []. The discarded
+    // structural move must surface as unreviewed and keep its payload visible.
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-1',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          actionType: '[Task] Convert to sub task' as ActionType,
+          payload: {
+            actionPayload: {
+              taskId: 'task-1',
+              targetParentId: 'parent-1',
+              afterTaskId: null,
+            },
+            entityChanges: [],
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          payload: { task: { id: 'task-1', title: 'Remote' } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    expect(entry.reason).not.toBe('noise');
+    expect(entry.status).toBe('unreviewed');
+    // The discarded action payload is preserved verbatim for review.
+    const actionDiff = entry.fieldDiffs.find((d) => d.kind === 'action');
+    expect(actionDiff?.field).toBe('[Task] Convert to sub task');
+    expect(actionDiff?.localVal).toEqual({
+      taskId: 'task-1',
+      targetParentId: 'parent-1',
+      afterTaskId: null,
+    });
+    expect(actionDiff?.localChanged).toBe(true);
+    expect(actionDiff?.remoteChanged).toBe(false);
+  });
+
+  it('uses capture-time entityChanges as the delta source for non-adapter payloads', () => {
+    // syncTimeSpent: reducer-relevant fields live in entityChanges, not in an
+    // adapter-shaped actionPayload. The loser's real fields must be read from
+    // there instead of misclassifying the loss as noise.
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-1',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          actionType: '[TimeTracking] Sync time spent' as ActionType,
+          payload: {
+            actionPayload: { taskId: 'task-1', date: '2026-07-10', duration: 100 },
+            entityChanges: [
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-1',
+                opType: OpType.Update,
+                changes: { taskId: 'task-1', date: '2026-07-10', duration: 100 },
+              },
+            ],
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          payload: { task: { id: 'task-1', title: 'Remote' } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    expect(entry.reason).toBe('newer');
+    expect(entry.status).toBe('unreviewed');
+    const durationDiff = entry.fieldDiffs.find((d) => d.field === 'duration');
+    expect(durationDiff?.localVal).toBe(100);
+    expect(durationDiff?.localChanged).toBe(true);
+  });
+
+  it('records per-side presence so winner-only fields are not attributed to the loser', () => {
+    // local (loser) changed only title; remote (winner) changed title + notes.
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-1',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({ payload: { task: { id: 'task-1', title: 'Local' } }, timestamp: 1000 }),
+      ],
+      remoteOps: [
+        op({
+          payload: { task: { id: 'task-1', title: 'Remote', notes: 'Remote notes' } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    const titleDiff = entry.fieldDiffs.find((d) => d.field === 'title');
+    expect(titleDiff?.localChanged).toBe(true);
+    expect(titleDiff?.remoteChanged).toBe(true);
+    const notesDiff = entry.fieldDiffs.find((d) => d.field === 'notes');
+    expect(notesDiff?.localChanged).toBe(false);
+    expect(notesDiff?.remoteChanged).toBe(true);
   });
 
   it('same-field edit, equal timestamps, remote wins → reason "tie"', () => {

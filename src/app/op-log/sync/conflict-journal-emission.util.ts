@@ -23,6 +23,8 @@ import {
 } from './conflict-journal.model';
 import {
   buildMergedFieldDiffs,
+  hasOpaqueChanges,
+  isOpaqueChangeOp,
   mergeChangedFields,
 } from './conflict-disjoint-merge.util';
 
@@ -91,6 +93,52 @@ const maxTimestamp = (ops: Operation[]): number =>
   ops.length ? Math.max(...ops.map((op) => op.timestamp)) : 0;
 
 /**
+ * `kind: 'action'` diffs for every opaque op on either side: the op's mutation
+ * is real but not readable as field values (see `extractOpChanges`), so the
+ * raw action payload is preserved verbatim under the action type instead. This
+ * keeps the discarded change REVIEWABLE (the journal entry outlives the op),
+ * while `loserChangesFor`/`winnerChangesFor` skip these diffs so flip and the
+ * stale guard never treat an action payload as entity fields.
+ */
+const buildOpaqueActionDiffs = (
+  localOps: Operation[],
+  remoteOps: Operation[],
+  payloadKey: string,
+  pickedSide: 'local' | 'remote',
+): ConflictJournalFieldDiff[] => {
+  const byActionType = new Map<string, ConflictJournalFieldDiff>();
+  const add = (op: Operation, side: 'local' | 'remote'): void => {
+    if (!isOpaqueChangeOp(op, payloadKey)) {
+      return;
+    }
+    const diff = byActionType.get(op.actionType) ?? {
+      field: op.actionType,
+      localVal: undefined,
+      remoteVal: undefined,
+      localChanged: false,
+      remoteChanged: false,
+      pickedSide,
+      kind: 'action' as const,
+    };
+    if (side === 'local') {
+      diff.localVal = extractActionPayload(op.payload);
+      diff.localChanged = true;
+    } else {
+      diff.remoteVal = extractActionPayload(op.payload);
+      diff.remoteChanged = true;
+    }
+    byActionType.set(op.actionType, diff);
+  };
+  for (const op of localOps) {
+    add(op, 'local');
+  }
+  for (const op of remoteOps) {
+    add(op, 'remote');
+  }
+  return Array.from(byActionType.values());
+};
+
+/**
  * Classifies one already-resolved LWW conflict into a journal entry.
  *
  * Precedence: clock-corruption → delete-wins → delete-lost → noise → newer/tie.
@@ -154,7 +202,9 @@ export const buildConflictJournalEntry = (
   }
 
   // fieldDiffs: union of changed fields on both sides, capturing each side's
-  // value VERBATIM so the loser's discarded values are preserved.
+  // value VERBATIM so the loser's discarded values are preserved, plus per-side
+  // presence flags so readers can tell "this side never touched the field"
+  // apart from the union's `undefined` placeholder.
   const fieldNames = Array.from(
     new Set([...Object.keys(localChanges), ...Object.keys(remoteChanges)]),
   );
@@ -162,8 +212,11 @@ export const buildConflictJournalEntry = (
     field,
     localVal: localChanges[field],
     remoteVal: remoteChanges[field],
+    localChanged: field in localChanges,
+    remoteChanged: field in remoteChanges,
     pickedSide: winner,
   }));
+  fieldDiffs.push(...buildOpaqueActionDiffs(localOps, remoteOps, payloadKey, winner));
 
   const winnerOps = winner === 'local' ? localOps : remoteOps;
   const loserOps = winner === 'local' ? remoteOps : localOps;
@@ -171,6 +224,10 @@ export const buildConflictJournalEntry = (
   const loserRealFields = Object.keys(loserChanges).filter(
     (field) => !NOISE_FIELDS.has(field),
   );
+  // Opaque loser ops (mutation not readable as fields — e.g. convertToSubTask)
+  // are REAL losses: without this, `loserChanges` is empty and the discarded
+  // structural change would be misclassified as `noise`/`info` and hidden.
+  const loserHasOpaqueChanges = hasOpaqueChanges(loserOps, payloadKey);
 
   const isDeleteWin =
     ARCHIVE_PLAN_REASONS.has(planReason) ||
@@ -195,7 +252,7 @@ export const buildConflictJournalEntry = (
   } else if (isDeleteLost) {
     reason = 'delete-lost';
     status = 'unreviewed';
-  } else if (loserRealFields.length === 0) {
+  } else if (loserRealFields.length === 0 && !loserHasOpaqueChanges) {
     reason = 'noise';
     status = 'info';
   } else {

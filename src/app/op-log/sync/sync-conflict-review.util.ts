@@ -46,17 +46,37 @@ export const computeWinCounts = (
 };
 
 /**
+ * Whether the given side actually changed the diffed field. Falls back to
+ * value-presence for entries persisted before the `localChanged`/`remoteChanged`
+ * flags existed — exact for that data, since op payloads are pure JSON and can
+ * never carry a real `undefined`.
+ */
+const sideChanged = (
+  diff: ConflictJournalFieldDiff,
+  side: 'local' | 'remote',
+): boolean =>
+  side === 'local'
+    ? (diff.localChanged ?? diff.localVal !== undefined)
+    : (diff.remoteChanged ?? diff.remoteVal !== undefined);
+
+/**
  * For each diffed field, the value of the side that LWW *discarded* (the loser).
  * Applying this map re-instates the losing edit — this is exactly what "flip"
- * dispatches. Diffs without a `pickedSide` (merged entries, where nothing was
- * discarded) are skipped.
+ * dispatches. Skipped: diffs without a `pickedSide` (merged entries, where
+ * nothing was discarded) and fields the losing side never changed (a union diff
+ * records those as `undefined`, and dispatching them would CLEAR winner-only
+ * fields instead of layering the discarded edit on top).
  */
 export const loserChangesFor = (entry: ConflictJournalEntry): Record<string, unknown> => {
   const changes: Record<string, unknown> = {};
   for (const diff of entry.fieldDiffs) {
-    if (diff.pickedSide === 'local') {
+    if (diff.kind === 'action') {
+      // Raw action payload of an opaque op — not an entity field.
+      continue;
+    }
+    if (diff.pickedSide === 'local' && sideChanged(diff, 'remote')) {
       changes[diff.field] = diff.remoteVal;
-    } else if (diff.pickedSide === 'remote') {
+    } else if (diff.pickedSide === 'remote' && sideChanged(diff, 'local')) {
       changes[diff.field] = diff.localVal;
     }
   }
@@ -64,19 +84,25 @@ export const loserChangesFor = (entry: ConflictJournalEntry): Record<string, unk
 };
 
 /**
- * For each diffed field, the value of the side that LWW *kept* (the winner).
+ * For each diffed field the winner actually changed, the value LWW *kept*.
  * The stale-flip guard compares the entity's CURRENT field values to these: if
  * any differ, the entity was edited since the conflict resolved and flipping
- * would overwrite that newer edit.
+ * would overwrite that newer edit. Loser-only fields are omitted — the winner
+ * recorded no value for them, and comparing `undefined` against the live entity
+ * would flag every such entry stale.
  */
 export const winnerChangesFor = (
   entry: ConflictJournalEntry,
 ): Record<string, unknown> => {
   const changes: Record<string, unknown> = {};
   for (const diff of entry.fieldDiffs) {
-    if (diff.pickedSide === 'local') {
+    if (diff.kind === 'action') {
+      // Raw action payload of an opaque op — not an entity field.
+      continue;
+    }
+    if (diff.pickedSide === 'local' && sideChanged(diff, 'local')) {
       changes[diff.field] = diff.localVal;
-    } else if (diff.pickedSide === 'remote') {
+    } else if (diff.pickedSide === 'remote' && sideChanged(diff, 'remote')) {
       changes[diff.field] = diff.remoteVal;
     }
   }

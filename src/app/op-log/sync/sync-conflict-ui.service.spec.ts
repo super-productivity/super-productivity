@@ -132,6 +132,120 @@ describe('SyncConflictUiService', () => {
     expect((await journal.getEntry('e1'))?.status).toBe('unreviewed');
   });
 
+  it('flip() only dispatches fields the losing side actually changed', async () => {
+    // local (loser) changed only title; remote (winner) also changed notes.
+    // The dispatched changes must NOT contain notes: undefined — that would
+    // clear the winner-only field instead of layering the discarded edit.
+    const entry = makeEntry({
+      id: 'presence1',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+        {
+          field: 'notes',
+          localVal: undefined,
+          remoteVal: 'Remote notes',
+          localChanged: false,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('applied');
+    const dispatched = dispatchSpy.calls.mostRecent().args[0] as ReturnType<
+      typeof TaskSharedActions.updateTask
+    >;
+    const changes = dispatched.task.changes as Record<string, unknown>;
+    expect(changes).toEqual({ title: 'Local title' });
+    expect(Object.prototype.hasOwnProperty.call(changes, 'notes')).toBe(false);
+  });
+
+  it('canFlip() is false for delete-lost and delete-wins entries', () => {
+    expect(service.canFlip(makeEntry({ reason: 'delete-lost', fieldDiffs: [] }))).toBe(
+      false,
+    );
+    expect(service.canFlip(makeEntry({ reason: 'delete-wins' }))).toBe(false);
+  });
+
+  it('flip() reports unsupported for delete-lost (no false success)', async () => {
+    // delete-lost: the entity was resurrected, fieldDiffs is empty. A normal
+    // update op cannot re-apply the delete, so flip must NOT mark the entry
+    // flipped / return applied while dispatching nothing.
+    const entry = makeEntry({ id: 'dl1', reason: 'delete-lost', fieldDiffs: [] });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('unsupported');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((await journal.getEntry('dl1'))?.status).toBe('unreviewed');
+  });
+
+  it('flip() reports unsupported when the entry has no discarded field values', async () => {
+    const entry = makeEntry({ id: 'empty1', fieldDiffs: [] });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('unsupported');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((await journal.getEntry('empty1'))?.status).toBe('unreviewed');
+  });
+
+  it('canFlip() is false when the discarded side touched relationship fields', () => {
+    const entry = makeEntry({
+      fieldDiffs: [
+        {
+          field: 'projectId',
+          localVal: 'project-A',
+          remoteVal: 'project-B',
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    expect(service.canFlip(entry)).toBe(false);
+  });
+
+  it('flip() reports unsupported when loser changes include relationship fields', async () => {
+    // Re-applying projectId/subTaskIds/... via a bare adapter update bypasses
+    // the multi-entity meta-reducer invariants (membership lists on the other
+    // entity are not updated), so such flips must be refused, not dispatched.
+    const entry = makeEntry({
+      id: 'rel1',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          pickedSide: 'remote',
+        },
+        {
+          field: 'projectId',
+          localVal: 'project-A',
+          remoteVal: 'project-B',
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('unsupported');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((await journal.getEntry('rel1'))?.status).toBe('unreviewed');
+  });
+
   it('flip() reports unsupported for a non-adapter entity type', async () => {
     const entry = makeEntry({ id: 'e2', entityType: 'GLOBAL_CONFIG' as EntityType });
     await journal.record(entry);

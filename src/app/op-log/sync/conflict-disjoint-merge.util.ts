@@ -14,7 +14,7 @@
 
 import { OpType } from '../core/operation.types';
 import type { Operation } from '../core/operation.types';
-import { extractUpdateChanges } from '@sp/sync-core';
+import { extractUpdateChanges, isMultiEntityPayload } from '@sp/sync-core';
 import { ConflictJournalFieldDiff, NOISE_FIELDS } from './conflict-journal.model';
 
 /** Identity of one side of the conflict for the deterministic noise tiebreak. */
@@ -24,6 +24,43 @@ export interface MergeSideMeta {
   /** The client that authored that side. */
   clientId: string;
 }
+
+/**
+ * The changed fields of ONE op, from either of the two delta sources:
+ *
+ *  1. the adapter-shaped action payload (`{ [payloadKey]: { id, changes } }`
+ *     or a flat entity) via `extractUpdateChanges`;
+ *  2. falling back to the capture-time `entityChanges` computed by
+ *     `OperationCaptureService` for reducers that don't follow the adapter
+ *     pattern (e.g. TIME_TRACKING, syncTimeSpent).
+ *
+ * Returns `{}` when neither source has anything — the op's mutation is encoded
+ * in a domain-specific payload shape (e.g. `convertToSubTask`'s
+ * `{ taskId, targetParentId, afterTaskId }`) that CANNOT be read as field
+ * values. Such "opaque" ops still represent a real state change; callers must
+ * treat empty-with-payload as unknown, not as "nothing changed" — see
+ * `hasOpaqueChanges`.
+ */
+const extractOpChanges = (op: Operation, payloadKey: string): Record<string, unknown> => {
+  const adapterChanges = extractUpdateChanges(op.payload, payloadKey);
+  if (Object.keys(adapterChanges).length > 0) {
+    return adapterChanges;
+  }
+  if (isMultiEntityPayload(op.payload)) {
+    const merged: Record<string, unknown> = {};
+    for (const change of op.payload.entityChanges) {
+      if (
+        change.entityId === op.entityId &&
+        change.changes &&
+        typeof change.changes === 'object'
+      ) {
+        Object.assign(merged, change.changes as Record<string, unknown>);
+      }
+    }
+    return merged;
+  }
+  return {};
+};
 
 /**
  * Union of the changed-field maps across a set of ops on one side.
@@ -41,13 +78,25 @@ export const mergeChangedFields = (
     if (op.opType === OpType.Delete) {
       continue;
     }
-    const changes = extractUpdateChanges(op.payload, payloadKey);
-    for (const [key, value] of Object.entries(changes)) {
-      merged[key] = value;
-    }
+    Object.assign(merged, extractOpChanges(op, payloadKey));
   }
   return merged;
 };
+
+/** True when this non-DELETE op's field-level delta cannot be extracted. */
+export const isOpaqueChangeOp = (op: Operation, payloadKey: string): boolean =>
+  op.opType !== OpType.Delete &&
+  Object.keys(extractOpChanges(op, payloadKey)).length === 0;
+
+/**
+ * True when the side contains at least one op whose mutation is real but not
+ * expressible as field values (see `extractOpChanges`). A side with opaque
+ * changes must never be classified as "changed nothing real" (journal `noise`)
+ * nor auto-merged (the synthesized entity would silently drop the opaque
+ * mutation and the two clients would diverge).
+ */
+export const hasOpaqueChanges = (ops: Operation[], payloadKey: string): boolean =>
+  ops.some((op) => isOpaqueChangeOp(op, payloadKey));
 
 /** The non-NOISE keys of a changed-field map. */
 const nonNoiseKeys = (changes: Record<string, unknown>): string[] =>
@@ -92,6 +141,12 @@ export const isDisjointMergeEligible = (params: {
 
   if (localOps.some((op) => op.opType === OpType.Delete)) return false;
   if (remoteOps.some((op) => op.opType === OpType.Delete)) return false;
+
+  // A side with opaque ops has real changes the merge could not carry over —
+  // synthesizing from the extracted fields alone would drop them (and the two
+  // clients would synthesize DIFFERENT entities). Fall back to LWW instead.
+  if (hasOpaqueChanges(localOps, payloadKey)) return false;
+  if (hasOpaqueChanges(remoteOps, payloadKey)) return false;
 
   const localNonNoise = nonNoiseKeys(mergeChangedFields(localOps, payloadKey));
   const remoteNonNoise = nonNoiseKeys(mergeChangedFields(remoteOps, payloadKey));
@@ -188,6 +243,8 @@ export const buildMergedFieldDiffs = (
       field,
       localVal: localChanges[field],
       remoteVal: remoteChanges[field],
+      localChanged: localHas,
+      remoteChanged: remoteHas,
       pickedSide,
     };
   });

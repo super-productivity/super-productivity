@@ -201,6 +201,26 @@ export class ConflictJournalService {
     }
   }
 
+  /**
+   * Deletes EVERY journal entry. Called on user-profile transitions: profiles
+   * are "complete, isolated instances", and the journal is a device-local
+   * side-store the profile switch's backup/import cycle does not otherwise
+   * touch — without this, the next profile would see the previous profile's
+   * entity titles/values and could Flip against the wrong dataset.
+   *
+   * Same swallow-errors contract as `record()`: the caller (profile switch)
+   * must not fail after the dataset has already been replaced.
+   */
+  async clearAll(): Promise<void> {
+    try {
+      const db = await this._ensureDb();
+      await db.clear(CONFLICT_JOURNAL_STORE);
+      await this._refreshUnreviewedCount(db);
+    } catch (err) {
+      OpLog.err('ConflictJournalService: clearAll failed (ignored)', err);
+    }
+  }
+
   private async _refreshUnreviewedCount(
     db: IDBPDatabase<ConflictJournalDB>,
   ): Promise<void> {

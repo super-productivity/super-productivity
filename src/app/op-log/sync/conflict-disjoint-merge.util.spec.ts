@@ -1,10 +1,107 @@
 import {
   buildMergedFieldDiffs,
+  hasOpaqueChanges,
+  isDisjointMergeEligible,
+  mergeChangedFields,
   MergeSideMeta,
   noiseTiebreakSide,
 } from './conflict-disjoint-merge.util';
+import { ActionType, EntityType, OpType, Operation } from '../core/operation.types';
+
+const op = (over: Partial<Operation> = {}): Operation => ({
+  id: 'op-1',
+  actionType: '[Task] Update' as ActionType,
+  opType: OpType.Update,
+  entityType: 'TASK' as EntityType,
+  entityId: 'task-1',
+  payload: { task: { id: 'task-1' } },
+  clientId: 'A',
+  vectorClock: { A: 1 },
+  timestamp: 1000,
+  schemaVersion: 1,
+  ...over,
+});
+
+/** Production-shaped convertToSubTask op: non-adapter payload, empty entityChanges. */
+const convertToSubTaskOp = (over: Partial<Operation> = {}): Operation =>
+  op({
+    actionType: '[Task] Convert to sub task' as ActionType,
+    payload: {
+      actionPayload: {
+        taskId: 'task-1',
+        targetParentId: 'parent-1',
+        afterTaskId: null,
+      },
+      entityChanges: [],
+    },
+    ...over,
+  });
 
 describe('conflict-disjoint-merge.util', () => {
+  describe('mergeChangedFields (non-adapter payloads)', () => {
+    it('falls back to capture-time entityChanges when the action payload is not adapter-shaped', () => {
+      const timeSyncOp = op({
+        actionType: '[TimeTracking] Sync time spent' as ActionType,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2026-07-10', duration: 100 },
+          entityChanges: [
+            {
+              entityType: 'TASK' as EntityType,
+              entityId: 'task-1',
+              opType: OpType.Update,
+              changes: { taskId: 'task-1', date: '2026-07-10', duration: 100 },
+            },
+          ],
+        },
+      });
+      expect(mergeChangedFields([timeSyncOp], 'task')).toEqual({
+        taskId: 'task-1',
+        date: '2026-07-10',
+        duration: 100,
+      });
+    });
+  });
+
+  describe('hasOpaqueChanges', () => {
+    it('is true for a non-adapter payload with no entityChanges (convertToSubTask)', () => {
+      expect(hasOpaqueChanges([convertToSubTaskOp()], 'task')).toBe(true);
+    });
+
+    it('is false for adapter-shaped updates and for DELETE ops', () => {
+      expect(
+        hasOpaqueChanges(
+          [op({ payload: { task: { id: 'task-1', title: 'T' } } })],
+          'task',
+        ),
+      ).toBe(false);
+      expect(
+        hasOpaqueChanges(
+          [op({ opType: OpType.Delete, payload: { task: { id: 'task-1' } } })],
+          'task',
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('isDisjointMergeEligible (opaque ops)', () => {
+    it('refuses the merge when one side also has an opaque op, even if extracted fields are disjoint', () => {
+      // local: adapter title edit + opaque structural move; remote: notes edit.
+      // Extracted fields (title vs notes) are disjoint, but merging would
+      // silently drop the structural move and the two clients would diverge.
+      const eligible = isDisjointMergeEligible({
+        localOps: [
+          op({ payload: { task: { id: 'task-1', title: 'Local' } } }),
+          convertToSubTaskOp(),
+        ],
+        remoteOps: [
+          op({ payload: { task: { id: 'task-1', notes: 'Remote' } }, clientId: 'B' }),
+        ],
+        payloadKey: 'task',
+      });
+      expect(eligible).toBe(false);
+    });
+  });
+
   describe('noiseTiebreakSide', () => {
     it('picks the greater-timestamp side (local newer)', () => {
       expect(
@@ -82,12 +179,16 @@ describe('conflict-disjoint-merge.util', () => {
         field: 'title',
         localVal: 'Local',
         remoteVal: undefined,
+        localChanged: true,
+        remoteChanged: false,
         pickedSide: 'local',
       });
       expect(diffs).toContain({
         field: 'notes',
         localVal: undefined,
         remoteVal: 'Remote',
+        localChanged: false,
+        remoteChanged: true,
         pickedSide: 'remote',
       });
       expect(diffs.length).toBe(2);
@@ -106,6 +207,8 @@ describe('conflict-disjoint-merge.util', () => {
         field: 'modified',
         localVal: 1111,
         remoteVal: 2222,
+        localChanged: true,
+        remoteChanged: true,
         pickedSide: 'remote',
       });
     });
