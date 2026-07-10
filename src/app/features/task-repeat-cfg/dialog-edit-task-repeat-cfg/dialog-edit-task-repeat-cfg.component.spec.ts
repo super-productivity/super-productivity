@@ -7,7 +7,10 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
+import { MatFormFieldHarness } from '@angular/material/form-field/testing';
+import { MatSelectHarness } from '@angular/material/select/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, Subject } from 'rxjs';
@@ -74,6 +77,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     getRepeatCfgReturnValue?:
       | Observable<TaskRepeatCfg | undefined>
       | Subject<TaskRepeatCfg>,
+    renderTemplate = false,
   ): Promise<ComponentFixture<DialogEditTaskRepeatCfgComponent>> => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
@@ -117,7 +121,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       formatTime: () => '12:00 PM',
     });
 
-    await TestBed.configureTestingModule({
+    const testModule = TestBed.configureTestingModule({
       imports: [
         DialogEditTaskRepeatCfgComponent,
         MatDialogModule,
@@ -140,22 +144,92 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         { provide: DateService, useValue: mockDateService },
         { provide: DateAdapter, useClass: CustomDateAdapter },
       ],
-    })
-      .overrideComponent(DialogEditTaskRepeatCfgComponent, {
+    });
+
+    if (!renderTemplate) {
+      testModule.overrideComponent(DialogEditTaskRepeatCfgComponent, {
         set: {
           // Use a minimal template to avoid @ngx-formly/material select rendering,
           // which triggers a compareWith validation error with Angular Material 21+.
           // These tests verify component signals/logic, not template rendering.
           template: '<div></div>',
         },
-      })
-      .compileComponents();
+      });
+    }
+
+    await testModule.compileComponents();
 
     return TestBed.createComponent(DialogEditTaskRepeatCfgComponent);
   };
 
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('keeps Day of month selected after switching from an Nth weekday (#8886)', async () => {
+    const monthlyNthWeekdayCfg: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'repeat-cfg-monthly-nth-weekday',
+      title: 'Monthly task',
+      quickSetting: 'CUSTOM',
+      repeatCycle: 'MONTHLY',
+      startDate: '2026-06-09',
+      monthlyWeekOfMonth: 2,
+      monthlyWeekday: 1,
+    };
+    const fixture = await setupTestBed(
+      { repeatCfg: monthlyNthWeekdayCfg },
+      undefined,
+      true,
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    const selects = await loader.getAllHarnesses(MatSelectHarness);
+    const formFieldsBeforeSwitch = await loader.getAllHarnesses(MatFormFieldHarness);
+    const labelsBeforeSwitch = await Promise.all(
+      formFieldsBeforeSwitch.map((formField) => formField.getLabel()),
+    );
+    expect(labelsBeforeSwitch).toContain(T.F.TASK_REPEAT.F.WEEKDAY);
+    let monthlyPatternSelect: MatSelectHarness | undefined;
+    let dayOfMonthOptionText = '';
+
+    for (const select of selects) {
+      await select.open();
+      const [dayOfMonthOption] = await select.getOptions({
+        text: /MONTHLY_MODE_DAY_OF_MONTH/,
+      });
+      if (dayOfMonthOption) {
+        monthlyPatternSelect = select;
+        dayOfMonthOptionText = await dayOfMonthOption.getText();
+        await dayOfMonthOption.click();
+        break;
+      }
+      await select.close();
+    }
+
+    expect(monthlyPatternSelect).toBeDefined();
+    expect(await monthlyPatternSelect!.getValueText()).toBe(dayOfMonthOptionText);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.repeatCfg().monthlyWeekOfMonth).toBeNull();
+    const formFieldsAfterSwitch = await loader.getAllHarnesses(MatFormFieldHarness);
+    const labelsAfterSwitch = await Promise.all(
+      formFieldsAfterSwitch.map((formField) => formField.getLabel()),
+    );
+    expect(labelsAfterSwitch).not.toContain(T.F.TASK_REPEAT.F.WEEKDAY);
+
+    fixture.componentInstance.save();
+
+    const changes =
+      mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent().args[1];
+    expect(
+      Object.prototype.hasOwnProperty.call(changes, 'monthlyWeekOfMonth'),
+    ).toBeTrue();
+    expect(changes.monthlyWeekOfMonth).toBeUndefined();
   });
 
   describe('isLoading signal', () => {

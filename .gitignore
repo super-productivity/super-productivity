@@ -98,7 +98,6 @@ electron-builder.win-store.yaml
 /src/environments/environment.js
 /src/environments/environment.js.map
 /.claude/*
-!/.claude/skills
 .aider*
 
 

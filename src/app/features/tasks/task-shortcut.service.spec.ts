@@ -74,6 +74,7 @@ describe('TaskShortcutService', () => {
       currentTaskId: signal<string | null>(null),
       setCurrentId: jasmine.createSpy('setCurrentId'),
       toggleStartTask: jasmine.createSpy('toggleStartTask'),
+      scheduleForTodayById: jasmine.createSpy('scheduleForTodayById'),
     } as any;
 
     mockConfigService = {
@@ -100,6 +101,41 @@ describe('TaskShortcutService', () => {
     service = TestBed.inject(TaskShortcutService);
   });
 
+  // The shortcut handler now treats the DOM as authoritative for task focus
+  // (#8851): a task shortcut only fires when document.activeElement is inside
+  // the <task> matching focusedTaskId. Helper stubs both so "a task is focused"
+  // tests reflect real focus. activeElement is stubbed directly rather than via
+  // el.focus() — headless Chrome only updates activeElement when the test iframe
+  // has window focus, which is not guaranteed inside a large suite.
+  let focusedTaskEl: HTMLElement | null = null;
+  let activeElementStubbed = false;
+
+  const stubActiveElement = (el: Element | null): void => {
+    Object.defineProperty(document, 'activeElement', {
+      configurable: true,
+      get: () => el,
+    });
+    activeElementStubbed = true;
+  };
+
+  const setFocusedTask = (id: string): HTMLElement => {
+    focusedTaskEl = document.createElement('task');
+    focusedTaskEl.setAttribute('data-task-id', id);
+    document.body.appendChild(focusedTaskEl);
+    stubActiveElement(focusedTaskEl);
+    mockTaskFocusService.focusedTaskId.set(id);
+    return focusedTaskEl;
+  };
+
+  afterEach(() => {
+    focusedTaskEl?.remove();
+    focusedTaskEl = null;
+    if (activeElementStubbed) {
+      delete (document as unknown as { activeElement?: unknown }).activeElement;
+      activeElementStubbed = false;
+    }
+  });
+
   describe('handleTaskShortcuts - togglePlay (Y key)', () => {
     describe('when focused task exists', () => {
       it('should delegate to focused task component togglePlayPause method', () => {
@@ -109,7 +145,7 @@ describe('TaskShortcutService', () => {
           togglePlayPause: jasmine.createSpy('togglePlayPause'),
           taskContextMenu: () => undefined, // No context menu open
         };
-        mockTaskFocusService.focusedTaskId.set('focused-task-1');
+        setFocusedTask('focused-task-1');
         mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
         const event = createKeyboardEvent('Y');
@@ -255,7 +291,7 @@ describe('TaskShortcutService', () => {
           togglePlayPause: jasmine.createSpy('togglePlayPause'),
           taskContextMenu: () => undefined, // No context menu open
         };
-        mockTaskFocusService.focusedTaskId.set('focused-task-1');
+        setFocusedTask('focused-task-1');
         mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
         mockTaskService.selectedTaskId.set('selected-task-2'); // Different task selected
 
@@ -280,7 +316,7 @@ describe('TaskShortcutService', () => {
         openNotesPanel: jasmine.createSpy('openNotesPanel'),
         taskContextMenu: () => undefined,
       };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
       const event = createKeyboardEvent('N');
@@ -299,7 +335,7 @@ describe('TaskShortcutService', () => {
         openDeadlineDialog: jasmine.createSpy('openDeadlineDialog'),
         taskContextMenu: () => undefined,
       };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
       const event = createKeyboardEvent('S', 'KeyS', { shiftKey: true });
@@ -318,7 +354,7 @@ describe('TaskShortcutService', () => {
         openContextMenu: jasmine.createSpy('openContextMenu'),
         taskContextMenu: () => undefined,
       };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
       const event = createKeyboardEvent('ContextMenu', 'ContextMenu');
@@ -337,7 +373,7 @@ describe('TaskShortcutService', () => {
         openContextMenu: jasmine.createSpy('openContextMenu'),
         taskContextMenu: () => undefined,
       };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
       const event = createKeyboardEvent('Unidentified', 'ContextMenu');
@@ -356,7 +392,7 @@ describe('TaskShortcutService', () => {
         openContextMenu: jasmine.createSpy('openContextMenu'),
         taskContextMenu: () => undefined,
       };
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
 
       const event = createKeyboardEvent('ContextMenu', 'ContextMenu', {
@@ -403,7 +439,7 @@ describe('TaskShortcutService', () => {
         configurable: true,
         value: { writeText },
       });
-      mockTaskFocusService.focusedTaskId.set('focused-task-1');
+      setFocusedTask('focused-task-1');
       mockTaskFocusService.lastFocusedTaskComponent.set({
         task: () => ({ id: 'focused-task-1', title: 'Task title to copy' }),
         taskContextMenu: () => undefined,
@@ -496,22 +532,10 @@ describe('TaskShortcutService', () => {
      * test iframe has window focus, which is not guaranteed inside a
      * large suite (other tests can steal/drop focus).
      */
+    // Reuses the outer stubActiveElement helper (and its afterEach cleanup).
     let taskEl: HTMLElement;
-    let activeElementStubbed = false;
-
-    const stubActiveElement = (el: Element | null): void => {
-      Object.defineProperty(document, 'activeElement', {
-        configurable: true,
-        get: () => el,
-      });
-      activeElementStubbed = true;
-    };
 
     afterEach(() => {
-      if (activeElementStubbed) {
-        delete (document as unknown as { activeElement?: unknown }).activeElement;
-        activeElementStubbed = false;
-      }
       taskEl?.remove();
     });
 
@@ -602,6 +626,143 @@ describe('TaskShortcutService', () => {
 
       expect(result).toBe(true);
       expect(mockTaskComponent.toggleDoneKeyboard).toHaveBeenCalled();
+    });
+  });
+
+  describe('stale-focus guard (#8851)', () => {
+    let taskEl: HTMLElement;
+
+    afterEach(() => {
+      taskEl?.remove();
+    });
+
+    it('drops a task shortcut when focus has left all <task> elements', () => {
+      // focusedTaskId still points at a task, but the DOM contradicts it:
+      // the active element is <body>, i.e. focus left every <task> (e.g. after
+      // navigating to a view with no live <task>). The shortcut must not fire.
+      stubActiveElement(document.body);
+      const mockTaskComponent = {
+        task: () => ({ id: 'stale-task' }),
+        toggleDoneKeyboard: jasmine.createSpy('toggleDoneKeyboard'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('stale-task');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const result = service.handleTaskShortcuts(createKeyboardEvent('D'));
+
+      expect(result).toBe(false);
+      expect(mockTaskComponent.toggleDoneKeyboard).not.toHaveBeenCalled();
+    });
+
+    it('uses the <task> containing focus over a mismatched focusedTaskId', () => {
+      // Active element is inside a different <task> than focusedTaskId claims —
+      // the DOM wins, so delegation targets the DOM task, not the stale id.
+      taskEl = document.createElement('task');
+      taskEl.setAttribute('data-task-id', 'dom-task');
+      document.body.appendChild(taskEl);
+      stubActiveElement(taskEl);
+
+      const mockTaskComponent = {
+        task: () => ({ id: 'dom-task' }),
+        toggleDoneKeyboard: jasmine.createSpy('toggleDoneKeyboard'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('stale-task');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const result = service.handleTaskShortcuts(createKeyboardEvent('D'));
+
+      expect(result).toBe(true);
+      expect(mockTaskComponent.toggleDoneKeyboard).toHaveBeenCalled();
+    });
+  });
+
+  describe('schedule-today shortcut (#8851)', () => {
+    let hostEl: HTMLElement;
+
+    afterEach(() => {
+      hostEl?.remove();
+    });
+
+    it('delegates to the focused <task> component (preserves overdue/backlog branching)', () => {
+      const taskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        moveToTodayWithFocus: jasmine.createSpy('moveToTodayWithFocus'),
+        taskContextMenu: () => undefined,
+      };
+      setFocusedTask('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(taskComponent);
+
+      const event = createKeyboardEvent('F');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(taskComponent.moveToTodayWithFocus).toHaveBeenCalled();
+      expect(mockTaskService.scheduleForTodayById).not.toHaveBeenCalled();
+    });
+
+    it('schedules by id from a focused <planner-task> without a live <task>', () => {
+      // The Planner overdue list renders <planner-task>, which is not a
+      // TaskComponent and never registers focus. It carries data-task-id and is
+      // focusable, so Shift+T resolves the id from the DOM and dispatches
+      // planTasksForToday by id instead of delegating to a stale <task>.
+      hostEl = document.createElement('planner-task');
+      hostEl.setAttribute('data-task-id', 'overdue-planner-task');
+      document.body.appendChild(hostEl);
+      stubActiveElement(hostEl);
+      mockTaskFocusService.focusedTaskId.set(null);
+
+      const event = createKeyboardEvent('F');
+      spyOn(event, 'preventDefault');
+
+      const result = service.handleTaskShortcuts(event);
+
+      expect(result).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(mockTaskService.scheduleForTodayById).toHaveBeenCalledWith(
+        'overdue-planner-task',
+      );
+    });
+
+    it('does nothing when no task can be resolved from focus', () => {
+      stubActiveElement(document.body);
+      mockTaskFocusService.focusedTaskId.set(null);
+
+      const result = service.handleTaskShortcuts(createKeyboardEvent('F'));
+
+      expect(result).toBe(false);
+      expect(mockTaskService.scheduleForTodayById).not.toHaveBeenCalled();
+    });
+
+    it('schedules the focused planner-task, not a stale focusedTaskId (literal #8851 repro)', () => {
+      // The exact reported shape: focusedTaskId still points at a <task> from a
+      // previously-visited view, while a <planner-task> in the overdue list
+      // actually holds DOM focus. Shift+T must act on the planner task's id and
+      // never touch the stale component (which produced the stray sync write).
+      hostEl = document.createElement('planner-task');
+      hostEl.setAttribute('data-task-id', 'overdue-planner-task');
+      document.body.appendChild(hostEl);
+      stubActiveElement(hostEl);
+
+      const staleComponent = {
+        task: () => ({ id: 'stale-task-elsewhere' }),
+        moveToTodayWithFocus: jasmine.createSpy('moveToTodayWithFocus'),
+        taskContextMenu: () => undefined,
+      };
+      mockTaskFocusService.focusedTaskId.set('stale-task-elsewhere');
+      mockTaskFocusService.lastFocusedTaskComponent.set(staleComponent);
+
+      const result = service.handleTaskShortcuts(createKeyboardEvent('F'));
+
+      expect(result).toBe(true);
+      expect(mockTaskService.scheduleForTodayById).toHaveBeenCalledWith(
+        'overdue-planner-task',
+      );
+      expect(mockTaskService.scheduleForTodayById).toHaveBeenCalledTimes(1);
+      expect(staleComponent.moveToTodayWithFocus).not.toHaveBeenCalled();
     });
   });
 });

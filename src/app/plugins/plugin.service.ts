@@ -61,6 +61,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/google-calendar-provider',
   'assets/bundled-plugins/caldav-calendar-provider',
   'assets/bundled-plugins/doc-mode',
+  'assets/bundled-plugins/todoist-import',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -85,6 +86,7 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'linear-issue-provider',
   'procrastination-buster',
   'sync-md',
+  'todoist-import',
   'trello-issue-provider',
   'voice-reminder',
   'yesterday-tasks',

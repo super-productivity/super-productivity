@@ -18,6 +18,7 @@ import { FocusModeBreakComponent } from '../focus-mode-break/focus-mode-break.co
 import { FocusModeService } from '../focus-mode.service';
 import { FocusScreen } from '../focus-mode.model';
 import { isInputElement } from '../../../util/dom-element';
+import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'focus-mode-overlay',
@@ -32,6 +33,7 @@ import { isInputElement } from '../../../util/dom-element';
     FocusModeMainComponent,
     FocusModeSessionDoneComponent,
     FocusModeBreakComponent,
+    TranslatePipe,
   ],
 })
 export class FocusModeOverlayComponent implements OnDestroy {

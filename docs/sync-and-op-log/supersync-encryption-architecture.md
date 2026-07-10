@@ -227,13 +227,56 @@ privateCfg: {
 
 ## Security Properties
 
-| Property            | Guarantee                             |
-| ------------------- | ------------------------------------- |
-| **Confidentiality** | Server cannot read operation payloads |
-| **Integrity**       | GCM auth tag detects tampering        |
-| **Key Security**    | Argon2id makes brute-force expensive  |
-| **Forward Secrecy** | Each operation uses random IV         |
-| **Wrong Password**  | Decryption fails, operation rejected  |
+| Property            | Guarantee                                       |
+| ------------------- | ----------------------------------------------- |
+| **Confidentiality** | Server cannot read operation payloads           |
+| **Integrity**       | GCM auth tag detects tampering of the _payload_ |
+| **Key Security**    | Argon2id makes brute-force expensive            |
+| **Forward Secrecy** | Each operation uses random IV                   |
+| **Wrong Password**  | Decryption fails, operation rejected            |
+
+> **Integrity scope (important).** Only `op.payload` is encrypted and covered by
+> the AES-GCM authentication tag. Every other operation field — `actionType`,
+> `opType`, `entityType`, `entityId`, `entityIds`, `vectorClock`, `timestamp`,
+> `schemaVersion`, `syncImportReason`, **and the `isPayloadEncrypted` flag
+> itself** — travels as **plaintext** and is **not** bound as Additional
+> Authenticated Data (AAD), so a malicious/compromised sync server or a TLS MITM
+> can tamper with it. As **defense-in-depth**, the client fails closed on two
+> tamper vectors:
+>
+> - **Plaintext-injection downgrade:** a forged op with `isPayloadEncrypted=false`
+>   would skip decryption _and_ the payload check and be applied as-is — arbitrary
+>   op forgery on an encryption-mandatory client. `assertOpsEncryptedWhenExpected`
+>   rejects any inbound plaintext op (download + piggyback) when encryption is
+>   **enabled in config** (`isEncryptionMandatory && isEncryptionEnabled()` —
+>   config intent, not key presence, so it also fails closed in the
+>   dropped-credential state). Safe because enabling encryption deletes +
+>   re-uploads all data encrypted, so no legitimate plaintext op remains — this
+>   rests on the server contract that `deleteAllData()` removes every downloadable
+>   plaintext op. This is the SuperSync op-level twin of the file-based GHSA-vrc7
+>   download guard and the GHSA-9544 _upload_ guard.
+> - **LWW `entityId` retarget:** the client rejects an _encrypted_ LWW-update op
+>   whose authenticated `payload.id` does not equal `op.entityId`
+>   (`verify-decrypted-op-integrity.ts`).
+>
+> This is **not** full integrity. Still open pending the durable fix:
+>
+> - `opType` promotion to a full-state (`loadAllData`) op.
+> - Within-LWW `entityType`/`actionType` swap (ids left equal, so it passes).
+> - `vectorClock`/`timestamp` reorder/replay.
+> - The restore-to-point path (`getStateAtSeq` → `importCompleteBackup`) applies
+>   server-reconstructed state without this guard; it is server-authored by
+>   nature and the server blocks it for encrypted accounts, but E2EE cannot
+>   authenticate it.
+>
+> Known limitation: a peer running an app version that predates the GHSA-9544
+> _upload_ guard can still push plaintext ops; a keyed client then fails closed
+> here with the tamper message. Recovery is to update the old peer.
+>
+> Full protection — binding the metadata (and the encryption flag) as GCM AAD
+> behind an envelope-version migration, with a monotonic "encryption floor" to
+> block downgrades — is tracked in **GHSA-8pxh-mgc7-gp3g**. Do not treat
+> plaintext metadata as trusted at client decision points.
 
 ## Initial Setup — Password Dialog Selection
 

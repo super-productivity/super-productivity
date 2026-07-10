@@ -36,6 +36,7 @@ import {
   ConflictReason,
   DecryptError,
   DecryptNoPasswordError,
+  OperationIntegrityError,
   EncryptNoPasswordError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
@@ -910,6 +911,22 @@ export class SyncWrapperService {
           'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      } else if (error instanceof OperationIntegrityError) {
+        // A decrypted op's unauthenticated metadata contradicted its authenticated
+        // payload, or a plaintext op arrived while encryption is mandatory
+        // (GHSA-8pxh-mgc7-gp3g). Fail closed with a calm, translated message so the
+        // generic handler below cannot surface the raw technical/GHSA string to the
+        // user. The technical details are already in the log.
+        SyncLog.err('SyncWrapperService: operation integrity check failed', {
+          name: error.name,
+        });
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
+          type: 'ERROR',
+          config: { duration: 15000 },
+        });
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');

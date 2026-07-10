@@ -95,6 +95,7 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
             defaultValue: null,
             templateOptions: {
               label: T.F.TASK_REPEAT.F.WEEK_OF_MONTH,
+              description: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION,
               options: [
                 { value: null, label: T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH },
                 { value: 1, label: T.F.TASK_REPEAT.F.ORD_FIRST },

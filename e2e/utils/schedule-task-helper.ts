@@ -4,7 +4,7 @@ import { fillTimeInput } from './time-input-helper';
 
 // Selectors for scheduling
 const DETAIL_PANEL_BTN = '.show-additional-info-btn';
-const DETAIL_PANEL_SELECTOR = 'dialog-task-detail-panel, task-detail-panel';
+const DETAIL_PANEL_SELECTOR = 'task-detail-panel';
 const DETAIL_PANEL_SCHEDULE_ITEM =
   'task-detail-item:has(mat-icon:text("alarm")), ' +
   'task-detail-item:has(mat-icon:text("today")), ' +

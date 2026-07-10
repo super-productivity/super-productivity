@@ -361,6 +361,10 @@
       class="edit-date-info"
       [title]="T.G.EDIT | translate"
       (click)="editCreated()"
+      (keydown.enter)="editCreated()"
+      (keydown.space)="$event.preventDefault(); editCreated()"
+      role="button"
+      tabindex="0"
     >
       Created on {{ task().created | localeDate: 'short' : undefined : locale() }}
     </div>
@@ -369,6 +373,10 @@
         class="edit-date-info"
         [title]="T.G.EDIT | translate"
         (click)="editCompleted()"
+        (keydown.enter)="editCompleted()"
+        (keydown.space)="$event.preventDefault(); editCompleted()"
+        role="button"
+        tabindex="0"
       >
         Completed on {{ task().doneOn | localeDate: 'short' : undefined : locale() }}
       </div>

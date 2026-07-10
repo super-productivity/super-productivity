@@ -118,5 +118,13 @@
     "author": "coissay",
     "authorUrl": "https://github.com/coissay",
     "stars": 0
+  },
+  {
+    "name": "Home Assistant Bridge",
+    "shortDescription": "Bidirectional bridge between Super Productivity and Home Assistant. Rules-based automation engine: control lights, scenes, media, and notifications based on your tasks. Auto-focus mode, break reminders, daily summaries, and live HA sensor display.",
+    "url": "https://github.com/jloops412/ha-super-productivity",
+    "author": "jloops412",
+    "authorUrl": "https://github.com/jloops412",
+    "stars": 0
   }
 ]

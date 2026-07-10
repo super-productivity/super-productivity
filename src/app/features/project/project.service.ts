@@ -48,6 +48,9 @@ import { sortByTitle } from '../../util/sort-by-title';
 import { Note } from '../note/note.model';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { addNote } from '../note/store/note.actions';
+import { Section } from '../section/section.model';
+import { addSection } from '../section/store/section.actions';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
@@ -502,9 +505,16 @@ export class ProjectService {
     const newNoteIds = this._duplicateNotesToProject(notesToCopy, newProjectId);
     this.update(newProjectId, { noteIds: newNoteIds });
 
-    this._duplicateTasksToProject(parentTasks, newProjectId, false, taskState);
+    const sectionsMap = await firstValueFrom(
+      this._store$.select(selectSectionsByContextIdMap),
+    );
+    const sectionsToCopy = sectionsMap.get(templateProjectId) ?? [];
 
-    this._duplicateTasksToProject(backlogTasks, newProjectId, true, taskState);
+    const taskIdMap = new Map<string, string>();
+    this._duplicateTasksToProject(parentTasks, newProjectId, false, taskState, taskIdMap);
+    this._duplicateTasksToProject(backlogTasks, newProjectId, true, taskState, taskIdMap);
+
+    this._duplicateSectionsToProject(sectionsToCopy, newProjectId, taskIdMap);
 
     return newProjectId;
   }
@@ -514,6 +524,7 @@ export class ProjectService {
     newProjectId: string,
     isBacklog: boolean,
     taskState: TaskState,
+    taskIdMap: Map<string, string>,
   ): void {
     // For each parent task create a copy in the new project and then copy its subtasks
     for (const p of tasks) {
@@ -541,6 +552,7 @@ export class ProjectService {
         workContextType: WorkContextType.PROJECT,
         workContextId: newProjectId,
       });
+      taskIdMap.set(p.id, newParentTask.id);
 
       // dispatch addTask for the parent task
       this._store$.dispatch(
@@ -580,6 +592,7 @@ export class ProjectService {
             workContextType: WorkContextType.PROJECT,
             workContextId: newProjectId,
           });
+          taskIdMap.set(st.id, newSub.id);
 
           this._store$.dispatch(addSubTask({ task: newSub, parentId: newParentTask.id }));
         }
@@ -606,5 +619,30 @@ export class ProjectService {
       this._store$.dispatch(addNote({ note: newNote, isPreventFocus: true }));
     }
     return newNoteIds;
+  }
+
+  private _duplicateSectionsToProject(
+    sections: Section[],
+    newProjectId: string,
+    taskIdMap: Map<string, string>,
+  ): void {
+    for (const section of sections) {
+      const newTaskIds = section.taskIds
+        .map((id) => taskIdMap.get(id))
+        .filter((id): id is string => !!id);
+
+      this._store$.dispatch(
+        addSection({
+          section: {
+            id: nanoid(),
+            contextId: newProjectId,
+            contextType: WorkContextType.PROJECT,
+            title: section.title,
+            isExpanded: section.isExpanded,
+            taskIds: newTaskIds,
+          },
+        }),
+      );
+    }
   }
 }

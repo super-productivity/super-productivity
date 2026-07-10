@@ -6,9 +6,9 @@
 
 The single-file approach (`sync-data.json`) has these specific weaknesses when multiple clients sync simultaneously:
 
-### 1. Single retry on upload conflict
+### 1. Bounded retries on upload conflict
 
-`_uploadWithRetry()` (`file-based-sync-adapter.service.ts:474`) retries **exactly once** on rev mismatch. With 3+ clients syncing at similar intervals, the retry can also fail — the second upload attempt has no fallback.
+`_uploadWithMismatchFallback()` (`file-based-sync-adapter.service.ts`) makes up to `1 + _MAX_UPLOAD_RETRIES` conditional attempts (`_MAX_UPLOAD_RETRIES` is currently `2`, so 3 total) and never force-overwrites. On a rev mismatch it re-downloads: if the remote rev actually changed it treats that as a genuine concurrent write and throws a retryable error **immediately** (the extra attempts exist only for the transient case where the re-downloaded rev is unchanged). The next sync cycle then downloads the concurrent ops and rebuilds a consistent snapshot. This handles a concurrent write that is _visible at check time_; it does **not** close the check-then-write race described in §5.
 
 ### 2. Wide race window
 
@@ -22,9 +22,51 @@ Every upload includes the **complete application state** (line 452: `getStateSna
 
 WebDAV uses `lastmod` (seconds resolution) as the revision. Two uploads within the same second can't be distinguished. The `syncVersion` counter inside the file compensates, but only if the file is actually re-downloaded between attempts.
 
-### 5. No atomic CAS for LocalFile
+### 5. No atomic CAS for LocalFile (accepted limitation — #8898)
 
-For local file sync (Electron/Android), there's no server-side compare-and-swap. The rev is an MD5 hash computed client-side, but the read-modify-write is not atomic.
+For local file sync there is no server-side compare-and-swap. `uploadFile()`
+(`local-file-sync-base.ts`) does the rev check (`downloadFile` + hash compare)
+and the `writeFile` as two separate, non-atomic steps, so a concurrent writer
+that lands **between** check and write is not detected and can be overwritten (a
+classic TOCTOU race). This is an **accepted limitation**, LOW severity in
+practice because several layers narrow the window or soften the outcome:
+
+- Within one client, concurrent uploads share an upload lock (`LockService`,
+  `LOCK_NAMES.UPLOAD` — Web Locks cross-tab, in-process mutex fallback on
+  Electron/Android), so a client's own upload cycles don't race on the file. This
+  does **not** extend across machines. (Downloads use a separate lock; only
+  uploads write the file.)
+- Cross-machine contention needs multiple writers on the same file — an external
+  folder-sync tool (Syncthing/Dropbox) or a directly shared/network-mounted sync
+  folder. An OS-level lock wouldn't help across machines anyway.
+- A concurrent write that is _visible at check time_ is caught, not clobbered:
+  `_uploadWithMismatchFallback` never force-overwrites; on a rev mismatch it
+  re-downloads and throws retryably, and the next cycle re-applies the concurrent
+  ops. Only a write landing inside the check→write window escapes this.
+- Backup-before-overwrite (`.bak`, #8786, best-effort): the current remote content
+  is copied to a `.bak` before overwrite, letting the next download recover a
+  **corrupt/interrupted** primary. It does **not** recover a valid concurrent
+  overwrite, nor a primary that went fully missing (e.g. an Android
+  delete-then-crash), and the `.bak` write is non-fatal if it fails.
+
+So the residual risk is narrow but real: a writer whose write falls inside another
+client's check→write window can have its update lost — recoverable only if that
+client's local op-log still holds the ops and re-uploads them on a later cycle.
+Two distinct problems live here; keep them separate:
+
+- **Torn writes** (crash mid-write → partial/corrupt file) are already prevented
+  on **Electron/desktop**: `FILE_SYNC_SAVE` (`electron/local-file-sync.ts`) writes
+  to a temp file (`flag: 'wx'`) then `renameSync` (atomic on ext4/APFS/NTFS), with
+  temp cleanup on failure. **Android SAF still writes in place**
+  (`SafBridgePlugin.writeFile` → `openOutputStream`), so a torn write is possible
+  there — only partly mitigated by the best-effort `.bak` recovery above (and not
+  at all if the primary goes missing rather than corrupt). A native
+  temp-DocumentFile + rename would close it, but it's low value (mobile is
+  effectively single-writer).
+- **The check-then-write CAS race itself** is NOT closed by atomic rename — rename
+  only makes the write atomic, not the read-compare-write sequence. Portably
+  closing it needs OS-level CAS (`O_EXCL` / advisory locks) that isn't uniformly
+  available across the LocalFile backends. Left as accepted.
 
 ## How Bad Is It in Practice?
 
