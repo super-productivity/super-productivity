@@ -227,13 +227,40 @@ privateCfg: {
 
 ## Security Properties
 
-| Property            | Guarantee                             |
-| ------------------- | ------------------------------------- |
-| **Confidentiality** | Server cannot read operation payloads |
-| **Integrity**       | GCM auth tag detects tampering        |
-| **Key Security**    | Argon2id makes brute-force expensive  |
-| **Forward Secrecy** | Each operation uses random IV         |
-| **Wrong Password**  | Decryption fails, operation rejected  |
+| Property            | Guarantee                                      |
+| ------------------- | ---------------------------------------------- |
+| **Confidentiality** | Server cannot read operation payloads          |
+| **Integrity**       | GCM auth tag detects tampering of the _payload_ |
+| **Key Security**    | Argon2id makes brute-force expensive           |
+| **Forward Secrecy** | Each operation uses random IV                  |
+| **Wrong Password**  | Decryption fails, operation rejected           |
+
+> **Integrity scope (important).** Only `op.payload` is encrypted and covered by
+> the AES-GCM authentication tag. Every other operation field — `actionType`,
+> `opType`, `entityType`, `entityId`, `entityIds`, `vectorClock`, `timestamp`,
+> `schemaVersion`, `syncImportReason`, **and the `isPayloadEncrypted` flag
+> itself** — travels as **plaintext** and is **not** bound as Additional
+> Authenticated Data (AAD), so a malicious/compromised sync server or a TLS MITM
+> can tamper with it. As **defense-in-depth**, the client rejects an *encrypted*
+> LWW-update op whose authenticated `payload.id` does not equal `op.entityId`
+> (`verify-decrypted-op-integrity.ts`, fail-closed), closing one retarget vector.
+>
+> This is **not** full integrity. Notably still open pending the durable fix:
+>
+> - **Plaintext-injection downgrade (highest impact):** a forged op with
+>   `isPayloadEncrypted=false` skips decryption *and* the check above and is
+>   applied as-is — arbitrary op forgery on an encryption-mandatory client. The
+>   companion fix is a download-side mandatory-encryption guard (reject inbound
+>   plaintext ops when encryption is active), symmetric to the existing
+>   GHSA-9544 *upload* guard.
+> - `opType` promotion to a full-state (`loadAllData`) op.
+> - Within-LWW `entityType`/`actionType` swap (ids left equal, so it passes).
+> - `vectorClock`/`timestamp` reorder/replay.
+>
+> Full protection — binding the metadata (and the encryption flag) as GCM AAD
+> behind an envelope-version migration, with a monotonic "encryption floor" to
+> block downgrades — is tracked in **GHSA-8pxh-mgc7-gp3g**. Do not treat
+> plaintext metadata as trusted at client decision points.
 
 ## Initial Setup — Password Dialog Selection
 

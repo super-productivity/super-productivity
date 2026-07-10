@@ -132,6 +132,21 @@ export class DecryptError extends AdditionalLogErrorBase {
   override name = 'DecryptError';
 }
 
+/**
+ * Thrown when a successfully-decrypted operation's UNAUTHENTICATED metadata is
+ * inconsistent with its AUTHENTICATED payload — the signature of sync-server
+ * (or MITM) tampering with the plaintext op fields that AES-GCM does not cover.
+ * GHSA-8pxh-mgc7-gp3g.
+ *
+ * Distinct from DecryptError on purpose: decryption SUCCEEDED (the password is
+ * correct), so this must NOT route to the enter-password recovery dialog. It
+ * falls through to the generic sync-error handler (fail closed: the sync stops
+ * rather than applying tampered data).
+ */
+export class OperationIntegrityError extends AdditionalLogErrorBase {
+  override name = 'OperationIntegrityError';
+}
+
 export class CompressError extends AdditionalLogErrorBase {
   override name = 'CompressError';
 }

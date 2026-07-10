@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
-import { DecryptError } from '../core/errors/sync-errors';
+import { DecryptError, OperationIntegrityError } from '../core/errors/sync-errors';
 import { ActionType } from '../core/operation.types';
+import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
 
 describe('OperationEncryptionService', () => {
@@ -224,6 +225,60 @@ describe('OperationEncryptionService', () => {
         expect(e).toBeInstanceOf(DecryptError);
         expect((e as Error).message).toContain('malformed-op-123');
       }
+    });
+  });
+
+  // GHSA-8pxh-mgc7-gp3g: E2EE covers only op.payload; op.entityId travels as
+  // plaintext. A tampered entityId on an encrypted LWW-update op must be
+  // rejected on decrypt (fail closed) rather than silently retargeting the
+  // authenticated changes onto the attacker-chosen entity.
+  describe('metadata integrity (GHSA-8pxh-mgc7-gp3g)', () => {
+    const LWW_TASK = toLwwUpdateActionType('TASK') as ActionType;
+
+    const createLwwOp = (entityId: string): SyncOperation => ({
+      ...createMockSyncOp({ id: entityId, changes: { title: 'legit change' } }),
+      actionType: LWW_TASK,
+      opType: 'UPDATE',
+      entityType: 'TASK',
+      entityId,
+    });
+
+    it('rejects a decrypted LWW op whose entityId was tampered (single)', async () => {
+      const encrypted = await service.encryptOperation(
+        createLwwOp('task-123'),
+        TEST_PASSWORD,
+      );
+      // Simulate a malicious server retagging the plaintext entityId.
+      const tampered: SyncOperation = { ...encrypted, entityId: 'task-999' };
+
+      await expectAsync(
+        service.decryptOperation(tampered, TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('rejects a decrypted LWW op whose entityId was tampered (batch)', async () => {
+      const [encrypted] = await service.encryptOperations(
+        [createLwwOp('task-123')],
+        TEST_PASSWORD,
+      );
+      const tampered: SyncOperation = { ...encrypted, entityId: 'task-999' };
+
+      await expectAsync(
+        service.decryptOperations([tampered], TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('accepts a decrypted LWW op with untampered entityId', async () => {
+      const encrypted = await service.encryptOperation(
+        createLwwOp('task-123'),
+        TEST_PASSWORD,
+      );
+      const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+      expect(decrypted.entityId).toBe('task-123');
+      expect(decrypted.payload).toEqual({
+        id: 'task-123',
+        changes: { title: 'legit change' },
+      });
     });
   });
 
