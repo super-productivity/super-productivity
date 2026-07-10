@@ -1,4 +1,3 @@
-import PostalMime from 'postal-mime';
 import { isFileEml, parseEml } from './eml-parser';
 
 const makeFile = (content: string, name: string, type = ''): File =>
@@ -63,6 +62,23 @@ describe('parseEml', () => {
     expect(data.from?.address).toBe('alice@example.com');
     expect(data.from?.name).toBe('Alice Example');
     expect(data.subject).toBe('Hello World');
+    expect(data.text).toBe('This is the body text.\n');
+  });
+
+  it('should handle CRLF line endings and folded headers', async () => {
+    const foldedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Hello',
+      ' World',
+      '',
+      'body',
+      '',
+    ].join('\r\n');
+
+    const data = await parseEml(makeFile(foldedEml, 'mail.eml'));
+
+    expect(data.subject).toBe('Hello World');
+    expect(data.text).toBe('body\n');
   });
 
   it('should leave from undefined when there is no From header', async () => {
@@ -86,18 +102,64 @@ describe('parseEml', () => {
     expect(data.from?.address).toBe('alice@example.com');
   });
 
-  it('should throw if parsing rejects', async () => {
-    // NOTE: This test should almost never happen, since postal-mime almost never fails, but its good to have.
-    spyOn(PostalMime, 'parse').and.rejectWith(new Error('boom'));
-
+  it('should reject a file without a header/body separator', async () => {
     await expectAsync(parseEml(makeFile('whatever', 'bad.eml'))).toBeRejected();
   });
 
   it('should throw if the file cannot be read', async () => {
     const file = makeFile('', 'unreadable.eml');
-    // postal-mime reads a Blob via arrayBuffer(), so that's the read to fail.
-    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('read failed'));
+    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
 
     await expectAsync(parseEml(file)).toBeRejected();
+  });
+
+  it('should omit multipart bodies instead of trying to parse MIME parts', async () => {
+    const multipartEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Multipart',
+      'Content-Type: multipart/alternative; boundary="example"',
+      '',
+      '--example',
+      'Content-Type: text/plain',
+      '',
+      'plain body',
+      '--example--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(multipartEml, 'multipart.eml'));
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should omit transfer-encoded bodies instead of returning encoded content', async () => {
+    const encodedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Encoded',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'c2VjcmV0IGJvZHk=',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(encodedEml, 'encoded.eml'));
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should only treat the exact text/plain media type as plain text', async () => {
+    const nonPlainTextEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Other media type',
+      'Content-Type: text/plain-script',
+      '',
+      'not plain text',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(nonPlainTextEml, 'other.eml'));
+
+    expect(data.text).toBeUndefined();
   });
 });

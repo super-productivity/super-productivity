@@ -5,9 +5,9 @@ import { Log } from '../log';
 import { parseEml } from '../../util/eml-parser';
 import { T } from '../../t.const';
 
-// postal-mime parses synchronously on the main thread, and the body becomes a
-// note that syncs to every device. Bound the untrusted input so a pathological
-// .eml can't freeze the UI or balloon the op-log.
+// Parsing runs on the main thread, and the body becomes a note that syncs to every
+// device. Bound the untrusted input so a pathological .eml can't freeze the UI or
+// balloon the op-log.
 const MAX_EML_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @Injectable({
@@ -45,8 +45,8 @@ export class EmlDropService {
       this._taskService.add(title, false, { notes }, false, true);
     } catch (e) {
       // Log a bounded reason, not the raw error: the source is untrusted email
-      // content and log history is exportable (rule #9). postal-mime's throw
-      // messages are structural (no message content), so the reason is safe to keep.
+      // content and log history is exportable (rule #9). Parser errors are
+      // structural and contain no message content, so the reason is safe to keep.
       Log.err(
         'Failed to parse EML file',
         e instanceof Error ? e.message : 'Unknown error',

@@ -126,8 +126,7 @@ describe('EmlDropService', () => {
   it('should log and show an error snack without adding a task when parsing fails', async () => {
     const logErrSpy = spyOn(Log, 'err');
     const file = makeFile(VALID_EML);
-    // postal-mime reads a Blob via arrayBuffer(), so that's the read to fail.
-    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('read failed'));
+    spyOn(file, 'text').and.rejectWith(new Error('read failed'));
 
     await service.createTaskFromEml(file);
 
