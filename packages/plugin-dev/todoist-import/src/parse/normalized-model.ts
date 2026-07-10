@@ -10,6 +10,8 @@ export interface TodoistProject {
   parentExtId: string | null;
   isInbox: boolean;
   childOrder: number;
+  /** number of imported values shortened to the parser's safe limits */
+  truncatedFieldCount?: number;
 }
 
 export interface TodoistSection {
@@ -42,6 +44,8 @@ export interface TodoistTask {
   hasAssignee: boolean;
   /** comment file attachments (URLs kept in notes, files not imported) */
   attachmentCount: number;
+  /** number of imported values shortened to the parser's safe limits */
+  truncatedFieldCount?: number;
 }
 
 export interface TodoistImportModel {

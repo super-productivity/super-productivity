@@ -305,6 +305,41 @@ describe('parseSyncResponse', () => {
       );
       expect(task.attachmentCount).toBe(1);
     });
+
+    it('uses caller-provided strings for text added to imported notes', () => {
+      const raw = baseFixture();
+      raw.items = [
+        {
+          id: 't1',
+          project_id: 'p1',
+          content: '',
+          due: { date: '2026-07-15', is_recurring: true, string: 'every day' },
+          deadline: { date: '2026-08-01' },
+        },
+      ];
+      raw.notes = [
+        {
+          id: 'n1',
+          item_id: 't1',
+          content: 'attachment',
+          file_attachment: { file_url: 'https://x/file' },
+        },
+      ];
+
+      const [taskParsed] = parseSyncResponse(raw, {
+        untitledProject: 'Projekt ohne Titel',
+        untitledTask: 'Aufgabe ohne Titel',
+        repeats: (rule) => `Wiederholt: ${rule}`,
+        deadline: (date) => `Frist: ${date}`,
+        comments: 'Kommentare:',
+        file: 'Datei',
+      }).tasks;
+
+      expect(taskParsed.title).toBe('Aufgabe ohne Titel');
+      expect(taskParsed.notes).toBe(
+        'Wiederholt: every day\nFrist: 2026-08-01\n\nKommentare:\n- attachment Datei: https://x/file',
+      );
+    });
   });
 
   describe('hostile / malformed payloads', () => {
@@ -329,7 +364,7 @@ describe('parseSyncResponse', () => {
       expect(child?.parentExtId).toBeNull();
     });
 
-    it('drops non-http(s) attachment URLs from notes', () => {
+    it('drops unsafe or malformed attachment URLs from notes', () => {
       const raw = baseFixture();
       raw.items = [{ id: 't1', project_id: 'p1', content: 'a' }];
       raw.notes = [
@@ -339,9 +374,19 @@ describe('parseSyncResponse', () => {
           content: 'evil',
           file_attachment: { file_name: 'x', file_url: 'javascript:alert(1)' },
         },
+        {
+          id: 'n2',
+          item_id: 't1',
+          content: 'malformed',
+          file_attachment: {
+            file_name: 'x',
+            file_url: 'https://files.example/x\n[bad](javascript:alert(1))',
+          },
+        },
       ];
       const [taskParsed] = parseSyncResponse(raw).tasks;
-      expect(taskParsed.notes).toBe('Comments:\n- evil');
+      expect(taskParsed.notes).toBe('Comments:\n- evil\n- malformed');
+      expect(taskParsed.attachmentCount).toBe(0);
     });
 
     it('rejects non-finite or absurd durations', () => {
@@ -367,6 +412,7 @@ describe('parseSyncResponse', () => {
 
     it('clamps oversized titles and notes', () => {
       const raw = baseFixture();
+      raw.projects![0].name = 'p'.repeat(5000);
       raw.items = [
         {
           id: 't1',
@@ -375,9 +421,12 @@ describe('parseSyncResponse', () => {
           description: 'y'.repeat(100_000),
         },
       ];
-      const [taskParsed] = parseSyncResponse(raw).tasks;
+      const parsed = parseSyncResponse(raw);
+      const [taskParsed] = parsed.tasks;
+      expect(parsed.projects[0].truncatedFieldCount).toBe(1);
       expect(taskParsed.title.length).toBeLessThanOrEqual(1001);
       expect(taskParsed.notes.length).toBeLessThanOrEqual(50_001);
+      expect(taskParsed.truncatedFieldCount).toBe(2);
     });
   });
 

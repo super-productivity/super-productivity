@@ -42,6 +42,9 @@ const buildPlugin = async () => {
   for (const file of ['manifest.json', 'plugin.js', 'icon.svg']) {
     fs.copyFileSync(path.join(SRC_DIR, file), path.join(DIST_DIR, file));
   }
+  fs.cpSync(path.join(ROOT_DIR, 'i18n'), path.join(DIST_DIR, 'i18n'), {
+    recursive: true,
+  });
   console.log('todoist-import build complete → dist/');
 };
 

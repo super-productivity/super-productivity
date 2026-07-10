@@ -105,8 +105,10 @@ scans at 5k dated tasks) and today there is no cheaper path.
 ## Input source
 
 **API token only in v1.** The user pastes a Todoist personal token (Settings →
-Integrations → Developer); the plugin makes one
-`POST https://api.todoist.com/api/v1/sync` with `sync_token=*`,
+Integrations → Developer); the plugin makes an initial
+`POST https://api.todoist.com/api/v1/sync` with `sync_token=*`, followed immediately
+by an incremental request with the returned sync token. This applies changes that
+arrived while Todoist prepared a potentially delayed full snapshot. Both requests use
 `resource_types=["projects","items","sections","notes"]` (`notes` = task comments,
 folded into SP task notes; the `labels` resource is deliberately NOT requested —
 item labels arrive as names on the items themselves) via the gated `PluginAPI.request`
@@ -121,8 +123,7 @@ states "sent only to api.todoist.com, never stored".
 fixture suite + multi-file UI for strictly worse fidelity (no labels, no comments, no
 tz fidelity, one tedious export per project) — and its `DATE` column holds _localized
 natural-language_ strings ("every day", "5 août") that cannot be parsed faithfully.
-Named contingency if the web CORS check fails or users already closed their account;
-fast-follow, not v1.
+Named contingency for users who already closed their account; fast-follow, not v1.
 
 Completed-task history is out of scope for v1 (the sync endpoint returns only active
 items by default — nothing extra to do).
@@ -155,7 +156,7 @@ items by default — nothing extra to do).
 ```
 packages/plugin-dev/todoist-import/
   package.json             # esbuild + jest, modeled on sync-md (no framework)
-  scripts/build.js         # bundle ui/main.ts, INLINE bundle into index.html, copy manifest/icon
+  scripts/build.js         # bundle ui/main.ts, INLINE bundle into index.html, copy manifest/icon/i18n
   src/
     manifest.json          # iFrame:true, isSkipMenuEntry:true, permissions incl. "http",
                            # allowedHosts:["api.todoist.com"], hooks:[]
@@ -192,9 +193,9 @@ UI wizard specifics (trust items from review):
 
 - **M0 · Spike — ✅ DONE, verdict GREEN.** Token path viable on web, Electron, mobile
   via gated `PluginAPI.request` (`plugin-bridge.service.ts:508`); app CSP is
-  `connect-src *`; Electron injects ACAO:*. → *residual (web only):\* Todoist must
-  answer the CORS preflight for the `Authorization` header; confirm with one live
-  web-build call during M3. Electron/mobile need no confirm.
+  `connect-src *`; Electron injects ACAO:\*. Todoist's unified API documentation says
+  all endpoints except the initial OAuth authorization endpoint support CORS for any
+  origin; retain one live web-build sanity check during M3.
 - **M1 · Parse + normalize.** Sync-v1 JSON → normalized model. → _verify:_ jest
   fixtures: parent chains incl. depth 3+, the three `due.date` shapes, deadline,
   recurring strings, durations (minute/day), priority inversion, section ordering,
@@ -204,7 +205,7 @@ UI wizard specifics (trust items from review):
   executor. → _verify:_ unit tests on the op-builder; manual import of a fixture into
   a scratch profile: counts, nesting, order, due dates.
 - **M3 · UI + preview + summary.** Token input, per-project preview, import progress,
-  honest summary. → _verify:_ manual run web + Electron incl. the live CORS check.
+  honest summary. → _verify:_ manual run web + Electron incl. full + incremental sync.
 - **M4 · Discoverability + docs.** Launcher row in Import/Export
   (`activatePlugin` + route to `plugins/todoist-import/index`); "Switch from Todoist"
   docs page (search is how the day-they-quit-Todoist persona finds this — no
@@ -216,8 +217,9 @@ UI wizard specifics (trust items from review):
 - **Partial import on failure** — additive, not transactional; per-project execution
   bounds the blast radius to whole projects and the summary names what landed.
   Accepted for v1 (KISS) — no rollback machinery.
-- **Web CORS preflight** (M0 residual) — if Todoist blocks browser calls, web users
-  get a clear error pointing at the desktop app (or the CSV fast-follow).
+- **Archived-project re-runs** — `getAllProjects()` exposes active projects only, so
+  an archived prior import cannot be collision-flagged. Document the restore/delete
+  workaround; do not widen a permanent public plugin API solely for this importer.
 - **Follow-up `updateTask` volume** — one per dated/labelled task; bounded by the
   batch op for structure; acceptable one-time burst. Watch 5k+ item accounts.
 - **Todoist API drift** — unified v1 is current (v9 deprecated); parser is defensive

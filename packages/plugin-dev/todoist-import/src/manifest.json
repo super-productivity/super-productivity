@@ -22,5 +22,8 @@
   "allowedHosts": ["api.todoist.com"],
   "iFrame": true,
   "isSkipMenuEntry": true,
+  "i18n": {
+    "languages": ["en"]
+  },
   "icon": "icon.svg"
 }

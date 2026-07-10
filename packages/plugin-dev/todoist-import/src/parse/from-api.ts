@@ -85,6 +85,24 @@ const MAX_NOTES_LEN = 50_000;
 const MIN_DUE_MS = 0; // 1970
 const MAX_DUE_MS = 32_503_680_000_000; // year 3000
 
+export interface ParseStrings {
+  untitledProject: string;
+  untitledTask: string;
+  repeats: (rule: string) => string;
+  deadline: (date: string) => string;
+  comments: string;
+  file: string;
+}
+
+const DEFAULT_PARSE_STRINGS: ParseStrings = {
+  untitledProject: 'Untitled project',
+  untitledTask: 'Untitled task',
+  repeats: (rule) => `Repeats: ${rule}`,
+  deadline: (date) => `Deadline: ${date}`,
+  comments: 'Comments:',
+  file: 'file',
+};
+
 const asId = (v: string | number | null | undefined): string | null =>
   v === null || v === undefined || v === '' ? null : String(v);
 
@@ -126,6 +144,18 @@ export const mergeSyncResponses = (
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+const isSupportedAttachmentUrl = (url: unknown): url is string => {
+  if (typeof url !== 'string' || /[\s\u0000-\u001f\u007f]/u.test(url)) {
+    return false;
+  }
+  try {
+    const protocol = new URL(url).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 const isTruthyFlag = (v: boolean | number | undefined): boolean => !!v;
 
 const clamp = (s: string, maxLen: number): string =>
@@ -166,7 +196,8 @@ const buildNotes = (
   item: RawItem,
   comments: RawNote[],
   deadlineNoted: string | null,
-): string => {
+  strings: ParseStrings,
+): { notes: string; truncatedFieldCount: number } => {
   const parts: string[] = [];
   const description = asStr(item.description).trim();
   if (description) {
@@ -174,10 +205,10 @@ const buildNotes = (
   }
   const extras: string[] = [];
   if (item.due?.is_recurring && asStr(item.due.string)) {
-    extras.push(`Repeats: ${asStr(item.due.string)}`);
+    extras.push(strings.repeats(asStr(item.due.string)));
   }
   if (deadlineNoted) {
-    extras.push(`Deadline: ${deadlineNoted}`);
+    extras.push(strings.deadline(deadlineNoted));
   }
   if (extras.length) {
     parts.push(extras.join('\n'));
@@ -188,14 +219,18 @@ const buildNotes = (
       const att = c.file_attachment;
       // scheme-filter remote URLs before they land in markdown-rendered notes
       const url = asStr(att?.file_url);
-      const attLine = /^https?:\/\//i.test(url)
-        ? ` ${asStr(att?.file_name) || 'file'}: ${url}`
+      const attLine = isSupportedAttachmentUrl(url)
+        ? ` ${asStr(att?.file_name) || strings.file}: ${url}`
         : '';
       return `- ${content}${attLine}`.trimEnd();
     });
-    parts.push(`Comments:\n${lines.join('\n')}`);
+    parts.push(`${strings.comments}\n${lines.join('\n')}`);
   }
-  return clamp(parts.join('\n\n'), MAX_NOTES_LEN);
+  const notes = parts.join('\n\n');
+  return {
+    notes: clamp(notes, MAX_NOTES_LEN),
+    truncatedFieldCount: notes.length > MAX_NOTES_LEN ? 1 : 0,
+  };
 };
 
 /**
@@ -207,7 +242,10 @@ const buildNotes = (
  *   level is re-parented to its root ancestor in DFS (reading) order,
  * - items whose parent is missing (completed/deleted) are treated as roots.
  */
-export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
+export const parseSyncResponse = (
+  raw: RawSyncResponse,
+  strings: ParseStrings = DEFAULT_PARSE_STRINGS,
+): TodoistImportModel => {
   const projects: TodoistProject[] = [];
   const keptProjectIds = new Set<string>();
 
@@ -216,13 +254,15 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
     if (!extId || isTruthyFlag(p.is_archived) || isTruthyFlag(p.is_deleted)) {
       continue;
     }
+    const title = asStr(p.name).trim();
     keptProjectIds.add(extId);
     projects.push({
       extId,
-      title: clamp(asStr(p.name).trim(), MAX_TITLE_LEN) || 'Untitled project',
+      title: clamp(title, MAX_TITLE_LEN) || strings.untitledProject,
       parentExtId: asId(p.parent_id),
       isInbox: !!p.inbox_project,
       childOrder: p.child_order ?? 0,
+      truncatedFieldCount: title.length > MAX_TITLE_LEN ? 1 : 0,
     });
   }
   // parent-first DFS: `child_order` is per-parent in Todoist, so a flat sort
@@ -369,15 +409,24 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
       (duration.amount as number) <= 525_600; // 1 year in minutes
     const isDayDurationSkipped = !!duration && duration.unit === 'day';
 
+    const title = asStr(item.content).trim();
+    const labels = (item.labels || []).filter(
+      (label): label is string => typeof label === 'string' && label.trim() !== '',
+    );
+    const builtNotes = buildNotes(
+      item,
+      commentsByItemId.get(extId) || [],
+      deadlineNoted,
+      strings,
+    );
+
     return {
       extId,
       projectExtId: asId(item.project_id) as string,
       parentExtId: rootExtId,
-      title: clamp(asStr(item.content).trim(), MAX_TITLE_LEN) || 'Untitled task',
-      notes: buildNotes(item, commentsByItemId.get(extId) || [], deadlineNoted),
-      labels: (item.labels || [])
-        .filter((l) => typeof l === 'string' && l.trim() !== '')
-        .map((l) => clamp(l, MAX_LABEL_LEN)),
+      title: clamp(title, MAX_TITLE_LEN) || strings.untitledTask,
+      notes: builtNotes.notes,
+      labels: labels.map((label) => clamp(label, MAX_LABEL_LEN)),
       apiPriority: item.priority ?? 1,
       dueDay,
       dueWithTime,
@@ -386,9 +435,13 @@ export const parseSyncResponse = (raw: RawSyncResponse): TodoistImportModel => {
       wasDemoted: depth >= 2,
       isDayDurationSkipped,
       hasAssignee: !!asId(item.responsible_uid),
-      attachmentCount: (commentsByItemId.get(extId) || []).filter(
-        (c) => !!c.file_attachment?.file_url,
+      attachmentCount: (commentsByItemId.get(extId) || []).filter((c) =>
+        isSupportedAttachmentUrl(c.file_attachment?.file_url),
       ).length,
+      truncatedFieldCount:
+        (title.length > MAX_TITLE_LEN ? 1 : 0) +
+        labels.filter((label) => label.length > MAX_LABEL_LEN).length +
+        builtNotes.truncatedFieldCount,
     };
   };
 

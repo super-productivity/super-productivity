@@ -1,5 +1,5 @@
 import { PluginAPI as PluginApiType, Project } from '@super-productivity/plugin-api';
-import { parseSyncResponse } from '../parse/from-api';
+import { parseSyncResponse, ParseStrings } from '../parse/from-api';
 import { loadTodoistData } from '../parse/load-todoist-data';
 import { TodoistImportModel } from '../parse/normalized-model';
 import {
@@ -10,6 +10,8 @@ import {
   PriorityMapping,
 } from '../map/plan-import';
 import { runImport, ImportResult } from '../map/run-import';
+import { buildLossyNotes, LossNote } from './build-lossy-notes';
+import { loadTranslations, t } from './i18n';
 
 declare global {
   interface Window {
@@ -43,46 +45,59 @@ const render = (...children: HTMLElement[]): void => {
   root.replaceChildren(...children);
 };
 
+const parseStrings = (): ParseStrings => ({
+  untitledProject: t('PARSE.UNTITLED_PROJECT'),
+  untitledTask: t('PARSE.UNTITLED_TASK'),
+  repeats: (rule) => t('PARSE.REPEATS', { rule }),
+  deadline: (date) => t('PARSE.DEADLINE', { date }),
+  comments: t('PARSE.COMMENTS'),
+  file: t('PARSE.FILE'),
+});
+
 // ---------------------------------------------------------------------------
 // Step 1 — token input
 // ---------------------------------------------------------------------------
 
 const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
+  const tokenInputId = 'todoist-api-token';
   const tokenInput = el('input', {
+    id: tokenInputId,
     type: 'password',
-    placeholder: 'Todoist API token',
+    placeholder: t('TOKEN.PLACEHOLDER'),
     autocomplete: 'off',
     value: tokenValue || '',
   });
-  const fetchBtn = el('button', { text: 'Load preview' });
-  const errorLine = errorMsg ? [el('p', { className: 'error', text: errorMsg })] : [];
+  const fetchBtn = el('button', { text: t('BUTTON.LOAD_PREVIEW') });
+  const errorLine = errorMsg
+    ? [el('p', { className: 'error', role: 'alert', text: errorMsg })]
+    : [];
 
   const submit = async (): Promise<void> => {
     const token = tokenInput.value.trim();
     if (!token) {
-      renderTokenStep('Please paste your Todoist API token first.');
+      renderTokenStep(t('TOKEN.REQUIRED'));
       return;
     }
     render(
-      el('h2', { text: 'Import from Todoist' }),
-      el('p', { text: 'Loading your Todoist data…' }),
+      el('h1', { text: t('TITLE.IMPORT') }),
+      el('p', {
+        text: t('TOKEN.LOADING'),
+        role: 'status',
+        ariaLive: 'polite',
+      }),
     );
     try {
       const raw = await loadTodoistData(api(), token);
-      const model = parseSyncResponse(raw || {});
+      const model = parseSyncResponse(raw || {}, parseStrings());
       if (!model.projects.length) {
-        renderTokenStep('No active projects found for this Todoist account.', token);
+        renderTokenStep(t('TOKEN.NO_PROJECTS'), token);
         return;
       }
       const existingProjects = await api().getAllProjects();
       renderPreviewStep(model, existingProjects);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      renderTokenStep(
-        `Could not load data from Todoist: ${msg} — check the token and your ` +
-          'connection. If this keeps failing in the browser, try the desktop app.',
-        tokenInput.value,
-      );
+      renderTokenStep(t('ERROR.LOAD_FAILED', { error: msg }), tokenInput.value);
     }
   };
   fetchBtn.addEventListener('click', () => void submit());
@@ -93,21 +108,12 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
   });
 
   render(
-    el('h2', { text: 'Import from Todoist' }),
-    el('p', {
-      text:
-        'Brings your active Todoist projects, tasks, sub-tasks, labels and due ' +
-        'dates into Super Productivity. The import only adds data — nothing of ' +
-        'your existing Super Productivity data is changed or removed.',
-    }),
+    el('h1', { text: t('TITLE.IMPORT') }),
+    el('p', { text: t('TOKEN.INTRO') }),
     ...errorLine,
+    el('label', { htmlFor: tokenInputId, text: t('TOKEN.LABEL') }),
     tokenInput,
-    el('p', {
-      className: 'muted',
-      text:
-        'Find the token in Todoist under Settings → Integrations → Developer. ' +
-        'It is sent only to api.todoist.com and never stored.',
-    }),
+    el('p', { className: 'muted', text: t('TOKEN.HELP') }),
     el('div', { className: 'actions' }, [fetchBtn]),
   );
 };
@@ -115,53 +121,6 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
 // ---------------------------------------------------------------------------
 // Step 2 — preview with per-project selection
 // ---------------------------------------------------------------------------
-
-const buildLossyNotes = (
-  model: TodoistImportModel,
-  selected: ReadonlySet<string>,
-): string[] => {
-  const tasks = model.tasks.filter((t) => selected.has(t.projectExtId));
-  const notes: string[] = [];
-  const sectionCount = model.sections.filter((s) => selected.has(s.projectExtId)).length;
-  const demoted = tasks.filter((t) => t.wasDemoted).length;
-  const dayDurations = tasks.filter((t) => t.isDayDurationSkipped).length;
-  const subtaskLabels = tasks.filter((t) => t.parentExtId && t.labels.length).length;
-  const assignees = tasks.filter((t) => t.hasAssignee).length;
-  const recurring = tasks.filter((t) => t.isRecurring).length;
-  const attachments = tasks.reduce((sum, t) => sum + t.attachmentCount, 0);
-
-  if (sectionCount) {
-    notes.push(
-      `${sectionCount} sections are dropped (tasks keep their order in the project).`,
-    );
-  }
-  if (demoted) {
-    notes.push(
-      `${demoted} deeply nested sub-tasks become direct sub-tasks (2 levels max).`,
-    );
-  }
-  if (recurring) {
-    notes.push(
-      `${recurring} recurring tasks keep their next date; the recurrence rule is noted in the task notes.`,
-    );
-  }
-  if (dayDurations) {
-    notes.push(`${dayDurations} full-day durations are not imported.`);
-  }
-  if (subtaskLabels) {
-    notes.push(`${subtaskLabels} sub-tasks lose their labels (sub-tasks have no tags).`);
-  }
-  if (assignees) {
-    notes.push(
-      `${assignees} tasks are assigned to collaborators; assignees are dropped.`,
-    );
-  }
-  if (attachments) {
-    notes.push(`${attachments} comment attachments keep their link but no file.`);
-  }
-  notes.push('Completed tasks and reminders are not imported.');
-  return notes;
-};
 
 const renderPreviewStep = (
   model: TodoistImportModel,
@@ -200,7 +159,9 @@ const renderPreviewStep = (
 
   const refreshLossyList = (): void => {
     lossyList.replaceChildren(
-      ...buildLossyNotes(model, selectedIds()).map((text) => el('li', { text })),
+      ...buildLossyNotes(model, selectedIds(), selectedPriorityMapping()).map((note) =>
+        el('li', { text: t(note.key, note.params) }),
+      ),
     );
   };
 
@@ -213,52 +174,57 @@ const renderPreviewStep = (
     const checkbox = el('input', { type: 'checkbox', checked: !collides });
     checkbox.addEventListener('change', refreshLossyList);
     checkboxByExtId.set(project.extId, checkbox);
-    const countText = ` — ${rootCount} tasks${subCount ? ` (${subCount} sub-tasks)` : ''}`;
     return el('label', {}, [
       checkbox,
-      ` ${title}${countText}`,
+      ` ${t('PREVIEW.PROJECT_COUNTS', {
+        title,
+        taskCount: rootCount,
+        subTaskCount: subCount,
+      })}`,
       ...(collides
         ? [
             el('span', {
               className: 'warn',
-              text: '  already exists — possibly imported before',
+              text: ` — ${t('PREVIEW.ALREADY_EXISTS')}`,
             }),
           ]
         : []),
     ]);
   });
 
-  const importBtn = el('button', { text: 'Import' });
-  const backBtn = el('button', { text: 'Back' });
+  for (const radio of [priorityNoneRadio, priorityTagsRadio, priorityEisenhowerRadio]) {
+    radio.addEventListener('change', refreshLossyList);
+  }
+
+  const importBtn = el('button', { text: t('BUTTON.IMPORT') });
+  const backBtn = el('button', { text: t('BUTTON.BACK') });
   backBtn.addEventListener('click', () => renderTokenStep());
   importBtn.addEventListener('click', () => {
     const selected = selectedIds();
     if (!selected.size) {
-      api().showSnack({ msg: 'Select at least one project to import.', type: 'WARNING' });
+      api().showSnack({ msg: t('PREVIEW.SELECT_PROJECT'), type: 'WARNING' });
       return;
     }
+    const priorityMapping = selectedPriorityMapping();
     const plan = planImport(model, {
-      priorityMapping: selectedPriorityMapping(),
+      priorityMapping,
       selectedProjectExtIds: selected,
     });
-    void executeImport(plan, buildLossyNotes(model, selected));
+    void executeImport(plan, buildLossyNotes(model, selected, priorityMapping));
   });
 
   refreshLossyList();
   render(
-    el('h2', { text: 'Preview' }),
-    el('p', { text: 'Choose the projects to import:' }),
+    el('h1', { text: t('TITLE.PREVIEW') }),
+    el('p', { text: t('PREVIEW.CHOOSE_PROJECTS') }),
     el('div', {}, projectRows),
-    el('div', {}, [
-      el('p', { text: 'Map Todoist priorities to:' }),
-      el('label', {}, [priorityNoneRadio, ' Nothing']),
-      el('label', {}, [priorityTagsRadio, ' p1–p3 tags (p4 stays untagged)']),
-      el('label', {}, [
-        priorityEisenhowerRadio,
-        ' Eisenhower matrix — urgent / important tags',
-      ]),
+    el('fieldset', {}, [
+      el('legend', { text: t('PREVIEW.PRIORITY_LEGEND') }),
+      el('label', {}, [priorityNoneRadio, ` ${t('PREVIEW.PRIORITY_NONE')}`]),
+      el('label', {}, [priorityTagsRadio, ` ${t('PREVIEW.PRIORITY_TAGS')}`]),
+      el('label', {}, [priorityEisenhowerRadio, ` ${t('PREVIEW.PRIORITY_EISENHOWER')}`]),
     ]),
-    el('h3', { text: 'What will not survive the move' }),
+    el('h2', { text: t('PREVIEW.LOSS_HEADING') }),
     lossyList,
     el('div', { className: 'actions' }, [importBtn, backBtn]),
   );
@@ -268,46 +234,62 @@ const renderPreviewStep = (
 // Step 3 + 4 — import progress and summary
 // ---------------------------------------------------------------------------
 
-const executeImport = async (plan: ImportPlan, lossyNotes: string[]): Promise<void> => {
-  const progressLine = el('p', { text: 'Starting…' });
-  render(el('h2', { text: 'Importing…' }), progressLine);
+const executeImport = async (plan: ImportPlan, lossyNotes: LossNote[]): Promise<void> => {
+  const progressLine = el('p', {
+    text: t('IMPORT.STARTING'),
+    role: 'status',
+    ariaLive: 'polite',
+  });
+  render(el('h1', { text: t('TITLE.IMPORTING') }), progressLine);
 
   const result = await runImport(api(), plan, (progress) => {
     const detail =
       progress.phase === 'details' && progress.detailTotal
-        ? ` — applying dates & tags ${Math.min((progress.detailIndex ?? 0) + 1, progress.detailTotal)}/${progress.detailTotal}`
-        : ` (${progress.phase})`;
-    progressLine.textContent = `Project ${progress.projectIndex + 1} of ${progress.totalProjects}: ${progress.projectTitle}${detail}`;
+        ? t('IMPORT.PHASE_DETAILS', {
+            current: Math.min((progress.detailIndex ?? 0) + 1, progress.detailTotal),
+            total: progress.detailTotal,
+          })
+        : t(progress.phase === 'project' ? 'IMPORT.PHASE_PROJECT' : 'IMPORT.PHASE_TASKS');
+    progressLine.textContent = t('IMPORT.PROGRESS', {
+      current: progress.projectIndex + 1,
+      total: progress.totalProjects,
+      title: progress.projectTitle,
+      detail,
+    });
   });
   renderSummaryStep(result, lossyNotes);
 };
 
 const projectSummaryLine = (p: ImportResult['imported'][number]): HTMLElement => {
-  const subText = p.plannedSubTaskCount
-    ? `, ${p.landedSubTaskCount} of ${p.plannedSubTaskCount} sub-tasks`
-    : '';
   const isShortfall =
     p.landedTaskCount < p.plannedTaskCount ||
     p.landedSubTaskCount < p.plannedSubTaskCount;
   return el('li', {
     className: isShortfall ? 'warn' : '',
     text:
-      `${p.title}: ${p.landedTaskCount} of ${p.plannedTaskCount} tasks${subText}` +
-      (isShortfall ? ' — some items did not land, please review' : ''),
+      t('SUMMARY.PROJECT_RESULT', {
+        title: p.title,
+        landedTasks: p.landedTaskCount,
+        plannedTasks: p.plannedTaskCount,
+        landedSubTasks: p.landedSubTaskCount,
+        plannedSubTasks: p.plannedSubTaskCount,
+      }) + (isShortfall ? ` — ${t('SUMMARY.SHORTFALL')}` : ''),
   });
 };
 
-const renderSummaryStep = (result: ImportResult, lossyNotes: string[]): void => {
+const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void => {
   const items = result.imported.map(projectSummaryLine);
   const failure = result.errorMessage
     ? [
         el('p', {
           className: 'error',
+          role: 'alert',
           text: result.failedProjectTitle
-            ? `Import stopped at “${result.failedProjectTitle}”: ${result.errorMessage}. ` +
-              `That project was created only partially — delete “${result.failedProjectTitle}” ` +
-              'before re-running, then select it and the remaining projects again.'
-            : `Import failed: ${result.errorMessage}`,
+            ? t('ERROR.IMPORT_STOPPED', {
+                project: result.failedProjectTitle,
+                error: result.errorMessage,
+              })
+            : t('ERROR.IMPORT_FAILED', { error: result.errorMessage }),
         }),
       ]
     : [];
@@ -315,29 +297,38 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: string[]): void => 
     ? [
         el('p', {
           className: 'warn',
-          text: 'Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.',
+          role: 'status',
+          text: t('SUMMARY.UNVERIFIED'),
         }),
       ]
     : [];
   const tagLine = result.createdTagTitles.length
-    ? [el('p', { text: `Created tags: ${result.createdTagTitles.join(', ')}` })]
+    ? [
+        el('p', {
+          text: t('SUMMARY.CREATED_TAGS', {
+            tags: result.createdTagTitles.join(', '),
+          }),
+        }),
+      ]
     : [];
   const lossy = lossyNotes.length
     ? [
-        el('h3', { text: 'Not carried over' }),
+        el('h2', { text: t('SUMMARY.NOT_CARRIED_OVER') }),
         el(
           'ul',
           {},
-          lossyNotes.map((text) => el('li', { text })),
+          lossyNotes.map((note) => el('li', { text: t(note.key, note.params) })),
         ),
       ]
     : [];
 
   if (!result.errorMessage) {
-    api().showSnack({ msg: 'Todoist import finished', type: 'SUCCESS' });
+    api().showSnack({ msg: t('SUMMARY.SNACK_FINISHED'), type: 'SUCCESS' });
   }
   render(
-    el('h2', { text: result.errorMessage ? 'Import incomplete' : 'Import finished' }),
+    el('h1', {
+      text: t(result.errorMessage ? 'TITLE.INCOMPLETE' : 'TITLE.FINISHED'),
+    }),
     el('ul', {}, items),
     ...unverified,
     ...tagLine,
@@ -345,15 +336,20 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: string[]): void => 
     ...lossy,
     el('p', {
       className: 'muted',
-      text: 'The import is additive — to undo it, delete the created projects.',
+      text: t('SUMMARY.UNDO'),
     }),
   );
 };
 
 // The host injects the PluginAPI bridge script at the end of <body>; wait for
 // DOM readiness so it is guaranteed to be defined before first use.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => renderTokenStep());
-} else {
+const start = async (): Promise<void> => {
+  await loadTranslations(api());
   renderTokenStep();
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => void start());
+} else {
+  void start();
 }

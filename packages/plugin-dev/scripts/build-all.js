@@ -416,7 +416,7 @@ const plugins = [
       }
       assertFilesExist(
         targetDir,
-        ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'],
+        ['manifest.json', 'plugin.js', 'index.html', 'icon.svg', 'i18n/en.json'],
         'todoist-import',
       );
       return 'Built and copied to assets';
