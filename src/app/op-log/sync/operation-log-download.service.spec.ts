@@ -15,6 +15,7 @@ import { T } from '../../t.const';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
+import { OperationIntegrityError } from '../core/errors/sync-errors';
 
 describe('OperationLogDownloadService', () => {
   let service: OperationLogDownloadService;
@@ -193,6 +194,84 @@ describe('OperationLogDownloadService', () => {
           expect(OpLog.normal).not.toHaveBeenCalledWith(
             jasmine.stringMatching(NO_KEY_MSG),
           );
+        });
+      });
+
+      // GHSA-8pxh-mgc7-gp3g: reject an inbound plaintext op when SuperSync
+      // encryption is enabled (isPayloadEncrypted is unauthenticated metadata a
+      // malicious server can forge to inject an attacker-authored plaintext op).
+      describe('plaintext-injection guard (GHSA-8pxh-mgc7-gp3g)', () => {
+        const plaintextOpResponse = (): ReturnType<
+          (typeof mockApiProvider)['downloadOps']
+        > =>
+          Promise.resolve({
+            ops: [
+              {
+                serverSeq: 1,
+                receivedAt: Date.now(),
+                op: {
+                  id: 'op-forged',
+                  clientId: 'attacker',
+                  actionType: '[Task] Add' as ActionType,
+                  opType: OpType.Create,
+                  entityType: 'TASK',
+                  payload: { title: 'forged' },
+                  isPayloadEncrypted: false,
+                  vectorClock: {},
+                  timestamp: Date.now(),
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 1,
+          }) as ReturnType<(typeof mockApiProvider)['downloadOps']>;
+
+        beforeEach(() => {
+          (mockApiProvider as { isEncryptionMandatory?: boolean }).isEncryptionMandatory =
+            true;
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve('the-key'));
+        });
+
+        it('rejects a plaintext op when encryption is enabled', async () => {
+          mockApiProvider.isEncryptionEnabled = jasmine
+            .createSpy('isEncryptionEnabled')
+            .and.returnValue(Promise.resolve(true));
+          mockApiProvider.downloadOps.and.returnValue(plaintextOpResponse());
+
+          await expectAsync(
+            service.downloadRemoteOps(mockApiProvider),
+          ).toBeRejectedWithError(OperationIntegrityError);
+        });
+
+        it('fails closed even when the key is dropped (config intent, not key presence)', async () => {
+          // Dropped-credential state: encryption still enabled in config but
+          // getEncryptKey returns undefined. A `!!encryptKey` gate would fail OPEN
+          // here; gating on isEncryptionEnabled keeps it closed.
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve(undefined));
+          mockApiProvider.isEncryptionEnabled = jasmine
+            .createSpy('isEncryptionEnabled')
+            .and.returnValue(Promise.resolve(true));
+          mockApiProvider.downloadOps.and.returnValue(plaintextOpResponse());
+
+          await expectAsync(
+            service.downloadRemoteOps(mockApiProvider),
+          ).toBeRejectedWithError(OperationIntegrityError);
+        });
+
+        it('allows plaintext when encryption is not enabled (legacy never-encrypted account)', async () => {
+          mockApiProvider.isEncryptionEnabled = jasmine
+            .createSpy('isEncryptionEnabled')
+            .and.returnValue(Promise.resolve(false));
+          mockApiProvider.downloadOps.and.returnValue(plaintextOpResponse());
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+          expect(result.success).toBe(true);
+          expect(result.newOps.length).toBe(1);
         });
       });
 
