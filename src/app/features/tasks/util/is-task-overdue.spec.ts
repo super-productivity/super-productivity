@@ -1,4 +1,8 @@
-import { isTaskOverdue } from './is-task-overdue';
+import {
+  getLogicalTodayStartMs,
+  isTaskOverdue,
+  isTaskOverdueByThreshold,
+} from './is-task-overdue';
 import { Task } from '../task.model';
 
 const createTask = (overrides: Partial<Task> = {}): Task =>
@@ -77,6 +81,34 @@ describe('isTaskOverdue', () => {
   describe('no due date', () => {
     it('is not overdue when the task has no due fields', () => {
       expect(isTaskOverdue(createTask(), TODAY_STR, NO_OFFSET)).toBe(false);
+    });
+  });
+
+  describe('shared threshold contract', () => {
+    it('getLogicalTodayStartMs returns local midnight shifted by the offset', () => {
+      const localMidnight = new Date(2026, 2, 15).getTime();
+      expect(getLogicalTodayStartMs(TODAY_STR, NO_OFFSET)).toBe(localMidnight);
+      const offset = 4 * 60 * 60 * 1000;
+      expect(getLogicalTodayStartMs(TODAY_STR, offset)).toBe(localMidnight + offset);
+    });
+
+    it('isTaskOverdue delegates to isTaskOverdueByThreshold with the computed threshold', () => {
+      // Guards against the two overdue definitions drifting: isTaskOverdue must
+      // equal the threshold predicate fed the same logical start-of-today.
+      const offset = 4 * 60 * 60 * 1000;
+      const threshold = getLogicalTodayStartMs(TODAY_STR, offset);
+      const cases: Partial<Task>[] = [
+        { dueDay: '2026-03-14' },
+        { dueDay: '2026-03-15' },
+        { dueWithTime: new Date(2026, 2, 15, 1, 0, 0).getTime() },
+        {},
+      ];
+      cases.forEach((overrides) => {
+        const task = createTask(overrides);
+        expect(isTaskOverdue(task, TODAY_STR, offset)).toBe(
+          isTaskOverdueByThreshold(task, TODAY_STR, threshold),
+        );
+      });
     });
   });
 });
