@@ -53,8 +53,8 @@ export interface DownloadResultBase {
   snapshotVectorClock?: VectorClock;
   /**
    * True when operations were downloaded AND ALL of them have isPayloadEncrypted: false.
-   * This indicates another client disabled encryption. The receiving client should
-   * update its local config to match (isEncryptionEnabled: false, encryptKey: undefined).
+   * This may indicate another client disabled encryption, but the signal is remotely
+   * controllable. Callers may warn; they must never disable local encryption automatically.
    *
    * False/undefined when:
    * - No operations were downloaded (cannot determine encryption state)
@@ -126,8 +126,8 @@ export interface UploadResult {
   hasMorePiggyback?: boolean;
   /**
    * True when piggybacked operations were received AND ALL of them have isPayloadEncrypted: false.
-   * This indicates another client disabled encryption. The receiving client should
-   * update its local config to match (isEncryptionEnabled: false, encryptKey: undefined).
+   * This may indicate another client disabled encryption, but the signal is remotely
+   * controllable. Callers may warn; they must never disable local encryption automatically.
    *
    * False/undefined when:
    * - No piggybacked operations were received (cannot determine encryption state)

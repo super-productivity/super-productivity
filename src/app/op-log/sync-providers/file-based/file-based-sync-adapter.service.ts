@@ -36,6 +36,7 @@ import {
   InvalidDataSPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
+  PlaintextWhenEncryptionExpectedError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
   SyncDataCorruptedError,
@@ -1411,6 +1412,12 @@ export class FileBasedSyncAdapterService {
     try {
       current = await this._downloadStateFile(provider, cfg, encryptKey);
     } catch (e) {
+      // A plaintext primary while encryption is expected is a downgrade signal,
+      // not a missing/corrupt optional backup source. Let it abort compaction so
+      // the encrypted client cannot silently overwrite the remote state file.
+      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+        throw e;
+      }
       // Non-fatal — e.g. first compaction has no existing state file to back up.
       OpLog.normal('FileBasedSyncAdapter: state-file backup skipped (non-fatal)', e);
       return;
@@ -1471,6 +1478,12 @@ export class FileBasedSyncAdapterService {
         'FileBasedSyncAdapter: sync-state.json does not match snapshotRef; trying .bak',
       );
     } catch (e) {
+      // Do not treat a plaintext primary as ordinary corruption. Falling back to
+      // an encrypted .bak would hide the downgrade and hydrate data after the
+      // fail-closed decoder explicitly rejected the remote state file.
+      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+        throw e;
+      }
       OpLog.warn('FileBasedSyncAdapter: sync-state.json unreadable; trying .bak', e);
     }
     const bak = await this._recoverStateFromBackup(provider, cfg, encryptKey);
