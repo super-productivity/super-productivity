@@ -58,6 +58,19 @@ const config: CapacitorConfig = {
     ],
   },
   ios: {
+    // Keep the Android-only SQLite backend out of the iOS native binary. This
+    // allowlist mirrors the plugins currently generated into ios/App/Podfile.
+    includePlugins: [
+      '@capacitor/browser',
+      '@capacitor/keyboard',
+      '@capacitor/status-bar',
+      'capacitor-plugin-safe-area',
+      '@capacitor/app',
+      '@capacitor/filesystem',
+      '@capacitor/local-notifications',
+      '@capacitor/share',
+      '@capawesome/capacitor-background-task',
+    ],
     // Content inset for safe areas (notch, home indicator)
     contentInset: 'never',
     // Background color for safe areas (home indicator, notch)

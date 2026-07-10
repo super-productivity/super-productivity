@@ -10,6 +10,7 @@ import {
 } from './native-sqlite-backend';
 import { OpLogDbAdapter } from './op-log-db-adapter';
 import { Log } from '../../core/log';
+import { Capacitor } from '@capacitor/core';
 
 const ALL_STORES = Object.values(STORE_NAMES);
 
@@ -120,6 +121,15 @@ describe('native-sqlite-backend', () => {
       // Karma runs in a browser → the real default constant is false.
       expect(shouldUseNativeSqliteOpLogBackend()).toBe(false);
     });
+
+    it('still selects the native resolver when an Android build loses plugin registration', () => {
+      spyOn(Capacitor, 'getPlatform').and.returnValue('android');
+      spyOn(Capacitor, 'isPluginAvailable').and.returnValue(false);
+
+      // The resolver must fail loudly if SQLite was already authoritative; a
+      // synchronous fallback here would serve the retained, stale IndexedDB copy.
+      expect(shouldUseNativeSqliteOpLogBackend()).toBe(true);
+    });
   });
 
   describe('bootstrapNativeOpLogBackend (C1)', () => {
@@ -222,15 +232,35 @@ describe('native-sqlite-backend', () => {
       expect(ops.map((o) => o.op.id)).toEqual(['already-here']); // no merge
     });
 
-    it('skips the copy when databases() reports no legacy SUP_OPS', async () => {
+    it('does not re-copy when an unmarked destination contains only snapshot data', async () => {
+      await src.put(STORE_NAMES.STATE_CACHE, {
+        id: SINGLETON_KEY,
+        state: { source: true },
+      });
+      const db = await createSqlJsDb();
+      const dest = new SqliteOpLogAdapter(db);
+      await dest.init();
+      await dest.put(STORE_NAMES.STATE_CACHE, {
+        id: SINGLETON_KEY,
+        state: { existing: true },
+      });
+
+      await bootstrapNativeOpLogBackend(db);
+
+      expect(await dest.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY)).toEqual(
+        jasmine.objectContaining({ state: { existing: true } }),
+      );
+    });
+
+    it('does not trust databases() absence enough to skip legacy data', async () => {
       await src.add(STORE_NAMES.OPS, makeOpEntry('a'));
       spyOn(indexedDB, 'databases').and.resolveTo([{ name: 'something-else' }]);
 
       const db = await createSqlJsDb();
       await bootstrapNativeOpLogBackend(db);
 
-      // Marked done without touching the (real) IDB source.
-      expect(await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)).toBe(0);
+      // A false-negative presence hint must not make SQLite authoritative-empty.
+      expect(await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)).toBe(1);
     });
 
     it('still migrates when databases() is unavailable/throws (older WebView)', async () => {
@@ -332,6 +362,21 @@ describe('native-sqlite-backend', () => {
 
       await expectAsync(factory().init()).toBeResolved();
       expect(idb.init).toHaveBeenCalled();
+    });
+
+    it('fails loudly when the connection is unopenable and no existence probe is available', async () => {
+      const idb = fakeIdbAdapter();
+      const db: SqliteDb = {
+        run: () => Promise.reject(new DOMException('open failed', 'TimeoutError')),
+        query: () => Promise.reject(new DOMException('open failed', 'TimeoutError')),
+      };
+      const factory = createNativeSqliteOpLogAdapterFactory({
+        dbFactory: () => db,
+        idbFactory: () => idb,
+      });
+
+      await expectAsync(factory().init()).toBeRejected();
+      expect(idb.init).not.toHaveBeenCalled();
     });
 
     it('fails loudly (never serves stale IDB) when the marker is already set', async () => {

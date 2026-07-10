@@ -107,12 +107,12 @@ export interface SqliteDb {
    * implements it by looping `run`, which still exercises the adapter's batch
    * path); when absent {@link SqliteOpLogAdapter} falls back to per-row `run`.
    */
-   runSet?(set: ReadonlyArray<{ statement: string; values: unknown[] }>): Promise<void>;
-   /**
-   * Optional connection-level serializer for native bootstrap statements that
-   * run directly on the connection. Adapter operations use their own queue keyed
-   * by this `SqliteDb` instance; callers bypassing the adapter must serialize
-   * their work separately.
+  runSet?(set: ReadonlyArray<{ statement: string; values: unknown[] }>): Promise<void>;
+  /**
+   * Optional connection-level serializer. When present, both adapter operations
+   * and raw native bootstrap statements use it, so they cannot interleave on the
+   * connection's single transaction context. In-process backends may omit it;
+   * the adapter then uses its own queue keyed by this `SqliteDb` instance.
    */
   runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
   /**
@@ -131,9 +131,9 @@ export interface SqliteDb {
    * whether it is safe to fall back to the legacy IndexedDB copy: only when NO
    * SQLite file exists (so a migration can never have committed). A
    * present-but-unopenable file might hold post-migration ops, so falling back
-   * would silently lose them. Returns `false` when the plugin is unavailable
-   * (SQLite was never authoritative here). In-process backends (the sql.js test
-   * stand-in) may omit it.
+   * would silently lose them. Plugin availability alone cannot prove absence
+   * after an earlier app version made SQLite authoritative, so an unavailable
+   * probe must bias to `true`. In-process backends may omit it.
    */
   databaseExists?(): Promise<boolean>;
 }
@@ -727,6 +727,9 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
    * serialize.
    */
   private _serialize<T>(fn: () => Promise<T>): Promise<T> {
+    if (this._db.runExclusive) {
+      return this._db.runExclusive(fn);
+    }
     const q = connectionQueue(this._db);
     // `.then(fn, fn)` runs `fn` whether the prior slot resolved or rejected
     // (defensive — the tail below never rejects).

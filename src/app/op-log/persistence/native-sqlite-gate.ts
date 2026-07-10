@@ -11,30 +11,25 @@ import { Capacitor } from '@capacitor/core';
  * true, so web/PWA/Electron never bundle it.
  */
 
-/** Plugin name `@capacitor-community/sqlite` registers under the Capacitor bridge. */
-const SQLITE_PLUGIN_NAME = 'CapacitorSQLite';
-
 /**
- * True only inside a REAL Capacitor Android native container that actually has
- * the SQLite plugin registered.
+ * True only inside a real Capacitor Android native container.
  *
  * Deliberately NOT `IS_ANDROID_NATIVE`: that folds in `IS_ANDROID_WEB_VIEW`
  * (`!!window.SUPAndroid`), which the legacy online-mode `FullscreenActivity` —
  * a plain WebView with no Capacitor bridge, loading the app from the remote URL —
  * also injects. There `getPlatform()` is `'web'`, so this stays `false` and the
  * op-log keeps IndexedDB. `getPlatform()` is `'android'` only in the Capacitor
- * `CapacitorMainActivity`. `isPluginAvailable` is the positive proof the native
- * plugin is wired in, so a build that ever forgets `includePlugins` falls back to
- * IndexedDB instead of bricking boot (the op-log is read during hydration).
+ * `CapacitorMainActivity`. Plugin availability is deliberately NOT part of this
+ * synchronous gate: after SQLite becomes authoritative, selecting the retained
+ * IndexedDB copy because a later build lost plugin registration would silently
+ * discard every post-migration op. The native resolver must run and fail loudly
+ * in that broken-build case.
  */
-const isNativeSqliteAvailable = (): boolean =>
-  Capacitor.getPlatform() === 'android' &&
-  Capacitor.isPluginAvailable(SQLITE_PLUGIN_NAME);
+const isNativeSqliteAvailable = (): boolean => Capacitor.getPlatform() === 'android';
 
 /**
  * Whether to bind the op-log persistence backend to SQLite. Requires a real
- * Capacitor Android native container with the plugin registered
- * ({@link isNativeSqliteAvailable}):
+ * Capacitor Android native container ({@link isNativeSqliteAvailable}):
  * - iOS keeps IndexedDB — its WKWebView storage has different eviction semantics
  *   and the SQLite path is not validated there yet.
  * - The legacy online-mode WebView (`FullscreenActivity`) and web/PWA/Electron

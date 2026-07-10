@@ -42,18 +42,27 @@ interface StoredRow {
   readonly key: number | string;
 }
 
-const maxSeq = (rows: ReadonlyArray<{ seq?: number }>): number =>
-  rows.reduce((m, r) => (typeof r.seq === 'number' && r.seq > m ? r.seq : m), 0);
+/** Whether any user-data store already contains a row. */
+export const hasAnyOpLogData = async (adapter: OpLogDbAdapter): Promise<boolean> => {
+  for (const store of ALL_STORES) {
+    if ((await adapter.count(store)) > 0) {
+      return true;
+    }
+  }
+  return false;
+};
 
-/** Highest `seq` across a store's rows, via a streaming scan. */
+/** Highest `seq` via the same one-row descending read as getLastSeq(). */
 const maxSeqInStore = async (tx: OpLogTx, store: string): Promise<number> => {
   let m = 0;
-  await tx.iterate<{ seq?: number }>(store, {}, (value) => {
-    if (typeof value?.seq === 'number' && value.seq > m) {
-      m = value.seq;
-    }
-    return 'continue';
-  });
+  await tx.iterate<{ seq?: number }>(
+    store,
+    { direction: 'prev', mode: 'readonly', limit: 1 },
+    (value, key) => {
+      m = typeof key === 'number' ? key : (value.seq ?? 0);
+      return 'stop';
+    },
+  );
   return m;
 };
 
@@ -69,11 +78,11 @@ export const migrateOpLogBackend = async (
   await source.init();
   await dest.init();
 
-  // Refuse a non-empty destination — C1 runs only when SQLite is empty.
-  // Merging into existing data would risk seq/clock corruption.
-  if ((await dest.count(STORE_NAMES.OPS)) > 0) {
+  // Refuse data in ANY destination store — C1 runs only when SQLite is empty.
+  // Checking only ops can overwrite a newer snapshot/archive after compaction.
+  if (await hasAnyOpLogData(dest)) {
     throw new OpLogBackendMigrationError(
-      'destination already has ops; refusing to merge',
+      'destination already has data; refusing to merge',
     );
   }
 
@@ -93,10 +102,20 @@ export const migrateOpLogBackend = async (
     // `rows` array falls out of scope before the next store is read.
     for (const store of ALL_STORES) {
       const rows: StoredRow[] = [];
-      await source.iterate<unknown>(store, { mode: 'readonly' }, (value, key) => {
-        rows.push({ value, key: key as number | string });
-        return 'continue';
-      });
+      await source.iterate<{ seq?: number }>(
+        store,
+        { mode: 'readonly' },
+        (value, key) => {
+          rows.push({ value, key: key as number | string });
+          if (store === STORE_NAMES.OPS) {
+            const seq = typeof key === 'number' ? key : (value.seq ?? 0);
+            if (seq > srcLastSeq) {
+              srcLastSeq = seq;
+            }
+          }
+          return 'continue';
+        },
+      );
       // `putBatch` preserves the ops `seq` (the value carries it via ON CONFLICT)
       // and writes singletons at their out-of-line key — uniform across all store
       // kinds, no per-store special-casing. On SQLite the whole store's rows cross
@@ -105,9 +124,6 @@ export const migrateOpLogBackend = async (
       // it runs inside this single `dest.transaction`.
       await tx.putBatch(store, rows);
       copiedCounts[store] = rows.length;
-      if (store === STORE_NAMES.OPS) {
-        srcLastSeq = maxSeq(rows.map((r) => r.value as { seq?: number }));
-      }
     }
 
     // Verify-before-commit: per-store row counts, the ops high-water seq, and the

@@ -9,12 +9,11 @@
  * never brick startup and never silently serve stale data:
  *
  * - {@link shouldUseNativeSqliteOpLogBackend} gates on a real Capacitor Android
- *   container with the native plugin registered — NOT the legacy online-mode
- *   WebView (which has no SQLite bridge) and not iOS (different WebView storage
- *   semantics; not validated here). web/PWA/Electron never reach this (the
- *   plugin's web build is WASM-on-IndexedDB, which would reintroduce the eviction
- *   risk). No opt-in flag — qualifying Android is on by default, ramped via Play
- *   Console staged rollout.
+ *   container — NOT the legacy online-mode WebView and not iOS. Plugin presence
+ *   is checked by the resolver, not the gate: after migration, silently selecting
+ *   the retained IndexedDB copy when a later build loses plugin registration would
+ *   discard post-migration ops. No opt-in flag — qualifying Android is on by
+ *   default, ramped via Play Console staged rollout.
  * - The factory's `init()` bootstraps SQLite (schema + one-time migration) and,
  *   if that fails in a way we can prove is PRE-migration, transparently falls back
  *   to a self-opening IndexedDB adapter FOR THIS SESSION so the app still boots.
@@ -30,7 +29,7 @@ import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 import { SqliteDb, SqliteOpLogAdapter } from './sqlite-op-log-adapter';
 import { CapacitorSqliteDb } from './capacitor-sqlite-db';
 import { NativeOpLogAdapter } from './native-op-log-adapter';
-import { migrateOpLogBackend } from './op-log-backend-migration';
+import { hasAnyOpLogData, migrateOpLogBackend } from './op-log-backend-migration';
 import { DB_NAME, STORE_NAMES } from './db-keys.const';
 import { Log } from '../../core/log';
 // Re-exported so the spec and the dev-only benchmark keep importing the gate from
@@ -88,27 +87,6 @@ const markMigrationComplete = (db: SqliteDb): Promise<unknown> =>
   );
 
 /**
- * Best-effort check for a legacy `SUP_OPS` IndexedDB so we don't materialise an
- * empty one when there is nothing to migrate. When `indexedDB.databases()` is
- * unavailable (older WebViews) we return `true` and let
- * {@link migrateOpLogBackend} no-op over an empty source.
- */
-const legacyIdbSupOpsMayExist = async (): Promise<boolean> => {
-  try {
-    const idb = indexedDB as IDBFactory & {
-      databases?: () => Promise<{ name?: string }[]>;
-    };
-    if (typeof idb.databases === 'function') {
-      const dbs = await idb.databases();
-      return dbs.some((d) => d.name === DB_NAME);
-    }
-  } catch {
-    // Fall through — treat as "might exist".
-  }
-  return true;
-};
-
-/**
  * Create the SQLite schema and, on first launch only, copy the legacy `SUP_OPS`
  * IndexedDB into it. Idempotent: the meta marker (and a non-empty destination)
  * short-circuit subsequent launches. A failed/aborted migration leaves the
@@ -123,16 +101,12 @@ export const bootstrapNativeOpLogBackend = async (db: SqliteDb): Promise<void> =
   if (await isMigrationComplete(db)) {
     return;
   }
-  // A non-empty destination means a prior copy committed but the process died
+  // Any non-empty user-data store means a prior copy committed but the process died
   // BEFORE `markMigrationComplete` (the copy + verify is one atomic transaction;
   // the marker write is the separate step right after). The data is already
   // here and verified — never merge on top (would risk seq/clock corruption);
   // just finish marking it done.
-  if ((await dest.count(STORE_NAMES.OPS)) > 0) {
-    await markMigrationComplete(db);
-    return;
-  }
-  if (!(await legacyIdbSupOpsMayExist())) {
+  if (await hasAnyOpLogData(dest)) {
     await markMigrationComplete(db);
     return;
   }
@@ -188,10 +162,12 @@ const canFallBackToIdb = async (db: SqliteDb): Promise<boolean> => {
     }
     // Marker unset but the dest already holds a (verified) copy → treat as
     // authoritative, not pre-migration. Safe to fall back only when dest is empty.
-    return (await new SqliteOpLogAdapter(db).count(STORE_NAMES.OPS)) === 0;
+    return !(await hasAnyOpLogData(new SqliteOpLogAdapter(db)));
   } catch {
-    // Connection is unopenable — the on-disk file is the only signal left.
-    const exists = db.databaseExists ? await db.databaseExists() : false;
+    // Connection is unopenable — the on-disk file is the only signal left. If
+    // this backend cannot provide that probe, absence is unproven: fail closed
+    // rather than reinterpret an unknown state as a safe legacy-IDB fallback.
+    const exists = db.databaseExists ? await db.databaseExists() : true;
     return exists === false;
   }
 };

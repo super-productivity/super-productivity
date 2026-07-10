@@ -7,6 +7,7 @@ import {
 import { OpLogDbAdapter } from './op-log-db-adapter';
 import { STORE_NAMES, OPS_INDEXES } from './db-keys.const';
 import { createSqlJsDb } from './sql-js-db.test-helper';
+import { createConnectionSerializer } from './connection-serializer';
 
 /**
  * Two engines validate this adapter:
@@ -955,6 +956,33 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
 
   it('does not implement adoptConnection (SQLite self-manages its handle)', () => {
     expect((adapter as OpLogDbAdapter).adoptConnection).toBeUndefined();
+  });
+});
+
+describe('SqliteOpLogAdapter — external connection serialization (sql.js)', () => {
+  it('does not interleave adapter transactions with serialized raw statements', async () => {
+    const raw = await createSqlJsDb();
+    const db: SqliteDb = {
+      run: (sql, params) => raw.run(sql, params),
+      query: (sql, params) => raw.query(sql, params),
+      runExclusive: createConnectionSerializer(),
+    };
+    const adapter = new SqliteOpLogAdapter(db);
+    await adapter.init();
+
+    await expectAsync(
+      Promise.all([
+        db.runExclusive!(async () => {
+          await db.run('BEGIN IMMEDIATE');
+          await Promise.resolve();
+          await db.run('COMMIT');
+        }),
+        adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
+          tx.add(STORE_NAMES.OPS, makeOpEntry('serialized', 'local')),
+        ),
+      ]),
+    ).toBeResolved();
+    expect(await adapter.count(STORE_NAMES.OPS)).toBe(1);
   });
 });
 /**

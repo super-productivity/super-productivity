@@ -177,12 +177,12 @@ Add `performance.now()` timing around the real reads in `OperationLogHydratorSer
 
 From the 2026-06-23 multi-review, still open for the author:
 
-- **Statement-timeout leak:** `CapacitorSqliteDb.withTimeout` rejects but doesn't cancel the in-flight native call → a late `COMMIT` can break the one-transaction invariant. Fix = `reset()` on `TimeoutError`.
+- ✅ **Statement-timeout leak fixed:** a timeout resets/closes the connection before the serializer advances; if close cannot be confirmed, that wrapper is quarantined for the session.
 - **`INDEX_COLUMN_BY_PATH` drift guard:** a new `OP_LOG_DB_SCHEMA` index not added there is silently dropped (partial/missing index). Add a CI test asserting `planTables()` reproduces every schema index.
 - **Android Auto Backup:** the unencrypted `databases/SUP_OPS` is now a first-class backup/`adb backup` target (`allowBackup=true`, rules exclude only one sharedpref). Decide: exclude it or document.
-- **Pin `@capacitor-community/sqlite`** (drop the `^` caret — un-CI-able native dep on the authoritative store).
+- ✅ **Pinned `@capacitor-community/sqlite`** to the reviewed native version; the authoritative store no longer floats across minor releases.
 - **`hasSyncedOps` residual:** still scans all _synced_ ops (can't `LIMIT 1` due to the MIGRATION/RECOVERY skip). Minor; the correctness bug (NULL-index parity) is fixed.
-- **C2 on-device validation (most important):** install over a legacy-data app that lands in MODE_ONLINE (`FullscreenActivity`, no Capacitor bridge) and confirm it stays on IndexedDB and boots — the gate fix (`getPlatform()==='android' && isPluginAvailable('CapacitorSQLite')`) should keep SQLite off there.
+- **C2 on-device validation (most important):** install over a legacy-data app that lands in MODE_ONLINE (`FullscreenActivity`, no Capacitor bridge) and confirm it stays on IndexedDB and boots — `getPlatform()==='web'` there, so the Capacitor-Android gate stays off.
 
 ---
 

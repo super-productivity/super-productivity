@@ -28,6 +28,14 @@ import { createConnectionSerializer } from './connection-serializer';
 import { Log } from '../../core/log';
 import { environment } from '../../../environments/environment';
 
+type SqlitePluginModule = Pick<
+  typeof import('@capacitor-community/sqlite'),
+  'CapacitorSQLite' | 'SQLiteConnection'
+>;
+
+const loadSqlitePlugin = (): Promise<SqlitePluginModule> =>
+  import('@capacitor-community/sqlite');
+
 /**
  * No-encryption mode string the plugin expects for `createConnection`.
  * Deliberately matches the existing IndexedDB `SUP_OPS` posture (also
@@ -78,10 +86,15 @@ const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
     );
   });
 
+const isTimeoutError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === 'TimeoutError';
+
 export class CapacitorSqliteDb implements SqliteDb {
   private _conn?: SQLiteDBConnection;
   private _openPromise?: Promise<SQLiteDBConnection>;
   private _sqlite?: SQLiteConnection;
+  /** A timed-out native call whose connection could not be confirmed closed. */
+  private _recoveryUncertain = false;
   // Connection-level serializer (see SqliteDb.runExclusive). One SQLite
   // connection has one transaction context, so every adapter op over the shared
   // connection is chained — never interleaved.
@@ -91,6 +104,7 @@ export class CapacitorSqliteDb implements SqliteDb {
     private readonly _dbName: string,
     private readonly _openTimeoutMs: number = DEFAULT_OPEN_TIMEOUT_MS,
     private readonly _statementTimeoutMs: number = DEFAULT_STATEMENT_TIMEOUT_MS,
+    private readonly _loadPlugin: () => Promise<SqlitePluginModule> = loadSqlitePlugin,
   ) {}
 
   /**
@@ -98,19 +112,22 @@ export class CapacitorSqliteDb implements SqliteDb {
    * usable connection (so it is callable even after `open()` wedged). The native
    * backend uses it to gate the IndexedDB fallback: a missing file means no
    * migration can have committed, so the legacy IDB copy is still complete and
-   * safe to use. A plugin-load failure resolves to `false` for the same reason —
-   * SQLite has never been authoritative on a device where the plugin can't load.
+   * safe to use. A plugin-load failure is ambiguous across app upgrades and must
+   * bias to `true`: an earlier version may already have made SQLite authoritative.
    */
   async databaseExists(): Promise<boolean> {
+    if (this._recoveryUncertain) {
+      return true;
+    }
     let sqlite: SQLiteConnection;
     try {
       const { CapacitorSQLite, SQLiteConnection: SQLiteConnectionCtor } =
-        await import('@capacitor-community/sqlite');
+        await this._loadPlugin();
       sqlite = new SQLiteConnectionCtor(CapacitorSQLite);
     } catch {
-      // Plugin unavailable → SQLite has never been authoritative on this device,
-      // so no migration can have committed → report "absent" (fallback is safe).
-      return false;
+      // A later broken build can lose the plugin after migration. Never interpret
+      // module-load failure as proof that the retained IndexedDB copy is current.
+      return true;
     }
     try {
       const res = await withTimeout(
@@ -134,11 +151,14 @@ export class CapacitorSqliteDb implements SqliteDb {
   /**
    * Drop the connection so the next op reopens a clean handle (see
    * {@link SqliteDb.reset}). Best-effort: fully closes + removes the plugin's
-   * connection entry so any lingering open transaction is rolled back; a close
-   * failure is non-fatal because the next `_open()`'s consistency check + the
-   * create/retrieve fallback re-establish the connection anyway.
+   * connection entry so any lingering open transaction is rolled back. If close
+   * cannot be confirmed, this wrapper remains quarantined: reopening while a
+   * timed-out native call may still finish could leak it into a new transaction.
    */
   async reset(): Promise<void> {
+    // Stay quarantined until closeConnection positively confirms the old handle
+    // is gone. A Promise timeout does not cancel the underlying native call.
+    this._recoveryUncertain = true;
     const sqlite = this._sqlite;
     this._conn = undefined;
     this._openPromise = undefined;
@@ -154,8 +174,10 @@ export class CapacitorSqliteDb implements SqliteDb {
         this._openTimeoutMs,
         'SQLite closeConnection',
       );
+      this._recoveryUncertain = false;
     } catch {
-      // Non-fatal — the next _open() reconciles via checkConnectionsConsistency.
+      // Keep this instance quarantined. Reopening while the timed-out call may
+      // still be running can leak it into a new transaction or commit it later.
     }
   }
 
@@ -178,10 +200,19 @@ export class CapacitorSqliteDb implements SqliteDb {
       this._conn = undefined;
       this._openPromise = undefined;
       this._sqlite = undefined;
+      this._recoveryUncertain = false;
     }
   }
 
   private _ensureOpen(): Promise<SQLiteDBConnection> {
+    if (this._recoveryUncertain) {
+      return Promise.reject(
+        new DOMException(
+          'SQLite connection recovery could not be confirmed',
+          'InvalidStateError',
+        ),
+      );
+    }
     if (this._conn) {
       return Promise.resolve(this._conn);
     }
@@ -200,18 +231,24 @@ export class CapacitorSqliteDb implements SqliteDb {
     return this._openPromise;
   }
 
-  private _open(): Promise<SQLiteDBConnection> {
+  private async _open(): Promise<SQLiteDBConnection> {
     // Bound the whole native handshake: any of the bridge calls below can wedge
     // indefinitely on a broken native connection, and the op-log is read during
     // boot hydration, so an un-timed hang bricks startup (see DEFAULT_OPEN_TIMEOUT_MS).
-    return withTimeout(this._openUntimed(), this._openTimeoutMs, 'SQLite open');
+    try {
+      return await withTimeout(this._openUntimed(), this._openTimeoutMs, 'SQLite open');
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        await this.reset();
+      }
+      throw error;
+    }
   }
 
   private async _openUntimed(): Promise<SQLiteDBConnection> {
     // Dynamic import: the plugin (and its web WASM fallback) must NOT be pulled
     // into the eager bundle — this code path only runs on native.
-    const { CapacitorSQLite, SQLiteConnection } =
-      await import('@capacitor-community/sqlite');
+    const { CapacitorSQLite, SQLiteConnection } = await this._loadPlugin();
     const sqlite = new SQLiteConnection(CapacitorSQLite);
     // Kept so reset() can closeConnection() to roll back a wedged transaction.
     this._sqlite = sqlite;
@@ -265,7 +302,10 @@ export class CapacitorSqliteDb implements SqliteDb {
         this._statementTimeoutMs,
         'SQLite synchronous pragma',
       );
-    } catch {
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw error;
+      }
       // Pure optimization — fall through to the engine defaults on any failure.
     }
     // Dev-only readback so the applied pragmas are confirmable on-device (logcat /
@@ -275,13 +315,24 @@ export class CapacitorSqliteDb implements SqliteDb {
     // in shipped builds. Pragma values are not user content (sync rule #9 safe).
     if (!environment.production) {
       try {
-        const jm = await conn.query('PRAGMA journal_mode;');
-        const sy = await conn.query('PRAGMA synchronous;');
+        const jm = await withTimeout(
+          conn.query('PRAGMA journal_mode;'),
+          this._statementTimeoutMs,
+          'SQLite WAL pragma readback',
+        );
+        const sy = await withTimeout(
+          conn.query('PRAGMA synchronous;'),
+          this._statementTimeoutMs,
+          'SQLite synchronous pragma readback',
+        );
         Log.log('[opLog] SQLite pragmas applied', {
           journalMode: (jm.values?.[0] as { journal_mode?: string })?.journal_mode,
           synchronous: (sy.values?.[0] as { synchronous?: number })?.synchronous,
         });
-      } catch {
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          throw error;
+        }
         // Diagnostic only — never fail the open over a readback.
       }
     }
@@ -322,9 +373,8 @@ export class CapacitorSqliteDb implements SqliteDb {
   ): Promise<{ changes: number; lastId?: number }> {
     const conn = await this._ensureOpen();
     // transaction:false — the SqliteOpLogAdapter drives BEGIN/COMMIT/ROLLBACK.
-    const res = await withTimeout(
+    const res = await this._withStatementTimeout(
       conn.run(sql, params, false),
-      this._statementTimeoutMs,
       'SQLite run',
     );
     return {
@@ -335,11 +385,7 @@ export class CapacitorSqliteDb implements SqliteDb {
 
   async query(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
     const conn = await this._ensureOpen();
-    const res = await withTimeout(
-      conn.query(sql, params),
-      this._statementTimeoutMs,
-      'SQLite query',
-    );
+    const res = await this._withStatementTimeout(conn.query(sql, params), 'SQLite query');
     return (res.values ?? []) as Record<string, unknown>[];
   }
 
@@ -358,10 +404,20 @@ export class CapacitorSqliteDb implements SqliteDb {
     // partial apply. It does today. The migration does NOT rely on this alone —
     // its verify-before-commit re-counts rows + seq + vector clock and rolls back
     // on any mismatch, so a hypothetical future plugin regression here is caught.
-    await withTimeout(
+    await this._withStatementTimeout(
       conn.executeSet([...set], false),
-      this._statementTimeoutMs,
       'SQLite executeSet',
     );
+  }
+
+  private async _withStatementTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+    try {
+      return await withTimeout(promise, this._statementTimeoutMs, label);
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        await this.reset();
+      }
+      throw error;
+    }
   }
 }

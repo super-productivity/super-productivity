@@ -6,7 +6,7 @@ import {
   OpLogBackendMigrationError,
 } from './op-log-backend-migration';
 import { OPS_INDEXES, SINGLETON_KEY, STORE_NAMES } from './db-keys.const';
-import { DbTxMode, OpLogDbAdapter, OpLogTx } from './op-log-db-adapter';
+import { DbIterateOptions, DbTxMode, OpLogDbAdapter, OpLogTx } from './op-log-db-adapter';
 
 const ALL_STORES = Object.values(STORE_NAMES);
 
@@ -66,6 +66,43 @@ const makeLossyDest = (
     },
   }) as OpLogDbAdapter;
 };
+
+/** Capture the options used by migration's destination verification scan. */
+const observeDestIterates = (
+  dest: OpLogDbAdapter,
+  observed: DbIterateOptions[],
+): OpLogDbAdapter =>
+  new Proxy(dest, {
+    get: (target, prop, recv) => {
+      if (prop === 'transaction') {
+        return <T>(stores: string[], mode: DbTxMode, fn: (tx: OpLogTx) => Promise<T>) =>
+          target.transaction(stores, mode, (tx) =>
+            fn(
+              new Proxy(tx, {
+                get: (txTarget, txProp, txRecv) => {
+                  if (txProp === 'iterate') {
+                    return <V>(
+                      store: string,
+                      options: DbIterateOptions,
+                      visit: Parameters<OpLogTx['iterate']>[2],
+                    ) => {
+                      if (store === STORE_NAMES.OPS) {
+                        observed.push(options);
+                      }
+                      return txTarget.iterate<V>(store, options, visit);
+                    };
+                  }
+                  const value = Reflect.get(txTarget, txProp, txRecv);
+                  return typeof value === 'function' ? value.bind(txTarget) : value;
+                },
+              }),
+            ),
+          );
+      }
+      const value = Reflect.get(target, prop, recv);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as OpLogDbAdapter;
 
 describe('migrateOpLogBackend (IndexedDB -> SQLite, C1)', () => {
   let src: IndexedDbOpLogAdapter;
@@ -200,6 +237,36 @@ describe('migrateOpLogBackend (IndexedDB -> SQLite, C1)', () => {
     await dest.add(STORE_NAMES.OPS, makeOpEntry('pre-existing'));
     await expectAsync(migrateOpLogBackend(src, dest)).toBeRejectedWith(
       jasmine.any(OpLogBackendMigrationError),
+    );
+  });
+
+  it('refuses a destination containing non-ops data', async () => {
+    await src.put(STORE_NAMES.STATE_CACHE, {
+      id: SINGLETON_KEY,
+      state: { source: true },
+    });
+    await dest.put(STORE_NAMES.STATE_CACHE, {
+      id: SINGLETON_KEY,
+      state: { existing: true },
+    });
+
+    await expectAsync(migrateOpLogBackend(src, dest)).toBeRejectedWith(
+      jasmine.any(OpLogBackendMigrationError),
+    );
+    expect(await dest.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY)).toEqual(
+      jasmine.objectContaining({ state: { existing: true } }),
+    );
+  });
+
+  it('verifies the destination high-water sequence with a one-row scan', async () => {
+    await src.add(STORE_NAMES.OPS, makeOpEntry('a'));
+    await src.add(STORE_NAMES.OPS, makeOpEntry('b'));
+    const observed: DbIterateOptions[] = [];
+
+    await migrateOpLogBackend(src, observeDestIterates(dest, observed));
+
+    expect(observed).toContain(
+      jasmine.objectContaining({ direction: 'prev', mode: 'readonly', limit: 1 }),
     );
   });
 

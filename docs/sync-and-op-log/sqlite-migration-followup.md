@@ -46,11 +46,13 @@ ordered so each item is independently shippable and reviewable.
   flip (`native-sqlite-backend.ts`), and the one-time first-launch IDB→SQLite
   migration bootstrap are all wired. On **Android** the SQLite backend is the
   default (`shouldUseNativeSqliteOpLogBackend()` → real Capacitor Android bridge:
-  `getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`); iOS and
-  web/PWA/Electron stay on IndexedDB. There is **no opt-in flag** — rollout is
+  `getPlatform() === 'android'`); iOS and web/PWA/Electron stay on IndexedDB.
+  Plugin registration is deliberately checked by the resolver rather than this
+  gate, so a broken later build fails loudly instead of serving stale IndexedDB.
+  There is **no opt-in flag** — rollout is
   ramped at the store level (Play Console staged rollout), and the backend falls
   back to IndexedDB **in-session** if SQLite bootstrap fails recoverably (see C1).
-  On-device validation + the deferred bulk-write perf path remain.
+  On-device validation of the native bridge remains.
 
 The op-log is the app's **authoritative** store (read during boot hydration), so
 the wiring is built to never brick startup and never silently serve stale data —
@@ -117,7 +119,7 @@ captured on the next tick.
   enters the eager bundle; only a `import type` reaches the web build.
 - ✅ **Web-eviction gotcha respected:** construction is gated behind
   `shouldUseNativeSqliteOpLogBackend()` (real Capacitor Android bridge only:
-  `getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`).
+  `getPlatform() === 'android'`).
   The plugin's **web** build is WASM-SQLite persisted into IndexedDB — never bound
   on web/PWA/Electron, and iOS keeps IndexedDB too.
 - ✅ **Perf mitigation 1 baked in:** `run` returns the plugin's own `lastId` from
@@ -137,42 +139,38 @@ captured on the next tick.
   context, so both stores sharing the connection would otherwise nest `BEGIN`s /
   leak statements across transactions. `CapacitorSqliteDb` implements the new
   `SqliteDb.runExclusive`, and `SqliteOpLogAdapter` routes every top-level op
-  (each transaction as one unit) through it. Covered by a real-sql.js concurrency
-  test (`sqlite-op-log-adapter.spec.ts`) that asserts the collision without the
-  serializer and success with it.
-- ✅ **Open timeout (no boot-brick).** The native open handshake is bounded by
-  `DEFAULT_OPEN_TIMEOUT_MS` (15s); a wedged connection would otherwise leave
-  `open()` pending forever and, because the op-log is read during boot hydration,
-  brick startup with no recovery. On timeout the open rejects so the backend can
-  fall back to IndexedDB (pre-migration) or fail loudly (post-migration). The
-  timeout deliberately does **not** wrap the migration itself (bounded, progressing
-  work; capping it risks never migrating a large account) — a mid-migration wedge
-  is the residual the deferred per-statement timeout would close.
+  (each transaction as one unit) through it. Backends without `runExclusive` use
+  the adapter's connection-keyed fallback queue. Real-sql.js tests cover two
+  adapters sharing a connection and raw serialized statements racing a transaction.
+- ✅ **Open + statement timeouts (no boot-brick or late-call leak).** The native
+  open handshake is bounded at 15s and each bridge statement at 60s. A statement
+  timeout does not cancel its underlying native promise, so the wrapper closes and
+  resets the handle before the serializer advances. If close cannot be confirmed,
+  that wrapper is quarantined and reports the database as potentially present,
+  forcing fail-loud behavior rather than stale-IndexedDB fallback.
 - ✅ **`databaseExists()` durable existence probe.** Wraps the plugin's
   `isDatabase`, answerable without a usable connection, so the fallback decision
-  can ask "could a migration have committed?" even when `open()` failed.
+  can ask "could a migration have committed?" even when `open()` failed. Probe,
+  plugin-load, and timeout uncertainty all bias toward "present" to avoid serving
+  a retained but stale IndexedDB copy.
 - ⏳ **Remains (device-gated):** run `npx cap sync` (+ `pod install`) so the
   Android/iOS projects pick up the now-allowlisted native plugin, then build + run
   on a real device, including a WebView force-reload to exercise the reuse path.
-  Perf mitigation 2 (the `executeSet` bulk-write path) is still deferred — see the
-  note below; it only matters on the bridge and can't be measured with in-process
-  sql.js.
-- **⚡ Perf — bake two mitigations into the wrapper from the start.** On native
+  Native bridge timings still require a device; in-process sql.js cannot measure
+  that boundary.
+- ✅ **⚡ Perf — both bridge-round-trip mitigations are implemented.** On native
   the dominant cost is the Capacitor JS↔native bridge round-trip, not SQLite
   itself. Reads (`getAll`/`count`) are already one query = one crossing.
   Single-op append is negligible. The one cliff is **bulk write**:
-  `OperationLogStoreService.appendBatch()` loops `await tx.add()` once per op, so
-  N ops = N crossings. Mitigations (only matter on the bridge; can't be measured
-  with in-process sql.js, so validate on-device):
+  `OperationLogStoreService.appendBatch()` can write many rows at once. The two
+  implemented mitigations (which still need on-device timing) are:
   1. **Return `lastId` from the plugin's own `run` response** (it provides it) —
      never issue a separate `SELECT last_insert_rowid()`, which would double
      every insert to two crossings.
-  2. **Add an optional bulk path to the port** (e.g. `runBatch(statements)` on
-     `SqliteDb` + an `addBatch` on `OpLogTx`) so `appendBatch` collapses to one
-     crossing via the plugin's `executeSet`. Per-op `seq` recovery from a batched
-     insert needs `RETURNING seq` (SQLite ≥ 3.35) or `last_insert_rowid()`
-     arithmetic over the consecutive AUTOINCREMENT range — pick after confirming
-     the plugin's SQLite version on-device.
+  2. **Use the optional `runSet`/`putBatch` path** so bulk puts collapse into
+     bounded `executeSet` chunks within the caller's existing transaction. The
+     adapter derives the consecutive AUTOINCREMENT range from the final inserted
+     id and verifies the affected-row count.
 
 ### B2. Validate `SqliteOpLogAdapter` against a real engine — ✅ done (CI), on-device remains
 
@@ -225,8 +223,7 @@ captured on the next tick.
 - ✅ **Token flip landed — Android default-on, no flag.** `OP_LOG_DB_ADAPTER_FACTORY`
   returns the native SQLite factory when `shouldUseNativeSqliteOpLogBackend()`
   (`native-sqlite-backend.ts`) → real Capacitor Android bridge
-  (`getPlatform() === 'android'` + `isPluginAvailable('CapacitorSQLite')`); iOS and
-  web/PWA/Electron keep
+  (`getPlatform() === 'android'`); iOS and web/PWA/Electron keep
   the IndexedDB default. `createNativeSqliteOpLogAdapterFactory()` closes over ONE
   `CapacitorSqliteDb` and vends every service a `NativeOpLogAdapter` over a single
   shared backend decision (bootstrap + fallback choice run once regardless of how
@@ -252,9 +249,11 @@ captured on the next tick.
   sql.js in CI; the native plugin dest behaves identically through the port.
 - ✅ **Wiring landed (with B3):** `bootstrapNativeOpLogBackend()` runs once on the
   first adapter `init()` — it creates the SQLite schema, then (guarded by a
-  `sup_op_log_meta` marker table, a non-empty destination, and a best-effort
-  `indexedDB.databases()` presence check) calls `migrateOpLogBackend` to copy the
-  legacy `SUP_OPS` IndexedDB across. The marker is set only **after** a successful
+  `sup_op_log_meta` marker table and an all-store empty-destination check) calls
+  `migrateOpLogBackend` to copy the legacy `SUP_OPS` IndexedDB across. It always
+  opens the source rather than trusting `indexedDB.databases()` absence, because a
+  false negative would make an empty SQLite database authoritative. The marker is
+  set only **after** a successful
   verified copy, so a failed/aborted run retries next launch; the IDB copy is left
   **untouched** as a ≥ 1-release fallback. Unit-covered (idempotency, empty-source,
   shared-connection) in `native-sqlite-backend.spec.ts`.
@@ -336,8 +335,8 @@ backend, remove the IDB fallback and the `adoptConnection` bridge (Track D).
 
 > **Enabling on a native build:** SQLite is the default on Android — no flag.
 > Requires `npx cap sync android` first so the native plugin is built in. The gate
-> is a real Capacitor Android bridge (`getPlatform() === 'android'` +
-> `isPluginAvailable('CapacitorSQLite')`), deliberately NOT `IS_ANDROID_NATIVE` —
+> is a real Capacitor Android bridge (`getPlatform() === 'android'`), deliberately
+> NOT `IS_ANDROID_NATIVE` —
 > that folds in `IS_ANDROID_WEB_VIEW` (`window.SUPAndroid`), which the bridgeless
 > legacy online-mode `FullscreenActivity` WebView also sets, so gating on it there
 > would pick SQLite, find no native plugin, and brick boot. There is no runtime
