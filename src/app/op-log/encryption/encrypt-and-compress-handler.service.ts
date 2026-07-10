@@ -107,12 +107,15 @@ export class EncryptAndCompressHandlerService {
   async decompressAndDecrypt<T>({
     dataStr,
     encryptKey,
-    isEncryptExpected = false,
+    isEncryptExpected,
   }: {
     dataStr: string;
     encryptKey?: string;
-    // When true, a plaintext blob is refused instead of accepted (see below).
-    isEncryptExpected?: boolean;
+    // Local encryption intent. REQUIRED (no fail-open default): the guard below
+    // is only as safe as this flag, so every caller must state whether encryption
+    // is expected. The sole production caller is decompressAndDecryptData, which
+    // forwards cfg.isEncrypt.
+    isEncryptExpected: boolean;
   }): Promise<{
     data: T;
     modelVersion: number;

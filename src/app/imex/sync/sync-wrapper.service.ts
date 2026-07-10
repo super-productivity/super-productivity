@@ -21,6 +21,7 @@ import {
   EmptyRemoteBodySPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
+  PlaintextWhenEncryptionExpectedError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
@@ -910,6 +911,24 @@ export class SyncWrapperService {
           'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      } else if (error instanceof PlaintextWhenEncryptionExpectedError) {
+        // GHSA-vrc7-775g-ggqc: the remote is plaintext but encryption is enabled
+        // on this device, so we refused it (fail closed). This persists until the
+        // user acts (or an attacker stops tampering), so — like the transient
+        // branches above — only surface the snack on an explicit sync to avoid
+        // spamming every auto-sync cycle; the ERROR status keeps the sync
+        // indicator honest meanwhile. The message points to the only safe remedy
+        // (deliberately disabling encryption in Sync settings), never an
+        // auto-adopt action.
+        this._providerManager.setSyncStatus('ERROR');
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.REMOTE_NOT_ENCRYPTED,
+            type: 'ERROR',
+            config: { duration: 15000 },
+          });
+        }
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');

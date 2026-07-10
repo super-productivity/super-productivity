@@ -365,7 +365,7 @@ export class OperationLogSyncService {
     const pendingOps = await this.opLogStore.getUnsynced();
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
-    // Check for encryption state mismatch in piggybacked ops (another client disabled encryption)
+    // Detect (warn-only) an encryption-state mismatch in piggybacked ops — never auto-disable
     await this.handleEncryptionStateMismatch(
       syncProvider,
       result.piggybackHasOnlyUnencryptedData,
@@ -917,7 +917,7 @@ export class OperationLogSyncService {
     const pendingOps = await this.opLogStore.getUnsynced();
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
-    // Check for encryption state mismatch (another client disabled encryption)
+    // Detect (warn-only) an encryption-state mismatch — never auto-disable local encryption
     await this.handleEncryptionStateMismatch(
       syncProvider,
       result.serverHasOnlyUnencryptedData,
@@ -1308,11 +1308,15 @@ export class OperationLogSyncService {
   }
 
   /**
-   * Checks if there's an encryption state mismatch between local config and server data.
-   * If the server has only unencrypted data but local config has encryption enabled,
-   * this means another client disabled encryption. Updates local config to match.
+   * Detects an encryption-state mismatch: the server has only unencrypted data
+   * while local config has encryption enabled. Detect-and-warn ONLY — it never
+   * mutates config. The "server is unencrypted" signal is attacker-controllable
+   * (GHSA-vrc7-775g-ggqc), so adopting a plaintext remote must be a deliberate
+   * user action in Sync settings, never an automatic downgrade. The download
+   * path additionally fails closed on the plaintext blob itself
+   * (PlaintextWhenEncryptionExpectedError).
    *
-   * @param syncProvider - The sync provider to check and update
+   * @param syncProvider - The sync provider to check
    * @param serverHasOnlyUnencryptedData - Whether all downloaded/piggybacked ops were unencrypted
    */
   async handleEncryptionStateMismatch(

@@ -92,6 +92,7 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof testData>({
         dataStr,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result.data).toEqual(testData);
@@ -106,6 +107,7 @@ describe('EncryptAndCompressHandlerService', () => {
         service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         }),
       ).toBeRejectedWithError(JsonParseError);
     });
@@ -118,6 +120,7 @@ describe('EncryptAndCompressHandlerService', () => {
         await service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         });
         fail('Expected JsonParseError to be thrown');
       } catch (e) {
@@ -136,6 +139,7 @@ describe('EncryptAndCompressHandlerService', () => {
         await service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         });
         fail('Expected JsonParseError to be thrown');
       } catch (e) {
@@ -153,6 +157,7 @@ describe('EncryptAndCompressHandlerService', () => {
         service.decompressAndDecrypt({
           dataStr,
           encryptKey: undefined,
+          isEncryptExpected: false,
         }),
       ).toBeRejectedWithError(JsonParseError);
     });
@@ -168,6 +173,7 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof complexData>({
         dataStr,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result.data).toEqual(complexData);
@@ -229,10 +235,11 @@ describe('EncryptAndCompressHandlerService', () => {
         expect(result).toEqual({ secret: 'value' });
       });
 
-      it('defaults to accepting plaintext when isEncryptExpected is omitted (backward compat)', async () => {
+      it('accepts plaintext when isEncryptExpected is explicitly false', async () => {
         const result = await service.decompressAndDecrypt<{ secret: string }>({
           dataStr: plaintextBlob(),
           encryptKey: undefined,
+          isEncryptExpected: false,
         });
         expect(result.data).toEqual({ secret: 'value' });
       });
@@ -271,6 +278,7 @@ describe('EncryptAndCompressHandlerService', () => {
       const result = await service.decompressAndDecrypt<typeof testData>({
         dataStr: compressed,
         encryptKey: undefined,
+        isEncryptExpected: false,
       });
 
       expect(result).toEqual({
