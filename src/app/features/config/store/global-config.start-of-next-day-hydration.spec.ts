@@ -76,6 +76,24 @@ describe('start-of-next-day offset across operation replay', () => {
     schemaVersion: 1,
   });
 
+  const repairOp = (miscCfg: MiscConfig, clientId = 'client2'): Operation => ({
+    ...fullStateOp(miscCfg, clientId),
+    id: `op-repair-${clientId}`,
+    opType: OpType.Repair,
+    actionType: ActionType.REPAIR_AUTO,
+    payload: {
+      appDataComplete: appDataWithMisc(miscCfg),
+      repairSummary: {
+        entityStateFixed: 1,
+        orphanedEntitiesRestored: 0,
+        invalidReferencesRemoved: 0,
+        relationshipsFixed: 0,
+        structureRepaired: 0,
+        typeErrorsFixed: 0,
+      },
+    },
+  });
+
   let store: Store;
   let dateService: DateService;
   let observedActions: Action[];
@@ -171,6 +189,16 @@ describe('start-of-next-day offset across operation replay', () => {
     bootFromSnapshotAt(misc(0, '00:00'));
 
     replay([fullStateOp(misc(6, '06:00'))]);
+
+    expect(readStoreHour()).toBe(6);
+    expect(dateService.getStartOfNextDayDiffMs()).toBe(SIX_AM_MS);
+    expect(readAppStateOffset()).toBe(SIX_AM_MS);
+  });
+
+  it('installs the offset when a repair operation is replayed', () => {
+    bootFromSnapshotAt(misc(0, '00:00'));
+
+    replay([repairOp(misc(6, '06:00'))]);
 
     expect(readStoreHour()).toBe(6);
     expect(dateService.getStartOfNextDayDiffMs()).toBe(SIX_AM_MS);
