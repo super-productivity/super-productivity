@@ -671,8 +671,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _handlePointerUp(event: MouseEvent | TouchEvent): void {
     const draggedTask = this._externalDragService.activeTask();
 
-    // exclude recurring tasks
-    if (!draggedTask || draggedTask.repeatCfgId) {
+    if (!draggedTask) {
       return;
     }
 
@@ -713,6 +712,14 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
         this._taskService.moveToProject(draggedTask, projectId!);
       });
     } else if (navItemElement.hasAttribute('data-tag-id')) {
+      // Exclude recurring tasks from tag drops: the "Today" tag branch below
+      // reschedules the task's due date, which conflicts with its own repeat
+      // scheduling. Project drops (above) don't touch due dates, so they're
+      // unaffected by this.
+      if (draggedTask.repeatCfgId) {
+        return;
+      }
+
       // Task is dropped on a tag
       const tagId = navItemElement.getAttribute('data-tag-id');
       Log.debug('Task dropped on Tag', { taskId: draggedTask.id, tagId });
