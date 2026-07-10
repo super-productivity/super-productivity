@@ -62,13 +62,18 @@ const sideChanged = (
 /**
  * For each diffed field, the value of the side that LWW *discarded* (the loser).
  * Applying this map re-instates the losing edit — this is exactly what "flip"
- * dispatches. Skipped: diffs without a `pickedSide` (merged entries, where
- * nothing was discarded) and fields the losing side never changed (a union diff
- * records those as `undefined`, and dispatching them would CLEAR winner-only
- * fields instead of layering the discarded edit on top).
+ * dispatches. Skipped: `merged` entries as a whole (nothing was discarded — and
+ * their noise-tiebreak diffs DO carry a `pickedSide`, so the per-diff check
+ * alone would not exclude them), `kind: 'action'` diffs, and fields the losing
+ * side never changed (a union diff records those as `undefined`, and
+ * dispatching them would CLEAR winner-only fields instead of layering the
+ * discarded edit on top).
  */
 export const loserChangesFor = (entry: ConflictJournalEntry): Record<string, unknown> => {
   const changes: Record<string, unknown> = {};
+  if (entry.winner === 'merged') {
+    return changes;
+  }
   for (const diff of entry.fieldDiffs) {
     if (diff.kind === 'action') {
       // Raw action payload of an opaque op — not an entity field.
@@ -95,6 +100,10 @@ export const winnerChangesFor = (
   entry: ConflictJournalEntry,
 ): Record<string, unknown> => {
   const changes: Record<string, unknown> = {};
+  // Merged entries have no winner/loser side — see loserChangesFor.
+  if (entry.winner === 'merged') {
+    return changes;
+  }
   for (const diff of entry.fieldDiffs) {
     if (diff.kind === 'action') {
       // Raw action payload of an opaque op — not an entity field.

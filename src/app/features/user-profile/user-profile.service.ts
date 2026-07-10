@@ -9,7 +9,6 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { AppDataComplete, MODEL_CONFIGS } from '../../op-log/model/model-config';
-import { ConflictJournalService } from '../../op-log/sync/conflict-journal.service';
 import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 /**
@@ -23,7 +22,6 @@ export class UserProfileService {
   private readonly _storageService = inject(UserProfileStorageService);
   private readonly _providerManager = inject(SyncProviderManager);
   private readonly _backupService = inject(BackupService);
-  private readonly _conflictJournalService = inject(ConflictJournalService);
   private readonly _snackService = inject(SnackService);
   private readonly _injector = inject(Injector);
 
@@ -389,12 +387,10 @@ export class UserProfileService {
         );
       }
 
-      // Profiles are complete, isolated instances — but the conflict journal is
-      // a device-local side store the backup/import cycle above does not touch.
-      // Clear it so the new profile cannot see the previous profile's entity
-      // titles/values (or Flip against the wrong dataset). Swallows its own
-      // errors; must not fail the switch after the dataset was replaced.
-      await this._conflictJournalService.clearAll();
+      // NOTE: the device-local conflict journal is cleared by
+      // BackupService.importCompleteBackup (both branches above call it) — the
+      // shared "clear on full dataset replacement" chokepoint, so the new
+      // profile cannot see the previous profile's entity titles/values.
 
       // Reload the app to ensure all services and state are fully re-initialized
       // with the new profile's data. A reload is required because some parts of the

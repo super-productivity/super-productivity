@@ -92,6 +92,7 @@ describe('SyncConflictUiService', () => {
     expect(dispatchSpy).toHaveBeenCalledWith(
       TaskSharedActions.updateTask({
         task: { id: 'task-1', changes: { title: 'Local title' } },
+        isIgnoreShortSyntax: true,
       }),
     );
     expect((await journal.getEntry('e1'))?.status).toBe('flipped');
@@ -130,6 +131,23 @@ describe('SyncConflictUiService', () => {
     expect(result).toBe('cancelled');
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect((await journal.getEntry('e1'))?.status).toBe('unreviewed');
+  });
+
+  it('flip() suppresses short-syntax parsing on the re-applied title', async () => {
+    // The canonical flip is a rename conflict → changes is exactly { title },
+    // which is precisely the shape shortSyntax$ re-parses in replace mode. A
+    // journaled title like "Fix bug #urgent" must be re-applied LITERALLY, not
+    // re-parsed into tag/project/schedule mutations.
+    const entry = makeEntry({ id: 'ss1' });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('applied');
+    const dispatched = dispatchSpy.calls.mostRecent().args[0] as ReturnType<
+      typeof TaskSharedActions.updateTask
+    >;
+    expect(dispatched.isIgnoreShortSyntax).toBe(true);
   });
 
   it('flip() only dispatches fields the losing side actually changed', async () => {
@@ -244,6 +262,74 @@ describe('SyncConflictUiService', () => {
     expect(result).toBe('unsupported');
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect((await journal.getEntry('rel1'))?.status).toBe('unreviewed');
+  });
+
+  it('canFlip() is false when the discarded side touched schedule/reminder fields', () => {
+    // dueDay/dueWithTime/deadline*/reminderId invariants (mutual exclusivity,
+    // TODAY_TAG membership, reminder create/cancel) are maintained by dedicated
+    // flows, not by a bare updateTask — same honest-refusal policy as
+    // relationship fields.
+    const entry = makeEntry({
+      fieldDiffs: [
+        {
+          field: 'dueWithTime',
+          localVal: 111,
+          remoteVal: 222,
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    expect(service.canFlip(entry)).toBe(false);
+  });
+
+  it('getStaleState() returns no current entity for factory-selector types (ISSUE_PROVIDER)', async () => {
+    // ISSUE_PROVIDER registers a (id, key) => selector FACTORY, not a props
+    // selector. Calling it as a props selector returns the inner selector
+    // FUNCTION as the "entity", rendering a bogus current column + stale flag.
+    const entry = makeEntry({
+      id: 'ip1',
+      entityType: 'ISSUE_PROVIDER' as EntityType,
+      entityId: 'provider-1',
+    });
+
+    const stale = await service.getStaleState(entry);
+
+    expect(stale.current).toBeUndefined();
+    expect(stale.isStale).toBe(false);
+  });
+
+  it('getStaleState() resolves (no rejection) when the entity selector throws', async () => {
+    // selectTagById / selectNoteById THROW on a missing entity (unlike
+    // TASK/PROJECT which return undefined). Every delete-wins TAG/NOTE entry
+    // hits this on row expand — it must resolve to "no current entity", not
+    // reject through toggleExpand as an unhandled rejection.
+    const entry = makeEntry({
+      id: 'throw1',
+      entityType: 'TAG' as EntityType,
+      entityId: 'tag-gone',
+    });
+
+    const stale = await service.getStaleState(entry);
+
+    expect(stale.current).toBeUndefined();
+    expect(stale.isStale).toBe(false);
+  });
+
+  it('flip() reports unsupported (no rejection) when the entity selector throws', async () => {
+    const entry = makeEntry({
+      id: 'throw2',
+      entityType: 'TAG' as EntityType,
+      entityId: 'tag-gone',
+    });
+    await journal.record(entry);
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('unsupported');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((await journal.getEntry('throw2'))?.status).toBe('unreviewed');
   });
 
   it('flip() reports unsupported for a non-adapter entity type', async () => {

@@ -9,6 +9,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType } from '../core/operation.types';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
+import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('BackupService', () => {
@@ -19,6 +20,7 @@ describe('BackupService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let mockConflictJournal: jasmine.SpyObj<ConflictJournalService>;
 
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const createMinimalValidBackup = () => ({
@@ -111,6 +113,8 @@ describe('BackupService', () => {
       'flushPendingWrites',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockConflictJournal = jasmine.createSpyObj('ConflictJournalService', ['clearAll']);
+    mockConflictJournal.clearAll.and.resolveTo();
 
     // Default mock returns
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
@@ -135,6 +139,7 @@ describe('BackupService', () => {
           useValue: mockOperationWriteFlushService,
         },
         { provide: LockService, useValue: mockLockService },
+        { provide: ConflictJournalService, useValue: mockConflictJournal },
       ],
     });
 
@@ -242,6 +247,17 @@ describe('BackupService', () => {
       expect((dispatchedAction.appDataComplete as any).task).toEqual(
         jasmine.objectContaining(backupData.task),
       );
+    });
+
+    it('should clear the conflict journal (full dataset replacement)', async () => {
+      // Journal entries reference entities of the REPLACED dataset. Every
+      // import path (profile switch, JSON import, local-backup restore,
+      // SuperSync restore) funnels through here — without the clear, the badge
+      // keeps its pre-restore count and the review page lists conflicts from
+      // the old dataset.
+      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
+
+      expect(mockConflictJournal.clearAll).toHaveBeenCalledTimes(1);
     });
 
     it('should persist import to operation log', async () => {

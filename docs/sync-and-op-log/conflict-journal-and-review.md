@@ -6,14 +6,14 @@ and how the user reviews what happened (`/sync-conflicts` page, banner, badge).
 
 Code lives in `src/app/op-log/sync/`:
 
-| Concern                          | Files                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| Journal data model + store       | `conflict-journal.model.ts`, `conflict-journal.service.ts`                |
-| Classification (taxonomy)        | `conflict-journal-emission.util.ts`                                       |
-| Disjoint-field auto-merge        | `conflict-disjoint-merge.util.ts`, `conflict-resolution.service.ts`       |
-| Review UI derivation + actions   | `sync-conflict-review.util.ts`, `sync-conflict-ui.service.ts`             |
-| Banner / badge                   | `sync-conflict-banner.service.ts`                                         |
-| Page                             | `src/app/pages/sync-conflicts-page/`                                      |
+| Concern                        | Files                                                               |
+| ------------------------------ | ------------------------------------------------------------------- |
+| Journal data model + store     | `conflict-journal.model.ts`, `conflict-journal.service.ts`          |
+| Classification (taxonomy)      | `conflict-journal-emission.util.ts`                                 |
+| Disjoint-field auto-merge      | `conflict-disjoint-merge.util.ts`, `conflict-resolution.service.ts` |
+| Review UI derivation + actions | `sync-conflict-review.util.ts`, `sync-conflict-ui.service.ts`       |
+| Banner / badge                 | `sync-conflict-banner.service.ts`                                   |
+| Page                           | `src/app/pages/sync-conflicts-page/`                                |
 
 ## Conflict journal
 
@@ -34,11 +34,12 @@ Contracts:
   of a conflict verbatim — exactly the data the op log intentionally dropped.
   Uploading them would resurrect discarded data; they are also excluded from
   backups/exports (see wiki `3.06-User-Data`).
-- **Profile-scoped by clearing.** User profiles are complete, isolated
-  instances, but this side store is not part of the profile backup/import
-  cycle. `switchProfile` therefore calls `ConflictJournalService.clearAll()` so
-  the next profile can never see the previous profile's entity titles/values or
-  Flip against the wrong dataset.
+- **Cleared on full dataset replacement.** Journal entries describe conflicts
+  in the op history; when that history is replaced wholesale the entries are
+  stale (and, across user profiles, a privacy leak).
+  `BackupService.importCompleteBackup` — the chokepoint every replacement path
+  funnels through (profile switch, JSON import, local-backup restore, SuperSync
+  restore) — calls `ConflictJournalService.clearAll()`.
 - **Retention.** Pruned on app start to whichever bound binds first: entries
   older than 14 days (`JOURNAL_RETENTION_DAYS`) or beyond the newest 200
   (`JOURNAL_MAX_ENTRIES`).
@@ -147,8 +148,15 @@ an entry is only ever marked `flipped` when an op was actually dispatched:
   express (deferred);
 - not when the loser has no re-appliable field values (empty diffs, opaque
   `kind: 'action'` diffs);
-- not when the loser's changes touch relationship-bearing fields
-  (`projectId`, `parentId`, `subTaskIds`, `tagIds`, `taskIds`,
-  `backlogTaskIds`, `noteIds`) — those are kept consistent across entities by
-  meta-reducers, and re-applying one side of the pair via a bare adapter
-  update would corrupt the other entity's membership lists.
+- not when the loser's changes touch unsafe fields (`FLIP_UNSAFE_FIELDS`):
+  relationship-bearing fields (`projectId`, `parentId`, `subTaskIds`,
+  `tagIds`, `taskIds`, `backlogTaskIds`, `noteIds`) are kept consistent across
+  entities by meta-reducers, and re-applying one side of the pair via a bare
+  adapter update would corrupt the other entity's membership lists;
+  schedule/reminder fields (`dueDay`, `dueWithTime`, `deadlineDay`,
+  `deadlineWithTime`, `reminderId`) have invariants (mutual exclusivity,
+  TODAY_TAG membership, reminder create/cancel) that live in dedicated flows.
+
+A flipped TASK title is dispatched with `isIgnoreShortSyntax: true` — it is a
+journaled literal value, not user input, so `#tag`/`+project`/`@schedule`
+tokens in the discarded title must NOT re-parse into cross-entity mutations.

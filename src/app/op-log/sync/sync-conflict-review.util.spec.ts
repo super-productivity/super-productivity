@@ -137,6 +137,27 @@ describe('sync-conflict-review.util', () => {
       );
     });
 
+    it('returns nothing for merged entries even when a tiebroken noise diff has a pickedSide', () => {
+      // buildMergedFieldDiffs sets pickedSide on EVERY diff (incl. the noise
+      // tiebreak), so per-diff pickedSide checks alone don't exclude merged
+      // entries — nothing was discarded, so there is no loser/winner side.
+      const merged = makeEntry({
+        winner: 'merged',
+        fieldDiffs: [
+          {
+            field: 'modified',
+            localVal: 1111,
+            remoteVal: 2222,
+            localChanged: true,
+            remoteChanged: true,
+            pickedSide: 'remote',
+          },
+        ],
+      });
+      expect(loserChangesFor(merged)).toEqual({});
+      expect(winnerChangesFor(merged)).toEqual({});
+    });
+
     it('excludes action-payload diffs from both loser and winner changes', () => {
       // kind: 'action' diffs carry a raw action payload, not an entity field —
       // dispatching or stale-comparing them would corrupt the entity.

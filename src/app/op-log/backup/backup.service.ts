@@ -21,6 +21,7 @@ import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/norma
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
+import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 
 /**
@@ -42,6 +43,7 @@ export class BackupService {
   private _opLogStore = inject(OperationLogStoreService);
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
+  private _conflictJournalService = inject(ConflictJournalService);
 
   /**
    * Loads a complete backup of all application data.
@@ -157,6 +159,14 @@ export class BackupService {
       // Without this reset, the sync would start from the old seq and skip server ops,
       // meaning the BACKUP_IMPORT filter never runs and old ops are not filtered.
       this._resetAllLastServerSeqs();
+
+      // 4c. The conflict journal is a device-local side store describing
+      // conflicts in the op history that was JUST replaced — every import path
+      // (profile switch, JSON import, local-backup restore, SuperSync restore)
+      // funnels through here, and without this the badge keeps its pre-restore
+      // count and the review page lists entries from the replaced dataset.
+      // clearAll swallows its own errors (must not fail the import).
+      await this._conflictJournalService.clearAll();
 
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));

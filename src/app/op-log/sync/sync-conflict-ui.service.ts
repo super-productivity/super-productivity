@@ -21,7 +21,10 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { EntityType } from '../core/operation.types';
 import { getEntityConfig, isAdapterEntity } from '../core/entity-registry';
-import { PropsStateSelector } from '../core/entity-registry-host.types';
+import {
+  PropsStateSelector,
+  SelectByIdFactory,
+} from '../core/entity-registry-host.types';
 import { ConflictJournalService } from './conflict-journal.service';
 import { ConflictJournalEntry, ConflictJournalReason } from './conflict-journal.model';
 import { loserChangesFor, winnerChangesFor } from './sync-conflict-review.util';
@@ -64,13 +67,21 @@ const FLIP_UNSUPPORTED_REASONS: ReadonlySet<ConflictJournalReason> =
   new Set<ConflictJournalReason>(['delete-lost', 'delete-wins']);
 
 /**
- * Relationship-bearing fields kept consistent across entities by meta-reducers
- * (e.g. moving a task rewrites BOTH `task.projectId` and the project's
- * `taskIds`). Re-applying one side of such a pair via a bare adapter update
- * would corrupt the other entity's membership list, so flips touching these
- * fields are refused until domain-specific handling exists.
+ * Fields a bare `{id,changes}` update cannot safely re-apply, in two classes:
+ *
+ * - RELATIONSHIP fields kept consistent across entities by meta-reducers
+ *   (e.g. moving a task rewrites BOTH `task.projectId` and the project's
+ *   `taskIds`) — re-applying one side of the pair would corrupt the other
+ *   entity's membership list.
+ * - SCHEDULE/REMINDER fields whose invariants live in dedicated flows, not the
+ *   reducer: `dueDay`/`dueWithTime` mutual exclusivity, `dueDay`→TODAY_TAG
+ *   membership, and reminder create/cancel tied to `reminderId` — a bare
+ *   update can produce the both-set state or a dangling/missing reminder.
+ *
+ * Flips touching any of these are refused until domain-specific handling
+ * exists (honest refusal over silent cross-entity corruption).
  */
-const FLIP_RELATIONSHIP_FIELDS: ReadonlySet<string> = new Set<string>([
+const FLIP_UNSAFE_FIELDS: ReadonlySet<string> = new Set<string>([
   'projectId',
   'parentId',
   'subTaskIds',
@@ -78,6 +89,11 @@ const FLIP_RELATIONSHIP_FIELDS: ReadonlySet<string> = new Set<string>([
   'taskIds',
   'backlogTaskIds',
   'noteIds',
+  'dueDay',
+  'dueWithTime',
+  'deadlineDay',
+  'deadlineWithTime',
+  'reminderId',
 ]);
 
 @Injectable({ providedIn: 'root' })
@@ -91,7 +107,7 @@ export class SyncConflictUiService {
    * Whether FLIP can be applied for this entry. Requires a supported entity
    * type, a reason expressible as a normal update op (not delete/restore), and
    * at least one discarded field value that is safe to re-apply (relationship
-   * fields are excluded — see FLIP_RELATIONSHIP_FIELDS).
+   * and schedule/reminder fields are excluded — see FLIP_UNSAFE_FIELDS).
    */
   canFlip(entry: ConflictJournalEntry): boolean {
     if (!FLIP_SUPPORTED_TYPES.has(entry.entityType)) {
@@ -101,9 +117,7 @@ export class SyncConflictUiService {
       return false;
     }
     const fields = Object.keys(loserChangesFor(entry));
-    return (
-      fields.length > 0 && !fields.some((field) => FLIP_RELATIONSHIP_FIELDS.has(field))
-    );
+    return fields.length > 0 && !fields.some((field) => FLIP_UNSAFE_FIELDS.has(field));
   }
 
   /** KEEP — confirm the auto-resolution. */
@@ -212,6 +226,11 @@ export class SyncConflictUiService {
       case 'TASK':
         return TaskSharedActions.updateTask({
           task: { id: entityId, changes: changes as Partial<Task> } as Update<Task>,
+          // A flipped title is a journaled LITERAL value, not user input: without
+          // this, a title-only flip matches shortSyntax$'s exact trigger shape and
+          // any `#tag`/`+project`/`@schedule` tokens in the discarded title would
+          // re-parse into cross-entity tag/project/schedule mutations.
+          isIgnoreShortSyntax: true,
         });
       case 'PROJECT':
         return updateProject({
@@ -242,12 +261,30 @@ export class SyncConflictUiService {
     if (!config || !isAdapterEntity(config) || !config.selectById) {
       return undefined;
     }
-    // `SelectById` is a union across the registry's selector shapes; every
-    // flip-supported type (TASK/PROJECT/NOTE/TAG) registers the standard
-    // props-based selector, so narrowing to that union member is safe here.
-    const selectById = config.selectById as PropsStateSelector<{ id: string }>;
-    const entity = await firstValueFrom(this._store.select(selectById, { id: entityId }));
-    return (entity as Record<string, unknown> | undefined) ?? undefined;
+    try {
+      // ISSUE_PROVIDER registers a `(id, key) => selector` FACTORY, not a props
+      // selector (mirrors ConflictResolutionService.getCurrentEntityState).
+      // Calling it as a props selector would return the inner selector FUNCTION
+      // as the "entity" and render a bogus current column + stale flag.
+      if (entityType === 'ISSUE_PROVIDER') {
+        const factory = config.selectById as SelectByIdFactory<null>;
+        const entity = await firstValueFrom(this._store.select(factory(entityId, null)));
+        return (entity as Record<string, unknown> | undefined) ?? undefined;
+      }
+      // `SelectById` is a union across the registry's selector shapes; every
+      // other adapter type registers the standard props-based selector, so
+      // narrowing to that union member is safe here.
+      const selectById = config.selectById as PropsStateSelector<{ id: string }>;
+      const entity = await firstValueFrom(
+        this._store.select(selectById, { id: entityId }),
+      );
+      return (entity as Record<string, unknown> | undefined) ?? undefined;
+    } catch {
+      // Some selectors (selectTagById, selectNoteById) THROW on a missing
+      // entity instead of returning undefined — the app-wide convention. For
+      // this read-only "current state" lookup both mean the same thing.
+      return undefined;
+    }
   }
 
   private _valueEquals(a: unknown, b: unknown): boolean {
