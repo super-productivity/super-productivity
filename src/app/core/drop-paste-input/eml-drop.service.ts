@@ -8,6 +8,12 @@ import { T } from '../../t.const';
 // device. Bound the untrusted input so a pathological .eml can't freeze the UI or
 // balloon the op-log.
 const MAX_EML_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// The title and body sync to every device as ops. Bound them independently of the
+// file size: the literal fence can up to double the body length, and a crafted
+// `.eml` can carry a multi-MB Subject, either of which would bloat the op-log.
+// shortcut: fixed caps — make configurable if real emails legitimately exceed them.
+const MAX_EML_TITLE_LENGTH = 300;
+const MAX_EML_BODY_LENGTH = 100_000;
 
 @Injectable({
   providedIn: 'root',
@@ -35,11 +41,16 @@ export class EmlDropService {
         return;
       }
 
-      const title = [sender, subject].filter(Boolean).join(': ');
+      const title = _truncate(
+        [sender, subject].filter(Boolean).join(': '),
+        MAX_EML_TITLE_LENGTH,
+      );
       // A text/plain body is external text, not trusted Markdown. Store it in a
       // fence that cannot occur in the body so rendering stays literal and inert.
       const plainText = data.text?.trim();
-      const notes = plainText ? _asLiteralMarkdown(plainText) : undefined;
+      const notes = plainText
+        ? _asLiteralMarkdown(_truncate(plainText, MAX_EML_BODY_LENGTH))
+        : undefined;
       // isIgnoreShortSyntax: the subject is untrusted external content — don't
       // let ShortSyntaxEffects parse #tag/@date/+project tokens out of it.
       this._taskService.add(title, false, { notes }, false, true);
@@ -50,6 +61,9 @@ export class EmlDropService {
     }
   }
 }
+
+const _truncate = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max)}…` : text;
 
 const _asLiteralMarkdown = (text: string): string => {
   const backtickFence = '`'.repeat(_getFenceLength(text, /^ {0,3}(`{3,})/gm));

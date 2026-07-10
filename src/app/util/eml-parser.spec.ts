@@ -234,4 +234,97 @@ describe('parseEml', () => {
 
     expect(data.text).toBeUndefined();
   });
+
+  it('should decode a Q-encoded (RFC 2047) subject', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: =?UTF-8?Q?Gr=C3=BC=C3=9Fe?=',
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'q.eml'));
+
+    expect(data.subject).toBe('Grüße');
+  });
+
+  it('should decode a B-encoded (RFC 2047) subject', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: =?UTF-8?B?5LiW55WM?=',
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'b.eml'));
+
+    expect(data.subject).toBe('世界');
+  });
+
+  it('should join adjacent encoded-words and decode encoded-word display names', async () => {
+    const eml = [
+      'From: =?UTF-8?B?R3LDvMOfZQ==?= <alice@example.com>',
+      'Subject: =?UTF-8?Q?Hello?= =?UTF-8?Q?_World?=',
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'adjacent.eml'));
+
+    expect(data.from?.name).toBe('Grüße');
+    expect(data.subject).toBe('Hello World');
+  });
+
+  it('should leave encoded-words with an unsupported charset verbatim', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: =?ISO-8859-1?Q?caf=E9?=',
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'iso.eml'));
+
+    expect(data.subject).toBe('=?ISO-8859-1?Q?caf=E9?=');
+  });
+
+  it('should not be fooled by a charset inside another quoted parameter', async () => {
+    const file = new File(
+      [
+        [
+          'From: Alice <alice@example.com>',
+          'Subject: Quoted param',
+          'Content-Type: text/plain; name="x; charset=utf-8; y"; charset=windows-1252',
+          '',
+          '',
+        ].join('\r\n'),
+        new Uint8Array([0xe9]),
+      ],
+      'quoted-param.eml',
+    );
+
+    const data = await parseEml(file);
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should ignore header comments on Content-Type and Content-Transfer-Encoding', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Comments',
+      'Content-Type: text/plain (the plain one); charset=utf-8',
+      'Content-Transfer-Encoding: 7bit (identity)',
+      '',
+      'kept body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'comments.eml'));
+
+    expect(data.text).toBe('kept body\n');
+  });
 });

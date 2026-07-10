@@ -174,6 +174,39 @@ describe('EmlDropService', () => {
     });
   });
 
+  it('should cap an oversized body so the synced note stays bounded', async () => {
+    const maxBodyLength = 100_000;
+    const longBody = 'a'.repeat(maxBodyLength + 50);
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Long',
+      '',
+      longBody,
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(eml));
+
+    const notes = taskService.add.calls.mostRecent().args[2]?.notes;
+    expect(notes).toBe('```\n' + 'a'.repeat(maxBodyLength) + '…\n```');
+  });
+
+  it('should cap an oversized title', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: ' + 'S'.repeat(350),
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(eml));
+
+    const title = taskService.add.calls.mostRecent().args[0];
+    expect(title).toBe('Alice: ' + 'S'.repeat(293) + '…');
+    expect(title?.length).toBe(301);
+  });
+
   it('should show a warning snack and not add a task when both sender and subject are empty', async () => {
     await service.createTaskFromEml(makeFile(EMPTY_EML));
 
