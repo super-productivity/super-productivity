@@ -37,6 +37,7 @@ import {
   UploadRevToMatchMismatchAPIError,
   WebDavNativeRequestError,
   EncryptNoPasswordError,
+  PlaintextWhenEncryptionExpectedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
@@ -1834,6 +1835,40 @@ describe('SyncWrapperService', () => {
       );
       expect(mockSnackService.open).not.toHaveBeenCalled();
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
+    });
+
+    it('should explain a rejected plaintext remote for a user-triggered encrypted sync', async () => {
+      mockSyncService.downloadRemoteOps.and.rejectWith(
+        new PlaintextWhenEncryptionExpectedError({
+          isCompressed: false,
+          modelVersion: 1,
+        }),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.REMOTE_NOT_ENCRYPTED,
+        type: 'ERROR',
+        config: { duration: 15000 },
+      });
+    });
+
+    it('should reject a plaintext remote silently during automatic encrypted sync', async () => {
+      mockSyncService.downloadRemoteOps.and.rejectWith(
+        new PlaintextWhenEncryptionExpectedError({
+          isCompressed: false,
+          modelVersion: 1,
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
     });
   });
 

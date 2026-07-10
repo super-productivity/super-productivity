@@ -12,7 +12,6 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
 import { clearSessionKeyCache } from '@sp/sync-core';
-import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from './onedrive-auth-mode.const';
 
@@ -290,16 +289,14 @@ export class SyncConfigService {
     }
     const oldConfig = await activeProvider.privateCfg.load();
 
-    // Build new config - for SuperSync, always enable encryption when password is set
+    // Entering a password signals encryption intent for every provider. In
+    // particular, a file-based client prompted by an encrypted remote must not
+    // retain an explicit `false` intent and upload its next snapshot as plaintext.
     const newConfig = {
       ...oldConfig,
       encryptKey: pwd,
+      isEncryptionEnabled: true,
     } as PrivateCfgByProviderId<SyncProviderId>;
-
-    // For SuperSync, explicitly enable encryption
-    if (activeProvider.id === SyncProviderId.SuperSync) {
-      (newConfig as SuperSyncPrivateCfg).isEncryptionEnabled = true;
-    }
 
     await this._providerManager.setProviderConfig(activeProvider.id, newConfig);
 

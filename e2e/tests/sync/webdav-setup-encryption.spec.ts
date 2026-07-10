@@ -131,11 +131,10 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption', () => {
 });
 
 /**
- * Guards the data-safety edge case: a client that sets an encryption password at
- * setup while joining a remote that ALREADY holds UNENCRYPTED data (returning
- * user / new device on an existing plaintext remote). The normal download-first
- * sync must read the plaintext remote, keep the data, and re-upload it encrypted
- * — never overwrite the remote with the joining client's (empty) state.
+ * Guards the downgrade edge case: a client that sets an encryption password at
+ * setup while joining a remote that ALREADY holds UNENCRYPTED data. The remote
+ * prefix is attacker-controlled, so the client must reject the plaintext without
+ * importing it, overwriting it, or silently disabling local encryption.
  */
 test.describe('@webdav @encryption WebDAV Setup-Time Encryption — Unencrypted Remote', () => {
   test.describe.configure({ mode: 'serial' });
@@ -156,7 +155,7 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption — Unencrypted 
       `${WEBDAV_CONFIG_TEMPLATE.username}:${WEBDAV_CONFIG_TEMPLATE.password}`,
     ).toString('base64');
 
-  test('preserves data and upgrades the remote to encrypted when a setup-time-encryption client joins an unencrypted remote', async ({
+  test('rejects an unencrypted remote without overwriting it when setup-time encryption is enabled', async ({
     browser,
     baseURL,
     request,
@@ -165,7 +164,6 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption — Unencrypted 
     const url = baseURL || 'http://localhost:4242';
     const uniqueId = Date.now();
     const taskFromA = `MigrateTaskA-${uniqueId}`;
-    const taskFromB = `MigrateTaskB-${uniqueId}`;
 
     await createSyncFolder(request, SYNC_FOLDER_NAME);
 
@@ -193,7 +191,8 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption — Unencrypted 
       headers: { Authorization: AUTH_HEADER },
     });
     expect(before.ok()).toBeTruthy();
-    expect(await before.text()).toContain(taskFromA);
+    const beforeBody = await before.text();
+    expect(beforeBody).toContain(taskFromA);
     console.log('[SetupMigrate] Remote seeded unencrypted (plaintext title present)');
 
     // ============ PHASE 2: Client B joins it WITH setup-time encryption ============
@@ -213,35 +212,21 @@ test.describe('@webdav @encryption WebDAV Setup-Time Encryption — Unencrypted 
     await expect(syncPageB.syncBtn).toBeVisible();
 
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    const downgradeError = pageB.locator('.mat-mdc-snack-bar-container', {
+      hasText: 'The synced data is not encrypted',
+    });
+    await expect(downgradeError).toBeVisible({ timeout: 30000 });
 
-    // DATA SAFETY: B must have downloaded A's task — not overwritten the remote
-    // with its own empty state (the failure mode this test guards).
-    await expect(pageB.locator(`task:has-text("${taskFromA}")`).first()).toBeVisible();
-    console.log('[SetupMigrate] Client B preserved A data (received the task)');
-
-    // ============ PHASE 3: B writes → remote is upgraded to encrypted ============
-    await workViewPageB.addTask(taskFromB);
-    await waitForStatePersistence(pageB);
-
-    await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
-
-    // The remote is now encrypted: neither title appears in plaintext anymore.
+    // FAIL CLOSED: B imports nothing and the plaintext remote remains byte-for-byte
+    // unchanged. In particular, the failed sync must not upload B's empty state.
+    await expect(pageB.locator('task')).toHaveCount(0);
     const after = await request.fetch(SYNC_FILE_URL, {
       headers: { Authorization: AUTH_HEADER },
     });
     expect(after.ok()).toBeTruthy();
     const afterBody = await after.text();
-    expect(afterBody.length).toBeGreaterThan(0);
-    expect(afterBody).not.toContain(taskFromA);
-    expect(afterBody).not.toContain(taskFromB);
-    console.log('[SetupMigrate] Remote upgraded to encrypted (no plaintext titles)');
-
-    // B still holds both tasks (nothing lost during the upgrade).
-    await expect(pageB.locator(`task:has-text("${taskFromA}")`).first()).toBeVisible();
-    await expect(pageB.locator(`task:has-text("${taskFromB}")`).first()).toBeVisible();
-    console.log('[SetupMigrate] ✓ Data preserved and remote encrypted');
+    expect(afterBody).toBe(beforeBody);
+    console.log('[SetupMigrate] ✓ Plaintext remote rejected without modification');
 
     await closeContextsSafely(contextA, contextB);
   });
