@@ -1997,6 +1997,7 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "When enabled, subtasks from the most recent task instance will be recreated with the recurring task",
         "MONDAY": "Monday",
         "MONTHLY_MODE_DAY_OF_MONTH": "Day of month",
+        "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "\"Day of month\" uses the day shown in Start date.",
         "NOTES": "Default notes",
         "ORD_FIRST": "first",
         "ORD_FIRST_NTH": "first",
@@ -2038,7 +2039,7 @@
         "WAIT_FOR_COMPLETION": "Only create next task after completion",
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Prevents multiple pending recurring tasks from piling up. The next instance will only be created once the current task is completed",
         "WEDNESDAY": "Wednesday",
-        "WEEK_OF_MONTH": "Week of month",
+        "WEEK_OF_MONTH": "Monthly pattern",
         "WEEKDAY": "Weekday",
         "WEEKDAY_REQUIRED": "Select at least one weekday"
       },

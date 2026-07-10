@@ -2,6 +2,7 @@ import {
   TASK_REPEAT_CFG_ADVANCED_FORM_CFG,
   TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG,
 } from './task-repeat-cfg-form.const';
+import { T } from '../../../t.const';
 
 describe('TaskRepeatCfgFormConfig', () => {
   it('should not contain startDate in essential form fields', () => {
@@ -21,6 +22,22 @@ describe('TaskRepeatCfgFormConfig', () => {
 
     expect(startTimeField).toBeUndefined();
     expect(remindAtField).toBeUndefined();
+  });
+
+  it('explains that Day of month uses the start date (#8886)', () => {
+    const repeatContainer = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
+      (field) => field.fieldGroupClassName === 'repeat-config-container',
+    );
+    const monthlyAnchor = repeatContainer?.fieldGroup?.find(
+      (field) => field.fieldGroupClassName === 'monthly-anchor',
+    );
+    const monthlyPattern = monthlyAnchor?.fieldGroup?.find(
+      (field) => field.key === 'monthlyWeekOfMonth',
+    );
+
+    expect(monthlyPattern?.templateOptions?.description).toBe(
+      T.F.TASK_REPEAT.F.MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION,
+    );
   });
 
   describe('weekdays group visibility (issue #8025)', () => {
