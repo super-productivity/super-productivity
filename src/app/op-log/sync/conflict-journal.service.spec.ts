@@ -168,11 +168,27 @@ describe('ConflictJournalService (store)', () => {
     it('recovers after an abnormal DB termination (handles reset, next call reopens)', async () => {
       await service.record(makeEntry({ id: 'before-term' }));
 
-      // What idb's `terminated` callback runs when the browser force-closes
-      // the connection: the memoized handles are dropped so calls reopen
-      // instead of failing on a dead connection for the rest of the session.
-      service['_resetDbHandles']();
+      // Fire the `close` event idb's `terminated` option listens for (what the
+      // browser dispatches on abnormal termination). This pins the wiring
+      // itself: if the `terminated` callback were removed, the handles would
+      // survive and the expectation below fails. fake-indexeddb's dispatchEvent
+      // rejects DOM Events (it checks its own FakeEvent flags), so this is a
+      // minimal duck-typed FakeEvent; the distinct phase constants matter —
+      // all-undefined phases make its `stopped()` check skip the listener.
+      const db = await service['_ensureDb']();
+      db.dispatchEvent({
+        type: 'close',
+        initialized: true,
+        dispatched: false,
+        eventPath: [],
+        bubbles: false,
+        CAPTURING_PHASE: 1,
+        AT_TARGET: 2,
+        BUBBLING_PHASE: 3,
+      } as unknown as Event);
+      expect(service['_db']).toBeUndefined();
 
+      // Next call reopens instead of failing on a dead connection.
       await service.record(makeEntry({ id: 'after-term' }));
       const ids = (await service.list('history')).map((e) => e.id);
       expect(ids).toContain('before-term');
