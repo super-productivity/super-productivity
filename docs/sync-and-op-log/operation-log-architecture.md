@@ -2365,7 +2365,7 @@ src/app/op-log/
 │       ├── test-client.helper.ts             # Test client utilities
 │       └── operation-factory.helper.ts       # Test operation builders
 └── benchmarks/
-    └── operation-log-stress.spec.ts          # Performance stress tests
+    └── operation-log-stress.benchmark.ts     # Manual perf harness (not auto-run in CI)
 
 src/app/features/work-context/store/
 ├── work-context-meta.actions.ts          # Move actions (moveTaskInTodayList, etc.)
