@@ -854,4 +854,16 @@ describe('ScheduleComponent', () => {
       expect(weeks).toBe(2);
     });
   });
+
+  describe('day view persistence', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('persists the day view and reads it back', () => {
+      component.selectTimeView('day');
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect(localStorage.getItem('SELECTED_TIME_VIEW')).toBe('day');
+      // getTimeView is private; cast to reach it
+      expect((component as any).getTimeView()).toBe('day');
+    });
+  });
 });

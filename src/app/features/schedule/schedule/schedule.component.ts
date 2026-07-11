@@ -386,14 +386,16 @@ export class ScheduleComponent {
     });
   }
 
-  selectTimeView(view: 'week' | 'month'): void {
+  selectTimeView(view: 'week' | 'month' | 'day'): void {
     this.layoutService.selectedTimeView.set(view);
     localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
   }
 
-  private getTimeView(): 'week' | 'month' {
+  private getTimeView(): 'week' | 'month' | 'day' {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
-    return preservedView === 'month' ? 'month' : 'week';
+    if (preservedView === 'month') return 'month';
+    if (preservedView === 'day') return 'day';
+    return 'week';
   }
 
   constructor() {
