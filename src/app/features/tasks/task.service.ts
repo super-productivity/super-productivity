@@ -1,9 +1,16 @@
 import { nanoid } from 'nanoid';
 import typia from 'typia';
-import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
-import { computed, effect, inject, Injectable, untracked } from '@angular/core';
+import {
+  concatMap,
+  distinctUntilChanged,
+  first,
+  map,
+  take,
+  withLatestFrom,
+} from 'rxjs/operators';
+import { computed, effect, inject, Injectable, Injector, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import {
   ArchiveTask,
   DEFAULT_TASK,
@@ -97,7 +104,7 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
-import { INBOX_PROJECT } from '../project/project.const';
+import { INBOX_PROJECT, _MISSING_PROJECT_ } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
@@ -106,6 +113,12 @@ import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { ProjectService } from '../project/project.service';
+import { TaskRepeatCfgService } from '../task-repeat-cfg/task-repeat-cfg.service';
+import { lazyInject } from '../../util/lazy-inject';
+import { T } from '../../t.const';
 
 @Injectable({
   providedIn: 'root',
@@ -123,6 +136,15 @@ export class TaskService {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
+  private readonly _matDialog = inject(MatDialog);
+  // ProjectService and TaskRepeatCfgService both inject TaskService, so they
+  // are resolved lazily here to break the circular dependency (see lazy-inject.ts).
+  private readonly _injector = inject(Injector);
+  private readonly _getProjectService = lazyInject(this._injector, ProjectService);
+  private readonly _getTaskRepeatCfgService = lazyInject(
+    this._injector,
+    TaskRepeatCfgService,
+  );
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -985,6 +1007,126 @@ export class TaskService {
     }
     this._store.dispatch(
       TaskSharedActions.moveToOtherProject({ task, targetProjectId: projectId }),
+    );
+  }
+
+  /**
+   * Moves a task to another project, taking recurring tasks into account.
+   *
+   * A plain (non-recurring) task is just moved. A recurring task (has
+   * `repeatCfgId`) additionally updates the repeat config's `projectId`
+   * (so future occurrences spawn in the new project) and moves the other
+   * existing instances of that config (both present and archived). If more
+   * than one instance exists, the user is asked to confirm via a
+   * `D_CONFIRM_MOVE_TO_PROJECT` dialog first; a lone instance (e.g. one
+   * that was just created) is moved directly without prompting.
+   *
+   * @param task the task (with sub tasks) to move
+   * @param projectId the target project id
+   * @returns an observable that emits once the flow concludes:
+   * - `'moved'` when the task was moved directly, without showing a dialog
+   * - `'confirmed'` when a dialog was shown and the move was confirmed
+   * - `'cancelled'` when a dialog was shown and the move was cancelled
+   */
+  moveTaskToProjectWithRepeatCfgAwareness$(
+    task: TaskWithSubTasks,
+    projectId: string,
+  ): Observable<'moved' | 'confirmed' | 'cancelled'> {
+    if (!task.repeatCfgId) {
+      this.moveToProject(task, projectId);
+      return of('moved');
+    }
+
+    const repeatCfgId = task.repeatCfgId;
+    return forkJoin([
+      this._getTaskRepeatCfgService()
+        .getTaskRepeatCfgByIdAllowUndefined$(repeatCfgId)
+        .pipe(first()),
+      this.getTasksWithSubTasksByRepeatCfgId$(repeatCfgId).pipe(first()),
+      this.getArchiveTasksForRepeatCfgId(repeatCfgId),
+      this._getProjectService().getByIdOnce$(projectId),
+    ]).pipe(
+      concatMap(
+        ([
+          reminderCfg,
+          nonArchiveInstancesWithSubTasks,
+          archiveInstances,
+          targetProject,
+        ]) => {
+          TaskLog.log({
+            reminderCfg,
+            nonArchiveInstancesWithSubTasks,
+            archiveInstances,
+          });
+
+          // Repeat config was deleted (e.g. via cross-client sync) but the task
+          // still references it — treat it as a plain task move instead of
+          // crashing on the missing config. (#8715)
+          if (!reminderCfg) {
+            this.moveToProject(task, projectId);
+            return of('moved' as const);
+          }
+
+          // if there is only a single instance (probably just created) than directly update the task repeat cfg
+          if (
+            nonArchiveInstancesWithSubTasks.length === 1 &&
+            archiveInstances.length === 0
+          ) {
+            this._getTaskRepeatCfgService().updateTaskRepeatCfg(reminderCfg.id, {
+              projectId,
+            });
+            this.moveToProject(task, projectId);
+            return of('moved' as const);
+          }
+
+          return this._matDialog
+            .open(DialogConfirmComponent, {
+              data: {
+                okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
+                message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
+                translateParams: {
+                  projectName: targetProject?.title ?? _MISSING_PROJECT_,
+                  tasksNr:
+                    nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
+                },
+              },
+            })
+            .afterClosed()
+            .pipe(
+              map((isConfirm) => {
+                if (!isConfirm) {
+                  return 'cancelled' as const;
+                }
+
+                this._getTaskRepeatCfgService().updateTaskRepeatCfg(reminderCfg.id, {
+                  projectId,
+                });
+                nonArchiveInstancesWithSubTasks.forEach((nonArchiveTask) => {
+                  this.moveToProject(nonArchiveTask, projectId);
+                });
+
+                const archiveUpdates: Update<TaskCopy>[] = [];
+                archiveInstances.forEach((archiveTask) => {
+                  archiveUpdates.push({
+                    id: archiveTask.id,
+                    changes: { projectId },
+                  });
+                  if (archiveTask.subTaskIds.length) {
+                    archiveTask.subTaskIds.forEach((subId) => {
+                      archiveUpdates.push({
+                        id: subId,
+                        changes: { projectId },
+                      });
+                    });
+                  }
+                });
+                this.updateArchiveTasks(archiveUpdates);
+
+                return 'confirmed' as const;
+              }),
+            );
+        },
+      ),
     );
   }
 

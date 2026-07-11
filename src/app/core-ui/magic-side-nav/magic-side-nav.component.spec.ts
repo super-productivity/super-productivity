@@ -1,4 +1,4 @@
-﻿import { of } from 'rxjs';
+import { of } from 'rxjs';
 import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { createTask } from '../../features/tasks/task.test-helper';
 import { MagicSideNavComponent } from './magic-side-nav.component';
@@ -19,13 +19,15 @@ const buildReceiver = (
   activeTask: TaskWithSubTasks | null,
 ): {
   receiver: MagicSideNavComponent;
-  moveToProject: jasmine.Spy;
+  moveTaskToProjectWithRepeatCfgAwareness$: jasmine.Spy;
   addToToday: jasmine.Spy;
   updateTags: jasmine.Spy;
   setCancelNextDrop: jasmine.Spy;
   setActiveTask: jasmine.Spy;
 } => {
-  const moveToProject = jasmine.createSpy('moveToProject');
+  const moveTaskToProjectWithRepeatCfgAwareness$ = jasmine
+    .createSpy('moveTaskToProjectWithRepeatCfgAwareness$')
+    .and.returnValue(of('moved'));
   const addToToday = jasmine.createSpy('addToToday');
   const updateTags = jasmine.createSpy('updateTags');
   const setCancelNextDrop = jasmine.createSpy('setCancelNextDrop');
@@ -33,7 +35,7 @@ const buildReceiver = (
 
   const receiver = Object.assign(Object.create(MagicSideNavComponent.prototype), {
     _taskService: {
-      moveToProject,
+      moveTaskToProjectWithRepeatCfgAwareness$,
       addToToday,
       updateTags,
     },
@@ -47,7 +49,7 @@ const buildReceiver = (
 
   return {
     receiver,
-    moveToProject,
+    moveTaskToProjectWithRepeatCfgAwareness$,
     addToToday,
     updateTags,
     setCancelNextDrop,
@@ -80,25 +82,32 @@ describe('MagicSideNavComponent._handlePointerUp', () => {
         dueWithTime: Date.now(),
         repeatCfgId: 'repeat-1',
       }) as unknown as TaskWithSubTasks;
-      const { receiver, moveToProject, setCancelNextDrop } = buildReceiver(task);
+      const { receiver, moveTaskToProjectWithRepeatCfgAwareness$, setCancelNextDrop } =
+        buildReceiver(task);
 
       withNavItem('data-project-id', 'project-1', () => {
         callHandlePointerUp(receiver, pointerUpEvent());
       });
 
       expect(setCancelNextDrop).toHaveBeenCalledWith(true);
-      expect(moveToProject).toHaveBeenCalledWith(task, 'project-1');
+      expect(moveTaskToProjectWithRepeatCfgAwareness$).toHaveBeenCalledWith(
+        task,
+        'project-1',
+      );
     });
 
     it('moves a non-recurring task to the project', () => {
       const task = createTask({ id: 't2' }) as unknown as TaskWithSubTasks;
-      const { receiver, moveToProject } = buildReceiver(task);
+      const { receiver, moveTaskToProjectWithRepeatCfgAwareness$ } = buildReceiver(task);
 
       withNavItem('data-project-id', 'project-1', () => {
         callHandlePointerUp(receiver, pointerUpEvent());
       });
 
-      expect(moveToProject).toHaveBeenCalledWith(task, 'project-1');
+      expect(moveTaskToProjectWithRepeatCfgAwareness$).toHaveBeenCalledWith(
+        task,
+        'project-1',
+      );
     });
 
     it('does not move a subtask dropped on a project', () => {
@@ -106,13 +115,13 @@ describe('MagicSideNavComponent._handlePointerUp', () => {
         id: 'sub1',
         parentId: 'parent1',
       }) as unknown as TaskWithSubTasks;
-      const { receiver, moveToProject } = buildReceiver(task);
+      const { receiver, moveTaskToProjectWithRepeatCfgAwareness$ } = buildReceiver(task);
 
       withNavItem('data-project-id', 'project-1', () => {
         callHandlePointerUp(receiver, pointerUpEvent());
       });
 
-      expect(moveToProject).not.toHaveBeenCalled();
+      expect(moveTaskToProjectWithRepeatCfgAwareness$).not.toHaveBeenCalled();
     });
   });
 
@@ -149,13 +158,14 @@ describe('MagicSideNavComponent._handlePointerUp', () => {
   });
 
   it('does nothing when there is no active dragged task', () => {
-    const { receiver, moveToProject, addToToday, updateTags } = buildReceiver(null);
+    const { receiver, moveTaskToProjectWithRepeatCfgAwareness$, addToToday, updateTags } =
+      buildReceiver(null);
 
     withNavItem('data-project-id', 'project-1', () => {
       callHandlePointerUp(receiver, pointerUpEvent());
     });
 
-    expect(moveToProject).not.toHaveBeenCalled();
+    expect(moveTaskToProjectWithRepeatCfgAwareness$).not.toHaveBeenCalled();
     expect(addToToday).not.toHaveBeenCalled();
     expect(updateTags).not.toHaveBeenCalled();
   });

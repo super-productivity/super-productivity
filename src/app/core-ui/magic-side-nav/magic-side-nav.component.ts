@@ -709,13 +709,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       // if the dom element is removed before the return animation has finished
       const dragref = this._externalDragService.activeDragRef();
       dragref?.ended.pipe(take(1)).subscribe(() => {
-        this._taskService.moveToProject(draggedTask, projectId!);
+        this._taskService
+          .moveTaskToProjectWithRepeatCfgAwareness$(draggedTask, projectId!)
+          .subscribe();
       });
     } else if (navItemElement.hasAttribute('data-tag-id')) {
-      // Exclude recurring tasks from tag drops: the "Today" tag branch below
-      // reschedules the task's due date, which conflicts with its own repeat
-      // scheduling. Project drops (above) don't touch due dates, so they're
-      // unaffected by this.
+      // Exclude recurring tasks from all tag drops, not just "Today": this
+      // conservatively preserves prior behavior (recurring tasks were never
+      // tag-dropped here) rather than assuming untested paths are safe. A
+      // non-Today tag drop just adds/removes a tag via updateTags below.
       if (draggedTask.repeatCfgId) {
         return;
       }

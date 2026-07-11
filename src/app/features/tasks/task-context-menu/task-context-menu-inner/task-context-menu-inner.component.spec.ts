@@ -15,7 +15,7 @@ import { WorkContextService } from '../../../work-context/work-context.service';
 import { TaskFocusService } from '../../task-focus.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateAdapter } from '@angular/material/core';
-import { of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { addSubTask } from '../../store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
@@ -55,9 +55,7 @@ describe('TaskContextMenuInnerComponent', () => {
       'add',
       'createNewTaskWithDefaults',
       'currentTaskId',
-      'moveToProject',
-      'getTasksWithSubTasksByRepeatCfgId$',
-      'getArchiveTasksForRepeatCfgId',
+      'moveTaskToProjectWithRepeatCfgAwareness$',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     addSubtaskInputService = jasmine.createSpyObj<AddSubtaskInputService>(
@@ -400,39 +398,29 @@ describe('TaskContextMenuInnerComponent', () => {
     });
   });
 
-  // #8715: a task can reference a repeat config that was already deleted (e.g.
-  // via cross-client sync). Moving it must not throw ('Missing taskRepeatCfg')
-  // and crash — it should fall back to a plain task move.
-  describe('moveTaskToProject() with a deleted repeat config (#8715)', () => {
-    it('falls back to a plain move instead of crashing on the missing config', fakeAsync(() => {
+  // The recurring-aware move logic (incl. the #8715 deleted-config fallback)
+  // lives in TaskService.moveTaskToProjectWithRepeatCfgAwareness$ and is tested
+  // in task.service.spec.ts; here we only verify the delegation.
+  describe('moveTaskToProject()', () => {
+    it('delegates to the shared repeat-cfg-aware move', fakeAsync(() => {
       const taskWithRepeat = {
         ...DEFAULT_TASK,
         id: 'task-repeat',
         title: 'Repeat Task',
         projectId: 'project-current',
-        repeatCfgId: 'deleted-cfg',
+        repeatCfgId: 'cfg-1',
       } as Task;
       component.task = taskWithRepeat;
 
       const taskWithSubTasks = { ...taskWithRepeat, subTasks: [] } as any;
       store.overrideSelector(selectTaskByIdWithSubTaskData, taskWithSubTasks);
-      // config resolves to undefined (deleted); the other repeat lookups still run
-      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
-        of([taskWithSubTasks]),
-      );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
-      // guard against regressing to the throwing selector (the #8715 root cause)
-      const repeatCfgService = TestBed.inject(TaskRepeatCfgService);
-      (
-        repeatCfgService as unknown as { getTaskRepeatCfgById$: () => unknown }
-      ).getTaskRepeatCfgById$ = () =>
-        throwError(() => new Error('Missing taskRepeatCfg'));
+      taskService.moveTaskToProjectWithRepeatCfgAwareness$.and.returnValue(of('moved'));
 
       component.moveTaskToProject('project-b');
       tick(50); // _getTaskWithSubtasks delay(50)
       flush(); // focusRelatedTaskOrNext setTimeout
 
-      expect(taskService.moveToProject).toHaveBeenCalledWith(
+      expect(taskService.moveTaskToProjectWithRepeatCfgAwareness$).toHaveBeenCalledWith(
         taskWithSubTasks,
         'project-b',
       );
