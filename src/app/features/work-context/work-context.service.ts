@@ -356,6 +356,13 @@ export class WorkContextService {
     switchMap((worklogStrDate) => this.getTimeWorkedForDay$(worklogStrDate)),
   );
 
+  breakTimeToday$: Observable<number> =
+    this._globalTrackingIntervalService.todayDateStr$.pipe(
+      switchMap((day) => this.getBreakTime$(day)),
+      map((breakTime) => breakTime ?? 0),
+      distinctUntilChanged(),
+    );
+
   workingTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
       switchMap((worklogStrDate) =>
