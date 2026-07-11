@@ -21,6 +21,7 @@ import {
   EmptyRemoteBodySPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
+  PlaintextWhenEncryptionExpectedError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
 } from '../../op-log/core/errors/sync-errors';
@@ -855,6 +856,36 @@ export class SyncWrapperService {
           config: { duration: 15000 },
         });
         return 'HANDLED_ERROR';
+      } else if (error instanceof OperationIntegrityError) {
+        // A decrypted op's unauthenticated metadata contradicted its authenticated
+        // payload, or a plaintext op arrived while encryption is mandatory
+        // (GHSA-8pxh-mgc7-gp3g). Fail closed with a calm, translated message so the
+        // generic handler below cannot surface the raw technical/GHSA string to the
+        // user. The technical details are already in the log.
+        //
+        // Ordering matters: this precise instanceof check MUST stay ABOVE the
+        // string-heuristic branches below (isTransientNetworkError / _isTimeoutError
+        // / _isPermissionError). The error message embeds the offending op's uuidv7
+        // id, and an id that happens to contain "504" would otherwise be
+        // misclassified as a gateway timeout by _isTimeoutError — showing the wrong
+        // "try again" message and skipping the ERROR status.
+        //
+        // Like the sibling PlaintextWhenEncryptionExpectedError branch, this is a
+        // persistent condition (until the user acts or tampering stops), so only
+        // surface the snack on an explicit sync to avoid spamming every auto-sync
+        // cycle; the ERROR status keeps the sync indicator honest meanwhile.
+        SyncLog.err('SyncWrapperService: operation integrity check failed', {
+          name: error.name,
+        });
+        this._providerManager.setSyncStatus('ERROR');
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
+            type: 'ERROR',
+            config: { duration: 15000 },
+          });
+        }
+        return 'HANDLED_ERROR';
       } else if (
         error instanceof NetworkUnavailableSPError ||
         isTransientNetworkError(error)
@@ -912,21 +943,23 @@ export class SyncWrapperService {
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';
-      } else if (error instanceof OperationIntegrityError) {
-        // A decrypted op's unauthenticated metadata contradicted its authenticated
-        // payload, or a plaintext op arrived while encryption is mandatory
-        // (GHSA-8pxh-mgc7-gp3g). Fail closed with a calm, translated message so the
-        // generic handler below cannot surface the raw technical/GHSA string to the
-        // user. The technical details are already in the log.
-        SyncLog.err('SyncWrapperService: operation integrity check failed', {
-          name: error.name,
-        });
+      } else if (error instanceof PlaintextWhenEncryptionExpectedError) {
+        // GHSA-vrc7-775g-ggqc: the remote is plaintext but encryption is enabled
+        // on this device, so we refused it (fail closed). This persists until the
+        // user acts (or an attacker stops tampering), so — like the transient
+        // branches above — only surface the snack on an explicit sync to avoid
+        // spamming every auto-sync cycle; the ERROR status keeps the sync
+        // indicator honest meanwhile. The message points to the only safe remedy
+        // (deliberately disabling encryption in Sync settings), never an
+        // auto-adopt action.
         this._providerManager.setSyncStatus('ERROR');
-        this._snackService.open({
-          msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
-          type: 'ERROR',
-          config: { duration: 15000 },
-        });
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.REMOTE_NOT_ENCRYPTED,
+            type: 'ERROR',
+            config: { duration: 15000 },
+          });
+        }
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');
@@ -1355,9 +1388,15 @@ export class SyncWrapperService {
 
   private _isTimeoutError(error: unknown): boolean {
     const errStr = String(error).toLowerCase();
+    // Bound '504' to word boundaries: an HTTP 504 status ("http 504 gateway
+    // timeout", "status 504") still matches, but a '504' buried inside a longer
+    // token — e.g. a uuidv7 op id like '01920504-…' in an OperationIntegrityError
+    // message — must NOT be read as a gateway timeout and misclassify an unrelated
+    // error. (The OperationIntegrityError branch is also ordered above this guard;
+    // this hardening removes the footgun for any other error type too.)
     return (
       errStr.includes('timeout') ||
-      errStr.includes('504') ||
+      /\b504\b/.test(errStr) ||
       errStr.includes('gateway timeout')
     );
   }

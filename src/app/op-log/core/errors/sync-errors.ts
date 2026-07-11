@@ -128,6 +128,32 @@ export class EncryptNoPasswordError extends AdditionalLogErrorBase {
   override name = 'EncryptNoPasswordError';
 }
 
+/**
+ * The remote sync file is PLAINTEXT (its prefix carries no encryption flag) but
+ * local config expects encryption (GHSA-vrc7-775g-ggqc). The prefix flags live
+ * OUTSIDE the AEAD envelope, so a remote attacker (compromised Dropbox/WebDAV
+ * account, or a non-TLS WebDAV MITM) can strip the flag and serve
+ * attacker-authored plaintext. Deciding decrypt-or-not from that
+ * attacker-controlled prefix alone would silently accept the injected data and
+ * drop the E2EE authenticity guarantee, so the download path fails closed with
+ * this error instead — the download-side mirror of EncryptNoPasswordError.
+ * NEVER attach the payload: it is plaintext user (or attacker) content.
+ */
+export class PlaintextWhenEncryptionExpectedError extends AdditionalLogErrorBase<{
+  isCompressed: boolean;
+  modelVersion: number;
+}> {
+  override name = 'PlaintextWhenEncryptionExpectedError';
+
+  constructor(info: { isCompressed: boolean; modelVersion: number }) {
+    super(
+      'Remote sync file is unencrypted but local encryption is enabled — ' +
+        'refusing to accept plaintext (possibly a tampered or downgraded remote).',
+    );
+    this.additionalLog = info;
+  }
+}
+
 export class DecryptError extends AdditionalLogErrorBase {
   override name = 'DecryptError';
 }

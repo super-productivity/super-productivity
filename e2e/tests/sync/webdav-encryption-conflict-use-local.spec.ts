@@ -161,37 +161,42 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
 
     await syncPageB.triggerSync();
 
-    // Conflict dialog should NOT appear
+    // Conflict dialog should NOT appear; the sync must reach success instead.
     const conflictDialogSecond = pageB.locator('mat-dialog-container', {
       hasText: 'Conflicting Data',
     });
-    await pageB.waitForTimeout(2000);
-    const isConflictVisible = await conflictDialogSecond.isVisible();
-    expect(isConflictVisible).toBe(false);
+    const secondSyncResult = await waitForSyncComplete(pageB, syncPageB, 30000);
+    expect(secondSyncResult).toBe('success');
+    await expect(conflictDialogSecond).not.toBeVisible();
     console.log('[Test] Verified NO conflict dialog on second sync');
-
-    await waitForSyncComplete(pageB, syncPageB, 30000);
     console.log('[Test] Second sync completed without conflict');
 
     // Verify both tasks present on Client B
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
     await expect(pageB.locator('task', { hasText: taskB2 })).toBeVisible();
 
-    // --- Client A syncs → should decrypt Client B's encrypted data correctly ---
-    await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
-    console.log('[Test] Client A synced');
+    // --- Fresh Client C joins → encrypted snapshot must be readable ---
+    // A pre-existing client can miss the replacement snapshot when sequence
+    // numbers align, which is orthogonal to this test. A fresh client reads from
+    // seq 0 and directly verifies that USE_LOCAL did not double-encrypt or corrupt
+    // the remote snapshot.
+    const { context: contextC, page: pageC } = await setupSyncClient(browser, url);
+    const syncPageC = new SyncPage(pageC);
+    const workViewPageC = new WorkViewPage(pageC);
+    await workViewPageC.waitForTaskList();
 
-    // Client A should be able to decrypt Client B's ops (taskB2 was uploaded as ops).
-    // This validates that Client B's encrypted upload after USE_LOCAL is readable.
-    // Note: The first task (taskB) was part of Client B's snapshot upload, which
-    // may not propagate via incremental sync when seq numbers align. That's an
-    // orthogonal sync protocol behavior, not related to the double-encryption fix.
-    await expect(pageA.locator('task', { hasText: taskB2 })).toBeVisible({
-      timeout: 15000,
+    await syncPageC.setupWebdavSync({
+      ...WEBDAV_CONFIG,
+      encryptAtSetup: true,
+      encryptionPassword: ENCRYPTION_PASSWORD,
     });
-    console.log('[Test] Client A received and decrypted Client B data successfully');
+    await syncPageC.triggerSync();
+    await waitForSyncComplete(pageC, syncPageC);
 
-    await closeContextsSafely(contextA, contextB);
+    await expect(pageC.locator('task', { hasText: taskB })).toBeVisible();
+    await expect(pageC.locator('task', { hasText: taskB2 })).toBeVisible();
+    console.log('[Test] Fresh Client C decrypted the USE_LOCAL snapshot successfully');
+
+    await closeContextsSafely(contextA, contextB, contextC);
   });
 });

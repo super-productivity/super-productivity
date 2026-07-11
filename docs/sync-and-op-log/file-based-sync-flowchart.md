@@ -16,7 +16,9 @@ flowchart TD
     %% ── DECRYPTION (shared with SuperSync) ────────────────────────
     DECRYPT{Encrypted?}
     DECRYPT -->|Yes| DECRYPT_OK{Decryption succeeds?}
-    DECRYPT -->|No| SNAPSHOT_CHK
+    DECRYPT -->|No| ENC_EXPECTED{Encryption expected<br/>locally?}
+    ENC_EXPECTED -->|Yes| PLAINTEXT_REJECT[Reject plaintext remote<br/>without import or upload]
+    ENC_EXPECTED -->|No| SNAPSHOT_CHK
     DECRYPT_OK -->|Yes| SNAPSHOT_CHK
     DECRYPT_OK -->|No password configured| NO_PWD_DLG[Enter Password dialog:<br/>Save & Sync / Force Overwrite / Cancel]
     DECRYPT_OK -->|Wrong password| WRONG_PWD_DLG[Decrypt Error dialog:<br/>Save & Sync / Use Local / Cancel]
@@ -24,6 +26,7 @@ flowchart TD
     NO_PWD_DLG -->|Force Overwrite| FORCE_UP[Force upload local state<br/>SYNC_IMPORT]
     WRONG_PWD_DLG -->|Save & Sync| START
     WRONG_PWD_DLG -->|Use Local| FORCE_UP
+    PLAINTEXT_REJECT --> ERROR
 
     %% ── SNAPSHOT vs INCREMENTAL BRANCH (file-based specific) ────
     SNAPSHOT_CHK{snapshotState<br/>received?<br/>seq 0 download only}
@@ -120,6 +123,7 @@ flowchart LR
 
     TYPE -->|DecryptNoPasswordError| PWD_DLG[Enter Password dialog]
     TYPE -->|DecryptError| DEC_DLG[Decrypt Error dialog]
+    TYPE -->|PlaintextWhenEncryptionExpectedError| DOWNGRADE[Plaintext remote rejected<br/>error snackbar on explicit sync]
     TYPE -->|LocalDataConflictError| CONF_DLG[SyncConflictDialog]
     TYPE -->|PotentialCorsError| CORS[CORS error snackbar]
     TYPE -->|AuthFail / MissingCredentials| AUTH[Auth error snackbar<br/>+ Configure action]
@@ -132,7 +136,7 @@ flowchart LR
     classDef snack fill:#f90,stroke:#b60,color:#fff
 
     class PWD_DLG,DEC_DLG,CONF_DLG dialog
-    class LOCK,CORS,AUTH,CRYPTO,TIMEOUT,PERM,GENERIC snack
+    class LOCK,CORS,AUTH,CRYPTO,TIMEOUT,PERM,DOWNGRADE,GENERIC snack
 ```
 
 **Legend:**
@@ -159,6 +163,7 @@ flowchart LR
 ## Notes
 
 - The `Enter Password` and `Decrypt Error` dialogs correspond to `DecryptNoPasswordError` and `DecryptError` respectively — they are shared with SuperSync and are distinct components with different options.
+- A plaintext remote is rejected when local file-based encryption is enabled. The client does not import it, upload over it, or automatically disable encryption; adopting that remote requires a deliberate settings change.
 - `Encryption-only change` bypass: when an incoming SYNC_IMPORT has `syncImportReason === 'PASSWORD_CHANGED'` and there are no meaningful pending ops, the dialog is skipped (data is identical, only encryption changed).
 - LWW tie-breaking: on equal timestamps, remote wins (server-authoritative). `moveToArchive` operations always win regardless of timestamp.
 - Gap detection triggers: (1) syncVersion reset — another client uploaded a snapshot resetting the counter; (2) snapshot replacement — `recentOps` is empty but `state` exists and `clientId` differs; (3) partial trimming — `oldestOpSyncVersion > sinceSeq` and buffer is full.

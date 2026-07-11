@@ -15,6 +15,7 @@ import {
 import {
   EncryptNoPasswordError,
   InvalidDataSPError,
+  PlaintextWhenEncryptionExpectedError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
   SyncDataCorruptedError,
@@ -29,6 +30,7 @@ import { ArchiveModel } from '../../../features/time-tracking/time-tracking.mode
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
 import { SnackService } from '../../../core/snack/snack.service';
+import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
@@ -2889,6 +2891,19 @@ describe('FileBasedSyncAdapterService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('SPAP-11: split-file (Surgical sync) format', () => {
     const C = FILE_BASED_SYNC_CONSTANTS;
+    const encryptedCfg: EncryptAndCompressCfg = {
+      isEncrypt: true,
+      isCompress: false,
+    };
+    const encryptionHandler = new EncryptAndCompressHandlerService();
+
+    const encryptSplitFile = <T>(data: T): Promise<string> =>
+      encryptionHandler.compressAndEncryptData(
+        encryptedCfg,
+        'test-password',
+        data,
+        C.SPLIT_FILE_VERSION,
+      );
 
     const makeOpsFile = (o: Partial<FileBasedOpsFile> = {}): FileBasedOpsFile => ({
       version: 3,
@@ -3120,6 +3135,26 @@ describe('FileBasedSyncAdapterService', () => {
       expect(stateIdx).toBeLessThan(opsIdx);
     });
 
+    it('(b) encrypted compaction rejects a plaintext state file without writing', async () => {
+      const many = Array.from({ length: C.MAX_RECENT_OPS }, () => ({ sv: 1 }) as never);
+      const opsFile = makeOpsFile({ syncVersion: 5, recentOps: many });
+      routeDownloads({
+        [C.OPS_FILE]: await encryptSplitFile(opsFile),
+        [C.STATE_FILE]: addPrefix(makeStateFile({ syncVersion: 1 }), 3),
+      });
+      const encryptedAdapter = service.createAdapter(
+        mockProvider,
+        encryptedCfg,
+        'test-password',
+      );
+
+      await expectAsync(
+        encryptedAdapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(PlaintextWhenEncryptionExpectedError);
+
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
     // (b2) Review regression: once the folder is past SPLIT_COMPACTION_THRESHOLD but
     // still under MAX_RECENT_OPS, op-bearing syncs must stay cheap (no snapshot
     // rebuild). The old code triggered compaction at SPLIT_COMPACTION_THRESHOLD, so
@@ -3182,6 +3217,39 @@ describe('FileBasedSyncAdapterService', () => {
       // No throw, no conflict — recovered the referenced snapshot from .bak.
       expect(res.snapshotState).toBeDefined();
       expect((res.snapshotState as { tasks: string[] }).tasks).toEqual(['from-bak']);
+    });
+
+    it('(c) encrypted download rejects a plaintext state file without adopting its backup', async () => {
+      const opsFile = makeOpsFile({
+        syncVersion: 5,
+        recentOps: [makeCompactOp()],
+        snapshotRef: { syncVersion: 1, vectorClock: { client1: 1 }, rev: 'sr1' },
+      });
+      routeDownloads({
+        [C.OPS_FILE]: await encryptSplitFile(opsFile),
+        [C.STATE_FILE]: addPrefix(makeStateFile({ syncVersion: 1 }), 3),
+        [C.STATE_BACKUP_FILE]: await encryptSplitFile(
+          makeStateFile({
+            syncVersion: 1,
+            vectorClock: { client1: 1 },
+            state: { tasks: ['must-not-be-adopted'] },
+          }),
+        ),
+      });
+      const encryptedAdapter = service.createAdapter(
+        mockProvider,
+        encryptedCfg,
+        'test-password',
+      );
+
+      await expectAsync(encryptedAdapter.downloadOps(0, 'client2')).toBeRejectedWithError(
+        PlaintextWhenEncryptionExpectedError,
+      );
+
+      const downloadedPaths = mockProvider.downloadFile.calls
+        .allArgs()
+        .map((args) => args[0] as string);
+      expect(downloadedPaths).not.toContain(C.STATE_BACKUP_FILE);
     });
 
     // (d) snapshotRef mismatch (and no usable backup) is treated as a gap.
