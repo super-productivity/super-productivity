@@ -100,13 +100,20 @@ const walkCursor = async <T>(
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
   const query = options.query !== undefined ? (options.query as IDBValidKey) : null;
+  const limit = options.limit;
+  let visited = 0;
   let cursor = await source.openCursor(query, options.direction ?? 'next');
   while (cursor) {
     const action = visit(cursor.value as T, cursor.primaryKey as DbKey);
     if (action === 'delete' || action === 'delete-stop') {
       await cursor.delete();
     }
-    if (action === 'stop' || action === 'delete-stop') {
+    visited++;
+    if (
+      action === 'stop' ||
+      action === 'delete-stop' ||
+      (limit !== undefined && visited >= limit)
+    ) {
       return;
     }
     cursor = await cursor.continue();
@@ -380,6 +387,17 @@ class IdbOpLogTx implements OpLogTx {
     await storeOf(this._tx, store).put(value, key as IDBValidKey | undefined);
   }
 
+  async putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void> {
+    // No bridge to amortize — just loop the same per-row puts (within this tx).
+    const objectStore = storeOf(this._tx, store);
+    for (const { value, key } of entries) {
+      await objectStore.put(value, key as IDBValidKey | undefined);
+    }
+  }
+
   async get<T>(store: string, key: DbKey): Promise<T | undefined> {
     return (await storeOf(this._tx, store).get(key as IDBValidKey)) as T | undefined;
   }
@@ -394,6 +412,10 @@ class IdbOpLogTx implements OpLogTx {
 
   async clear(store: string): Promise<void> {
     await storeOf(this._tx, store).clear();
+  }
+
+  async count(store: string, range?: DbKeyRange): Promise<number> {
+    return storeOf(this._tx, store).count(toIdbKeyRange(range));
   }
 
   async getFromIndex<T>(

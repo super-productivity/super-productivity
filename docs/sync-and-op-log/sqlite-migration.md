@@ -38,13 +38,22 @@
 > - ✅ **Phase C step (algorithm) — backend migration:** `migrateOpLogBackend`
 >   (`op-log-backend-migration.ts`) copies the whole DB source→dest with
 >   verify-before-commit; tested real-IDB → sql.js. Not yet wired into startup.
-> - ⏳ Remaining (device-gated): add `@capacitor-community/sqlite` + a thin
->   `SqliteDb` wrapper over its `SQLiteDBConnection` (with the bridge-perf
->   mitigations — see followup B1), override `OP_LOG_DB_ADAPTER_FACTORY` for
->   native behind a flag, fix the store `init()` to call `adapter.init()` / skip
->   the IDB open on SQLite (see followup B3), wire the C1 migration trigger, and
->   run on-device. The other small IDB consumers (theme, credential, oauth,
->   client-id) are out of the data-loss scope (Phase D).
+> - ✅ **Native wiring landed — Android default-on, no opt-in flag:** the
+>   `@capacitor-community/sqlite` plugin and the `CapacitorSqliteDb` wrapper (with
+>   the lastId-from-run and `transaction:false` bridge-perf mitigations + a native
+>   open timeout and a `databaseExists` probe); the `OP_LOG_DB_ADAPTER_FACTORY`
+>   override (`native-sqlite-backend.ts`) gated on a real Capacitor Android bridge
+>   (`getPlatform() === 'android'`, NOT
+>   `IS_ANDROID_NATIVE` — which would also fire in the bridgeless online-mode
+>   WebView and brick it); the one-time
+>   C1 migration (first-launch IDB→SQLite copy with verify-before-commit and a
+>   run-once durable marker); and an **in-session fallback** to IndexedDB on a
+>   recoverable pre-migration bootstrap failure (fails loudly post-migration so a
+>   stale snapshot is never served). iOS and web/PWA/Electron stay on IndexedDB.
+> - ⏳ Remaining (device-gated): `npx cap sync android` + an on-device run, then the
+>   Play Console staged rollout (no in-app kill-switch), plus the deferred bulk-write
+>   perf path. The other small IDB consumers (theme, credential, oauth, client-id)
+>   are out of the data-loss scope (Phase D).
 >
 > **Open decisions (need on-device validation):**
 >
@@ -171,11 +180,17 @@ data-loss class.
 
 1. **Phase A** → merge behind no flag (IDB still the only backend). Gate: all
    unit + 38 integration specs green.
-2. **Phase B + C** → merge behind a native feature flag, default **off**.
-   Dogfood on real Android devices.
+2. **Phase B + C** → originally merged behind a native feature flag (default
+   off). Now the SQLite backend is the **Android default** (real Capacitor
+   Android bridge only — `getPlatform() === 'android'`, not the bridgeless
+   online-mode WebView;
+   no opt-in flag), made safe by the in-session IndexedDB fallback + durable
+   marker + bounded native calls. Rollout is ramped via **Play Console staged
+   rollout** (no in-app kill-switch); iOS stays on IndexedDB.
 3. Parameterize the integration harness to run a **second time against
    `SqliteOpLogAdapter`** — catches auto-increment/unique-index/atomicity gaps.
-4. Staged enable on native; retain IDB fallback ≥1 release; then add cleanup.
+4. Staged enable on Android via Play Console; retain IDB fallback ≥1 release;
+   then add cleanup (Track D).
 
 ## 5. Risk register
 

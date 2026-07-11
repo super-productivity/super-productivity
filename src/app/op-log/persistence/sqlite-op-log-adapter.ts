@@ -44,6 +44,7 @@ import {
 } from './op-log-db-adapter';
 import { DbStoreSchema, OP_LOG_DB_SCHEMA, OpLogDbSchema } from './op-log-db-schema';
 import { OPS_INDEXES } from './db-keys.const';
+import { decodeValue, encodeValue } from './value-codec';
 
 /** Column carrying the JSON-encoded stored object. */
 export const VALUE_COLUMN = 'value';
@@ -96,6 +97,45 @@ export interface SqliteDb {
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastId?: number }>;
   /** Run a query, returning rows as plain objects. */
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
+  /**
+   * Optional batched write: run many parameterized statements in ONE native
+   * round-trip (the plugin's `executeSet`), within the caller's *current*
+   * transaction (no implicit BEGIN/COMMIT of its own — the adapter's enclosing
+   * transaction governs). This collapses the per-row JS↔native bridge crossings
+   * that dominate the one-time IDB→SQLite migration (N rows = N crossings → a few
+   * crossings). Backends without a bridge may omit it (the sql.js test stand-in
+   * implements it by looping `run`, which still exercises the adapter's batch
+   * path); when absent {@link SqliteOpLogAdapter} falls back to per-row `run`.
+   */
+  runSet?(set: ReadonlyArray<{ statement: string; values: unknown[] }>): Promise<void>;
+  /**
+   * Optional connection-level serializer. When present, both adapter operations
+   * and raw native bootstrap statements use it, so they cannot interleave on the
+   * connection's single transaction context. In-process backends may omit it;
+   * the adapter then uses its own queue keyed by this `SqliteDb` instance.
+   */
+  runExclusive?<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Optional connection-recovery hook. If a transaction's `COMMIT` *and* its
+   * fallback `ROLLBACK` both fail, the connection may still hold an open
+   * transaction that would make every later `BEGIN` throw "transaction within a
+   * transaction" and wedge the backend. The adapter calls this to drop the
+   * connection so the next op reopens clean. In-process backends (the sql.js
+   * test stand-in) may omit it — there the failure mode does not arise.
+   */
+  reset?(): Promise<void>;
+  /**
+   * Optional durable "does the database file exist on disk?" probe, answerable
+   * WITHOUT opening (or successfully opening) the connection. The native backend
+   * uses it to decide — after a bootstrap failure it could not recover from —
+   * whether it is safe to fall back to the legacy IndexedDB copy: only when NO
+   * SQLite file exists (so a migration can never have committed). A
+   * present-but-unopenable file might hold post-migration ops, so falling back
+   * would silently lose them. Plugin availability alone cannot prove absence
+   * after an earlier app version made SQLite authoritative, so an unavailable
+   * probe must bias to `true`. In-process backends may omit it.
+   */
+  databaseExists?(): Promise<boolean>;
 }
 
 /**
@@ -242,7 +282,7 @@ const buildInsert = (
     }
   }
   columns.push(VALUE_COLUMN);
-  params.push(JSON.stringify(value));
+  params.push(encodeValue(value));
   for (const ic of plan.indexColumns) {
     columns.push(ic.column);
     params.push(toSqlValue(extractPath(value, ic.jsonPath)));
@@ -251,7 +291,7 @@ const buildInsert = (
 };
 
 const decodeRow = <T>(plan: SqlTablePlan, row: Record<string, unknown>): T => {
-  const value = JSON.parse(row[VALUE_COLUMN] as string) as Record<string, unknown>;
+  const value = decodeValue(row[VALUE_COLUMN] as string) as Record<string, unknown>;
   // The autoinc PK (`seq`) lives in its own column, never the JSON `value` blob
   // — inject it back (from the `__pk` alias every read selects) so callers see
   // `.seq`, exactly like IDB's keyPath+autoIncrement store. keyPath stores keep
@@ -318,6 +358,27 @@ const whereRange = (
 
 const whereClause = (clause: string): string => (clause ? ` WHERE ${clause}` : '');
 
+/** AND together the non-empty WHERE fragments. */
+const andClauses = (...parts: string[]): string => parts.filter(Boolean).join(' AND ');
+
+/**
+ * IndexedDB omits a record from an index when its index key path evaluates to
+ * `undefined`. Reproduce that in SQL: an index scan must only see rows whose
+ * index column(s) are non-NULL. Local ops store `syncedAt: undefined`, so they
+ * are absent from IDB's `bySyncedAt` index; without this filter the SQLite scan
+ * would visit them and diverge — e.g. `hasSyncedOps` would report an unsynced op
+ * as synced. Exact-match index lookups (`whereExact`, `= ?`) already exclude
+ * NULLs, so this matters for the unbounded / open-range index scans.
+ */
+const indexNotNull = (columns: string[]): string =>
+  columns.map((c) => `${c} IS NOT NULL`).join(' AND ');
+
+/** `LIMIT n` for a positive integer `n`, else empty. Bound never carries data. */
+const limitClause = (limit?: number): string =>
+  typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+    ? ` LIMIT ${Math.floor(limit)}`
+    : '';
+
 // ── SQL operations (shared by the adapter and its transaction) ───────────────
 //
 // Every method takes a SqliteDb so the same code serves both the adapter
@@ -340,24 +401,87 @@ const sqlAdd = async (
   }
 };
 
-const sqlPut = async (
-  db: SqliteDb,
+/** Max rows per `executeSet` batch — bounds one native call's payload + duration. */
+const PUT_BATCH_CHUNK = 500;
+
+/**
+ * Max keys per batched cursor-scan `DELETE … IN (…)` statement. Each statement is
+ * one JS↔native bridge crossing (~2 ms), so per-row deletes made compaction —
+ * which prunes most of the ops table inside a write transaction that serializes
+ * every other op — pay N crossings; chunked IN-lists pay N/500. Kept below
+ * SQLite's conservative bound-parameter floor (SQLITE_MAX_VARIABLE_NUMBER = 999
+ * on older builds).
+ */
+const DELETE_BATCH_CHUNK = 500;
+
+/**
+ * The upsert statement + bound params for putting `value` (the single source of
+ * truth shared by single {@link sqlPut} and batched {@link sqlPutBatch}, so they
+ * can never diverge).
+ */
+const buildPutStatement = (
   plan: SqlTablePlan,
   value: unknown,
   key?: DbKey,
-): Promise<void> => {
+): { statement: string; values: (string | number | null)[] } => {
   const { columns, params } = buildInsert(plan, value, key);
   // Never overwrite the primary-key column on conflict (it is the match key).
   const updateCols = columns.filter((c) => c !== plan.pkColumn);
-  const sql =
+  const statement =
     `INSERT INTO ${plan.table} (${columns.join(', ')}) VALUES (${columns
       .map(() => '?')
       .join(', ')}) ` +
     `ON CONFLICT(${plan.pkColumn}) DO UPDATE SET ${updateCols
       .map((c) => `${c} = excluded.${c}`)
       .join(', ')}`;
+  return { statement, values: params };
+};
+
+const sqlPut = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  value: unknown,
+  key?: DbKey,
+): Promise<void> => {
+  const { statement, values } = buildPutStatement(plan, value, key);
   try {
-    await db.run(sql, params);
+    await db.run(statement, values);
+  } catch (e) {
+    mapSqliteError(e);
+  }
+};
+
+/**
+ * Batched {@link sqlPut}: same upsert semantics, but the whole set crosses the
+ * native bridge in one `runSet` (chunked) instead of one crossing per row. When
+ * the backend exposes no `runSet`, falls back to per-row `sqlPut` — identical
+ * result, no batching win. Caller is responsible for the enclosing transaction.
+ */
+const sqlPutBatch = async (
+  db: SqliteDb,
+  plan: SqlTablePlan,
+  entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+): Promise<void> => {
+  if (!entries.length) {
+    return;
+  }
+  if (!db.runSet) {
+    for (const { value, key } of entries) {
+      await sqlPut(db, plan, value, key);
+    }
+    return;
+  }
+  try {
+    // Build AND ship one chunk at a time, so at most PUT_BATCH_CHUNK statements are
+    // ever resident. Mapping the whole `entries` array up front would double the
+    // store's peak memory and defeat the migration's one-store-at-a-time bound on
+    // large accounts / low-end devices.
+    for (let i = 0; i < entries.length; i += PUT_BATCH_CHUNK) {
+      const chunk = entries
+        .slice(i, i + PUT_BATCH_CHUNK)
+        .map(({ value, key }) => buildPutStatement(plan, value, key));
+      await db.runSet(chunk);
+    }
   } catch (e) {
     mapSqliteError(e);
   }
@@ -456,13 +580,12 @@ const sqlGetAllFromIndex = async <T>(
   range?: DbKeyRange,
 ): Promise<T[]> => {
   const idx = indexPlan(plan, indexName);
-  const { clause, params } = whereRange(
-    idx.columns.map((c) => c.column),
-    range,
-  );
-  const order = idx.columns.map((c) => c.column).join(', ');
+  const cols = idx.columns.map((c) => c.column);
+  const { clause, params } = whereRange(cols, range);
+  const fullClause = andClauses(clause, indexNotNull(cols));
+  const order = cols.join(', ');
   const rows = await db.query(
-    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(clause)} ORDER BY ${order} ASC`,
+    `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}${whereClause(fullClause)} ORDER BY ${order} ASC`,
     params,
   );
   return rows.map((r) => decodeRow<T>(plan, r));
@@ -480,9 +603,10 @@ const sqlIterate = async <T>(
   options: DbIterateOptions,
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
-  const orderCols = options.index
+  const indexCols = options.index
     ? indexPlan(plan, options.index).columns.map((c) => c.column)
-    : [plan.pkColumn];
+    : null;
+  const orderCols = indexCols ?? [plan.pkColumn];
   const dir = options.direction === 'prev' ? 'DESC' : 'ASC';
 
   let clause = '';
@@ -492,10 +616,15 @@ const sqlIterate = async <T>(
     clause = ex.clause;
     params = ex.params;
   }
+  // Match IDB: an index scan never visits rows whose index key is NULL.
+  if (indexCols) {
+    clause = andClauses(clause, indexNotNull(indexCols));
+  }
 
   const rows = await db.query(
     `SELECT ${plan.pkColumn} AS __pk, ${VALUE_COLUMN} FROM ${plan.table}` +
-      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}`,
+      `${whereClause(clause)} ORDER BY ${orderCols.map((c) => `${c} ${dir}`).join(', ')}` +
+      limitClause(options.limit),
     params,
   );
 
@@ -518,10 +647,17 @@ const sqlIterate = async <T>(
       break;
     }
   }
-  for (const pk of toDelete) {
-    await db.run(`DELETE FROM ${plan.table} WHERE ${plan.pkColumn} = ?`, [
-      toSqlValue(pk),
-    ]);
+  // Chunked IN-list instead of one DELETE per key: same rows, same enclosing
+  // transaction (callers wrap non-readonly scans), but one bridge crossing per
+  // DELETE_BATCH_CHUNK keys rather than per row.
+  for (let i = 0; i < toDelete.length; i += DELETE_BATCH_CHUNK) {
+    const chunk = toDelete.slice(i, i + DELETE_BATCH_CHUNK);
+    await db.run(
+      `DELETE FROM ${plan.table} WHERE ${plan.pkColumn} IN (${chunk
+        .map(() => '?')
+        .join(', ')})`,
+      chunk.map(toSqlValue),
+    );
   }
 };
 
@@ -591,6 +727,9 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
    * serialize.
    */
   private _serialize<T>(fn: () => Promise<T>): Promise<T> {
+    if (this._db.runExclusive) {
+      return this._db.runExclusive(fn);
+    }
     const q = connectionQueue(this._db);
     // `.then(fn, fn)` runs `fn` whether the prior slot resolved or rejected
     // (defensive — the tail below never rejects).
@@ -685,17 +824,18 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
   }
 
   countFromIndex(store: string, index: string, range?: DbKeyRange): Promise<number> {
-    const plan = this._plan(store);
-    const idx = indexPlan(plan, index);
-    const { clause, params } = whereRange(
-      idx.columns.map((c) => c.column),
-      range,
-    );
-    return this._serialize(() =>
-      this._db
-        .query(`SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(clause)}`, params)
-        .then((rows) => Number(rows[0]?.['n'] ?? 0)),
-    );
+    return this._serialize(async () => {
+      const plan = this._plan(store);
+      const idx = indexPlan(plan, index);
+      const cols = idx.columns.map((c) => c.column);
+      const { clause, params } = whereRange(cols, range);
+      const fullClause = andClauses(clause, indexNotNull(cols));
+      const rows = await this._db.query(
+        `SELECT COUNT(*) AS n FROM ${plan.table}${whereClause(fullClause)}`,
+        params,
+      );
+      return Number(rows[0]?.['n'] ?? 0);
+    });
   }
 
   async iterate<T>(
@@ -736,20 +876,46 @@ export class SqliteOpLogAdapter implements OpLogDbAdapter {
     fn: () => Promise<T>,
   ): Promise<T> {
     return this._serialize(async () => {
-      await this._db.run(`BEGIN ${kind}`);
+      try {
+        await this._db.run(`BEGIN ${kind}`);
+      } catch (e) {
+        // A failing BEGIN can indicate a leaked transaction or wedged native
+        // connection. Drop it so the next serialized operation can reopen cleanly.
+        if (this._db.reset) {
+          await this._db.reset().catch(() => undefined);
+        }
+        return mapSqliteError(e);
+      }
       try {
         const result = await fn();
         await this._db.run('COMMIT');
         return result;
       } catch (e) {
-        try {
-          await this._db.run('ROLLBACK');
-        } catch {
-          // Already rolled back / no active transaction.
-        }
+        await this._rollback();
         return mapSqliteError(e);
       }
     });
+  }
+
+  /**
+   * Best-effort rollback of the open transaction. If `ROLLBACK` itself fails the
+   * connection may still hold the transaction, which would make the next `BEGIN`
+   * throw "transaction within a transaction" and wedge every later op — so we
+   * fall back to {@link SqliteDb.reset} (when the backend offers it) to drop the
+   * connection and force a clean reopen.
+   */
+  private async _rollback(): Promise<void> {
+    try {
+      await this._db.run('ROLLBACK');
+      return;
+    } catch {
+      // ROLLBACK failed — recover via a connection reset below.
+    }
+    try {
+      await this._db.reset?.();
+    } catch {
+      // Nothing more we can safely do here.
+    }
   }
 }
 
@@ -789,6 +955,15 @@ class SqliteOpLogTx implements OpLogTx {
     return sqlPut(this._db, this._plan(store), value, key);
   }
 
+  putBatch(
+    store: string,
+    entries: ReadonlyArray<{ value: unknown; key?: DbKey }>,
+  ): Promise<void> {
+    // Already inside the enclosing BEGIN/COMMIT — sqlPutBatch issues directly on
+    // _db (one executeSet per chunk), so the whole batch shares this atomic unit.
+    return sqlPutBatch(this._db, this._plan(store), entries);
+  }
+
   get<T>(store: string, key: DbKey): Promise<T | undefined> {
     return sqlGet<T>(this._db, this._plan(store), key);
   }
@@ -803,6 +978,10 @@ class SqliteOpLogTx implements OpLogTx {
 
   clear(store: string): Promise<void> {
     return sqlClear(this._db, this._plan(store));
+  }
+
+  count(store: string, range?: DbKeyRange): Promise<number> {
+    return sqlCount(this._db, this._plan(store), range);
   }
 
   getFromIndex<T>(

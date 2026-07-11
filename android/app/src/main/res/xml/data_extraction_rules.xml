@@ -5,11 +5,28 @@
     <exclude
       domain="sharedpref"
       path="com.superproductivity.superproductivity_preferences.xml" />
+    <!--
+      The native SQLite op-log (SUP_OPS) is the AUTHORITATIVE, sync/replay-sensitive
+      store, read during boot hydration. Auto Backup restores run after install and
+      BEFORE first launch, so a stale cloud backup could seed an old op-log under the
+      hydrator and confuse sync reconciliation. Exclude it from auto-restore; the
+      KeyValStore (SupKeyValStore) disaster-recovery backup stays included and is the
+      intended, guarded cross-device restore path (also covers no-sync users).
+      Files: @capacitor-community/sqlite stores SUP_OPS as `SUP_OPSSQLite.db` (+ the
+      `-wal`/`-shm` WAL sidecars).
+    -->
+    <exclude domain="database" path="SUP_OPSSQLite.db" />
+    <exclude domain="database" path="SUP_OPSSQLite.db-wal" />
+    <exclude domain="database" path="SUP_OPSSQLite.db-shm" />
   </cloud-backup>
   <device-transfer>
     <!-- A transferred fresh install should select launch mode from current state. -->
     <exclude
       domain="sharedpref"
       path="com.superproductivity.superproductivity_preferences.xml" />
+    <!-- Op-log: keep it out of all auto-restore paths (see cloud-backup note). -->
+    <exclude domain="database" path="SUP_OPSSQLite.db" />
+    <exclude domain="database" path="SUP_OPSSQLite.db-wal" />
+    <exclude domain="database" path="SUP_OPSSQLite.db-shm" />
   </device-transfer>
 </data-extraction-rules>

@@ -1,0 +1,423 @@
+/**
+ * Native {@link SqliteDb} backing the op-log over `@capacitor-community/sqlite`
+ * — B1 of the SQLite migration (see docs/sync-and-op-log/sqlite-migration.md).
+ *
+ * This is the only file that talks to the plugin. It opens ONE app-private
+ * SQLite database (`SUP_OPS` in `Directory.Data` / `databases/`) and exposes the
+ * minimal `run`/`query` surface the {@link SqliteOpLogAdapter} drives. The
+ * adapter owns all SQL + transaction control; this wrapper is a dumb bridge.
+ *
+ * ⚠️ NATIVE ONLY. The plugin's WEB build is WASM-SQLite persisted *into
+ * IndexedDB* — i.e. it reintroduces the exact OS-eviction risk this migration
+ * exists to escape. Callers MUST gate construction on `IS_NATIVE_PLATFORM`
+ * (`shouldUseNativeSqliteOpLogBackend()` does this). The plugin itself is loaded
+ * via a dynamic `import()` so it never enters the eager web bundle.
+ *
+ * ⚡ Perf (the JS↔native bridge is the dominant cost, not SQLite):
+ * - `run(...)` returns the plugin's own `lastId` from the insert response — never
+ *   a separate `SELECT last_insert_rowid()`, which would double every insert to
+ *   two bridge crossings.
+ * - `run` is issued with `transaction = false` so the adapter's explicit
+ *   `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` are the single transaction in
+ *   force; otherwise the plugin would wrap each statement in its own
+ *   transaction and the adapter's `BEGIN` would fail.
+ */
+import type { SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
+import { SqliteDb } from './sqlite-op-log-adapter';
+import { createConnectionSerializer } from './connection-serializer';
+import { Log } from '../../core/log';
+import { environment } from '../../../environments/environment';
+
+type SqlitePluginModule = Pick<
+  typeof import('@capacitor-community/sqlite'),
+  'CapacitorSQLite' | 'SQLiteConnection'
+>;
+
+const loadSqlitePlugin = (): Promise<SqlitePluginModule> =>
+  import('@capacitor-community/sqlite');
+
+/**
+ * No-encryption mode string the plugin expects for `createConnection`.
+ * Deliberately matches the existing IndexedDB `SUP_OPS` posture (also
+ * unencrypted-at-rest in the app-private store) — this migration moves the
+ * op-log off an evictable store, it does not change its encryption stance.
+ * Encryption-at-rest (SQLCipher) is a separate, future track.
+ */
+const NO_ENCRYPTION = 'no-encryption';
+
+/**
+ * Hard cap on the native open handshake. A wedged native SQLite connection can
+ * leave `open()` (or the consistency/create calls) pending forever; because the
+ * op-log is the app's authoritative store and is read during boot hydration, an
+ * un-timed open would brick the app at startup with no recovery. On timeout the
+ * open rejects so the native backend can fall back to IndexedDB (pre-migration)
+ * or fail loudly (post-migration). NOT a cap on the migration itself — that is
+ * bounded, progressing work and capping it risks never migrating a large account.
+ */
+const DEFAULT_OPEN_TIMEOUT_MS = 15_000;
+
+/**
+ * Hard cap on a single statement crossing the native bridge. The open timeout
+ * only bounds connecting; a wedged connection can also hang an individual
+ * `run`/`query` *after* opening (e.g. mid-migration), which would park the shared
+ * connection serializer forever and brick the (boot-hydrated) op-log just the
+ * same. Generous — far above any legitimate single statement — so it only ever
+ * fires on a genuine wedge, converting it into a reject the adapter can roll back
+ * / fall back from instead of an indefinite hang.
+ */
+const DEFAULT_STATEMENT_TIMEOUT_MS = 60_000;
+
+/** Reject with a tagged error if `p` has not settled within `ms`. */
+const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new DOMException(`${label} timed out after ${ms}ms`, 'TimeoutError')),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+
+const isTimeoutError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === 'TimeoutError';
+
+export class CapacitorSqliteDb implements SqliteDb {
+  private _conn?: SQLiteDBConnection;
+  private _openPromise?: Promise<SQLiteDBConnection>;
+  private _sqlite?: SQLiteConnection;
+  /** A timed-out native call whose connection could not be confirmed closed. */
+  private _recoveryUncertain = false;
+  // Connection-level serializer (see SqliteDb.runExclusive). One SQLite
+  // connection has one transaction context, so every adapter op over the shared
+  // connection is chained — never interleaved.
+  private readonly _runExclusive = createConnectionSerializer();
+
+  constructor(
+    private readonly _dbName: string,
+    private readonly _openTimeoutMs: number = DEFAULT_OPEN_TIMEOUT_MS,
+    private readonly _statementTimeoutMs: number = DEFAULT_STATEMENT_TIMEOUT_MS,
+    private readonly _loadPlugin: () => Promise<SqlitePluginModule> = loadSqlitePlugin,
+  ) {}
+
+  /**
+   * Whether the `SUP_OPS` SQLite file exists on disk, answered WITHOUT opening a
+   * usable connection (so it is callable even after `open()` wedged). The native
+   * backend uses it to gate the IndexedDB fallback: a missing file means no
+   * migration can have committed, so the legacy IDB copy is still complete and
+   * safe to use. A plugin-load failure is ambiguous across app upgrades and must
+   * bias to `true`: an earlier version may already have made SQLite authoritative.
+   */
+  async databaseExists(): Promise<boolean> {
+    if (this._recoveryUncertain) {
+      return true;
+    }
+    let sqlite: SQLiteConnection;
+    try {
+      const { CapacitorSQLite, SQLiteConnection: SQLiteConnectionCtor } =
+        await this._loadPlugin();
+      sqlite = new SQLiteConnectionCtor(CapacitorSQLite);
+    } catch {
+      // A later broken build can lose the plugin after migration. Never interpret
+      // module-load failure as proof that the retained IndexedDB copy is current.
+      return true;
+    }
+    try {
+      const res = await withTimeout(
+        sqlite.isDatabase(this._dbName),
+        this._openTimeoutMs,
+        'SQLite isDatabase',
+      );
+      return res.result === true;
+    } catch {
+      // The plugin loaded but the probe failed/hung — a migrated file MIGHT exist.
+      // Bias toward "exists" so the caller fails loudly rather than risk serving a
+      // stale IndexedDB snapshot over post-migration ops.
+      return true;
+    }
+  }
+
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    return this._runExclusive(fn);
+  }
+
+  /**
+   * Drop the connection so the next op reopens a clean handle (see
+   * {@link SqliteDb.reset}). Best-effort: fully closes + removes the plugin's
+   * connection entry so any lingering open transaction is rolled back. If close
+   * cannot be confirmed, this wrapper remains quarantined: reopening while a
+   * timed-out native call may still finish could leak it into a new transaction.
+   */
+  async reset(): Promise<void> {
+    // Stay quarantined until closeConnection positively confirms the old handle
+    // is gone. A Promise timeout does not cancel the underlying native call.
+    this._recoveryUncertain = true;
+    const sqlite = this._sqlite;
+    this._conn = undefined;
+    this._openPromise = undefined;
+    this._sqlite = undefined;
+    if (!sqlite) {
+      return;
+    }
+    try {
+      // Bounded: a wedged connection can hang close() too, and reset() runs on the
+      // recovery path — an un-timed close would defeat the recovery it enables.
+      await withTimeout(
+        sqlite.closeConnection(this._dbName, false),
+        this._openTimeoutMs,
+        'SQLite closeConnection',
+      );
+      this._recoveryUncertain = false;
+    } catch {
+      // Keep this instance quarantined. Reopening while the timed-out call may
+      // still be running can leak it into a new transaction or commit it later.
+    }
+  }
+
+  /**
+   * Delete the underlying SQLite database file (drops every table and removes it
+   * from disk), then drop the cached handle so a later op reopens/recreates
+   * cleanly. NOT part of the normal op-log lifecycle — the authoritative
+   * `SUP_OPS` file is never deleted at runtime. This exists for the dev-only
+   * op-log backend benchmark to tear down its throwaway bench DB, and is kept
+   * here so all `@capacitor-community/sqlite` access stays in this one file.
+   */
+  async deleteDatabase(): Promise<void> {
+    const conn = await this._ensureOpen();
+    try {
+      // delete() requires an open connection; it closes the connection natively
+      // and removes the file. Bounded like every other native call so a wedged
+      // teardown can't hang the benchmark indefinitely.
+      await withTimeout(conn.delete(), this._statementTimeoutMs, 'SQLite delete');
+    } finally {
+      this._conn = undefined;
+      this._openPromise = undefined;
+      this._sqlite = undefined;
+      this._recoveryUncertain = false;
+    }
+  }
+
+  private _ensureOpen(): Promise<SQLiteDBConnection> {
+    if (this._recoveryUncertain) {
+      return Promise.reject(
+        new DOMException(
+          'SQLite connection recovery could not be confirmed',
+          'InvalidStateError',
+        ),
+      );
+    }
+    if (this._conn) {
+      return Promise.resolve(this._conn);
+    }
+    if (!this._openPromise) {
+      this._openPromise = this._open()
+        .then((conn) => {
+          this._conn = conn;
+          return conn;
+        })
+        .catch((e) => {
+          // Allow a later call to retry the open rather than caching a rejection.
+          this._openPromise = undefined;
+          throw e;
+        });
+    }
+    return this._openPromise;
+  }
+
+  private async _open(): Promise<SQLiteDBConnection> {
+    // Bound the whole native handshake: any of the bridge calls below can wedge
+    // indefinitely on a broken native connection, and the op-log is read during
+    // boot hydration, so an un-timed hang bricks startup (see DEFAULT_OPEN_TIMEOUT_MS).
+    try {
+      return await withTimeout(this._openUntimed(), this._openTimeoutMs, 'SQLite open');
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        await this.reset();
+      }
+      throw error;
+    }
+  }
+
+  private async _openUntimed(): Promise<SQLiteDBConnection> {
+    // Dynamic import: the plugin (and its web WASM fallback) must NOT be pulled
+    // into the eager bundle — this code path only runs on native.
+    const { CapacitorSQLite, SQLiteConnection } = await this._loadPlugin();
+    const sqlite = new SQLiteConnection(CapacitorSQLite);
+    // Kept so reset() can closeConnection() to roll back a wedged transaction.
+    this._sqlite = sqlite;
+    const readonly = false;
+    // A fresh `SQLiteConnection` starts with an EMPTY JS connection map, but on a
+    // WebView reload the NATIVE side may still hold an open `SUP_OPS` connection
+    // from the previous JS runtime. Reconcile first, otherwise the create path
+    // below rejects with "connection already exists". Best-effort — a failure
+    // here is non-fatal (the create/retrieve fallback still covers it).
+    await sqlite.checkConnectionsConsistency().catch(() => undefined);
+    const conn = await this._createOrRetrieveConnection(sqlite, readonly);
+    if (!(await conn.isDBOpen()).result) {
+      await conn.open();
+    }
+    await this._applyPerfPragmas(conn);
+    return conn;
+  }
+
+  /**
+   * Best-effort performance pragmas, applied on every open. NON-FATAL — the
+   * op-log is fully correct without them (default rollback journal + FULL sync),
+   * just slower; a failure here must never block the boot-critical open.
+   * - `journal_mode=WAL`: readers don't block the writer and each autocommit
+   *   `append()` avoids the rollback-journal fsync dance. Persisted in the DB
+   *   file, but harmless to re-assert each open.
+   * - `synchronous=NORMAL`: the real append-speed win — drops the per-commit fsync
+   *   that FULL forces on every autocommit `append()` (the WAL "readers don't block
+   *   writers" benefit is mostly moot here: a single connection serialized by
+   *   `runExclusive` never has concurrent read/write contention to relieve). The
+   *   documented-safe WAL pairing — durable across an app crash, risking only the
+   *   last transaction on an OS-level power loss (not an app crash). A synced client
+   *   re-syncs it; an unsynced client loses at most that one last append — still
+   *   strictly more durable than the IndexedDB store this replaces. Per-connection,
+   *   so it MUST be set each open.
+   *
+   * Each pragma is its OWN `execute()` call ON PURPOSE: the plugin only splits a
+   * multi-statement string on `";\n"` (semicolon+newline) — a `"; "`-joined string
+   * reaches Android `execSQL()` as one statement, which runs only the FIRST, so a
+   * combined `'…WAL; …NORMAL;'` silently drops `synchronous`. WAL is incompatible
+   * with a transaction, so both run with `transaction:false`.
+   */
+  private async _applyPerfPragmas(conn: SQLiteDBConnection): Promise<void> {
+    try {
+      await withTimeout(
+        conn.execute('PRAGMA journal_mode=WAL;', false),
+        this._statementTimeoutMs,
+        'SQLite WAL pragma',
+      );
+      await withTimeout(
+        conn.execute('PRAGMA synchronous=NORMAL;', false),
+        this._statementTimeoutMs,
+        'SQLite synchronous pragma',
+      );
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw error;
+      }
+      // Pure optimization — fall through to the engine defaults on any failure.
+    }
+    // Dev-only readback so the applied pragmas are confirmable on-device (logcat /
+    // chrome://inspect) — `synchronous` is a per-connection runtime setting not
+    // stored in the file, so this is the only way to verify it took. Gated to
+    // non-production so it never adds bridge round-trips to the boot-critical open
+    // in shipped builds. Pragma values are not user content (sync rule #9 safe).
+    if (!environment.production) {
+      try {
+        const jm = await withTimeout(
+          conn.query('PRAGMA journal_mode;'),
+          this._statementTimeoutMs,
+          'SQLite WAL pragma readback',
+        );
+        const sy = await withTimeout(
+          conn.query('PRAGMA synchronous;'),
+          this._statementTimeoutMs,
+          'SQLite synchronous pragma readback',
+        );
+        Log.log('[opLog] SQLite pragmas applied', {
+          journalMode: (jm.values?.[0] as { journal_mode?: string })?.journal_mode,
+          synchronous: (sy.values?.[0] as { synchronous?: number })?.synchronous,
+        });
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          throw error;
+        }
+        // Diagnostic only — never fail the open over a readback.
+      }
+    }
+  }
+
+  /**
+   * Get a `SUP_OPS` connection, reusing the existing one when the plugin already
+   * tracks it. Falls back to `retrieveConnection` if `createConnection` still
+   * reports the connection exists (a stale entry the consistency check above
+   * didn't clear), so a reload can never wedge on "connection already exists".
+   */
+  private async _createOrRetrieveConnection(
+    sqlite: SQLiteConnection,
+    readonly: boolean,
+  ): Promise<SQLiteDBConnection> {
+    if ((await sqlite.isConnection(this._dbName, readonly)).result) {
+      return sqlite.retrieveConnection(this._dbName, readonly);
+    }
+    try {
+      return await sqlite.createConnection(
+        this._dbName,
+        false,
+        NO_ENCRYPTION,
+        1,
+        readonly,
+      );
+    } catch (e) {
+      if (/already exists/i.test(e instanceof Error ? e.message : String(e))) {
+        return sqlite.retrieveConnection(this._dbName, readonly);
+      }
+      throw e;
+    }
+  }
+
+  async run(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<{ changes: number; lastId?: number }> {
+    const conn = await this._ensureOpen();
+    // transaction:false — the SqliteOpLogAdapter drives BEGIN/COMMIT/ROLLBACK.
+    const res = await this._withStatementTimeout(
+      conn.run(sql, params, false),
+      'SQLite run',
+    );
+    return {
+      changes: res.changes?.changes ?? 0,
+      lastId: res.changes?.lastId,
+    };
+  }
+
+  async query(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+    const conn = await this._ensureOpen();
+    const res = await this._withStatementTimeout(conn.query(sql, params), 'SQLite query');
+    return (res.values ?? []) as Record<string, unknown>[];
+  }
+
+  async runSet(
+    set: ReadonlyArray<{ statement: string; values: unknown[] }>,
+  ): Promise<void> {
+    const conn = await this._ensureOpen();
+    // transaction:false — like run(), the SqliteOpLogAdapter drives the single
+    // BEGIN/COMMIT/ROLLBACK in force, so executeSet must NOT wrap its own (the
+    // plugin gates its internal begin/rollback on this flag; verified in the
+    // bundled Android source). The whole set crosses the bridge once instead of
+    // once per statement — the win for the one-time migration's bulk insert.
+    //
+    // Locked-in plugin contract: a failed statement mid-set must surface as a
+    // throw (so the adapter's enclosing ROLLBACK fires), not a silently-swallowed
+    // partial apply. It does today. The migration does NOT rely on this alone —
+    // its verify-before-commit re-counts rows + seq + vector clock and rolls back
+    // on any mismatch, so a hypothetical future plugin regression here is caught.
+    await this._withStatementTimeout(
+      conn.executeSet([...set], false),
+      'SQLite executeSet',
+    );
+  }
+
+  private async _withStatementTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+    try {
+      return await withTimeout(promise, this._statementTimeoutMs, label);
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        await this.reset();
+      }
+      throw error;
+    }
+  }
+}
