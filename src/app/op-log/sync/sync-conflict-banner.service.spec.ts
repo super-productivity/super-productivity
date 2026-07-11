@@ -34,8 +34,13 @@ describe('SyncConflictBannerService', () => {
   let bannerService: jasmine.SpyObj<BannerService>;
   let router: jasmine.SpyObj<Router>;
 
+  /** Lets the count-change subscription's async refresh settle. */
+  const flushAsync = (): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, 0));
+
   beforeEach(() => {
-    bannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss']);
+    bannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss', 'isShown']);
+    bannerService.isShown.and.returnValue(false);
     router = jasmine.createSpyObj('Router', ['navigate']);
 
     TestBed.configureTestingModule({
@@ -87,5 +92,58 @@ describe('SyncConflictBannerService', () => {
     banner.action?.fn();
 
     expect(router.navigate).toHaveBeenCalledWith([SYNC_CONFLICTS_ROUTE]);
+  });
+
+  it('refreshes the OPEN banner counts when entries are reviewed in-page (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    const b = makeEntry({ winner: 'local' });
+    await journal.record(a);
+    await journal.record(b);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
+      count: 2,
+      remoteWins: 1,
+      localWins: 1,
+    });
+
+    bannerService.isShown.and.returnValue(true); // banner still on screen
+    await journal.markKept(a.id);
+    await flushAsync();
+
+    expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
+      count: 1,
+      remoteWins: 0,
+      localWins: 1,
+    });
+  });
+
+  it('dismisses the OPEN banner when the last entry is reviewed in-page (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    await journal.record(a);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open).toHaveBeenCalledTimes(1);
+
+    bannerService.isShown.and.returnValue(true);
+    await journal.markKept(a.id);
+    await flushAsync();
+
+    expect(bannerService.dismiss).toHaveBeenCalledWith(
+      BannerId.SyncConflictsAutoResolved,
+    );
+  });
+
+  it('does NOT resurrect a banner the user dismissed when the count changes (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    const b = makeEntry({ winner: 'local' });
+    await journal.record(a);
+    await journal.record(b);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open).toHaveBeenCalledTimes(1);
+
+    bannerService.isShown.and.returnValue(false); // user hit DISMISS
+    await journal.markKept(a.id);
+    await flushAsync();
+
+    expect(bannerService.open).toHaveBeenCalledTimes(1); // no re-open
   });
 });

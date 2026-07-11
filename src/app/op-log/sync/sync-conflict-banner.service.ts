@@ -10,6 +10,7 @@
 
 import { inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
+import { distinctUntilChanged, skip } from 'rxjs';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { ConflictJournalService } from './conflict-journal.service';
@@ -28,6 +29,20 @@ export class SyncConflictBannerService {
   // now depend on this) don't all have to provide a Router.
   private readonly _router = inject(Router, { optional: true });
   private readonly _journal = inject(ConflictJournalService);
+
+  constructor() {
+    // SPAP-35: the banner captures its counts when it opens; the sync-icon badge
+    // updates live but an OPEN banner would go stale while the user reviews
+    // entries on the page. Refresh (or dismiss at zero) the banner on every
+    // unreviewed-count change — but only while it is actually still shown, so a
+    // banner the user dismissed is never resurrected by reviewing activity.
+    // Root-scoped service → the subscription lives for the app's lifetime.
+    this._journal.unreviewedCount$.pipe(skip(1), distinctUntilChanged()).subscribe(() => {
+      if (this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) {
+        void this.maybeShowSummaryBanner();
+      }
+    });
+  }
 
   /** Navigate to the review page (shared by the banner action and elsewhere). */
   navigateToReview(): void {
