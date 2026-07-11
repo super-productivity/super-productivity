@@ -1,0 +1,3 @@
+[mcp_servers.angular-cli]
+command = "npx"
+args = ["--no-install", "ng", "mcp"]
