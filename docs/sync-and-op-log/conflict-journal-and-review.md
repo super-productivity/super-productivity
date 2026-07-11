@@ -150,6 +150,19 @@ cascade or re-merge on later syncs. Merged resolutions are journaled with
 `winner: 'merged'`, status `info` (nothing was discarded), recording per-field
 which side supplied each value.
 
+**Composition residual (pre-existing class):** the merged op is an ordinary
+partial UPDATE, so it is NOT closed under later whole-op LWW composition. When
+a concurrent third-device op overlapping a merged field crosses paths with the
+merged op after both are synced, `_checkEntityForConflict`'s no-pending-local
+fast path applies whichever op each client receives last, with no reconciling
+snapshot op — clients can permanently diverge on the overlapped field. This
+hole predates the merge feature: two plain concurrent user ops crossing after
+both are synced hit the identical branch (present at the pre-SPAP-14 baseline);
+the merged op is simply one more op subject to it, neither widening nor fixing
+it. Class-level fix ideas — per-field timestamps, a reconciling op on
+concurrent-apply, or carrying parent-op identity so a later conflict can
+decompose a merge — belong to a follow-up at the op-log level.
+
 ## Review UI (`/sync-conflicts`)
 
 Entry points: a banner after a sync that auto-resolved conflicts, an

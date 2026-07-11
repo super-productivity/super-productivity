@@ -150,23 +150,26 @@ export class BackupService {
       await this._operationWriteFlushService.flushPendingWrites();
       await this._lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
         await this._persistImportToOperationLog(validatedData);
+
+        // 4b. The conflict journal is a device-local side store describing
+        // conflicts in the op history that was JUST replaced — every import
+        // path (profile switch, JSON import, local-backup restore, SuperSync
+        // restore) funnels through here, and without this the badge keeps its
+        // pre-restore count and the review page lists entries from the
+        // replaced dataset. Cleared INSIDE the op-log lock: a concurrent
+        // (cross-tab) conflict resolution serializes on this lock, so its
+        // fresh post-import journal entries cannot land before the clear and
+        // be wiped. clearAll swallows its own errors (must not fail the import).
+        await this._conflictJournalService.clearAll();
       });
 
-      // 4b. Reset all sync providers' lastServerSeq to 0.
+      // 4c. Reset all sync providers' lastServerSeq to 0.
       // After a backup import, the client must re-sync from the beginning to ensure
       // that any ops on the server (which may conflict with the backup) are properly
       // filtered by the local BACKUP_IMPORT operation.
       // Without this reset, the sync would start from the old seq and skip server ops,
       // meaning the BACKUP_IMPORT filter never runs and old ops are not filtered.
       this._resetAllLastServerSeqs();
-
-      // 4c. The conflict journal is a device-local side store describing
-      // conflicts in the op history that was JUST replaced — every import path
-      // (profile switch, JSON import, local-backup restore, SuperSync restore)
-      // funnels through here, and without this the badge keeps its pre-restore
-      // count and the review page lists entries from the replaced dataset.
-      // clearAll swallows its own errors (must not fail the import).
-      await this._conflictJournalService.clearAll();
 
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
