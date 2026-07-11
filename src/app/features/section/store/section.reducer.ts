@@ -5,6 +5,7 @@ import { Section, SectionState } from '../section.model';
 import { sanitizeSectionTitle } from '../section.util';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
+import { arrayMoveToStart } from '../../../util/array-move';
 
 export const SECTION_FEATURE_NAME = 'section';
 
@@ -129,6 +130,15 @@ export const sectionReducer = createReducer(
       return updates.length ? adapter.updateMany(updates, state) : state;
     },
   ),
+
+  on(SectionActions.moveTaskToTopInSection, (state, { sectionId, taskId }) => {
+    const section = state.entities[sectionId];
+    if (!section || !section.taskIds.includes(taskId)) return state;
+    return adapter.updateOne(
+      { id: sectionId, changes: { taskIds: arrayMoveToStart(section.taskIds, taskId) } },
+      state,
+    );
+  }),
 
   on(SectionActions.removeTaskFromSection, (state, { sectionId, taskId }) => {
     const section = state.entities[sectionId];

@@ -103,6 +103,8 @@ import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
+import { SectionService } from '../section/section.service';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
@@ -121,6 +123,7 @@ export class TaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _sectionService = inject(SectionService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
 
@@ -716,6 +719,7 @@ export class TaskService {
       const workContextId = this._workContextService.activeWorkContextId as string;
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
+      const sectionId = isBacklog ? null : this._getSectionIdForTask(workContextId, id);
 
       if (isBacklog) {
         this._workContextService.doneBacklogTaskIds$
@@ -732,6 +736,8 @@ export class TaskService {
               }),
             );
           });
+      } else if (sectionId) {
+        this._sectionService.moveTaskToTopInSection(sectionId, id);
       } else {
         this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
           this._store.dispatch(
@@ -745,6 +751,21 @@ export class TaskService {
         });
       }
     }
+  }
+
+  private _getSectionIdForTask(workContextId: string, taskId: string): string | null {
+    let sectionId: string | null = null;
+    // selectSectionsByContextIdMap is BehaviorSubject-backed, so take(1)
+    // resolves synchronously.
+    this._store
+      .select(selectSectionsByContextIdMap)
+      .pipe(take(1))
+      .subscribe((sectionsByContext) => {
+        sectionId =
+          sectionsByContext.get(workContextId)?.find((s) => s.taskIds.includes(taskId))
+            ?.id ?? null;
+      });
+    return sectionId;
   }
 
   moveToBottom(id: string, parentId: string | null = null, isBacklog: boolean): void {

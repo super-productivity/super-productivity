@@ -3,6 +3,7 @@ import {
   addSection,
   addTaskToSection,
   deleteSection,
+  moveTaskToTopInSection,
   removeTaskFromSection,
   updateSection,
   updateSectionOrder,
@@ -343,6 +344,37 @@ describe('sectionReducer', () => {
           afterTaskId: null,
           sourceSectionId: null,
         }),
+      );
+      expect(next).toBe(start);
+    });
+  });
+
+  describe('moveTaskToTopInSection', () => {
+    it('moves a task already in the section to the front', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        moveTaskToTopInSection({ sectionId: 's1', taskId: 'c' }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['c', 'a', 'b']);
+    });
+
+    it('is a no-op (same reference) when the task is not in the section', () => {
+      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['a', 'b'] })]);
+      const next = sectionReducer(
+        start,
+        moveTaskToTopInSection({ sectionId: 's1', taskId: 'MISSING' }),
+      );
+      expect(next).toBe(start);
+    });
+
+    it('is a no-op when the section does not exist', () => {
+      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['a'] })]);
+      const next = sectionReducer(
+        start,
+        moveTaskToTopInSection({ sectionId: 'unknown', taskId: 'a' }),
       );
       expect(next).toBe(start);
     });
