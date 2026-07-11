@@ -104,6 +104,7 @@ export class ScheduleComponent {
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
   isDayView = computed(() => this._currentTimeViewMode() === 'day');
+  isWeekView = computed(() => this._currentTimeViewMode() === 'week');
 
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);

@@ -954,4 +954,25 @@ describe('ScheduleComponent', () => {
       expect(component.isMonthView()).toBe(false);
     });
   });
+
+  describe('day view toggle rendering', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('renders a schedule-week (not schedule-month) with one day when in day view', () => {
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('schedule-week')).toBeTruthy();
+      expect(el.querySelector('schedule-month')).toBeFalsy();
+    });
+
+    it('has a day-view toggle button that selects day mode', () => {
+      const el: HTMLElement = fixture.nativeElement;
+      const dayBtn = el.querySelector<HTMLButtonElement>('.week-month-btn.day-view-btn');
+      expect(dayBtn).toBeTruthy();
+      dayBtn!.click();
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+    });
+  });
 });
