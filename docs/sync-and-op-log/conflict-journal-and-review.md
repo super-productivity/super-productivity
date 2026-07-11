@@ -99,20 +99,34 @@ kept by synthesizing a single merged UPDATE op. Eligibility
 
 - neither side has a DELETE op, and the plan is not an archive plan;
 - neither side has opaque ops (their changes could not be carried into the
-  synthesized entity — merging would silently drop them and the two clients
-  would synthesize DIFFERENT entities);
+  synthesized delta — merging would silently drop them and the two clients
+  would synthesize DIFFERENT results);
 - both sides changed at least one real (non-noise) field;
-- the two sides' non-noise changed-field sets are disjoint.
+- the two sides' non-noise changed-field sets are disjoint;
+- the entity has only ONE conflict in this batch. `detectConflicts` emits one
+  conflict per remote op with no per-entity aggregation, so an entity with ≥2
+  concurrent remote ops would synthesize multiple merged ops whose clocks
+  dominate one another — a dominated sibling can be superseded and its field
+  silently dropped. Such entities fall back to whole-entity LWW (honest refusal;
+  per-entity aggregation into one op is a possible future improvement).
 
 **Convergence contract:** both clients must synthesize the byte-identical
-merged entity regardless of which one performs the merge. Each client starts
-from its own current state (`base + ownChanges`) and overlays the other side's
-non-noise fields (disjoint, so nothing is clobbered); noise fields both sides
-changed resolve via a deterministic `(timestamp, clientId)` tiebreak.
+merged **changes delta** regardless of which one performs the merge. The delta
+is the union of both sides' non-noise fields (disjoint, so nothing is clobbered)
+plus the noise fields either side changed, resolved via a deterministic
+`(timestamp, clientId)` tiebreak. Crucially the delta is derived ONLY from the
+two sides' ops — **not** from either client's current entity snapshot. A
+full-entity snapshot would drag along fields NEITHER side touched; if such an
+untouched field momentarily differs between the two clients (an ordinary
+staggered-sync race — e.g. one client already applied a third device's edit the
+other has not), the two snapshots would differ, tie under LWW at the identical
+`max(timestamp)`, and diverge PERMANENTLY. See `synthesizeMergedChanges`.
 
 **Atomicity / no-re-merge contract:** the merged resolution is exactly ONE new
-UPDATE op with a **flat full-entity payload**, layered on top of both sides'
-history like a normal edit — there is no history rewind. Because the payload is
+UPDATE op carrying a **flat PARTIAL delta** (only the changed fields), layered
+on top of both sides' history like a normal edit — there is no history rewind.
+`lwwUpdateMetaReducer` applies it via `updateOne` (a shallow merge), so fields
+outside the delta keep their own values on each client. Because the payload is
 flat (not `{ changes }`-shaped), `extractUpdateChanges` yields `{}` for it, so
 a merged op can never itself become disjoint-merge eligible: merges do not
 cascade or re-merge on later syncs. Merged resolutions are journaled with
@@ -133,9 +147,15 @@ Per-entry actions (`SyncConflictUiService`):
   action — the same action a manual edit dispatches — so the operation-capture
   meta-reducer turns it into a synced op that propagates everywhere. No history
   rewind; a flip is a brand-new edit on top of current state. Before applying,
-  a **stale guard** compares the entity's current values to the journaled
-  winner values and asks for confirmation if the entity was edited after the
-  conflict resolved.
+  a **stale guard** asks for confirmation if the entity was edited after the
+  conflict resolved. It checks every field the flip will actually write: a
+  winner-changed field whose current value diverged from the journaled winner
+  value, OR a **loser-only** field (one the flip writes but the winner never
+  changed, so it is invisible to the winner values) whose current value is not
+  already what the flip would write. Without the loser-only check the guard is
+  blind to exactly the fields flip overwrites, and a post-resolution edit there
+  would be silently lost. The bulk flip path shows no dialog, so it **skips**
+  stale entries entirely rather than overwriting them.
 
 **Flip capability is deliberately narrow** (`canFlip`); everything else
 returns `unsupported`, keeps the entry `unreviewed`, and shows an error snack —

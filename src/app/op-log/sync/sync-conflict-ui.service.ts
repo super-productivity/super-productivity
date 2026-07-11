@@ -193,8 +193,12 @@ export class SyncConflictUiService {
   /**
    * Bulk FLIP toward one side: applies to rows where that side LOST (so flipping
    * makes it win). `side='local'` targets remote-won entries; `side='remote'`
-   * targets local-won entries. Merged entries are never touched. The per-entry
-   * stale confirm is skipped for the bulk path (explicit power action).
+   * targets local-won entries. Merged entries are never touched.
+   *
+   * Stale entries are SKIPPED (left unreviewed), never silently flipped: a bulk
+   * action must not overwrite an edit made after the conflict resolved. Because
+   * the bulk path shows no per-entry dialog, we cannot ask — so we refuse the
+   * risky ones and leave them for per-entry flip (which surfaces the confirm).
    */
   async flipAllToSide(
     entries: readonly ConflictJournalEntry[],
@@ -207,6 +211,10 @@ export class SyncConflictUiService {
         entry.winner === loserIsSide &&
         this.canFlip(entry)
       ) {
+        const { isStale } = await this.getStaleState(entry);
+        if (isStale) {
+          continue;
+        }
         await this.flip(entry, { skipStaleConfirm: true });
       }
     }
@@ -222,11 +230,25 @@ export class SyncConflictUiService {
     if (!current) {
       return { isStale: false, current: undefined };
     }
+    // A field the WINNER changed diverged from its kept value → entity edited
+    // since resolution.
     const winnerVals = winnerChangesFor(entry);
-    const isStale = Object.keys(winnerVals).some(
+    const winnerStale = Object.keys(winnerVals).some(
       (field) => !this._valueEquals(current[field], winnerVals[field]),
     );
-    return { isStale, current };
+    // Loser-only fields: FLIP WILL write these, but the winner never changed
+    // them, so `winnerChangesFor` cannot see them — leaving getStaleState blind
+    // to exactly the fields flip overwrites. If the current value is not already
+    // the value flip would write, a post-resolution edit lives there and flip
+    // would silently destroy it, so force the stale confirm. (Overlaps with
+    // winner-changed fields, e.g. a both-changed `title`, are already covered
+    // above; only loser-ONLY fields need this extra pass.)
+    const flipVals = loserChangesFor(entry);
+    const loserOnlyStale = Object.keys(flipVals).some(
+      (field) =>
+        !(field in winnerVals) && !this._valueEquals(current[field], flipVals[field]),
+    );
+    return { isStale: winnerStale || loserOnlyStale, current };
   }
 
   private _buildUpdateAction(

@@ -7,9 +7,9 @@
  * both sides' changed fields.
  *
  * No Angular, no I/O — deterministic, so the merge decision and the synthesized
- * entity are unit-testable in isolation. Determinism is the whole point: both
- * clients must arrive at the byte-identical merged entity regardless of which
- * one performs the merge (see `synthesizeMergedEntity`).
+ * changes delta are unit-testable in isolation. Determinism is the whole point:
+ * both clients must arrive at the byte-identical merged delta regardless of
+ * which one performs the merge (see `synthesizeMergedChanges`).
  */
 
 import { OpType } from '../core/operation.types';
@@ -157,34 +157,45 @@ export const isDisjointMergeEligible = (params: {
 };
 
 /**
- * Synthesizes the merged entity — the SINGLE source of truth both clients must
- * converge on.
+ * Synthesizes the merged CHANGES DELTA — the union of both sides' changed
+ * fields, applied on top of each client's current entity by `updateOne` (a
+ * shallow MERGE, not a replace). This is the SINGLE source of truth both clients
+ * must converge on.
  *
- * `currentEntity` is THIS client's current entity state, i.e. `base + localChanges`.
- * We overlay the OTHER side's non-noise changed fields (guaranteed disjoint from
- * local's, so nothing local is clobbered), then resolve every noise field either
- * side changed via the deterministic `(timestamp, clientId)` tiebreak.
+ * IMPORTANT — why a delta and NOT a full-entity snapshot: the delta is derived
+ * purely from the two conflicting sides' ops, so both clients compute the
+ * byte-identical map regardless of the rest of their entity state. A full-entity
+ * snapshot (`{...currentEntity}`) would drag along fields NEITHER side touched;
+ * if such an untouched field momentarily differs between the two clients (an
+ * ordinary staggered-sync race — e.g. one client already applied a third
+ * device's edit the other has not), the two synthesized snapshots differ, tie
+ * under LWW at the identical `max(timestamp)`, and diverge PERMANENTLY. Carrying
+ * only the changed fields makes the merged ops identical and leaves every
+ * untouched field to its own op/LWW.
  *
- * Convergence: client A starts from `base+A` and overlays B's fields; client B
- * starts from `base+B` and overlays A's fields. For every non-noise field the
- * value is the same (disjoint sets → each field owned by exactly one side); for
- * every unchanged field the value is `base` on both; for every noise field both
- * pick the same global tiebreak winner. Therefore `mergedA === mergedB`.
+ * Convergence: for every non-noise field the value is the same (disjoint sets →
+ * each field owned by exactly one side); for every noise field both pick the
+ * same global `(timestamp, clientId)` tiebreak winner. Therefore the delta is
+ * identical on both clients.
  */
-export const synthesizeMergedEntity = (
-  currentEntity: Record<string, unknown>,
+export const synthesizeMergedChanges = (
   localChanges: Record<string, unknown>,
   remoteChanges: Record<string, unknown>,
   localMeta: MergeSideMeta,
   remoteMeta: MergeSideMeta,
 ): Record<string, unknown> => {
-  const merged: Record<string, unknown> = { ...currentEntity };
+  const changes: Record<string, unknown> = {};
 
-  // Overlay the remote side's real (non-noise) fields. Local's real fields are
-  // already present in `currentEntity` and are disjoint from these.
+  // Union of both sides' real (non-noise) fields. The two sets are guaranteed
+  // disjoint (isDisjointMergeEligible), so neither overwrites the other.
+  for (const [key, value] of Object.entries(localChanges)) {
+    if (!NOISE_FIELDS.has(key)) {
+      changes[key] = value;
+    }
+  }
   for (const [key, value] of Object.entries(remoteChanges)) {
     if (!NOISE_FIELDS.has(key)) {
-      merged[key] = value;
+      changes[key] = value;
     }
   }
 
@@ -200,15 +211,15 @@ export const synthesizeMergedEntity = (
     const localHas = field in localChanges;
     const remoteHas = field in remoteChanges;
     if (localHas && remoteHas) {
-      merged[field] = winner === 'local' ? localChanges[field] : remoteChanges[field];
+      changes[field] = winner === 'local' ? localChanges[field] : remoteChanges[field];
     } else if (localHas) {
-      merged[field] = localChanges[field];
+      changes[field] = localChanges[field];
     } else {
-      merged[field] = remoteChanges[field];
+      changes[field] = remoteChanges[field];
     }
   }
 
-  return merged;
+  return changes;
 };
 
 /**

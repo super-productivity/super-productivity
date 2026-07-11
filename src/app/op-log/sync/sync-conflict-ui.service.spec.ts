@@ -133,6 +133,123 @@ describe('SyncConflictUiService', () => {
     expect((await journal.getEntry('e1'))?.status).toBe('unreviewed');
   });
 
+  it('getStaleState() flags stale when a LOSER-ONLY field was edited after resolution', async () => {
+    // Overlapping-field LWW conflict: loser changed title+notes, winner changed
+    // only title (remote won). `notes` is a loser-only field — winnerChangesFor
+    // cannot see it, so the guard was blind to a post-resolution notes edit and
+    // flip would silently overwrite it. getStaleState must now detect it.
+    const entry = makeEntry({
+      id: 'lo1',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+        {
+          field: 'notes',
+          localVal: 'Loser notes',
+          remoteVal: undefined,
+          localChanged: true,
+          remoteChanged: false,
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    // Winner field (title) unchanged, but notes was edited to a value that is
+    // neither the kept value nor what flip would write.
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      title: 'Remote title',
+      notes: 'USER-EDIT',
+    } as Task);
+    store.refreshState();
+
+    const stale = await service.getStaleState(entry);
+    expect(stale.isStale).toBe(true);
+  });
+
+  it('flip() shows the stale confirm for a post-resolution loser-only edit (previously silent)', async () => {
+    const entry = makeEntry({
+      id: 'lo2',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+        {
+          field: 'notes',
+          localVal: 'Loser notes',
+          remoteVal: undefined,
+          localChanged: true,
+          remoteChanged: false,
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    await journal.record(entry);
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      title: 'Remote title',
+      notes: 'USER-EDIT',
+    } as Task);
+    store.refreshState();
+    setDialogResult(false); // user cancels → flip must NOT silently overwrite
+
+    const result = await service.flip(entry);
+
+    expect(matDialog.open).toHaveBeenCalled();
+    expect(result).toBe('cancelled');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('flipAllToSide() skips stale entries (never silently overwrites in bulk)', async () => {
+    // Remote-won entry whose loser-only notes field diverged after resolution.
+    // Bulk flip-to-local must SKIP it (leave unreviewed), not silently overwrite
+    // the newer notes — the bulk path shows no per-entry confirm.
+    const entry = makeEntry({
+      id: 'bulk1',
+      winner: 'remote',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'remote',
+        },
+        {
+          field: 'notes',
+          localVal: 'Loser notes',
+          remoteVal: undefined,
+          localChanged: true,
+          remoteChanged: false,
+          pickedSide: 'remote',
+        },
+      ],
+    });
+    await journal.record(entry);
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      title: 'Remote title',
+      notes: 'USER-EDIT',
+    } as Task);
+    store.refreshState();
+
+    await service.flipAllToSide([entry], 'local');
+
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((await journal.getEntry('bulk1'))?.status).toBe('unreviewed');
+  });
+
   it('flip() suppresses short-syntax parsing on the re-applied title', async () => {
     // The canonical flip is a rename conflict → changes is exactly { title },
     // which is precisely the shape shortSyntax$ re-parses in replace mode. A

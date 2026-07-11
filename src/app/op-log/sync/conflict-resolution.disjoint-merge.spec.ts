@@ -18,7 +18,7 @@ import {
   VectorClockComparison,
 } from '../../core/util/vector-clock';
 import {
-  synthesizeMergedEntity,
+  synthesizeMergedChanges,
   isDisjointMergeEligible,
 } from './conflict-disjoint-merge.util';
 
@@ -220,6 +220,90 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(result.localWinOpsCreated).toBe(1);
   });
 
+  // ── (a3) SPAP-14 fix: partial-delta merged op, no un-conflicted ride-along ──
+  it('(a3) synthesizes a partial-delta merged op that excludes un-conflicted fields', async () => {
+    // Current entity carries a field NEITHER side touched (timeSpentOnDay). A
+    // full-entity snapshot would embed it and diverge across clients whose
+    // current state differs (staggered third-device sync); the delta must carry
+    // ONLY the two sides' changed fields.
+    mockStore.select.and.returnValue(
+      of({
+        id: 'task-1',
+        title: 'Local title',
+        notes: 'base notes',
+        // An un-conflicted field present in current state (value shape is
+        // irrelevant — the delta must not read current state at all).
+        timeSpentOnDay: {},
+      }),
+    );
+    const localOp = op({
+      id: 'local-1',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-1',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { notes: 'Remote notes' } } },
+    });
+
+    await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
+
+    const merged = mergedOpArgs();
+    expect(merged).toBeDefined();
+    const payload = merged!.payload as Record<string, unknown>;
+    expect(payload['title']).toBe('Local title');
+    expect(payload['notes']).toBe('Remote notes');
+    // The un-conflicted field must NOT ride along in the synthesized op.
+    expect('timeSpentOnDay' in payload).toBe(false);
+  });
+
+  // ── (a4) SPAP-14 fix: refuse merge when the entity has >1 conflict this batch
+  it('(a4) refuses disjoint-merge for an entity with multiple conflicts (falls back to LWW)', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'base', notes: 'base', timeEstimate: 5 }),
+    );
+    const localEst = op({
+      id: 'local-est',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 3000,
+      payload: { task: { id: 'task-1', changes: { timeEstimate: 9 } } },
+    });
+    const remoteTitle = op({
+      id: 'remote-title',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 3100,
+      payload: { task: { id: 'task-1', changes: { title: 'B title' } } },
+    });
+    const remoteNotes = op({
+      id: 'remote-notes',
+      clientId: 'B',
+      vectorClock: { B: 2 },
+      timestamp: 3200,
+      payload: { task: { id: 'task-1', changes: { notes: 'B notes' } } },
+    });
+
+    // detectConflicts emits one conflict per remote op → two conflicts, same
+    // entity. Merging each independently would let the clock-dominating sibling
+    // silently drop the other's field, falsely journaled as "kept both".
+    await service.autoResolveConflictsLWW([
+      conflictOf([localEst], [remoteTitle]),
+      conflictOf([localEst], [remoteNotes]),
+    ]);
+
+    // No merged op was synthesized; both conflicts fell back to whole-entity LWW.
+    const entries = await journal.list('history');
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
+    expect((await journal.list('unreviewed')).length).toBeGreaterThan(0);
+  });
+
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
   it('(b) leaves same-field (title-vs-title) conflicts to LWW (journal unreviewed)', async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));
@@ -376,27 +460,22 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
   // ── (e) two-client convergence ─────────────────────────────────────────────
   describe('(e) two-client convergence', () => {
-    const base = { id: 'task-1', title: 'base', notes: 'base', modified: 100 };
     // side1 authored by client A; side2 authored by client B.
     const side1Changes = { title: 'A-title', modified: 1500 };
     const side2Changes = { notes: 'B-notes', modified: 1600 };
     const side1Meta = { timestamp: 1500, clientId: 'A' };
     const side2Meta = { timestamp: 1600, clientId: 'B' };
-    const currentA = { ...base, ...side1Changes };
-    const currentB = { ...base, ...side2Changes };
 
-    it('both clients synthesize the byte-identical merged entity (either ordering)', () => {
+    it('both clients synthesize the byte-identical merged DELTA (either ordering)', () => {
       // Client A: local = side1, remote = side2.
-      const mergedA = synthesizeMergedEntity(
-        currentA,
+      const mergedA = synthesizeMergedChanges(
         side1Changes,
         side2Changes,
         side1Meta,
         side2Meta,
       );
       // Client B: local = side2, remote = side1 (mirror).
-      const mergedB = synthesizeMergedEntity(
-        currentB,
+      const mergedB = synthesizeMergedChanges(
         side2Changes,
         side1Changes,
         side2Meta,
@@ -404,13 +483,35 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       );
 
       expect(mergedA).toEqual(mergedB);
-      // Explicit expected entity: both real fields kept; noise → newer (side2).
+      // Explicit expected delta: both real fields kept; noise → newer (side2).
+      // No `id` and NO untouched fields — the delta carries ONLY changed fields.
       expect(mergedA).toEqual({
-        id: 'task-1',
         title: 'A-title',
         notes: 'B-notes',
         modified: 1600,
       });
+    });
+
+    it("the merged DELTA is independent of each client's divergent current state (SPAP-14 divergence fix)", () => {
+      // The two clients' current entities differ on an UN-conflicted field
+      // (timeSpentOnDay) — e.g. one already applied a third device's edit the
+      // other has not. A full-entity snapshot would drag that field along and
+      // diverge forever; the delta is derived only from the two sides' ops, so
+      // it is identical regardless. Neither delta may contain timeSpentOnDay.
+      const mergedA = synthesizeMergedChanges(
+        side1Changes,
+        side2Changes,
+        side1Meta,
+        side2Meta,
+      );
+      const mergedB = synthesizeMergedChanges(
+        side2Changes,
+        side1Changes,
+        side2Meta,
+        side1Meta,
+      );
+      expect(mergedA).toEqual(mergedB);
+      expect('timeSpentOnDay' in mergedA).toBe(false);
     });
 
     it('both merged clocks dominate BOTH original ops', () => {

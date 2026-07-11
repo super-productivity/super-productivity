@@ -70,7 +70,7 @@ import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   isDisjointMergeEligible,
   mergeChangedFields,
-  synthesizeMergedEntity,
+  synthesizeMergedChanges,
 } from './conflict-disjoint-merge.util';
 
 /**
@@ -748,13 +748,39 @@ export class ConflictResolutionService {
         toEntityKey(entityType as EntityType, entityId),
     });
 
+    // SPAP-14 hardening: disjoint-merge is only safe for a SINGLE remote op per
+    // entity per batch. detectConflicts emits one conflict per remote op with no
+    // per-entity aggregation, so an entity with ≥2 concurrent remote ops (e.g.
+    // one device edited title then notes offline) would synthesize multiple
+    // merged ops for the same entity; their clocks dominate one another, so a
+    // dominated sibling can be superseded and its field silently dropped —
+    // falsely journaled as a successful "kept both" merge. Refuse the merge for
+    // any entity with >1 conflict this batch and fall back to whole-entity LWW
+    // (baseline behaviour, no false merge). Per-entity aggregation into one op is
+    // a possible future improvement; refusal is the safe floor.
+    const conflictCountByEntity = new Map<string, number>();
+    for (const plan of plans) {
+      const key = toEntityKey(
+        plan.conflict.entityType as EntityType,
+        plan.conflict.entityId,
+      );
+      conflictCountByEntity.set(key, (conflictCountByEntity.get(key) ?? 0) + 1);
+    }
+
     for (const plan of plans) {
       // SPAP-14: BEFORE the whole-entity LWW plan, try a disjoint-field merge —
       // when both sides edited the same entity but DIFFERENT real fields, keep
-      // BOTH instead of discarding the loser. Delete/archive and same-field
-      // (overlapping) conflicts are NOT eligible and fall through to the exact
-      // LWW + SPAP-13 path below, byte-unchanged.
-      const mergedOp = await this._tryCreateDisjointMergeOp(plan);
+      // BOTH instead of discarding the loser. Delete/archive, same-field
+      // (overlapping), and multi-remote-op-per-entity conflicts are NOT eligible
+      // and fall through to the exact LWW + SPAP-13 path below, byte-unchanged.
+      const entityKey = toEntityKey(
+        plan.conflict.entityType as EntityType,
+        plan.conflict.entityId,
+      );
+      const mergedOp =
+        (conflictCountByEntity.get(entityKey) ?? 0) > 1
+          ? undefined
+          : await this._tryCreateDisjointMergeOp(plan);
       if (mergedOp) {
         mergedResolutions.push({ conflict: plan.conflict, mergedOp });
         await this._journalMergedResolution(plan);
@@ -860,11 +886,14 @@ export class ConflictResolutionService {
    * path unchanged.
    *
    * The merged op is deterministic and CONVERGENT: both clients synthesize the
-   * byte-identical merged entity (union of both sides' disjoint real fields, with
-   * noise fields resolved by a deterministic `(timestamp, clientId)` tiebreak —
-   * see `synthesizeMergedEntity`) and a vector clock that DOMINATES both sides
-   * (via `mergeAndIncrementClocks`, mirroring `_createLocalWinUpdateOp`). The op
-   * uses the standard LWW Update action type and the max timestamp across both
+   * byte-identical merged CHANGES DELTA (union of both sides' disjoint real
+   * fields, with noise fields resolved by a deterministic `(timestamp, clientId)`
+   * tiebreak — see `synthesizeMergedChanges`) and a vector clock that DOMINATES
+   * both sides (via `mergeAndIncrementClocks`, mirroring `_createLocalWinUpdateOp`).
+   * The op carries a PARTIAL delta (not a full-entity snapshot), so untouched
+   * fields that momentarily differ between the two clients can't ride along and
+   * diverge; `lwwUpdateMetaReducer` applies it via `updateOne` (a shallow merge).
+   * It uses the standard LWW Update action type and the max timestamp across both
    * sides, so when two independently-synthesized merged ops meet they carry
    * identical payloads and resolve by ordinary LWW — never re-merging.
    *
@@ -916,8 +945,14 @@ export class ConflictResolutionService {
     const localTs = Math.max(...conflict.localOps.map((op) => op.timestamp));
     const remoteTs = Math.max(...conflict.remoteOps.map((op) => op.timestamp));
 
-    const mergedEntity = synthesizeMergedEntity(
-      currentEntityState as Record<string, unknown>,
+    // The merged op carries ONLY the union of both sides' changed fields (a
+    // partial delta), NOT a full-entity snapshot of `currentEntityState`. The
+    // delta is derived purely from the two sides' ops, so both clients compute
+    // the byte-identical map — a full snapshot would drag along untouched fields
+    // that can differ between clients under staggered sync and diverge forever.
+    // The lwwUpdateMetaReducer applies it via `updateOne` (a shallow merge), so
+    // fields outside the delta keep their own values. See `synthesizeMergedChanges`.
+    const mergedChanges = synthesizeMergedChanges(
       localChanges,
       remoteChanges,
       { timestamp: localTs, clientId: conflict.localOps[0]?.clientId ?? clientId },
@@ -939,7 +974,7 @@ export class ConflictResolutionService {
     return this.createLWWUpdateOp(
       conflict.entityType,
       conflict.entityId,
-      mergedEntity,
+      mergedChanges,
       clientId,
       newClock,
       mergedTimestamp,
