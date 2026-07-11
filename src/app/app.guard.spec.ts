@@ -1,8 +1,10 @@
+import { Component } from '@angular/core';
+import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router, UrlTree } from '@angular/router';
+import { provideRouter, Router, UrlTree } from '@angular/router';
 import { BehaviorSubject, of, throwError } from 'rxjs';
 import { DefaultStartPageGuard, DonatePageGuard } from './app.guard';
-import { IS_APPLE_APP_STORE_TOKEN } from './app.constants';
+import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { ProjectService } from './features/project/project.service';
@@ -10,6 +12,12 @@ import { TODAY_TAG } from './features/tag/tag.const';
 import { INBOX_PROJECT } from './features/project/project.const';
 import { Project } from './features/project/project.model';
 import { APP_ROUTES } from './app.routes';
+
+@Component({ standalone: true, template: '' })
+class DonateRouteTestComponent {}
+
+@Component({ standalone: true, template: '' })
+class HomeRouteTestComponent {}
 
 describe('DefaultStartPageGuard', () => {
   let guard: DefaultStartPageGuard;
@@ -168,25 +176,38 @@ describe('DefaultStartPageGuard', () => {
 });
 
 describe('DonatePageGuard', () => {
-  const setup = (isRestricted: boolean): DonatePageGuard => {
+  const setup = (isRestricted: boolean): Router => {
     TestBed.configureTestingModule({
       providers: [
-        DonatePageGuard,
-        { provide: IS_APPLE_APP_STORE_TOKEN, useValue: isRestricted },
+        provideLocationMocks(),
+        provideRouter([
+          {
+            path: 'donate',
+            component: DonateRouteTestComponent,
+            canActivate: [DonatePageGuard],
+          },
+          { path: '', component: HomeRouteTestComponent },
+        ]),
+        { provide: IS_DONATION_UI_RESTRICTED_TOKEN, useValue: isRestricted },
       ],
     });
-    return TestBed.inject(DonatePageGuard);
+    return TestBed.inject(Router);
   };
 
-  it('allows the donate page on unrestricted platforms', () => {
-    expect(setup(false).canActivate()).toBeTrue();
+  it('navigates to the donate page on unrestricted platforms', async () => {
+    const router = setup(false);
+
+    await router.navigateByUrl('/donate');
+
+    expect(router.url).toBe('/donate');
   });
 
-  it('redirects the donate page on restricted Apple platforms', () => {
-    const guard = setup(true);
-    const router = TestBed.inject(Router);
+  it('redirects donate navigation on restricted platforms', async () => {
+    const router = setup(true);
 
-    expect(router.serializeUrl(guard.canActivate() as UrlTree)).toBe('/');
+    await router.navigateByUrl('/donate');
+
+    expect(router.url).toBe('/');
   });
 
   it('protects the donate route', () => {

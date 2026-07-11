@@ -17,15 +17,15 @@ import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.sel
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { getStartPageUrlPath } from './features/config/default-start-page.util';
-import { IS_APPLE_APP_STORE_TOKEN } from './app.constants';
+import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 
 @Injectable({ providedIn: 'root' })
 export class DonatePageGuard {
-  private _isAppleAppStore = inject(IS_APPLE_APP_STORE_TOKEN);
+  private _isDonationUiRestricted = inject(IS_DONATION_UI_RESTRICTED_TOKEN);
   private _router = inject(Router);
 
   canActivate(): true | UrlTree {
-    return this._isAppleAppStore ? this._router.parseUrl('/') : true;
+    return this._isDonationUiRestricted ? this._router.parseUrl('/') : true;
   }
 }
 
