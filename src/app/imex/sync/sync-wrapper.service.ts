@@ -1388,9 +1388,15 @@ export class SyncWrapperService {
 
   private _isTimeoutError(error: unknown): boolean {
     const errStr = String(error).toLowerCase();
+    // Bound '504' to word boundaries: an HTTP 504 status ("http 504 gateway
+    // timeout", "status 504") still matches, but a '504' buried inside a longer
+    // token — e.g. a uuidv7 op id like '01920504-…' in an OperationIntegrityError
+    // message — must NOT be read as a gateway timeout and misclassify an unrelated
+    // error. (The OperationIntegrityError branch is also ordered above this guard;
+    // this hardening removes the footgun for any other error type too.)
     return (
       errStr.includes('timeout') ||
-      errStr.includes('504') ||
+      /\b504\b/.test(errStr) ||
       errStr.includes('gateway timeout')
     );
   }

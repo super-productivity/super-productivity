@@ -1253,6 +1253,24 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
+    it('does not misclassify a non-timeout error with an embedded "504" token as a gateway timeout', async () => {
+      // _isTimeoutError bounds '504' to word boundaries, so a '504' buried inside
+      // a longer token (here a byte offset) is NOT read as an HTTP 504. Such an
+      // error must fall through to the generic ERROR handler, not the timeout
+      // branch (which would show the wrong "try again" message / silence it).
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new Error('write failed at offset 1234504')),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.TIMEOUT_ERROR }),
+      );
+    });
+
     it('should surface a lock-acquisition timeout for user-triggered syncs', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new LockAcquisitionTimeoutError('sp_op_log', 30000)),
