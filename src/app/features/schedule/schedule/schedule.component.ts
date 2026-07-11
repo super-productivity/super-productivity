@@ -103,6 +103,7 @@ export class ScheduleComponent {
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
+  isDayView = computed(() => this._currentTimeViewMode() === 'day');
 
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
@@ -140,6 +141,8 @@ export class ScheduleComponent {
     const selectedView = this._currentTimeViewMode();
     const width = size.width;
     const height = size.height;
+
+    if (selectedView === 'day') return 1;
 
     if (selectedView === 'month') {
       const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
@@ -194,6 +197,9 @@ export class ScheduleComponent {
     const days = this.daysToShow();
     if (!days.length) return '';
     const locale = this._dateTimeFormatService.currentLocale();
+
+    if (this.isDayView())
+      return safeFormatDate(parseDbDateStr(days[0]), 'EEE, MMM d, yyyy', locale);
 
     if (this.isMonthView()) {
       const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
