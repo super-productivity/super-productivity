@@ -1,13 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, UrlTree } from '@angular/router';
 import { BehaviorSubject, of, throwError } from 'rxjs';
-import { DefaultStartPageGuard } from './app.guard';
+import { DefaultStartPageGuard, DonatePageGuard } from './app.guard';
+import { IS_APPLE_APP_STORE_TOKEN } from './app.constants';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { ProjectService } from './features/project/project.service';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { INBOX_PROJECT } from './features/project/project.const';
 import { Project } from './features/project/project.model';
+import { APP_ROUTES } from './app.routes';
 
 describe('DefaultStartPageGuard', () => {
   let guard: DefaultStartPageGuard;
@@ -162,5 +164,34 @@ describe('DefaultStartPageGuard', () => {
   it('falls back to Today when misc config itself is undefined', async () => {
     misc$.next(undefined);
     expectUrl(await runGuard(), TODAY_URL);
+  });
+});
+
+describe('DonatePageGuard', () => {
+  const setup = (isRestricted: boolean): DonatePageGuard => {
+    TestBed.configureTestingModule({
+      providers: [
+        DonatePageGuard,
+        { provide: IS_APPLE_APP_STORE_TOKEN, useValue: isRestricted },
+      ],
+    });
+    return TestBed.inject(DonatePageGuard);
+  };
+
+  it('allows the donate page on unrestricted platforms', () => {
+    expect(setup(false).canActivate()).toBeTrue();
+  });
+
+  it('redirects the donate page on restricted Apple platforms', () => {
+    const guard = setup(true);
+    const router = TestBed.inject(Router);
+
+    expect(router.serializeUrl(guard.canActivate() as UrlTree)).toBe('/');
+  });
+
+  it('protects the donate route', () => {
+    const donateRoute = APP_ROUTES.find((route) => route.path === 'donate');
+
+    expect(donateRoute?.canActivate).toContain(DonatePageGuard);
   });
 });

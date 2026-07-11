@@ -23,15 +23,18 @@ export const IS_GNOME_WAYLAND = IS_ELECTRON && window.ea.isGnomeWayland();
 // True only inside the Electron build — preload exposes process.arch.
 // Web builds can't reliably distinguish Apple Silicon from Intel and stay false.
 export const IS_APPLE_SILICON = IS_ELECTRON && window.ea.isAppleSilicon();
-// True only in a Mac App Store (sandboxed) Electron build. Reuses the existing
-// dist-channel bridge (driven by Electron's process.mas); direct-download macOS
-// (mac-dmg), other channels and web builds stay false.
-export const IS_MAC_APP_STORE = IS_ELECTRON && window.ea.getDistChannel() === 'mac-store';
 // Apple's App Store guidelines forbid donation/contribution links that route
-// around In-App Purchase (Guideline 3.1.1). True for both Apple App Store
-// distribution channels (iOS App Store and Mac App Store); direct-download and
-// web builds stay false, so they keep the donation UI.
-export const IS_APPLE_APP_STORE = IS_IOS_NATIVE || IS_MAC_APP_STORE;
+// around In-App Purchase (Guideline 3.1.1). Use the reliable OS bridge instead
+// of process.mas so review and local builds behave identically on macOS.
+export const IS_APPLE_APP_STORE = IS_IOS_NATIVE || (IS_ELECTRON && window.ea.isMacOS());
+
+export const IS_APPLE_APP_STORE_TOKEN = new InjectionToken<boolean>(
+  'IS_APPLE_APP_STORE',
+  {
+    providedIn: 'root',
+    factory: () => IS_APPLE_APP_STORE,
+  },
+);
 
 export const TRACKING_INTERVAL = 1000;
 
