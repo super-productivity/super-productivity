@@ -9,6 +9,13 @@
  * what happened; it NEVER throws back into resolution (any DB failure is logged
  * and swallowed) and never influences which op was picked.
  *
+ * The never-throw contract covers EVERY public method, not just `record()`:
+ * `list()` is awaited (via the summary banner) inside
+ * `autoResolveConflictsLWW`'s notification step — i.e. AFTER ops were applied —
+ * so a journal read failure must degrade to "no entries", never fail the sync.
+ * Reads fall back to empty results, status writes are swallowed; only the
+ * badge/review surface degrades.
+ *
  * Journal entries are DEVICE-LOCAL and are NEVER uploaded to the sync server.
  */
 
@@ -67,8 +74,18 @@ export class ConflictJournalService {
             store.createIndex(CONFLICT_JOURNAL_INDEX_RESOLVED_AT, 'resolvedAt');
           }
         },
+        // Abnormal closure (browser force-closes the connection, e.g. storage
+        // pressure): without this the memoized `_db` handle stays dead and every
+        // later call fails for the rest of the session. Dropping the handles
+        // lets the next call reopen.
+        terminated: () => this._resetDbHandles(),
       },
     );
+  }
+
+  private _resetDbHandles(): void {
+    this._db = undefined;
+    this._initPromise = undefined;
   }
 
   private async _ensureDb(): Promise<IDBPDatabase<ConflictJournalDB>> {
@@ -111,23 +128,38 @@ export class ConflictJournalService {
    * Lists entries newest-first.
    * - `unreviewed`: only entries still awaiting review.
    * - `history`: everything.
+   *
+   * Never throws: the banner path awaits this inside conflict resolution's
+   * notification step, so a transient DB failure degrades to an empty list
+   * (badge/banner miss a beat) instead of failing an otherwise-completed sync.
    */
   async list(view: ConflictJournalView): Promise<ConflictJournalEntry[]> {
-    const db = await this._ensureDb();
-    const ascending = await db.getAllFromIndex(
-      CONFLICT_JOURNAL_STORE,
-      CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
-    );
-    const newestFirst = ascending.reverse();
-    if (view === 'unreviewed') {
-      return newestFirst.filter((entry) => entry.status === 'unreviewed');
+    try {
+      const db = await this._ensureDb();
+      const ascending = await db.getAllFromIndex(
+        CONFLICT_JOURNAL_STORE,
+        CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
+      );
+      const newestFirst = ascending.reverse();
+      if (view === 'unreviewed') {
+        return newestFirst.filter((entry) => entry.status === 'unreviewed');
+      }
+      return newestFirst;
+    } catch (err) {
+      OpLog.err('ConflictJournalService: list failed (returning empty)', err);
+      return [];
     }
-    return newestFirst;
   }
 
+  /** Never throws — a failed lookup reads as "no such entry". */
   async getEntry(id: string): Promise<ConflictJournalEntry | undefined> {
-    const db = await this._ensureDb();
-    return db.get(CONFLICT_JOURNAL_STORE, id);
+    try {
+      const db = await this._ensureDb();
+      return await db.get(CONFLICT_JOURNAL_STORE, id);
+    } catch (err) {
+      OpLog.err('ConflictJournalService: getEntry failed (ignored)', err);
+      return undefined;
+    }
   }
 
   /** User confirmed the auto-resolution. */
@@ -140,14 +172,23 @@ export class ConflictJournalService {
     await this._setStatus(id, 'flipped');
   }
 
+  /**
+   * Never throws (same contract as `record()`): a failed status write leaves
+   * the entry unreviewed — the user can simply Keep/Flip it again — which beats
+   * an unhandled rejection in the review page's action handlers.
+   */
   private async _setStatus(id: string, status: ConflictJournalStatus): Promise<void> {
-    const db = await this._ensureDb();
-    const entry = await db.get(CONFLICT_JOURNAL_STORE, id);
-    if (!entry) {
-      return;
+    try {
+      const db = await this._ensureDb();
+      const entry = await db.get(CONFLICT_JOURNAL_STORE, id);
+      if (!entry) {
+        return;
+      }
+      await db.put(CONFLICT_JOURNAL_STORE, { ...entry, status });
+      await this._refreshUnreviewedCount(db);
+    } catch (err) {
+      OpLog.err(`ConflictJournalService: failed to mark entry ${status} (ignored)`, err);
     }
-    await db.put(CONFLICT_JOURNAL_STORE, { ...entry, status });
-    await this._refreshUnreviewedCount(db);
   }
 
   /**

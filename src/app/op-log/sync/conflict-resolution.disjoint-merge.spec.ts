@@ -346,6 +346,39 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
   });
 
+  // ── (a6) merge journaled only AFTER the merged op is durably appended ──────
+  it('(a6) does not journal a merge when appending the merged op fails', async () => {
+    // A `merged` entry claims "both sides kept" — that is only true once the
+    // merged op is persisted. If the append throws, the journal must not
+    // contain a phantom merge (STEP 3b journals post-append, not at plan time).
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Local title', notes: 'base' }),
+    );
+    mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(new Error('append failed'));
+
+    const localOp = op({
+      id: 'local-1',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-1',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { notes: 'Remote notes' } } },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]),
+    ).toBeRejected();
+
+    const history = await journal.list('history');
+    expect(history.filter((e) => e.winner === 'merged')).toEqual([]);
+  });
+
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
   it('(b) leaves same-field (title-vs-title) conflicts to LWW (journal unreviewed)', async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));

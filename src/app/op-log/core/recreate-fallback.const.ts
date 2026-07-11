@@ -29,6 +29,11 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * IMPORTANT: adding a new type here gives you the generic recreate backfill,
  * but the on-disk DEFENSE-IN-DEPTH heal stays absent until you ALSO add a
  * matching branch in `auto-fix-typia-errors.ts` (or generalize that file).
+ * Membership here ALSO opts the type into SPAP-14 disjoint-field auto-merge:
+ * `ConflictResolutionService._tryCreateDisjointMergeOp` refuses fallback-less
+ * types because its partial merged op must survive this recreate path. That is
+ * safe by construction (recreate-safe ⇒ merge-recreate-safe), but know that an
+ * entry here enables merging for the type too.
  *
  * TASK is the type the original report hit; PROJECT and TAG are defense in
  * depth because they share the same recreate code path. SIMPLE_COUNTER was

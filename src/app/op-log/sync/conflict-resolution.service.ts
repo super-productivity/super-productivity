@@ -87,6 +87,8 @@ type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
 interface MergedResolution {
   conflict: EntityConflict;
   mergedOp: Operation;
+  /** Kept so STEP 3b can journal the merge AFTER the merged op is durably appended. */
+  plan: LwwConflictResolutionPlan<EntityConflict>;
 }
 
 /** Result of `_resolveConflictsWithLWW`: LWW winners plus disjoint merges. */
@@ -472,6 +474,10 @@ export class ConflictResolutionService {
       );
       allStoredOps.push({ id: merged.mergedOp.id, seq });
       allOpsToApply.push(merged.mergedOp);
+      // Journal ONLY after the append: once persisted as a pending local op the
+      // merge is durable (it applies/uploads even across a crash), so a `merged`
+      // ("kept both") entry can never describe a merge that didn't happen.
+      await this._journalMergedResolution(merged.plan);
       OpLog.normal(
         `ConflictResolutionService: Appended disjoint-merge op ${merged.mergedOp.id} for ` +
           `${merged.mergedOp.entityType}:${merged.mergedOp.entityId}`,
@@ -783,8 +789,12 @@ export class ConflictResolutionService {
           ? undefined
           : await this._tryCreateDisjointMergeOp(plan);
       if (mergedOp) {
-        mergedResolutions.push({ conflict: plan.conflict, mergedOp });
-        await this._journalMergedResolution(plan);
+        // NOT journaled here: a `merged` entry claims "both sides kept", which
+        // is only true once the merged op is durably appended — STEP 3b journals
+        // it right after the append, so a failure in between cannot leave a
+        // phantom "kept both" entry. (LWW entries below journal at plan time:
+        // they describe a pick, not a new op, so there is nothing to wait for.)
+        mergedResolutions.push({ conflict: plan.conflict, mergedOp, plan });
         OpLog.normal(
           `ConflictResolutionService: Disjoint-field merge for ` +
             `${plan.conflict.entityType}:${plan.conflict.entityId} (kept both sides)`,
@@ -1000,7 +1010,9 @@ export class ConflictResolutionService {
    * SPAP-14 (observe-only): journal a disjoint-field merge as `merged` /
    * `disjoint-merge` / `info`. Nothing was discarded, so it must NOT count toward
    * the unreviewed count. Like `_journalResolution`, any failure is swallowed and
-   * can never affect resolution.
+   * can never affect resolution. Called from STEP 3b AFTER the merged op is
+   * appended — not at plan time — so the entry never describes a merge that was
+   * never persisted.
    */
   private async _journalMergedResolution(
     plan: LwwConflictResolutionPlan<EntityConflict>,

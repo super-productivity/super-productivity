@@ -29,7 +29,13 @@ Contracts:
   never throw back into conflict resolution. Corollary: the op-log write and
   the journal write are **not atomic**. The op log is the source of truth; the
   journal is a best-effort record, and a crash between the two can lose a
-  journal entry but never an operation.
+  journal entry but never an operation. The never-throw contract covers reads
+  and status writes too (`list` → `[]`, `getEntry` → `undefined`, mark
+  kept/flipped swallowed): `list()` is awaited inside the post-resolution
+  notification step, so a journal failure degrades the badge/review surface,
+  never the sync. One asymmetry: a `merged` entry claims "both sides kept", so
+  it is journaled only AFTER the merged op is durably appended — the journal
+  can under-report a merge, but never report one that didn't happen.
 - **Device-local, never synced.** Entries capture the discarded (losing) side
   of a conflict verbatim — exactly the data the op log intentionally dropped.
   Uploading them would resurrect discarded data; they are also excluded from
@@ -109,17 +115,17 @@ kept by synthesizing a single merged UPDATE op. Eligibility
   dominate one another — a dominated sibling can be superseded and its field
   silently dropped. Such entities fall back to whole-entity LWW (honest refusal;
   per-entity aggregation into one op is a possible future improvement);
-- the entity type has a `RECREATE_FALLBACK` (TASK / PROJECT / TAG /
-  SIMPLE_COUNTER). The merged op is a partial delta, so if it wins over a
+- the entity type has a `RECREATE_FALLBACK` (`TASK` / `PROJECT` / `TAG` /
+  `SIMPLE_COUNTER`). The merged op is a partial delta, so if it wins over a
   concurrent DELETE on a client that already applied that delete (a passive
   observer, which does NOT pass through the full-entity reconstruction in
   `_convertToLWWUpdatesIfNeeded`), `lwwUpdateMetaReducer`'s `addOne` recreate
   branch must backfill it to a schema-valid entity. Types without a fallback
-  (NOTE / METRIC / TASK_REPEAT_CFG / ISSUE_PROVIDER) would recreate an invalid
-  entity, so they fall back to whole-entity LWW (whose local-win op carries a
-  full snapshot). Residual: fallback types can still recreate with DEFAULT_\*
-  backfill diverging from holders in that rare race — the same bounded
-  limitation documented in `recreate-fallback.const.ts`.
+  (`NOTE` / `METRIC` / `TASK_REPEAT_CFG` / `ISSUE_PROVIDER`) would recreate an
+  invalid entity, so they fall back to whole-entity LWW (whose local-win op
+  carries a full snapshot). Residual: fallback types can still recreate with
+  `DEFAULT_*` backfill diverging from holders in that rare race — the same
+  bounded limitation documented in `recreate-fallback.const.ts`.
 
 **Convergence contract:** both clients must synthesize the byte-identical
 merged **changes delta** regardless of which one performs the merge. The delta

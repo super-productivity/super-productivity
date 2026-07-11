@@ -152,6 +152,33 @@ describe('ConflictJournalService (store)', () => {
       expect(await service.getEntry(`entry-${JOURNAL_MAX_ENTRIES}`)).toBeTruthy();
     });
   });
+
+  describe('failure hardening (never-throw contract)', () => {
+    it('list/getEntry/markKept/markFlipped degrade to safe defaults when the DB cannot open', async () => {
+      // list() is awaited inside conflict resolution's notification step — a
+      // DB failure must degrade to "no entries", never reject into the sync.
+      spyOn(globalThis.indexedDB, 'open').and.throwError('idb down');
+
+      await expectAsync(service.list('history')).toBeResolvedTo([]);
+      await expectAsync(service.getEntry('nope')).toBeResolvedTo(undefined);
+      await expectAsync(service.markKept('nope')).toBeResolved();
+      await expectAsync(service.markFlipped('nope')).toBeResolved();
+    });
+
+    it('recovers after an abnormal DB termination (handles reset, next call reopens)', async () => {
+      await service.record(makeEntry({ id: 'before-term' }));
+
+      // What idb's `terminated` callback runs when the browser force-closes
+      // the connection: the memoized handles are dropped so calls reopen
+      // instead of failing on a dead connection for the rest of the session.
+      service['_resetDbHandles']();
+
+      await service.record(makeEntry({ id: 'after-term' }));
+      const ids = (await service.list('history')).map((e) => e.id);
+      expect(ids).toContain('before-term');
+      expect(ids).toContain('after-term');
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
