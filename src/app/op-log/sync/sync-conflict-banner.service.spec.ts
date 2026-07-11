@@ -146,4 +146,92 @@ describe('SyncConflictBannerService', () => {
 
     expect(bannerService.open).toHaveBeenCalledTimes(1); // no re-open
   });
+
+  // --- Concurrency guards (SPAP-35 review hardening) ---
+  // The refresh does an async journal read between "is the banner shown?" and
+  // open()/dismiss(). These cover the three ways that gap can misbehave.
+
+  it('does NOT resurrect the banner when the user dismisses while a refresh read is in flight (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    const b = makeEntry({ winner: 'local' });
+    await journal.record(a);
+    await journal.record(b);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open).toHaveBeenCalledTimes(1);
+
+    bannerService.isShown.and.returnValue(true); // banner on screen when review starts
+    // Hold the refresh's journal read open so a dismiss can land mid-await.
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+    const realList = journal.list.bind(journal);
+    spyOn(journal, 'list').and.callFake((view) => readGate.then(() => realList(view)));
+
+    await journal.markKept(a.id); // count 2 -> 1: refresh starts, read now pending
+    await flushAsync();
+    bannerService.isShown.and.returnValue(false); // user clicks the banner's DISMISS (X)
+    releaseRead();
+    await flushAsync();
+    await flushAsync();
+
+    // One entry still unreviewed (count 1 > 0), but the banner was dismissed:
+    // the post-await isShown() re-check must stop it re-opening.
+    expect(bannerService.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a stale in-flight refresh when a newer count change supersedes it (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    const b = makeEntry({ winner: 'local' });
+    const c = makeEntry({ winner: 'remote' });
+    await journal.record(a);
+    await journal.record(b);
+    await journal.record(c);
+    await service.maybeShowSummaryBanner();
+    bannerService.isShown.and.returnValue(true);
+
+    // Two refreshes fire; force the OLDER read to resolve LAST with a stale set.
+    let resolveOld!: (v: ConflictJournalEntry[]) => void;
+    let resolveNew!: (v: ConflictJournalEntry[]) => void;
+    const oldRead = new Promise<ConflictJournalEntry[]>((r) => (resolveOld = r));
+    const newRead = new Promise<ConflictJournalEntry[]>((r) => (resolveNew = r));
+    spyOn(journal, 'list').and.returnValues(oldRead, newRead);
+
+    await journal.markKept(a.id); // count 3 -> 2: refresh #0 (awaits oldRead)
+    await flushAsync();
+    await journal.markKept(b.id); // count 2 -> 1: refresh #1 (awaits newRead)
+    await flushAsync();
+
+    resolveNew([c]); // newer refresh completes first -> renders count 1
+    await flushAsync();
+    resolveOld([a, b, c]); // stale older refresh resolves last with count 3
+    await flushAsync();
+    await flushAsync();
+
+    // The sequence guard must drop the stale refresh: last render stays at count 1.
+    expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
+      count: 1,
+      remoteWins: 1,
+      localWins: 0,
+    });
+  });
+
+  it('does NOT dismiss the banner on a phantom zero from a failed journal read (SPAP-35)', async () => {
+    const a = makeEntry({ winner: 'remote' });
+    const b = makeEntry({ winner: 'local' });
+    await journal.record(a);
+    await journal.record(b);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open).toHaveBeenCalledTimes(1);
+
+    bannerService.isShown.and.returnValue(true);
+    bannerService.dismiss.calls.reset();
+    // list() degrades to [] on a transient DB error — a real entry still remains.
+    spyOn(journal, 'list').and.resolveTo([]);
+
+    await journal.markKept(a.id); // count 2 -> 1 emitted; read (falsely) sees []
+    await flushAsync();
+    await flushAsync();
+
+    // count stream says 1 (> 0) but the read is empty: don't dismiss a valid banner.
+    expect(bannerService.dismiss).not.toHaveBeenCalled();
+  });
 });

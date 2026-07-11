@@ -9,12 +9,13 @@
  */
 
 import { inject, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { distinctUntilChanged, skip } from 'rxjs';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { ConflictJournalService } from './conflict-journal.service';
-import { computeWinCounts } from './sync-conflict-review.util';
+import { computeWinCounts, ConflictWinCounts } from './sync-conflict-review.util';
 import { T } from '../../t.const';
 
 /** Route path of the Sync Conflicts review page. */
@@ -30,18 +31,20 @@ export class SyncConflictBannerService {
   private readonly _router = inject(Router, { optional: true });
   private readonly _journal = inject(ConflictJournalService);
 
+  // Monotonic guard shared by every async banner update (open + live refresh):
+  // each attempt claims a sequence before its journal read and bails if a newer
+  // attempt has started, so a slow read can never overwrite a fresher decision.
+  private _bannerSeq = 0;
+
   constructor() {
     // SPAP-35: the banner captures its counts when it opens; the sync-icon badge
     // updates live but an OPEN banner would go stale while the user reviews
     // entries on the page. Refresh (or dismiss at zero) the banner on every
     // unreviewed-count change — but only while it is actually still shown, so a
     // banner the user dismissed is never resurrected by reviewing activity.
-    // Root-scoped service → the subscription lives for the app's lifetime.
-    this._journal.unreviewedCount$.pipe(skip(1), distinctUntilChanged()).subscribe(() => {
-      if (this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) {
-        void this.maybeShowSummaryBanner();
-      }
-    });
+    this._journal.unreviewedCount$
+      .pipe(skip(1), distinctUntilChanged(), takeUntilDestroyed())
+      .subscribe((count) => void this._refreshOpenBanner(count));
   }
 
   /** Navigate to the review page (shared by the banner action and elsewhere). */
@@ -52,12 +55,44 @@ export class SyncConflictBannerService {
   /**
    * Opens the summary banner iff there are unreviewed conflicts. No-ops (and
    * dismisses any stale banner) when the unreviewed count is zero, so routine
-   * self-healing syncs stay silent.
+   * self-healing syncs stay silent. Called after a sync resolves conflicts.
    */
   async maybeShowSummaryBanner(): Promise<void> {
+    const seq = ++this._bannerSeq;
     const unreviewed = await this._journal.list('unreviewed');
-    const { total, remoteWins, localWins } = computeWinCounts(unreviewed);
+    if (seq !== this._bannerSeq) return; // superseded by a newer banner update
+    this._renderSummaryBanner(computeWinCounts(unreviewed));
+  }
 
+  /**
+   * SPAP-35 live-refresh path: keep an ALREADY-OPEN banner in sync with the
+   * current unreviewed count, or dismiss it at zero. Unlike the opener it must
+   * never OPEN a banner the user isn't already looking at, and it has to survive
+   * the async journal read racing with either a dismiss or a newer refresh:
+   *   - re-check `isShown()` AFTER the await, so a banner dismissed mid-read is
+   *     not resurrected (the pre-await check alone is a check-then-act TOCTOU);
+   *   - re-check the sequence, so a slow older read can't clobber newer counts;
+   *   - ignore a phantom zero: `list()` returns `[]` on a transient DB error, so
+   *     a zero read while the count stream still reports >0 must not dismiss a
+   *     valid banner.
+   */
+  private async _refreshOpenBanner(emittedCount: number): Promise<void> {
+    if (!this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) return;
+    const seq = ++this._bannerSeq;
+    const unreviewed = await this._journal.list('unreviewed');
+    if (seq !== this._bannerSeq) return; // a newer refresh/open superseded us
+    if (!this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) return; // dismissed mid-read
+    const wins = computeWinCounts(unreviewed);
+    if (wins.total === 0 && emittedCount > 0) return; // phantom zero from a failed read
+    this._renderSummaryBanner(wins);
+  }
+
+  /** Applies a resolved count to the banner: dismiss at zero, else (re)open. */
+  private _renderSummaryBanner({
+    total,
+    remoteWins,
+    localWins,
+  }: ConflictWinCounts): void {
     if (total === 0) {
       this._bannerService.dismiss(BannerId.SyncConflictsAutoResolved);
       return;
