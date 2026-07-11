@@ -1533,4 +1533,208 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       ).toBe(false);
     });
   });
+
+  describe('(e2e) three-client: later overlapping edit beats the merged op', () => {
+    // Adjudicates the "partial merged delta is not closed under later LWW
+    // composition" concern: after a merged op loses whole-op LWW to a newer
+    // overlapping edit from a third client, the clients are TRANSIENTLY apart
+    // (the remote-win side keeps the merged delta's other field; the local-win
+    // side never applied it) — convergence depends entirely on the local-win
+    // side emitting a FULL-SNAPSHOT reconciling op. This spec pins that
+    // property: if _createLocalWinUpdateOp ever becomes a partial delta, the
+    // three clients diverge permanently and this test goes red.
+    const resolveCapturing = async (
+      clientId: string,
+      currentState: Record<string, unknown>,
+      conflict: EntityConflict,
+    ): Promise<{ appended: Operation[]; applied: Operation[] }> => {
+      TestBed.resetTestingModule();
+
+      const store = jasmine.createSpyObj('Store', ['select']);
+      store.select.and.returnValue(of(currentState));
+
+      const applier = jasmine.createSpyObj('OperationApplierService', [
+        'applyOperations',
+      ]);
+      applier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+      const opLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+        'appendBatchSkipDuplicates',
+        'appendWithVectorClockUpdate',
+        'markApplied',
+        'markRejected',
+        'markFailed',
+        'getUnsyncedByEntity',
+        'mergeRemoteOpClocks',
+      ]);
+      opLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
+      opLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
+      opLogStore.markRejected.and.resolveTo(undefined);
+      opLogStore.markApplied.and.resolveTo(undefined);
+      opLogStore.markFailed.and.resolveTo(undefined);
+      opLogStore.appendWithVectorClockUpdate.and.resolveTo(1);
+      opLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
+        Promise.resolve({
+          seqs: ops.map((_, i) => i + 1),
+          writtenOps: ops,
+          skippedCount: 0,
+        }),
+      );
+
+      const validate = jasmine.createSpyObj('ValidateStateService', [
+        'validateAndRepairCurrentState',
+      ]);
+      validate.validateAndRepairCurrentState.and.resolveTo(true);
+
+      const effects = jasmine.createSpyObj('OperationLogEffects', [
+        'processDeferredActions',
+      ]);
+      effects.processDeferredActions.and.resolveTo();
+
+      TestBed.configureTestingModule({
+        providers: [
+          ConflictResolutionService,
+          { provide: Store, useValue: store },
+          { provide: OperationApplierService, useValue: applier },
+          { provide: OperationLogStoreService, useValue: opLogStore },
+          {
+            provide: SnackService,
+            useValue: jasmine.createSpyObj('SnackService', ['open']),
+          },
+          { provide: ValidateStateService, useValue: validate },
+          { provide: OperationLogEffects, useValue: effects },
+          {
+            provide: CLIENT_ID_PROVIDER,
+            useValue: { loadClientId: () => Promise.resolve(clientId) },
+          },
+          { provide: ENTITY_REGISTRY, useValue: buildEntityRegistry() },
+        ],
+      });
+
+      const svc = TestBed.inject(ConflictResolutionService);
+      await svc.autoResolveConflictsLWW([conflict]);
+
+      const appended = opLogStore.appendWithVectorClockUpdate.calls
+        .allArgs()
+        .map(([o]) => o as Operation)
+        .filter((o) => o.entityId === 'task-1' && o.opType === OpType.Update);
+      const applied = applier.applyOperations.calls
+        .allArgs()
+        .flatMap(([ops]) => ops as Operation[])
+        .filter((o) => o.entityId === 'task-1');
+      return { appended, applied };
+    };
+
+    /** Applies one op's payload to a state map, mirroring the two consumer
+     *  paths: adapter `{ task: { id, changes } }` -> merge changes;
+     *  flat LWW payload -> shallow-merge all fields minus id (updateOne). */
+    const applyOp = (
+      state: Record<string, unknown>,
+      o: Operation,
+    ): Record<string, unknown> => {
+      const p = o.payload as Record<string, unknown>;
+      const task = p['task'] as Record<string, unknown> | undefined;
+      if (task && typeof task['changes'] === 'object') {
+        return { ...state, ...(task['changes'] as Record<string, unknown>) };
+      }
+      const flat = { ...p };
+      delete flat['id'];
+      return { ...state, ...flat };
+    };
+
+    const pick = (s: Record<string, unknown>): Record<string, unknown> => ({
+      title: s['title'],
+      notes: s['notes'],
+    });
+
+    it('reconverges all clients via the full-snapshot local-win op (loss is consistent, not divergent)', async () => {
+      // Round 1: A (title) and B (notes) conflict -> disjoint merge on A.
+      const opA = op({
+        id: 'op-A',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 2000,
+        payload: { task: { id: 'task-1', changes: { title: 'A-title' } } },
+      });
+      const opB = op({
+        id: 'op-B',
+        clientId: 'clientB',
+        vectorClock: { clientB: 1 },
+        timestamp: 3000,
+        payload: { task: { id: 'task-1', changes: { notes: 'B-notes' } } },
+      });
+
+      const r1 = await resolveCapturing(
+        'clientA',
+        { id: 'task-1', title: 'A-title', notes: 'base' },
+        conflictOf([opA], [opB]),
+      );
+      const mergedOp = r1.appended[0];
+      expect(mergedOp).toBeDefined();
+
+      // A's state after applying the merged delta.
+      let stateA = applyOp({ id: 'task-1', title: 'A-title', notes: 'base' }, mergedOp);
+      expect(pick(stateA)).toEqual({ title: 'A-title', notes: 'B-notes' });
+
+      // Concurrent third client C: overlapping title edit, NEWER timestamp,
+      // clock concurrent with everything (C never saw opA/opB/merged).
+      const opC = op({
+        id: 'op-C',
+        clientId: 'clientC',
+        vectorClock: { clientC: 1 },
+        timestamp: 4000,
+        payload: { task: { id: 'task-1', changes: { title: 'C-title' } } },
+      });
+      let stateC: Record<string, unknown> = {
+        id: 'task-1',
+        title: 'C-title',
+        notes: 'base',
+      };
+
+      // Round 2 on A: local merged op vs remote opC. Fields overlap on title
+      // and the merged op is flat/opaque -> no re-merge -> whole-op LWW ->
+      // opC (newer) wins -> A applies opC AS-IS (partial).
+      const r2a = await resolveCapturing(
+        'clientA',
+        stateA,
+        conflictOf([mergedOp], [opC]),
+      );
+      expect(r2a.appended.length).toBe(0); // remote win: no new op from A
+      for (const o of r2a.applied) {
+        stateA = applyOp(stateA, o);
+      }
+
+      // TRANSIENT LIMB (documented, not asserted as final): A now holds
+      // { title: C, notes: B-notes } while C holds { title: C, notes: base }.
+      expect(pick(stateA)).toEqual({ title: 'C-title', notes: 'B-notes' });
+
+      // Round 2 on C: local opC vs remote merged op -> LOCAL win -> C must
+      // emit a reconciling local-win op carrying its FULL entity snapshot.
+      const r2c = await resolveCapturing(
+        'clientC',
+        stateC,
+        conflictOf([opC], [mergedOp]),
+      );
+      for (const o of r2c.applied) {
+        stateC = applyOp(stateC, o);
+      }
+      const localWinOp = r2c.appended[0];
+      expect(localWinOp).toBeDefined();
+      // Full snapshot, not a partial delta: it must carry notes (=base), the
+      // field opC never touched — this is the closure property. If this op
+      // were partial, nothing would ever reconcile A's B-notes with C.
+      const localWinPayload = localWinOp.payload as Record<string, unknown>;
+      expect('notes' in localWinPayload).toBe(true);
+
+      // Propagation: the local-win op's clock dominates both sides, so it
+      // reaches A as a plain (non-conflicting) remote op and applies directly.
+      stateA = applyOp(stateA, localWinOp);
+
+      // CONVERGENCE: every client ends on the identical entity. B-notes are
+      // lost to LWW — but CONSISTENTLY on all clients (and journaled by the
+      // round-2 resolutions for review/flip), never as silent divergence.
+      expect(pick(stateA)).toEqual(pick(stateC));
+      expect(pick(stateA)).toEqual({ title: 'C-title', notes: 'base' });
+    });
+  });
 });
