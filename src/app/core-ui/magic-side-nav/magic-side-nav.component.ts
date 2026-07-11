@@ -671,8 +671,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _handlePointerUp(event: MouseEvent | TouchEvent): void {
     const draggedTask = this._externalDragService.activeTask();
 
-    // exclude recurring tasks
-    if (!draggedTask || draggedTask.repeatCfgId) {
+    if (!draggedTask) {
       return;
     }
 
@@ -710,9 +709,19 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       // if the dom element is removed before the return animation has finished
       const dragref = this._externalDragService.activeDragRef();
       dragref?.ended.pipe(take(1)).subscribe(() => {
-        this._taskService.moveToProject(draggedTask, projectId!);
+        this._taskService
+          .moveTaskToProjectWithRepeatCfgAwareness$(draggedTask, projectId!)
+          .subscribe();
       });
     } else if (navItemElement.hasAttribute('data-tag-id')) {
+      // Exclude recurring tasks from all tag drops, not just "Today": this
+      // conservatively preserves prior behavior (recurring tasks were never
+      // tag-dropped here) rather than assuming untested paths are safe. A
+      // non-Today tag drop just adds/removes a tag via updateTags below.
+      if (draggedTask.repeatCfgId) {
+        return;
+      }
+
       // Task is dropped on a tag
       const tagId = navItemElement.getAttribute('data-tag-id');
       Log.debug('Task dropped on Tag', { taskId: draggedTask.id, tagId });

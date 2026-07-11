@@ -544,6 +544,96 @@ describe('TaskService', () => {
     });
   });
 
+  describe('moveTaskToProjectWithRepeatCfgAwareness$', () => {
+    it('updates the repeat cfg projectId and moves the lone instance directly', (done) => {
+      const task = createMockTaskWithSubTasks(
+        createMockTask('task-1', { repeatCfgId: 'repeat-1' }),
+      );
+      const repeatCfg = { id: 'repeat-1', projectId: 'old-project' } as any;
+
+      spyOn(service, 'getTasksWithSubTasksByRepeatCfgId$').and.returnValue(of([task]));
+      spyOn(service, 'getArchiveTasksForRepeatCfgId').and.returnValue(
+        Promise.resolve([]),
+      );
+
+      // TaskRepeatCfgService/ProjectService are resolved lazily (circular DI, see
+      // lazy-inject.ts); patch the lazy getters directly instead of paying for a
+      // full TestBed provider graph for two services this test doesn't otherwise need.
+      const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
+        'getTaskRepeatCfgByIdAllowUndefined$',
+        'updateTaskRepeatCfg',
+      ]);
+      taskRepeatCfgServiceSpy.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of(repeatCfg),
+      );
+      const projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getByIdOnce$']);
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ id: 'new-project', title: 'New Project' }),
+      );
+      (service as any)._getTaskRepeatCfgService = (): unknown => taskRepeatCfgServiceSpy;
+      (service as any)._getProjectService = (): unknown => projectServiceSpy;
+
+      service
+        .moveTaskToProjectWithRepeatCfgAwareness$(task, 'new-project')
+        .subscribe((result) => {
+          expect(result).toBe('moved');
+          expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).toHaveBeenCalledWith(
+            'repeat-1',
+            { projectId: 'new-project' },
+          );
+          expect(store.dispatch).toHaveBeenCalledWith(
+            TaskSharedActions.moveToOtherProject({
+              task,
+              targetProjectId: 'new-project',
+            }),
+          );
+          done();
+        });
+    });
+
+    // #8715: a task can reference a repeat config that was already deleted
+    // (e.g. via cross-client sync). Moving it must not crash — it should fall
+    // back to a plain task move without touching any repeat config.
+    it('falls back to a plain move when the repeat config was deleted (#8715)', (done) => {
+      const task = createMockTaskWithSubTasks(
+        createMockTask('task-1', { repeatCfgId: 'deleted-cfg' }),
+      );
+
+      spyOn(service, 'getTasksWithSubTasksByRepeatCfgId$').and.returnValue(of([task]));
+      spyOn(service, 'getArchiveTasksForRepeatCfgId').and.returnValue(
+        Promise.resolve([]),
+      );
+
+      const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
+        'getTaskRepeatCfgByIdAllowUndefined$',
+        'updateTaskRepeatCfg',
+      ]);
+      taskRepeatCfgServiceSpy.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of(undefined),
+      );
+      const projectServiceSpy = jasmine.createSpyObj('ProjectService', ['getByIdOnce$']);
+      projectServiceSpy.getByIdOnce$.and.returnValue(
+        of({ id: 'new-project', title: 'New Project' }),
+      );
+      (service as any)._getTaskRepeatCfgService = (): unknown => taskRepeatCfgServiceSpy;
+      (service as any)._getProjectService = (): unknown => projectServiceSpy;
+
+      service
+        .moveTaskToProjectWithRepeatCfgAwareness$(task, 'new-project')
+        .subscribe((result) => {
+          expect(result).toBe('moved');
+          expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).not.toHaveBeenCalled();
+          expect(store.dispatch).toHaveBeenCalledWith(
+            TaskSharedActions.moveToOtherProject({
+              task,
+              targetProjectId: 'new-project',
+            }),
+          );
+          done();
+        });
+    });
+  });
+
   describe('restoreTask', () => {
     it('should dispatch restoreTask', () => {
       const task = createMockTask('task-1');
