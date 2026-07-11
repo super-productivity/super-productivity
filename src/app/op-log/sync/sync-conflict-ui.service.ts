@@ -75,11 +75,19 @@ const FLIP_UNSUPPORTED_REASONS: ReadonlySet<ConflictJournalReason> =
  *   entity's membership list.
  * - SCHEDULE/REMINDER fields whose invariants live in dedicated flows, not the
  *   reducer: `dueDay`/`dueWithTime` mutual exclusivity, `dueDay`→TODAY_TAG
- *   membership, and reminder create/cancel tied to `reminderId` — a bare
- *   update can produce the both-set state or a dangling/missing reminder.
+ *   membership, and reminder create/cancel tied to `reminderId`/`remindAt`/
+ *   `deadlineRemindAt` (scheduled via `scheduleTaskWithTime`, torn down via
+ *   `dismissReminderOnly`/`clearDeadlineReminder`) — a bare update can produce
+ *   the both-set state or a dangling/missing reminder.
  *
  * Flips touching any of these are refused until domain-specific handling
  * exists (honest refusal over silent cross-entity corruption).
+ *
+ * NOTE: this is a deny-list — any Task field NOT listed here is flippable by
+ * default. When adding a Task field with cross-entity or dedicated-flow
+ * invariants, add it here too; the spec's per-field `canFlip() is false when
+ * the discarded side touched <field>` cases pin the reminder/schedule members
+ * against silent drift.
  */
 const FLIP_UNSAFE_FIELDS: ReadonlySet<string> = new Set<string>([
   'projectId',
@@ -94,6 +102,10 @@ const FLIP_UNSAFE_FIELDS: ReadonlySet<string> = new Set<string>([
   'deadlineDay',
   'deadlineWithTime',
   'reminderId',
+  // Reminder-lifecycle timestamps: setting them via a bare update writes the
+  // field without scheduling/cancelling the actual reminder in ReminderService.
+  'remindAt',
+  'deadlineRemindAt',
 ]);
 
 @Injectable({ providedIn: 'root' })

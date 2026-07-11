@@ -154,8 +154,9 @@ an entry is only ever marked `flipped` when an op was actually dispatched:
   entities by meta-reducers, and re-applying one side of the pair via a bare
   adapter update would corrupt the other entity's membership lists;
   schedule/reminder fields (`dueDay`, `dueWithTime`, `deadlineDay`,
-  `deadlineWithTime`, `reminderId`) have invariants (mutual exclusivity,
-  TODAY_TAG membership, reminder create/cancel) that live in dedicated flows.
+  `deadlineWithTime`, `reminderId`, `remindAt`, `deadlineRemindAt`) have
+  invariants (mutual exclusivity, TODAY_TAG membership, reminder create/cancel)
+  that live in dedicated flows.
 
 A flipped TASK title is dispatched with `isIgnoreShortSyntax: true` — it is a
 journaled literal value, not user input, so `#tag`/`+project`/`@schedule`

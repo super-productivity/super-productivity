@@ -284,6 +284,31 @@ describe('SyncConflictUiService', () => {
     expect(service.canFlip(entry)).toBe(false);
   });
 
+  // Drift guard: every reminder/schedule field whose invariants live in a
+  // dedicated flow must be refused by canFlip. Adding such a Task field without
+  // adding it to FLIP_UNSAFE_FIELDS (a deny-list — unlisted fields are flippable
+  // by default) would let a bare updateTask flip write the field WITHOUT
+  // scheduling/cancelling the reminder or enforcing due/deadline exclusivity.
+  (['remindAt', 'deadlineRemindAt', 'dueDay', 'deadlineWithTime'] as const).forEach(
+    (field) => {
+      it(`canFlip() is false when the discarded side touched ${field}`, () => {
+        const entry = makeEntry({
+          fieldDiffs: [
+            {
+              field,
+              localVal: 111,
+              remoteVal: 222,
+              localChanged: true,
+              remoteChanged: true,
+              pickedSide: 'remote',
+            },
+          ],
+        });
+        expect(service.canFlip(entry)).toBe(false);
+      });
+    },
+  );
+
   it('getStaleState() returns no current entity for factory-selector types (ISSUE_PROVIDER)', async () => {
     // ISSUE_PROVIDER registers a (id, key) => selector FACTORY, not a props
     // selector. Calling it as a props selector returns the inner selector
