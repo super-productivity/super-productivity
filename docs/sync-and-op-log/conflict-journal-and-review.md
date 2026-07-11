@@ -108,7 +108,18 @@ kept by synthesizing a single merged UPDATE op. Eligibility
   concurrent remote ops would synthesize multiple merged ops whose clocks
   dominate one another — a dominated sibling can be superseded and its field
   silently dropped. Such entities fall back to whole-entity LWW (honest refusal;
-  per-entity aggregation into one op is a possible future improvement).
+  per-entity aggregation into one op is a possible future improvement);
+- the entity type has a `RECREATE_FALLBACK` (TASK / PROJECT / TAG /
+  SIMPLE_COUNTER). The merged op is a partial delta, so if it wins over a
+  concurrent DELETE on a client that already applied that delete (a passive
+  observer, which does NOT pass through the full-entity reconstruction in
+  `_convertToLWWUpdatesIfNeeded`), `lwwUpdateMetaReducer`'s `addOne` recreate
+  branch must backfill it to a schema-valid entity. Types without a fallback
+  (NOTE / METRIC / TASK_REPEAT_CFG / ISSUE_PROVIDER) would recreate an invalid
+  entity, so they fall back to whole-entity LWW (whose local-win op carries a
+  full snapshot). Residual: fallback types can still recreate with DEFAULT_\*
+  backfill diverging from holders in that rare race — the same bounded
+  limitation documented in `recreate-fallback.const.ts`.
 
 **Convergence contract:** both clients must synthesize the byte-identical
 merged **changes delta** regardless of which one performs the merge. The delta

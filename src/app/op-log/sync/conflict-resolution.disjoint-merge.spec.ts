@@ -304,6 +304,48 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect((await journal.list('unreviewed')).length).toBeGreaterThan(0);
   });
 
+  // ── (a5) SPAP-14 fix: refuse merge for fallback-less entity types ───────────
+  it('(a5) refuses disjoint-merge for a type without a RECREATE_FALLBACK (NOTE → LWW)', async () => {
+    // A partial-delta merged op that later wins over a concurrent delete would
+    // recreate a schema-INVALID NOTE (no RECREATE_FALLBACK). So NOTE disjoint
+    // conflicts must fall back to whole-entity LWW, not merge.
+    mockStore.select.and.returnValue(
+      of({ id: 'note-1', content: 'base', backgroundColor: 'base' }),
+    );
+    const localOp = op({
+      id: 'local-note',
+      clientId: 'A',
+      entityType: 'NOTE',
+      entityId: 'note-1',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: { note: { id: 'note-1', changes: { content: 'Local content' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-note',
+      clientId: 'B',
+      entityType: 'NOTE',
+      entityId: 'note-1',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { note: { id: 'note-1', changes: { backgroundColor: 'Remote color' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'NOTE',
+        entityId: 'note-1',
+        localOps: [localOp],
+        remoteOps: [remoteOp],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    const entries = await journal.list('history');
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
+  });
+
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
   it('(b) leaves same-field (title-vs-title) conflicts to LWW (journal unreviewed)', async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));

@@ -72,6 +72,7 @@ import {
   mergeChangedFields,
   synthesizeMergedChanges,
 } from './conflict-disjoint-merge.util';
+import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
@@ -909,6 +910,20 @@ export class ConflictResolutionService {
 
     const { conflict } = plan;
     const payloadKey = this._resolvePayloadKey(conflict.entityType);
+
+    // The merged op carries a PARTIAL delta. If it later has to RECREATE a
+    // concurrently-deleted entity (lwwUpdateMetaReducer's addOne branch — reached
+    // by a passive observer that applied a remote delete before this op, which
+    // does NOT pass through the full-entity reconstruction in
+    // `_convertToLWWUpdatesIfNeeded`), the entity must be backfillable to a
+    // schema-valid shape. Only types with a RECREATE_FALLBACK are; for others a
+    // bare partial `addOne` yields a Typia-invalid entity ("Repair failed"
+    // dead-end). Refuse the merge for fallback-less types and fall back to
+    // whole-entity LWW, whose local-win op carries a full snapshot that recreates
+    // losslessly. See recreate-fallback.const.ts.
+    if (!RECREATE_FALLBACK[conflict.entityType]) {
+      return undefined;
+    }
 
     if (
       !isDisjointMergeEligible({
