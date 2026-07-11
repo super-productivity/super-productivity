@@ -250,6 +250,83 @@ describe('SyncConflictUiService', () => {
     expect((await journal.getEntry('bulk1'))?.status).toBe('unreviewed');
   });
 
+  it('getStaleState() does NOT false-positive on a LOCAL-won loser-only field (no post-edit)', async () => {
+    // winner='local': the loser (remote) changed `notes`, which was rejected and
+    // never applied, so current.notes sits at base — which legitimately differs
+    // from the remote value flip would write. That is NOT a post-resolution edit,
+    // so it must NOT be flagged stale (the loser-only check only applies when the
+    // loser is LOCAL, i.e. winner='remote').
+    const entry = makeEntry({
+      id: 'lw1',
+      winner: 'local',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'local',
+        },
+        {
+          field: 'notes',
+          localVal: undefined,
+          remoteVal: 'Remote notes',
+          localChanged: false,
+          remoteChanged: true,
+          pickedSide: 'local',
+        },
+      ],
+    });
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      title: 'Local title',
+      notes: 'base notes',
+    } as Task);
+    store.refreshState();
+
+    const stale = await service.getStaleState(entry);
+    expect(stale.isStale).toBe(false);
+  });
+
+  it('flipAllToSide() flips a clean LOCAL-won entry (not falsely skipped as stale)', async () => {
+    const entry = makeEntry({
+      id: 'lw2',
+      winner: 'local',
+      fieldDiffs: [
+        {
+          field: 'title',
+          localVal: 'Local title',
+          remoteVal: 'Remote title',
+          localChanged: true,
+          remoteChanged: true,
+          pickedSide: 'local',
+        },
+        {
+          field: 'notes',
+          localVal: undefined,
+          remoteVal: 'Remote notes',
+          localChanged: false,
+          remoteChanged: true,
+          pickedSide: 'local',
+        },
+      ],
+    });
+    await journal.record(entry);
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      title: 'Local title',
+      notes: 'base notes',
+    } as Task);
+    store.refreshState();
+
+    // flip-to-remote targets local-won entries; a clean one must actually flip.
+    await service.flipAllToSide([entry], 'remote');
+
+    expect(dispatchSpy).toHaveBeenCalled();
+    expect((await journal.getEntry('lw2'))?.status).toBe('flipped');
+  });
+
   it('flip() suppresses short-syntax parsing on the re-applied title', async () => {
     // The canonical flip is a rename conflict → changes is exactly { title },
     // which is precisely the shape shortSyntax$ re-parses in replace mode. A

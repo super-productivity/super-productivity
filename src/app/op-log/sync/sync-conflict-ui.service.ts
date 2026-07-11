@@ -238,12 +238,20 @@ export class SyncConflictUiService {
     );
     // Loser-only fields: FLIP WILL write these, but the winner never changed
     // them, so `winnerChangesFor` cannot see them — leaving getStaleState blind
-    // to exactly the fields flip overwrites. If the current value is not already
-    // the value flip would write, a post-resolution edit lives there and flip
-    // would silently destroy it, so force the stale confirm. (Overlaps with
-    // winner-changed fields, e.g. a both-changed `title`, are already covered
-    // above; only loser-ONLY fields need this extra pass.)
-    const flipVals = loserChangesFor(entry);
+    // to exactly the fields flip overwrites. We can only tell "edited since" from
+    // "clean" when the loser's value actually PERSISTED in current state, and
+    // that is ONLY when the loser is the LOCAL side (`winner === 'remote'`): a
+    // remote win rejects the local op in the log but does NOT roll local state
+    // back, so the loser's optimistic value stays applied — a clean entry has
+    // `current === flipVal`, and any divergence is a genuine post-resolution edit
+    // flip would silently overwrite. For a LOCAL win the loser is REMOTE, whose
+    // value was never applied (current holds the un-recorded base), so
+    // `current !== flipVal` is the NORMAL post-resolution state, not an edit — we
+    // have no baseline to compare against and must NOT flag it stale (doing so
+    // false-positives on the common two-device shape and silently skips valid
+    // bulk flips). Detecting that quadrant needs a journaled post-resolution
+    // baseline (follow-up).
+    const flipVals = entry.winner === 'remote' ? loserChangesFor(entry) : {};
     const loserOnlyStale = Object.keys(flipVals).some(
       (field) =>
         !(field in winnerVals) && !this._valueEquals(current[field], flipVals[field]),

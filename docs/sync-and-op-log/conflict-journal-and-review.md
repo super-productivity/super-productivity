@@ -148,14 +148,22 @@ Per-entry actions (`SyncConflictUiService`):
   meta-reducer turns it into a synced op that propagates everywhere. No history
   rewind; a flip is a brand-new edit on top of current state. Before applying,
   a **stale guard** asks for confirmation if the entity was edited after the
-  conflict resolved. It checks every field the flip will actually write: a
-  winner-changed field whose current value diverged from the journaled winner
-  value, OR a **loser-only** field (one the flip writes but the winner never
+  conflict resolved. It checks a winner-changed field whose current value
+  diverged from the journaled winner value, plus — for **remote-won** entries
+  only — a **loser-only** field (one the flip writes but the winner never
   changed, so it is invisible to the winner values) whose current value is not
-  already what the flip would write. Without the loser-only check the guard is
-  blind to exactly the fields flip overwrites, and a post-resolution edit there
-  would be silently lost. The bulk flip path shows no dialog, so it **skips**
-  stale entries entirely rather than overwriting them.
+  already what the flip would write. The loser-only check is scoped to
+  `winner === 'remote'` because only then did the loser's (local, optimistically
+  applied) value persist in current state, giving a valid "unedited" baseline;
+  for a local win the loser (remote) value was never applied and no base is
+  journaled, so `current !== flipVal` there is the normal post-resolution state,
+  not an edit. The bulk flip path shows no dialog, so it **skips** stale entries
+  rather than overwriting them.
+
+  KNOWN GAP: a post-resolution edit to a **loser-only field on a LOCAL-won
+  entry** is not yet detectable (no journaled base), so a flip there can still
+  overwrite it silently — a follow-up needs a per-field post-resolution baseline
+  in the journal.
 
 **Flip capability is deliberately narrow** (`canFlip`); everything else
 returns `unsupported`, keeps the entry `unreviewed`, and shows an error snack —
