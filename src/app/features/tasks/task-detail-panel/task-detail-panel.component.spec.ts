@@ -428,6 +428,7 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
  * sub-task is handled by TaskService.focusTaskById (covered separately).
  */
 describe('TaskDetailPanelComponent add sub-task', () => {
+  let fixture: ComponentFixture<TaskDetailPanelComponent>;
   let component: TaskDetailPanelComponent;
   let addSubTaskToSpy: jasmine.Spy;
 
@@ -485,7 +486,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
       })
       .compileComponents();
 
-    const fixture = TestBed.createComponent(TaskDetailPanelComponent);
+    fixture = TestBed.createComponent(TaskDetailPanelComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('task', fakeTask('P'));
     fixture.detectChanges();
@@ -501,15 +502,15 @@ describe('TaskDetailPanelComponent add sub-task', () => {
   });
 
   it('creates a sibling directly when adding a subtask from a subtask panel', () => {
-    const fixture = TestBed.createComponent(TaskDetailPanelComponent);
-    const subComponent = fixture.componentInstance;
-    fixture.componentRef.setInput('task', {
+    const subFixture = TestBed.createComponent(TaskDetailPanelComponent);
+    const subComponent = subFixture.componentInstance;
+    subFixture.componentRef.setInput('task', {
       id: 'SUB',
       parentId: 'P',
       subTasks: [],
       tagIds: [],
     } as unknown as TaskWithSubTasks);
-    fixture.detectChanges();
+    subFixture.detectChanges();
 
     subComponent.addSubTask();
 
@@ -525,6 +526,56 @@ describe('TaskDetailPanelComponent add sub-task', () => {
     // The section stays expanded so the just-added subtasks remain visible.
     expect(component.isSubTasksExpanded()).toBe(true);
   });
+
+  it('focuses the last panel subtask on previous navigation', fakeAsync(() => {
+    const lastSubtask = document.createElement('task');
+    lastSubtask.tabIndex = 0;
+    fixture.nativeElement.append(lastSubtask);
+    component.isAddSubtaskInputVisible.set(true);
+
+    component.onAddSubtaskInputClosed('prev');
+    tick();
+
+    expect(document.activeElement).toBe(lastSubtask);
+  }));
+
+  it('focuses the next main-list task on next navigation', fakeAsync(() => {
+    const mainList = document.createElement('div');
+    const parentTask = document.createElement('task');
+    const mainSubtask = document.createElement('task');
+    const nextTask = document.createElement('task');
+    parentTask.id = 't-P';
+    parentTask.tabIndex = 0;
+    mainSubtask.tabIndex = 0;
+    nextTask.tabIndex = 0;
+    parentTask.append(mainSubtask);
+    mainList.append(parentTask, nextTask);
+    document.body.append(mainList);
+    component.isAddSubtaskInputVisible.set(true);
+
+    component.onAddSubtaskInputClosed('next');
+    tick();
+
+    expect(document.activeElement).toBe(nextTask);
+    mainList.remove();
+  }));
+
+  it('keeps focus on the last panel subtask when there is no next task', fakeAsync(() => {
+    const mainParentTask = document.createElement('task');
+    const panelSubtask = document.createElement('task');
+    mainParentTask.id = 't-P';
+    mainParentTask.tabIndex = 0;
+    panelSubtask.tabIndex = 0;
+    document.body.append(mainParentTask);
+    fixture.nativeElement.append(panelSubtask);
+    component.isAddSubtaskInputVisible.set(true);
+
+    component.onAddSubtaskInputClosed('next');
+    tick();
+
+    expect(document.activeElement).toBe(panelSubtask);
+    mainParentTask.remove();
+  }));
 
   it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {
     spyOn(component, 'addSubTask');

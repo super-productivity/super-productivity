@@ -557,6 +557,82 @@ describe('TaskComponent shortcut handling', () => {
       expect(component.isAddSubtaskInputVisible()).toBe(false);
       expect(focusByIdSpy).not.toHaveBeenCalled();
     }));
+
+    it('focuses the last visible subtask on previous navigation', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const firstSubtask = document.createElement('task');
+      const lastSubtask = document.createElement('task');
+      firstSubtask.tabIndex = 0;
+      lastSubtask.tabIndex = 0;
+      host.append(firstSubtask, lastSubtask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('prev');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+    }));
+
+    it('focuses the parent task on previous navigation when it has no visible subtasks', fakeAsync(() => {
+      // The overridden empty test template uses a generic Angular root element,
+      // so mirror the real <task tabindex="0"> host binding explicitly.
+      (fixture.nativeElement as HTMLElement).tabIndex = 0;
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('prev');
+      tick();
+
+      expect(document.activeElement).toBe(fixture.nativeElement);
+    }));
+
+    it('focuses the next task after the parent and its subtasks', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const subtask = document.createElement('task');
+      const nextTask = document.createElement('task');
+      subtask.tabIndex = 0;
+      nextTask.tabIndex = 0;
+      host.append(subtask);
+      host.after(nextTask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(nextTask);
+      nextTask.remove();
+    }));
+
+    it('keeps focus on the last visible row when there is no next task', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const lastSubtask = document.createElement('task');
+      lastSubtask.tabIndex = 0;
+      host.append(lastSubtask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+    }));
+
+    it('does not navigate into task copies rendered in the detail panel', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const lastSubtask = document.createElement('task');
+      const detailPanel = document.createElement('task-detail-panel');
+      const duplicateTask = document.createElement('task');
+      lastSubtask.tabIndex = 0;
+      duplicateTask.tabIndex = 0;
+      host.append(lastSubtask);
+      detailPanel.append(duplicateTask);
+      host.after(detailPanel);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+      detailPanel.remove();
+    }));
   });
 
   describe('moveToToday overdue branch (#8851)', () => {

@@ -1,4 +1,8 @@
-import { findAdjacentFocusable } from './find-adjacent-focusable';
+import {
+  findAdjacentFocusable,
+  findLastTaskInSubtree,
+  findNextTaskAfterSubtree,
+} from './find-adjacent-focusable';
 
 describe('findAdjacentFocusable', () => {
   let root: HTMLElement;
@@ -88,5 +92,21 @@ describe('findAdjacentFocusable', () => {
     const outsider = document.createElement('div');
     root.insertBefore(outsider, root.firstChild);
     expect(findAdjacentFocusable(outsider, 'next', SELECTOR)).toBeNull();
+  });
+
+  it('finds the last rendered task in a parent subtree', () => {
+    const { taskA2, subA2 } = setupTree();
+
+    expect(findLastTaskInSubtree(taskA2)).toBe(subA2);
+  });
+
+  it('finds the next task after a subtree without entering the detail panel', () => {
+    root.innerHTML = `
+      <task id="parent"><task id="subtask"></task></task>
+      <task-detail-panel><task id="duplicate"></task></task-detail-panel>
+    `;
+    const parent = root.querySelector<HTMLElement>('#parent')!;
+
+    expect(findNextTaskAfterSubtree(parent)).toBeNull();
   });
 });

@@ -21,11 +21,11 @@ import { TaskService } from '../task.service';
 
 /**
  * Why the inline draft input closed. `escape` is a keyboard cancel (the draft
- * is discarded and focus returns to the task row); `blur` means focus already
- * moved elsewhere, so any pending draft is committed and focus is not stolen
- * back.
+ * is discarded and focus returns to the task row); `prev` and `next` continue
+ * keyboard navigation from an empty input; `blur` means focus already moved
+ * elsewhere, so any pending draft is committed and focus is not stolen back.
  */
-export type AddSubtaskInputCloseReason = 'escape' | 'blur';
+export type AddSubtaskInputCloseReason = 'escape' | 'blur' | 'prev' | 'next';
 
 @Component({
   selector: 'add-subtask-input',
@@ -65,6 +65,20 @@ export class AddSubtaskInputComponent {
     if (ev.key === 'Escape') {
       ev.preventDefault();
       this._close('escape');
+      return;
+    }
+
+    if (
+      (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') &&
+      !ev.isComposing &&
+      !ev.ctrlKey &&
+      !ev.metaKey &&
+      !ev.altKey &&
+      !ev.shiftKey &&
+      !(this.inputEl()?.nativeElement.value ?? this.titleDraft()).trim()
+    ) {
+      ev.preventDefault();
+      this._close(ev.key === 'ArrowUp' ? 'prev' : 'next');
       return;
     }
 

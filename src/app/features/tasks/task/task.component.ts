@@ -42,7 +42,11 @@ import {
   CollapsibleComponent,
   GROUP_NAV_SELECTOR,
 } from '../../../ui/collapsible/collapsible.component';
-import { findAdjacentFocusable } from '../../../util/find-adjacent-focusable';
+import {
+  findAdjacentFocusable,
+  findLastTaskInSubtree,
+  findNextTaskAfterSubtree,
+} from '../../../util/find-adjacent-focusable';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { ProjectService } from '../../project/project.service';
@@ -951,7 +955,22 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       // Return focus to the task the draft was opened from (which may be a
       // subtask) so keyboard navigation continues from there after cancelling.
       this._refocusTaskAfterDraftCancel(originTaskId);
+    } else if (reason === 'prev' || reason === 'next') {
+      this._focusFromClosedSubtaskInput(reason);
     }
+  }
+
+  private _focusFromClosedSubtaskInput(direction: 'prev' | 'next'): void {
+    // The input follows the rendered subtask list. Its previous row is therefore
+    // the last visible subtask (or the parent), while its next row follows the
+    // entire parent subtree in document order.
+    window.setTimeout(() => {
+      const host = this._elementRef.nativeElement as HTMLElement;
+      const lastRow = findLastTaskInSubtree(host);
+      const target =
+        direction === 'prev' ? lastRow : (findNextTaskAfterSubtree(host) ?? lastRow);
+      target.focus();
+    });
   }
 
   private _refocusTaskAfterDraftCancel(taskId: string | null): void {

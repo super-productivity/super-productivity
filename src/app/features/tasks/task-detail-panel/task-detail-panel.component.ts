@@ -93,6 +93,7 @@ import {
   AddSubtaskInputComponent,
   AddSubtaskInputCloseReason,
 } from '../add-subtask-input/add-subtask-input.component';
+import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 
 @Component({
   selector: 'task-detail-panel',
@@ -130,6 +131,7 @@ import {
   ],
 })
 export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly _elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   // Services
   attachmentService = inject(TaskAttachmentService);
   taskService = inject(TaskService);
@@ -687,7 +689,28 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     // keyboard navigation continues from the panel rather than falling to body.
     if (reason === 'escape') {
       window.setTimeout(() => this.addSubTaskBtn()?.nativeElement.focus());
+    } else if (reason === 'prev' || reason === 'next') {
+      this._focusFromClosedSubtaskInput(reason);
     }
+  }
+
+  private _focusFromClosedSubtaskInput(direction: 'prev' | 'next'): void {
+    const panelSubtaskEls = Array.from(
+      this._elementRef.nativeElement.querySelectorAll<HTMLElement>('task'),
+    );
+    const mainParentTaskEl = Array.from(
+      document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(this.task().id)}`),
+    ).find((taskEl) => !taskEl.closest('task-detail-panel'));
+    const fallbackTarget =
+      panelSubtaskEls[panelSubtaskEls.length - 1] ??
+      mainParentTaskEl ??
+      this.addSubTaskBtn()?.nativeElement;
+    const target =
+      direction === 'next' && mainParentTaskEl
+        ? (findNextTaskAfterSubtree(mainParentTaskEl) ?? fallbackTarget)
+        : fallbackTarget;
+
+    window.setTimeout(() => target?.focus());
   }
 
   collapseParent(): void {
