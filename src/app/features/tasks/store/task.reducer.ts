@@ -52,7 +52,6 @@ import {
 } from '../../time-tracking/store/time-tracking.actions';
 import { TaskLog } from '../../../core/log';
 import { devError } from '../../../util/dev-error';
-import { getReorderedSubTaskIds } from '../util/get-reordered-sub-task-ids';
 import { moveValidIdsToFront } from '../util/move-valid-ids-to-front';
 
 export { taskAdapter };
@@ -144,8 +143,10 @@ const reorderSubTask = (
     return state;
   }
 
-  const reorderedSubTaskIds = getReorderedSubTaskIds(parentTask.subTaskIds, id, moveFn);
-  if (!reorderedSubTaskIds) {
+  const parentSubTaskIds = parentTask.subTaskIds;
+
+  // Check if the subtask is actually in the parent's subtask list
+  if (!parentSubTaskIds.includes(id)) {
     TaskLog.err(`Subtask ${id} not found in parent ${parentId} subtasks`);
     return state;
   }
@@ -154,7 +155,7 @@ const reorderSubTask = (
     {
       id: parentId,
       changes: {
-        subTaskIds: reorderedSubTaskIds,
+        subTaskIds: moveFn(parentSubTaskIds, id),
       },
     },
     state,
