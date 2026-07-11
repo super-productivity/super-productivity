@@ -24,6 +24,7 @@ import {
 } from '../core/operation-log.const';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
+import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -114,6 +115,18 @@ export class OperationLogDownloadService implements OnDestroy {
     let encryptKey = syncProvider.getEncryptKey
       ? await syncProvider.getEncryptKey()
       : undefined;
+
+    // Whether inbound plaintext ops must be rejected (GHSA-8pxh-mgc7-gp3g). Gate
+    // on config INTENT (isEncryptionEnabled), not key presence: in the
+    // dropped-credential state the key is transiently gone but encryption is
+    // still enabled, and a `!!encryptKey` gate would fail OPEN there and accept a
+    // forged plaintext batch. `isEncryptionMandatory` scopes this to SuperSync,
+    // where enabling encryption deletes + re-uploads all data encrypted, so no
+    // legitimate plaintext op remains. Config intent is stable across a
+    // gap-reset re-fetch, so compute once here.
+    const isEncryptionExpected =
+      !!syncProvider.isEncryptionMandatory &&
+      !!(await syncProvider.isEncryptionEnabled?.());
 
     await this.lockService.request(LOCK_NAMES.DOWNLOAD, async () => {
       const lastServerSeq = forceFromSeq0 ? 0 : await syncProvider.getLastServerSeq();
@@ -249,6 +262,12 @@ export class OperationLogDownloadService implements OnDestroy {
         let syncOps: SyncOperation[] = response.ops
           .filter((serverOp) => !appliedOpIds.has(serverOp.op.id))
           .map((serverOp) => serverOp.op);
+
+        // Fail closed on a plaintext op when SuperSync encryption is enabled: the
+        // server is all-encrypted once encryption is on (delete + reupload), so an
+        // inbound plaintext op is stale or attacker-injected and would otherwise
+        // skip decryption + the integrity check (GHSA-8pxh-mgc7-gp3g).
+        assertOpsEncryptedWhenExpected(syncOps, isEncryptionExpected);
 
         // Decrypt encrypted operations if we have an encryption key
         const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);

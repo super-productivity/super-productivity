@@ -12,6 +12,7 @@
   <button
     mat-icon-button
     (click)="editBoard.emit()"
+    [attr.aria-label]="T.G.EDIT | translate"
   >
     <mat-icon>edit</mat-icon>
   </button>

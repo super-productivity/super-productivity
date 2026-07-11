@@ -1,0 +1,76 @@
+{
+  "TITLE": {
+    "IMPORT": "Import from Todoist",
+    "PREVIEW": "Preview",
+    "IMPORTING": "Importing…",
+    "FINISHED": "Import finished",
+    "INCOMPLETE": "Import incomplete"
+  },
+  "TOKEN": {
+    "LABEL": "Todoist API token",
+    "PLACEHOLDER": "Paste your Todoist API token",
+    "INTRO": "Brings your active Todoist projects, tasks, sub-tasks, labels and due dates into Super Productivity. The import only adds data — nothing in Super Productivity is changed or removed.",
+    "HELP": "Find the token in Todoist under Settings → Integrations → Developer. It is sent only to api.todoist.com and never stored.",
+    "REQUIRED": "Please paste your Todoist API token first.",
+    "LOADING": "Loading your Todoist data…",
+    "NO_PROJECTS": "No active projects found for this Todoist account."
+  },
+  "ERROR": {
+    "LOAD_FAILED": "Could not load data from Todoist: {{error}} — check the token and your connection.",
+    "IMPORT_FAILED": "Import failed: {{error}}",
+    "IMPORT_STOPPED": "Import stopped at “{{project}}”: {{error}}. That project was created only partially — delete “{{project}}” before re-running, then select it and the remaining projects again."
+  },
+  "BUTTON": {
+    "LOAD_PREVIEW": "Load preview",
+    "IMPORT": "Import",
+    "BACK": "Back"
+  },
+  "PREVIEW": {
+    "CHOOSE_PROJECTS": "Choose the projects to import:",
+    "PROJECT_COUNTS": "{{title}} — tasks: {{taskCount}}, sub-tasks: {{subTaskCount}}",
+    "ALREADY_EXISTS": "already exists — possibly imported before",
+    "PRIORITY_LEGEND": "Map Todoist priorities to:",
+    "PRIORITY_NONE": "Nothing",
+    "PRIORITY_TAGS": "p1–p3 tags (p4 stays untagged)",
+    "PRIORITY_EISENHOWER": "Eisenhower matrix — urgent / important tags",
+    "LOSS_HEADING": "What will not survive the move",
+    "SELECT_PROJECT": "Select at least one project to import."
+  },
+  "LOSS": {
+    "NESTED_PROJECTS": "Nested projects flattened into the project list: {{count}}.",
+    "SECTIONS": "Sections dropped (tasks keep their order in the project): {{count}}.",
+    "DEMOTED_SUBTASKS": "Deeply nested sub-tasks made direct sub-tasks (2 levels max): {{count}}.",
+    "RECURRING": "Recurring tasks keeping only their next date (the rule is noted in task notes): {{count}}.",
+    "DAY_DURATIONS": "Full-day durations not imported: {{count}}.",
+    "SUBTASK_LABELS": "Sub-task labels not imported (sub-tasks have no tags): {{count}}.",
+    "SUBTASK_PRIORITIES": "Prioritized sub-tasks not receiving priority tags: {{count}}.",
+    "ASSIGNEES": "Task collaborator assignments dropped: {{count}}.",
+    "ATTACHMENTS": "Comment attachment links kept without their files: {{count}}.",
+    "TRUNCATED_FIELDS": "Unusually long values shortened to safe import limits: {{count}}.",
+    "COMPLETED_AND_REMINDERS": "Completed tasks and reminders are not imported."
+  },
+  "IMPORT": {
+    "STARTING": "Starting…",
+    "PHASE_PROJECT": "creating project",
+    "PHASE_TASKS": "creating tasks",
+    "PHASE_DETAILS": "applying dates and tags {{current}}/{{total}}",
+    "PROGRESS": "Project {{current}} of {{total}}: {{title}} — {{detail}}"
+  },
+  "SUMMARY": {
+    "PROJECT_RESULT": "{{title}}: {{landedTasks}} of {{plannedTasks}} tasks, {{landedSubTasks}} of {{plannedSubTasks}} sub-tasks",
+    "SHORTFALL": "some items did not land; please review",
+    "UNVERIFIED": "Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.",
+    "CREATED_TAGS": "Created tags: {{tags}}",
+    "NOT_CARRIED_OVER": "Not carried over",
+    "SNACK_FINISHED": "Todoist import finished",
+    "UNDO": "The import is additive — to undo it, delete the created projects."
+  },
+  "PARSE": {
+    "UNTITLED_PROJECT": "Untitled project",
+    "UNTITLED_TASK": "Untitled task",
+    "REPEATS": "Repeats: {{rule}}",
+    "DEADLINE": "Deadline: {{date}}",
+    "COMMENTS": "Comments:",
+    "FILE": "file"
+  }
+}

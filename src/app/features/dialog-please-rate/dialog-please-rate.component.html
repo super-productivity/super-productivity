@@ -79,7 +79,7 @@
       <!-- Fallback: if no mail client is registered the mailto: link above does
            nothing, so show the address as selectable text (never a dead end). -->
       <small class="feedback-email">{{ maintainerEmail }}</small>
-      @if (!IS_APPLE_APP_STORE) {
+      @if (!IS_DONATION_UI_RESTRICTED) {
         <a
           class="action-item"
           [href]="contributingUrl"

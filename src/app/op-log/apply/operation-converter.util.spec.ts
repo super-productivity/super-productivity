@@ -202,6 +202,7 @@ describe('operation-converter utility', () => {
         });
         const action = convertOpToAction(op);
 
+        expect(action.type).toBe(ActionType.LOAD_ALL_DATA);
         expect((action as any).appDataComplete).toEqual(fullState);
         expect((action as any).task).toBeUndefined();
       });
@@ -218,6 +219,7 @@ describe('operation-converter utility', () => {
         });
         const action = convertOpToAction(op);
 
+        expect(action.type).toBe(ActionType.LOAD_ALL_DATA);
         expect((action as any).appDataComplete).toEqual(fullState);
       });
 

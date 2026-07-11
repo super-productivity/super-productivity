@@ -462,6 +462,24 @@ export class TaskService {
     );
   }
 
+  /**
+   * Schedules a task for today by id (same effect as the "Add to My Day"
+   * button / Schedule → Today). Used by the id-based schedule-today shortcut
+   * path so it works from views without a live `<task>` component (e.g. the
+   * Planner overdue list, which renders `<planner-task>`). (#8851)
+   */
+  scheduleForTodayById(taskId: string): void {
+    const task = this._taskEntities()[taskId];
+    this._store.dispatch(
+      TaskSharedActions.planTasksForToday({
+        taskIds: [taskId],
+        today: this._dateService.todayStr(),
+        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+        parentTaskMap: task ? { [taskId]: task.parentId } : undefined,
+      }),
+    );
+  }
+
   remove(task: TaskWithSubTasks): void {
     this._store.dispatch(TaskSharedActions.deleteTask({ task }));
   }

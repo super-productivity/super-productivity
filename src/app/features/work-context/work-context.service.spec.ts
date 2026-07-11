@@ -143,6 +143,29 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     jasmine.clock().uninstall();
   });
 
+  describe('breakTimeToday$', () => {
+    it('exposes recorded break time for the current day', (done) => {
+      const today = '2023-06-13';
+      service.activeWorkContextTTData$ = of({
+        [today]: { bt: 10 * 60 * 1000 },
+      });
+
+      service.breakTimeToday$.subscribe((breakTime) => {
+        expect(breakTime).toBe(10 * 60 * 1000);
+        done();
+      });
+    });
+
+    it('defaults to zero when no break time is recorded', (done) => {
+      service.activeWorkContextTTData$ = of({});
+
+      service.breakTimeToday$.subscribe((breakTime) => {
+        expect(breakTime).toBe(0);
+        done();
+      });
+    });
+  });
+
   // Test the filtering logic directly instead of testing the full observable chain
   describe('filtering logic', () => {
     const filterTasks = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] => {

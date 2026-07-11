@@ -53,10 +53,14 @@ export class TaskPage extends BasePage {
    */
   async markTaskAsDone(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
-    // `data-task-id` is only bound on the <task> host. Wrapper components such
-    // as <planner-task> (Boards) render the same done-toggle but expose no id,
-    // so the done-confirmation strategy is chosen based on its presence.
-    const taskId = await task.getAttribute('data-task-id');
+    // The done-confirmation strategy differs for real <task> rows vs. wrapper
+    // components (<planner-task> etc.) that render the same done-toggle. Key it
+    // off the element actually being a <task>, not off `data-task-id` presence:
+    // <planner-task> also carries `data-task-id` in the Planner overdue list
+    // (#8851), but querying `document.querySelectorAll('task')` for it finds
+    // nothing, so the <task> strategy would hang for a wrapper.
+    const isTaskHost = (await task.evaluate((el) => el.tagName.toLowerCase())) === 'task';
+    const taskId = isTaskHost ? await task.getAttribute('data-task-id') : null;
     await task.hover();
 
     // Give hover effects time to settle

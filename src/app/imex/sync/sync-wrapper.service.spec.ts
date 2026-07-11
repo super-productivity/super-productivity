@@ -23,6 +23,7 @@ import {
   AuthFailSPError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
+  OperationIntegrityError,
   PotentialCorsError,
   SyncProviderId,
   SyncStatus,
@@ -1033,6 +1034,30 @@ describe('SyncWrapperService', () => {
         jasmine.objectContaining({
           type: 'ERROR',
         }),
+      );
+    });
+
+    it('should handle OperationIntegrityError with a calm ERROR snack, not the password dialog', async () => {
+      // GHSA-8pxh-mgc7-gp3g: decryption succeeded but metadata was tampered (or a
+      // plaintext op arrived while encryption is mandatory). Must fail closed with
+      // a non-jargon message and NOT route to the enter-password recovery dialog.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new OperationIntegrityError('tampered. GHSA-8pxh-mgc7-gp3g')),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
+          type: 'ERROR',
+        }),
+      );
+      // The raw GHSA/technical string must never reach the user.
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: jasmine.stringMatching(/GHSA-/) }),
       );
     });
 

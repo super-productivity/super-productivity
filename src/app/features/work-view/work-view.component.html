@@ -53,7 +53,14 @@
               @if (isShowTimeWorkedWithoutBreak) {
                 <div class="item hide-xs">
                   <span class="label">{{ T.WW.WITHOUT_BREAK | translate }} </span>
-                  <span class="no-wrap">
+                  <span
+                    class="no-wrap"
+                    matTooltip="{{ T.F.TIME_TRACKING.D_IDLE.BREAK | translate }}: {{
+                      breakTimeToday() | msToString
+                    }}"
+                    [matTooltipDisabled]="!breakTimeToday()"
+                    matTooltipPosition="above"
+                  >
                     <strong class="time-val">{{
                       takeABreakService.timeWorkingWithoutABreak$ | async | msToString
                     }}</strong

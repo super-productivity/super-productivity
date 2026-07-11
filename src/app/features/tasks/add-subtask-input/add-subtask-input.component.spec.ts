@@ -112,6 +112,56 @@ describe('AddSubtaskInputComponent', () => {
     expect(closeSpy).toHaveBeenCalledOnceWith('escape');
   });
 
+  it('closes toward the previous task on ArrowUp when the input is empty', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      cancelable: true,
+    });
+
+    getInput().dispatchEvent(ev);
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(closeSpy).toHaveBeenCalledOnceWith('prev');
+  });
+
+  it('closes toward the next task on ArrowDown when the input is empty', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    const ev = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      cancelable: true,
+    });
+
+    getInput().dispatchEvent(ev);
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(closeSpy).toHaveBeenCalledOnceWith('next');
+  });
+
+  it('treats a whitespace-only draft as empty for arrow navigation', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('   ');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+
+    expect(closeSpy).toHaveBeenCalledOnceWith('prev');
+  });
+
+  it('keeps a non-empty draft open when ArrowUp or ArrowDown is pressed', () => {
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    setInputValue('Keep editing');
+
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+    getInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(getInput().value).toBe('Keep editing');
+  });
+
   it('does not commit when Escape is followed by blur', () => {
     const closeSpy = jasmine.createSpy('closed');
     component.closed.subscribe(closeSpy);

@@ -56,26 +56,12 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL,
     ),
     kbField('toggleIssuePanel', T.GCF.KEYBOARD.TOGGLE_ISSUE_PANEL),
-    // {
-    //   key: 'showHelp',
-    //   type: 'keyboard',
-    //   templateOptions: {
-    //     label: T.GCF.KEYBOARD.SHOW_HELP
-    //   },
-    // },
     kbField('showSearchBar', T.GCF.KEYBOARD.SHOW_SEARCH_BAR),
     kbField('toggleBacklog', T.GCF.KEYBOARD.TOGGLE_BACKLOG),
     kbField('goToWorkView', T.GCF.KEYBOARD.GO_TO_WORK_VIEW),
     kbField('goToFocusMode', T.GCF.KEYBOARD.GO_TO_FOCUS_MODE),
     kbField('goToTimeline', T.GCF.KEYBOARD.GO_TO_SCHEDULE),
     kbField('goToScheduledView', T.GCF.KEYBOARD.GO_TO_SCHEDULED_VIEW),
-    // {
-    //   key: 'goToDailyAgenda',
-    //   type: 'keyboard',
-    //   templateOptions: {
-    //     label: T.GCF.KEYBOARD.GO_TO_DAILY_AGENDA
-    //   },
-    // },
     kbField('goToSettings', T.GCF.KEYBOARD.GO_TO_SETTINGS),
     kbField('zoomIn', T.GCF.KEYBOARD.ZOOM_IN),
     kbField('zoomOut', T.GCF.KEYBOARD.ZOOM_OUT),

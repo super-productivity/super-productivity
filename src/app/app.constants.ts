@@ -23,15 +23,35 @@ export const IS_GNOME_WAYLAND = IS_ELECTRON && window.ea.isGnomeWayland();
 // True only inside the Electron build — preload exposes process.arch.
 // Web builds can't reliably distinguish Apple Silicon from Intel and stay false.
 export const IS_APPLE_SILICON = IS_ELECTRON && window.ea.isAppleSilicon();
-// True only in a Mac App Store (sandboxed) Electron build. Reuses the existing
-// dist-channel bridge (driven by Electron's process.mas); direct-download macOS
-// (mac-dmg), other channels and web builds stay false.
-export const IS_MAC_APP_STORE = IS_ELECTRON && window.ea.getDistChannel() === 'mac-store';
+interface DonationUiPlatformContext {
+  isIosNative: boolean;
+  isElectron: boolean;
+  isMacOS: boolean;
+}
+
+export const isDonationUiRestricted = ({
+  isIosNative,
+  isElectron,
+  isMacOS,
+}: DonationUiPlatformContext): boolean => isIosNative || (isElectron && isMacOS);
+
 // Apple's App Store guidelines forbid donation/contribution links that route
-// around In-App Purchase (Guideline 3.1.1). True for both Apple App Store
-// distribution channels (iOS App Store and Mac App Store); direct-download and
-// web builds stay false, so they keep the donation UI.
-export const IS_APPLE_APP_STORE = IS_IOS_NATIVE || IS_MAC_APP_STORE;
+// around In-App Purchase (Guideline 3.1.1). Apply the restriction to every
+// macOS Electron build so App Store, direct-download and local review behavior
+// cannot diverge based on the unreliable process.mas signal.
+export const IS_DONATION_UI_RESTRICTED = isDonationUiRestricted({
+  isIosNative: IS_IOS_NATIVE,
+  isElectron: IS_ELECTRON,
+  isMacOS: IS_ELECTRON && window.ea.isMacOS(),
+});
+
+export const IS_DONATION_UI_RESTRICTED_TOKEN = new InjectionToken<boolean>(
+  'IS_DONATION_UI_RESTRICTED',
+  {
+    providedIn: 'root',
+    factory: () => IS_DONATION_UI_RESTRICTED,
+  },
+);
 
 export const TRACKING_INTERVAL = 1000;
 

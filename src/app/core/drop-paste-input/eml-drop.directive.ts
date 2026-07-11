@@ -1,5 +1,5 @@
 import { Directive, HostListener, inject } from '@angular/core';
-import { isFileEml } from '../../util/eml-parser';
+import { isFileEml } from '../../util/is-file-eml';
 import { EmlDropService } from './eml-drop.service';
 
 @Directive({

@@ -45,6 +45,7 @@ For local SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/C
 
 - **Translations:** UI strings go through `T` / `TranslateService`. Edit only `en.json`; never other locales.
 - **Privacy:** no analytics or tracking — user data stays local unless explicitly synced.
+- **Dependencies:** PRs must not add new packages to the root project's `dependencies` or `devDependencies`; use platform APIs, existing packages, or a small in-repo implementation instead. Dependencies scoped to an individual plugin are allowed when they are necessary and remain isolated to that plugin.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
 - **Templates:** plain HTML, minimal CSS/classes, Angular Material sparingly. See [`docs/styling-guide.md`](docs/styling-guide.md).
 - **Styling review:** do not locally restyle Angular Material or shared `src/app/ui/` components for one-off context needs. This includes overriding button styles via `.mat-*`, `.mdc-*`, `button[mat-*]`, or component internals in local SCSS. Prefer existing inputs/classes/tokens; if a variant must exist, make it reusable or add it to the shared style layer.

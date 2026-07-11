@@ -1,13 +1,23 @@
+import { Component } from '@angular/core';
+import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router, UrlTree } from '@angular/router';
+import { provideRouter, Router, UrlTree } from '@angular/router';
 import { BehaviorSubject, of, throwError } from 'rxjs';
-import { DefaultStartPageGuard } from './app.guard';
+import { DefaultStartPageGuard, DonatePageGuard } from './app.guard';
+import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { ProjectService } from './features/project/project.service';
 import { TODAY_TAG } from './features/tag/tag.const';
 import { INBOX_PROJECT } from './features/project/project.const';
 import { Project } from './features/project/project.model';
+import { APP_ROUTES } from './app.routes';
+
+@Component({ standalone: true, template: '' })
+class DonateRouteTestComponent {}
+
+@Component({ standalone: true, template: '' })
+class HomeRouteTestComponent {}
 
 describe('DefaultStartPageGuard', () => {
   let guard: DefaultStartPageGuard;
@@ -162,5 +172,47 @@ describe('DefaultStartPageGuard', () => {
   it('falls back to Today when misc config itself is undefined', async () => {
     misc$.next(undefined);
     expectUrl(await runGuard(), TODAY_URL);
+  });
+});
+
+describe('DonatePageGuard', () => {
+  const setup = (isRestricted: boolean): Router => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideLocationMocks(),
+        provideRouter([
+          {
+            path: 'donate',
+            component: DonateRouteTestComponent,
+            canActivate: [DonatePageGuard],
+          },
+          { path: '', component: HomeRouteTestComponent },
+        ]),
+        { provide: IS_DONATION_UI_RESTRICTED_TOKEN, useValue: isRestricted },
+      ],
+    });
+    return TestBed.inject(Router);
+  };
+
+  it('navigates to the donate page on unrestricted platforms', async () => {
+    const router = setup(false);
+
+    await router.navigateByUrl('/donate');
+
+    expect(router.url).toBe('/donate');
+  });
+
+  it('redirects donate navigation on restricted platforms', async () => {
+    const router = setup(true);
+
+    await router.navigateByUrl('/donate');
+
+    expect(router.url).toBe('/');
+  });
+
+  it('protects the donate route', () => {
+    const donateRoute = APP_ROUTES.find((route) => route.path === 'donate');
+
+    expect(donateRoute?.canActivate).toContain(DonatePageGuard);
   });
 });

@@ -35,6 +35,7 @@ import {
   DecryptNoPasswordError,
   EncryptNoPasswordError,
 } from '../core/errors/sync-errors';
+import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected';
 import {
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
@@ -354,6 +355,15 @@ export class OperationLogUploadService {
               (response.hasMorePiggyback ? ' (more available on server)' : ''),
           );
           let piggybackSyncOps = response.newOps.map((serverOp) => serverOp.op);
+
+          // Fail closed on a plaintext piggybacked op when encryption is mandatory
+          // (same reasoning as the download path, GHSA-8pxh-mgc7-gp3g). A keyless
+          // mandatory-encryption upload already returned early above, so reaching
+          // here implies a usable key — `isEncryptionEnabled` (=!!encryptKey) holds.
+          assertOpsEncryptedWhenExpected(
+            piggybackSyncOps,
+            !!syncProvider.isEncryptionMandatory && isEncryptionEnabled,
+          );
 
           // Track encryption state BEFORE decryption to detect server's actual state.
           // This is critical for detecting when another client disables encryption.

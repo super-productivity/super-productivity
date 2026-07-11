@@ -163,6 +163,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
   const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
+  const replayActionType = isFullStateOp ? ActionType.LOAD_ALL_DATA : actionType;
   let actionPayload: Record<string, unknown> = isFullStateOp
     ? extractFullStatePayload(op.payload)
     : (extractActionPayload(op.payload) as Record<string, unknown>);
@@ -211,7 +212,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // named 'type' (like SimpleCounter.type = 'ClickCounter') from overwriting the action type.
   return {
     ...actionPayload,
-    type: actionType,
+    type: replayActionType,
     meta: {
       isPersistent: true,
       entityType: op.entityType,

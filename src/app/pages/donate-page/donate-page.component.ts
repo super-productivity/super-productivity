@@ -3,7 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
-import { IS_APPLE_APP_STORE } from '../../app.constants';
+import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 
 @Component({
   selector: 'donate-page',
@@ -15,7 +15,7 @@ import { IS_APPLE_APP_STORE } from '../../app.constants';
 })
 export class DonatePageComponent {
   readonly T = T;
-  // Hides the whole page body on Apple App Store builds — the route stays
-  // reachable by direct URL even though the nav entry is gone. See IS_APPLE_APP_STORE.
-  readonly IS_APPLE_APP_STORE = IS_APPLE_APP_STORE;
+  // Defense in depth: DonatePageGuard redirects restricted platforms before
+  // this component renders, and this gate prevents accidental direct rendering.
+  readonly IS_DONATION_UI_RESTRICTED = IS_DONATION_UI_RESTRICTED;
 }

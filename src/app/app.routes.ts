@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import {
   ActiveWorkContextGuard,
   DefaultStartPageGuard,
+  DonatePageGuard,
   FocusOverlayOpenGuard,
   ValidProjectIdGuard,
   ValidTagIdGuard,
@@ -101,7 +102,7 @@ export const APP_ROUTES: Routes = [
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.DonatePageComponent),
     data: { page: 'donate' },
-    canActivate: [FocusOverlayOpenGuard],
+    canActivate: [DonatePageGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'contrast-test',

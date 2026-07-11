@@ -6,28 +6,35 @@
  *
  * To run these benchmarks:
  * 1. Run: npm run test:file src/app/op-log/testing/benchmarks/operation-log-stress.benchmark.ts
- * 3. Watch the console output for timing information
+ * 2. Watch the console output for timing information
  *
  * Note: Results vary significantly based on:
  * - Browser/test runner
  * - System I/O performance
  * - Concurrent processes
  *
- * These tests are excluded from regular test runs to avoid flaky CI failures
- * due to timing dependencies on system load.
+ * These tests are excluded from regular test runs (the Karma builder only
+ * auto-runs `**\/*.spec.ts`) to avoid flaky CI failures from timing
+ * dependencies on system load. They are still part of the spec TS program
+ * (`src/tsconfig.spec.json` includes `**\/*.benchmark.ts`) so they compile and
+ * only run when named explicitly via `test:file`.
  */
 import { TestBed } from '@angular/core/testing';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { ActionType, Operation, OpType, EntityType } from '../../core/operation.types';
 import { uuidv7 } from '../../../util/uuid-v7';
 
-// Increase timeout for stress tests
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 60000;
+// Stress-run timeout for the large-payload / 10k-op benchmarks. Must be set
+// in `beforeEach` (not at module scope): `src/test.ts` has a global `beforeAll`
+// that resets `DEFAULT_TIMEOUT_INTERVAL` to 2000ms, which would otherwise clobber
+// a module-level assignment and time these benchmarks out.
+const STRESS_TIMEOUT_MS = 60000;
 
 describe('OperationLog Performance Benchmarks', () => {
   let service: OperationLogStoreService;
 
   beforeEach(async () => {
+    jasmine.DEFAULT_TIMEOUT_INTERVAL = STRESS_TIMEOUT_MS;
     TestBed.configureTestingModule({
       providers: [OperationLogStoreService],
     });

@@ -29,5 +29,8 @@
     }
   },
   "files": ["test.ts", "polyfills.ts"],
-  "include": ["**/*.spec.ts", "**/*.d.ts"]
+  // `**/*.benchmark.ts` files are part of the spec TS program so they compile
+  // (and are type-checked in CI), but they are NOT auto-run: the Karma builder's
+  // default `include` is `**/*.spec.ts`, so benchmarks need to be run manually.
+  "include": ["**/*.spec.ts", "**/*.benchmark.ts", "**/*.d.ts"]
 }

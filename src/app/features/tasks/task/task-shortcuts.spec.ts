@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { DateAdapter } from '@angular/material/core';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -556,5 +557,153 @@ describe('TaskComponent shortcut handling', () => {
       expect(component.isAddSubtaskInputVisible()).toBe(false);
       expect(focusByIdSpy).not.toHaveBeenCalled();
     }));
+
+    it('focuses the last visible subtask on previous navigation', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const firstSubtask = document.createElement('task');
+      const lastSubtask = document.createElement('task');
+      firstSubtask.tabIndex = 0;
+      lastSubtask.tabIndex = 0;
+      host.append(firstSubtask, lastSubtask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('prev');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+    }));
+
+    it('focuses the parent task on previous navigation when it has no visible subtasks', fakeAsync(() => {
+      // The overridden empty test template uses a generic Angular root element,
+      // so mirror the real <task tabindex="0"> host binding explicitly.
+      (fixture.nativeElement as HTMLElement).tabIndex = 0;
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('prev');
+      tick();
+
+      expect(document.activeElement).toBe(fixture.nativeElement);
+    }));
+
+    it('focuses the next task after the parent and its subtasks', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const subtask = document.createElement('task');
+      const nextTask = document.createElement('task');
+      subtask.tabIndex = 0;
+      nextTask.tabIndex = 0;
+      host.append(subtask);
+      host.after(nextTask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(nextTask);
+      nextTask.remove();
+    }));
+
+    it('keeps focus on the last visible row when there is no next task', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const lastSubtask = document.createElement('task');
+      lastSubtask.tabIndex = 0;
+      host.append(lastSubtask);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+    }));
+
+    it('does not navigate into task copies rendered in the detail panel', fakeAsync(() => {
+      const host = fixture.nativeElement as HTMLElement;
+      const lastSubtask = document.createElement('task');
+      const detailPanel = document.createElement('task-detail-panel');
+      const duplicateTask = document.createElement('task');
+      lastSubtask.tabIndex = 0;
+      duplicateTask.tabIndex = 0;
+      host.append(lastSubtask);
+      detailPanel.append(duplicateTask);
+      host.after(detailPanel);
+      component.isAddSubtaskInputVisible.set(true);
+
+      component.onAddSubtaskInputClosed('next');
+      tick();
+
+      expect(document.activeElement).toBe(lastSubtask);
+      detailPanel.remove();
+    }));
+  });
+
+  describe('moveToToday overdue branch (#8851)', () => {
+    let dateService: jasmine.SpyObj<DateService>;
+    let projectService: jasmine.SpyObj<ProjectService>;
+
+    beforeEach(() => {
+      dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
+      projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
+      (dateService as any).todayStr = jasmine
+        .createSpy('todayStr')
+        .and.returnValue('2026-06-01');
+      (dateService as any).getStartOfNextDayDiffMs = jasmine
+        .createSpy('getStartOfNextDayDiffMs')
+        .and.returnValue(0);
+    });
+
+    it('schedules an overdue task for today instead of a position-only move', () => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Overdue'),
+        dueDay: '2026-05-30',
+      });
+      storeSpy.dispatch.calls.reset();
+
+      component.moveToToday();
+
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['top-1'],
+          today: '2026-06-01',
+          startOfNextDayDiffMs: 0,
+          parentTaskMap: { ['top-1']: undefined },
+        }),
+      );
+      expect(projectService.moveTaskToTodayList).not.toHaveBeenCalled();
+    });
+
+    it('keeps the position-only move for a non-overdue task (#8592)', () => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Not overdue'),
+        dueDay: undefined,
+        dueWithTime: undefined,
+      });
+      storeSpy.dispatch.calls.reset();
+
+      component.moveToToday();
+
+      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
+        'top-1',
+        'project-1',
+      );
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('keeps the position-only move for a done task with a stale past dueDay', () => {
+      // A done task can sit in the backlog with an old dueDay; it must take the
+      // backlog→regular position-only move, not be re-added to Today.
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Done + overdue'),
+        isDone: true,
+        dueDay: '2026-05-30',
+      });
+      storeSpy.dispatch.calls.reset();
+
+      component.moveToToday();
+
+      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
+        'top-1',
+        'project-1',
+      );
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
   });
 });

@@ -22,3 +22,28 @@ export const findAdjacentFocusable = (
   const step = direction === 'next' ? 1 : -1;
   return all[idx + step] ?? null;
 };
+
+/**
+ * Returns the final rendered row in a parent task's subtree. The parent itself
+ * is returned when it has no rendered subtasks.
+ */
+export const findLastTaskInSubtree = (parentTaskEl: HTMLElement): HTMLElement => {
+  const subtaskEls = Array.from(parentTaskEl.querySelectorAll<HTMLElement>('task'));
+  return subtaskEls[subtaskEls.length - 1] ?? parentTaskEl;
+};
+
+/**
+ * Finds the next main-list task after a parent and all of its rendered
+ * subtasks. Task copies inside the detail panel are excluded so navigation
+ * cannot jump into a second rendering of the same subtree.
+ */
+export const findNextTaskAfterSubtree = (
+  parentTaskEl: HTMLElement,
+): HTMLElement | null => {
+  const lastRow = findLastTaskInSubtree(parentTaskEl);
+  const mainTaskEls = Array.from(document.querySelectorAll<HTMLElement>('task')).filter(
+    (taskEl) => !taskEl.closest('task-detail-panel'),
+  );
+  const currentIndex = mainTaskEls.indexOf(lastRow);
+  return currentIndex < 0 ? null : (mainTaskEls[currentIndex + 1] ?? null);
+};

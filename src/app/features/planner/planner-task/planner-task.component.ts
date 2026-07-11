@@ -50,6 +50,13 @@ import { TranslatePipe } from '@ngx-translate/core';
   ],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
+    // data-task-id + tabindex only where the id-based schedule-today shortcut
+    // needs them (the Planner overdue list, #8851). Elsewhere data-task-id
+    // must stay absent: the e2e page object (e2e/pages/task.page.ts) picks its
+    // done-confirmation strategy based on its presence, and tabindex would add
+    // a Tab stop to every planner-day/scheduled card board-wide.
+    '[attr.data-task-id]': 'focusable() ? task().id : null',
+    '[attr.tabindex]': 'focusable() ? "0" : null',
     '[class.isDone]': 'task().isDone',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isCurrent]': 'isCurrent()',
@@ -72,6 +79,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   // TODO remove
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
+  // Opt-in DOM focusability (only the Planner overdue list needs it, for the
+  // schedule-today shortcut). Off everywhere else to avoid stray Tab stops.
+  readonly focusable = input<boolean>(false);
 
   readonly T = T;
   readonly isTouchActive = isTouchActive;

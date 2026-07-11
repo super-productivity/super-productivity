@@ -381,6 +381,8 @@ export const TaskSharedActions = createActionGroup({
       projectId: string;
       operations: BatchOperation[];
       createdTaskIds: { [tempId: string]: string };
+      /** Captured before dispatch so replay creates identical task state. */
+      createdTaskTimestamp?: number;
     }) => ({
       ...taskProps,
       meta: {

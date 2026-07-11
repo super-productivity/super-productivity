@@ -2,6 +2,8 @@
   <div
     [@banner]
     class="content-wrapper"
+    role="status"
+    aria-live="polite"
   >
     @if (banner.progress$ && (banner.progress$ | async); as progress) {
       @if (progress > 0) {
@@ -14,7 +16,10 @@
     <div class="inner-content-wrapper">
       @if (banner.img) {
         <div class="motivational-img-wrapper">
-          <img [src]="banner.img" />
+          <img
+            [src]="banner.img"
+            alt=""
+          />
         </div>
       }
       <div class="message-wrapper">
@@ -27,7 +32,10 @@
         <!-- -->
         @if (banner.timer$) {
           <div class="message">
-            <strong>{{ banner.timer$ | async | msToMinuteClockString }}</strong> –
+            <strong aria-hidden="true">{{
+              banner.timer$ | async | msToMinuteClockString
+            }}</strong>
+            –
             {{ banner.msg | translate: banner.translateParams }}
           </div>
         } @else {

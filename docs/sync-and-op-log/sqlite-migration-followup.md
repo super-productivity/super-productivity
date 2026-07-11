@@ -138,7 +138,10 @@ captured on the next tick.
 - ⏳ **Remains: the on-device real-engine run.** sql.js validates the engine, not
   the Capacitor bridge or the native plugin's specific SQLite build/flags. The
   `operation-log-stress.benchmark.ts` harness is the lever for the on-device
-  perf + behavior pass (see B1 perf note).
+  perf + behavior pass (see B1 perf note). Run it explicitly with
+  `npm run test:file src/app/op-log/testing/benchmarks/operation-log-stress.benchmark.ts`;
+  it is compiled by `src/tsconfig.spec.json` but excluded from the auto-run
+  `**/*.spec.ts` set, so it never runs in normal CI.
 
 ### B3. Flip the DI token on native — init fix ✅ landed; token flip device-gated
 

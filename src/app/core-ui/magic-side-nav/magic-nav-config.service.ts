@@ -36,7 +36,7 @@ import {
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
-import { IS_APPLE_APP_STORE } from '../../app.constants';
+import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -252,9 +252,9 @@ export class MagicNavConfigService {
       },
 
       // Help Menu (rendered as mat-menu)
-      // Not allowed to display donation stuff on the iOS or Mac App Store per
-      // App Store guidelines (Guideline 3.1.1)
-      ...(this.isDonatePageEnabled() && !IS_APPLE_APP_STORE
+      // Donation links are disabled on native iOS and every macOS desktop build
+      // to keep App Store review behavior deterministic (Guideline 3.1.1).
+      ...(this.isDonatePageEnabled() && !IS_DONATION_UI_RESTRICTED
         ? [
             {
               type: 'route',
@@ -293,9 +293,9 @@ export class MagicNavConfigService {
             icon: 'feedback',
             href: 'https://github.com/super-productivity/super-productivity/discussions',
           },
-          // Not allowed to display donation stuff on the iOS or Mac App Store
-          // per App Store guidelines (Guideline 3.1.1)
-          ...(!IS_APPLE_APP_STORE
+          // Donation links are disabled on native iOS and every macOS desktop
+          // build to keep App Store review behavior deterministic.
+          ...(!IS_DONATION_UI_RESTRICTED
             ? [
                 {
                   type: 'href' as const,

@@ -57,6 +57,7 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { DateService } from '../../../core/date/date.service';
+import { MAT_SELECT_CONFIG } from '@angular/material/select';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -88,6 +89,12 @@ const WEEKDAY_KEYS: (keyof TaskRepeatCfgCopy)[] = [
   templateUrl: './dialog-edit-task-repeat-cfg.component.html',
   styleUrls: ['./dialog-edit-task-repeat-cfg.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [
+    {
+      provide: MAT_SELECT_CONFIG,
+      useValue: { canSelectNullableOptions: true },
+    },
+  ],
   imports: [
     MatDialogTitle,
     TranslatePipe,

@@ -8,6 +8,11 @@
           <div class="material-table">
             <div
               (click)="visibility[i] = !visibility[i]"
+              (keydown.enter)="visibility[i] = !visibility[i]"
+              (keydown.space)="$event.preventDefault(); visibility[i] = !visibility[i]"
+              role="button"
+              tabindex="0"
+              [attr.aria-expanded]="!!visibility[i]"
               class="caption"
               mat-ripple
             >

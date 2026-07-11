@@ -17,15 +17,16 @@
   padding: 0 44px 0 var(--s2);
   border: 1px solid var(--extra-border-color);
   border-radius: var(--task-border-radius);
+  box-shadow: var(--whiteframe-shadow-4dp);
   outline: 0;
-  background: var(--sub-task-c-bg);
+  background: var(--bg-lightest);
   color: var(--text-color-most-intense);
   font-family: var(--font-primary-stack);
   font-size: 14px;
   line-height: 40px;
 
   &:focus {
-    border-color: var(--palette-primary-500);
+    border-color: var(--c-accent);
   }
 }
 

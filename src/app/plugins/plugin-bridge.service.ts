@@ -1221,6 +1221,7 @@ export class PluginBridgeService implements OnDestroy {
 
     // Chunk large operations to prevent oversized payloads
     const chunks = this._chunkOperations(request.operations);
+    const createdTaskTimestamp = Date.now();
 
     if (chunks.length > 1) {
       PluginLog.log('PluginBridge: Chunking large batch operation', {
@@ -1237,6 +1238,7 @@ export class PluginBridgeService implements OnDestroy {
           projectId: request.projectId,
           operations: chunk,
           createdTaskIds, // Same IDs mapping for all chunks
+          createdTaskTimestamp,
         }),
       );
     });

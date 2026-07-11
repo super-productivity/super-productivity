@@ -1,0 +1,7 @@
+- New Android home-screen widget for today’s tasks
+- Import Todoist data from the Import/Export launcher
+- Create tasks by dropping links or EML files into the app
+- Redesigned add-task bar with improved notes, toggles, and accessibility
+- New completed-task sorting and file-tree nesting options
+- More reliable encrypted file sync and fewer false conflict dialogs
+- Improved recurring tasks, subtasks, project duplication, calendars, and mobile layouts
