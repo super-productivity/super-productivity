@@ -1062,6 +1062,49 @@ describe('SyncWrapperService', () => {
       );
     });
 
+    it('routes an OperationIntegrityError whose op id contains "504" to the tamper handler, not the timeout branch', async () => {
+      // Regression: the error message embeds the offending op's uuidv7 id. The
+      // precise instanceof branch must win over _isTimeoutError's
+      // String(error).includes('504') heuristic — otherwise an id that happens to
+      // contain "504" is misclassified as a gateway timeout and shows the wrong
+      // "try again" message (and skips ERROR status). GHSA-8pxh-mgc7-gp3g.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new OperationIntegrityError(
+            'Operation 01920504-6b0a-7f3c-8e2d-000000000000 failed metadata integrity check. GHSA-8pxh-mgc7-gp3g',
+          ),
+        ),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.TIMEOUT_ERROR }),
+      );
+    });
+
+    it('suppresses the OperationIntegrityError snack on an automatic sync but still flags ERROR', async () => {
+      // Persistent condition (tampered/misconfigured server): re-showing the snack
+      // on every auto-sync cycle would spam the user, so only surface it on an
+      // explicit sync — matching the sibling PlaintextWhenEncryptionExpectedError
+      // branch. The ERROR status still keeps the sync indicator honest.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new OperationIntegrityError('tampered. GHSA-8pxh-mgc7-gp3g')),
+      );
+
+      const result = await service.sync(); // isUserTriggered = false (auto sync)
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED }),
+      );
+    });
+
     it('should handle NetworkUnavailableSPError with WARNING snackbar when user-triggered', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new NetworkUnavailableSPError()),

@@ -856,6 +856,36 @@ export class SyncWrapperService {
           config: { duration: 15000 },
         });
         return 'HANDLED_ERROR';
+      } else if (error instanceof OperationIntegrityError) {
+        // A decrypted op's unauthenticated metadata contradicted its authenticated
+        // payload, or a plaintext op arrived while encryption is mandatory
+        // (GHSA-8pxh-mgc7-gp3g). Fail closed with a calm, translated message so the
+        // generic handler below cannot surface the raw technical/GHSA string to the
+        // user. The technical details are already in the log.
+        //
+        // Ordering matters: this precise instanceof check MUST stay ABOVE the
+        // string-heuristic branches below (isTransientNetworkError / _isTimeoutError
+        // / _isPermissionError). The error message embeds the offending op's uuidv7
+        // id, and an id that happens to contain "504" would otherwise be
+        // misclassified as a gateway timeout by _isTimeoutError — showing the wrong
+        // "try again" message and skipping the ERROR status.
+        //
+        // Like the sibling PlaintextWhenEncryptionExpectedError branch, this is a
+        // persistent condition (until the user acts or tampering stops), so only
+        // surface the snack on an explicit sync to avoid spamming every auto-sync
+        // cycle; the ERROR status keeps the sync indicator honest meanwhile.
+        SyncLog.err('SyncWrapperService: operation integrity check failed', {
+          name: error.name,
+        });
+        this._providerManager.setSyncStatus('ERROR');
+        if (isUserTriggered) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
+            type: 'ERROR',
+            config: { duration: 15000 },
+          });
+        }
+        return 'HANDLED_ERROR';
       } else if (
         error instanceof NetworkUnavailableSPError ||
         isTransientNetworkError(error)
@@ -930,22 +960,6 @@ export class SyncWrapperService {
             config: { duration: 15000 },
           });
         }
-        return 'HANDLED_ERROR';
-      } else if (error instanceof OperationIntegrityError) {
-        // A decrypted op's unauthenticated metadata contradicted its authenticated
-        // payload, or a plaintext op arrived while encryption is mandatory
-        // (GHSA-8pxh-mgc7-gp3g). Fail closed with a calm, translated message so the
-        // generic handler below cannot surface the raw technical/GHSA string to the
-        // user. The technical details are already in the log.
-        SyncLog.err('SyncWrapperService: operation integrity check failed', {
-          name: error.name,
-        });
-        this._providerManager.setSyncStatus('ERROR');
-        this._snackService.open({
-          msg: T.F.SYNC.S.INTEGRITY_TAMPER_DETECTED,
-          type: 'ERROR',
-          config: { duration: 15000 },
-        });
         return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');
