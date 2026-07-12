@@ -1,5 +1,15 @@
 # iOS home screen widget (port of the Android widget)
 
+> **Status: implemented** (code + project wiring + CI). Remaining manual steps —
+> portal App ID / App Group / provisioning profiles, the
+> `IOS_WIDGET_PROVISION_PROFILE` CI secret, wiring the Swift parser tests to a
+> test target, and on-device verification — are listed in
+> [`ios/App/SupWidget/README.md`](../../ios/App/SupWidget/README.md).
+> Open decision 1 was settled as proposed (`group.com.super-productivity.app`);
+> decision 2 landed the TS rename (`features/android/android-widget.*` →
+> `features/widget/`) inside the feature change, after Android widget PR #8737
+> merged.
+
 Port of the Android task-list widget (PR #8737, plan
 [2026-07-03-android-home-screen-widget.md](2026-07-03-android-home-screen-widget.md))
 to iOS via a WidgetKit extension. The Android architecture — one-way versioned JSON

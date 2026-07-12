@@ -1,13 +1,13 @@
-import { getTaskDoneChangesToApply } from './android-widget.effects';
+import { getTaskDoneChangesToApply } from './widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
 
 /**
- * The effects themselves are gated by IS_ANDROID_WEB_VIEW (false in tests), so
+ * The effects themselves are gated by IS_WIDGET_PLATFORM (false in tests), so
  * we test the drain decision logic directly (repo convention, see
  * android-sync-bridge.effects.spec.ts).
  */
-describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
+describe('WidgetEffects - getTaskDoneChangesToApply', () => {
   const entities = (...tasks: { id: string; isDone?: boolean }[]): Dictionary<Task> =>
     Object.fromEntries(
       tasks.map((t) => [t.id, { id: t.id, isDone: !!t.isDone } as Task]),

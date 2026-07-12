@@ -1,8 +1,8 @@
-import { selectAndroidWidgetData } from './android-widget.selectors';
+import { selectWidgetData } from './widget.selectors';
 import { Task } from '../../tasks/task.model';
 import { Project } from '../../project/project.model';
 
-describe('selectAndroidWidgetData', () => {
+describe('selectWidgetData', () => {
   const task = (id: string, partial: Partial<Task> = {}): Task =>
     ({
       id,
@@ -25,7 +25,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should project today tasks in order with project colors', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1', 't2'],
       {
         t1: task('t1', { title: 'Task one', projectId: 'p1' }),
@@ -44,7 +44,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should skip today ids without a task entity', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['missing', 't1'],
       { t1: task('t1') },
       projectState([]),
@@ -54,7 +54,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should omit projectId key entirely for project-less tasks (JSON null breaks the Kotlin parser contract)', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1', { projectId: undefined }) },
       projectState([]),
@@ -63,7 +63,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should not include colors for projects without a theme primary', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1', { projectId: 'p1' }) },
       projectState([project('p1')]),
@@ -72,8 +72,8 @@ describe('selectAndroidWidgetData', () => {
     expect(result.tasks[0].projectId).toBe('p1');
   });
 
-  it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt (see WidgetDataTest.kt)', () => {
-    const result = selectAndroidWidgetData.projector(
+  it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt and WidgetData.swift (see WidgetDataTest.kt / WidgetDataTests.swift)', () => {
+    const result = selectWidgetData.projector(
       ['t1', 't2'],
       {
         t1: task('t1', { title: 'Task one', projectId: 'p1' }),

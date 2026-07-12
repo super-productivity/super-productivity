@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { merge } from 'rxjs';
+import { merge, of } from 'rxjs';
 import {
   concatMap,
   debounceTime,
@@ -12,25 +12,33 @@ import {
   tap,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { androidInterface } from '../android-interface';
+import { IS_IOS_NATIVE } from '../../../util/is-native-platform';
+import { androidInterface } from '../../android/android-interface';
+import { iosInterface } from '../../ios/ios-interface';
 import { WidgetDataService } from '../widget-data.service';
 import { TaskService } from '../../tasks/task.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { DroidLog } from '../../../core/log';
+import { Log } from '../../../core/log';
 import { T } from '../../../t.const';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
-import { selectAndroidWidgetData } from './android-widget.selectors';
+import { selectWidgetData } from './widget.selectors';
 import { selectTaskEntities } from '../../tasks/store/task.selectors';
 import { Dictionary } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
+
+/**
+ * Whether the current platform has a native home screen widget wired to the
+ * `widget_data` contract (Android legacy-bridge WebView or iOS Capacitor).
+ */
+export const IS_WIDGET_PLATFORM = IS_ANDROID_WEB_VIEW || IS_IOS_NATIVE;
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
  * The queue is a last-wins map `{taskId: targetIsDone}`; missing tasks (deleted
  * since the tap) and tasks already in the target state are skipped so stale
  * queue entries never produce redundant update ops. Exported for direct
- * testing — the effect itself is gated by IS_ANDROID_WEB_VIEW.
+ * testing — the effect itself is gated by IS_WIDGET_PLATFORM.
  */
 export const getTaskDoneChangesToApply = (
   queueJson: string,
@@ -40,7 +48,7 @@ export const getTaskDoneChangesToApply = (
   try {
     targets = JSON.parse(queueJson);
   } catch (e) {
-    DroidLog.err('Failed to parse widget done queue', e);
+    Log.err('Failed to parse widget done queue', e);
     return [];
   }
   if (typeof targets !== 'object' || targets === null || Array.isArray(targets)) {
@@ -55,7 +63,7 @@ export const getTaskDoneChangesToApply = (
 };
 
 @Injectable()
-export class AndroidWidgetEffects {
+export class WidgetEffects {
   private _store = inject(Store);
   private _widgetDataService = inject(WidgetDataService);
   private _taskService = inject(TaskService);
@@ -66,10 +74,10 @@ export class AndroidWidgetEffects {
   // The selector emission is only a change trigger; pushCurrent() re-reads the
   // store at push time (fresher than debounce-stale data) and dedupes itself.
   pushOnStateChange$ =
-    IS_ANDROID_WEB_VIEW &&
+    IS_WIDGET_PLATFORM &&
     createEffect(
       () =>
-        this._store.select(selectAndroidWidgetData).pipe(
+        this._store.select(selectWidgetData).pipe(
           filter(() => !this._hydrationState.isApplyingRemoteOps()),
           debounceTime(500),
           tap(() => this._widgetDataService.pushCurrent()),
@@ -81,7 +89,7 @@ export class AndroidWidgetEffects {
   // re-emits afterwards, so without this the widget would miss synced changes
   // until the next local edit. Push once whenever the sync window closes.
   pushOnSyncWindowEnd$ =
-    IS_ANDROID_WEB_VIEW &&
+    IS_WIDGET_PLATFORM &&
     createEffect(
       () =>
         this._hydrationState.isInSyncWindow$.pipe(
@@ -93,40 +101,54 @@ export class AndroidWidgetEffects {
     );
 
   // Last chance to hand the freshest state to the widget before the WebView may
-  // be frozen or killed in the background — deliberately not debounced.
+  // be frozen or killed in the background — deliberately not debounced. On iOS
+  // the App Group write is fast enough to fit the background grace period
+  // alongside the op-log flush in main.ts.
   pushOnPause$ =
-    IS_ANDROID_WEB_VIEW &&
+    IS_WIDGET_PLATFORM &&
     createEffect(
       () =>
-        androidInterface.onPause$.pipe(tap(() => this._widgetDataService.pushCurrent())),
+        (IS_ANDROID_WEB_VIEW ? androidInterface.onPause$ : iosInterface.onPause$).pipe(
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
       { dispatch: false },
     );
 
-  // Single delivery path for widget done-taps: cold start and background→
-  // foreground are covered by onResume$ (ReplaySubject(1)), taps while the app
-  // is alive by the contentless native drain signal. The queue read is
-  // get-and-clear, so overlapping triggers drain at most once.
+  // Single delivery path for widget done-taps. Android: cold start and
+  // background→foreground are covered by onResume$ (ReplaySubject(1)), taps
+  // while the app is alive by the contentless native drain signal. iOS:
+  // appStateChange fires on transitions only — never at cold start — so an
+  // initial emission stands in for the missing first resume; taps while the
+  // app is foregrounded apply on the next resume (no LocalBroadcast
+  // equivalent, see the iOS widget plan doc). The queue read is get-and-clear,
+  // so overlapping triggers drain at most once.
   drainWidgetDoneQueue$ =
-    IS_ANDROID_WEB_VIEW &&
+    IS_WIDGET_PLATFORM &&
     createEffect(
       () =>
-        merge(
-          androidInterface.onResume$,
-          androidInterface.onWidgetDoneDrainRequest$,
+        (IS_ANDROID_WEB_VIEW
+          ? merge(androidInterface.onResume$, androidInterface.onWidgetDoneDrainRequest$)
+          : merge(of(undefined), iosInterface.onResume$)
         ).pipe(
           concatMap(() =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               first(),
               switchMap(() => this._store.select(selectTaskEntities).pipe(first())),
+              switchMap((taskEntities) => this._drainDoneQueue(taskEntities)),
             ),
           ),
-          tap((taskEntities) => this._drainDoneQueue(taskEntities)),
         ),
       { dispatch: false },
     );
 
-  private _drainDoneQueue(taskEntities: Dictionary<Task>): void {
-    const queueJson = androidInterface.getWidgetDoneQueue?.();
+  private async _drainDoneQueue(taskEntities: Dictionary<Task>): Promise<void> {
+    let queueJson: string | null;
+    try {
+      queueJson = await this._widgetDataService.getAndClearDoneQueue();
+    } catch (e) {
+      Log.err('Failed to read widget done queue', e);
+      return;
+    }
     if (!queueJson) {
       return;
     }
@@ -138,7 +160,7 @@ export class AndroidWidgetEffects {
         this._taskService.setUnDone(change.id);
       }
     }
-    DroidLog.log('Drained widget done queue', { changeCount: changes.length });
+    Log.log('Drained widget done queue', { changeCount: changes.length });
 
     if (changes.length > 0) {
       this._snackService.open({

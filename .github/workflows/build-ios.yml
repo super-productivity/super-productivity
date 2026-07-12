@@ -105,6 +105,34 @@ jobs:
           fi
           echo "Bundle ID verification passed!"
 
+      - name: Install widget extension provisioning profile
+        env:
+          IOS_WIDGET_PROVISION_PROFILE: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
+        run: |
+          if [ -z "$IOS_WIDGET_PROVISION_PROFILE" ]; then
+            echo "ERROR: IOS_WIDGET_PROVISION_PROFILE secret is not set."
+            echo "The SupWidget extension needs its own App Store provisioning profile"
+            echo "(bundle ID com.super-productivity.app.widget) and the app profile must"
+            echo "include the App Group — see ios/App/SupWidget/README.md for the setup steps."
+            exit 1
+          fi
+          PROFILE_PATH="$RUNNER_TEMP/ios-widget-provisioning.mobileprovision"
+          echo "$IOS_WIDGET_PROVISION_PROFILE" | base64 --decode > "$PROFILE_PATH"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(security cms -D -i "$PROFILE_PATH"))
+          echo "Widget profile UUID: $PROFILE_UUID"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+          echo "WIDGET_PROVISIONING_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          # Verify the profile matches the extension bundle ID
+          security cms -D -i "$PROFILE_PATH" > /tmp/widget-profile.plist
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /tmp/widget-profile.plist | sed 's/^[A-Z0-9]*\.//')
+          EXPECTED_BUNDLE_ID="com.super-productivity.app.widget"
+          if [ "$PROFILE_APP_ID" != "$EXPECTED_BUNDLE_ID" ]; then
+            echo "ERROR: Widget provisioning profile app ID ($PROFILE_APP_ID) does not match expected bundle ID ($EXPECTED_BUNDLE_ID)"
+            exit 1
+          fi
+          echo "Widget bundle ID verification passed!"
+
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
@@ -187,6 +215,8 @@ jobs:
               <dict>
                   <key>com.super-productivity.app</key>
                   <string>${{ env.PROVISIONING_PROFILE_UUID }}</string>
+                  <key>com.super-productivity.app.widget</key>
+                  <string>${{ env.WIDGET_PROVISIONING_PROFILE_UUID }}</string>
               </dict>
           </dict>
           </plist>
