@@ -23,7 +23,7 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStrWithOffset } from '../../../util/get-db-date-str';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
@@ -349,7 +349,7 @@ const getScheduledTaskItems = (
   allPlannedTasks
     .filter(
       (task) =>
-        getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === dayDate,
+        getDbDateStrWithOffset(task.dueWithTime, startOfNextDayDiffMs) === dayDate,
     )
     .map((task) => {
       const start = task.dueWithTime;
@@ -383,7 +383,7 @@ const getIcalEventsForDay = (
   calendarEvents.forEach((icalMapEntry) => {
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
-      if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
+      if (getDbDateStrWithOffset(start, startOfNextDayDiffMs) === dayDate) {
         if (isAllDayCalendarEvent(calEv)) {
           // Some providers expose all-day events as 24h timed events.
           allDayEvents.push({ ...calEv, isAllDay: true });
@@ -420,7 +420,7 @@ const groupDeadlineTasksByDay = (
 
     let dayKey: string | undefined;
     if (task.deadlineWithTime) {
-      dayKey = getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs));
+      dayKey = getDbDateStrWithOffset(task.deadlineWithTime, startOfNextDayDiffMs);
     } else if (task.deadlineDay) {
       dayKey = task.deadlineDay;
     }

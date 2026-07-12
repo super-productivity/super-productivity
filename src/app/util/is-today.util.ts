@@ -1,4 +1,4 @@
-import { getDbDateStr } from './get-db-date-str';
+import { getDbDateStrWithOffset } from './get-db-date-str';
 
 export const isTodayWithOffset = (
   date: number | Date,
@@ -9,7 +9,7 @@ export const isTodayWithOffset = (
   if (!(d.getTime() > 0)) {
     throw new Error('Invalid date passed');
   }
-  return getDbDateStr(new Date(d.getTime() - startOfNextDayDiffMs)) === todayStr;
+  return getDbDateStrWithOffset(d, startOfNextDayDiffMs) === todayStr;
 };
 
 /** @deprecated Use `DateService.isToday()` or `isTodayWithOffset()` instead for offset-aware comparison. */

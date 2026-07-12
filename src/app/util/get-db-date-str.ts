@@ -14,6 +14,21 @@ export const getDbDateStr = (date: Date | number | string = new Date()): string 
   return `${year}-${month}-${day}`;
 };
 
+/**
+ * Buckets a timestamp/Date into its *logical* day string by shifting it back
+ * by the start-of-next-day offset before formatting (e.g. a 1 AM task with a
+ * 4-hour offset still belongs to the previous day). Centralizes the
+ * `getDbDateStr(new Date(ts - startOfNextDayDiffMs))` pattern repeated across
+ * planner/schedule day-bucketing (tasks, calendar events, deadlines).
+ */
+export const getDbDateStrWithOffset = (
+  date: number | Date,
+  startOfNextDayDiffMs: number = 0,
+): string => {
+  const ts = typeof date === 'number' ? date : date.getTime();
+  return getDbDateStr(new Date(ts - startOfNextDayDiffMs));
+};
+
 export const isDBDateStr = (str: string): boolean => {
   if (str.length !== 10 || str[4] !== '-' || str[7] !== '-') return false;
   for (let i = 0; i < 10; i++) {
