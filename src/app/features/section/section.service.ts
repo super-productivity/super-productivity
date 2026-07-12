@@ -10,7 +10,6 @@ import {
   addSection,
   addTaskToSection,
   deleteSection,
-  moveTaskToTopInSection,
   removeTaskFromSection,
   updateSection,
   updateSectionOrder,
@@ -91,15 +90,6 @@ export class SectionService {
         sourceSectionId,
       }),
     );
-  }
-
-  /**
-   * Move `taskId` to the top of its section. `section.taskIds` drives
-   * in-section display order, so this is what "move to top" targets for a
-   * sectioned task (the work-context reorder alone would be invisible).
-   */
-  moveTaskToTopInSection(sectionId: string, taskId: string): void {
-    this._store.dispatch(moveTaskToTopInSection({ sectionId, taskId }));
   }
 
   /**

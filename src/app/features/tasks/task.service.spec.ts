@@ -27,8 +27,11 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { signal } from '@angular/core';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
-import { moveTaskToTopInTodayList } from '../work-context/store/work-context-meta.actions';
-import { moveTaskToTopInSection } from '../section/store/section.actions';
+import {
+  moveTaskToBottomInTodayList,
+  moveTaskToTopInTodayList,
+} from '../work-context/store/work-context-meta.actions';
+import { addTaskToSection } from '../section/store/section.actions';
 import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { Section } from '../section/section.model';
 
@@ -410,16 +413,16 @@ describe('TaskService', () => {
     });
   });
 
-  describe('moveToTop', () => {
-    const makeSection = (overrides: Partial<Section> = {}): Section => ({
-      id: 'sec-1',
-      contextId: 'test-project',
-      contextType: WorkContextType.PROJECT,
-      title: 'Section',
-      taskIds: [],
-      ...overrides,
-    });
+  const makeSection = (overrides: Partial<Section> = {}): Section => ({
+    id: 'sec-1',
+    contextId: 'test-project',
+    contextType: WorkContextType.PROJECT,
+    title: 'Section',
+    taskIds: [],
+    ...overrides,
+  });
 
+  describe('moveToTop', () => {
     it('should dispatch moveSubTaskToTop for subtask', () => {
       service.moveToTop('subtask-1', 'parent-1', false);
 
@@ -442,7 +445,7 @@ describe('TaskService', () => {
       );
     });
 
-    it('should reorder within the section when the task is in a section', () => {
+    it('should move the task to the front of the section when it is in a section', () => {
       store.overrideSelector(
         selectSectionsByContextIdMap,
         new Map([
@@ -453,8 +456,14 @@ describe('TaskService', () => {
 
       service.moveToTop('task-1', null, false);
 
+      // null anchor => prepend; section as its own source => in-place reorder.
       expect(store.dispatch).toHaveBeenCalledWith(
-        moveTaskToTopInSection({ sectionId: 'sec-1', taskId: 'task-1' }),
+        addTaskToSection({
+          sectionId: 'sec-1',
+          taskId: 'task-1',
+          afterTaskId: null,
+          sourceSectionId: 'sec-1',
+        }),
       );
       expect(store.dispatch).not.toHaveBeenCalledWith(
         jasmine.objectContaining({ type: moveTaskToTopInTodayList.type }),
@@ -485,6 +494,81 @@ describe('TaskService', () => {
 
       expect(store.dispatch).toHaveBeenCalledWith(
         moveSubTaskToBottom({ id: 'subtask-1', parentId: 'parent-1' }),
+      );
+    });
+
+    it('should dispatch moveTaskToBottomInTodayList when the task is not in a section', () => {
+      store.overrideSelector(selectSectionsByContextIdMap, new Map());
+      store.refreshState();
+
+      service.moveToBottom('task-1', null, false);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: moveTaskToBottomInTodayList.type,
+          taskId: 'task-1',
+        }),
+      );
+    });
+
+    it('should move the task after the section last task when it is in a section', () => {
+      store.overrideSelector(
+        selectSectionsByContextIdMap,
+        new Map([
+          ['test-project', [makeSection({ id: 'sec-1', taskIds: ['task-1', 'task-2'] })]],
+        ]),
+      );
+      store.refreshState();
+
+      service.moveToBottom('task-1', null, false);
+
+      // Anchor is the current last task excluding the moved one (task-2).
+      expect(store.dispatch).toHaveBeenCalledWith(
+        addTaskToSection({
+          sectionId: 'sec-1',
+          taskId: 'task-1',
+          afterTaskId: 'task-2',
+          sourceSectionId: 'sec-1',
+        }),
+      );
+      expect(store.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: moveTaskToBottomInTodayList.type }),
+      );
+    });
+
+    it('should use a null anchor when the task is the only one in the section', () => {
+      store.overrideSelector(
+        selectSectionsByContextIdMap,
+        new Map([['test-project', [makeSection({ id: 'sec-1', taskIds: ['task-1'] })]]]),
+      );
+      store.refreshState();
+
+      service.moveToBottom('task-1', null, false);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        addTaskToSection({
+          sectionId: 'sec-1',
+          taskId: 'task-1',
+          afterTaskId: null,
+          sourceSectionId: 'sec-1',
+        }),
+      );
+    });
+
+    it('should ignore sections that do not contain the task', () => {
+      store.overrideSelector(
+        selectSectionsByContextIdMap,
+        new Map([['test-project', [makeSection({ id: 'sec-1', taskIds: ['task-2'] })]]]),
+      );
+      store.refreshState();
+
+      service.moveToBottom('task-1', null, false);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: moveTaskToBottomInTodayList.type,
+          taskId: 'task-1',
+        }),
       );
     });
   });

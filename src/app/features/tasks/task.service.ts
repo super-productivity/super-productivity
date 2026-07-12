@@ -104,6 +104,7 @@ import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
 import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
@@ -719,7 +720,9 @@ export class TaskService {
       const workContextId = this._workContextService.activeWorkContextId as string;
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
-      const sectionId = isBacklog ? null : this._getSectionIdForTask(workContextId, id);
+      // Sections only exist in the today/regular list, so skip the lookup for
+      // the backlog.
+      const section = isBacklog ? null : this._getSectionForTask(workContextId, id);
 
       if (isBacklog) {
         this._workContextService.doneBacklogTaskIds$
@@ -736,8 +739,13 @@ export class TaskService {
               }),
             );
           });
-      } else if (sectionId) {
-        this._sectionService.moveTaskToTopInSection(sectionId, id);
+      } else if (section) {
+        // A sectioned task's visible order comes from section.taskIds (see
+        // WorkViewComponent.undoneTasksBySection), so "top" is a within-section
+        // reorder to the front — the same op drag-to-top dispatches. A null
+        // anchor prepends; passing the section as its own source keeps it a
+        // single-entity in-place move.
+        this._sectionService.addTaskToSection(section.id, id, null, section.id);
       } else {
         this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
           this._store.dispatch(
@@ -753,19 +761,19 @@ export class TaskService {
     }
   }
 
-  private _getSectionIdForTask(workContextId: string, taskId: string): string | null {
-    let sectionId: string | null = null;
+  private _getSectionForTask(workContextId: string, taskId: string): Section | null {
+    let section: Section | null = null;
     // selectSectionsByContextIdMap is BehaviorSubject-backed, so take(1)
     // resolves synchronously.
     this._store
       .select(selectSectionsByContextIdMap)
       .pipe(take(1))
       .subscribe((sectionsByContext) => {
-        sectionId =
-          sectionsByContext.get(workContextId)?.find((s) => s.taskIds.includes(taskId))
-            ?.id ?? null;
+        section =
+          sectionsByContext.get(workContextId)?.find((s) => s.taskIds.includes(taskId)) ??
+          null;
       });
-    return sectionId;
+    return section;
   }
 
   moveToBottom(id: string, parentId: string | null = null, isBacklog: boolean): void {
@@ -775,6 +783,9 @@ export class TaskService {
       const workContextId = this._workContextService.activeWorkContextId as string;
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
+      // Sections only exist in the today/regular list, so skip the lookup for
+      // the backlog.
+      const section = isBacklog ? null : this._getSectionForTask(workContextId, id);
 
       if (isBacklog) {
         this._workContextService.doneBacklogTaskIds$
@@ -791,6 +802,13 @@ export class TaskService {
               }),
             );
           });
+      } else if (section) {
+        // Mirror of moveToTop: append after the section's current last task
+        // (excluding this one) so the task lands at the bottom of its section,
+        // matching drag-to-bottom. No anchor when it would be alone.
+        const others = section.taskIds.filter((tId) => tId !== id);
+        const afterTaskId = others.length ? others[others.length - 1] : null;
+        this._sectionService.addTaskToSection(section.id, id, afterTaskId, section.id);
       } else {
         this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
           this._store.dispatch(

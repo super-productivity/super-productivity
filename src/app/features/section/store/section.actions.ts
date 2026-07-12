@@ -89,27 +89,6 @@ export const addTaskToSection = createAction(
 );
 
 /**
- * Move `taskId` to the top of `sectionId`'s `taskIds`. Mirrors
- * `moveProjectTaskToTopInBacklogList` for the section case: `section.taskIds`
- * is authoritative for in-section display order, so the context-menu /
- * shortcut "move to top" on a sectioned task reorders here rather than in the
- * work-context list. Single-entity SECTION update; a no-op (same reference)
- * when the task isn't in the section, so replay stays deterministic.
- */
-export const moveTaskToTopInSection = createAction(
-  '[Section] Move Task to Top in Section',
-  (payload: { sectionId: string; taskId: string }) => ({
-    ...payload,
-    meta: {
-      isPersistent: true,
-      entityType: 'SECTION',
-      entityId: payload.sectionId,
-      opType: OpType.Move,
-    } satisfies PersistentActionMeta,
-  }),
-);
-
-/**
  * Remove `taskId` from `sectionId` and atomically reposition it in the
  * work-context's `taskIds` so it lands at the dropped slot in the
  * no-section bucket. The work-context reorder happens in

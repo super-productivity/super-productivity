@@ -3,7 +3,6 @@ import {
   addSection,
   addTaskToSection,
   deleteSection,
-  moveTaskToTopInSection,
   removeTaskFromSection,
   updateSection,
   updateSectionOrder,
@@ -313,6 +312,40 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.taskIds).toEqual(['b', 'a', 'c']);
     });
 
+    it('moves an in-section task to the front', () => {
+      // Caller pattern: null anchor, section as its own source.
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's1',
+          taskId: 'c',
+          afterTaskId: null,
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['c', 'a', 'b']);
+    });
+
+    it('moves an in-section task to the end', () => {
+      // Caller pattern: anchor is the current last task excluding the moved one.
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's1',
+          taskId: 'a',
+          afterTaskId: 'c',
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['b', 'c', 'a']);
+    });
+
     it('does not touch other sections when sourceSectionId is null', () => {
       // Local invariant says t1 should only be in s1, but the test simulates
       // a stale duplicate (e.g. concurrent move). With explicit null source
@@ -344,37 +377,6 @@ describe('sectionReducer', () => {
           afterTaskId: null,
           sourceSectionId: null,
         }),
-      );
-      expect(next).toBe(start);
-    });
-  });
-
-  describe('moveTaskToTopInSection', () => {
-    it('moves a task already in the section to the front', () => {
-      const start = stateWithSections([
-        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
-      ]);
-      const next = sectionReducer(
-        start,
-        moveTaskToTopInSection({ sectionId: 's1', taskId: 'c' }),
-      );
-      expect(next.entities['s1']?.taskIds).toEqual(['c', 'a', 'b']);
-    });
-
-    it('is a no-op (same reference) when the task is not in the section', () => {
-      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['a', 'b'] })]);
-      const next = sectionReducer(
-        start,
-        moveTaskToTopInSection({ sectionId: 's1', taskId: 'MISSING' }),
-      );
-      expect(next).toBe(start);
-    });
-
-    it('is a no-op when the section does not exist', () => {
-      const start = stateWithSections([makeSection({ id: 's1', taskIds: ['a'] })]);
-      const next = sectionReducer(
-        start,
-        moveTaskToTopInSection({ sectionId: 'unknown', taskId: 'a' }),
       );
       expect(next).toBe(start);
     });
