@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Ketika penanganan waktu idle diaktifkan, sebuah dialog akan terbuka setelah jangka waktu tertentu untuk memeriksa apakah dan pada tugas mana Anda ingin melacak waktu Anda, saat Anda menganggur.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktifkan penanganan waktu idle",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Hanya picu dialog waktu idle saat tugas saat ini dipilih",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Sembunyikan dialog idle selama sesi fokus",
       "MIN_IDLE_TIME": "Memicu idle setelah X",
       "TITLE": "Penanganan Menganggur"
     },

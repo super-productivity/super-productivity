@@ -2168,6 +2168,7 @@
       "HELP": "<div><p>Quando o tratamento de tempo de inatividade está ativado, um diálogo será aberto após um período especificado para verificar se — e em qual — tarefa você deseja registrar seu tempo quando esteve inativo.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Ativar tratamento de tempo de inatividade",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Acionar diálogo de inatividade apenas quando a tarefa atual estiver selecionada",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suprimir dialogo de inatividade durante sessoes de foco",
       "MIN_IDLE_TIME": "Acionar inatividade após X",
       "TITLE": "Tratamento de Inatividade"
     },

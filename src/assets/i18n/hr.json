@@ -1501,7 +1501,6 @@
         "LABEL": "Oznake"
       },
       "FORM_BASIC": {
-        "L_COLOR": "Ako nije postavljeno, koristi se primarna boja teme)",
         "L_COLOR": "Boja oznake",
         "L_ICON": "Ikona",
         "L_TITLE": "Ime oznake",
@@ -2172,6 +2171,7 @@
       "HELP": "<div><p>Kada je upravljanje neaktivnošću omogućeno, dijalog će se otvoriti nakon određenog vremena kako bi provjerio na kojem zadatku želiš pratiti vrijeme dok si bio neaktivan.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktiviraj upravljanje neaktivnošću",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Otvaraj dijalog samo kada je trenutni zadatak odabran",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Sakrij dijalog nekoristenja tijekom fokus nacina",
       "MIN_IDLE_TIME": "Pokreni dijalog nakon X",
       "TITLE": "Upravljanje neaktivnošću"
     },

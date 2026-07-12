@@ -2042,6 +2042,7 @@
       "HELP": "<div><p>Når håndtering av inaktiv tid er aktivert, åpnes en dialog etter en spesifisert tid for å sjekke om og på hvilken oppgave du vil spore tiden din, når du har vært inaktiv.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktiver håndtering av inaktiv tid",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Bare utløs tomgangsdialog når en aktuell oppgave er valgt",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Skjul ledig-dialog under fokusmodus",
       "MIN_IDLE_TIME": "Utløser tomgang etter X",
       "TITLE": "Tomgangshåndtering"
     },

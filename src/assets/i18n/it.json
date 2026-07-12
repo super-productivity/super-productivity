@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Quando la gestione del tempo di inattività è abilitata, un finestra si aprirà dopo un periodo specifico di tempo per controllare se e su quale attività vuoi tracciare il tuo tempo, nel periodo che sei stato inattivo.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Abilita la gestione del tempo di inattività",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Innesca una finestra per il tempo di inattività soltanto quando è selezionata un'attività corrente",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Nascondi finestra inattivita durante sessioni focus",
       "MIN_IDLE_TIME": "Innesca inattività dopo X tempo",
       "TITLE": "Gestione inattività"
     },

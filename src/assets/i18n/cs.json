@@ -2025,6 +2025,7 @@
       "HELP": "<div><p>Když je zacházení s nečinným časem povoleno, po uplynutí určité doby se zobrazí dialogové okno, ve kterém můžete zkontrolovat, zda a na jaký úkol chcete sledovat svůj čas po období nečinnosti.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Povolit zacházení s nečinným časem",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Otevřít dialogové okno nečinnosti pouze při vybraném aktuálním úkolu",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Skryt dialog necinnosti behem rezimu soustredeni",
       "MIN_IDLE_TIME": "Spustit nečinnost po X",
       "TITLE": "Zacházení s nečinným časem"
     },

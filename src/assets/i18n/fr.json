@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Lorsque la gestion de la durée d'inactivité est activée, une boîte de dialogue s'ouvre après un délai spécifié pour vérifier si et sur quelle tâche vous souhaitez suivre votre temps, lorsque vous êtes inactif.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Activer la gestion du temps d'inactivité",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Déclenchez uniquement la boîte de dialogue d'inactivité lorsqu'une tâche en cours est sélectionnée",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Masquer la boite de dialogue d'inactivite pendant les sessions focus",
       "MIN_IDLE_TIME": "Déclenchement d'inactivité après X",
       "TITLE": "Gestion de l'inactivité"
     },

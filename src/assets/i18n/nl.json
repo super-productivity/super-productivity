@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Wanneer de verwerking van inactieve tijd is ingeschakeld, wordt na een bepaalde tijd een dialoogvenster geopend om te controleren of en voor welke taak u uw tijd wilt bijhouden, wanneer u inactief bent geweest.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Inactieve tijdafhandeling inschakelen",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Activeer alleen een inactieve tijdsvenster wanneer een huidige taak is geselecteerd",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Onderdruk inactiviteitsdialoog tijdens focussessies",
       "MIN_IDLE_TIME": "Activeer inactief na X",
       "TITLE": "Idle Handling"
     },

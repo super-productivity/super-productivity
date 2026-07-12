@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Quando a manipulação de tempo ocioso estiver ativada, uma caixa de diálogo será aberta após um período especificado para verificar se e em qual tarefa você deseja acompanhar seu tempo, quando você estiver ocioso.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Ativar manipulação de tempo ocioso",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Só aciona o diálogo de tempo ocioso quando uma tarefa atual é selecionada",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suprimir dialogo de inatividade durante sessoes de foco",
       "MIN_IDLE_TIME": "Trigger ocioso após X",
       "TITLE": "Manuseio inativo"
     },

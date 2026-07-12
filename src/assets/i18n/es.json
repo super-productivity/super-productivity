@@ -2184,6 +2184,7 @@
       "HELP": "<div><p>Cuando el manejo de tiempo inactivo está habilitado se abrirá un diálogo después de una cantidad de tiempo especificada para comprobar si y en qué tarea quieres rastrear tu tiempo, cuando has estado inactivo.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Habilitar manejo de tiempo inactivo",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Solo activar diálogo de tiempo inactivo cuando hay una tarea actual seleccionada",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suprimir dialogo de inactividad durante sesiones de enfoque",
       "MIN_IDLE_TIME": "Activar inactividad después de X",
       "TITLE": "Manejo de Inactividad"
     },

@@ -2366,6 +2366,7 @@
       "HELP": "<div><p>När hantering av inaktiv tid är aktiverad öppnas en dialogruta efter en angiven tid för att kontrollera om och på vilken uppgift du vill spåra din tid när du har varit inaktiv.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktivera hantering av inaktiv tid",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Aktivera endast dialogrutan för inaktiv tid när en aktuell uppgift är vald",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Dolj overksamhetsdialog under fokuslage",
       "MIN_IDLE_TIME": "Aktivera viloläge efter X",
       "TITLE": "Tomgångshantering"
     },

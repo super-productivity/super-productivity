@@ -2362,6 +2362,7 @@
       "HELP": "<div><p>Când tratarea timpului de inactivitate este activat, un dialog se va deschide după un anumit interval de timp pentru a verifica dacă - și pe care - sarcina doriți să urmăriți timpul când ați fost inactiv.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Activează tratarea timpului de inactivitate",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Activează dialogul de inactivitate doar când sarcina curentă este selectată",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ascunde dialogul de inactivitate in timpul sesiunilor de focus",
       "MIN_IDLE_TIME": "Activează inactivitatea după X",
       "TITLE": "Gestionare inactivitate"
     },

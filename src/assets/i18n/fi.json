@@ -2042,6 +2042,7 @@
       "HELP": "<div><p>Kun toimettoman ajan käsittely on käytössä, ikkuna avautuu määritetyn ajan kuluttua tarkistaakseen, haluatko ja mihin tehtävään seurata aikaasi, kun olet ollut toimettomana.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Ota toimettoman ajan käsittely käyttöön",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Käynnistä toimettoman ajan ikkuna vain, kun nykyinen tehtävä on valittu",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Piilota toimettomuusikkuna keskittymistilassa",
       "MIN_IDLE_TIME": "Käynnistä toimettomuus X jälkeen",
       "TITLE": "Toimettoman ajan käsittely"
     },
