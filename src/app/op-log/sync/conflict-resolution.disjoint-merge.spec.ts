@@ -10,7 +10,13 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
-import { ActionType, EntityConflict, OpType, Operation } from '../core/operation.types';
+import {
+  ActionType,
+  EntityConflict,
+  extractActionPayload,
+  OpType,
+  Operation,
+} from '../core/operation.types';
 import {
   compareVectorClocks,
   incrementVectorClock,
@@ -281,9 +287,10 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     // A single synthesized merged op carries BOTH changes.
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
+    expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
 
     // BOTH original ops are superseded (rejected).
     const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
@@ -374,7 +381,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
     // The un-conflicted field must NOT ride along in the synthesized op.
@@ -421,6 +428,34 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
     expect((await journal.list('unreviewed')).length).toBeGreaterThan(0);
+  });
+
+  it('(a5) refuses disjoint-merge for a multi-entity remote operation (#8956)', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Local title', notes: 'base notes' }),
+    );
+    const localOp = op({
+      id: 'local-multi-guard',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-multi-guard',
+      clientId: 'B',
+      entityIds: ['task-1', 'task-2'],
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { notes: 'Remote notes' } } },
+    });
+
+    await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
+
+    expect(mergedOpArgs()).toBeUndefined();
+    const entries = await journal.list('history');
+    expect(entries.length).toBe(1);
+    expect(entries[0].reason).not.toBe('disjoint-merge');
   });
 
   // ── (a5) SPAP-14 fix: refuse merge for fallback-less entity types ───────────
@@ -558,7 +593,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
     // The noise field resolves to the greater-(timestamp) side, NOT simply the
@@ -832,7 +867,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     };
 
     const entityOf = (o: Operation): Record<string, unknown> => {
-      const p = o.payload as Record<string, unknown>;
+      const p = extractActionPayload(o.payload);
       return { title: p['title'], notes: p['notes'] };
     };
 

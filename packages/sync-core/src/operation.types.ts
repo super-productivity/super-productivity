@@ -206,6 +206,27 @@ export interface MultiEntityPayload<TOpType extends string = OpType> {
 }
 
 /**
+ * Controls how a synthetic LWW update is applied to an existing entity.
+ *
+ * `replace` carries a complete winning snapshot. `patch` is reserved for
+ * deterministic field-level merges whose omitted fields must stay untouched.
+ */
+export type LwwUpdateMode = 'replace' | 'patch';
+
+/**
+ * Backward-compatible LWW payload envelope.
+ *
+ * Extending MultiEntityPayload means clients that predate `lwwUpdateMode`
+ * still extract and replay `actionPayload` instead of treating the envelope as
+ * entity data. New clients can distinguish snapshots from partial merges.
+ */
+export interface LwwUpdatePayload<
+  TOpType extends string = OpType,
+> extends MultiEntityPayload<TOpType> {
+  lwwUpdateMode: LwwUpdateMode;
+}
+
+/**
  * Type guard to check if a payload is a multi-entity payload.
  */
 export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPayload => {
@@ -216,6 +237,11 @@ export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPa
     Array.isArray((payload as MultiEntityPayload).entityChanges)
   );
 };
+
+export const isLwwUpdatePayload = (payload: unknown): payload is LwwUpdatePayload =>
+  isMultiEntityPayload(payload) &&
+  'lwwUpdateMode' in payload &&
+  (payload.lwwUpdateMode === 'replace' || payload.lwwUpdateMode === 'patch');
 
 /**
  * Extracts the action payload from an operation payload.

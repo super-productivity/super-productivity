@@ -428,6 +428,52 @@ describe('OperationLogUploadService', () => {
         expect(result.uploadedCount).toBe(1);
       });
 
+      it('should strip local-only sync settings from GLOBAL_CONFIG LWW replacements (#8956)', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = '[GLOBAL_CONFIG] LWW Update' as ActionType;
+        entry.op.entityType = 'GLOBAL_CONFIG';
+        entry.op.entityId = '*';
+        entry.op.opType = OpType.Update;
+        entry.op.payload = {
+          actionPayload: {
+            misc: { isDisableAnimations: true },
+            sync: {
+              syncProvider: 'webDav',
+              syncInterval: 300000,
+              isManualSyncOnly: true,
+              isEnabled: true,
+              isEncryptionEnabled: true,
+              isCompressionEnabled: true,
+            },
+          },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        };
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          }),
+        );
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedOps = mockApiProvider.uploadOps.calls.mostRecent().args[0];
+        const payload = uploadedOps[0].payload as {
+          actionPayload: { sync: Record<string, unknown> };
+          lwwUpdateMode: string;
+        };
+        expect(payload.lwwUpdateMode).toBe('replace');
+        expect(payload.actionPayload.sync).toEqual({
+          syncProvider: null,
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          isCompressionEnabled: true,
+        });
+      });
+
       it('should update last server seq after upload', async () => {
         mockOpLogStore.getUnsynced.and.returnValue(
           Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),

@@ -155,7 +155,7 @@ describe('RemoteOpsProcessingService', () => {
         },
       ): Promise<{
         isSupersededOrDuplicate: boolean;
-        conflict: EntityConflict | null;
+        conflicts: EntityConflict[];
       }> => {
         const entityIdsToCheck = remoteOp.entityIds?.length
           ? remoteOp.entityIds
@@ -163,6 +163,7 @@ describe('RemoteOpsProcessingService', () => {
             ? [remoteOp.entityId]
             : [];
 
+        const conflicts: EntityConflict[] = [];
         for (const entityId of entityIdsToCheck) {
           const entityKey = toEntityKey(remoteOp.entityType, entityId);
           const localOpsForEntity = ctx.localPendingOpsByEntity.get(entityKey) || [];
@@ -193,12 +194,12 @@ describe('RemoteOpsProcessingService', () => {
 
           // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // No pending ops = no conflict possible
@@ -208,20 +209,17 @@ describe('RemoteOpsProcessingService', () => {
 
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
-            return {
-              isSupersededOrDuplicate: false,
-              conflict: {
-                entityType: remoteOp.entityType,
-                entityId,
-                localOps: localOpsForEntity,
-                remoteOps: [remoteOp],
-                suggestedResolution: 'manual',
-              },
-            };
+            conflicts.push({
+              entityType: remoteOp.entityType,
+              entityId,
+              localOps: localOpsForEntity,
+              remoteOps: [remoteOp],
+              suggestedResolution: 'manual',
+            });
           }
         }
 
-        return { isSupersededOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflicts };
       },
     );
     validateStateServiceSpy = jasmine.createSpyObj('ValidateStateService', [
@@ -1484,6 +1482,42 @@ describe('RemoteOpsProcessingService', () => {
       expect(result.conflicts.length).toBe(1);
       expect(result.conflicts[0].entityId).toBe('task-1');
       expect(result.nonConflicting.length).toBe(0);
+    });
+
+    it('should retain every per-entity conflict reported for one remote op (#8956)', async () => {
+      const remoteOp = createOp({
+        id: 'remote-multi',
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+      });
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [createOp({ id: 'local-1', entityId: 'task-1' })],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+        {
+          entityType: 'TASK',
+          entityId: 'task-2',
+          localOps: [createOp({ id: 'local-2', entityId: 'task-2' })],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+      conflictResolutionServiceSpy.checkOpForConflicts.and.resolveTo({
+        isSupersededOrDuplicate: false,
+        conflicts,
+      });
+
+      const result = await service.detectConflicts([remoteOp], new Map());
+
+      expect(result.conflicts.map((conflict) => conflict.entityId)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+      expect(result.nonConflicting).toEqual([]);
     });
 
     it('should skip superseded remote ops (local is newer)', async () => {

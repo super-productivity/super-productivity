@@ -5,6 +5,7 @@ import {
   LOCAL_ONLY_SYNC_SCHEDULE_KEYS,
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
+  stripLocalOnlySyncSettingsFromGlobalConfig,
 } from './local-only-sync-settings.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 
@@ -55,6 +56,26 @@ describe('local-only sync settings utils', () => {
     expect(sync['isCompressionEnabled']).toBe(true);
     expect(globalConfig['misc']).toEqual({ isDisableAnimations: true });
     expect(result['task']).toEqual({ ids: [] });
+  });
+
+  it('should strip local-only sync settings from a global config payload', () => {
+    const result = stripLocalOnlySyncSettingsFromGlobalConfig({
+      sync: {
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isManualSyncOnly: true,
+        isCompressionEnabled: true,
+      },
+      misc: { isDisableAnimations: true },
+    });
+
+    expect(result).toEqual({
+      sync: {
+        syncProvider: null,
+        isCompressionEnabled: true,
+      },
+      misc: { isDisableAnimations: true },
+    });
   });
 
   it('should leave data without globalConfig.sync unchanged by reference', () => {

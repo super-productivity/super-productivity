@@ -192,6 +192,52 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedTask.notes).toBe('Updated notes');
     });
 
+    it('should remove fields omitted from an explicit replacement snapshot (#8956)', () => {
+      const state = createMockState([{ notes: 'Must not be resurrected' }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Replacement title',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.title).toBe('Replacement title');
+      expect(updatedTask.notes).toBeUndefined();
+    });
+
+    it('should preserve omitted fields for an explicit partial merge (#8956)', () => {
+      const state = createMockState([{ notes: 'Keep this field' }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Merged title',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.title).toBe('Merged title');
+      expect(updatedTask.notes).toBe('Keep this field');
+    });
+
     it('should update modified timestamp', () => {
       const state = createMockState([{ modified: 1000 }]);
       const action = {
@@ -1164,6 +1210,60 @@ describe('lwwUpdateMetaReducer', () => {
       expect(globalConfig['sound']).toBeUndefined();
       // 'misc' was in the payload — it must be present
       expect(globalConfig['misc']).toBeDefined();
+    });
+
+    it('should preserve local-only sync settings from a remote replacement (#8956)', () => {
+      const state = createMockStateWithSingletons();
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: {
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: false,
+        },
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        sync: {
+          syncProvider: 'webDav',
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          syncInterval: 300000,
+          isManualSyncOnly: false,
+          isCompressionEnabled: true,
+        },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          isApplyingFromOtherClient: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(
+        jasmine.objectContaining({
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        }),
+      );
     });
 
     it('should replace timeTracking state with LWW winning data', () => {

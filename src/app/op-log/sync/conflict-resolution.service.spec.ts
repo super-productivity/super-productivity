@@ -9,7 +9,13 @@ import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
-import { ActionType, EntityConflict, OpType, Operation } from '../core/operation.types';
+import {
+  ActionType,
+  EntityConflict,
+  extractActionPayload,
+  OpType,
+  Operation,
+} from '../core/operation.types';
 import {
   compareVectorClocks,
   VectorClock,
@@ -20,6 +26,7 @@ import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import { ConflictJournalService } from './conflict-journal.service';
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService;
@@ -987,12 +994,21 @@ describe('ConflictResolutionService', () => {
           ),
         ];
 
-        await service.autoResolveConflictsLWW(conflicts);
+        const result = await service.autoResolveConflictsLWW(conflicts);
 
         // Local DELETE wins (newer timestamp)
-        // Both ops should be rejected, local state (deleted) is preserved
+        // Both originals are obsolete, but a replacement DELETE with a clock
+        // dominating both sides must remain pending for upload.
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-del']);
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-upd']);
+        const replacementDelete = getFirstMixedLocalOp();
+        expect(replacementDelete.opType).toBe(OpType.Delete);
+        expect(replacementDelete.actionType).toBe(conflicts[0].localOps[0].actionType);
+        expect(replacementDelete.payload).toEqual(conflicts[0].localOps[0].payload);
+        expect(replacementDelete.vectorClock['client-a']).toBeGreaterThanOrEqual(1);
+        expect(replacementDelete.vectorClock['client-b']).toBeGreaterThanOrEqual(1);
+        expect(replacementDelete.vectorClock[TEST_CLIENT_ID]).toBeGreaterThanOrEqual(1);
+        expect(result.localWinOpsCreated).toBe(1);
       });
 
       it('should resolve UPDATE vs DELETE conflict using LWW when UPDATE is newer', async () => {
@@ -1057,6 +1073,199 @@ describe('ConflictResolutionService', () => {
           jasmine.any(Object),
         );
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-del']);
+      });
+
+      it('should apply one multi-entity remote op then compensate only local-winning entities (#8956)', async () => {
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 2000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: { taskIds: ['task-1', 'task-2'] },
+        };
+        const localTask1 = createOpWithTimestamp('local-task-1', 'client-a', 1000);
+        const localTask2 = {
+          ...createOpWithTimestamp(
+            'local-task-2',
+            'client-a',
+            3000,
+            OpType.Update,
+            'task-2',
+          ),
+          payload: { localOpaqueChange: true },
+        };
+        const conflicts: EntityConflict[] = [
+          createConflict('task-1', [localTask1], [remoteMultiOp]),
+          createConflict('task-2', [localTask2], [remoteMultiOp]),
+        ];
+        const pendingRemoteWinner = createOpWithTimestamp(
+          'pending-task-1',
+          'client-a',
+          900,
+        );
+        const pendingLocalWinner = createOpWithTimestamp(
+          'pending-task-2',
+          'client-a',
+          2900,
+          OpType.Update,
+          'task-2',
+        );
+        mockOpLogStore.getUnsyncedByEntity.and.resolveTo(
+          new Map([
+            ['TASK:task-1', [pendingRemoteWinner]],
+            ['TASK:task-2', [pendingLocalWinner]],
+          ]),
+        );
+        mockStore.select.and.returnValue(
+          of({ id: 'task-2', title: 'Local winning task' }),
+        );
+        const journal = (
+          service as unknown as { conflictJournal: ConflictJournalService }
+        ).conflictJournal;
+        spyOn(journal, 'record').and.resolveTo();
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        const remoteMixedOps = getMixedRemoteOps().filter(
+          (op) => op.id === remoteMultiOp.id,
+        );
+        expect(remoteMixedOps.length).toBe(1);
+        expect(
+          mockOpLogStore.appendBatchSkipDuplicates.calls
+            .allArgs()
+            .flatMap(([ops]) => ops)
+            .some((op) => op.id === remoteMultiOp.id),
+        ).toBeFalse();
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps[0].id).toBe(remoteMultiOp.id);
+        expect(appliedOps[1].actionType).toBe('[TASK] LWW Update');
+        expect(appliedOps[1].entityId).toBe('task-2');
+
+        const rejectedIds = mockOpLogStore.markRejected.calls
+          .allArgs()
+          .flatMap(([ids]) => ids);
+        expect(rejectedIds).toContain('pending-task-1');
+        expect(rejectedIds).toContain('local-task-2');
+        expect(rejectedIds).not.toContain('pending-task-2');
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [],
+          [],
+        );
+        expect(journal.record).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not apply a multi-entity remote op when local wins every entity', async () => {
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 1000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: { taskIds: ['task-1', 'task-2'] },
+        };
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-task-1', 'client-a', 2000)],
+            [remoteMultiOp],
+          ),
+          createConflict(
+            'task-2',
+            [
+              createOpWithTimestamp(
+                'local-task-2',
+                'client-a',
+                3000,
+                OpType.Update,
+                'task-2',
+              ),
+            ],
+            [remoteMultiOp],
+          ),
+        ];
+        mockStore.select.and.returnValue(of({ title: 'Local winning task' }));
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        expect(getMixedRemoteOps()).toEqual([remoteMultiOp]);
+        expect(getMixedLocalOps().length).toBe(2);
+        expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
+      });
+
+      it('should durably recreate a locally deleted entity when a multi-entity remote update wins', async () => {
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp(
+            'remote-multi',
+            'client-b',
+            2000,
+            OpType.Update,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_UPDATE_MULTIPLE,
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            task: { id: 'task-1', changes: { title: 'Remote winning title' } },
+          },
+        };
+        const localDelete: Operation = {
+          ...createOpWithTimestamp(
+            'local-delete',
+            'client-a',
+            1000,
+            OpType.Delete,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE,
+          payload: {
+            task: { id: 'task-1', title: 'Deleted locally', notes: 'Keep me' },
+          },
+        };
+        const localTask2 = createOpWithTimestamp(
+          'local-task-2',
+          'client-a',
+          1000,
+          OpType.Update,
+          'task-2',
+        );
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        const result = await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localDelete], [remoteMultiOp]),
+          createConflict('task-2', [localTask2], [remoteMultiOp]),
+        ]);
+
+        const recreationOp = getFirstMixedLocalOp();
+        expect(result.localWinOpsCreated).toBe(1);
+        expect(getMixedRemoteOps()).toEqual([remoteMultiOp]);
+        expect(recreationOp.actionType).toBe('[TASK] LWW Update');
+        expect(recreationOp.entityId).toBe('task-1');
+        expect(extractActionPayload(recreationOp.payload)).toEqual(
+          jasmine.objectContaining({
+            id: 'task-1',
+            title: 'Remote winning title',
+            notes: 'Keep me',
+          }),
+        );
+        expect((recreationOp.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+          'replace',
+        );
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps.map((op) => op.id)).toEqual([
+          remoteMultiOp.id,
+          recreationOp.id,
+        ]);
       });
 
       it('should extract entity from DELETE payload when UPDATE wins but entity not in store', () => {
@@ -3210,7 +3419,7 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.isSupersededOrDuplicate).toBe(true);
-      expect(result.conflict).toBeNull();
+      expect(result.conflicts).toEqual([]);
     });
 
     it('should NOT mark CONCURRENT remote op as superseded when entity still in state', async () => {
@@ -3233,7 +3442,7 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.isSupersededOrDuplicate).toBe(false);
-      expect(result.conflict).toBeNull();
+      expect(result.conflicts).toEqual([]);
     });
 
     it('should mark CONCURRENT remote op as superseded when entity state is null', async () => {
@@ -3255,7 +3464,7 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.isSupersededOrDuplicate).toBe(true);
-      expect(result.conflict).toBeNull();
+      expect(result.conflicts).toEqual([]);
     });
 
     it('should NOT check entity state for LESS_THAN remote op with no pending ops', async () => {
@@ -3276,9 +3485,46 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.isSupersededOrDuplicate).toBe(false);
-      expect(result.conflict).toBeNull();
+      expect(result.conflicts).toEqual([]);
       // Should NOT have called store.select for entity state check
       expect(mockStore.select).not.toHaveBeenCalled();
+    });
+
+    it('should report a conflict for every affected entity in a multi-entity op (#8956)', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-multi', 'clientB'),
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+        vectorClock: { clientB: 1 },
+      };
+      const localTask1 = {
+        ...createMockOp('local-1', 'clientA'),
+        entityId: 'task-1',
+        vectorClock: { clientA: 1 },
+      };
+      const localTask2 = {
+        ...createMockOp('local-2', 'clientA'),
+        entityId: 'task-2',
+        vectorClock: { clientA: 1 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localTask1]],
+        ['TASK:task-2', [localTask2]],
+      ]);
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TASK:task-1', { clientA: 1 }],
+        ['TASK:task-2', { clientA: 1 }],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity, appliedFrontierByEntity }),
+      );
+
+      expect(result.conflicts.map((conflict) => conflict.entityId)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
     });
 
     it('should detect CONCURRENT conflict when pending local ops exist', async () => {
@@ -3306,8 +3552,8 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.isSupersededOrDuplicate).toBe(false);
-      expect(result.conflict).not.toBeNull();
-      expect(result.conflict!.entityId).toBe('task-1');
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].entityId).toBe('task-1');
       // Should NOT have called store.select — pending ops exist, so normal conflict path
       expect(mockStore.select).not.toHaveBeenCalled();
     });
@@ -3341,8 +3587,8 @@ describe('ConflictResolutionService', () => {
 
       // With the fix, entityId 'task-1' is resolved and a conflict is detected.
       // Without the fix, entityIds: [] would be used as-is, skipping the entity entirely.
-      expect(result.conflict).not.toBeNull();
-      expect(result.conflict!.entityId).toBe('task-1');
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].entityId).toBe('task-1');
     });
   });
 
@@ -4361,7 +4607,8 @@ describe('ConflictResolutionService', () => {
         Date.now(),
       );
 
-      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+      expect(extractActionPayload(op.payload)['id']).toBe('task-canonical');
+      expect((op.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('replace');
     });
 
     it('should overwrite a mismatched payload.id with the canonical entityId', () => {
@@ -4378,7 +4625,7 @@ describe('ConflictResolutionService', () => {
         Date.now(),
       );
 
-      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+      expect(extractActionPayload(op.payload)['id']).toBe('task-canonical');
     });
 
     it('should handle non-object entityState by producing { id } payload', () => {
@@ -4393,7 +4640,7 @@ describe('ConflictResolutionService', () => {
         Date.now(),
       );
 
-      expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+      expect(extractActionPayload(op.payload)['id']).toBe('task-canonical');
     });
 
     it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {
@@ -4460,9 +4707,9 @@ describe('ConflictResolutionService', () => {
         Date.now(),
       );
 
-      expect((op.payload as Record<string, unknown>)['id']).toBeUndefined();
-      // Original payload shape preserved (no synthetic field injected).
-      expect(op.payload).toEqual(singletonState);
+      expect(extractActionPayload(op.payload)['id']).toBeUndefined();
+      // Original action payload shape is preserved (no synthetic field injected).
+      expect(extractActionPayload(op.payload)).toEqual(singletonState);
     });
   });
 });

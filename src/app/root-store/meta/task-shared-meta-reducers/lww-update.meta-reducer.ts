@@ -28,6 +28,8 @@ import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
+import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
+import { SyncConfig } from '../../../features/config/global-config.model';
 
 /**
  * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
@@ -446,6 +448,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
     // If a singleton or adapter state gains such a key, it would be silently dropped.
     const actionAny = action as unknown as Record<string, unknown>;
+    const actionMeta = actionAny['meta'] as
+      | {
+          isApplyingFromOtherClient?: boolean;
+          lwwUpdateMode?: 'replace' | 'patch';
+        }
+      | undefined;
     let entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
       if (key !== 'type' && key !== 'meta') {
@@ -462,6 +470,22 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         OpLog.warn(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
+      }
+      if (
+        entityType === 'GLOBAL_CONFIG' &&
+        actionMeta?.isApplyingFromOtherClient === true &&
+        typeof entityData['sync'] === 'object' &&
+        entityData['sync'] !== null &&
+        typeof (featureState as Record<string, unknown>)['sync'] === 'object' &&
+        (featureState as Record<string, unknown>)['sync'] !== null
+      ) {
+        entityData = {
+          ...entityData,
+          sync: withLocalOnlySyncSettings(
+            entityData['sync'] as SyncConfig,
+            (featureState as Record<string, unknown>)['sync'] as SyncConfig,
+          ),
+        };
       }
       const updatedState: RootState = {
         ...rootState,
@@ -584,21 +608,26 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         featureState as any,
       );
     } else {
-      // Entity exists - replace it entirely with the LWW winning state
-      // Use updateOne with all fields as changes to preserve adapter behavior
-      updatedFeatureState = (adapter as EntityAdapter<any>).updateOne(
-        {
-          id: entityId,
-          changes: {
-            ...entityData,
-            // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
-            // See comment above for rationale - vector clocks drive conflict resolution,
-            // `modified` is for UI display of "when this client last saw this change"
-            modified: Date.now(),
-          },
-        },
-        featureState as any,
-      );
+      const entityWithLocalModified = {
+        ...entityData,
+        // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
+        // See comment above for rationale - vector clocks drive conflict resolution,
+        // `modified` is for UI display of "when this client last saw this change"
+        modified: Date.now(),
+      };
+      updatedFeatureState =
+        actionMeta?.lwwUpdateMode === 'replace'
+          ? (adapter as EntityAdapter<any>).setOne(
+              entityWithLocalModified as any,
+              featureState as any,
+            )
+          : (adapter as EntityAdapter<any>).updateOne(
+              {
+                id: entityId,
+                changes: entityWithLocalModified,
+              },
+              featureState as any,
+            );
     }
 
     let updatedState: RootState = {

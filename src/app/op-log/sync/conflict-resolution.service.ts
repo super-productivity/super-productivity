@@ -31,6 +31,8 @@ import {
   EntityType,
   extractActionPayload,
   Operation,
+  LwwUpdateMode,
+  LwwUpdatePayload,
   OpType,
   VectorClock,
 } from '../core/operation.types';
@@ -192,6 +194,7 @@ export class ConflictResolutionService {
     clientId: string,
     vectorClock: VectorClock,
     timestamp: number,
+    lwwUpdateMode: LwwUpdateMode = 'replace',
   ): Operation {
     // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
     // NOT in the ActionType enum. They are dynamically constructed here and matched
@@ -209,9 +212,14 @@ export class ConflictResolutionService {
       entityState && typeof entityState === 'object'
         ? (entityState as Record<string, unknown>)
         : {};
-    const payload = isSingletonEntityId(entityId)
+    const actionPayload = isSingletonEntityId(entityId)
       ? basePayload
       : { ...basePayload, id: entityId };
+    const payload: LwwUpdatePayload = {
+      actionPayload,
+      entityChanges: [],
+      lwwUpdateMode,
+    };
     return {
       id: uuidv7(),
       actionType: toLwwUpdateActionType(entityType),
@@ -358,16 +366,147 @@ export class ConflictResolutionService {
       },
     );
 
-    const {
-      remoteWinsOps,
-      localWinsRemoteOps,
-      remoteOpsToReject,
-      newLocalWinOps,
-      remoteWinnerAffectedEntityKeys,
-    } = lwwPartitions;
-    const localOpsToReject = [...lwwPartitions.localOpsToReject];
+    const uniqueOpsById = (ops: Operation[]): Operation[] => [
+      ...new Map(ops.map((op) => [op.id, op])).values(),
+    ];
+    let remoteWinsOps = uniqueOpsById(lwwPartitions.remoteWinsOps);
+    let localWinsRemoteOps = uniqueOpsById(lwwPartitions.localWinsRemoteOps);
+    let remoteOpsToReject = [...new Set(lwwPartitions.remoteOpsToReject)];
+    const newLocalWinOps = uniqueOpsById(lwwPartitions.newLocalWinOps);
+    const { remoteWinnerAffectedEntityKeys } = lwwPartitions;
+    const localOpsToReject = [...new Set(lwwPartitions.localOpsToReject)];
     const localOpsToRejectSet = new Set(localOpsToReject);
     let writtenLocalWinOps: Operation[] = [];
+
+    // A multi-entity action cannot be split when different entities pick
+    // different winners. Persist/apply the original remote op once, then replay
+    // local-win snapshots after it as compensations. The remote row is stored as
+    // a rejected loser before those local rows, so status-blind hydration replays
+    // the same deterministic sequence after a crash.
+    const multiEntityRemoteOpWinners = new Map<
+      string,
+      {
+        op: Operation;
+        hasLocalWinner: boolean;
+        hasRemoteWinner: boolean;
+        localWinnerKeys: Set<string>;
+        localWinOpIds: Set<string>;
+        remoteWinCompensationIds: Set<string>;
+      }
+    >();
+    const compensatedRemoteOps = new Map<string, Operation>();
+    const compensationOpIdsToApply = new Set<string>();
+    for (const resolution of resolutions) {
+      for (const remoteOp of resolution.conflict.remoteOps) {
+        if (getOpEntityIds(remoteOp).length <= 1) {
+          continue;
+        }
+        const winners = multiEntityRemoteOpWinners.get(remoteOp.id) ?? {
+          op: remoteOp,
+          hasLocalWinner: false,
+          hasRemoteWinner: false,
+          localWinnerKeys: new Set<string>(),
+          localWinOpIds: new Set<string>(),
+          remoteWinCompensationIds: new Set<string>(),
+        };
+        if (resolution.winner === 'local') {
+          winners.hasLocalWinner = true;
+          winners.localWinnerKeys.add(
+            toEntityKey(resolution.conflict.entityType, resolution.conflict.entityId),
+          );
+          if (resolution.localWinOp) {
+            winners.localWinOpIds.add(resolution.localWinOp.id);
+          }
+        } else {
+          winners.hasRemoteWinner = true;
+        }
+        multiEntityRemoteOpWinners.set(remoteOp.id, winners);
+      }
+    }
+
+    // A remote UPDATE that wins over a local DELETE needs a durable recreate
+    // snapshot because the original update reducer cannot recreate a missing
+    // entity. For multi-entity operations this snapshot must be applied after
+    // the original atomic action, alongside any local-winner compensations.
+    for (const resolution of resolutions) {
+      if (
+        resolution.winner !== 'remote' ||
+        !resolution.conflict.localOps.some((op) => op.opType === OpType.Delete)
+      ) {
+        continue;
+      }
+      for (const remoteOp of resolution.conflict.remoteOps) {
+        if (getOpEntityIds(remoteOp).length <= 1 || remoteOp.opType !== OpType.Update) {
+          continue;
+        }
+        const recreationOp = await this._createRemoteWinRecreationOp(
+          resolution.conflict,
+          remoteOp,
+        );
+        if (recreationOp === undefined) {
+          throw new Error(
+            `ConflictResolutionService: Cannot safely recreate remote winner ${remoteOp.id} for ${resolution.conflict.entityId}`,
+          );
+        }
+        if (recreationOp === null) {
+          continue;
+        }
+        newLocalWinOps.push(recreationOp);
+        multiEntityRemoteOpWinners
+          .get(remoteOp.id)
+          ?.remoteWinCompensationIds.add(recreationOp.id);
+      }
+    }
+
+    const newLocalWinOpsById = new Map(newLocalWinOps.map((op) => [op.id, op]));
+
+    for (const winners of multiEntityRemoteOpWinners.values()) {
+      const hasMixedWinners = winners.hasLocalWinner && winners.hasRemoteWinner;
+      const needsRemoteRecreation = winners.remoteWinCompensationIds.size > 0;
+      if (!hasMixedWinners && !needsRemoteRecreation) {
+        continue;
+      }
+      const { op: remoteOp } = winners;
+      const compensatedEntityKeys = new Set<string>();
+      for (const localWinOpId of winners.localWinOpIds) {
+        const localWinOp = newLocalWinOpsById.get(localWinOpId);
+        if (!localWinOp) {
+          continue;
+        }
+        for (const entityId of getOpEntityIds(localWinOp)) {
+          compensatedEntityKeys.add(toEntityKey(localWinOp.entityType, entityId));
+        }
+      }
+      if (
+        hasMixedWinners &&
+        [...winners.localWinnerKeys].some(
+          (entityKey) => !compensatedEntityKeys.has(entityKey),
+        )
+      ) {
+        throw new Error(
+          `ConflictResolutionService: Cannot safely compensate mixed multi-entity winners for ${remoteOp.id}`,
+        );
+      }
+      compensatedRemoteOps.set(remoteOp.id, remoteOp);
+      for (const localWinOpId of winners.localWinOpIds) {
+        compensationOpIdsToApply.add(localWinOpId);
+      }
+      for (const remoteWinCompensationId of winners.remoteWinCompensationIds) {
+        compensationOpIdsToApply.add(remoteWinCompensationId);
+      }
+      remoteWinsOps = remoteWinsOps.filter((op) => op.id !== remoteOp.id);
+      localWinsRemoteOps = uniqueOpsById([...localWinsRemoteOps, remoteOp]);
+      remoteOpsToReject = [...new Set([...remoteOpsToReject, remoteOp.id])];
+
+      for (const entityId of getOpEntityIds(remoteOp)) {
+        remoteWinnerAffectedEntityKeys.add(toEntityKey(remoteOp.entityType, entityId));
+      }
+      if (hasMixedWinners) {
+        for (const localWinnerKey of winners.localWinnerKeys) {
+          remoteWinnerAffectedEntityKeys.delete(localWinnerKey);
+        }
+      }
+    }
 
     for (const resolution of resolutions) {
       // Note: localWinOp is undefined for archive-wins sibling conflicts
@@ -426,6 +565,20 @@ export class ConflictResolutionService {
         OpLog.normal(
           `ConflictResolutionService: Appended local-win update op ${op.id} for ${op.entityType}:${op.entityId}`,
         );
+      }
+
+      if (compensatedRemoteOps.size > 0) {
+        allOpsToApply.push(...compensatedRemoteOps.values());
+        for (const remoteOp of compensatedRemoteOps.values()) {
+          checkpointExemptOpIds.add(remoteOp.id);
+        }
+        const writtenCompensations = writtenLocalWinOps.filter((op) =>
+          compensationOpIdsToApply.has(op.id),
+        );
+        allOpsToApply.push(...writtenCompensations);
+        for (const compensation of writtenCompensations) {
+          checkpointExemptOpIds.add(compensation.id);
+        }
       }
     }
 
@@ -991,6 +1144,9 @@ export class ConflictResolutionService {
     }
 
     const { conflict } = plan;
+    if (conflict.remoteOps.some((op) => getOpEntityIds(op).length > 1)) {
+      return undefined;
+    }
     const payloadKey = this._resolvePayloadKey(conflict.entityType);
 
     // The merged op carries a PARTIAL delta. If it later has to RECREATE a
@@ -1075,6 +1231,7 @@ export class ConflictResolutionService {
       clientId,
       newClock,
       mergedTimestamp,
+      'patch',
     );
   }
 
@@ -1131,6 +1288,14 @@ export class ConflictResolutionService {
     );
 
     if (entityState === undefined) {
+      const localMaxTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
+      const winningDeleteOp = conflict.localOps.find(
+        (op) => op.opType === OpType.Delete && op.timestamp === localMaxTimestamp,
+      );
+      if (winningDeleteOp) {
+        return this._createReplacementDeleteOp(conflict, winningDeleteOp);
+      }
+
       // Try to extract entity from remote DELETE operation
       // This handles the case where a remote DELETE was applied before LWW resolution,
       // and the local UPDATE wins. We need to recreate the entity from the DELETE payload.
@@ -1181,6 +1346,42 @@ export class ConflictResolutionService {
       newClock,
       preservedTimestamp,
     );
+  }
+
+  /**
+   * Replaces a locally winning DELETE whose original row is rejected during
+   * resolution. Keeping the original payload/scope preserves the atomic user
+   * intent, while the merged clock prevents the remote loser from resurfacing.
+   */
+  private async _createReplacementDeleteOp(
+    conflict: EntityConflict,
+    deleteOp: Operation,
+  ): Promise<Operation | undefined> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err('ConflictResolutionService: Cannot create delete-win op - no client ID');
+      return undefined;
+    }
+
+    const allClocks = [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ];
+    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
+
+    return {
+      id: uuidv7(),
+      actionType: deleteOp.actionType,
+      opType: OpType.Delete,
+      entityType: deleteOp.entityType,
+      entityId: deleteOp.entityId,
+      entityIds: deleteOp.entityIds,
+      payload: deleteOp.payload,
+      clientId,
+      vectorClock: newClock,
+      timestamp: deleteOp.timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
   }
 
   /**
@@ -1248,6 +1449,52 @@ export class ConflictResolutionService {
     const entityKey = this._resolvePayloadKey(conflict.entityType);
 
     return actionPayload[entityKey];
+  }
+
+  /**
+   * Creates a durable, single-entity recreate snapshot when one entity in a
+   * winning remote multi-entity UPDATE was deleted locally. `null` means the
+   * original operation already has recreate semantics; `undefined` means the
+   * remote result cannot be reconstructed safely from the available payloads.
+   */
+  private async _createRemoteWinRecreationOp(
+    conflict: EntityConflict,
+    remoteOp: Operation,
+  ): Promise<Operation | null | undefined> {
+    if (remoteOp.actionType === toLwwUpdateActionType(remoteOp.entityType)) {
+      return null;
+    }
+
+    const convertedOp = this._convertToLWWUpdatesIfNeeded(conflict).find(
+      (op) => op.id === remoteOp.id,
+    );
+    if (
+      !convertedOp ||
+      convertedOp.actionType !== toLwwUpdateActionType(remoteOp.entityType)
+    ) {
+      return undefined;
+    }
+
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        'ConflictResolutionService: Cannot create remote-win recreation op - no client ID',
+      );
+      return undefined;
+    }
+
+    const allClocks = [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ];
+    return this.createLWWUpdateOp(
+      conflict.entityType,
+      conflict.entityId,
+      extractActionPayload(convertedOp.payload),
+      clientId,
+      this.mergeAndIncrementClocks(allClocks, clientId),
+      remoteOp.timestamp,
+    );
   }
 
   /**
@@ -1421,7 +1668,7 @@ export class ConflictResolutionService {
    *
    * @param remoteOp - The remote operation to check
    * @param ctx - Context containing local state for conflict detection
-   * @returns Object indicating if op is superseded/duplicate and any detected conflict
+   * @returns Object indicating if op is superseded/duplicate and every detected conflict
    */
   async checkOpForConflicts(
     remoteOp: Operation,
@@ -1432,8 +1679,9 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
       hasNoSnapshotClock: boolean;
     },
-  ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
+  ): Promise<{ isSupersededOrDuplicate: boolean; conflicts: EntityConflict[] }> {
     const entityIdsToCheck = getOpEntityIds(remoteOp);
+    const conflicts: EntityConflict[] = [];
 
     for (const entityId of entityIdsToCheck) {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);
@@ -1448,14 +1696,16 @@ export class ConflictResolutionService {
       });
 
       if (result.isSupersededOrDuplicate) {
-        return { isSupersededOrDuplicate: true, conflict: null };
+        // Operations are atomic. If any affected entity already supersedes this
+        // operation, do not partially apply it or resolve a subset of its scope.
+        return { isSupersededOrDuplicate: true, conflicts: [] };
       }
       if (result.conflict) {
-        return { isSupersededOrDuplicate: false, conflict: result.conflict };
+        conflicts.push(result.conflict);
       }
     }
 
-    return { isSupersededOrDuplicate: false, conflict: null };
+    return { isSupersededOrDuplicate: false, conflicts };
   }
 
   /**

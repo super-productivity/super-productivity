@@ -18,7 +18,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
-import { LOCAL_ONLY_SYNC_KEYS } from '../local-only-sync-settings.util';
+import { withLocalOnlySyncSettings } from '../local-only-sync-settings.util';
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -135,20 +135,6 @@ const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig 
   }
 
   return keyboard;
-};
-
-// Overwrite every local-only key on the incoming config with the local value.
-// Keys are sourced from LOCAL_ONLY_SYNC_KEYS so adding a new local-only key in
-// local-only-sync-settings.util.ts automatically preserves it here too.
-const withLocalOnlySyncSettings = (
-  incomingSyncConfig: SyncConfig,
-  localSyncConfig: SyncConfig,
-): SyncConfig => {
-  const merged = { ...incomingSyncConfig } as Record<string, unknown>;
-  for (const key of LOCAL_ONLY_SYNC_KEYS) {
-    merged[key] = localSyncConfig[key];
-  }
-  return merged as SyncConfig;
 };
 
 export const globalConfigReducer = createReducer<GlobalConfigState>(

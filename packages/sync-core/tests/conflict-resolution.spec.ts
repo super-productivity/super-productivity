@@ -9,8 +9,10 @@ import {
 } from '../src/conflict-resolution';
 import { adjustForClockCorruption, buildEntityFrontier } from '../src/entity-frontier';
 import {
+  extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
+  isLwwUpdatePayload,
   OpType,
 } from '../src/operation.types';
 import type { EntityConflict, Operation } from '../src/operation.types';
@@ -567,6 +569,18 @@ describe('partitionLwwResolutions', () => {
 });
 
 describe('delete-loses-to-update payload helpers', () => {
+  it('recognizes and unwraps backward-compatible LWW payload modes', () => {
+    const payload = {
+      actionPayload: { id: 'task-1', title: 'Winning state' },
+      entityChanges: [],
+      lwwUpdateMode: 'replace' as const,
+    };
+
+    expect(isLwwUpdatePayload(payload)).toBe(true);
+    expect(extractActionPayload(payload)).toEqual(payload.actionPayload);
+    expect(isLwwUpdatePayload({ ...payload, lwwUpdateMode: 'unknown' })).toBe(false);
+  });
+
   it('extracts a base entity from direct and multi-entity payloads', () => {
     const entity = { id: 'task-1', title: 'Deleted' };
 
