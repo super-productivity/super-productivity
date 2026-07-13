@@ -312,6 +312,38 @@ describe('sectionReducer', () => {
       expect(next.entities['s1']?.taskIds).toEqual(['b', 'a', 'c']);
     });
 
+    it('moves an in-section task to the front', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's1',
+          taskId: 'c',
+          afterTaskId: null,
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['c', 'a', 'b']);
+    });
+
+    it('moves an in-section task to the end', () => {
+      const start = stateWithSections([
+        makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
+      ]);
+      const next = sectionReducer(
+        start,
+        addTaskToSection({
+          sectionId: 's1',
+          taskId: 'a',
+          afterTaskId: 'c',
+          sourceSectionId: 's1',
+        }),
+      );
+      expect(next.entities['s1']?.taskIds).toEqual(['b', 'c', 'a']);
+    });
+
     it('does not touch other sections when sourceSectionId is null', () => {
       // Local invariant says t1 should only be in s1, but the test simulates
       // a stale duplicate (e.g. concurrent move). With explicit null source
