@@ -256,8 +256,14 @@ export class ConflictJournalService {
 
     if (idsToDelete.size > 0) {
       const tx = db.transaction(CONFLICT_JOURNAL_STORE, 'readwrite');
-      await Promise.all(Array.from(idsToDelete, (id) => tx.store.delete(id)));
-      await tx.done;
+      // Await the delete requests AND tx.done together. If the transaction aborts
+      // while requests are still pending, both the delete aggregate and tx.done
+      // reject; awaiting them separately (delete first, then tx.done) leaves
+      // tx.done's rejection without a handler once the delete aggregate rejects,
+      // so it escapes as a global unhandled rejection. Putting tx.done inside the
+      // same Promise.all attaches a handler to it, so no rejection escapes.
+      const deletes = Array.from(idsToDelete, (id) => tx.store.delete(id));
+      await Promise.all([...deletes, tx.done]);
     }
 
     return idsToDelete.size;
