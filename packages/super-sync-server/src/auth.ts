@@ -18,6 +18,8 @@ export const JWT_EXPIRY = '365d';
 
 export const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const MAX_VERIFICATION_RESEND_COUNT = 20;
+const REGISTRATION_SUCCESS_MESSAGE =
+  'Registration successful. Please check your email to verify your account.';
 const LOGIN_MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 export const getJwtSecret = (): string => {
@@ -228,27 +230,46 @@ export const requestLoginMagicLink = async (
     return successMessage;
   }
 
-  const loginToken = randomBytes(32).toString('hex');
-  const expiresAt = BigInt(Date.now() + LOGIN_MAGIC_LINK_EXPIRY_MS);
+  const now = Date.now();
+  if (
+    user.loginToken &&
+    user.loginTokenExpiresAt !== null &&
+    user.loginTokenExpiresAt > BigInt(now)
+  ) {
+    return successMessage;
+  }
 
-  await prisma.user.update({
-    where: { id: user.id },
+  const loginToken = randomBytes(32).toString('hex');
+  const expiresAt = BigInt(now + LOGIN_MAGIC_LINK_EXPIRY_MS);
+
+  // Claim the expired/empty token slot atomically. Concurrent requests for the
+  // same account must not each rotate the token and send another email.
+  const claim = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      OR: [
+        { loginToken: null },
+        { loginTokenExpiresAt: null },
+        { loginTokenExpiresAt: { lte: BigInt(now) } },
+      ],
+    },
     data: {
       loginToken,
       loginTokenExpiresAt: expiresAt,
     },
   });
+  if (claim.count === 0) return successMessage;
 
   const emailSent = await sendLoginMagicLinkEmail(email, loginToken);
   if (!emailSent) {
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.user.updateMany({
+      where: { id: user.id, loginToken },
       data: {
         loginToken: null,
         loginTokenExpiresAt: null,
       },
     });
-    throw new Error('Failed to send login email. Please try again later.');
+    return successMessage;
   }
 
   Logger.info(`Magic link login requested (ID: ${user.id})`);
@@ -269,9 +290,10 @@ export const verifyLoginMagicLink = async (
     throw new Error('Invalid or expired login link');
   }
 
-  if (user.loginTokenExpiresAt && user.loginTokenExpiresAt < BigInt(Date.now())) {
-    await prisma.user.update({
-      where: { id: user.id },
+  const now = BigInt(Date.now());
+  if (user.loginTokenExpiresAt && user.loginTokenExpiresAt < now) {
+    await prisma.user.updateMany({
+      where: { id: user.id, loginToken: token },
       data: {
         loginToken: null,
         loginTokenExpiresAt: null,
@@ -280,9 +302,14 @@ export const verifyLoginMagicLink = async (
     throw new Error('Invalid or expired login link');
   }
 
-  // Clear the token (single use) and reset any failed attempts
-  await prisma.user.update({
-    where: { id: user.id },
+  // Consume the exact token atomically. A concurrent redemption or renewal
+  // must not issue a second JWT or clear a replacement token.
+  const consume = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      loginToken: token,
+      OR: [{ loginTokenExpiresAt: null }, { loginTokenExpiresAt: { gte: now } }],
+    },
     data: {
       loginToken: null,
       loginTokenExpiresAt: null,
@@ -290,6 +317,9 @@ export const verifyLoginMagicLink = async (
       lockedUntil: null,
     },
   });
+  if (consume.count !== 1) {
+    throw new Error('Invalid or expired login link');
+  }
 
   const tokenVersion = user.tokenVersion ?? 0;
   const jwtToken = jwt.sign(
@@ -319,7 +349,7 @@ export const registerWithMagicLink = async (
   });
 
   if (existingUser?.isVerified === 1) {
-    throw new Error('An account with this email already exists');
+    return { message: REGISTRATION_SUCCESS_MESSAGE };
   }
 
   const verificationToken = randomBytes(32).toString('hex');
@@ -332,16 +362,15 @@ export const registerWithMagicLink = async (
 
     if (existingUser) {
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
-        throw new Error(
-          'Too many verification attempts. Please try again later or contact support.',
-        );
+        Logger.warn(`Verification resend cap reached (ID: ${existingUser.id})`);
+        return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
 
       if (!config.testMode?.autoVerifyUsers) {
         // Send email BEFORE updating DB to avoid invalidating the old token on failure
         const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
         if (!emailSent) {
-          throw new Error('Failed to send verification email. Please try again later.');
+          return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }
 
@@ -386,7 +415,7 @@ export const registerWithMagicLink = async (
             where: { email: normalizedEmail, isVerified: 0 },
           });
           Logger.info(`Cleaned up failed magic-link registration for new user`);
-          throw new Error('Failed to send verification email. Please try again later.');
+          return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }
     }
@@ -407,12 +436,10 @@ export const registerWithMagicLink = async (
     }
 
     Logger.info(`Magic-link registration initiated`);
-    return {
-      message: 'Registration successful. Please check your email to verify your account.',
-    };
+    return { message: REGISTRATION_SUCCESS_MESSAGE };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      throw new Error('An account with this email already exists');
+      return { message: REGISTRATION_SUCCESS_MESSAGE };
     }
     throw err;
   }

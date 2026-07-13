@@ -446,13 +446,32 @@ describe('ValidationService', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('should reject timestamps too old', () => {
+    it('should accept timestamps older than server retention', () => {
       const oldTime = Date.now() - 50 * 24 * 60 * 60 * 1000; // 50 days ago (beyond 45-day retention)
       const op = createValidOp({ timestamp: oldTime });
       const result = validationService.validateOp(op, clientId);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject a non-integer timestamp that would throw on BigInt persistence', () => {
+      const result = validationService.validateOp(
+        createValidOp({ timestamp: Date.now() + 0.5 }),
+        clientId,
+      );
       expect(result.valid).toBe(false);
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
-      expect(result.error).toContain('too old');
+      expect(result.error).toBe('Invalid timestamp');
+    });
+
+    it('should reject non-finite timestamps', () => {
+      for (const timestamp of [Infinity, NaN]) {
+        const result = validationService.validateOp(
+          createValidOp({ timestamp }),
+          clientId,
+        );
+        expect(result.valid).toBe(false);
+        expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
+      }
     });
   });
 
