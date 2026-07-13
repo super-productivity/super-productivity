@@ -3,7 +3,7 @@ import { CdkDragRelease } from '@angular/cdk/drag-drop';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { TaskReminderOptionId } from '../../tasks/task.model';
+import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { signal } from '@angular/core';
@@ -12,6 +12,7 @@ import { ScheduleEvent } from '../schedule.model';
 import { FH, SVEType, T_ID_PREFIX } from '../schedule.const';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
+import { DateService } from '../../../core/date/date.service';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -58,6 +59,10 @@ describe('ScheduleWeekDragService', () => {
           provide: GlobalConfigService,
           useValue: createMockGlobalConfigService(defaultTaskRemindOption),
         },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-03-20' },
+        },
       ],
     });
 
@@ -73,6 +78,25 @@ describe('ScheduleWeekDragService', () => {
 
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('captures today when unscheduling a timed task but leaving it in Today', () => {
+    setupTestBed();
+    const sourceEvent = createTaskEvent({ id: 'task-1', dueWithTime: Date.now() });
+
+    (
+      service as unknown as {
+        _handleUnschedule: (task: TaskCopy, sourceEvent: ScheduleEvent) => void;
+      }
+    )._handleUnschedule(sourceEvent.data as TaskCopy, sourceEvent);
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      TaskSharedActions.unscheduleTask({
+        id: 'task-1',
+        isLeaveInToday: true,
+        today: '2026-03-20',
+      }),
+    );
   });
 
   const createTaskEvent = (

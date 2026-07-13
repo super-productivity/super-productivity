@@ -864,9 +864,52 @@ describe('TaskService', () => {
     });
   });
 
+  describe('batched time sync', () => {
+    it('captures the absolute per-day total when the accumulator flushes', () => {
+      const task = createMockTask('task-1', {
+        timeSpentOnDay: { ['2026-01-05']: 300000 },
+        timeSpent: 300000,
+      });
+      store.setState({
+        tasks: {
+          ids: ['task-1'],
+          entities: { ['task-1']: task },
+          currentTaskId: 'task-1',
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+      const accumulator = (
+        service as unknown as {
+          _timeAccumulator: {
+            accumulate: (id: string, duration: number, date: string) => void;
+          };
+        }
+      )._timeAccumulator;
+      accumulator.accumulate('task-1', 60000, '2026-01-05');
+
+      service.flushAccumulatedTimeSpent();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Sync time spent',
+          taskId: 'task-1',
+          date: '2026-01-05',
+          duration: 60000,
+          timeSpentForDay: 300000,
+        }),
+      );
+    });
+  });
+
   describe('addTimeSpentAndSync', () => {
     it('should dispatch both addTimeSpent and syncTimeSpent', () => {
-      const task = createMockTask('task-1');
+      const task = createMockTask('task-1', {
+        timeSpentOnDay: { ['2026-01-05']: 120000 },
+        timeSpent: 120000,
+      });
 
       service.addTimeSpentAndSync(task, 60000);
 
@@ -884,6 +927,7 @@ describe('TaskService', () => {
           taskId: 'task-1',
           duration: 60000,
           date: '2026-01-05',
+          timeSpentForDay: 180000,
         }),
       );
     });

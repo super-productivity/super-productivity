@@ -68,11 +68,22 @@ export const TimeTrackingActions = createActionGroup({
  * Dispatched every 5 minutes during active tracking and when tracking stops.
  *
  * Local dispatch: Ignored by reducer (state already updated by addTimeSpent ticks)
- * Remote dispatch: Applied to update timeSpentOnDay and timeTracking state
+ * Own replay: Applies the captured absolute per-day value when available
+ * Foreign dispatch: Adds the duration to preserve concurrent tracking
  */
 export const syncTimeSpent = createAction(
   '[TimeTracking] Sync time spent',
-  (actionProps: { taskId: string; date: string; duration: number }) => ({
+  (actionProps: {
+    taskId: string;
+    date: string;
+    duration: number;
+    /**
+     * Absolute value after this device applied the batched duration.
+     * Own-op replay uses it to avoid double-counting snapshot overlap; foreign
+     * ops remain additive so concurrent tracking on multiple devices is preserved.
+     */
+    timeSpentForDay?: number;
+  }) => ({
     ...actionProps,
     meta: {
       isPersistent: true,

@@ -572,12 +572,17 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       (target === 'DONE' || target === 'UNDONE')
     ) {
       const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      const now = Date.now();
+      const isDone = target === 'DONE';
       this._store.dispatch(
         TaskSharedActions.convertToMainTask({
           task: draggedTask ?? ({ id: taskId, parentId: src } as TaskWithSubTasks),
           isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
           afterTaskId,
-          isDone: target === 'DONE',
+          isDone,
+          today: this._dateService.todayStr(),
+          modified: now,
+          ...(isDone ? { doneOn: now } : {}),
         }),
       );
       return;

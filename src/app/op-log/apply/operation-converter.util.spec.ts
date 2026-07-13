@@ -401,6 +401,73 @@ describe('operation-converter utility', () => {
       });
     });
 
+    describe('legacy convertToMainTask date backfill', () => {
+      it('injects replay-safe dates from the originating operation timestamp', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp,
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isPlanForToday: true,
+            isDone: true,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(timestamp);
+        expect(action.modified).toBe(timestamp);
+      });
+
+      it('preserves dates already captured by the originating action', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isDone: true,
+            today: '2024-06-14',
+            doneOn: 1718352000000,
+            modified: 1718352000000,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(1718352000000);
+        expect(action.modified).toBe(1718352000000);
+      });
+    });
+
+    describe('legacy unscheduleTask date backfill', () => {
+      it('injects today when leaving the task in Today', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          timestamp,
+          payload: { id: 'task-1', isLeaveInToday: true },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+      });
+
+      it('does not inject today for a plain unschedule', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          payload: { id: 'task-1' },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBeUndefined();
+      });
+    });
+
     describe('updateTask done replay date backfill', () => {
       it('injects only doneOn (never a dueDay) from the operation timestamp when missing', () => {
         const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();

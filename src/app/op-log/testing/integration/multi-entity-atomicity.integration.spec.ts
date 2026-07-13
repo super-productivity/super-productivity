@@ -189,6 +189,7 @@ describe('Multi-Entity Atomicity Integration', () => {
         taskId: 'task-1',
         date: '2024-01-15',
         duration: 3600000,
+        timeSpentForDay: 7200000,
         meta: {
           isPersistent: true,
           entityType: 'TASK' as EntityType,
@@ -207,6 +208,7 @@ describe('Multi-Entity Atomicity Integration', () => {
         taskId: 'task-1',
         date: '2024-01-15',
         duration: 3600000,
+        timeSpentForDay: 7200000,
       });
     });
   });

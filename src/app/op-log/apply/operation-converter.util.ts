@@ -65,6 +65,55 @@ const addLegacyPlanForTodayDate = (
   return actionPayload;
 };
 
+const addLegacyConvertToMainTaskDates = (
+  actionType: string,
+  actionPayload: Record<string, unknown>,
+  op: Operation,
+): Record<string, unknown> => {
+  if (actionType !== ActionType.TASK_SHARED_CONVERT_TO_MAIN) {
+    return actionPayload;
+  }
+
+  return {
+    ...actionPayload,
+    today:
+      typeof actionPayload['today'] === 'string'
+        ? actionPayload['today']
+        : getDbDateStr(op.timestamp),
+    modified:
+      typeof actionPayload['modified'] === 'number'
+        ? actionPayload['modified']
+        : op.timestamp,
+    ...(actionPayload['isDone'] === true
+      ? {
+          doneOn:
+            typeof actionPayload['doneOn'] === 'number'
+              ? actionPayload['doneOn']
+              : op.timestamp,
+        }
+      : {}),
+  };
+};
+
+const addLegacyUnscheduleDate = (
+  actionType: string,
+  actionPayload: Record<string, unknown>,
+  op: Operation,
+): Record<string, unknown> => {
+  if (
+    actionType !== ActionType.TASK_SHARED_UNSCHEDULE ||
+    actionPayload['isLeaveInToday'] !== true ||
+    typeof actionPayload['today'] === 'string'
+  ) {
+    return actionPayload;
+  }
+
+  return {
+    ...actionPayload,
+    today: getDbDateStr(op.timestamp),
+  };
+};
+
 const addReplaySafeDoneFields = (
   actionType: string,
   actionPayload: Record<string, unknown>,
@@ -169,6 +218,8 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
     : (extractActionPayload(op.payload) as Record<string, unknown>);
 
   actionPayload = addLegacyPlanForTodayDate(actionType, actionPayload, op);
+  actionPayload = addLegacyConvertToMainTaskDates(actionType, actionPayload, op);
+  actionPayload = addLegacyUnscheduleDate(actionType, actionPayload, op);
   actionPayload = addReplaySafeDoneFields(actionType, actionPayload, op);
   actionPayload = stripMalformedConvertToMainTaskParentTagIds(
     actionType,

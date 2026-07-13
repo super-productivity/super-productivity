@@ -204,8 +204,19 @@ export class TaskService {
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private _timeAccumulator = new BatchedTimeSyncAccumulator(
     TaskService.SYNC_INTERVAL_MS,
-    (taskId, date, duration) =>
-      this._store.dispatch(syncTimeSpent({ taskId, date, duration })),
+    (taskId, date, duration) => {
+      const timeSpentForDay = this._taskEntities()[taskId]?.timeSpentOnDay?.[date];
+      this._store.dispatch(
+        syncTimeSpent({
+          taskId,
+          date,
+          duration,
+          ...(typeof timeSpentForDay === 'number' && Number.isFinite(timeSpentForDay)
+            ? { timeSpentForDay }
+            : {}),
+        }),
+      );
+    },
   );
   private _unsyncedContexts: Map<
     string,
@@ -871,8 +882,17 @@ export class TaskService {
       return;
     }
     const date = this._dateService.todayStr();
+    const currentTimeSpentForDay =
+      (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
     this.addTimeSpent(task, duration, date);
-    this._store.dispatch(syncTimeSpent({ taskId: task.id, date, duration }));
+    this._store.dispatch(
+      syncTimeSpent({
+        taskId: task.id,
+        date,
+        duration,
+        timeSpentForDay: currentTimeSpentForDay + duration,
+      }),
+    );
   }
 
   removeTimeSpent(
@@ -1256,11 +1276,14 @@ export class TaskService {
 
   async convertToMainTask(task: Task): Promise<void> {
     const parent = await this.getByIdOnce$(task.parentId as string).toPromise();
+    const now = Date.now();
     this._store.dispatch(
       TaskSharedActions.convertToMainTask({
         task,
         parentTagIds: parent.tagIds,
         isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
+        today: this._dateService.todayStr(),
+        modified: now,
       }),
     );
   }

@@ -646,14 +646,18 @@ export class AndroidForegroundTrackingEffects {
       }
 
       if (duration > 0) {
-        this._taskService.addTimeSpent(task, duration, this._dateService.todayStr());
+        const date = this._dateService.todayStr();
+        const currentTimeSpentForDay =
+          (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
+        this._taskService.addTimeSpent(task, duration, date);
         // Also dispatch syncTimeSpent to capture in operation log
         // addTimeSpent only updates local state, syncTimeSpent creates the operation
         this._store.dispatch(
           syncTimeSpent({
             taskId: task.id,
-            date: this._dateService.todayStr(),
+            date,
             duration,
+            timeSpentForDay: currentTimeSpentForDay + duration,
           }),
         );
         // Reset the tracking interval to prevent double-counting
