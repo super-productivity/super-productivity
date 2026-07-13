@@ -77,9 +77,20 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       // Client B downloads
       await clientB.downloadOps(0);
 
-      // Simulate race condition: inject rev mismatch error on first upload attempt
-      provider.injectNextError(
-        new UploadRevToMatchMismatchAPIError('Rev changed during upload'),
+      // Simulate a mismatch on the primary CAS, not on its preceding backup write.
+      const realUploadFile = provider.uploadFile.bind(provider);
+      let isFirstPrimaryUpload = true;
+      spyOn(provider, 'uploadFile').and.callFake(
+        async (targetPath, dataStr, revToMatch, isForceOverwrite) => {
+          if (
+            targetPath === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE &&
+            isFirstPrimaryUpload
+          ) {
+            isFirstPrimaryUpload = false;
+            throw new UploadRevToMatchMismatchAPIError('Rev changed during upload');
+          }
+          return realUploadFile(targetPath, dataStr, revToMatch, isForceOverwrite);
+        },
       );
 
       // Client B uploads - should handle the retry internally

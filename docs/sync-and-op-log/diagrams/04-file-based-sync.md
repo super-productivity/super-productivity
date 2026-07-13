@@ -19,6 +19,7 @@ flowchart LR
     subgraph V2["Default v2"]
         DATA["sync-data.json<br/>snapshot + archives<br/>vector clock + recent ops"]
         DATA_BAK["sync-data.json.bak"]
+        DATA_TX["sync-data.snapshot-transaction.json"]
     end
 
     subgraph V3["Opt-in v3: Surgical sync"]
@@ -26,6 +27,7 @@ flowchart LR
         STATE["sync-state.json<br/>snapshot + archives"]
         REF["snapshotRef<br/>syncVersion + vector clock"]
         OPS_BAK["sync-ops.json.bak"]
+        OPS_TX["sync-ops.snapshot-transaction.json"]
         STATE_BAK["sync-state.json.bak"]
         TOMB["sync-data.json<br/>v3 split tombstone"]
 
@@ -36,17 +38,19 @@ flowchart LR
     DATA -. migration .-> STATE
     DATA -. replaced by .-> TOMB
     DATA --- DATA_BAK
+    DATA --- DATA_TX
     OPS --- OPS_BAK
+    OPS --- OPS_TX
     STATE --- STATE_BAK
 ```
 
-| Property | Default v2 | Opt-in v3 |
-| --- | --- | --- |
-| Hot file | `sync-data.json` | `sync-ops.json` |
-| Snapshot | Embedded in every hot-file upload | `sync-state.json`, rewritten for compaction or authoritative replacement |
-| Recent-op cap | 2,000 | Grows to 2,000, then compacts to 1,000 |
-| Commit point | `sync-data.json` revision | `sync-ops.json` revision |
-| Compatibility | Default | Every client for the folder must enable Surgical sync |
+| Property      | Default v2                        | Opt-in v3                                                                |
+| ------------- | --------------------------------- | ------------------------------------------------------------------------ |
+| Hot file      | `sync-data.json`                  | `sync-ops.json`                                                          |
+| Snapshot      | Embedded in every hot-file upload | `sync-state.json`, rewritten for compaction or authoritative replacement |
+| Recent-op cap | 2,000                             | Grows to 2,000, then compacts to 1,000                                   |
+| Commit point  | `sync-data.json` revision         | `sync-ops.json` revision                                                 |
+| Compatibility | Default                           | Every client for the folder must enable Surgical sync                    |
 
 The transport envelope types and permanent file names live in
 `packages/sync-providers/src/file-based-sync-data.ts`.
@@ -73,7 +77,7 @@ sequenceDiagram
     else another writer won
         Remote-->>Adapter: revision mismatch
         Adapter->>Remote: re-download
-        Adapter->>Adapter: merge and retry with backoff
+        Adapter-->>App: abort current attempt; next sync downloads and merges
     end
 ```
 
@@ -85,10 +89,10 @@ active commit file.
 
 Every `FileSyncProvider` implements the same `uploadFile` contract:
 
-| Call | Required behavior |
-| --- | --- |
-| `revToMatch: "revision"` | Replace only that exact revision. |
-| `revToMatch: null` | Create only if the file is absent. |
+| Call                     | Required behavior                             |
+| ------------------------ | --------------------------------------------- |
+| `revToMatch: "revision"` | Replace only that exact revision.             |
+| `revToMatch: null`       | Create only if the file is absent.            |
 | `isForceOverwrite: true` | Intentionally replace without a precondition. |
 
 Dropbox maps this to atomic update/add modes. OneDrive uses `If-Match` or
@@ -133,6 +137,16 @@ A structurally corrupt primary state may be healed from the backup only when the
 backup matches `snapshotRef`. Healing conditionally matches the corrupt
 primary's own revision; a newer valid but unreferenced state is not overwritten.
 
+Authoritative snapshot replacement is separately crash-serialized. A durable
+pending transaction contains the exact encoded snapshot payloads (both state and
+ops in v3), then the adapter publishes the bound files before conditionally
+marking that same transaction complete. Startup/download completes a pending
+transaction before ordinary sync, and ordinary backup rotation verifies that the
+observed marker revision is unchanged. The completed marker keeps compact
+SHA-256 bindings plus the published revisions, allowing recovery to reject a
+stale backup written by a marker-unaware client. Replacement intent is never
+guessed from vector-clock order.
+
 ```mermaid
 sequenceDiagram
     participant A as Compactor A
@@ -171,10 +185,10 @@ Browser WebDAV must allow `GET`, `PUT`, `DELETE`, `MKCOL`, `PROPFIND`, and
 
 ## Key Files
 
-| File | Responsibility |
-| --- | --- |
+| File                                                                          | Responsibility                                                                  |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts` | Layout selection, migration, recovery, merge, compaction, and conditional retry |
-| `packages/sync-providers/src/file-based-sync-data.ts` | Provider-neutral v2/v3 envelopes and constants |
-| `packages/sync-providers/src/provider-types.ts` | `FileSyncProvider` conditional-write contract |
-| `src/app/op-log/persistence/sync-hydration.service.ts` | Snapshot/archive hydration and durable state cache |
-| `src/app/op-log/sync/operation-log-sync.service.ts` | Local/remote orchestration and conflict handling |
+| `packages/sync-providers/src/file-based-sync-data.ts`                         | Provider-neutral v2/v3 envelopes and constants                                  |
+| `packages/sync-providers/src/provider-types.ts`                               | `FileSyncProvider` conditional-write contract                                   |
+| `src/app/op-log/persistence/sync-hydration.service.ts`                        | Snapshot/archive hydration and durable state cache                              |
+| `src/app/op-log/sync/operation-log-sync.service.ts`                           | Local/remote orchestration and conflict handling                                |

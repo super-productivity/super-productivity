@@ -1093,7 +1093,8 @@ Download commit point
                     Conditional upload against the
                     revision returned by the read
                               │
-                    mismatch ─┴─► re-download and retry
+                    mismatch ─┴─► classify; genuine races
+                                  retry on the next sync cycle
 ```
 
 **Key file:** `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts`
@@ -1125,14 +1126,21 @@ interface FileBasedSyncData {
 The recent-operation cap is `MAX_RECENT_OPS` (currently 2,000). A client that
 falls behind the retained window takes the snapshot/gap path.
 
+Authoritative replacements use `sync-data.snapshot-transaction.json` to bind a
+crash-recovery transaction to the exact encoded snapshot. A pending transaction
+is completed before ordinary sync can replace its backup or primary. The
+completed marker retains only SHA-256 payload bindings and authoritative file
+revisions so mixed-version clients cannot make a stale backup recoverable.
+
 ### Opt-in v3
 
-| File | Role |
-| --- | --- |
-| `sync-ops.json` | Small commit point read and conditionally rewritten on ordinary sync; contains vector clock, recent ops, and `snapshotRef`. |
-| `sync-state.json` | Full state and archives; rewritten for compaction, authoritative snapshots, migration, and repair. |
-| `sync-data.json` | Replaced by a v3 split tombstone after migration so clients with the setting off stop instead of recreating v2 data. |
-| `*.bak` | Recovery artifacts. A recovered split state is adopted only when it matches `snapshotRef`. |
+| File                                 | Role                                                                                                                        |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `sync-ops.json`                      | Small commit point read and conditionally rewritten on ordinary sync; contains vector clock, recent ops, and `snapshotRef`. |
+| `sync-state.json`                    | Full state and archives; rewritten for compaction, authoritative snapshots, migration, and repair.                          |
+| `sync-data.json`                     | Replaced by a v3 split tombstone after migration so clients with the setting off stop instead of recreating v2 data.        |
+| `*.bak`                              | Recovery artifacts. A recovered split state is adopted only when it matches `snapshotRef`.                                  |
+| `sync-ops.snapshot-transaction.json` | Durable pending/complete marker that binds an authoritative split state/ops pair to both exact encoded payloads.            |
 
 Compaction starts only when the operation buffer exceeds `MAX_RECENT_OPS`, then
 retains `SPLIT_COMPACTION_THRESHOLD` operations (currently 1,000). The state
@@ -1154,9 +1162,10 @@ Dropbox uses its atomic update/add modes. OneDrive uses `If-Match` or
 hash check and are not safe for simultaneous writers. Local File is likewise a
 single-writer target.
 
-On a revision mismatch the adapter re-downloads, merges, and retries with
-bounded exponential backoff. There is no file-provider “piggyback” response;
-concurrent remote operations are learned from that re-download.
+On a revision mismatch the adapter re-downloads to distinguish a transient
+provider mismatch from a genuine concurrent write. A genuine concurrent write
+ends the current attempt; the next sync cycle downloads and merges the remote
+operations before retrying. There is no file-provider “piggyback” response.
 
 ## B.4 Snapshot Hydration and Archives
 
@@ -1198,13 +1207,13 @@ For server-based sync, the operation log IS the sync mechanism. Individual opera
 
 ## C.1 How Server Sync Differs from File-Based
 
-| Aspect              | File-Based Sync (Part B)                               | Server Sync (Part C)  |
-| ------------------- | ------------------------------------------------------ | --------------------- |
-| What syncs          | State snapshot + recent ops                            | Individual operations |
-| Conflict detection  | Vector clock on snapshot                               | Entity-level per-op   |
+| Aspect              | File-Based Sync (Part B)                              | Server Sync (Part C)  |
+| ------------------- | ----------------------------------------------------- | --------------------- |
+| What syncs          | State snapshot + recent ops                           | Individual operations |
+| Conflict detection  | Vector clock on snapshot                              | Entity-level per-op   |
 | Transport           | v2 single file or opt-in v3 split files on a provider | HTTP API              |
-| Op-log role         | Builds snapshot from ops                               | IS the sync           |
-| `syncedAt` tracking | Not needed                                             | Required              |
+| Op-log role         | Builds snapshot from ops                              | IS the sync           |
+| `syncedAt` tracking | Not needed                                            | Required              |
 
 ## C.2 Operation Sync Protocol
 

@@ -478,9 +478,11 @@ describe('File-Based Sync Integration - Sync Cycle Cache', () => {
     // Client B downloads (caches the data)
     await clientB.downloadOps(0);
 
-    // Get download call count
-    const downloadCallsAfterDownload = provider.getCallsTo('downloadFile').length;
-    expect(downloadCallsAfterDownload).toBe(1);
+    const primaryDownloads = (): number =>
+      provider
+        .getCallsTo('downloadFile')
+        .filter(({ args }) => args[0] === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).length;
+    expect(primaryDownloads()).toBe(1);
 
     // Client B immediately uploads (should use cached data)
     const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -488,9 +490,14 @@ describe('File-Based Sync Integration - Sync Cycle Cache', () => {
     });
     await clientB.uploadOps([opB]);
 
-    // Should not have made another download call (cache was used)
-    const totalDownloadCalls = provider.getCallsTo('downloadFile').length;
-    expect(totalDownloadCalls).toBe(1); // Same as before, cache was used
+    // The source-of-truth file remains cached. The upload does inspect the
+    // recovery artifact so a stale writer cannot roll a newer backup backward.
+    expect(primaryDownloads()).toBe(1);
+    expect(
+      provider
+        .getCallsTo('downloadFile')
+        .filter(({ args }) => args[0] === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE),
+    ).toHaveSize(1);
   });
 
   it('should invalidate cache after upload', async () => {
@@ -518,8 +525,13 @@ describe('File-Based Sync Integration - Sync Cycle Cache', () => {
     // Client B downloads again (should fetch fresh, not use stale cache)
     await clientB.downloadOps(0);
 
-    // Should have made a new download call
-    expect(provider.getCallsTo('downloadFile').length).toBe(1);
+    // Should have fetched the primary again. The crash-recovery transaction
+    // marker is a separate lightweight probe and does not satisfy this check.
+    expect(
+      provider
+        .getCallsTo('downloadFile')
+        .filter(({ args }) => args[0] === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE),
+    ).toHaveSize(1);
   });
 });
 
