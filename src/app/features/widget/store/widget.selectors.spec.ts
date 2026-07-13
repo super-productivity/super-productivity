@@ -1,6 +1,6 @@
 import { selectWidgetData } from './widget.selectors';
 import { Task } from '../../tasks/task.model';
-import { Project } from '../../project/project.model';
+import { Project, ProjectState } from '../../project/project.model';
 
 describe('selectWidgetData', () => {
   const task = (id: string, partial: Partial<Task> = {}): Task =>
@@ -19,7 +19,7 @@ describe('selectWidgetData', () => {
       theme: primary ? { primary } : {},
     }) as Project;
 
-  const projectState = (projects: Project[]): any => ({
+  const projectState = (projects: Project[]): ProjectState => ({
     ids: projects.map((p) => p.id),
     entities: Object.fromEntries(projects.map((p) => [p.id, p])),
   });
