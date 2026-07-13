@@ -11,7 +11,7 @@ This directory contains visual diagrams explaining the Operation Log sync archit
 | [01-local-persistence.md](./01-local-persistence.md)             | Local IndexedDB persistence, hydration, compaction        | Implemented |
 | [02-server-sync.md](./02-server-sync.md)                         | SuperSync server API, PostgreSQL, upload/download flows   | Implemented |
 | [03-conflict-resolution.md](./03-conflict-resolution.md)         | LWW auto-resolution, SYNC_IMPORT filtering, vector clocks | Implemented |
-| [04-file-based-sync.md](./04-file-based-sync.md)                 | WebDAV/Dropbox/LocalFile sync via single sync-data.json   | Implemented |
+| [04-file-based-sync.md](./04-file-based-sync.md)                 | File-based v2 and opt-in v3 split sync                    | Implemented |
 | [05-meta-reducers.md](./05-meta-reducers.md)                     | Atomic multi-entity operations, state consistency         | Implemented |
 | [06-archive-operations.md](./06-archive-operations.md)           | Archive side effects, dual-database architecture          | Implemented |
 | [07-supersync-vs-file-based.md](./07-supersync-vs-file-based.md) | Comparison of SuperSync and file-based sync providers     | Implemented |

@@ -19,7 +19,8 @@ vector clocks detect concurrent edits.
           │
           └──► Sync Providers
                ├── SuperSync   (operation-based, real-time)
-               └── WebDAV / Dropbox / LocalFile  (file-based, single sync-data.json)
+               └── WebDAV / Dropbox / OneDrive / LocalFile
+                   (file-based: v2 single file or opt-in v3 split files)
 ```
 
 ## Start here
