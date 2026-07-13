@@ -17,6 +17,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DEFAULT_TASK, Task } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { TaskTimeSyncService } from '../task-time-sync.service';
 
 describe('ShortSyntaxEffects', () => {
   let effects: ShortSyntaxEffects;
@@ -44,6 +45,7 @@ describe('ShortSyntaxEffects', () => {
   let workContextServiceMock: {
     activeWorkContextId: string;
   };
+  let taskTimeSyncServiceSpy: jasmine.SpyObj<TaskTimeSyncService>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -112,6 +114,7 @@ describe('ShortSyntaxEffects', () => {
     workContextServiceMock = {
       activeWorkContextId: 'project-1',
     };
+    taskTimeSyncServiceSpy = jasmine.createSpyObj('TaskTimeSyncService', ['flushOne']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -127,6 +130,7 @@ describe('ShortSyntaxEffects', () => {
         { provide: LayoutService, useValue: layoutServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
+        { provide: TaskTimeSyncService, useValue: taskTimeSyncServiceSpy },
       ],
     });
 
@@ -246,6 +250,21 @@ describe('ShortSyntaxEffects', () => {
 
       tick(100);
       expect(emitted).toBe(false);
+    }));
+
+    it('should flush pending timer deltas before an absolute short-syntax time edit', fakeAsync(() => {
+      const task = createTask('task-1', { title: 'Task 10m/1h' });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+      effects.shortSyntax$.subscribe();
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: task.title } },
+        }),
+      );
+      tick(100);
+
+      expect(taskTimeSyncServiceSpy.flushOne).toHaveBeenCalledOnceWith('task-1');
     }));
 
     it('should add URL as attachment when updating task title with a URL', fakeAsync(() => {

@@ -1,6 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { TranslateModule } from '@ngx-translate/core';
 import { ScheduleEventComponent } from './schedule-event.component';
@@ -10,6 +10,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
 
 const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent => ({
   id: 'cal-1',
@@ -50,7 +51,10 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
         { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
         {
           provide: TaskService,
-          useValue: { setSelectedId: jasmine.createSpy('setSelectedId') },
+          useValue: {
+            setSelectedId: jasmine.createSpy('setSelectedId'),
+            remove: jasmine.createSpy('remove'),
+          },
         },
         {
           provide: CalendarEventActionsService,
@@ -170,6 +174,26 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
     });
   });
 
+  it('should delete scheduled tasks through TaskService cleanup', fakeAsync(() => {
+    const task = {
+      id: 'task-1',
+      title: 'Task',
+      timeEstimate: 3600000,
+      subTaskIds: [],
+      subTasks: [],
+    } as any;
+    const store = TestBed.inject(MockStore);
+    const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    store.overrideSelector(selectTaskByIdWithSubTaskData, task);
+    fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+    fixture.detectChanges();
+
+    component.deleteTask();
+    tick(51);
+
+    expect(taskService.remove).toHaveBeenCalledOnceWith(task);
+  }));
+
   describe('style', () => {
     it('should render overlapping events in equal-width lanes', () => {
       fixture.componentRef.setInput(
@@ -210,7 +234,10 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
           { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
           {
             provide: TaskService,
-            useValue: { setSelectedId: jasmine.createSpy('setSelectedId') },
+            useValue: {
+              setSelectedId: jasmine.createSpy('setSelectedId'),
+              remove: jasmine.createSpy('remove'),
+            },
           },
           {
             provide: CalendarEventActionsService,
