@@ -1,4 +1,9 @@
-import { ActionType, Operation, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  isMultiEntityPayload,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 
@@ -241,10 +246,15 @@ const applyTaskProjectionFromOp = (op: Operation, projection: TaskEntityMap): vo
   }
 };
 
-const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
-  op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+const isTaskArchiveOp = (op: Operation): boolean =>
+  op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE;
+
+const isTaskDeleteOp = (op: Operation): boolean =>
   op.actionType === ActionType.TASK_SHARED_DELETE ||
   op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE;
+
+const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
+  isTaskArchiveOp(op) || isTaskDeleteOp(op);
 
 const addOperationEntityIds = (op: Operation, sink: Set<string>): void => {
   if (Array.isArray(op.entityIds)) {
@@ -320,14 +330,26 @@ export const collectCascadedSubTaskIds = (
  * `parentId`, a later stale `moveToArchive` / `deleteTask` sees that child just
  * like `deleteTaskHelper` would when the archive/delete action actually runs.
  */
-export const collectArchivingOrDeletingEntityIdsFromBatch = (
+export const collectTaskRemovalEntityIdsFromBatch = (
   operations: Operation[],
   state: unknown,
-): Set<string> => {
+): {
+  all: Set<string>;
+  archiving: Set<string>;
+  deleting: Set<string>;
+} => {
   // Archive-free hydration/sync batches are common; skip projection work for them.
-  if (!operations.some(isTaskArchiveOrDeleteOp)) return new Set<string>();
+  if (!operations.some(isTaskArchiveOrDeleteOp)) {
+    return {
+      all: new Set<string>(),
+      archiving: new Set<string>(),
+      deleting: new Set<string>(),
+    };
+  }
 
   const archivingOrDeletingEntityIds = new Set<string>();
+  const archivingEntityIds = new Set<string>();
+  const deletingEntityIds = new Set<string>();
   const projectedTaskEntities = cloneTaskEntityMap(state);
 
   for (const op of operations) {
@@ -337,6 +359,7 @@ export const collectArchivingOrDeletingEntityIdsFromBatch = (
       collectCascadedSubTaskIds(op, removedByThisOp, projectedTaskEntities);
       for (const id of removedByThisOp) {
         archivingOrDeletingEntityIds.add(id);
+        (isTaskArchiveOp(op) ? archivingEntityIds : deletingEntityIds).add(id);
         delete projectedTaskEntities[id];
       }
       continue;
@@ -345,8 +368,17 @@ export const collectArchivingOrDeletingEntityIdsFromBatch = (
     applyTaskProjectionFromOp(op, projectedTaskEntities);
   }
 
-  return archivingOrDeletingEntityIds;
+  return {
+    all: archivingOrDeletingEntityIds,
+    archiving: archivingEntityIds,
+    deleting: deletingEntityIds,
+  };
 };
+
+export const collectArchivingOrDeletingEntityIdsFromBatch = (
+  operations: Operation[],
+  state: unknown,
+): Set<string> => collectTaskRemovalEntityIdsFromBatch(operations, state).all;
 
 /**
  * Issue #7330: `lwwUpdateMetaReducer`'s orphan filter only sees taskState as
@@ -367,8 +399,11 @@ export const stripBatchArchivedTaskIdsFromLwwPayload = (
   if (!isLww) return op;
   const payload = op.payload;
   if (!payload || typeof payload !== 'object') return op;
+  const entityPayload = isMultiEntityPayload(payload)
+    ? payload.actionPayload
+    : (payload as Record<string, unknown>);
   const newPayload = filterTaskIdArraysFromTagOrProjectPayload(
-    payload as Record<string, unknown>,
+    entityPayload,
     op.entityType,
     (id) => archivingOrDeletingEntityIds.has(id),
     {
@@ -378,5 +413,11 @@ export const stripBatchArchivedTaskIdsFromLwwPayload = (
       entityId: op.entityId,
     },
   );
-  return newPayload ? { ...op, payload: newPayload } : op;
+  if (!newPayload) return op;
+  return {
+    ...op,
+    payload: isMultiEntityPayload(payload)
+      ? { ...payload, actionPayload: newPayload }
+      : newPayload,
+  };
 };

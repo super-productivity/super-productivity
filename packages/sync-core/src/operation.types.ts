@@ -224,6 +224,15 @@ export interface LwwUpdatePayload<
   TOpType extends string = OpType,
 > extends MultiEntityPayload<TOpType> {
   lwwUpdateMode: LwwUpdateMode;
+  /**
+   * Allows this synthetic update to recreate an entity removed by an earlier
+   * DELETE in the same replay batch. Conflict resolution sets this only when
+   * a multi-entity delete wins for some entities but loses for this one.
+   *
+   * Archive operations never set this flag: archive precedence remains
+   * absolute and archived entities must not be resurrected by LWW updates.
+   */
+  recreatesEntityAfterDelete?: true;
 }
 
 /**
@@ -285,9 +294,34 @@ export const extractEntityFromPayload = (
 export const extractUpdateChanges = (
   payload: unknown,
   payloadKey: string,
+  entityId?: string,
 ): Record<string, unknown> => {
   const actionPayload = extractActionPayload(payload);
-  const entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
+  let entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
+  if (!entityPayload && entityId) {
+    const bulkPayload = actionPayload[`${payloadKey}s`];
+    if (Array.isArray(bulkPayload)) {
+      const matchingPayload = bulkPayload.find(
+        (candidate): candidate is Record<string, unknown> =>
+          typeof candidate === 'object' &&
+          candidate !== null &&
+          candidate['id'] === entityId,
+      );
+      entityPayload = matchingPayload;
+    }
+  }
+  if (!entityPayload && entityId && isMultiEntityPayload(payload)) {
+    const matchingChange = payload.entityChanges.find(
+      (change) =>
+        change.entityId === entityId &&
+        change.opType === OpType.Update &&
+        typeof change.changes === 'object' &&
+        change.changes !== null,
+    );
+    if (matchingChange) {
+      return matchingChange.changes as Record<string, unknown>;
+    }
+  }
   if (!entityPayload) return {};
   if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
     return entityPayload['changes'] as Record<string, unknown>;

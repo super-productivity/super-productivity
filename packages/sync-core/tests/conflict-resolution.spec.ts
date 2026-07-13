@@ -631,6 +631,44 @@ describe('delete-loses-to-update payload helpers', () => {
     ).toEqual({ title: 'New' });
   });
 
+  it('extracts the matching entity from a real plural bulk-update payload', () => {
+    expect(
+      extractUpdateChanges(
+        {
+          actionPayload: {
+            tasks: [
+              { id: 'task-1', changes: { title: 'First' } },
+              { id: 'task-2', changes: { title: 'Second' } },
+            ],
+          },
+          entityChanges: [],
+        },
+        'task',
+        'task-2',
+      ),
+    ).toEqual({ title: 'Second' });
+  });
+
+  it('falls back to capture-time entity changes for bulk updates', () => {
+    expect(
+      extractUpdateChanges(
+        {
+          actionPayload: { taskIds: ['task-1'] },
+          entityChanges: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              opType: OpType.Update,
+              changes: { title: 'Captured' },
+            },
+          ],
+        },
+        'task',
+        'task-1',
+      ),
+    ).toEqual({ title: 'Captured' });
+  });
+
   it('returns empty changes when the update payload key is absent', () => {
     expect(extractUpdateChanges({ project: { id: 'project-1' } }, 'task')).toEqual({});
   });

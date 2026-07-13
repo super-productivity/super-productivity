@@ -450,7 +450,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     const actionAny = action as unknown as Record<string, unknown>;
     const actionMeta = actionAny['meta'] as
       | {
-          isApplyingFromOtherClient?: boolean;
           lwwUpdateMode?: 'replace' | 'patch';
         }
       | undefined;
@@ -471,21 +470,27 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
       }
-      if (
-        entityType === 'GLOBAL_CONFIG' &&
-        actionMeta?.isApplyingFromOtherClient === true &&
-        typeof entityData['sync'] === 'object' &&
-        entityData['sync'] !== null &&
-        typeof (featureState as Record<string, unknown>)['sync'] === 'object' &&
-        (featureState as Record<string, unknown>)['sync'] !== null
-      ) {
-        entityData = {
-          ...entityData,
-          sync: withLocalOnlySyncSettings(
-            entityData['sync'] as SyncConfig,
-            (featureState as Record<string, unknown>)['sync'] as SyncConfig,
-          ),
-        };
+      if (entityType === 'GLOBAL_CONFIG') {
+        const localSync = (featureState as Record<string, unknown>)['sync'];
+        if (
+          typeof localSync === 'object' &&
+          localSync !== null &&
+          !Array.isArray(localSync)
+        ) {
+          const incomingSync = entityData['sync'];
+          entityData = {
+            ...entityData,
+            sync:
+              typeof incomingSync === 'object' &&
+              incomingSync !== null &&
+              !Array.isArray(incomingSync)
+                ? withLocalOnlySyncSettings(
+                    incomingSync as SyncConfig,
+                    localSync as SyncConfig,
+                  )
+                : localSync,
+          };
+        }
       }
       const updatedState: RootState = {
         ...rootState,

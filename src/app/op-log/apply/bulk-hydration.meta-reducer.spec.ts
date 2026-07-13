@@ -661,6 +661,30 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
     });
 
+    it('does not let a delete-recreation marker override archive precedence', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const markedLwwOp = createMockOperation({
+        ...createLwwUpdateOp(TASK_ID),
+        payload: {
+          actionPayload: createMockTask(),
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [createMoveToArchiveOp([TASK_ID]), markedLwwOp],
+        }),
+      );
+
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
     it('should apply LWW Update for non-archived entity normally', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();
@@ -803,6 +827,50 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_DELETE_MULTIPLE);
     });
 
+    it('applies an explicit LWW compensation after deleteTasks removes the entity', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const deleteMultipleOp = createMockOperation({
+        id: 'delete-multiple-before-compensation',
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID, TASK_ID_2],
+        payload: {
+          actionPayload: { taskIds: [TASK_ID, TASK_ID_2] },
+          entityChanges: [],
+        },
+      });
+      const compensationOp = createMockOperation({
+        id: 'lww-delete-compensation',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID_2,
+        payload: {
+          actionPayload: createMockTask({ id: TASK_ID_2 }),
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [deleteMultipleOp, compensationOp],
+        }),
+      );
+
+      expect(mockReducer).toHaveBeenCalledTimes(2);
+      expect(reducerCalls.map(({ action }) => action.type)).toEqual([
+        ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        TASK_LWW_TYPE,
+      ]);
+    });
+
     it('should filter using entityId fallback when entityIds array is missing', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();
@@ -899,6 +967,41 @@ describe('bulkHydrationMetaReducer', () => {
       expect(tagAction).toBeDefined();
       // The archiving TASK_ID must be stripped; TASK_ID_2 stays.
       expect(tagAction!.taskIds).toEqual([TASK_ID_2]);
+    });
+
+    it('strips archiving task IDs from an enveloped TAG LWW Update payload', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const tagLwwOp = createMockOperation({
+        id: 'tag-lww-enveloped',
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: {
+          actionPayload: {
+            id: TAG_ID,
+            title: 'Today',
+            taskIds: [TASK_ID, TASK_ID_2],
+            color: '#000',
+            icon: null,
+          },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [tagLwwOp, createMoveToArchiveOp([TASK_ID])],
+        }),
+      );
+
+      const tagAction = reducerCalls.find((c) => c.action.type === TAG_LWW_TYPE)
+        ?.action as { taskIds?: string[] } | undefined;
+      expect(tagAction?.taskIds).toEqual([TASK_ID_2]);
     });
 
     it('strips archiving task IDs from a PROJECT LWW Update taskIds + backlogTaskIds', () => {

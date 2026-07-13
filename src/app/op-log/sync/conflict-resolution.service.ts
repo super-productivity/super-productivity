@@ -33,6 +33,8 @@ import {
   Operation,
   LwwUpdateMode,
   LwwUpdatePayload,
+  isLwwUpdatePayload,
+  isMultiEntityPayload,
   OpType,
   VectorClock,
 } from '../core/operation.types';
@@ -348,6 +350,8 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     const { lwwResolutions: resolutions, mergedResolutions } =
       await this._resolveConflictsWithLWW(conflicts);
+    const additionalLocalIntentOps =
+      await this._preservePartiallyRejectedLocalBulkDeletes(resolutions);
 
     const allOpsToApply: Operation[] = [];
     const allStoredOps: Array<{ id: string; seq: number }> = [];
@@ -372,7 +376,10 @@ export class ConflictResolutionService {
     let remoteWinsOps = uniqueOpsById(lwwPartitions.remoteWinsOps);
     let localWinsRemoteOps = uniqueOpsById(lwwPartitions.localWinsRemoteOps);
     let remoteOpsToReject = [...new Set(lwwPartitions.remoteOpsToReject)];
-    const newLocalWinOps = uniqueOpsById(lwwPartitions.newLocalWinOps);
+    const newLocalWinOps = uniqueOpsById([
+      ...lwwPartitions.newLocalWinOps,
+      ...additionalLocalIntentOps,
+    ]);
     const { remoteWinnerAffectedEntityKeys } = lwwPartitions;
     const localOpsToReject = [...new Set(lwwPartitions.localOpsToReject)];
     const localOpsToRejectSet = new Set(localOpsToReject);
@@ -390,6 +397,7 @@ export class ConflictResolutionService {
         hasLocalWinner: boolean;
         hasRemoteWinner: boolean;
         localWinnerKeys: Set<string>;
+        resolvedEntityKeys: Set<string>;
         localWinOpIds: Set<string>;
         remoteWinCompensationIds: Set<string>;
       }
@@ -406,9 +414,13 @@ export class ConflictResolutionService {
           hasLocalWinner: false,
           hasRemoteWinner: false,
           localWinnerKeys: new Set<string>(),
+          resolvedEntityKeys: new Set<string>(),
           localWinOpIds: new Set<string>(),
           remoteWinCompensationIds: new Set<string>(),
         };
+        winners.resolvedEntityKeys.add(
+          toEntityKey(resolution.conflict.entityType, resolution.conflict.entityId),
+        );
         if (resolution.winner === 'local') {
           winners.hasLocalWinner = true;
           winners.localWinnerKeys.add(
@@ -422,6 +434,18 @@ export class ConflictResolutionService {
         }
         multiEntityRemoteOpWinners.set(remoteOp.id, winners);
       }
+    }
+
+    // Conflict detection reports only entities that actually conflict. Every
+    // other entity touched by the same remote atomic action is therefore an
+    // uncontested remote winner and must keep the original op eligible for
+    // apply. Without this, one local-winning sibling suppresses the remote
+    // change for every unaffected sibling.
+    for (const winners of multiEntityRemoteOpWinners.values()) {
+      winners.hasRemoteWinner ||= getOpEntityIds(winners.op).some(
+        (entityId) =>
+          !winners.resolvedEntityKeys.has(toEntityKey(winners.op.entityType, entityId)),
+      );
     }
 
     // A remote UPDATE that wins over a local DELETE needs a durable recreate
@@ -487,10 +511,35 @@ export class ConflictResolutionService {
           `ConflictResolutionService: Cannot safely compensate mixed multi-entity winners for ${remoteOp.id}`,
         );
       }
-      compensatedRemoteOps.set(remoteOp.id, remoteOp);
-      for (const localWinOpId of winners.localWinOpIds) {
-        compensationOpIdsToApply.add(localWinOpId);
+      if (remoteOp.opType === OpType.Delete) {
+        for (const localWinOpId of winners.localWinOpIds) {
+          const localWinOpIndex = newLocalWinOps.findIndex(
+            (op) => op.id === localWinOpId,
+          );
+          if (localWinOpIndex < 0) {
+            continue;
+          }
+          const localWinOp = newLocalWinOps[localWinOpIndex];
+          if (!isLwwUpdatePayload(localWinOp.payload)) {
+            continue;
+          }
+          const markedCompensation: Operation = {
+            ...localWinOp,
+            payload: {
+              ...localWinOp.payload,
+              recreatesEntityAfterDelete: true,
+            },
+          };
+          newLocalWinOps[localWinOpIndex] = markedCompensation;
+          newLocalWinOpsById.set(localWinOpId, markedCompensation);
+          compensationOpIdsToApply.add(localWinOpId);
+        }
+      } else {
+        for (const localWinOpId of winners.localWinOpIds) {
+          compensationOpIdsToApply.add(localWinOpId);
+        }
       }
+      compensatedRemoteOps.set(remoteOp.id, remoteOp);
       for (const remoteWinCompensationId of winners.remoteWinCompensationIds) {
         compensationOpIdsToApply.add(remoteWinCompensationId);
       }
@@ -1380,6 +1429,122 @@ export class ConflictResolutionService {
       clientId,
       vectorClock: newClock,
       timestamp: deleteOp.timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+  }
+
+  /**
+   * A local deleteTasks action can conflict for only one task while also
+   * deleting unaffected siblings. Rejecting the original atomic row is
+   * necessary for the remote-winning task, but would otherwise prevent those
+   * sibling deletions from ever reaching another client.
+   *
+   * Replace each affected bulk row with one narrowed delete operation that
+   * excludes explicit remote winners, retains uncontested/local-winning
+   * siblings, and dominates every conflict clock involving the original row.
+   */
+  private async _preservePartiallyRejectedLocalBulkDeletes(
+    resolutions: LWWResolution[],
+  ): Promise<Operation[]> {
+    interface BulkDeleteResolutionGroup {
+      deleteOp: Operation;
+      resolutions: LWWResolution[];
+      remoteWinnerIds: Set<string>;
+    }
+
+    const groups = new Map<string, BulkDeleteResolutionGroup>();
+    for (const resolution of resolutions) {
+      for (const localOp of resolution.conflict.localOps) {
+        if (
+          localOp.actionType !== ActionType.TASK_SHARED_DELETE_MULTIPLE ||
+          getOpEntityIds(localOp).length <= 1
+        ) {
+          continue;
+        }
+        const group = groups.get(localOp.id) ?? {
+          deleteOp: localOp,
+          resolutions: [],
+          remoteWinnerIds: new Set<string>(),
+        };
+        group.resolutions.push(resolution);
+        if (resolution.winner === 'remote') {
+          group.remoteWinnerIds.add(resolution.conflict.entityId);
+        }
+        groups.set(localOp.id, group);
+      }
+    }
+
+    const additionalOps: Operation[] = [];
+    for (const group of groups.values()) {
+      const retainedEntityIds = getOpEntityIds(group.deleteOp).filter(
+        (entityId) => !group.remoteWinnerIds.has(entityId),
+      );
+      if (retainedEntityIds.length === 0) {
+        continue;
+      }
+
+      const replacementOp = await this._createScopedBulkDeleteReplacement(
+        group,
+        retainedEntityIds,
+      );
+      let assignedToLocalWinner = false;
+      for (const resolution of group.resolutions) {
+        if (
+          resolution.winner === 'local' &&
+          resolution.localWinOp?.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE
+        ) {
+          resolution.localWinOp = replacementOp;
+          assignedToLocalWinner = true;
+        }
+      }
+      if (!assignedToLocalWinner) {
+        additionalOps.push(replacementOp);
+      }
+    }
+    return additionalOps;
+  }
+
+  private async _createScopedBulkDeleteReplacement(
+    group: {
+      deleteOp: Operation;
+      resolutions: LWWResolution[];
+    },
+    retainedEntityIds: string[],
+  ): Promise<Operation> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      throw new Error(
+        'ConflictResolutionService: Cannot preserve partial bulk delete - no client ID',
+      );
+    }
+
+    const allClocks = group.resolutions.flatMap(({ conflict }) => [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ]);
+    const originalPayload = group.deleteOp.payload;
+    const scopedActionPayload = {
+      ...extractActionPayload(originalPayload),
+      taskIds: retainedEntityIds,
+    };
+    const scopedPayload = isMultiEntityPayload(originalPayload)
+      ? {
+          ...originalPayload,
+          actionPayload: scopedActionPayload,
+          entityChanges: originalPayload.entityChanges.filter((change) =>
+            retainedEntityIds.includes(change.entityId),
+          ),
+        }
+      : scopedActionPayload;
+
+    return {
+      ...group.deleteOp,
+      id: uuidv7(),
+      entityId: retainedEntityIds[0],
+      entityIds: retainedEntityIds,
+      payload: scopedPayload,
+      clientId,
+      vectorClock: this.mergeAndIncrementClocks(allClocks, clientId),
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
   }

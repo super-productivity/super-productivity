@@ -1266,6 +1266,93 @@ describe('lwwUpdateMetaReducer', () => {
       );
     });
 
+    it('should preserve local-only sync settings when replaying an own-client replacement', () => {
+      const state = createMockStateWithSingletons();
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: {
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: false,
+        },
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        sync: {
+          syncProvider: null,
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          isCompressionEnabled: true,
+        },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(
+        jasmine.objectContaining({
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        }),
+      );
+    });
+
+    it('should retain the local sync section when a replacement omits it', () => {
+      const state = createMockStateWithSingletons();
+      const localSync = {
+        syncProvider: 'localFile',
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncInterval: 600000,
+        isManualSyncOnly: true,
+        isCompressionEnabled: false,
+      };
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: localSync,
+      } as never;
+
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(localSync);
+    });
+
     it('should replace timeTracking state with LWW winning data', () => {
       const state = createMockStateWithSingletons();
       const action = {
