@@ -982,6 +982,23 @@ describe('OperationLogSyncService', () => {
           );
         });
 
+        it('should surface a rejected full-state upload barrier to sync orchestrators', async () => {
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [],
+            rejectedCount: 0,
+            rejectedOps: [],
+            blockedByRejectedFullState: true,
+          });
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('completed');
+          if (result.kind === 'completed') {
+            expect(result.blockedByRejectedFullState).toBe(true);
+          }
+        });
+
         // Issue #7330 follow-up: a download triggered from inside the
         // rejected-op handler can run post-sync validation. If validation
         // fails on that path, the boolean must surface through the eventual

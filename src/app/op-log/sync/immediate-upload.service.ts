@@ -257,6 +257,7 @@ export class ImmediateUploadService implements OnDestroy {
         let totalUploadedCount = result.uploadedCount;
         let hasPermanentRejection = result.permanentRejectionCount > 0;
         let encryptionRequiredKeyMissing = result.encryptionRequiredKeyMissing === true;
+        let blockedByRejectedFullState = result.blockedByRejectedFullState === true;
         if (result.localWinOpsCreated > 0) {
           OpLog.verbose(
             `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
@@ -281,6 +282,8 @@ export class ImmediateUploadService implements OnDestroy {
           hasPermanentRejection ||= followUpResult.permanentRejectionCount > 0;
           encryptionRequiredKeyMissing ||=
             followUpResult.encryptionRequiredKeyMissing === true;
+          blockedByRejectedFullState ||=
+            followUpResult.blockedByRejectedFullState === true;
         }
 
         // Read the validation latch BEFORE any IN_SYNC / deferred-checkmark
@@ -298,6 +301,11 @@ export class ImmediateUploadService implements OnDestroy {
         // Don't show checkmark when piggybacked ops exist - there may be more
         // remote ops pending. Let normal sync cycle confirm full sync state.
         if (hasPermanentRejection) {
+          this._providerManager.setSyncStatus('ERROR');
+          return;
+        }
+
+        if (blockedByRejectedFullState) {
           this._providerManager.setSyncStatus('ERROR');
           return;
         }

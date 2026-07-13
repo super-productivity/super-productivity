@@ -117,6 +117,8 @@ export class OperationLogUploadService {
     // Set when the mandatory-encryption guard skips the upload with pending ops still
     // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
     let encryptionRequiredKeyMissing = false;
+    let blockedByRejectedFullState = false;
+    let rejectedImportBarrierSeq: number | undefined;
 
     // Migration discovery may perform network probes or wait on a dialog. Keep
     // that work outside the cross-tab upload lock; the callback is responsible
@@ -201,6 +203,26 @@ export class OperationLogUploadService {
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
+      const rejectedImport = await this.opLogStore.getLatestRejectedImportOpEntry();
+      if (rejectedImport) {
+        const latestActiveFullState = await this.opLogStore.getLatestFullStateOpEntry();
+        if (!latestActiveFullState || latestActiveFullState.seq <= rejectedImport.seq) {
+          blockedByRejectedFullState = true;
+          OpLog.warn(
+            `OperationLogUploadService: Keeping ${regularOps.length} regular op(s) pending ` +
+              `because rejected ${rejectedImport.op.opType} ${rejectedImport.op.id} ` +
+              'has not been superseded by a newer full-state operation.',
+          );
+          return;
+        }
+        if (latestActiveFullState.source === 'local' && !latestActiveFullState.syncedAt) {
+          // A pending recovery snapshot is allowed to try, but it does not
+          // release the durable barrier until the server actually accepts it.
+          blockedByRejectedFullState = true;
+          rejectedImportBarrierSeq = rejectedImport.seq;
+        }
+      }
+
       // Upload full-state operations via snapshot endpoint
       let fullStateOpUploaded = false;
       let fullStateUploadBlocked = false;
@@ -237,6 +259,13 @@ export class OperationLogUploadService {
           // are already included in its frozen snapshot payload
           fullStateOpUploaded = true;
           lastUploadedFullStateOpSeq = entry.seq;
+          if (
+            rejectedImportBarrierSeq !== undefined &&
+            entry.seq > rejectedImportBarrierSeq
+          ) {
+            blockedByRejectedFullState = false;
+            rejectedImportBarrierSeq = undefined;
+          }
         } else {
           // Special handling for SYNC_IMPORT_EXISTS: another client already uploaded
           // a SYNC_IMPORT. We should delete our local SYNC_IMPORT and let the normal
@@ -521,6 +550,7 @@ export class OperationLogUploadService {
       ...(piggybackHasOnlyUnencryptedData ? { piggybackHasOnlyUnencryptedData } : {}),
       ...(lastServerSeqToPersist !== undefined ? { lastServerSeqToPersist } : {}),
       ...(encryptionRequiredKeyMissing ? { encryptionRequiredKeyMissing: true } : {}),
+      ...(blockedByRejectedFullState ? { blockedByRejectedFullState: true } : {}),
       ...(options?.deferAcknowledgement
         ? { selectedPendingOps, pendingAcknowledgementSeqs }
         : {}),

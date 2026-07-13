@@ -687,6 +687,40 @@ describe('OperationLogStoreService', () => {
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
     });
 
+    it('should expose the latest rejected explicit import without treating stale Repair as a barrier', async () => {
+      const rejectedImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000053',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000054',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRemoteImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000055',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(rejectedImport);
+      await service.append(rejectedRepair);
+      await service.append(rejectedRemoteImport, 'remote');
+      await service.markRejected([
+        rejectedImport.id,
+        rejectedRepair.id,
+        rejectedRemoteImport.id,
+      ]);
+
+      expect((await service.getLatestRejectedImportOpEntry())?.op.id).toBe(
+        rejectedImport.id,
+      );
+    });
+
     it('should rebuild malformed metadata instead of throwing', async () => {
       const latestImport = createTestOperation({
         id: '01900000-0000-7000-8000-000000000041',

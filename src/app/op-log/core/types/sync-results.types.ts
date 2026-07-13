@@ -166,6 +166,12 @@ export interface UploadResult {
    * pending ops to upload (the guard fires after the empty-ops check).
    */
   encryptionRequiredKeyMissing?: boolean;
+  /**
+   * True when pending incremental operations were kept local because the newest
+   * explicit import/restore boundary was permanently rejected by the server.
+   * A newer successful full-state operation clears the barrier.
+   */
+  blockedByRejectedFullState?: boolean;
 }
 
 /**
@@ -299,6 +305,8 @@ export type UploadOutcome =
        * key is configured, leaving pending ops unsynced. The wrapper must not claim IN_SYNC.
        */
       encryptionRequiredKeyMissing?: boolean;
+      /** Pending ops depend on an explicit full-state baseline the server rejected. */
+      blockedByRejectedFullState?: boolean;
     }
   | {
       /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */

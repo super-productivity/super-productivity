@@ -1077,22 +1077,38 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * @returns The latest full-state operation entry, or undefined if none exists
    */
   async getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
+    return this._getLatestFullStateOpEntryMatching((stored) => !stored.rejectedAt);
+  }
+
+  /**
+   * Finds the newest rejected local explicit import/restore boundary.
+   *
+   * A rejected local SYNC_IMPORT or BACKUP_IMPORT means later incremental
+   * operations may depend on a baseline the server never accepted. Rejected
+   * remote imports are conflict-resolution history, not upload barriers.
+   * Automatic REPAIR is also excluded: a stale repair is deliberately retired
+   * so concurrent server ops can download and trigger a fresh repair if needed.
+   */
+  async getLatestRejectedImportOpEntry(): Promise<OperationLogEntry | undefined> {
+    return this._getLatestFullStateOpEntryMatching(
+      (stored) =>
+        stored.source === 'local' &&
+        !!stored.rejectedAt &&
+        getStoredOpType(stored.op) !== 'REPAIR',
+    );
+  }
+
+  private async _getLatestFullStateOpEntryMatching(
+    matches: (stored: StoredOperationLogEntry) => boolean,
+  ): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
 
-    const findLatestActive = async (
+    const findLatest = async (
       meta: FullStateOpsMetaEntry,
     ): Promise<{ entry?: OperationLogEntry; hasStaleRef: boolean }> => {
       let hasStaleRef = false;
-      if (!meta.latest) {
-        return { hasStaleRef };
-      }
-
-      const latestRef = meta.latest;
-      const readRef = async (
-        ref: FullStateOpRef,
-      ): Promise<
-        { status: 'active'; entry: OperationLogEntry } | { status: 'rejected' | 'stale' }
-      > => {
+      const refsNewestFirst = [...meta.refs].sort((a, b) => b.seq - a.seq);
+      for (const ref of refsNewestFirst) {
         const stored = await this._adapter.get<StoredOperationLogEntry>(
           STORE_NAMES.OPS,
           ref.seq,
@@ -1102,43 +1118,23 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           getOpId(stored.op) !== ref.opId ||
           !isFullStateOpType(getStoredOpType(stored.op))
         ) {
-          return { status: 'stale' };
-        }
-        if (!stored.rejectedAt) {
-          return { status: 'active', entry: decodeStoredEntry(stored) };
-        }
-        return { status: 'rejected' };
-      };
-
-      const latestResult = await readRef(latestRef);
-      if (latestResult.status === 'active') {
-        return { entry: latestResult.entry, hasStaleRef };
-      }
-      hasStaleRef = latestResult.status === 'stale';
-
-      const olderRefsNewestFirst = meta.refs
-        .filter((ref) => ref.seq !== latestRef.seq)
-        .sort((a, b) => b.seq - a.seq);
-      for (const ref of olderRefsNewestFirst) {
-        const result = await readRef(ref);
-        if (result.status === 'stale') {
           hasStaleRef = true;
           continue;
         }
-        if (result.status === 'active') {
-          return { entry: result.entry, hasStaleRef };
+        if (matches(stored)) {
+          return { entry: decodeStoredEntry(stored), hasStaleRef };
         }
       }
       return { hasStaleRef };
     };
 
     const meta = await this._getFullStateOpsMetaOrRebuild();
-    const firstRead = await findLatestActive(meta);
+    const firstRead = await findLatest(meta);
     if (firstRead.entry || !firstRead.hasStaleRef) {
       return firstRead.entry;
     }
 
-    return (await findLatestActive(await this._rebuildFullStateOpsMeta())).entry;
+    return (await findLatest(await this._rebuildFullStateOpsMeta())).entry;
   }
 
   /**

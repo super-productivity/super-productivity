@@ -458,6 +458,7 @@ export class OperationLogSyncService {
       ...(result.encryptionRequiredKeyMissing
         ? { encryptionRequiredKeyMissing: true }
         : {}),
+      ...(result.blockedByRejectedFullState ? { blockedByRejectedFullState: true } : {}),
     };
   }
 

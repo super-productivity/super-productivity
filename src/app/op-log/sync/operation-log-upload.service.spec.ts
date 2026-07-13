@@ -43,6 +43,8 @@ describe('OperationLogUploadService', () => {
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getUnsynced',
+      'getLatestFullStateOpEntry',
+      'getLatestRejectedImportOpEntry',
       'markSynced',
       'markRejected',
       'deleteOpsWhere',
@@ -54,6 +56,8 @@ describe('OperationLogUploadService', () => {
       fn(),
     );
     mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([]));
+    mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(undefined);
+    mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(undefined);
     mockOpLogStore.markSynced.and.returnValue(Promise.resolve());
     mockOpLogStore.deleteOpsWhere.and.returnValue(Promise.resolve());
 
@@ -1213,6 +1217,93 @@ describe('OperationLogUploadService', () => {
         expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
         expect(result.uploadedCount).toBe(0);
         expect(result.rejectedCount).toBe(1);
+      });
+
+      it('should keep regular ops pending across sync cycles after an explicit import was rejected', async () => {
+        const rejectedImport = createFullStateEntry(
+          1,
+          'rejected-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        rejectedImport.rejectedAt = Date.now();
+        const dependentOp = createMockEntry(2, 'dependent-op', 'client-1');
+        mockOpLogStore.getUnsynced.and.resolveTo([dependentOp]);
+        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockApiProvider.uploadOps.and.resolveTo({
+          results: [{ opId: dependentOp.op.id, accepted: true }],
+          latestSeq: 2,
+          newOps: [],
+        });
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(0);
+        expect(result.blockedByRejectedFullState).toBe(true);
+      });
+
+      it('should release the rejected-import barrier after a newer full-state upload succeeds', async () => {
+        const rejectedImport = createFullStateEntry(
+          1,
+          'rejected-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        rejectedImport.rejectedAt = Date.now();
+        const recoveryImport = createFullStateEntry(
+          2,
+          'recovery-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        const dependentOp = createMockEntry(3, 'dependent-op', 'client-1');
+        mockOpLogStore.getUnsynced.and.resolveTo([recoveryImport, dependentOp]);
+        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(recoveryImport);
+        mockApiProvider.uploadSnapshot.and.resolveTo({ accepted: true, serverSeq: 2 });
+        mockApiProvider.uploadOps.and.resolveTo({
+          results: [{ opId: dependentOp.op.id, accepted: true }],
+          latestSeq: 3,
+          newOps: [],
+        });
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
+        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(2);
+        expect(result.blockedByRejectedFullState).toBeUndefined();
+      });
+
+      it('should retain the rejected-import barrier while a newer full-state upload is still failing', async () => {
+        const rejectedImport = createFullStateEntry(
+          1,
+          'rejected-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        rejectedImport.rejectedAt = Date.now();
+        const recoveryImport = createFullStateEntry(
+          2,
+          'recovery-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        const dependentOp = createMockEntry(3, 'dependent-op', 'client-1');
+        mockOpLogStore.getUnsynced.and.resolveTo([recoveryImport, dependentOp]);
+        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(recoveryImport);
+        mockApiProvider.uploadSnapshot.and.resolveTo({
+          accepted: false,
+          error: 'Failed to fetch',
+        });
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(result.blockedByRejectedFullState).toBe(true);
       });
 
       it('should update server seq after snapshot upload', async () => {
