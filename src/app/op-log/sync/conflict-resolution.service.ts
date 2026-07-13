@@ -344,7 +344,9 @@ export class ConflictResolutionService {
     const allOpsToApply: Operation[] = [];
     const allStoredOps: Array<{ id: string; seq: number }> = [];
     // Synthetic local ops (disjoint merges) ride in the apply batch but are NOT
-    // pending remote rows — the reducer-commit checkpoint must never see them.
+    // pending remote rows. Successful ones are excluded from the remote reducer
+    // checkpoint; reducer-failed ones are still durably rejected so they cannot
+    // upload an effect that never entered local state.
     const checkpointExemptOpIds = new Set<string>();
 
     const lwwPartitions = partitionLwwResolutions<Operation, EntityConflict>(
@@ -574,10 +576,10 @@ export class ConflictResolutionService {
         const applyResult = await this.operationApplier.applyOperations(allOpsToApply, {
           skipDeferredLocalActions: true,
           onReducersCommitted: async (reducerCommittedOps, reducerFailures = []) => {
-            // Disjoint-merge ops are synthetic LOCAL rows in the apply batch;
-            // their durability contract is the mixed-source append + upload
-            // path. The checkpoint's pending-only assertion must only see rows
-            // appended with pendingApply.
+            // Disjoint-merge ops are synthetic LOCAL rows in the apply batch.
+            // Exclude successful ones from the checkpoint's pending-only seq
+            // assertion, while allowing reducer-failed IDs through to the
+            // rejection path below.
             const checkpointOps = reducerCommittedOps.filter(
               (op) => !checkpointExemptOpIds.has(op.id),
             );
@@ -589,9 +591,7 @@ export class ConflictResolutionService {
                 'ConflictResolutionService: reducer commit contained an unknown operation.',
               );
             }
-            const rejectedReducerOpIds = reducerFailures
-              .map((failure) => failure.op.id)
-              .filter((opId) => !checkpointExemptOpIds.has(opId));
+            const rejectedReducerOpIds = reducerFailures.map((failure) => failure.op.id);
             if (rejectedReducerOpIds.length > 0) {
               await this.opLogStore.markReducersCommittedAndMergeClocks(
                 reducerCommittedSeqs,

@@ -22,6 +22,7 @@ describe('OperationLogRecoveryService', () => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch']);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'append',
+      'appendRecoveryOperationAndSnapshot',
       'getLastSeq',
       'loadStateCache',
       'saveStateCache',
@@ -79,14 +80,24 @@ describe('OperationLogRecoveryService', () => {
 
       await service.attemptRecovery();
 
-      expect(mockOpLogStore.append).toHaveBeenCalledWith(
+      expect(
+        (
+          mockOpLogStore as unknown as {
+            appendRecoveryOperationAndSnapshot: jasmine.Spy;
+          }
+        ).appendRecoveryOperationAndSnapshot,
+      ).toHaveBeenCalledWith(
         jasmine.objectContaining({
           actionType: ActionType.RECOVERY_DATA_IMPORT,
           opType: OpType.Batch,
           entityType: 'RECOVERY',
           payload: legacyData,
         }),
+        legacyData,
       );
+      expect(mockOpLogStore.append).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
       expect(mockStore.dispatch).toHaveBeenCalled();
       expect(mockLockService.request).toHaveBeenCalledWith(
         LOCK_NAMES.OPERATION_LOG,
@@ -162,7 +173,7 @@ describe('OperationLogRecoveryService', () => {
 
       await service.recoverFromLegacyData(legacyData);
 
-      expect(mockOpLogStore.append).toHaveBeenCalledWith(
+      expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).toHaveBeenCalledWith(
         jasmine.objectContaining({
           actionType: ActionType.RECOVERY_DATA_IMPORT,
           opType: OpType.Batch,
@@ -172,6 +183,7 @@ describe('OperationLogRecoveryService', () => {
           clientId: 'testClient',
           vectorClock: { testClient: 1 },
         }),
+        legacyData,
       );
     });
 
@@ -183,7 +195,7 @@ describe('OperationLogRecoveryService', () => {
       );
     });
 
-    it('should save state cache after recovery', async () => {
+    it('should pass recovered state to the atomic persistence boundary', async () => {
       const legacyData = { task: { ids: ['task1'] } };
       mockClientIdService.loadClientId.and.resolveTo('testClient');
       mockOpLogStore.append.and.resolveTo(undefined);
@@ -192,16 +204,13 @@ describe('OperationLogRecoveryService', () => {
 
       await service.recoverFromLegacyData(legacyData);
 
-      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          state: legacyData,
-          lastAppliedOpSeq: 5,
-          vectorClock: { testClient: 1 },
-        }),
+      expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).toHaveBeenCalledWith(
+        jasmine.any(Object),
+        legacyData,
       );
     });
 
-    it('should persist vector clock to IndexedDB store after recovery', async () => {
+    it('should include the recovery clock in the atomically persisted operation', async () => {
       const legacyData = { task: { ids: ['task1'] } };
       mockClientIdService.loadClientId.and.resolveTo('testClient');
       mockOpLogStore.append.and.resolveTo(undefined);
@@ -210,7 +219,10 @@ describe('OperationLogRecoveryService', () => {
 
       await service.recoverFromLegacyData(legacyData);
 
-      expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith({ testClient: 1 });
+      expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).toHaveBeenCalledWith(
+        jasmine.objectContaining({ vectorClock: { testClient: 1 } }),
+        legacyData,
+      );
     });
 
     it('should reject invalid legacy data before writing or dispatching it', async () => {
@@ -241,28 +253,21 @@ describe('OperationLogRecoveryService', () => {
       expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
     });
 
-    it('should quarantine crash-interrupted ops for archive recovery', async () => {
+    it('should leave crash-interrupted ops pending until hydration replays their reducers', async () => {
       const now = Date.now();
       const pendingOps = [
         { seq: 1, op: { id: 'op1' }, appliedAt: now - 1000, source: 'remote' },
         { seq: 2, op: { id: 'op2' }, appliedAt: now - 2000, source: 'remote' },
       ] as any;
       mockOpLogStore.getPendingRemoteOps.and.resolveTo(pendingOps);
-      mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
+      const result = await service.recoverPendingRemoteOps();
 
-      await service.recoverPendingRemoteOps();
-
-      expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
-        [1, 2],
-        pendingOps.map((entry) => entry.op),
-      );
+      expect(result).toEqual(pendingOps);
+      expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
       expect(mockOpLogStore.markApplied).not.toHaveBeenCalled();
     });
 
-    it('should quarantine regardless of age without charging retry budget', async () => {
-      // The former PENDING_OPERATION_EXPIRY_MS split changed nothing: every
-      // crash-interrupted op lands in the same quarantine, and retryCount is
-      // only ever bumped for an actually attempted archive failure.
+    it('should return every pending op regardless of age without changing status', async () => {
       const now = Date.now();
       const weekMs = 7 * 24 * 60 * 60 * 1000;
       const pendingOps = [
@@ -275,14 +280,10 @@ describe('OperationLogRecoveryService', () => {
         },
       ] as any;
       mockOpLogStore.getPendingRemoteOps.and.resolveTo(pendingOps);
-      mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
+      const result = await service.recoverPendingRemoteOps();
 
-      await service.recoverPendingRemoteOps();
-
-      expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
-        [1, 2],
-        pendingOps.map((entry) => entry.op),
-      );
+      expect(result).toEqual(pendingOps);
+      expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
       expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
     });
   });

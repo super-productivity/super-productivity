@@ -105,7 +105,11 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Important Notes
  *
- * - Remote archive mutations serialize behind the TASK_ARCHIVE mutex (separate from the OPERATION_LOG lock sync holds)
+ * - Task/archive model writes, full-state archive replacement, flush, and
+ *   compression serialize behind the TASK_ARCHIVE mutex (separate from the
+ *   OPERATION_LOG lock sync holds)
+ * - TimeTrackingService's project/tag cleanup paths are not yet covered by that
+ *   mutex (tracked in #8941)
  * - All operations are idempotent - safe to run multiple times
  * - Use `isArchiveAffectingAction()` helper to check if an action needs archive handling
  */
@@ -142,9 +146,11 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Process an action and handle any archive-related side effects.
    *
    * This method handles both local and remote operations. Remote operations
-   * run while sync holds the OPERATION_LOG lock; archive mutations additionally
+   * run while sync holds the OPERATION_LOG lock. Archive mutations performed by
+   * the task archive, direct adapter, and compression paths additionally
    * serialize behind the separate TASK_ARCHIVE mutex (the legacy
-   * isIgnoreDBLock option no longer bypasses it).
+   * isIgnoreDBLock option no longer bypasses it). Time-tracking cleanup remains
+   * a documented exception (#8941).
    *
    * @param action The action that was dispatched
    * @returns Promise that resolves when archive operations are complete
@@ -372,7 +378,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Removes all archived tasks for a deleted project.
    *
    * @localBehavior Executes (cleans up archive for deleted project)
-   * @remoteBehavior Executes under the TASK_ARCHIVE mutex
+   * @remoteBehavior Task archive cleanup uses the mutex; time-tracking cleanup is separate (#8941)
    */
   private async _handleDeleteProject(action: PersistentAction): Promise<void> {
     const projectId = (action as ReturnType<typeof TaskSharedActions.deleteProject>)
@@ -389,7 +395,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Removes tag references from archived tasks and deletes orphaned tasks.
    *
    * @localBehavior Executes (cleans up archive for deleted tags)
-   * @remoteBehavior Executes under the TASK_ARCHIVE mutex
+   * @remoteBehavior Task archive cleanup uses the mutex; time-tracking cleanup is separate (#8941)
    */
   private async _handleDeleteTags(action: PersistentAction): Promise<void> {
     const tagIdsToRemove =

@@ -218,6 +218,40 @@ describe('applyRemoteOperations', () => {
     expect(result.reducerFailures).toEqual([{ op: op2, error: reducerError }]);
   });
 
+  it('fails closed before checkpointing when a full-state reducer fails', async () => {
+    const fullStateOp = {
+      ...createOperation('sync-import'),
+      opType: 'SYNC_IMPORT',
+    };
+    const reducerError = new Error('full-state reducer failure');
+    const store = createStore({
+      seqs: [1],
+      writtenOps: [fullStateOp],
+      skippedCount: 0,
+    });
+    const applier: ReducerCommitAwareOperationApplyPort<Operation<string>> = {
+      applyOperations: vi.fn(async (_ops, options) => {
+        await options.onReducersCommitted([], [{ op: fullStateOp, error: reducerError }]);
+        return {
+          appliedOps: [],
+          reducerFailures: [{ op: fullStateOp, error: reducerError }],
+        };
+      }),
+    };
+
+    await expect(
+      applyRemoteOperations({
+        ops: [fullStateOp],
+        store,
+        applier,
+        isFullStateOperation: (op) => op.opType === 'SYNC_IMPORT',
+      }),
+    ).rejects.toThrow(/full-state.*reducer/i);
+
+    expect(store.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
+    expect(store.markApplied).not.toHaveBeenCalled();
+  });
+
   it('rejects an applier result whose failed op is not in the appended batch', async () => {
     const op1 = createOperation('op-1');
     const unknownFailedOp = createOperation('unknown-failed-op');

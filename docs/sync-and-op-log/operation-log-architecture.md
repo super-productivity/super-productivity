@@ -217,11 +217,22 @@ Downloaded operations use a durable status transition so reducer state, archive 
 
 Bulk replay isolates conversion/reducer exceptions per operation. The reducer-successful
 subsequence is checkpointed and receives archive side effects; reducer-failed rows are marked
-with terminal `rejectedAt` metadata in the **same transaction**. This prevents one malformed
-operation from terminating NgRx's state pipeline or receiving archive work, without creating a
-crash window where startup could mistake it for incomplete reducer work.
+with terminal `rejectedAt` plus `reducerRejectedAt` metadata in the **same transaction**.
+`reducerRejectedAt` is distinct from an ordinary sync rejection: hydration excludes that row
+because its migrated reducer effect never entered state. Pending rows deliberately removed by a
+schema migration receive the same terminal marker. This prevents one malformed operation from
+terminating NgRx's state pipeline or receiving archive work, without creating a crash window
+where startup could mistake it for incomplete reducer work.
 
-Startup hydration replays persisted state history, quarantines surviving `pending` rows, and retries `archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download, upload, or advance its cursor while any incomplete rows remain. Database version 8 is a downgrade barrier: released readers that do not understand the distinct reducer checkpoint cannot open the newer store and silently overlook outstanding archive work.
+Startup recovery leaves surviving `pending` rows pending, then hydration replays them through the
+same per-operation reducer-failure collector. Successful rows and reducer failures are durably
+partitioned before archive retry or snapshot creation. A pending full-state operation never uses
+the direct-load shortcut. During live sync, a full-state reducer failure aborts before the reducer
+checkpoint and server cursor advance, so the pending row remains recoverable. Hydration retries
+`archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download,
+upload, or advance its cursor while any incomplete rows remain. Database version 8 is a downgrade
+barrier: released readers that do not understand the distinct reducer checkpoint cannot open the
+newer store and silently overlook outstanding archive work.
 
 Local actions buffered during a remote-apply window stay ordered until each operation is durable. Transient persistence failures keep the failed suffix queued and block the current sync so a later sync can retry. A deterministically invalid buffered action also remains queued, but requires reload: its reducer already changed live state, so discarding it would let live state diverge from the durable operation log.
 
@@ -595,7 +606,9 @@ export class MyEffects {
 Automatic legacy recovery runs the emptiness check and legacy write under the operation-log
 lock, and fails closed. A present snapshot, a non-empty operation log, or an inspection error
 prevents the legacy write and propagates the hydration failure. The generic hydration catch
-must never place an older `pf` copy at the current SUP_OPS sequence frontier.
+must never place an older `pf` copy at the current SUP_OPS sequence frontier. When recovery is
+allowed, the recovery operation, state-cache snapshot, and vector clock commit in one IndexedDB
+transaction; an interrupted write cannot leave a snapshot claiming an operation that rolled back.
 
 ### Implementation
 
@@ -1193,6 +1206,10 @@ archive halves. When both halves are available, `archiveYoung` and `archiveOld` 
 one `saveArchivesAtomic()` transaction; a protected or omitted half is carried forward unchanged.
 `BACKUP_IMPORT` does not prompt on receiving clients: the originating restore was already an
 explicit user decision, so replay is deterministic across devices.
+
+Archive compression uses the same `TASK_ARCHIVE` mutex for its entire read-compress-write cycle.
+This prevents compression from overwriting a concurrent full-state replacement with archives it
+read before the replacement. The final young/old pair is still committed atomically.
 
 ### Why Archives Bypass Operation Log
 
@@ -1906,6 +1923,8 @@ fresh id.
 - Compaction aborts before snapshotting while any non-rejected `pending` remote row exists
 - Deletion requires terminal status: synced applied/legacy-complete rows or old rejected rows
 - `archive_pending` and `failed` quarantine rows survive regardless of age
+- Emergency compaction returns `false` when it skips for pending reducer work or an empty/degraded
+  live state; callers only treat an actually written snapshot/prune pass as success
 
 ---
 

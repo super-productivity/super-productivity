@@ -2045,6 +2045,44 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
       });
 
+      it('should reject a reducer-failed synthetic disjoint merge before upload', async () => {
+        const now = Date.now();
+        const localOp = createOpWithTimestamp('local-1', 'client-a', now - 1000);
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const mergedOp = createOpWithTimestamp('merged-1', TEST_CLIENT_ID, now + 1);
+        const conflict = createConflict('task-1', [localOp], [remoteOp]);
+        const serviceInternals = service as unknown as {
+          _journalMergedResolution: () => Promise<unknown>;
+          _resolveConflictsWithLWW: () => Promise<unknown>;
+        };
+        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
+        spyOn(serviceInternals, '_resolveConflictsWithLWW').and.resolveTo({
+          lwwResolutions: [],
+          mergedResolutions: [
+            {
+              conflict,
+              mergedOp,
+              plan: { conflict },
+            },
+          ],
+        });
+        mockOperationApplier.applyOperations.and.callFake(async (_ops, options) => {
+          const reducerFailures = [
+            { op: mergedOp, error: new Error('synthetic reducer failed') },
+          ];
+          await options?.onReducersCommitted?.([], reducerFailures);
+          return { appliedOps: [], reducerFailures };
+        });
+
+        await service.autoResolveConflictsLWW([conflict]);
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [],
+          [],
+          [mergedOp.id],
+        );
+      });
+
       it('should process deferred actions after merging remote clocks when caller holds lock', async () => {
         const now = Date.now();
         const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);

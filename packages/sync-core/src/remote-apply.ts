@@ -166,6 +166,15 @@ export const applyRemoteOperations = async <
           appendResult.writtenOps,
           reportedFailures,
         );
+        const failedFullStateOp = authoritativeReducerFailures.find((failure) =>
+          isFullStateOperation(failure.op),
+        );
+        if (failedFullStateOp) {
+          reducerCommitCallbackError = new Error(
+            `applyRemoteOperations: full-state operation ${failedFullStateOp.op.id} failed during reducer replay.`,
+          );
+          throw reducerCommitCallbackError;
+        }
         reducerFailures = authoritativeReducerFailures;
         const reducerFailedIds = new Set(
           authoritativeReducerFailures.map((failure) => failure.op.id),

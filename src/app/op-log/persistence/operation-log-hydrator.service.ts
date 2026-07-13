@@ -15,7 +15,12 @@ import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
 import { OpLog } from '../../core/log';
 import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot.service';
-import { Operation, OpType, RepairPayload } from '../core/operation.types';
+import {
+  Operation,
+  OperationLogEntry,
+  OpType,
+  RepairPayload,
+} from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -29,6 +34,10 @@ import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { IS_ELECTRON } from '../../app.constants';
+import {
+  BulkReplayReducerFailure,
+  runWithBulkReplayFailureCollector,
+} from '../apply/bulk-replay-failure-collector';
 
 /**
  * sessionStorage key used to track auto-reload attempts after IndexedDB backing store errors.
@@ -73,7 +82,7 @@ export class OperationLogHydratorService {
     try {
       // PERF: Parallel startup operations - all access different IndexedDB stores
       // and don't depend on each other's results, so they can run concurrently.
-      const [, , hasBackup] = await Promise.all([
+      const [pendingRemoteOps, , hasBackup] = await Promise.all([
         // Check for pending remote ops from crashed sync (touches 'ops' store)
         this.recoveryService.recoverPendingRemoteOps(),
         // Legacy migration placeholder - kept for future DB migrations if needed
@@ -210,8 +219,9 @@ export class OperationLogHydratorService {
 
         // 4. Replay tail operations (A.7.13: with operation migration)
         //
-        // Replay is deliberately status-blind (getOpsAfterSeq has no status
-        // filter) — every entry's reducer effect belongs in state exactly once:
+        // Replay is status-blind except for durable reducer rejections
+        // (getOpsAfterSeq has no status filter) — every other entry's reducer
+        // effect belongs in state exactly once:
         // - applied ops: their effect is state history by definition.
         // - failed ops (remote, archive side effect threw): their reducers DID
         //   commit before the failure (bulk dispatch precedes archive handling),
@@ -224,12 +234,27 @@ export class OperationLogHydratorService {
         //   rejections never revert state), and LWW-losing remote ops are
         //   followed by the local-win op that overwrites them
         //   (ConflictResolutionService).
-        const tailOps = await this.opLogStore.getOpsAfterSeq(snapshot.lastAppliedOpSeq);
+        // - reducerRejectedAt ops: conversion, schema migration, or reducer
+        //   application could not produce state, so replay must not try them
+        //   again on every startup.
+        const tailOps = (
+          await this.opLogStore.getOpsAfterSeq(snapshot.lastAppliedOpSeq)
+        ).filter((entry) => entry.reducerRejectedAt === undefined);
 
         if (tailOps.length > 0) {
           // Optimization: If last op is SyncImport or Repair, skip replay and load directly
-          const lastOp = tailOps[tailOps.length - 1].op;
-          const appData = this._extractFullStateFromOp(lastOp);
+          const lastEntry = tailOps[tailOps.length - 1];
+          const lastOp = lastEntry.op;
+          // The shortcut is safe only when the entire replay range has a
+          // durable reducer outcome. An earlier pending row still needs bulk
+          // replay/checkpointing even if a later full-state op replaces its
+          // visible state; otherwise that row would quarantine sync forever.
+          const hasPendingReducerWork = tailOps.some(
+            (entry) => entry.applicationStatus === 'pending',
+          );
+          const appData = hasPendingReducerWork
+            ? undefined
+            : this._extractFullStateFromOp(lastOp);
           if (appData) {
             OpLog.normal(
               `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
@@ -275,15 +300,12 @@ export class OperationLogHydratorService {
             // See bulkOperationsMetaReducer.
             const localClientId =
               (await this.clientIdProvider.loadClientId()) ?? undefined;
-            this.hydrationStateService.startApplyingRemoteOps();
-            this.store.dispatch(
-              bulkApplyOperations({ operations: opsToReplay, localClientId }),
+            const tailOpIds = new Set(tailOps.map((entry) => entry.op.id));
+            await this._dispatchHydrationReplay(
+              opsToReplay,
+              localClientId,
+              pendingRemoteOps.filter((entry) => tailOpIds.has(entry.op.id)),
             );
-            this.hydrationStateService.endApplyingRemoteOps();
-
-            // Merge replayed ops' clocks into local clock
-            // This ensures subsequent ops have clocks that dominate these tail ops
-            await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
             // CHECKPOINT C: Validate state after replaying tail operations.
             // If invalid, we keep the data on screen but skip the snapshot save so
@@ -309,9 +331,11 @@ export class OperationLogHydratorService {
         );
         // No snapshot means we might be in a fresh install state or post-migration-check with no legacy data.
         // We must replay ALL operations from the beginning of the log.
-        // Status-blind on purpose — see the replay-policy note in the snapshot
-        // branch above.
-        const allOps = await this.opLogStore.getOpsAfterSeq(0);
+        // Status-blind except for durable reducer rejections — see the replay
+        // policy note in the snapshot branch above.
+        const allOps = (await this.opLogStore.getOpsAfterSeq(0)).filter(
+          (entry) => entry.reducerRejectedAt === undefined,
+        );
 
         if (allOps.length === 0) {
           // Fresh install - no data at all
@@ -323,8 +347,14 @@ export class OperationLogHydratorService {
         }
 
         // Optimization: If last op is SyncImport or Repair, skip replay and load directly
-        const lastOp = allOps[allOps.length - 1].op;
-        const appData = this._extractFullStateFromOp(lastOp);
+        const lastEntry = allOps[allOps.length - 1];
+        const lastOp = lastEntry.op;
+        const hasPendingReducerWork = allOps.some(
+          (entry) => entry.applicationStatus === 'pending',
+        );
+        const appData = hasPendingReducerWork
+          ? undefined
+          : this._extractFullStateFromOp(lastOp);
         if (appData) {
           OpLog.normal(
             `OperationLogHydratorService: Last of ${allOps.length} ops is ${lastOp.opType}, loading directly`,
@@ -362,14 +392,12 @@ export class OperationLogHydratorService {
           // for the common case (replaying THIS device's own ops). See
           // bulkOperationsMetaReducer.
           const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
-          this.hydrationStateService.startApplyingRemoteOps();
-          this.store.dispatch(
-            bulkApplyOperations({ operations: opsToReplay, localClientId }),
+          const allOpIds = new Set(allOps.map((entry) => entry.op.id));
+          await this._dispatchHydrationReplay(
+            opsToReplay,
+            localClientId,
+            pendingRemoteOps.filter((entry) => allOpIds.has(entry.op.id)),
           );
-          this.hydrationStateService.endApplyingRemoteOps();
-
-          // Merge replayed ops' clocks into local clock
-          await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
 
           // CHECKPOINT C: Validate state after replaying all operations.
           // If invalid, we still proceed but skip the snapshot save so we don't
@@ -430,6 +458,64 @@ export class OperationLogHydratorService {
         });
         throw recoveryErr;
       }
+    }
+  }
+
+  /**
+   * Replays a hydration batch and durably records its reducer outcome before
+   * startup can retry archive side effects or save a snapshot past the batch.
+   */
+  private async _dispatchHydrationReplay(
+    operations: Operation[],
+    localClientId: string | undefined,
+    pendingRemoteOps: OperationLogEntry[],
+  ): Promise<void> {
+    const reducerFailures: BulkReplayReducerFailure[] = [];
+    this.hydrationStateService.startApplyingRemoteOps();
+    try {
+      runWithBulkReplayFailureCollector(
+        (failure) => reducerFailures.push(failure),
+        () => this.store.dispatch(bulkApplyOperations({ operations, localClientId })),
+      );
+    } finally {
+      this.hydrationStateService.endApplyingRemoteOps();
+    }
+
+    const replayedOpIds = new Set(operations.map((op) => op.id));
+    const reducerFailedOpIds = new Set(reducerFailures.map((failure) => failure.op.id));
+    const pendingById = new Map(pendingRemoteOps.map((entry) => [entry.op.id, entry]));
+    const committedPendingOps = operations.filter(
+      (op) => pendingById.has(op.id) && !reducerFailedOpIds.has(op.id),
+    );
+    const committedPendingSeqs = committedPendingOps.map(
+      (op) => pendingById.get(op.id)!.seq,
+    );
+    const migratedOutPendingEntries = pendingRemoteOps.filter(
+      (entry) => !replayedOpIds.has(entry.op.id),
+    );
+    const migratedOutPendingOpIds = migratedOutPendingEntries.map((entry) => entry.op.id);
+    const rejectedOpIds = [
+      ...new Set([
+        ...reducerFailures.map((failure) => failure.op.id),
+        ...migratedOutPendingOpIds,
+      ]),
+    ];
+
+    // Make the entire replay frontier durable before terminally marking any
+    // reducer failure. If startup crashes after the clock write, the rows stay
+    // pending and replay safely; the inverse order could filter a rejected row
+    // on the next boot before its clock was ever merged.
+    await this.opLogStore.mergeRemoteOpClocks([
+      ...operations,
+      ...migratedOutPendingEntries.map((entry) => entry.op),
+    ]);
+
+    if (committedPendingOps.length > 0 || rejectedOpIds.length > 0) {
+      await this.opLogStore.markReducersCommittedAndMergeClocks(
+        committedPendingSeqs,
+        committedPendingOps,
+        rejectedOpIds,
+      );
     }
   }
 

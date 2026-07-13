@@ -497,6 +497,26 @@ describe('OperationLogCompactionService', () => {
       expect(result).toBeFalse();
     });
 
+    it('should return false when pending reducer work makes compaction skip', async () => {
+      mockOpLogStore.getPendingRemoteOps.and.resolveTo([
+        {
+          seq: 1,
+          op: {} as never,
+          appliedAt: Date.now(),
+          source: 'remote',
+          applicationStatus: 'pending',
+        },
+      ]);
+
+      expect(await service.emergencyCompact()).toBeFalse();
+    });
+
+    it('should return false when the empty-state safety guard skips compaction', async () => {
+      mockStateSnapshot.getStateSnapshot.and.returnValue({} as never);
+
+      expect(await service.emergencyCompact()).toBeFalse();
+    });
+
     it('should use shorter retention window than regular compaction', async () => {
       let capturedFilter: ((entry: OperationLogEntry) => boolean) | undefined;
       mockOpLogStore.deleteOpsWhere.and.callFake(async (filterFn) => {

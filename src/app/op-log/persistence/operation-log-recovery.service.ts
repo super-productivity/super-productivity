@@ -5,7 +5,12 @@ import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { Operation, OpType, ActionType } from '../core/operation.types';
+import {
+  Operation,
+  OperationLogEntry,
+  OpType,
+  ActionType,
+} from '../core/operation.types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
@@ -126,21 +131,7 @@ export class OperationLogRecoveryService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
-    // Write recovery operation
-    await this.opLogStore.append(recoveryOp);
-
-    // Create state cache
-    const lastSeq = await this.opLogStore.getLastSeq();
-    await this.opLogStore.saveStateCache({
-      state: legacyData,
-      lastAppliedOpSeq: lastSeq,
-      vectorClock: recoveryOp.vectorClock,
-      compactedAt: Date.now(),
-    });
-
-    // Persist vector clock to IndexedDB store for immediate availability
-    // Without this, getVectorClock() returns stale clock until cache is populated
-    await this.opLogStore.setVectorClock(recoveryOp.vectorClock);
+    await this.opLogStore.appendRecoveryOperationAndSnapshot(recoveryOp, legacyData);
 
     // Dispatch to NgRx
     this.store.dispatch(loadAllData({ appDataComplete: legacyData as AppDataComplete }));
@@ -152,12 +143,11 @@ export class OperationLogRecoveryService {
 
   /**
    * Recovers from pending remote ops that were stored but not applied (crash recovery).
-   * These ops are replayed through reducers during normal hydration, but a crash may
-   * have happened before their archive side effects completed. Move them to the
-   * 'archive_pending' checkpoint so hydration retries archive work without
-   * double-applying reducers; sync stays blocked until that recovery succeeds.
+   * The crash point is unknowable, so this method only returns the quarantine.
+   * Hydration replays the rows, persists their reducer outcome, and only then
+   * retries archive work; sync stays blocked until that recovery succeeds.
    */
-  async recoverPendingRemoteOps(): Promise<void> {
+  async recoverPendingRemoteOps(): Promise<OperationLogEntry[]> {
     const recoveredLegacyFailures =
       await this.opLogStore.recoverLegacyTerminalRemoteFailures();
     if (recoveredLegacyFailures > 0) {
@@ -168,21 +158,18 @@ export class OperationLogRecoveryService {
     const pendingOps = await this.opLogStore.getPendingRemoteOps();
 
     if (pendingOps.length === 0) {
-      return;
+      return [];
     }
 
-    // Reducers are replayed status-blind during hydration; archive work is
-    // retried after. Age is irrelevant — every crash-interrupted op lands in
-    // the same quarantine, and retryCount stays untouched (no attempt was made).
-    const seqs = pendingOps.map((e) => e.seq);
-    await this.opLogStore.markReducersCommittedAndMergeClocks(
-      seqs,
-      pendingOps.map((entry) => entry.op),
-    );
+    // Do not checkpoint these rows yet. A crash can occur before reducer
+    // dispatch, during a partially successful bulk dispatch, or immediately
+    // after it. Hydration must replay the reducers and durably partition their
+    // successes/failures before any archive-only retry can start.
     OpLog.warn(
       `OperationLogRecoveryService: Found ${pendingOps.length} pending remote ops from previous crash. ` +
-        'Quarantined their archive work (reducers will replay during hydration).',
+        'Reducers will be replayed before archive recovery.',
     );
+    return pendingOps;
   }
 
   /**

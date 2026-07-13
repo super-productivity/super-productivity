@@ -732,6 +732,34 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
     });
 
+    it('should reapply an earlier LWW Update when the later archive reducer fails', () => {
+      const reducerError = new Error('archive reducer failed');
+      mockReducer.and.callFake((state, action) => {
+        reducerCalls.push({ state, action });
+        if (action.type === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE) {
+          throw reducerError;
+        }
+        return state;
+      });
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const lwwUpdate = createLwwUpdateOp(TASK_ID);
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+      const failures: Array<{ op: Operation; error: Error }> = [];
+
+      runWithBulkReplayFailureCollector(
+        (failure) => failures.push(failure),
+        () =>
+          reducer(
+            state,
+            bulkApplyHydrationOperations({ operations: [lwwUpdate, archiveOp] }),
+          ),
+      );
+
+      expect(reducerCalls.map((call) => call.action.type)).toContain(TASK_LWW_TYPE);
+      expect(failures).toEqual([{ op: archiveOp, error: reducerError }]);
+    });
+
     it('should skip multiple LWW Updates when multi-entity archive is in same batch', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();

@@ -44,8 +44,7 @@ export class OperationLogCompactionService {
    */
   async emergencyCompact(): Promise<boolean> {
     try {
-      await this._doCompact(EMERGENCY_COMPACTION_RETENTION_MS, true);
-      return true;
+      return await this._doCompact(EMERGENCY_COMPACTION_RETENTION_MS, true);
     } catch (e) {
       OpLog.err('OperationLogCompactionService: Emergency compaction failed', e);
       return false;
@@ -57,8 +56,8 @@ export class OperationLogCompactionService {
    * @param retentionMs - How long to keep synced operations (in ms)
    * @param isEmergency - Whether this is an emergency compaction (for logging)
    */
-  private async _doCompact(retentionMs: number, isEmergency: boolean): Promise<void> {
-    await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+  private async _doCompact(retentionMs: number, isEmergency: boolean): Promise<boolean> {
+    return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
       const startTime = Date.now();
       const label = isEmergency ? 'emergency ' : '';
 
@@ -71,7 +70,7 @@ export class OperationLogCompactionService {
         OpLog.warn(
           'OperationLogCompactionService: Skipping compaction — remote reducer work is pending',
         );
-        return;
+        return false;
       }
 
       // 1. Get current state from NgRx store
@@ -94,7 +93,7 @@ export class OperationLogCompactionService {
           'OperationLogCompactionService: Skipping compaction — current state has no ' +
             'meaningful data (refusing to overwrite cache and prune ops against empty state)',
         );
-        return;
+        return false;
       }
 
       // 2. Get current vector clock (max of all ops)
@@ -160,6 +159,8 @@ export class OperationLogCompactionService {
           isEmergency,
         });
       }
+
+      return true;
     });
   }
 

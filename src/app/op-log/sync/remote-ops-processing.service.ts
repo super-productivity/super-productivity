@@ -501,7 +501,7 @@ export class RemoteOpsProcessingService {
         },
       });
 
-      committedFullStateOpIds = result.appendedOps
+      committedFullStateOpIds = result.appliedOps
         .filter((op) => FULL_STATE_OP_TYPES.has(op.opType))
         .map((op) => op.id);
 
