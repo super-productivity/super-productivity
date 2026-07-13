@@ -12,19 +12,26 @@ applied by the app on next resume.
   `group.com.super-productivity.app`) via `WidgetBridgePlugin` in the app
   target.
 - Checkbox taps run `ToggleDoneIntent`, which writes a last-wins
-  `{taskId: targetIsDone}` map (`DoneQueue`) — never the blob itself. The
-  timeline provider overlays pending targets at render time, so the widget is
-  immediately correct even while the app is suspended.
-- Timeline policy is `.never`: every refresh is an explicit
-  `WidgetCenter.reloadTimelines` push (from the app after a snapshot write) or
-  WidgetKit's automatic re-render after an interactive intent. No polling.
+  `{taskId: targetIsDone}` map (`DoneQueue`) to an App Group file — never the
+  blob itself. A POSIX file lock protects app/extension read-modify-write races.
+  The app leases the queue non-destructively and acknowledges only matching
+  per-tap revision tokens after their op-log writes are durable and the updated
+  native snapshot is saved, so a crash, newer tap, or same-value ABA sequence
+  cannot silently lose work or revert the
+  widget view. The timeline provider overlays pending targets at render
+  time, so the widget is immediately correct while the app is suspended.
+- Each snapshot includes the next logical-day boundary. The timeline includes an
+  explicit empty entry at that boundary (and requests a reload), so stale Today
+  tasks disappear even when WidgetKit delays the provider refresh. Expired or
+  unknown data asks the user to open the app. All other refreshes are explicit
+  `WidgetCenter.reloadTimelines` pushes; there is no polling.
 - `WidgetShared.swift` and `DoneQueue.swift` are members of BOTH targets (app +
   extension); `WidgetData.swift`, `ToggleDoneIntent.swift`,
   `TaskListWidget.swift` are extension-only.
 
-Known v1 limitations are documented in the plan (stale-until-next-open on day
-rollover, taps while the app is alive apply on next resume, iOS 17+ only —
-the app itself stays at iOS 16, English-only chrome).
+Known v1 limitations are documented in the plan (the new day's tasks stay empty
+until the app next opens, taps while the app is alive apply on next resume,
+iOS 17+ only — the app itself stays at iOS 16, English-only chrome).
 
 ## Capacitor
 
@@ -53,6 +60,7 @@ The target, entitlements, and build settings are already wired in
 
 `../SupWidgetTests/WidgetDataTests.swift` locks the Swift parser to the same
 golden JSON as the Kotlin `WidgetDataTest.kt` and the writer-side
-`widget.selectors.spec.ts`. The project has no iOS test target yet — to run
-them, add a Unit Testing Bundle target (`SupWidgetTests`, no host app) in
-Xcode, add that file plus `SupWidget/WidgetData.swift` to it, and Cmd+U.
+`widget.selectors.spec.ts`, and exercises the cross-process queue lease/ack
+semantics. Run the shared `SupWidgetTests` scheme with Cmd+U in Xcode. Pull
+requests touching the iOS/widget code build the app and widget and run this
+scheme via `.github/workflows/ios-pr.yml`.

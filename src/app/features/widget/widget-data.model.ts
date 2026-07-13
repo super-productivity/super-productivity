@@ -27,4 +27,6 @@ export interface WidgetData {
   v: 1;
   tasks: WidgetTask[];
   projectColors: { [projectId: string]: string };
+  /** Epoch milliseconds when this logical-Today snapshot becomes stale. */
+  validUntil?: number;
 }

@@ -13,12 +13,14 @@ export interface WidgetBridgePlugin {
    */
   setWidgetData(options: { json: string }): Promise<void>;
 
+  /** Read the pending done-target queue without deleting it. */
+  readDoneQueue(): Promise<{ json: string | null; token: string | null }>;
+
   /**
-   * Atomically read and clear the pending widget done-tap queue.
-   * @returns JSON object string `{taskId: targetIsDone}`, or null if empty —
-   * same shape as `androidInterface.getWidgetDoneQueue()`.
+   * Remove only entries whose unique revision still matches a lease token.
+   * Every tap after the read remains pending, even if its final target matches.
    */
-  getAndClearDoneQueue(): Promise<{ json: string | null }>;
+  acknowledgeDoneQueue(options: { token: string }): Promise<void>;
 }
 
 export const WidgetBridge = registerPlugin<WidgetBridgePlugin>('WidgetBridge');

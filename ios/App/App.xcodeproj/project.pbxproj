@@ -30,6 +30,12 @@
 		DDCAFE0000000000000000B8 /* ToggleDoneIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A5 /* ToggleDoneIntent.swift */; };
 		DDCAFE0000000000000000B9 /* TaskListWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A6 /* TaskListWidget.swift */; };
 		DDCAFE0000000000000000BA /* SupWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A1 /* SupWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DDBEEF0000000000000000B1 /* WidgetDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000AC /* WidgetDataTests.swift */; };
+		DDBEEF0000000000000000B2 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A4 /* WidgetData.swift */; };
+		DDBEEF0000000000000000B3 /* DoneQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A3 /* DoneQueue.swift */; };
+		DDBEEF0000000000000000B4 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A2 /* WidgetShared.swift */; };
+		DDC0DE0000000000000000B1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DDC0DE0000000000000000A1 /* PrivacyInfo.xcprivacy */; };
+		DDC0DE0000000000000000B2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +68,9 @@
 		DDCAFE0000000000000000AA /* WidgetBridgePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridgePlugin.swift; sourceTree = "<group>"; };
 		DDCAFE0000000000000000AB /* WidgetBridgePlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WidgetBridgePlugin.m; sourceTree = "<group>"; };
 		DDCAFE0000000000000000AC /* WidgetDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataTests.swift; sourceTree = "<group>"; };
+		DDBEEF0000000000000000A1 /* SupWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SupWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDC0DE0000000000000000A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -88,6 +97,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DDCAFE0000000000000000D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDBEEF0000000000000000D4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,6 +138,7 @@
 			children = (
 				504EC3041FED79650016851F /* App.app */,
 				DDCAFE0000000000000000A1 /* SupWidget.appex */,
+				DDBEEF0000000000000000A1 /* SupWidgetTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -129,6 +146,7 @@
 		504EC3061FED79650016851F /* App */ = {
 			isa = PBXGroup;
 			children = (
+				DDC0DE0000000000000000A1 /* PrivacyInfo.xcprivacy */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */,
@@ -152,6 +170,7 @@
 		DDCAFE0000000000000000C1 /* SupWidget */ = {
 			isa = PBXGroup;
 			children = (
+				DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */,
 				DDCAFE0000000000000000A2 /* WidgetShared.swift */,
 				DDCAFE0000000000000000A3 /* DoneQueue.swift */,
 				DDCAFE0000000000000000A4 /* WidgetData.swift */,
@@ -221,6 +240,23 @@
 			productReference = DDCAFE0000000000000000A1 /* SupWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		DDBEEF0000000000000000D1 /* SupWidgetTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DDBEEF0000000000000000D2 /* Build configuration list for PBXNativeTarget "SupWidgetTests" */;
+			buildPhases = (
+				DDBEEF0000000000000000D3 /* Sources */,
+				DDBEEF0000000000000000D4 /* Frameworks */,
+				DDBEEF0000000000000000D5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SupWidgetTests;
+			productName = SupWidgetTests;
+			productReference = DDBEEF0000000000000000A1 /* SupWidgetTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -236,6 +272,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					DDCAFE0000000000000000D1 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+					};
+					DDBEEF0000000000000000D1 = {
 						CreatedOnToolsVersion = 15.0;
 						ProvisioningStyle = Automatic;
 					};
@@ -258,6 +298,7 @@
 			targets = (
 				504EC3031FED79650016851F /* App */,
 				DDCAFE0000000000000000D1 /* SupWidget */,
+				DDBEEF0000000000000000D1 /* SupWidgetTests */,
 			);
 		};
 /* End PBXProject section */
@@ -267,6 +308,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DDC0DE0000000000000000B1 /* PrivacyInfo.xcprivacy in Resources */,
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
@@ -277,6 +319,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DDCAFE0000000000000000D5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDC0DE0000000000000000B2 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDBEEF0000000000000000D5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -348,6 +398,17 @@
 				DDCAFE0000000000000000B7 /* WidgetData.swift in Sources */,
 				DDCAFE0000000000000000B8 /* ToggleDoneIntent.swift in Sources */,
 				DDCAFE0000000000000000B9 /* TaskListWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DDBEEF0000000000000000D3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDBEEF0000000000000000B1 /* WidgetDataTests.swift in Sources */,
+				DDBEEF0000000000000000B2 /* WidgetData.swift in Sources */,
+				DDBEEF0000000000000000B3 /* DoneQueue.swift in Sources */,
+				DDBEEF0000000000000000B4 /* WidgetShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -580,6 +641,43 @@
 			};
 			name = Release;
 		};
+		DDBEEF0000000000000000D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.super-productivity.app.widget-tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "";
+			};
+			name = Debug;
+		};
+		DDBEEF0000000000000000D7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.super-productivity.app.widget-tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -606,6 +704,15 @@
 			buildConfigurations = (
 				DDCAFE0000000000000000D6 /* Debug */,
 				DDCAFE0000000000000000D7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DDBEEF0000000000000000D2 /* Build configuration list for PBXNativeTarget "SupWidgetTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DDBEEF0000000000000000D6 /* Debug */,
+				DDBEEF0000000000000000D7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -16,6 +16,9 @@ private enum WidgetStyle {
 struct TaskListEntry: TimelineEntry {
     let date: Date
     let tasks: [WidgetTask]
+    let totalTaskCount: Int
+    let validUntil: Date?
+    let isExpired: Bool
 }
 
 struct TaskListProvider: TimelineProvider {
@@ -26,7 +29,10 @@ struct TaskListProvider: TimelineProvider {
                 WidgetTask(id: "ph-1", title: "Plan the day", isDone: false, projectColor: nil),
                 WidgetTask(id: "ph-2", title: "Deep work block", isDone: false, projectColor: nil),
                 WidgetTask(id: "ph-3", title: "Inbox review", isDone: true, projectColor: nil),
-            ]
+            ],
+            totalTaskCount: 3,
+            validUntil: nil,
+            isExpired: false
         )
     }
 
@@ -35,17 +41,42 @@ struct TaskListProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TaskListEntry>) -> Void) {
-        // Single entry that never expires: every refresh is an explicit
-        // reloadTimelines push — from the app after a snapshot write, or the
-        // automatic re-render after ToggleDoneIntent. No polling.
-        completion(Timeline(entries: [loadEntry()], policy: .never))
+        let entry = loadEntry()
+        var entries = [entry]
+        let policy: TimelineReloadPolicy
+        if let validUntil = entry.validUntil, validUntil > entry.date {
+            // WidgetKit may delay the requested reload. Supplying the boundary
+            // entry guarantees yesterday's tasks disappear on time even when
+            // the provider is not called again immediately.
+            entries.append(
+                TaskListEntry(
+                    date: validUntil,
+                    tasks: [],
+                    totalTaskCount: 0,
+                    validUntil: nil,
+                    isExpired: true
+                )
+            )
+            policy = .after(validUntil)
+        } else {
+            policy = .never
+        }
+        completion(Timeline(entries: entries, policy: policy))
     }
 
-    private func loadEntry() -> TaskListEntry {
+    private func loadEntry(at now: Date = Date()) -> TaskListEntry {
         let json = UserDefaults(suiteName: WidgetShared.appGroupId)?
             .string(forKey: WidgetShared.widgetDataKey) ?? "{}"
-        let tasks = WidgetData.parse(json, pendingDoneTargets: DoneQueue.peek())
-        return TaskListEntry(date: Date(), tasks: Array(tasks.prefix(WidgetShared.maxTasks)))
+        let snapshot = WidgetData.parseSnapshot(json, pendingDoneTargets: DoneQueue.peek())
+        let isExpired = !snapshot.isValid(at: now)
+        let tasks = isExpired ? [] : snapshot.tasks
+        return TaskListEntry(
+            date: now,
+            tasks: Array(tasks.prefix(WidgetShared.maxTasks)),
+            totalTaskCount: tasks.count,
+            validUntil: snapshot.validUntil,
+            isExpired: isExpired
+        )
     }
 }
 
@@ -95,7 +126,11 @@ struct TaskListWidgetView: View {
             Spacer()
             HStack {
                 Spacer()
-                Text("No tasks for today")
+                Text(
+                    entry.isExpired
+                        ? "Open Super Productivity to refresh"
+                        : "No tasks for today"
+                )
                     .font(.system(size: 14))
                     .foregroundStyle(WidgetStyle.inkMuted)
                 Spacer()
@@ -109,8 +144,8 @@ struct TaskListWidgetView: View {
             ForEach(entry.tasks.prefix(maxRows), id: \.id) { task in
                 TaskRowView(task: task)
             }
-            if entry.tasks.count > maxRows {
-                Text("+\(entry.tasks.count - maxRows) more")
+            if entry.totalTaskCount > maxRows {
+                Text("+\(entry.totalTaskCount - maxRows) more")
                     .font(.system(size: 12))
                     .foregroundStyle(WidgetStyle.inkMuted)
                     .padding(.leading, 30)
@@ -133,12 +168,18 @@ private struct TaskRowView: View {
                     .foregroundStyle(task.isDone ? WidgetStyle.brand : WidgetStyle.inkMuted)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+                task.isDone ? "Mark \(task.title) as not done" : "Mark \(task.title) as done"
+            )
 
             // Project dot: tinted with the project color, hidden entirely for
             // project-less tasks instead of showing a meaningless default.
-            if let color = parseHexColor(task.projectColor) {
+            if let color = WidgetColor.parse(task.projectColor) {
                 Circle()
-                    .fill(color)
+                    .fill(
+                        Color(red: color.red, green: color.green, blue: color.blue)
+                            .opacity(color.alpha)
+                    )
                     .frame(width: 8, height: 8)
             }
 
@@ -149,37 +190,6 @@ private struct TaskRowView: View {
 
             Spacer(minLength: 0)
         }
-    }
-
-    /// Accepts #RGB / #RRGGBB / #AARRGGBB like Android's Color.parseColor;
-    /// returns nil for anything unparsable (dot is hidden then).
-    private func parseHexColor(_ hex: String?) -> Color? {
-        guard let hex, hex.hasPrefix("#") else { return nil }
-        var value: UInt64 = 0
-        let digits = String(hex.dropFirst())
-        guard Scanner(string: digits).scanHexInt64(&value) else { return nil }
-        let r: Double
-        let g: Double
-        let b: Double
-        var a: Double = 1
-        switch digits.count {
-        case 3:
-            r = Double((value >> 8) & 0xF) / 15
-            g = Double((value >> 4) & 0xF) / 15
-            b = Double(value & 0xF) / 15
-        case 6:
-            r = Double((value >> 16) & 0xFF) / 255
-            g = Double((value >> 8) & 0xFF) / 255
-            b = Double(value & 0xFF) / 255
-        case 8:
-            a = Double((value >> 24) & 0xFF) / 255
-            r = Double((value >> 16) & 0xFF) / 255
-            g = Double((value >> 8) & 0xFF) / 255
-            b = Double(value & 0xFF) / 255
-        default:
-            return nil
-        }
-        return Color(red: r, green: g, blue: b).opacity(a)
     }
 }
 

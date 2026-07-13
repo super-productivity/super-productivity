@@ -14,7 +14,8 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "WidgetBridge"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "setWidgetData", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getAndClearDoneQueue", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "readDoneQueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "acknowledgeDoneQueue", returnType: CAPPluginReturnPromise)
     ]
 
     /// Persist the v:1 JSON snapshot to the shared App Group container and ask
@@ -34,14 +35,30 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
-    /// Atomically read and clear pending widget done-taps. Resolves with
-    /// `{ json: string | null }` — the same `{taskId: targetIsDone}` object
-    /// string shape as `androidInterface.getWidgetDoneQueue()`.
-    @objc func getAndClearDoneQueue(_ call: CAPPluginCall) {
-        if let json = DoneQueue.getAndClear() {
-            call.resolve(["json": json])
-        } else {
-            call.resolve(["json": NSNull()])
+    /// Lease pending widget done targets without deleting them.
+    @objc func readDoneQueue(_ call: CAPPluginCall) {
+        do {
+            if let lease = try DoneQueue.read() {
+                call.resolve(["json": lease.targetsJson, "token": lease.token])
+            } else {
+                call.resolve(["json": NSNull(), "token": NSNull()])
+            }
+        } catch {
+            call.reject("Failed to read widget done queue", nil, error)
+        }
+    }
+
+    /// Acknowledge only entries whose unique revision still matches the lease.
+    @objc func acknowledgeDoneQueue(_ call: CAPPluginCall) {
+        guard let token = call.getString("token") else {
+            call.reject("Missing token parameter")
+            return
+        }
+        do {
+            try DoneQueue.acknowledge(token)
+            call.resolve()
+        } catch {
+            call.reject("Failed to acknowledge widget done queue", nil, error)
         }
     }
 }

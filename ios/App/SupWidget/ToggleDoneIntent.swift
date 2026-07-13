@@ -26,7 +26,7 @@ struct ToggleDoneIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        DoneQueue.setTarget(taskId: taskId, isDone: setDone)
+        try DoneQueue.setTarget(taskId: taskId, isDone: setDone)
         return .result()
     }
 }

@@ -15,8 +15,8 @@ enum WidgetShared {
     /// contract is defined in `src/app/features/widget/widget-data.model.ts`.
     static let widgetDataKey = "widget_data"
 
-    /// Same key name as `WidgetDoneQueue.kt`'s SharedPreferences entry.
-    static let doneQueueKey = "WIDGET_DONE_TASK_IDS"
+    static let doneQueueFileName = "widget-done-targets.json"
+    static let doneQueueLockFileName = "widget-done-targets.lock"
 
     /// Parity with TaskListWidgetService.kt's MAX_TASKS.
     static let maxTasks = 20
