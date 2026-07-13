@@ -8,6 +8,7 @@ import {
 } from './bulk-archive-filter.util';
 import { OpLog } from '../../core/log';
 import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
+import { reportBulkReplayReducerFailure } from './bulk-replay-failure-collector';
 
 /**
  * Meta-reducer that applies multiple operations in a single reducer pass.
@@ -53,10 +54,19 @@ export const bulkOperationsMetaReducer = <T>(
       // Pre-scan: collect entity IDs being archived or deleted in this batch.
       // LWW Update ops for these entities must be skipped to prevent
       // lwwUpdateMetaReducer.addOne() from resurrecting archived/deleted tasks.
-      const archivingOrDeletingEntityIds = collectArchivingOrDeletingEntityIdsFromBatch(
-        operations,
-        state,
-      );
+      let archivingOrDeletingEntityIds: Set<string>;
+      try {
+        archivingOrDeletingEntityIds = collectArchivingOrDeletingEntityIdsFromBatch(
+          operations,
+          state,
+        );
+      } catch (error) {
+        OpLog.err(
+          'bulkOperationsMetaReducer: Archive/delete pre-scan failed; continuing without batch filtering',
+          { name: error instanceof Error ? error.name : 'UnknownError' },
+        );
+        archivingOrDeletingEntityIds = new Set<string>();
+      }
 
       const hasArchives = archivingOrDeletingEntityIds.size > 0;
       // Apply every op in one synchronous reducer pass. Suppress the action
@@ -66,47 +76,58 @@ export const bulkOperationsMetaReducer = <T>(
       const finalState = runWithBulkReplayLoggingSuppressed(() => {
         let currentState = state;
         for (const op of operations) {
-          const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
-          // Skip LWW Updates whose entityId itself is archived/deleted in this batch
-          // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
-          if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
-            OpLog.normal(
-              `bulkOperationsMetaReducer: Skipping LWW Update for ` +
-                `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
+          try {
+            const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
+            // Skip LWW Updates whose entityId itself is archived/deleted in this batch
+            // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
+            if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
+              OpLog.normal(
+                `bulkOperationsMetaReducer: Skipping LWW Update for ` +
+                  `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,
+              );
+              continue;
+            }
+            const opForApply = hasArchives
+              ? stripBatchArchivedTaskIdsFromLwwPayload(
+                  op,
+                  isLww,
+                  archivingOrDeletingEntityIds,
+                )
+              : op;
+            const opAction = convertOpToAction(opForApply);
+            // Mark ops authored by a DIFFERENT client so reducers can preserve
+            // per-device "local-only" settings against remote overwrites — while
+            // replaying the device's OWN ops faithfully.
+            //
+            // When localClientId is unknown we leave the flag unset (own-op
+            // semantics: apply faithfully, don't preserve). In practice this only
+            // happens before the clientId cache is warm — i.e. a never-synced or
+            // cold-booting device. A device that actually has foreign ops to apply
+            // has already resolved its clientId (download/upload/vector-clock all
+            // require it), so genuine remote applies always carry it and stay
+            // protected. The unset fallback deliberately favours own-op fidelity:
+            // the alternative (blanket-preserve, the old `isRemote` gate) is what
+            // silently nulled the device's own syncProvider on replay. The
+            // residual risk — a foreign op adopting another device's provider/
+            // isEnabled/isEncryptionEnabled — needs a transient IndexedDB failure
+            // on a cold boot and is user-recoverable, strictly narrower than the
+            // own-settings data-loss this replaces.
+            const isApplyingFromOtherClient =
+              !!localClientId && op.clientId !== localClientId;
+            const finalAction = isApplyingFromOtherClient
+              ? {
+                  ...opAction,
+                  meta: { ...opAction.meta, isApplyingFromOtherClient: true },
+                }
+              : opAction;
+            currentState = reducer(currentState, finalAction);
+          } catch (error) {
+            reportBulkReplayReducerFailure(op, error);
+            OpLog.err(
+              `bulkOperationsMetaReducer: Skipping reducer-failed operation ${op.id}`,
+              { name: error instanceof Error ? error.name : 'UnknownError' },
             );
-            continue;
           }
-          const opForApply = hasArchives
-            ? stripBatchArchivedTaskIdsFromLwwPayload(
-                op,
-                isLww,
-                archivingOrDeletingEntityIds,
-              )
-            : op;
-          const opAction = convertOpToAction(opForApply);
-          // Mark ops authored by a DIFFERENT client so reducers can preserve
-          // per-device "local-only" settings against remote overwrites — while
-          // replaying the device's OWN ops faithfully.
-          //
-          // When localClientId is unknown we leave the flag unset (own-op
-          // semantics: apply faithfully, don't preserve). In practice this only
-          // happens before the clientId cache is warm — i.e. a never-synced or
-          // cold-booting device. A device that actually has foreign ops to apply
-          // has already resolved its clientId (download/upload/vector-clock all
-          // require it), so genuine remote applies always carry it and stay
-          // protected. The unset fallback deliberately favours own-op fidelity:
-          // the alternative (blanket-preserve, the old `isRemote` gate) is what
-          // silently nulled the device's own syncProvider on replay. The
-          // residual risk — a foreign op adopting another device's provider/
-          // isEnabled/isEncryptionEnabled — needs a transient IndexedDB failure
-          // on a cold boot and is user-recoverable, strictly narrower than the
-          // own-settings data-loss this replaces.
-          const isApplyingFromOtherClient =
-            !!localClientId && op.clientId !== localClientId;
-          const finalAction = isApplyingFromOtherClient
-            ? { ...opAction, meta: { ...opAction.meta, isApplyingFromOtherClient: true } }
-            : opAction;
-          currentState = reducer(currentState, finalAction);
         }
         return currentState;
       });

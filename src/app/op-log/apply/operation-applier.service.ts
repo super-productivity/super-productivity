@@ -19,6 +19,10 @@ import { bulkApplyOperations } from './bulk-hydration.action';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { ApplyOperationsResult, ApplyOperationsOptions } from '../core/types/apply.types';
+import {
+  BulkReplayReducerFailure,
+  runWithBulkReplayFailureCollector,
+} from './bulk-replay-failure-collector';
 
 // Re-export for consumers that import from this service
 export type {
@@ -104,15 +108,23 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
     // the unset flag's own-op default is the safe direction. See meta-reducer.
     const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
 
+    const reducerFailures: BulkReplayReducerFailure[] = [];
     const result = await replayOperationBatch({
       ops,
       applyOptions: {
         isLocalHydration,
         skipReducerDispatch: options.skipReducerDispatch,
       },
-      dispatcher: this.store,
+      dispatcher: {
+        dispatch: (action) =>
+          runWithBulkReplayFailureCollector(
+            (failure) => reducerFailures.push(failure),
+            () => this.store.dispatch(action),
+          ),
+      },
       createBulkApplyAction: (operations) =>
         bulkApplyOperations({ operations, localClientId }),
+      getReducerFailures: () => reducerFailures,
       remoteApplyWindow: this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>
@@ -144,6 +156,12 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
 
     if (!result.failedOp) {
       OpLog.normal('OperationApplierService: Finished applying operations.');
+    }
+
+    if (result.reducerFailures?.length) {
+      OpLog.err(
+        `OperationApplierService: Skipped ${result.reducerFailures.length} reducer-failed operation(s).`,
+      );
     }
 
     return result;

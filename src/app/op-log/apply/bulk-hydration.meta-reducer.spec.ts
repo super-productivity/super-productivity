@@ -13,6 +13,7 @@ import { Task } from '../../features/tasks/task.model';
 import { Project } from '../../features/project/project.model';
 import { Tag } from '../../features/tag/tag.model';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { runWithBulkReplayFailureCollector } from './bulk-replay-failure-collector';
 
 // Set to true to run stress tests (10k+ operations)
 // These tests take 1-2 seconds each and are skipped by default to speed up test runs
@@ -581,19 +582,26 @@ describe('bulkHydrationMetaReducer', () => {
   });
 
   describe('error scenarios', () => {
-    it('should propagate errors from reducer', () => {
-      const errorReducer = jasmine
-        .createSpy('errorReducer')
-        .and.throwError('Reducer error');
+    it('should isolate errors from reducer', () => {
+      const reducerError = new Error('Reducer error');
+      const errorReducer = jasmine.createSpy('errorReducer').and.throwError(reducerError);
       const reducer = bulkHydrationMetaReducer(errorReducer);
       const state = createMockState();
       const operation = createMockOperation();
       const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const failures: Array<{ op: Operation; error: Error }> = [];
 
-      expect(() => reducer(state, action)).toThrowError('Reducer error');
+      expect(() =>
+        runWithBulkReplayFailureCollector(
+          (failure) => failures.push(failure),
+          () => reducer(state, action),
+        ),
+      ).not.toThrow();
+      expect(errorReducer).toHaveBeenCalledTimes(1);
+      expect(failures).toEqual([{ op: operation, error: reducerError }]);
     });
 
-    it('should stop processing on first error', () => {
+    it('should continue processing after a per-operation error', () => {
       let callCount = 0;
       const errorReducer = jasmine.createSpy('errorReducer').and.callFake(() => {
         callCount++;
@@ -611,9 +619,8 @@ describe('bulkHydrationMetaReducer', () => {
       ];
       const action = bulkApplyHydrationOperations({ operations });
 
-      expect(() => reducer(state, action)).toThrowError('Second operation failed');
-      // Should have called reducer twice (second call threw)
-      expect(callCount).toBe(2);
+      expect(() => reducer(state, action)).not.toThrow();
+      expect(callCount).toBe(3);
     });
   });
 

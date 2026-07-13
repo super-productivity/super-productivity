@@ -573,7 +573,7 @@ export class ConflictResolutionService {
         const opIdToSeq = new Map(allStoredOps.map((o) => [o.id, o.seq]));
         const applyResult = await this.operationApplier.applyOperations(allOpsToApply, {
           skipDeferredLocalActions: true,
-          onReducersCommitted: async (reducerCommittedOps) => {
+          onReducersCommitted: async (reducerCommittedOps, reducerFailures = []) => {
             // Disjoint-merge ops are synthetic LOCAL rows in the apply batch;
             // their durability contract is the mixed-source append + upload
             // path. The checkpoint's pending-only assertion must only see rows
@@ -589,12 +589,29 @@ export class ConflictResolutionService {
                 'ConflictResolutionService: reducer commit contained an unknown operation.',
               );
             }
-            await this.opLogStore.markReducersCommittedAndMergeClocks(
-              reducerCommittedSeqs,
-              checkpointOps,
-            );
+            const rejectedReducerOpIds = reducerFailures
+              .map((failure) => failure.op.id)
+              .filter((opId) => !checkpointExemptOpIds.has(opId));
+            if (rejectedReducerOpIds.length > 0) {
+              await this.opLogStore.markReducersCommittedAndMergeClocks(
+                reducerCommittedSeqs,
+                checkpointOps,
+                rejectedReducerOpIds,
+              );
+            } else {
+              await this.opLogStore.markReducersCommittedAndMergeClocks(
+                reducerCommittedSeqs,
+                checkpointOps,
+              );
+            }
           },
         });
+
+        if (applyResult.reducerFailures?.length) {
+          OpLog.err(
+            `ConflictResolutionService: Skipped ${applyResult.reducerFailures.length} reducer-failed operation(s).`,
+          );
+        }
 
         const appliedSeqs = applyResult.appliedOps
           .map((op) => opIdToSeq.get(op.id))

@@ -215,6 +215,12 @@ Downloaded operations use a durable status transition so reducer state, archive 
 3. `failed` — an archive side-effect attempt failed. `retryCount` is charged only to the attempted row, so later rows in the same batch do not consume retry budget.
 4. `applied` — reducer and archive work both completed.
 
+Bulk replay isolates conversion/reducer exceptions per operation. The reducer-successful
+subsequence is checkpointed and receives archive side effects; reducer-failed rows are marked
+with terminal `rejectedAt` metadata in the **same transaction**. This prevents one malformed
+operation from terminating NgRx's state pipeline or receiving archive work, without creating a
+crash window where startup could mistake it for incomplete reducer work.
+
 Startup hydration replays persisted state history, quarantines surviving `pending` rows, and retries `archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download, upload, or advance its cursor while any incomplete rows remain. Database version 8 is a downgrade barrier: released readers that do not understand the distinct reducer checkpoint cannot open the newer store and silently overlook outstanding archive work.
 
 Local actions buffered during a remote-apply window stay ordered until each operation is durable. Transient persistence failures keep the failed suffix queued and block the current sync so a later sync can retry. A deterministically invalid buffered action also remains queued, but requires reload: its reducer already changed live state, so discarding it would let live state diverge from the durable operation log.
@@ -399,12 +405,15 @@ Without compaction, the op log grows unbounded. Compaction:
 
 ```typescript
 async compact(): Promise<void> {
-  // 1. Acquire lock
-  await this.lockService.request('sp_op_log_compact', async () => {
-    // 2. Read current state from NgRx (via delegate)
+  // 1. Acquire the operation-log lock
+  await this.lockService.request('sp_op_log', async () => {
+    // 2. Never advance a snapshot past reducer-uncommitted remote rows
+    if ((await this.opLogStore.getPendingRemoteOps()).length > 0) return;
+
+    // 3. Read current state from NgRx (via delegate)
     const currentState = await this.storeDelegate.getAllSyncModelDataFromStore();
 
-    // 3. Save new snapshot
+    // 4. Save new snapshot
     const lastSeq = await this.opLogStore.getLastSeq();
     await this.opLogStore.saveStateCache({
       state: currentState,
@@ -414,16 +423,25 @@ async compact(): Promise<void> {
       schemaVersion: CURRENT_SCHEMA_VERSION
     });
 
-    // 4. Delete old ops (sync-aware)
-    // Only delete ops that have been synced AND are older than retention window
+    // 5. Delete old terminal ops only
     const retentionWindowMs = 7 * 24 * 60 * 60 * 1000; // 7 days
     const cutoff = Date.now() - retentionWindowMs;
 
     await this.opLogStore.deleteOpsWhere(
-      (entry) =>
-        !!entry.syncedAt && // never drop unsynced ops
-        entry.appliedAt < cutoff &&
-        entry.seq <= lastSeq
+      (entry) => {
+        const rejected = entry.rejectedAt !== undefined;
+        const complete =
+          rejected ||
+          entry.applicationStatus === undefined ||
+          entry.applicationStatus === 'applied';
+        const terminalAt = entry.rejectedAt ?? entry.appliedAt;
+        return (
+          (!!entry.syncedAt || rejected) &&
+          complete &&
+          terminalAt < cutoff &&
+          entry.seq <= lastSeq
+        );
+      }
     );
   });
 }
@@ -438,7 +456,9 @@ async compact(): Promise<void> {
 | Emergency retention             | 1 day   | Shorter retention for quota exceeded           |
 | Compaction timeout              | 25 sec  | Abort if exceeds (prevents lock expiration)    |
 | Max compaction failures         | 3       | Failures before user notification              |
-| Unsynced ops                    | ∞       | Never delete unsynced ops                      |
+| Unsynced non-rejected ops       | ∞       | Never delete unsynced active ops               |
+| Incomplete remote ops           | ∞       | Never delete pending/archive_pending/failed    |
+| Rejected ops retention          | 7 days  | Delete after terminal rejection retention      |
 | Max download ops in memory      | 50,000  | Bounds memory during API download              |
 | Remote file retention           | 14 days | Server-side operation file retention           |
 | Max remote files to keep        | 100     | Minimum recent files on server                 |
@@ -566,12 +586,16 @@ export class MyEffects {
 
 ```
 1. Detect: Hydration fails or returns empty/invalid state
-2. Check legacy 'pf' database for data
-3. If found: Run recovery migration with that data
-4. If not: Check remote sync for data
-5. If remote has data: Force sync download
-6. If all else fails: User must restore from backup
+2. Verify SUP_OPS has neither a snapshot nor any operation rows
+3. Only when SUP_OPS is provably empty, check legacy 'pf' database for data
+4. If found: Run recovery migration with that data
+5. Otherwise: restore through sync or a user-selected backup
 ```
+
+Automatic legacy recovery runs the emptiness check and legacy write under the operation-log
+lock, and fails closed. A present snapshot, a non-empty operation log, or an inspection error
+prevents the legacy write and propagates the hydration failure. The generic hydration catch
+must never place an older `pf` copy at the current SUP_OPS sequence frontier.
 
 ### Implementation
 
@@ -580,11 +604,12 @@ async hydrateStore(): Promise<void> {
   try {
     const snapshot = await this.opLogStore.loadStateCache();
     if (!snapshot || !this.isValidSnapshot(snapshot)) {
-      await this.attemptRecovery();
-      return;
+      // attemptRecovery() proceeds only if snapshot === null and lastSeq === 0
+      return await this.attemptRecovery();
     }
     // Normal hydration...
   } catch (e) {
+    // This rethrows when SUP_OPS is non-empty or cannot be inspected.
     await this.attemptRecovery();
   }
 }
@@ -1162,6 +1187,12 @@ async hydrateFromRemoteSync(downloadedMainModelData?: Record<string, unknown>): 
 
 Archive data (`archiveYoung`, `archiveOld`) is included in the state snapshot for file-based sync.
 Archives are written directly to IndexedDB via `ArchiveDbAdapter` (bypassing the operation log for performance).
+
+Remote full-state replay holds the archive mutex while it loads, preflights, and writes both
+archive halves. When both halves are available, `archiveYoung` and `archiveOld` commit through
+one `saveArchivesAtomic()` transaction; a protected or omitted half is carried forward unchanged.
+`BACKUP_IMPORT` does not prompt on receiving clients: the originating restore was already an
+explicit user decision, so replay is deterministic across devices.
 
 ### Why Archives Bypass Operation Log
 
@@ -1871,9 +1902,10 @@ fresh id.
 
 **Status:** Handled via Locks
 
-- Compaction acquires `sp_op_log_compact` lock
-- Sync operations use separate locks
-- **Verified safe**: Compaction only deletes ops with `syncedAt` set, so unsynced ops from active sync are preserved
+- Compaction and sync serialize on the operation-log lock
+- Compaction aborts before snapshotting while any non-rejected `pending` remote row exists
+- Deletion requires terminal status: synced applied/legacy-complete rows or old rejected rows
+- `archive_pending` and `failed` quarantine rows survive regardless of age
 
 ---
 

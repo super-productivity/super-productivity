@@ -2015,6 +2015,36 @@ describe('ConflictResolutionService', () => {
         );
       });
 
+      it('should atomically reject a reducer-failed remote winner', async () => {
+        const now = Date.now();
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const reducerError = new Error('Reducer failed');
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+            [remoteOp],
+          ),
+        ];
+
+        mockOpLogStore.hasOp.and.resolveTo(false);
+        mockOpLogStore.append.and.resolveTo(1);
+        mockOperationApplier.applyOperations.and.callFake(async (_ops, options) => {
+          const reducerFailures = [{ op: remoteOp, error: reducerError }];
+          await options?.onReducersCommitted?.([], reducerFailures);
+          return { appliedOps: [], reducerFailures };
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [],
+          [],
+          [remoteOp.id],
+        );
+        expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
+      });
+
       it('should process deferred actions after merging remote clocks when caller holds lock', async () => {
         const now = Date.now();
         const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);

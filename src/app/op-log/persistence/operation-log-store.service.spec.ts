@@ -1601,9 +1601,40 @@ describe('OperationLogStoreService', () => {
       });
     });
 
+    it('should atomically reject reducer failures while checkpointing successful ops', async () => {
+      const successfulOp = createTestOperation({ id: 'successful-op' });
+      const failedOp = createTestOperation({
+        id: 'reducer-failed-op',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const successfulSeq = await service.append(successfulOp, 'remote', {
+        pendingApply: true,
+      });
+      await service.append(failedOp, 'remote', { pendingApply: true });
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(failedOp.id);
+
+      await service.markReducersCommittedAndMergeClocks(
+        [successfulSeq],
+        [successfulOp],
+        [failedOp.id],
+      );
+
+      const successfulEntry = await service.getOpById(successfulOp.id);
+      const failedEntry = await service.getOpById(failedOp.id);
+      expect(successfulEntry?.applicationStatus).toBe('archive_pending');
+      expect(failedEntry?.applicationStatus).toBe('pending');
+      expect(failedEntry?.rejectedAt).toBeDefined();
+      expect(await service.getPendingRemoteOps()).toEqual([]);
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+    });
+
     it('should roll back reducer checkpoint and clock when the atomic clock write fails', async () => {
       const op = createTestOperation();
+      const reducerFailedOp = createTestOperation({ id: 'reducer-failed-op' });
       const seq = await service.append(op, 'remote', { pendingApply: true });
+      await service.append(reducerFailedOp, 'remote', { pendingApply: true });
       await service.setVectorClock({ testClient: 2 });
 
       const adapter = (
@@ -1636,11 +1667,15 @@ describe('OperationLogStoreService', () => {
         service.markReducersCommittedAndMergeClocks(
           [seq],
           [{ ...op, vectorClock: { remoteClient: 4 } }],
+          [reducerFailedOp.id],
         ),
       ).toBeRejectedWithError('injected vector-clock write failure');
 
       const [stored] = await service.getOpsAfterSeq(0);
       expect(stored.applicationStatus).toBe('pending');
+      const failedEntry = await service.getOpById(reducerFailedOp.id);
+      expect(failedEntry?.applicationStatus).toBe('pending');
+      expect(failedEntry?.rejectedAt).toBeUndefined();
       service.clearVectorClockCache();
       expect(await service.getVectorClock()).toEqual({ testClient: 2 });
     });

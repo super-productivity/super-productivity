@@ -62,6 +62,18 @@ export class OperationLogCompactionService {
       const startTime = Date.now();
       const label = isEmergency ? 'emergency ' : '';
 
+      // A snapshot must never advance past remote operations whose reducers have
+      // not committed yet. Otherwise restart hydration would treat those ops as
+      // covered by the snapshot even though their state is missing from it.
+      const pendingRemoteOps = await this.opLogStore.getPendingRemoteOps();
+      this.checkCompactionTimeout(startTime, `${label}pending operation check`);
+      if (pendingRemoteOps.length > 0) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — remote reducer work is pending',
+        );
+        return;
+      }
+
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshot();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);
@@ -120,16 +132,24 @@ export class OperationLogCompactionService {
       // 6. Reset compaction counter (persistent across tabs/restarts)
       await this.opLogStore.resetCompactionCounter();
 
-      // 7. Delete old operations (keep recent for conflict resolution window)
-      // Only delete ops that have been synced to remote
+      // 7. Delete old terminal operations (keep recent for conflict resolution)
       const cutoff = Date.now() - retentionMs;
 
-      await this.opLogStore.deleteOpsWhere(
-        (entry) =>
-          !!entry.syncedAt && // never drop unsynced ops
-          entry.appliedAt < cutoff &&
-          entry.seq <= lastSeq, // keep tail for conflict frontier
-      );
+      await this.opLogStore.deleteOpsWhere((entry) => {
+        const isRejected = entry.rejectedAt !== undefined;
+        const isApplicationComplete =
+          isRejected ||
+          entry.applicationStatus === undefined ||
+          entry.applicationStatus === 'applied';
+        const terminalAt = entry.rejectedAt ?? entry.appliedAt;
+
+        return (
+          (entry.syncedAt !== undefined || isRejected) &&
+          isApplicationComplete &&
+          terminalAt < cutoff &&
+          entry.seq <= lastSeq // keep tail for conflict frontier
+        );
+      });
 
       // Log metrics for slow compaction or emergency compaction
       const totalDuration = Date.now() - startTime;

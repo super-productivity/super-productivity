@@ -180,6 +180,44 @@ describe('applyRemoteOperations', () => {
     expect(result.failedOpIds).toEqual(['op-2']);
   });
 
+  it('rejects reducer-failed ops while checkpointing and applying successful successors', async () => {
+    const op1 = createOperation('op-1');
+    const op2 = createOperation('op-2');
+    const op3 = createOperation('op-3');
+    const reducerError = new Error('reducer failure');
+    const store = createStore({
+      seqs: [1, 2, 3],
+      writtenOps: [op1, op2, op3],
+      skippedCount: 0,
+    });
+    const applier: ReducerCommitAwareOperationApplyPort<Operation<string>> = {
+      applyOperations: vi.fn(async (_ops, options) => {
+        await options.onReducersCommitted([op1, op3], [{ op: op2, error: reducerError }]);
+        return {
+          appliedOps: [op1, op3],
+          reducerFailures: [{ op: op2, error: reducerError }],
+        };
+      }),
+    };
+
+    const result = await applyRemoteOperations({
+      ops: [op1, op2, op3],
+      store,
+      applier,
+    });
+
+    expect(store.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+      [1, 3],
+      [op1, op3],
+      ['op-2'],
+    );
+    expect(store.markApplied).toHaveBeenCalledWith([1, 3]);
+    expect(store.markFailed).not.toHaveBeenCalled();
+    expect(result.appliedOps).toEqual([op1, op3]);
+    expect(result.reducerFailedOpIds).toEqual(['op-2']);
+    expect(result.reducerFailures).toEqual([{ op: op2, error: reducerError }]);
+  });
+
   it('rejects an applier result whose failed op is not in the appended batch', async () => {
     const op1 = createOperation('op-1');
     const unknownFailedOp = createOperation('unknown-failed-op');

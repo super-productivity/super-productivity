@@ -891,22 +891,25 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   async markReducersCommittedAndMergeClocks(
     seqs: number[],
     ops: Operation[],
+    rejectedOpIds: string[] = [],
   ): Promise<void> {
     if (seqs.length !== ops.length) {
       throw new Error(
         'markReducersCommittedAndMergeClocks requires one sequence per operation.',
       );
     }
-    if (ops.length === 0) {
+    if (ops.length === 0 && rejectedOpIds.length === 0) {
       return;
     }
 
     await this._ensureInit();
     const currentClientId = await this.clientIdProvider.loadClientId();
     let committedClock: VectorClock | undefined;
+    const rejectedAt = Date.now();
+    const rejectedFullStateOpIds = new Set<string>();
 
     await this._adapter.transaction(
-      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK],
+      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK, STORE_NAMES.META],
       'readwrite',
       async (tx) => {
         const currentEntry = await tx.get<VectorClockEntry>(
@@ -930,6 +933,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           await tx.put(STORE_NAMES.OPS, entry);
         }
 
+        for (const opId of rejectedOpIds) {
+          const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            opId,
+          );
+          if (entry?.applicationStatus !== 'pending') {
+            throw new Error(
+              `Reducer rejection requires pending remote operation ${opId}.`,
+            );
+          }
+          entry.rejectedAt = rejectedAt;
+          if (isFullStateOpType(getStoredOpType(entry.op))) {
+            rejectedFullStateOpIds.add(opId);
+          }
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
+
+        if (rejectedFullStateOpIds.size > 0) {
+          const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
+          await tx.put(
+            STORE_NAMES.META,
+            this._withoutFullStateRefs(meta, rejectedFullStateOpIds),
+            FULL_STATE_OPS_META_KEY,
+          );
+        }
+
         await tx.put(
           STORE_NAMES.VECTOR_CLOCK,
           { clock: committedClock, lastUpdate: Date.now() } satisfies VectorClockEntry,
@@ -939,6 +969,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     );
 
     this._vectorClockCache = committedClock ? { ...committedClock } : null;
+    if (rejectedOpIds.length > 0) {
+      this._invalidateUnsyncedCache();
+    }
   }
 
   /**

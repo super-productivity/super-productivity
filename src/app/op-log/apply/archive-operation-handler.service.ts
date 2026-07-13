@@ -24,7 +24,6 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
-import { confirmDialog } from '../../util/native-dialogs';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -465,8 +464,8 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Fixes bug where SYNC_IMPORT updated NgRx state but never persisted archive
    * data to IndexedDB on remote client, causing data loss on restart.
    *
-   * Uses rollback for atomicity - if archiveOld write fails after archiveYoung
-   * succeeds, we restore archiveYoung to its original state.
+   * Both archive halves are preflighted before writing and, whenever both are
+   * available, committed in one IndexedDB transaction.
    *
    * @localBehavior SKIP - Archive written by BackupService.importCompleteBackup()
    * @remoteBehavior Executes - Uses ArchiveDbAdapter for direct IndexedDB access
@@ -483,71 +482,68 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
       .archiveYoung;
     const archiveOld = (appDataComplete as { archiveOld?: ArchiveModel }).archiveOld;
 
-    // Load original state for potential rollback and safety checks
-    const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    const didWrite = await this._lockService.request(
+      LOCK_NAMES.TASK_ARCHIVE,
+      async () => {
+        // Load both originals before evaluating either guard. A refused/missing half
+        // is preserved in the same transaction as an accepted incoming half.
+        const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+        const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    // Write archiveYoung if present in the import data
-    if (archiveYoung !== undefined) {
-      if (
-        await this._guardArchiveOverwrite({
-          label: 'archiveYoung',
-          existing: originalArchiveYoung,
-          incoming: archiveYoung,
-          opType: action.meta.opType,
-        })
-      ) {
-        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-      }
-    }
+        const shouldWriteYoung =
+          archiveYoung !== undefined &&
+          (await this._guardArchiveOverwrite({
+            label: 'archiveYoung',
+            existing: originalArchiveYoung,
+            incoming: archiveYoung,
+            opType: action.meta.opType,
+          }));
+        const shouldWriteOld =
+          archiveOld !== undefined &&
+          (await this._guardArchiveOverwrite({
+            label: 'archiveOld',
+            existing: originalArchiveOld,
+            incoming: archiveOld,
+            opType: action.meta.opType,
+          }));
 
-    // Write archiveOld if present in the import data
-    if (archiveOld !== undefined) {
-      if (
-        await this._guardArchiveOverwrite({
-          label: 'archiveOld',
-          existing: originalArchiveOld,
-          incoming: archiveOld,
-          opType: action.meta.opType,
-        })
-      ) {
-        try {
-          await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-        } catch (e) {
-          // Attempt rollback: restore archiveYoung to original state
-          OpLog.err(
-            '[ArchiveOperationHandler] archiveOld write failed, attempting rollback...',
-            e,
-          );
-          try {
-            if (originalArchiveYoung !== undefined) {
-              await this._archiveDbAdapter.saveArchiveYoung(originalArchiveYoung);
-              OpLog.log('[ArchiveOperationHandler] Rollback successful');
-            }
-          } catch (rollbackErr) {
-            OpLog.err(
-              '[ArchiveOperationHandler] Rollback FAILED - archive may be inconsistent',
-              rollbackErr,
-            );
-          }
-          throw e; // Re-throw original error
+        if (!shouldWriteYoung && !shouldWriteOld) {
+          return false;
         }
-      }
-    }
 
-    OpLog.log(
-      '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
+        const nextArchiveYoung = shouldWriteYoung ? archiveYoung : originalArchiveYoung;
+        const nextArchiveOld = shouldWriteOld ? archiveOld : originalArchiveOld;
+
+        if (nextArchiveYoung !== undefined && nextArchiveOld !== undefined) {
+          await this._archiveDbAdapter.saveArchivesAtomic(
+            nextArchiveYoung,
+            nextArchiveOld,
+          );
+        } else if (shouldWriteYoung && nextArchiveYoung !== undefined) {
+          await this._archiveDbAdapter.saveArchiveYoung(nextArchiveYoung);
+        } else if (shouldWriteOld && nextArchiveOld !== undefined) {
+          await this._archiveDbAdapter.saveArchiveOld(nextArchiveOld);
+        }
+        return true;
+      },
     );
+
+    if (didWrite) {
+      OpLog.log(
+        '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
+      );
+    }
   }
 
   /**
    * Safety guard: prevents overwriting a non-empty local archive with an empty
    * incoming one. Returns true if the caller should proceed with the write.
    *
-   * Handles three opType paths:
+   * Handles two opType paths:
    * - SYNC_IMPORT / REPAIR: silently preserves local (empty incoming is likely a bug)
-   * - BACKUP_IMPORT: asks user for confirmation (explicit restore action)
-   * - default: allows the write
+   * - BACKUP_IMPORT / default: allows the write. BACKUP_IMPORT is already an
+   *   explicit user decision on the originating client, so remote replay must
+   *   be deterministic and cannot prompt independently on every other client.
    */
   private async _guardArchiveOverwrite(opts: {
     label: 'archiveYoung' | 'archiveOld';
@@ -570,18 +566,6 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
           'Preserving local archives (this is likely a bug in the full-state op source).',
       );
       return false;
-    }
-
-    if (opts.opType === OpType.BackupImport) {
-      const confirmed = confirmDialog(
-        `This backup has empty ${opts.label === 'archiveYoung' ? '' : 'old '}archives, but you have ${existingCount} ${opts.label === 'archiveYoung' ? '' : 'old '}archived tasks locally. ` +
-          `Restoring will delete your ${opts.label === 'archiveYoung' ? '' : 'old '}archived data. Continue?`,
-      );
-      if (!confirmed) {
-        throw new Error(
-          '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
-        );
-      }
     }
 
     return true;
