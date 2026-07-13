@@ -27,6 +27,7 @@ import {
   isOpaqueChangeOp,
   mergeChangedFields,
 } from './conflict-disjoint-merge.util';
+import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 
 /** Everything the classifier needs about one resolved conflict. */
 export interface ConflictJournalClassificationInput {
@@ -76,7 +77,7 @@ const extractEntityTitle = (
     const entity = extractEntityFromPayload(op.payload, payloadKey) as
       | Record<string, unknown>
       | undefined;
-    const isMultiEntityOp = (op.entityIds?.length ?? 0) > 1;
+    const isMultiEntityOp = isMultiEntityOperation(op);
     if (!isMultiEntityOp || entity?.['id'] === entityId) {
       const title = firstString(entity?.['title'], entity?.['name']);
       if (title) {

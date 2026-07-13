@@ -60,6 +60,91 @@ describe('conflict-disjoint-merge.util', () => {
         duration: 100,
       });
     });
+
+    it('does not borrow a direct-format bulk payload from its primary entity', () => {
+      const bulkOp = op({
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+        payload: { task: { id: 'task-1', changes: { notes: 'Task 1 notes' } } },
+      });
+
+      expect(mergeChangedFields([bulkOp], 'task', 'task-2')).toEqual({});
+      expect(hasOpaqueChanges([bulkOp], 'task', 'task-2')).toBe(true);
+    });
+
+    it('requires an adapter payload to positively identify its target entity', () => {
+      const missingIdOp = op({
+        payload: { task: { changes: { notes: 'Unscoped notes' } } },
+      });
+
+      expect(mergeChangedFields([missingIdOp], 'task', 'task-1')).toEqual({});
+      expect(hasOpaqueChanges([missingIdOp], 'task', 'task-1')).toBe(true);
+    });
+
+    it('treats non-update target entityChanges as opaque', () => {
+      const bulkOp = op({
+        payload: {
+          actionPayload: { taskId: 'task-1' },
+          entityChanges: [
+            {
+              entityType: 'TASK' as EntityType,
+              entityId: 'task-1',
+              opType: OpType.Delete,
+              changes: { title: 'Must not become an update' },
+            },
+          ],
+        },
+      });
+
+      expect(mergeChangedFields([bulkOp], 'task', 'task-1')).toEqual({});
+      expect(hasOpaqueChanges([bulkOp], 'task', 'task-1')).toBe(true);
+    });
+
+    it('treats array and identity-bearing target entityChanges as opaque', () => {
+      const invalidChanges = [
+        ['not', 'a', 'field-map'],
+        { id: 'task-2', title: 'Must not retarget the update' },
+      ];
+
+      for (const changes of invalidChanges) {
+        const bulkOp = op({
+          payload: {
+            actionPayload: { taskId: 'task-1' },
+            entityChanges: [
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-1',
+                opType: OpType.Update,
+                changes,
+              },
+            ],
+          },
+        });
+
+        expect(mergeChangedFields([bulkOp], 'task', 'task-1')).toEqual({});
+        expect(hasOpaqueChanges([bulkOp], 'task', 'task-1')).toBe(true);
+      }
+    });
+
+    it('treats a bulk op without a target-specific delta as opaque', () => {
+      const bulkOp = op({
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+        payload: {
+          actionPayload: { taskId: 'task-1' },
+          entityChanges: [
+            {
+              entityType: 'TASK' as EntityType,
+              entityId: 'task-1',
+              opType: OpType.Update,
+              changes: { title: 'Task 1' },
+            },
+          ],
+        },
+      });
+
+      expect(hasOpaqueChanges([bulkOp], 'task', 'task-2')).toBe(true);
+    });
   });
 
   describe('hasOpaqueChanges', () => {
@@ -102,6 +187,41 @@ describe('conflict-disjoint-merge.util', () => {
         entityId: 'task-1',
       });
       expect(eligible).toBe(false);
+    });
+
+    it('refuses inconsistent scalar-plus-array entity metadata', () => {
+      const mixedMetadataOp = op({
+        entityId: 'task-1',
+        entityIds: ['task-2'],
+        clientId: 'B',
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', changes: { notes: 'Task 1 notes' } },
+          },
+          entityChanges: [
+            {
+              entityType: 'TASK' as EntityType,
+              entityId: 'task-2',
+              opType: OpType.Update,
+              changes: { notes: 'Task 2 notes' },
+            },
+          ],
+        },
+      });
+
+      expect(
+        isDisjointMergeEligible({
+          localOps: [
+            op({
+              entityId: 'task-2',
+              payload: { task: { id: 'task-2', changes: { title: 'Local' } } },
+            }),
+          ],
+          remoteOps: [mixedMetadataOp],
+          payloadKey: 'task',
+          entityId: 'task-2',
+        }),
+      ).toBe(false);
     });
   });
 

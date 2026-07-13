@@ -14,8 +14,13 @@
 
 import { OpType } from '../core/operation.types';
 import type { Operation } from '../core/operation.types';
-import { extractUpdateChanges, isMultiEntityPayload } from '@sp/sync-core';
+import {
+  extractEntityFromPayload,
+  extractUpdateChanges,
+  isMultiEntityPayload,
+} from '@sp/sync-core';
 import { ConflictJournalFieldDiff, NOISE_FIELDS } from './conflict-journal.model';
+import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 
 /** Identity of one side of the conflict for the deterministic noise tiebreak. */
 export interface MergeSideMeta {
@@ -42,6 +47,14 @@ export interface MergeSideMeta {
  * treat empty-with-payload as unknown, not as "nothing changed" — see
  * `hasOpaqueChanges`.
  */
+const asSafeUpdateChanges = (changes: unknown): Record<string, unknown> | undefined => {
+  if (changes === null || typeof changes !== 'object' || Array.isArray(changes)) {
+    return undefined;
+  }
+  const record = changes as Record<string, unknown>;
+  return 'id' in record ? undefined : record;
+};
+
 const extractOpChanges = (
   op: Operation,
   payloadKey: string,
@@ -49,15 +62,23 @@ const extractOpChanges = (
 ): Record<string, unknown> => {
   const capturedChanges: Record<string, unknown> = {};
   if (isMultiEntityPayload(op.payload)) {
+    let hasUnsafeTargetChange = false;
     for (const change of op.payload.entityChanges) {
-      if (
-        change.entityType === op.entityType &&
-        change.entityId === entityId &&
-        change.changes &&
-        typeof change.changes === 'object'
-      ) {
-        Object.assign(capturedChanges, change.changes as Record<string, unknown>);
+      if (change.entityType !== op.entityType || change.entityId !== entityId) {
+        continue;
       }
+
+      const safeChanges =
+        change.opType === OpType.Update ? asSafeUpdateChanges(change.changes) : undefined;
+      if (!safeChanges) {
+        hasUnsafeTargetChange = true;
+        continue;
+      }
+      Object.assign(capturedChanges, safeChanges);
+    }
+
+    if (hasUnsafeTargetChange) {
+      return {};
     }
 
     // A multi-entity op's adapter-shaped action payload is not inherently scoped
@@ -66,14 +87,27 @@ const extractOpChanges = (
     // source exclusively; if it is absent, return {} so the op is treated as
     // opaque and falls back to whole-entity LWW instead of borrowing the primary
     // entity's fields.
-    if ((op.entityIds?.length ?? 0) > 1) {
+    if (isMultiEntityOperation(op)) {
       return capturedChanges;
     }
+  } else if (isMultiEntityOperation(op)) {
+    // Old direct-format bulk payloads describe only their primary entity. They
+    // cannot be projected onto an arbitrary sibling from entityIds.
+    return {};
   }
 
+  const entityPayload = extractEntityFromPayload(op.payload, payloadKey);
+  const embeddedId = entityPayload?.['id'];
+  // Adapter entities must positively identify the conflict target. Singleton
+  // feature state is the sole exception: it uses the '*' sentinel and has no
+  // embedded id by design.
+  if (entityId !== '*' && embeddedId !== entityId) {
+    return capturedChanges;
+  }
   const adapterChanges = extractUpdateChanges(op.payload, payloadKey);
-  if (Object.keys(adapterChanges).length > 0) {
-    return adapterChanges;
+  const safeAdapterChanges = asSafeUpdateChanges(adapterChanges);
+  if (safeAdapterChanges && Object.keys(safeAdapterChanges).length > 0) {
+    return safeAdapterChanges;
   }
   return capturedChanges;
 };
@@ -166,8 +200,8 @@ export const isDisjointMergeEligible = (params: {
 }): boolean => {
   const { localOps, remoteOps, payloadKey, entityId } = params;
 
-  const hasMultiEntityOp = [...localOps, ...remoteOps].some(
-    (op) => (op.entityIds?.length ?? 0) > 1,
+  const hasMultiEntityOp = [...localOps, ...remoteOps].some((op) =>
+    isMultiEntityOperation(op),
   );
   if (hasMultiEntityOp) return false;
 
