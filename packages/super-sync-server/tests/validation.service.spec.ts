@@ -473,6 +473,16 @@ describe('ValidationService', () => {
         expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
       }
     });
+
+    it('should reject negative timestamps', () => {
+      const result = validationService.validateOp(
+        createValidOp({ timestamp: -1 }),
+        clientId,
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
+    });
   });
 
   describe('validatePayloadComplexity', () => {

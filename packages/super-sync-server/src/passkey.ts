@@ -13,7 +13,7 @@ import type {
 import { prisma } from './db';
 import { Logger } from './logger';
 import { randomBytes } from 'crypto';
-import { sendPasskeyRecoveryEmail } from './email';
+import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
 import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
@@ -176,6 +176,10 @@ export const verifyRegistration = async (
   const acceptedAt = termsAcceptedAt ? BigInt(termsAcceptedAt) : BigInt(Date.now());
 
   try {
+    const config = loadConfigFromEnv();
+    let createdUserId: number | undefined;
+    let verificationEmailSent = false;
+
     // Check if unverified user exists (re-registration attempt)
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -191,39 +195,32 @@ export const verifyRegistration = async (
         return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
 
-      // Update existing unverified user with new passkey
-      await prisma.$transaction(async (tx) => {
-        // Delete old passkeys
-        await tx.passkey.deleteMany({ where: { userId: existingUser.id } });
+      // A registration ceremony proves possession of the submitted passkey,
+      // not ownership of the email address. Keep the original credential until
+      // the existing account has been verified; otherwise an attacker could
+      // replace it and rely on the victim to activate the attacker's passkey.
+      if (!config.testMode?.autoVerifyUsers) {
+        verificationEmailSent = await sendVerificationEmail(email, verificationToken);
+        if (!verificationEmailSent) {
+          return { message: REGISTRATION_SUCCESS_MESSAGE };
+        }
+      }
 
-        // Create new passkey
-        await tx.passkey.create({
-          data: {
-            credentialId: credentialIdRawBytes,
-            publicKey: Buffer.from(credentialInfo.publicKey),
-            counter: BigInt(credentialInfo.counter),
-            transports: credential.response.transports
-              ? JSON.stringify(credential.response.transports)
-              : null,
-            userId: existingUser.id,
-          },
-        });
-
-        // Update user with new verification token
-        await tx.user.update({
-          where: { id: existingUser.id },
-          data: {
-            verificationToken,
-            verificationTokenExpiresAt: tokenExpiresAt,
-            verificationResendCount: { increment: 1 },
-          },
-        });
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          verificationToken,
+          verificationTokenExpiresAt: tokenExpiresAt,
+          verificationResendCount: { increment: 1 },
+        },
       });
 
-      Logger.info(`Updated passkey for unverified user (ID: ${existingUser.id})`);
+      Logger.info(
+        `Updated verification token for unverified user (ID: ${existingUser.id})`,
+      );
     } else {
       // Create new user with passkey
-      await prisma.user.create({
+      const createdUser = await prisma.user.create({
         data: {
           email: email.toLowerCase(),
           passwordHash: null, // Passkey-only user
@@ -242,12 +239,12 @@ export const verifyRegistration = async (
           },
         },
       });
+      createdUserId = createdUser.id;
 
       Logger.info(`Created new passkey user`);
     }
 
     // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
-    const config = loadConfigFromEnv();
     if (config.testMode?.autoVerifyUsers) {
       await prisma.user.update({
         where: { email: email.toLowerCase() },
@@ -264,21 +261,28 @@ export const verifyRegistration = async (
     }
 
     // Normal flow: send verification email
-    const { sendVerificationEmail } = await import('./email');
-    const emailSent = await sendVerificationEmail(email, verificationToken);
+    const emailSent =
+      verificationEmailSent || (await sendVerificationEmail(email, verificationToken));
 
     if (!emailSent) {
-      // Clean up on email failure for new users
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-      });
-      if (user && user.isVerified === 0) {
+      // Only remove the exact unverified row created by this attempt. A
+      // concurrent registration may already have rotated the token or verified
+      // the account, in which case cleanup must leave it alone.
+      if (createdUserId !== undefined) {
         // AUTH_CACHE_INVALIDATION: bracket the delete pre + post, matching every
         // other user-delete site, so the convention stays uniformly auditable.
-        authCache.invalidate(user.id);
-        await prisma.user.delete({ where: { id: user.id } });
-        authCache.invalidate(user.id);
-        Logger.info(`Cleaned up failed passkey registration (ID: ${user.id})`);
+        authCache.invalidate(createdUserId);
+        const cleanup = await prisma.user.deleteMany({
+          where: {
+            id: createdUserId,
+            isVerified: 0,
+            verificationToken,
+          },
+        });
+        authCache.invalidate(createdUserId);
+        if (cleanup.count > 0) {
+          Logger.info(`Cleaned up failed passkey registration (ID: ${createdUserId})`);
+        }
       }
       return { message: REGISTRATION_SUCCESS_MESSAGE };
     }

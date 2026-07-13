@@ -390,7 +390,7 @@ export const registerWithMagicLink = async (
       );
     } else {
       // Create new user (no passkey, no password)
-      await prisma.user.create({
+      const createdUser = await prisma.user.create({
         data: {
           email: normalizedEmail,
           passwordHash: null,
@@ -411,10 +411,16 @@ export const registerWithMagicLink = async (
           // issued for an unverified user, so verifyToken was never called for
           // it and no authCache entry can exist. Documented to keep the
           // bracket-every-delete convention auditable.
-          await prisma.user.deleteMany({
-            where: { email: normalizedEmail, isVerified: 0 },
+          const cleanup = await prisma.user.deleteMany({
+            where: {
+              id: createdUser.id,
+              isVerified: 0,
+              verificationToken,
+            },
           });
-          Logger.info(`Cleaned up failed magic-link registration for new user`);
+          if (cleanup.count > 0) {
+            Logger.info(`Cleaned up failed magic-link registration for new user`);
+          }
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }

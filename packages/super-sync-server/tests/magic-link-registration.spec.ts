@@ -256,7 +256,11 @@ describe('Magic Link Registration', () => {
 
       expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.deleteMany).toHaveBeenCalledWith({
-        where: { email: testEmail, isVerified: 0 },
+        where: {
+          id: 1,
+          isVerified: 0,
+          verificationToken: expect.any(String),
+        },
       });
     });
 

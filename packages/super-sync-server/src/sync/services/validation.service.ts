@@ -177,7 +177,7 @@ export class ValidationService {
     // a per-op error instead. Age is deliberately NOT bounded — old-but-valid ops
     // are accepted so long-offline devices keep their backlog (#8961); causality
     // is resolved by vector clocks, not by the client timestamp.
-    if (!Number.isSafeInteger(op.timestamp)) {
+    if (!Number.isSafeInteger(op.timestamp) || op.timestamp < 0) {
       return {
         valid: false,
         error: 'Invalid timestamp',
