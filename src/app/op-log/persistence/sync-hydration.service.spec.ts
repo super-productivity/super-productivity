@@ -3,7 +3,7 @@ import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
 import { SyncHydrationService } from './sync-hydration.service';
 import { OperationLogStoreService } from './operation-log-store.service';
-import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { AppStateSnapshot, StateSnapshotService } from '../backup/state-snapshot.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -13,6 +13,9 @@ import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { SnackService } from '../../core/snack/snack.service';
+import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('SyncHydrationService', () => {
   let service: SyncHydrationService;
@@ -23,6 +26,8 @@ describe('SyncHydrationService', () => {
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
+  let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
+  let mockLockService: jasmine.SpyObj<LockService>;
 
   // Default local sync config for tests
   const defaultLocalSyncConfig = {
@@ -66,6 +71,14 @@ describe('SyncHydrationService', () => {
       'validateAndRepair',
     ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+    mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
+      'saveArchiveYoung',
+      'saveArchiveOld',
+    ]);
+    mockArchiveDbAdapter.saveArchiveYoung.and.resolveTo();
+    mockArchiveDbAdapter.saveArchiveOld.and.resolveTo();
+    mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockLockService.request.and.callFake(async (_lockName, callback) => callback());
 
     TestBed.configureTestingModule({
       providers: [
@@ -77,6 +90,8 @@ describe('SyncHydrationService', () => {
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
         { provide: SnackService, useValue: mockSnackService },
+        { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
+        { provide: LockService, useValue: mockLockService },
       ],
     });
     service = TestBed.inject(SyncHydrationService);
@@ -98,6 +113,38 @@ describe('SyncHydrationService', () => {
 
   describe('hydrateFromRemoteSync', () => {
     beforeEach(setupDefaultMocks);
+
+    it('serializes archive replacement and its snapshot read', async () => {
+      let isArchiveLockHeld = false;
+      mockLockService.request.and.callFake(async (lockName, callback) => {
+        expect(lockName).toBe(LOCK_NAMES.TASK_ARCHIVE);
+        isArchiveLockHeld = true;
+        try {
+          return await callback();
+        } finally {
+          isArchiveLockHeld = false;
+        }
+      });
+      mockArchiveDbAdapter.saveArchiveYoung.and.callFake(async () => {
+        expect(isArchiveLockHeld).toBeTrue();
+      });
+      mockArchiveDbAdapter.saveArchiveOld.and.callFake(async () => {
+        expect(isArchiveLockHeld).toBeTrue();
+      });
+      mockStateSnapshotService.getAllSyncModelDataFromStoreAsync.and.callFake(
+        async () => {
+          expect(isArchiveLockHeld).toBeTrue();
+          return {} as AppStateSnapshot;
+        },
+      );
+
+      await service.hydrateFromRemoteSync({
+        archiveYoung: { task: { ids: [], entities: {} } },
+        archiveOld: { task: { ids: [], entities: {} } },
+      });
+
+      expect(mockLockService.request).toHaveBeenCalledTimes(1);
+    });
 
     it('should merge downloaded data with archive data from DB', async () => {
       const downloadedData = { task: { ids: ['t1'] }, project: { ids: ['p1'] } };
