@@ -1693,6 +1693,7 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
     opsFile: FileBasedOpsFile,
   ): Promise<FileBasedStateFile | null> {
+    let corruptPrimaryRev: string | undefined;
     try {
       const { data } = await this._downloadStateFile(provider, cfg, encryptKey);
       if (this._validateSnapshotRef(opsFile, data)) return data;
@@ -1700,10 +1701,34 @@ export class FileBasedSyncAdapterService {
         'FileBasedSyncAdapter: sync-state.json does not match snapshotRef; trying .bak',
       );
     } catch (e) {
+      if (this._isRecoverableCorruption(e)) {
+        const annotatedRev = (e as { primaryRev?: unknown } | null)?.primaryRev;
+        if (typeof annotatedRev === 'string') {
+          corruptPrimaryRev = annotatedRev;
+        }
+      }
       OpLog.warn('FileBasedSyncAdapter: sync-state.json unreadable; trying .bak', e);
     }
     const bak = await this._recoverStateFromBackup(provider, cfg, encryptKey);
-    if (bak && this._validateSnapshotRef(opsFile, bak)) return bak;
+    if (bak && this._validateSnapshotRef(opsFile, bak)) {
+      if (corruptPrimaryRev) {
+        try {
+          await this._writeStateFile(provider, cfg, encryptKey, bak, {
+            revToMatch: corruptPrimaryRev,
+            isForceOverwrite: false,
+          });
+        } catch (e) {
+          // Recovery remains usable even when this client is read-only or a
+          // concurrent writer already replaced the corrupt revision. A later
+          // sync can retry the conditional heal.
+          OpLog.warn(
+            'FileBasedSyncAdapter: recovered state backup but could not heal sync-state.json',
+            e,
+          );
+        }
+      }
+      return bak;
+    }
     OpLog.warn(
       'FileBasedSyncAdapter: no snapshot matching snapshotRef; signaling gap for full re-sync.',
     );
@@ -1870,11 +1895,80 @@ export class FileBasedSyncAdapterService {
       encoded,
       'FileBasedSyncAdapter._writeRequiredMigrationOpsBackup',
     );
+
+    let backupRev: string | null = null;
+    try {
+      const response = await provider.downloadFile(
+        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+      );
+      backupRev = response.rev;
+
+      let existing: unknown;
+      try {
+        existing =
+          await this._encryptAndCompressHandler.decompressAndDecryptData<unknown>(
+            cfg,
+            encryptKey,
+            response.dataStr,
+          );
+      } catch (e) {
+        // A corrupt backup is replaceable, but only while its exact revision is
+        // still current. The conditional write below owns that decision.
+        OpLog.warn(
+          'FileBasedSyncAdapter: replacing unreadable migration ops backup conditionally',
+          e,
+        );
+      }
+
+      if (this._isFileBasedOpsFile(existing)) {
+        const clockOrder = compareVectorClocks(existing.vectorClock, pending.vectorClock);
+        const existingMayBeNewer =
+          existing.syncVersion > pending.syncVersion ||
+          clockOrder === 'GREATER_THAN' ||
+          clockOrder === 'CONCURRENT';
+        if (existingMayBeNewer) {
+          // Reuse the same retry signal as a primary CAS loss. The caller will
+          // re-download sync-ops.json instead of letting this stale migrator
+          // overwrite a newer recovery artifact.
+          throw new UploadRevToMatchMismatchAPIError();
+        }
+
+        const sameRecoveryPayload =
+          existing.syncVersion === pending.syncVersion &&
+          existing.schemaVersion === pending.schemaVersion &&
+          clockOrder === 'EQUAL' &&
+          existing.oldestOpSyncVersion === pending.oldestOpSyncVersion &&
+          existing.snapshotRef.syncVersion === pending.snapshotRef.syncVersion &&
+          compareVectorClocks(
+            existing.snapshotRef.vectorClock,
+            pending.snapshotRef.vectorClock,
+          ) === 'EQUAL' &&
+          JSON.stringify(existing.recentOps) === JSON.stringify(pending.recentOps) &&
+          (existing.migration === undefined ||
+            existing.migration.legacyRev === pending.migration?.legacyRev);
+        if (sameRecoveryPayload) {
+          // A matching pending marker or its already-finalized form is at least
+          // as useful for recovery as rewriting the same backup again.
+          return;
+        }
+
+        if (clockOrder === 'EQUAL') {
+          // Equal clocks with different payloads are inconsistent; neither may
+          // silently replace the other.
+          throw new UploadRevToMatchMismatchAPIError();
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof RemoteFileNotFoundAPIError)) {
+        throw e;
+      }
+    }
+
     await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
       encoded,
-      null,
-      true,
+      backupRev,
+      false,
     );
   }
 

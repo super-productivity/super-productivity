@@ -3432,6 +3432,53 @@ describe('FileBasedSyncAdapterService', () => {
       expect((res.snapshotState as { tasks: string[] }).tasks).toEqual(['from-bak']);
     });
 
+    it('(c2) heals a corrupt sync-state.json from its validated backup revision', async () => {
+      const snapshotClock = { client1: 1 };
+      const opsFile = makeOpsFile({
+        syncVersion: 5,
+        recentOps: [makeCompactOp()],
+        snapshotRef: { syncVersion: 1, vectorClock: snapshotClock },
+      });
+      const backup = makeStateFile({
+        syncVersion: 1,
+        vectorClock: snapshotClock,
+        state: { tasks: ['from-validated-backup'] },
+      });
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) {
+          return { dataStr: addPrefix(opsFile, 3), rev: 'ops-rev-5' };
+        }
+        if (path === C.STATE_FILE) {
+          return {
+            dataStr: addPrefix({ version: C.SPLIT_FILE_VERSION }, 3),
+            rev: 'corrupt-state-rev',
+          };
+        }
+        if (path === C.STATE_BACKUP_FILE) {
+          return { dataStr: addPrefix(backup, 3), rev: 'state-backup-rev' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      const result = await adapter.downloadOps(0, 'client2');
+
+      expect((result.snapshotState as { tasks: string[] }).tasks).toEqual([
+        'from-validated-backup',
+      ]);
+      const healCall = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === C.STATE_FILE);
+      expect(healCall).toBeDefined();
+      expect(healCall![2]).toBe('corrupt-state-rev');
+      expect(healCall![3]).toBeFalse();
+      const healedState = parseWithPrefix(
+        healCall![1] as string,
+      ) as unknown as FileBasedStateFile;
+      expect((healedState.state as { tasks: string[] }).tasks).toEqual([
+        'from-validated-backup',
+      ]);
+    });
+
     // (d) snapshotRef mismatch (and no usable backup) is treated as a gap.
     it('(d) snapshotRef mismatch with no backup signals a gap (full re-download)', async () => {
       const opsFile = makeOpsFile({
@@ -3970,6 +4017,63 @@ describe('FileBasedSyncAdapterService', () => {
 
       expect(stateData.syncVersion).toBe(8);
       expect((stateData.state as { tasks: string[] }).tasks).toEqual(['v8']);
+      expect((result.snapshotState as { tasks: string[] }).tasks).toEqual(['v8']);
+    });
+
+    it('(e4c) does not let a stale migration poison a newer ops backup', async () => {
+      const clock7 = { legacy: 7 };
+      const clock8 = { legacy: 8 };
+      const pendingV7 = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: clock7,
+        snapshotRef: { syncVersion: 7, vectorClock: clock7 },
+        migration: { status: 'pending', legacyRev: 'legacy-rev-7' },
+      });
+      const finalizedV8 = makeOpsFile({
+        syncVersion: 8,
+        vectorClock: clock8,
+        snapshotRef: { syncVersion: 8, vectorClock: clock8 },
+      });
+      const stateV8 = makeStateFile({
+        syncVersion: 8,
+        vectorClock: clock8,
+        state: { tasks: ['v8'] },
+      });
+      const tombstone = {
+        version: C.SPLIT_FILE_VERSION,
+        format: C.SPLIT_TOMBSTONE_FORMAT,
+        migratedAt: Date.now(),
+        note: 'newer migration already committed',
+      };
+      let opsDownloads = 0;
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) {
+          opsDownloads++;
+          const data = opsDownloads === 1 ? pendingV7 : finalizedV8;
+          return {
+            dataStr: addPrefix(data, 3),
+            rev: opsDownloads === 1 ? 'ops-rev-7' : 'ops-rev-8',
+          };
+        }
+        if (path === C.OPS_BACKUP_FILE) {
+          return { dataStr: addPrefix(finalizedV8, 3), rev: 'ops-backup-rev-8' };
+        }
+        if (path === C.SYNC_FILE) {
+          return { dataStr: addPrefix(tombstone, 3), rev: 'legacy-tombstone-rev' };
+        }
+        if (path === C.STATE_FILE) {
+          return { dataStr: addPrefix(stateV8, 3), rev: 'state-rev-8' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      const result = await adapter.downloadOps(0, 'client2');
+
+      expect(
+        mockProvider.uploadFile.calls
+          .allArgs()
+          .some(([path]) => path === C.OPS_BACKUP_FILE),
+      ).toBeFalse();
       expect((result.snapshotState as { tasks: string[] }).tasks).toEqual(['v8']);
     });
 
