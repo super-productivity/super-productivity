@@ -46,7 +46,10 @@ import {
   SyncImportConflictData,
   SyncImportConflictResolution,
 } from './dialog-sync-import-conflict/dialog-sync-import-conflict.component';
-import { SyncImportConflictGateService } from './sync-import-conflict-gate.service';
+import {
+  IncomingFullStateConflictGateResult,
+  SyncImportConflictGateService,
+} from './sync-import-conflict-gate.service';
 import {
   CURRENT_SCHEMA_VERSION,
   MIN_SUPPORTED_SCHEMA_VERSION,
@@ -60,7 +63,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { SyncLocalStateService } from './sync-local-state.service';
 import { SyncImportConflictCoordinatorService } from './sync-import-conflict-coordinator.service';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
-import { Operation } from '../core/operation.types';
+import { Operation, OperationLogEntry } from '../core/operation.types';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { firstValueFrom } from 'rxjs';
@@ -77,6 +80,10 @@ import { processDeferredActions } from './process-deferred-actions-flush.util';
 type RemoteOpsProcessingResult = Awaited<
   ReturnType<RemoteOpsProcessingService['processRemoteOps']>
 >;
+
+type GuardedRemoteOpsProcessingResult = RemoteOpsProcessingResult & {
+  preApplyFullStateConflict?: IncomingFullStateConflictGateResult;
+};
 
 /**
  * Orchestrates synchronization of the Operation Log with remote storage.
@@ -360,10 +367,42 @@ export class OperationLogSyncService {
         result.piggybackedOps,
         startupCleanupFullStateOpId,
         startupOpIdsToDiscard,
-        result.lastServerSeqToPersist,
+        {
+          repairBaseServerSeq: result.lastServerSeqToPersist,
+          conflictRecheck: {
+            isNeverSynced: isNeverSyncedAtSyncStart,
+            preCapturedPendingOps: result.selectedPendingOps ?? [],
+          },
+        },
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
       // Validation failure (if any) is on the session-validation latch.
+
+      if (processResult.preApplyFullStateConflict?.dialogData) {
+        const { fullStateOp, pendingOps, dialogData } =
+          processResult.preApplyFullStateConflict;
+        OpLog.warn(
+          `OperationLogSyncService: ${fullStateOp?.opType ?? 'Full-state op'} gained ` +
+            `${pendingOps.length} pending local op(s) before piggyback apply. Showing conflict dialog.`,
+        );
+        const conflictResult = await this._handleSyncImportConflict(
+          syncProvider,
+          dialogData,
+          'OperationLogSyncService (piggybacked full-state pre-apply recheck)',
+        );
+        if (conflictResult === 'CANCEL') {
+          return { kind: 'cancelled' };
+        }
+        return {
+          kind: 'completed',
+          uploadedCount: result.uploadedCount,
+          piggybackedOpsCount: result.piggybackedOps.length,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        };
+      }
 
       if (processResult.blockedByIncompatibleOp) {
         return { kind: 'blocked_incompatible' };
@@ -978,9 +1017,30 @@ export class OperationLogSyncService {
       result.newOps,
       startupCleanupFullStateOpId,
       startupOpIdsToDiscard,
-      result.latestServerSeq,
-      options?.ignoredLocalFullStateOpIds,
+      {
+        repairBaseServerSeq: result.latestServerSeq,
+        ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+        conflictRecheck: { isNeverSynced: options?.isNeverSynced },
+      },
     );
+
+    if (processResult.preApplyFullStateConflict?.dialogData) {
+      const { fullStateOp, pendingOps, dialogData } =
+        processResult.preApplyFullStateConflict;
+      OpLog.warn(
+        `OperationLogSyncService: ${fullStateOp?.opType ?? 'Full-state op'} gained ` +
+          `${pendingOps.length} pending local op(s) before download apply. Showing conflict dialog.`,
+      );
+      const conflictResult = await this._handleSyncImportConflict(
+        syncProvider,
+        dialogData,
+        'OperationLogSyncService (incoming full-state pre-apply recheck)',
+      );
+      if (conflictResult === 'CANCEL') {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'no_new_ops' };
+    }
 
     if (processResult.blockedByIncompatibleOp) {
       return { kind: 'blocked_incompatible' };
@@ -1068,25 +1128,68 @@ export class OperationLogSyncService {
     remoteOps: Operation[],
     fullStateOpId: string | undefined,
     startupOpIds: string[],
-    repairBaseServerSeq?: number,
-    ignoredLocalFullStateOpIds?: readonly string[],
-  ): Promise<RemoteOpsProcessingResult> {
+    options?: {
+      repairBaseServerSeq?: number;
+      ignoredLocalFullStateOpIds?: readonly string[];
+      conflictRecheck?: {
+        isNeverSynced?: boolean;
+        preCapturedPendingOps?: OperationLogEntry[];
+      };
+    },
+  ): Promise<GuardedRemoteOpsProcessingResult> {
+    const startupOpIdsToDiscard = new Set(startupOpIds);
+    let preApplyFullStateConflict: IncomingFullStateConflictGateResult | undefined;
     try {
+      const conflictRecheck = options?.conflictRecheck;
+      const beforeFullStateApply = conflictRecheck
+        ? async (fullStateOps: Operation[]): Promise<boolean> => {
+            const conflict =
+              await this.syncImportConflictGateService.checkIncomingFullStateConflict(
+                fullStateOps,
+                {
+                  isNeverSynced: conflictRecheck.isNeverSynced,
+                  preCapturedPendingOps: conflictRecheck.preCapturedPendingOps,
+                },
+              );
+            for (const opId of conflict.discardablePendingOpIds) {
+              startupOpIdsToDiscard.add(opId);
+            }
+            if (conflict.dialogData) {
+              preApplyFullStateConflict = conflict;
+              return false;
+            }
+            return true;
+          }
+        : undefined;
       const result = await this.repairSyncContext.runWithBaseServerSeq(
-        repairBaseServerSeq,
+        options?.repairBaseServerSeq,
         () =>
-          ignoredLocalFullStateOpIds?.length
-            ? this.remoteOpsProcessingService.processRemoteOps(remoteOps, {
-                ignoredLocalFullStateOpIds,
-              })
-            : this.remoteOpsProcessingService.processRemoteOps(remoteOps),
+          this.remoteOpsProcessingService.processRemoteOps(remoteOps, {
+            ...(options?.ignoredLocalFullStateOpIds?.length
+              ? {
+                  ignoredLocalFullStateOpIds: options.ignoredLocalFullStateOpIds,
+                }
+              : {}),
+            ...(beforeFullStateApply ? { beforeFullStateApply } : {}),
+          }),
       );
+      if (
+        result.fullStateApplyBlockedByLocalConflict &&
+        !preApplyFullStateConflict?.dialogData
+      ) {
+        throw new Error(
+          'Full-state apply was blocked without conflict data for resolution.',
+        );
+      }
       await this._discardStartupOpsIfFullStateCommitted(
         fullStateOpId,
-        startupOpIds,
+        [...startupOpIdsToDiscard],
         result.committedFullStateOpIds,
       );
-      return result;
+      return {
+        ...result,
+        ...(preApplyFullStateConflict ? { preApplyFullStateConflict } : {}),
+      };
     } catch (error) {
       try {
         // The reducer/apply transaction can commit the full-state op before a
@@ -1094,7 +1197,7 @@ export class OperationLogSyncService {
         // so obsolete startup ops cannot replay after an already-applied import.
         await this._discardStartupOpsIfFullStateCommitted(
           fullStateOpId,
-          startupOpIds,
+          [...startupOpIdsToDiscard],
           [],
           true,
         );

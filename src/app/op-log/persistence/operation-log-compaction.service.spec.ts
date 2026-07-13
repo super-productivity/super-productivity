@@ -41,6 +41,7 @@ describe('OperationLogCompactionService', () => {
       'saveStateCache',
       'resetCompactionCounter',
       'deleteOpsWhere',
+      'getPendingRemoteOps',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
@@ -64,6 +65,7 @@ describe('OperationLogCompactionService', () => {
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
     mockOpLogStore.resetCompactionCounter.and.returnValue(Promise.resolve());
     mockOpLogStore.deleteOpsWhere.and.returnValue(Promise.resolve());
+    mockOpLogStore.getPendingRemoteOps.and.resolveTo([]);
     mockStateSnapshot.getStateSnapshot.and.returnValue(mockState);
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve(mockVectorClock),
@@ -277,6 +279,69 @@ describe('OperationLogCompactionService', () => {
       expect(capturedFilter!(oldSyncedEntry)).toBeTrue();
     });
 
+    it('should preserve old remote operations with incomplete application status', async () => {
+      let capturedFilter: ((entry: OperationLogEntry) => boolean) | undefined;
+      mockOpLogStore.deleteOpsWhere.and.callFake(async (filterFn) => {
+        capturedFilter = filterFn;
+      });
+
+      await service.compact();
+
+      for (const applicationStatus of ['pending', 'archive_pending', 'failed'] as const) {
+        const quarantinedEntry: OperationLogEntry = {
+          seq: 50,
+          op: {} as any,
+          appliedAt: Date.now() - COMPACTION_RETENTION_MS - 1000,
+          source: 'remote',
+          syncedAt: Date.now() - COMPACTION_RETENTION_MS - 500,
+          applicationStatus,
+        };
+
+        expect(capturedFilter!(quarantinedEntry))
+          .withContext(applicationStatus)
+          .toBeFalse();
+      }
+    });
+
+    it('should delete old rejected operations that were never synced', async () => {
+      let capturedFilter: ((entry: OperationLogEntry) => boolean) | undefined;
+      mockOpLogStore.deleteOpsWhere.and.callFake(async (filterFn) => {
+        capturedFilter = filterFn;
+      });
+
+      await service.compact();
+
+      const rejectedEntry: OperationLogEntry = {
+        seq: 50,
+        op: {} as any,
+        appliedAt: Date.now() - COMPACTION_RETENTION_MS - 1000,
+        source: 'remote',
+        rejectedAt: Date.now() - COMPACTION_RETENTION_MS - 500,
+        applicationStatus: 'pending',
+      };
+
+      expect(capturedFilter!(rejectedEntry)).toBeTrue();
+    });
+
+    it('should skip compaction when reducer-uncommitted remote operations exist', async () => {
+      mockOpLogStore.getPendingRemoteOps.and.resolveTo([
+        {
+          seq: 50,
+          op: {} as any,
+          appliedAt: Date.now(),
+          source: 'remote',
+          syncedAt: Date.now(),
+          applicationStatus: 'pending',
+        },
+      ]);
+
+      await service.compact();
+
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.resetCompactionCounter).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
     it('should not delete operations with seq greater than lastSeq', async () => {
       mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(100));
 
@@ -309,6 +374,12 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
       expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
       expect(mockOpLogStore.resetCompactionCounter).not.toHaveBeenCalled();
+    });
+
+    it('should report when regular compaction is skipped', async () => {
+      mockStateSnapshot.getStateSnapshot.and.returnValue({} as never);
+
+      expect(await service.compact()).toBeFalse();
     });
 
     it('should handle empty vector clock', async () => {
@@ -430,6 +501,26 @@ describe('OperationLogCompactionService', () => {
       const result = await service.emergencyCompact();
 
       expect(result).toBeFalse();
+    });
+
+    it('should return false when pending reducer work makes compaction skip', async () => {
+      mockOpLogStore.getPendingRemoteOps.and.resolveTo([
+        {
+          seq: 1,
+          op: {} as never,
+          appliedAt: Date.now(),
+          source: 'remote',
+          applicationStatus: 'pending',
+        },
+      ]);
+
+      expect(await service.emergencyCompact()).toBeFalse();
+    });
+
+    it('should return false when the empty-state safety guard skips compaction', async () => {
+      mockStateSnapshot.getStateSnapshot.and.returnValue({} as never);
+
+      expect(await service.emergencyCompact()).toBeFalse();
     });
 
     it('should use shorter retention window than regular compaction', async () => {

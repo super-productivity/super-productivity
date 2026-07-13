@@ -13,6 +13,7 @@ import { remoteArchiveDataApplied } from '../../features/archive/store/archive.a
 import { bulkApplyOperations } from './bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
+import { reportBulkReplayReducerFailure } from './bulk-replay-failure-collector';
 
 describe('OperationApplierService', () => {
   let service: OperationApplierService;
@@ -229,6 +230,31 @@ describe('OperationApplierService', () => {
   });
 
   describe('error paths', () => {
+    it('should report and skip reducer-failed operations before archive handling', async () => {
+      const op1 = createMockOperation('op-1');
+      const op2 = createMockOperation('op-2');
+      const op3 = createMockOperation('op-3');
+      const reducerError = new Error('Reducer failed');
+      const onReducersCommitted = jasmine
+        .createSpy('onReducersCommitted')
+        .and.resolveTo();
+      mockStore.dispatch.and.callFake((() => {
+        reportBulkReplayReducerFailure(op2, reducerError);
+      }) as never);
+
+      const result = await service.applyOperations([op1, op2, op3], {
+        onReducersCommitted,
+      });
+
+      expect(onReducersCommitted).toHaveBeenCalledOnceWith(
+        [op1, op3],
+        [{ op: op2, error: reducerError }],
+      );
+      expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledTimes(2);
+      expect(result.appliedOps).toEqual([op1, op3]);
+      expect(result.reducerFailures).toEqual([{ op: op2, error: reducerError }]);
+    });
+
     it('should return failed op when archiveOperationHandler throws', async () => {
       const op = createMockOperation('op-1', 'TASK', OpType.Update, { title: 'Test' });
       const archiveError = new Error('Archive write failed');
@@ -726,6 +752,19 @@ describe('OperationApplierService', () => {
       });
 
       expect(mockOperationLogEffects.processDeferredActions).not.toHaveBeenCalled();
+    });
+
+    it('should leave an already-open remote apply window to its caller', async () => {
+      const op = createMockOperation('op-1');
+
+      await service.applyOperations([op], {
+        remoteApplyWindowAlreadyOpen: true,
+        skipDeferredLocalActions: true,
+      });
+
+      expect(mockHydrationState.startApplyingRemoteOps).not.toHaveBeenCalled();
+      expect(mockHydrationState.startPostSyncCooldown).not.toHaveBeenCalled();
+      expect(mockHydrationState.endApplyingRemoteOps).not.toHaveBeenCalled();
     });
 
     it('should call processDeferredActions after endApplyingRemoteOps', async () => {

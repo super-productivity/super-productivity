@@ -5,12 +5,19 @@ import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { Operation, OpType, ActionType } from '../core/operation.types';
+import {
+  Operation,
+  OperationLogEntry,
+  OpType,
+  ActionType,
+} from '../core/operation.types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
 import { ValidateStateService } from '../validation/validate-state.service';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 /**
  * Handles crash recovery and data restoration for the operation log system.
@@ -30,45 +37,60 @@ export class OperationLogRecoveryService {
   private legacyPfDb = inject(LegacyPfDbService);
   private clientIdService = inject(ClientIdService);
   private validateStateService = inject(ValidateStateService);
+  private lockService = inject(LockService);
 
   /**
    * Attempts to recover from a corrupted or missing SUP_OPS database.
    * Recovery strategy:
-   * 1. Try to load data from legacy 'pf' database (IndexedDB)
-   * 2. If found, run genesis migration with that data
-   * 3. If no legacy data, log error (user will need to sync or restore from backup)
+   * 1. Prove SUP_OPS has neither a snapshot nor operations
+   * 2. Try to load data from legacy 'pf' database (IndexedDB)
+   * 3. If found, run genesis migration with that data
+   * 4. If no legacy data, log error (user will need to sync or restore from backup)
+   *
+   * Inspection and recovery errors intentionally propagate. Treating an
+   * unreadable SUP_OPS database as empty could overwrite newer data with a stale
+   * legacy copy and then advance the snapshot past the healthy operation log.
    */
   async attemptRecovery(): Promise<void> {
     OpLog.normal('OperationLogRecoveryService: Attempting disaster recovery...');
+    await this.lockService.request(LOCK_NAMES.OPERATION_LOG, () =>
+      this._attemptRecoveryWhileLocked(),
+    );
+  }
 
-    try {
-      // 1. Try to load from legacy 'pf' database
-      const hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+  private async _attemptRecoveryWhileLocked(): Promise<void> {
+    const [stateCache, lastSeq] = await Promise.all([
+      this.opLogStore.loadStateCache(),
+      this.opLogStore.getLastSeq(),
+    ]);
 
-      if (hasLegacyData) {
-        OpLog.normal(
-          'OperationLogRecoveryService: Found data in legacy database. Recovering...',
-        );
-        const legacyData = await this.legacyPfDb.loadAllEntityData();
-        await this.recoverFromLegacyData(
-          legacyData as unknown as Record<string, unknown>,
-        );
-        return;
-      }
-
-      // 2. No legacy data found
-      // App will start with NgRx initial state (empty).
-      // User can sync or import a backup to restore their data.
-      OpLog.warn(
-        'OperationLogRecoveryService: No legacy data found. ' +
-          'If you have sync enabled, please trigger a sync to restore your data. ' +
-          'Otherwise, you may need to restore from a backup.',
-      );
-    } catch (e) {
-      OpLog.err('OperationLogRecoveryService: Recovery failed', e);
-      // App will start with NgRx initial state (empty).
-      // User can sync or restore from backup.
+    if (stateCache !== null && stateCache !== undefined) {
+      throw new Error('Refusing legacy recovery because a SUP_OPS snapshot still exists');
     }
+    if (lastSeq > 0) {
+      throw new Error(
+        'Refusing legacy recovery because the SUP_OPS operation log is not empty',
+      );
+    }
+
+    const hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+
+    if (hasLegacyData) {
+      OpLog.normal(
+        'OperationLogRecoveryService: Found data in legacy database. Recovering...',
+      );
+      const legacyData = await this.legacyPfDb.loadAllEntityData();
+      await this.recoverFromLegacyData(legacyData as unknown as Record<string, unknown>);
+      return;
+    }
+
+    // No legacy data found. App will start with NgRx initial state (empty).
+    // User can sync or import a backup to restore their data.
+    OpLog.warn(
+      'OperationLogRecoveryService: No legacy data found. ' +
+        'If you have sync enabled, please trigger a sync to restore your data. ' +
+        'Otherwise, you may need to restore from a backup.',
+    );
   }
 
   /**
@@ -109,21 +131,7 @@ export class OperationLogRecoveryService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
-    // Write recovery operation
-    await this.opLogStore.append(recoveryOp);
-
-    // Create state cache
-    const lastSeq = await this.opLogStore.getLastSeq();
-    await this.opLogStore.saveStateCache({
-      state: legacyData,
-      lastAppliedOpSeq: lastSeq,
-      vectorClock: recoveryOp.vectorClock,
-      compactedAt: Date.now(),
-    });
-
-    // Persist vector clock to IndexedDB store for immediate availability
-    // Without this, getVectorClock() returns stale clock until cache is populated
-    await this.opLogStore.setVectorClock(recoveryOp.vectorClock);
+    await this.opLogStore.appendRecoveryOperationAndSnapshot(recoveryOp, legacyData);
 
     // Dispatch to NgRx
     this.store.dispatch(loadAllData({ appDataComplete: legacyData as AppDataComplete }));
@@ -135,12 +143,11 @@ export class OperationLogRecoveryService {
 
   /**
    * Recovers from pending remote ops that were stored but not applied (crash recovery).
-   * These ops are replayed through reducers during normal hydration, but a crash may
-   * have happened before their archive side effects completed. Move them to the
-   * 'archive_pending' checkpoint so hydration retries archive work without
-   * double-applying reducers; sync stays blocked until that recovery succeeds.
+   * The crash point is unknowable, so this method only returns the quarantine.
+   * Hydration replays the rows, persists their reducer outcome, and only then
+   * retries archive work; sync stays blocked until that recovery succeeds.
    */
-  async recoverPendingRemoteOps(): Promise<void> {
+  async recoverPendingRemoteOps(): Promise<OperationLogEntry[]> {
     const recoveredLegacyFailures =
       await this.opLogStore.recoverLegacyTerminalRemoteFailures();
     if (recoveredLegacyFailures > 0) {
@@ -151,21 +158,18 @@ export class OperationLogRecoveryService {
     const pendingOps = await this.opLogStore.getPendingRemoteOps();
 
     if (pendingOps.length === 0) {
-      return;
+      return [];
     }
 
-    // Reducers are replayed status-blind during hydration; archive work is
-    // retried after. Age is irrelevant — every crash-interrupted op lands in
-    // the same quarantine, and retryCount stays untouched (no attempt was made).
-    const seqs = pendingOps.map((e) => e.seq);
-    await this.opLogStore.markReducersCommittedAndMergeClocks(
-      seqs,
-      pendingOps.map((entry) => entry.op),
-    );
+    // Do not checkpoint these rows yet. A crash can occur before reducer
+    // dispatch, during a partially successful bulk dispatch, or immediately
+    // after it. Hydration must replay the reducers and durably partition their
+    // successes/failures before any archive-only retry can start.
     OpLog.warn(
       `OperationLogRecoveryService: Found ${pendingOps.length} pending remote ops from previous crash. ` +
-        'Quarantined their archive work (reducers will replay during hydration).',
+        'Reducers will be replayed before archive recovery.',
     );
+    return pendingOps;
   }
 
   /**

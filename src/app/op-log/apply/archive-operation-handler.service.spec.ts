@@ -16,6 +16,8 @@ import { TimeTrackingService } from '../../features/time-tracking/time-tracking.
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { OpType } from '../core/operation.types';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('isArchiveAffectingAction', () => {
   it('should return true for moveToArchive action', () => {
@@ -95,6 +97,7 @@ describe('ArchiveOperationHandler', () => {
   let mockTaskArchiveService: jasmine.SpyObj<TaskArchiveService>;
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockTimeTrackingService: jasmine.SpyObj<TimeTrackingService>;
+  let mockLockService: jasmine.SpyObj<LockService>;
 
   const createMockTaskWithSubTasks = (
     id: string,
@@ -140,6 +143,8 @@ describe('ArchiveOperationHandler', () => {
       'cleanupDataEverywhereForProject',
       'cleanupArchiveDataForTag',
     ]);
+    mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockLockService.request.and.callFake(async (_lockName, callback) => callback());
     mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
       'loadArchiveYoung',
       'loadArchiveOld',
@@ -188,6 +193,7 @@ describe('ArchiveOperationHandler', () => {
         { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: TimeTrackingService, useValue: mockTimeTrackingService },
+        { provide: LockService, useValue: mockLockService },
       ],
     });
 
@@ -873,9 +879,10 @@ describe('ArchiveOperationHandler', () => {
 
         await service.handleOperation(action);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          archiveYoungData,
-        );
+        const [savedYoung, savedOld] =
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args;
+        expect(savedYoung).toBe(archiveYoungData);
+        expect(savedOld.task.ids).toEqual([]);
       });
 
       it('should write archiveOld to IndexedDB for remote operations', async () => {
@@ -889,7 +896,10 @@ describe('ArchiveOperationHandler', () => {
 
         await service.handleOperation(action);
 
-        expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(archiveOldData);
+        const [savedYoung, savedOld] =
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args;
+        expect(savedYoung.task.ids).toEqual([]);
+        expect(savedOld).toBe(archiveOldData);
       });
 
       it('should write both archiveYoung and archiveOld for remote operations', async () => {
@@ -904,10 +914,33 @@ describe('ArchiveOperationHandler', () => {
 
         await service.handleOperation(action);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+        expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
           archiveYoungData,
+          archiveOldData,
         );
-        expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(archiveOldData);
+        expect(mockLockService.request).toHaveBeenCalledWith(
+          LOCK_NAMES.TASK_ARCHIVE,
+          jasmine.any(Function),
+        );
+      });
+
+      it('should commit both remote archive halves in one transaction', async () => {
+        const archiveYoungData = createArchiveModelForTest(['young-1']);
+        const archiveOldData = createArchiveModelForTest(['old-1']);
+        const action = {
+          type: loadAllData.type,
+          appDataComplete: { archiveYoung: archiveYoungData, archiveOld: archiveOldData },
+          meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+        } as unknown as PersistentAction;
+
+        await service.handleOperation(action);
+
+        expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
+          archiveYoungData,
+          archiveOldData,
+        );
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
       });
 
       it('should NOT write archive for local operations (already done by PfapiService)', async () => {
@@ -923,6 +956,7 @@ describe('ArchiveOperationHandler', () => {
 
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchivesAtomic).not.toHaveBeenCalled();
       });
 
       it('should NOT write archive when isRemote is undefined (treated as local)', async () => {
@@ -938,6 +972,7 @@ describe('ArchiveOperationHandler', () => {
 
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchivesAtomic).not.toHaveBeenCalled();
       });
 
       it('should handle missing archiveYoung gracefully', async () => {
@@ -952,7 +987,10 @@ describe('ArchiveOperationHandler', () => {
         await service.handleOperation(action);
 
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
-        expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(archiveOldData);
+        const [savedYoung, savedOld] =
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args;
+        expect(savedYoung.task.ids).toEqual([]);
+        expect(savedOld).toBe(archiveOldData);
       });
 
       it('should handle missing archiveOld gracefully', async () => {
@@ -966,10 +1004,11 @@ describe('ArchiveOperationHandler', () => {
 
         await service.handleOperation(action);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          archiveYoungData,
-        );
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+        const [savedYoung, savedOld] =
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args;
+        expect(savedYoung).toBe(archiveYoungData);
+        expect(savedOld.task.ids).toEqual([]);
       });
 
       it('should handle empty appDataComplete gracefully', async () => {
@@ -983,6 +1022,7 @@ describe('ArchiveOperationHandler', () => {
 
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchivesAtomic).not.toHaveBeenCalled();
       });
 
       it('should preserve timeTracking data in archive', async () => {
@@ -1004,7 +1044,7 @@ describe('ArchiveOperationHandler', () => {
         await service.handleOperation(action);
 
         const savedData =
-          mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args[0];
         expect(savedData.timeTracking.project.proj1.date20240115.s).toBe(3600000);
         expect(savedData.timeTracking.tag.tag1.date20240115.s).toBe(1800000);
         expect(savedData.lastTimeTrackingFlush).toBe(1234567890);
@@ -1052,6 +1092,27 @@ describe('ArchiveOperationHandler', () => {
         });
 
         describe('SYNC_IMPORT', () => {
+          it('should preflight both guards before atomically updating the allowed half', async () => {
+            const newArchiveYoung = createArchiveModelForTest(['new-young']);
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: {
+                archiveYoung: newArchiveYoung,
+                archiveOld: emptyArchive,
+              },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
+              newArchiveYoung,
+              existingArchiveOld,
+            );
+            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          });
+
           it('should preserve local archiveYoung when SYNC_IMPORT has empty archive (likely bug)', async () => {
             const action = {
               type: loadAllData.type,
@@ -1090,8 +1151,9 @@ describe('ArchiveOperationHandler', () => {
 
             await service.handleOperation(action);
 
-            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
               newArchive,
+              existingArchiveOld,
             );
           });
         });
@@ -1134,8 +1196,9 @@ describe('ArchiveOperationHandler', () => {
 
             await service.handleOperation(action);
 
-            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
               newArchive,
+              existingArchiveOld,
             );
           });
         });
@@ -1152,61 +1215,50 @@ describe('ArchiveOperationHandler', () => {
             window.confirm = originalConfirm;
           });
 
-          it('should show confirm dialog and throw if user cancels (archiveYoung)', async () => {
+          it('should replay the originating backup decision without prompting remotely', async () => {
             (window.confirm as jasmine.Spy).and.returnValue(false);
-
             const action = {
               type: loadAllData.type,
-              appDataComplete: { archiveYoung: emptyArchive },
-              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
-            } as unknown as PersistentAction;
-
-            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
-              /User cancelled backup import/,
-            );
-            expect(window.confirm).toHaveBeenCalledWith(
-              jasmine.stringContaining('2 archived tasks'),
-            );
-            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
-          });
-
-          it('should show confirm dialog and proceed if user confirms (archiveYoung)', async () => {
-            (window.confirm as jasmine.Spy).and.returnValue(true);
-
-            const action = {
-              type: loadAllData.type,
-              appDataComplete: { archiveYoung: emptyArchive },
-              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+              appDataComplete: {
+                archiveYoung: emptyArchive,
+                archiveOld: emptyArchive,
+              },
+              meta: {
+                isPersistent: true,
+                isRemote: true,
+                opType: OpType.BackupImport,
+              },
             } as unknown as PersistentAction;
 
             await service.handleOperation(action);
 
-            expect(window.confirm).toHaveBeenCalled();
-            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+            expect(window.confirm).not.toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
+              emptyArchive,
               emptyArchive,
             );
           });
 
-          it('should show confirm dialog and throw if user cancels (archiveOld)', async () => {
+          it('should apply an empty archiveYoung without another device-local decision', async () => {
             (window.confirm as jasmine.Spy).and.returnValue(false);
 
             const action = {
               type: loadAllData.type,
-              appDataComplete: { archiveOld: emptyArchive },
+              appDataComplete: { archiveYoung: emptyArchive },
               meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
             } as unknown as PersistentAction;
 
-            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
-              /User cancelled backup import/,
+            await service.handleOperation(action);
+
+            expect(window.confirm).not.toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
+              emptyArchive,
+              existingArchiveOld,
             );
-            expect(window.confirm).toHaveBeenCalledWith(
-              jasmine.stringContaining('1 old archived tasks'),
-            );
-            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
           });
 
-          it('should show confirm dialog and proceed if user confirms (archiveOld)', async () => {
-            (window.confirm as jasmine.Spy).and.returnValue(true);
+          it('should apply an empty archiveOld without another device-local decision', async () => {
+            (window.confirm as jasmine.Spy).and.returnValue(false);
 
             const action = {
               type: loadAllData.type,
@@ -1216,8 +1268,9 @@ describe('ArchiveOperationHandler', () => {
 
             await service.handleOperation(action);
 
-            expect(window.confirm).toHaveBeenCalled();
-            expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(
+            expect(window.confirm).not.toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
+              existingArchiveYoung,
               emptyArchive,
             );
           });
@@ -1234,8 +1287,9 @@ describe('ArchiveOperationHandler', () => {
             await service.handleOperation(action);
 
             expect(window.confirm).not.toHaveBeenCalled();
-            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+            expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
               newArchive,
+              existingArchiveOld,
             );
           });
         });

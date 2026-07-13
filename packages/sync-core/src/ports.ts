@@ -1,4 +1,8 @@
-import type { ApplyOperationsOptions, ApplyOperationsResult } from './apply.types';
+import type {
+  ApplyOperationsOptions,
+  ApplyOperationsResult,
+  OperationApplyFailure,
+} from './apply.types';
 import type { Operation } from './operation.types';
 
 export type SyncPortMeta = Record<string, string | number | boolean | null | undefined>;
@@ -22,7 +26,10 @@ export interface OperationApplyPort<TOperation extends Operation<string> = Opera
     ops: TOperation[],
     options?: ApplyOperationsOptions & {
       /** Persist reducer-commit bookkeeping before post-dispatch side effects start. */
-      onReducersCommitted?: (ops: TOperation[]) => Promise<void>;
+      onReducersCommitted?: (
+        ops: TOperation[],
+        failures?: OperationApplyFailure<TOperation>[],
+      ) => Promise<void>;
     },
   ): Promise<ApplyOperationsResult<TOperation>>;
 }
@@ -40,7 +47,10 @@ export interface ReducerCommitAwareOperationApplyPort<
   applyOperations(
     ops: TOperation[],
     options: ApplyOperationsOptions & {
-      onReducersCommitted: (ops: TOperation[]) => Promise<void>;
+      onReducersCommitted: (
+        ops: TOperation[],
+        failures?: OperationApplyFailure<TOperation>[],
+      ) => Promise<void>;
     },
   ): Promise<ApplyOperationsResult<TOperation>>;
 }

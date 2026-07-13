@@ -241,7 +241,7 @@ const applyTaskProjectionFromOp = (op: Operation, projection: TaskEntityMap): vo
   }
 };
 
-const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
+export const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
   op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
   op.actionType === ActionType.TASK_SHARED_DELETE ||
   op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE;

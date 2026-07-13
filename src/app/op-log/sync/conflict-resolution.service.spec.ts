@@ -3,6 +3,7 @@ import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
+import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
@@ -28,6 +29,7 @@ describe('ConflictResolutionService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockValidateStateService: jasmine.SpyObj<ValidateStateService>;
+  let mockHydrationStateService: jasmine.SpyObj<HydrationStateService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
   let mockEntityRegistry: ReturnType<typeof buildEntityRegistry>;
   let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
@@ -91,6 +93,7 @@ describe('ConflictResolutionService', () => {
       'markRejected',
       'markFailed',
       'getUnsyncedByEntity',
+      'getOpById',
     ]);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
@@ -101,6 +104,11 @@ describe('ConflictResolutionService', () => {
     mockSnackService.hasPendingPersistentAction.and.returnValue(false);
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepairCurrentState',
+    ]);
+    mockHydrationStateService = jasmine.createSpyObj('HydrationStateService', [
+      'startApplyingRemoteOps',
+      'startPostSyncCooldown',
+      'endApplyingRemoteOps',
     ]);
     mockOperationLogEffects = jasmine.createSpyObj('OperationLogEffects', [
       'processDeferredActions',
@@ -120,6 +128,7 @@ describe('ConflictResolutionService', () => {
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: SnackService, useValue: mockSnackService },
         { provide: ValidateStateService, useValue: mockValidateStateService },
+        { provide: HydrationStateService, useValue: mockHydrationStateService },
         { provide: OperationLogEffects, useValue: mockOperationLogEffects },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: ENTITY_REGISTRY, useValue: mockEntityRegistry },
@@ -132,6 +141,7 @@ describe('ConflictResolutionService', () => {
     mockOperationLogEffects.processDeferredActions.and.resolveTo();
     mockValidateStateService.validateAndRepairCurrentState.and.resolveTo(true);
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
+    mockOpLogStore.getOpById.and.resolveTo(undefined);
     // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
@@ -1749,7 +1759,7 @@ describe('ConflictResolutionService', () => {
         expect(result).toEqual({ localWinOpsCreated: 1 });
       });
 
-      it('should persist local-win compensation before applying mixed remote winners', async () => {
+      it('should keep originals recoverable when applying a mixed resolution fails', async () => {
         const now = Date.now();
         const remoteWinner = createOpWithTimestamp('remote-winner', 'client-b', now);
         const remoteLoser = createOpWithTimestamp(
@@ -1809,12 +1819,7 @@ describe('ConflictResolutionService', () => {
           service.autoResolveConflictsLWW(conflicts),
         ).toBeRejectedWithError('remote archive apply failed');
 
-        expect(callOrder).toEqual([
-          'persist-mixed-resolution',
-          'mark-rejected',
-          'mark-rejected',
-          'apply-remote',
-        ]);
+        expect(callOrder).toEqual(['persist-mixed-resolution', 'apply-remote']);
       });
 
       it('should not reject or apply remote rows when local-win compensation cannot persist', async () => {
@@ -2013,6 +2018,276 @@ describe('ConflictResolutionService', () => {
           [1],
           [remoteOp],
         );
+      });
+
+      it('should keep original operations recoverable when a remote winner reducer fails', async () => {
+        const now = Date.now();
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const reducerError = new Error('Reducer failed');
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+            [remoteOp],
+          ),
+        ];
+
+        mockOpLogStore.hasOp.and.resolveTo(false);
+        mockOpLogStore.append.and.resolveTo(1);
+        mockOperationApplier.applyOperations.and.callFake(async (_ops, options) => {
+          const reducerFailures = [{ op: remoteOp, error: reducerError }];
+          await options?.onReducersCommitted?.([], reducerFailures);
+          return { appliedOps: [], reducerFailures };
+        });
+
+        await expectAsync(
+          service.autoResolveConflictsLWW(conflicts),
+        ).toBeRejectedWithError(IncompleteRemoteOperationsError);
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markFailed).not.toHaveBeenCalled();
+      });
+
+      it('should retry an existing pending remote winner after its reducer recovers', async () => {
+        const now = Date.now();
+        const localOp = createOpWithTimestamp('local-1', 'client-a', now - 1000);
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const redeliveredRemoteOp = {
+          ...remoteOp,
+          payload: { changedAfterPersistence: true },
+          vectorClock: { clientB: 99 },
+        };
+        const reducerError = new Error('Reducer failed');
+        const conflicts: EntityConflict[] = [
+          createConflict('task-1', [localOp], [remoteOp]),
+        ];
+        const retryConflicts: EntityConflict[] = [
+          createConflict('task-1', [localOp], [redeliveredRemoteOp]),
+        ];
+        let appendAttempt = 0;
+        mockOpLogStore.appendBatchSkipDuplicates.and.callFake(async () => {
+          appendAttempt++;
+          return appendAttempt === 1
+            ? { seqs: [7], writtenOps: [remoteOp], skippedCount: 0 }
+            : { seqs: [], writtenOps: [], skippedCount: 1 };
+        });
+        mockOpLogStore.getOpById.and.resolveTo({
+          seq: 7,
+          op: remoteOp,
+          appliedAt: now,
+          source: 'remote',
+          applicationStatus: 'pending',
+        });
+        let applyAttempt = 0;
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          applyAttempt++;
+          if (applyAttempt === 1) {
+            const reducerFailures = [{ op: remoteOp, error: reducerError }];
+            await options?.onReducersCommitted?.([], reducerFailures);
+            return { appliedOps: [], reducerFailures };
+          }
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await expectAsync(
+          service.autoResolveConflictsLWW(conflicts),
+        ).toBeRejectedWithError(IncompleteRemoteOperationsError);
+        const retryResult = await service.autoResolveConflictsLWW(retryConflicts);
+
+        expect(retryResult).toEqual({ localWinOpsCreated: 0 });
+        expect(mockOperationApplier.applyOperations).toHaveBeenCalledTimes(2);
+        expect(mockOperationApplier.applyOperations.calls.argsFor(1)[0]).toEqual([
+          remoteOp,
+        ]);
+        expect(mockOpLogStore.markApplied).toHaveBeenCalledWith([7]);
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([localOp.id]);
+      });
+
+      it('should fall back to LWW when a synthetic merge reducer fails', async () => {
+        const now = Date.now();
+        const localOp = createOpWithTimestamp('local-1', 'client-a', now - 1000);
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const mergedOp = createOpWithTimestamp('merged-1', TEST_CLIENT_ID, now + 1);
+        const conflict = createConflict('task-1', [localOp], [remoteOp]);
+        const serviceInternals = service as unknown as {
+          _journalMergedResolution: () => Promise<unknown>;
+          _journalResolution: () => Promise<unknown>;
+          _resolveConflictsWithLWW: (
+            conflicts: EntityConflict[],
+            disableDisjointMerge?: boolean,
+          ) => Promise<unknown>;
+        };
+        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
+        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
+        spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
+          async (_conflicts, disableDisjointMerge = false) =>
+            disableDisjointMerge
+              ? {
+                  lwwResolutions: [{ conflict, winner: 'remote' }],
+                  mergedResolutions: [],
+                  lwwPlans: [{ conflict }],
+                }
+              : {
+                  lwwResolutions: [],
+                  mergedResolutions: [
+                    {
+                      conflict,
+                      mergedOp,
+                      plan: { conflict },
+                    },
+                  ],
+                  lwwPlans: [],
+                },
+        );
+        mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
+          seqs: [],
+          writtenOps: [],
+          skippedCount: 1,
+        });
+        mockOpLogStore.getOpById.and.resolveTo({
+          seq: 7,
+          op: remoteOp,
+          appliedAt: now,
+          source: 'remote',
+          applicationStatus: 'pending',
+        });
+        let applyAttempt = 0;
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          applyAttempt++;
+          if (applyAttempt === 1) {
+            const reducerFailures = [
+              { op: mergedOp, error: new Error('synthetic reducer failed') },
+            ];
+            await options?.onReducersCommitted?.([], reducerFailures);
+            return { appliedOps: [], reducerFailures };
+          }
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        const result = await service.autoResolveConflictsLWW([conflict]);
+
+        expect(result).toEqual({ localWinOpsCreated: 0 });
+        const mergeRemoteBatch =
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0][0];
+        expect(mergeRemoteBatch).toEqual(
+          jasmine.objectContaining({
+            source: 'remote',
+            options: { pendingApply: true },
+          }),
+        );
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [],
+          [],
+          [mergedOp.id],
+        );
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [7],
+          [remoteOp],
+        );
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([localOp.id]);
+        expect(serviceInternals._journalMergedResolution).not.toHaveBeenCalled();
+        expect(serviceInternals._journalResolution).toHaveBeenCalled();
+      });
+
+      it('should keep deferred user actions outside a failed merge fallback rejection', async () => {
+        const now = Date.now();
+        const localOp = createOpWithTimestamp('local-1', 'client-a', now - 1000);
+        const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
+        const mergedOp = createOpWithTimestamp('merged-1', TEST_CLIENT_ID, now + 1);
+        const deferredOp = createOpWithTimestamp(
+          'deferred-user-op',
+          TEST_CLIENT_ID,
+          now + 2,
+        );
+        const conflict = createConflict('task-1', [localOp], [remoteOp]);
+        const serviceInternals = service as unknown as {
+          _journalMergedResolution: () => Promise<unknown>;
+          _journalResolution: () => Promise<unknown>;
+          _resolveConflictsWithLWW: (
+            conflicts: EntityConflict[],
+            disableDisjointMerge?: boolean,
+          ) => Promise<unknown>;
+        };
+        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
+        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
+        spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
+          async (_conflicts, disableDisjointMerge = false) =>
+            disableDisjointMerge
+              ? {
+                  lwwResolutions: [{ conflict, winner: 'remote' }],
+                  mergedResolutions: [],
+                  lwwPlans: [{ conflict }],
+                }
+              : {
+                  lwwResolutions: [],
+                  mergedResolutions: [{ conflict, mergedOp, plan: { conflict } }],
+                  lwwPlans: [],
+                },
+        );
+        mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
+          seqs: [],
+          writtenOps: [],
+          skippedCount: 1,
+        });
+        mockOpLogStore.getOpById.and.resolveTo({
+          seq: 7,
+          op: remoteOp,
+          appliedAt: now,
+          source: 'remote',
+          applicationStatus: 'pending',
+        });
+        const callOrder: string[] = [];
+        let deferredWasPersisted = false;
+        let applyAttempt = 0;
+        mockHydrationStateService.startApplyingRemoteOps.and.callFake(() => {
+          callOrder.push('window-start');
+        });
+        mockHydrationStateService.startPostSyncCooldown.and.callFake(() => {
+          callOrder.push('cooldown-start');
+        });
+        mockHydrationStateService.endApplyingRemoteOps.and.callFake(() => {
+          callOrder.push('window-end');
+        });
+        mockOpLogStore.getUnsyncedByEntity.and.callFake(async () =>
+          deferredWasPersisted ? new Map([['TASK:task-1', [deferredOp]]]) : new Map(),
+        );
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          applyAttempt++;
+          callOrder.push(`apply-${applyAttempt}`);
+          if (applyAttempt === 1) {
+            const reducerFailures = [
+              { op: mergedOp, error: new Error('synthetic reducer failed') },
+            ];
+            await options?.onReducersCommitted?.([], reducerFailures);
+            return { appliedOps: [], reducerFailures };
+          }
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+        mockOperationLogEffects.processDeferredActions.and.callFake(async () => {
+          callOrder.push('process-deferred');
+          deferredWasPersisted = true;
+        });
+
+        await service.autoResolveConflictsLWW([conflict]);
+
+        const rejectedIds = mockOpLogStore.markRejected.calls
+          .allArgs()
+          .flatMap(([ids]) => ids);
+        expect(rejectedIds).not.toContain(deferredOp.id);
+        expect(callOrder).toEqual([
+          'window-start',
+          'apply-1',
+          'apply-2',
+          'cooldown-start',
+          'window-end',
+          'process-deferred',
+        ]);
+        expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalledTimes(1);
+        expect(mockHydrationStateService.endApplyingRemoteOps).toHaveBeenCalledTimes(1);
       });
 
       it('should process deferred actions after merging remote clocks when caller holds lock', async () => {

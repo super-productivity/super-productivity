@@ -91,7 +91,7 @@ describe('OperationLogEffects', () => {
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ testClient: 5 }),
     );
-    mockCompactionService.compact.and.returnValue(Promise.resolve());
+    mockCompactionService.compact.and.returnValue(Promise.resolve(true));
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
     mockStore.select.and.returnValue(of({})); // Return empty state observable
     mockClientIdService.getOrGenerateClientId.and.returnValue(
@@ -760,7 +760,7 @@ describe('OperationLogEffects', () => {
       mockOpLogStore.getCompactionCounter.and.returnValue(
         Promise.resolve(COMPACTION_THRESHOLD - 1),
       );
-      mockCompactionService.compact.and.returnValue(Promise.resolve());
+      mockCompactionService.compact.and.returnValue(Promise.resolve(true));
 
       const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
       actions$ = of(action);
@@ -777,6 +777,20 @@ describe('OperationLogEffects', () => {
         );
       });
       expect(errorCalls.length).toBe(0);
+    }));
+
+    it('should keep the threshold counter when compaction safely skips', fakeAsync(() => {
+      mockOpLogStore.getCompactionCounter.and.resolveTo(COMPACTION_THRESHOLD - 1);
+      mockCompactionService.compact.and.returnValue(Promise.resolve(false));
+      actions$ = of(createPersistentAction(ActionType.TASK_SHARED_UPDATE));
+
+      effects.persistOperation$.subscribe();
+      tick(100);
+
+      const internalState = effects as unknown as {
+        inMemoryCompactionCounter: number | null;
+      };
+      expect(internalState.inMemoryCompactionCounter).toBe(COMPACTION_THRESHOLD);
     }));
   });
 

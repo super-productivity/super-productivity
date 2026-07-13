@@ -150,4 +150,7 @@ export const runDbUpgrade = (
   // Version 8: no shape change. The version itself is a downgrade barrier for
   // `archive_pending`; v7 readers must fail closed instead of silently skipping
   // reducer-committed operations whose archive work is still outstanding.
+
+  // Version 9: no shape change. This downgrade barrier prevents v8 readers from
+  // replaying rows quarantined with `reducerRejectedAt`.
 };

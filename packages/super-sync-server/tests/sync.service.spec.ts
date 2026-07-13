@@ -175,6 +175,11 @@ vi.mock('../src/db', async () => {
               op.serverSeq > args.where.serverSeq.lte
             )
               return false;
+            if (
+              args.where?.serverSeq?.lt !== undefined &&
+              op.serverSeq >= args.where.serverSeq.lt
+            )
+              return false;
             if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
               return false;
             if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
@@ -215,6 +220,8 @@ vi.mock('../src/db', async () => {
         for (const [id, op] of state.operations) {
           let shouldDelete = true;
           if (args.where?.userId !== undefined && op.userId !== args.where.userId)
+            shouldDelete = false;
+          if (args.where?.id?.in && !args.where.id.in.includes(op.id))
             shouldDelete = false;
           if (
             args.where?.receivedAt?.lt !== undefined &&
@@ -541,6 +548,11 @@ vi.mock('../src/db', async () => {
               if (
                 args.where?.serverSeq?.lte !== undefined &&
                 op.serverSeq > args.where.serverSeq.lte
+              )
+                return false;
+              if (
+                args.where?.serverSeq?.lt !== undefined &&
+                op.serverSeq >= args.where.serverSeq.lt
               )
                 return false;
               if (
@@ -1739,7 +1751,7 @@ describe('SyncService', () => {
       }
     });
 
-    it('should reject operations that are too old', async () => {
+    it('should accept operations created before the server retention window', async () => {
       const service = getSyncService();
       const tooOld = Date.now() - DEFAULT_SYNC_CONFIG.retentionMs - 10000;
 
@@ -1758,8 +1770,8 @@ describe('SyncService', () => {
 
       const results = await service.uploadOps(userId, clientId, [op]);
 
-      expect(results[0].accepted).toBe(false);
-      expect(results[0].error).toBe('Operation too old');
+      expect(results[0].accepted).toBe(true);
+      expect(testState.operations.get(op.id)?.clientTimestamp).toBe(BigInt(tooOld));
     });
 
     it('should reject operations with payload exceeding size limit', async () => {
@@ -2539,8 +2551,34 @@ describe('SyncService', () => {
   });
 
   describe('cleanup', () => {
-    it('should delete old operations (time-based)', async () => {
+    const seedFullStateOp = (
+      targetUserId: number,
+      serverSeq: number,
+      receivedAt: bigint,
+    ): void => {
+      testState.operations.set(`full-state-${targetUserId}-${serverSeq}`, {
+        id: `full-state-${targetUserId}-${serverSeq}`,
+        userId: targetUserId,
+        clientId: `client-${targetUserId}`,
+        serverSeq,
+        actionType: 'LOAD_ALL_DATA',
+        opType: 'SYNC_IMPORT',
+        entityType: 'ALL',
+        entityId: null,
+        entityIds: [],
+        payload: { appDataComplete: { TASK: {} } },
+        vectorClock: {},
+        schemaVersion: 1,
+        clientTimestamp: BigInt(Date.now()),
+        receivedAt,
+        isPayloadEncrypted: false,
+        syncImportReason: null,
+      });
+    };
+
+    it('should not delete old operations when no full-state base exists', async () => {
       const service = getSyncService();
+      const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
 
       // Upload operations
       for (let i = 1; i <= 5; i++) {
@@ -2577,15 +2615,67 @@ describe('SyncService', () => {
         snapshotAt: BigInt(Date.now()), // Snapshot taken recently (>= cutoffTime)
       });
 
-      const { totalDeleted, affectedUserIds } =
-        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      try {
+        const { totalDeleted, affectedUserIds } =
+          await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
 
-      expect(totalDeleted).toBe(2);
-      expect(affectedUserIds).toContain(userId);
+        expect(totalDeleted).toBe(0);
+        expect(affectedUserIds).not.toContain(userId);
+        expect(warnSpy).toHaveBeenCalledWith(
+          'Cleanup [old-ops]: skipped 1 eligible user(s) without a full-state replay base; their operation histories were left intact.',
+        );
 
-      const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
-        .ops;
-      expect(remaining).toHaveLength(3);
+        const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+          .ops;
+        expect(remaining).toHaveLength(5);
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('should preserve the latest full-state operation and its replay tail', async () => {
+      const service = getSyncService();
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+
+      for (let i = 1; i <= 5; i++) {
+        const isFullState = i === 2 || i === 4;
+        testState.operations.set(`old-op-${i}`, {
+          id: `old-op-${i}`,
+          userId,
+          clientId,
+          serverSeq: i,
+          actionType: isFullState ? 'LOAD_ALL_DATA' : 'ADD',
+          opType: i === 2 ? 'BACKUP_IMPORT' : i === 4 ? 'REPAIR' : 'CRT',
+          entityType: isFullState ? 'ALL' : 'TASK',
+          entityId: isFullState ? null : `t${i}`,
+          entityIds: [],
+          payload: isFullState ? { appDataComplete: { TASK: {} } } : {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+
+      testState.userSyncStates.set(userId, {
+        userId,
+        lastSeq: 5,
+        lastSnapshotSeq: 4,
+        snapshotAt: BigInt(Date.now()),
+        latestFullStateSeq: 4,
+      });
+
+      const { totalDeleted } = await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+      expect(totalDeleted).toBe(3);
+      expect(prisma.operation.findFirst).not.toHaveBeenCalled();
+      expect(Array.from(testState.operations.keys())).toEqual(['old-op-4', 'old-op-5']);
+      const freshClientOps = (
+        await operationDownloadService.getOpsSinceWithSeq(userId, 0)
+      ).ops;
+      expect(freshClientOps.map((op) => op.serverSeq)).toEqual([4, 5]);
     });
 
     it('drains a single user up to the per-run budget', async () => {
@@ -2614,11 +2704,12 @@ describe('SyncService', () => {
           syncImportReason: null,
         });
       }
+      seedFullStateOp(userId, totalOps + 1, BigInt(cutoffTime - 1));
 
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: totalOps,
-        lastSnapshotSeq: totalOps,
+        lastSeq: totalOps + 1,
+        lastSnapshotSeq: totalOps + 1,
         snapshotAt: BigInt(Date.now()),
       });
 
@@ -2631,7 +2722,7 @@ describe('SyncService', () => {
       // deleting until the budget hits zero, not just one batch.
       expect(totalDeleted).toBe(250);
       expect(affectedUserIds).toEqual([userId]);
-      expect(testState.operations.size).toBe(5);
+      expect(testState.operations.size).toBe(6);
     });
 
     it('marks user for reconcile when a later batch throws mid-loop', async () => {
@@ -2660,11 +2751,12 @@ describe('SyncService', () => {
           syncImportReason: null,
         });
       }
+      seedFullStateOp(userId, totalOps + 1, BigInt(cutoffTime - 1));
 
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: totalOps,
-        lastSnapshotSeq: totalOps,
+        lastSeq: totalOps + 1,
+        lastSnapshotSeq: totalOps + 1,
         snapshotAt: BigInt(Date.now()),
       });
 
@@ -2698,7 +2790,7 @@ describe('SyncService', () => {
       // First batch committed deletes; the user must still be marked so
       // the next request reconciles the now-stale-high counter.
       expect(storageQuotaService.needsReconcile(userId)).toBe(true);
-      expect(testState.operations.size).toBe(totalOps - 50);
+      expect(testState.operations.size).toBe(totalOps + 1 - 50);
     });
 
     it('shares the per-run budget across users; tail users wait for next pass', async () => {
@@ -2737,20 +2829,21 @@ describe('SyncService', () => {
             syncImportReason: null,
           });
         }
+        seedFullStateOp(uid, opsPerUser + 1, BigInt(cutoffTime - 1));
       }
 
       // userSyncStates are processed by `orderBy: snapshotAt asc`, so the
       // stalest snapshot wins the budget first. user1 here is staler.
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: opsPerUser,
-        lastSnapshotSeq: opsPerUser,
+        lastSeq: opsPerUser + 1,
+        lastSnapshotSeq: opsPerUser + 1,
         snapshotAt: BigInt(Date.now() - 1000),
       });
       testState.userSyncStates.set(user2Id, {
         userId: user2Id,
-        lastSeq: opsPerUser,
-        lastSnapshotSeq: opsPerUser,
+        lastSeq: opsPerUser + 1,
+        lastSnapshotSeq: opsPerUser + 1,
         snapshotAt: BigInt(Date.now()),
       });
 
@@ -2762,7 +2855,7 @@ describe('SyncService', () => {
       // user1 drains fully, user2 only gets the remaining budget.
       expect(totalDeleted).toBe(250);
       expect(affectedUserIds).toEqual([userId, user2Id]);
-      expect(testState.operations.size).toBe(150);
+      expect(testState.operations.size).toBe(152);
     });
 
     it('should delete old operations from all users', async () => {
@@ -2816,16 +2909,18 @@ describe('SyncService', () => {
 
       // Set up userSyncState with required fields for both users
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      seedFullStateOp(userId, 2, BigInt(cutoffTime - 1));
+      seedFullStateOp(user2Id, 3, BigInt(cutoffTime - 1));
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: 1,
-        lastSnapshotSeq: 1,
+        lastSeq: 2,
+        lastSnapshotSeq: 2,
         snapshotAt: BigInt(Date.now()),
       });
       testState.userSyncStates.set(user2Id, {
         userId: user2Id,
-        lastSeq: 2,
-        lastSnapshotSeq: 2,
+        lastSeq: 3,
+        lastSnapshotSeq: 3,
         snapshotAt: BigInt(Date.now()),
       });
 
@@ -2840,10 +2935,10 @@ describe('SyncService', () => {
 
       expect(
         (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops.length,
-      ).toBe(0);
+      ).toBe(1);
       expect(
         (await operationDownloadService.getOpsSinceWithSeq(user2Id, 0)).ops.length,
-      ).toBe(0);
+      ).toBe(1);
     });
 
     it('should delete stale devices', async () => {

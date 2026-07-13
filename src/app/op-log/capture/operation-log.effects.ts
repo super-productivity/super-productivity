@@ -446,7 +446,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     OpLog.normal('OperationLogEffects: Triggering compaction...');
     this.compactionService
       .compact()
-      .then(() => {
+      .then((didCompact) => {
+        if (!didCompact) {
+          return;
+        }
         this.compactionFailures = 0;
         // Reset in-memory counter on successful compaction
         this.inMemoryCompactionCounter = 0;

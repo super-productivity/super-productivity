@@ -69,6 +69,29 @@ describe('HydrationStateService', () => {
     });
   });
 
+  describe('scoped apply hold', () => {
+    it('should stay active until every idempotent hold is released', () => {
+      const releaseOuterHold = service.acquireApplyingRemoteOpsHold();
+      const releaseInnerHold = service.acquireApplyingRemoteOpsHold();
+      service.startApplyingRemoteOps();
+      service.endApplyingRemoteOps();
+
+      expect(service.isApplyingRemoteOps()).toBeTrue();
+      expect(getIsApplyingRemoteOps()).toBeTrue();
+
+      releaseOuterHold();
+      releaseOuterHold();
+
+      expect(service.isApplyingRemoteOps()).toBeTrue();
+      expect(getIsApplyingRemoteOps()).toBeTrue();
+
+      releaseInnerHold();
+
+      expect(service.isApplyingRemoteOps()).toBeFalse();
+      expect(getIsApplyingRemoteOps()).toBeFalse();
+    });
+  });
+
   describe('state transitions', () => {
     it('should correctly track multiple start/end cycles', () => {
       expect(service.isApplyingRemoteOps()).toBeFalse();
