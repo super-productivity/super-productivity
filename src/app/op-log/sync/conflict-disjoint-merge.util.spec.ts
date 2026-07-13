@@ -54,7 +54,7 @@ describe('conflict-disjoint-merge.util', () => {
           ],
         },
       });
-      expect(mergeChangedFields([timeSyncOp], 'task')).toEqual({
+      expect(mergeChangedFields([timeSyncOp], 'task', 'task-1')).toEqual({
         taskId: 'task-1',
         date: '2026-07-10',
         duration: 100,
@@ -64,7 +64,7 @@ describe('conflict-disjoint-merge.util', () => {
 
   describe('hasOpaqueChanges', () => {
     it('is true for a non-adapter payload with no entityChanges (convertToSubTask)', () => {
-      expect(hasOpaqueChanges([convertToSubTaskOp()], 'task')).toBe(true);
+      expect(hasOpaqueChanges([convertToSubTaskOp()], 'task', 'task-1')).toBe(true);
     });
 
     it('is false for adapter-shaped updates and for DELETE ops', () => {
@@ -72,12 +72,14 @@ describe('conflict-disjoint-merge.util', () => {
         hasOpaqueChanges(
           [op({ payload: { task: { id: 'task-1', title: 'T' } } })],
           'task',
+          'task-1',
         ),
       ).toBe(false);
       expect(
         hasOpaqueChanges(
           [op({ opType: OpType.Delete, payload: { task: { id: 'task-1' } } })],
           'task',
+          'task-1',
         ),
       ).toBe(false);
     });
@@ -97,6 +99,7 @@ describe('conflict-disjoint-merge.util', () => {
           op({ payload: { task: { id: 'task-1', notes: 'Remote' } }, clientId: 'B' }),
         ],
         payloadKey: 'task',
+        entityId: 'task-1',
       });
       expect(eligible).toBe(false);
     });

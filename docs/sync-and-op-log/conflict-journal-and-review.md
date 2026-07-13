@@ -83,6 +83,12 @@ delta from two sources in order:
 2. the capture-time `entityChanges` computed by `OperationCaptureService`
    (covers TIME_TRACKING and `syncTimeSpent`).
 
+Extraction is scoped to the entity currently in conflict. For a legacy
+multi-entity op, the matching `entityChanges` entry is used even when that
+entity is not the op's primary `entityId`. A multi-entity op without a matching
+captured delta is opaque; it must not borrow the primary entity's adapter
+payload because doing so could attribute one entity's values to another.
+
 An op with neither is **opaque** (`hasOpaqueChanges`). Opaque ops still
 represent real state changes, so:
 
@@ -104,6 +110,9 @@ kept by synthesizing a single merged UPDATE op. Eligibility
 `conflict-resolution.service.ts`):
 
 - neither side has a DELETE op, and the plan is not an archive plan;
+- neither side contains a multi-entity op. Resolution rejects the original ops,
+  so merging only the conflicted entity would silently drop the bulk op's
+  sibling-entity updates. These conflicts fall back to whole-op LWW;
 - neither side has opaque ops (their changes could not be carried into the
   synthesized delta — merging would silently drop them and the two clients
   would synthesize DIFFERENT results);

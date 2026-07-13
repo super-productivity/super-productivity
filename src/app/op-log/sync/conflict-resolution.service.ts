@@ -1012,6 +1012,7 @@ export class ConflictResolutionService {
         localOps: conflict.localOps,
         remoteOps: conflict.remoteOps,
         payloadKey,
+        entityId: conflict.entityId,
       })
     ) {
       return undefined;
@@ -1037,8 +1038,16 @@ export class ConflictResolutionService {
       return undefined;
     }
 
-    const localChanges = mergeChangedFields(conflict.localOps, payloadKey);
-    const remoteChanges = mergeChangedFields(conflict.remoteOps, payloadKey);
+    const localChanges = mergeChangedFields(
+      conflict.localOps,
+      payloadKey,
+      conflict.entityId,
+    );
+    const remoteChanges = mergeChangedFields(
+      conflict.remoteOps,
+      payloadKey,
+      conflict.entityId,
+    );
     const localTs = Math.max(...conflict.localOps.map((op) => op.timestamp));
     const remoteTs = Math.max(...conflict.remoteOps.map((op) => op.timestamp));
 

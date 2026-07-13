@@ -26,13 +26,14 @@ export interface MergeSideMeta {
 }
 
 /**
- * The changed fields of ONE op, from either of the two delta sources:
+ * The changed fields of ONE op, scoped to the entity currently in conflict.
  *
- *  1. the adapter-shaped action payload (`{ [payloadKey]: { id, changes } }`
- *     or a flat entity) via `extractUpdateChanges`;
- *  2. falling back to the capture-time `entityChanges` computed by
- *     `OperationCaptureService` for reducers that don't follow the adapter
- *     pattern (e.g. TIME_TRACKING, syncTimeSpent).
+ * Single-entity ops use the adapter-shaped action payload
+ * (`{ [payloadKey]: { id, changes } }` or a flat entity) first, then fall back
+ * to capture-time `entityChanges` for reducers that don't follow that pattern
+ * (e.g. TIME_TRACKING, syncTimeSpent). Multi-entity ops use only the matching
+ * target-specific `entityChanges` entry; their generic action payload cannot be
+ * safely attributed to one entity.
  *
  * Returns `{}` when neither source has anything — the op's mutation is encoded
  * in a domain-specific payload shape (e.g. `convertToSubTask`'s
@@ -41,25 +42,40 @@ export interface MergeSideMeta {
  * treat empty-with-payload as unknown, not as "nothing changed" — see
  * `hasOpaqueChanges`.
  */
-const extractOpChanges = (op: Operation, payloadKey: string): Record<string, unknown> => {
+const extractOpChanges = (
+  op: Operation,
+  payloadKey: string,
+  entityId: string,
+): Record<string, unknown> => {
+  const capturedChanges: Record<string, unknown> = {};
+  if (isMultiEntityPayload(op.payload)) {
+    for (const change of op.payload.entityChanges) {
+      if (
+        change.entityType === op.entityType &&
+        change.entityId === entityId &&
+        change.changes &&
+        typeof change.changes === 'object'
+      ) {
+        Object.assign(capturedChanges, change.changes as Record<string, unknown>);
+      }
+    }
+
+    // A multi-entity op's adapter-shaped action payload is not inherently scoped
+    // to the entity currently in conflict. Legacy state-diff capture, however,
+    // recorded one EntityChange per affected entity. Prefer that target-specific
+    // source exclusively; if it is absent, return {} so the op is treated as
+    // opaque and falls back to whole-entity LWW instead of borrowing the primary
+    // entity's fields.
+    if ((op.entityIds?.length ?? 0) > 1) {
+      return capturedChanges;
+    }
+  }
+
   const adapterChanges = extractUpdateChanges(op.payload, payloadKey);
   if (Object.keys(adapterChanges).length > 0) {
     return adapterChanges;
   }
-  if (isMultiEntityPayload(op.payload)) {
-    const merged: Record<string, unknown> = {};
-    for (const change of op.payload.entityChanges) {
-      if (
-        change.entityId === op.entityId &&
-        change.changes &&
-        typeof change.changes === 'object'
-      ) {
-        Object.assign(merged, change.changes as Record<string, unknown>);
-      }
-    }
-    return merged;
-  }
-  return {};
+  return capturedChanges;
 };
 
 /**
@@ -72,21 +88,26 @@ const extractOpChanges = (op: Operation, payloadKey: string): Record<string, unk
 export const mergeChangedFields = (
   ops: Operation[],
   payloadKey: string,
+  entityId: string,
 ): Record<string, unknown> => {
   const merged: Record<string, unknown> = {};
   for (const op of ops) {
     if (op.opType === OpType.Delete) {
       continue;
     }
-    Object.assign(merged, extractOpChanges(op, payloadKey));
+    Object.assign(merged, extractOpChanges(op, payloadKey, entityId));
   }
   return merged;
 };
 
 /** True when this non-DELETE op's field-level delta cannot be extracted. */
-export const isOpaqueChangeOp = (op: Operation, payloadKey: string): boolean =>
+export const isOpaqueChangeOp = (
+  op: Operation,
+  payloadKey: string,
+  entityId: string,
+): boolean =>
   op.opType !== OpType.Delete &&
-  Object.keys(extractOpChanges(op, payloadKey)).length === 0;
+  Object.keys(extractOpChanges(op, payloadKey, entityId)).length === 0;
 
 /**
  * True when the side contains at least one op whose mutation is real but not
@@ -95,8 +116,11 @@ export const isOpaqueChangeOp = (op: Operation, payloadKey: string): boolean =>
  * nor auto-merged (the synthesized entity would silently drop the opaque
  * mutation and the two clients would diverge).
  */
-export const hasOpaqueChanges = (ops: Operation[], payloadKey: string): boolean =>
-  ops.some((op) => isOpaqueChangeOp(op, payloadKey));
+export const hasOpaqueChanges = (
+  ops: Operation[],
+  payloadKey: string,
+  entityId: string,
+): boolean => ops.some((op) => isOpaqueChangeOp(op, payloadKey, entityId));
 
 /** The non-NOISE keys of a changed-field map. */
 const nonNoiseKeys = (changes: Record<string, unknown>): string[] =>
@@ -126,6 +150,8 @@ export const noiseTiebreakSide = (
  * True iff this conflict is safe to resolve by a disjoint-field merge.
  *
  * Field-level conditions only (the caller separately excludes archive plans):
+ *  - neither side contains a multi-entity op, because resolving one conflicted
+ *    entity would reject the whole original op and drop its sibling updates;
  *  - neither side has a DELETE op;
  *  - BOTH sides changed at least one real (non-noise) field — if one side only
  *    bumped noise, nothing real is lost by LWW, so leave it to SPAP-13's `noise`
@@ -136,8 +162,14 @@ export const isDisjointMergeEligible = (params: {
   localOps: Operation[];
   remoteOps: Operation[];
   payloadKey: string;
+  entityId: string;
 }): boolean => {
-  const { localOps, remoteOps, payloadKey } = params;
+  const { localOps, remoteOps, payloadKey, entityId } = params;
+
+  const hasMultiEntityOp = [...localOps, ...remoteOps].some(
+    (op) => (op.entityIds?.length ?? 0) > 1,
+  );
+  if (hasMultiEntityOp) return false;
 
   if (localOps.some((op) => op.opType === OpType.Delete)) return false;
   if (remoteOps.some((op) => op.opType === OpType.Delete)) return false;
@@ -145,11 +177,13 @@ export const isDisjointMergeEligible = (params: {
   // A side with opaque ops has real changes the merge could not carry over —
   // synthesizing from the extracted fields alone would drop them (and the two
   // clients would synthesize DIFFERENT entities). Fall back to LWW instead.
-  if (hasOpaqueChanges(localOps, payloadKey)) return false;
-  if (hasOpaqueChanges(remoteOps, payloadKey)) return false;
+  if (hasOpaqueChanges(localOps, payloadKey, entityId)) return false;
+  if (hasOpaqueChanges(remoteOps, payloadKey, entityId)) return false;
 
-  const localNonNoise = nonNoiseKeys(mergeChangedFields(localOps, payloadKey));
-  const remoteNonNoise = nonNoiseKeys(mergeChangedFields(remoteOps, payloadKey));
+  const localNonNoise = nonNoiseKeys(mergeChangedFields(localOps, payloadKey, entityId));
+  const remoteNonNoise = nonNoiseKeys(
+    mergeChangedFields(remoteOps, payloadKey, entityId),
+  );
   if (localNonNoise.length === 0 || remoteNonNoise.length === 0) return false;
 
   const remoteSet = new Set(remoteNonNoise);

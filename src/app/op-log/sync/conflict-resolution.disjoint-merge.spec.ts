@@ -57,21 +57,25 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     ...over,
   });
 
-  const conflictOf = (localOps: Operation[], remoteOps: Operation[]): EntityConflict => ({
+  const conflictOf = (
+    localOps: Operation[],
+    remoteOps: Operation[],
+    entityId = 'task-1',
+  ): EntityConflict => ({
     entityType: 'TASK',
-    entityId: 'task-1',
+    entityId,
     localOps,
     remoteOps,
     suggestedResolution: 'manual',
   });
 
-  const mergedOpArgs = (): Operation | undefined =>
+  const mergedOpArgs = (entityId = 'task-1'): Operation | undefined =>
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
       .allArgs()
       .flatMap(([batches]) => batches)
       .filter((batch) => batch.source === 'local')
       .flatMap((batch) => [...batch.ops])
-      .find((o) => o.entityId === 'task-1' && o.opType === OpType.Update);
+      .find((o) => o.entityId === entityId && o.opType === OpType.Update);
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['select']);
@@ -305,6 +309,120 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(entries[0].reason).toBe('disjoint-merge');
     expect(entries[0].status).toBe('info');
     expect((await journal.list('unreviewed')).length).toBe(0);
+  });
+
+  it('(a1) refuses disjoint merge for a legacy remote bulk op', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-2', title: 'Local title', timeSpent: 0 }),
+    );
+
+    const localOp = op({
+      id: 'local-task-2',
+      entityId: 'task-2',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-2', changes: { title: 'Local title' } } },
+    });
+    const remoteBulkOp = op({
+      id: 'remote-bulk',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localOp], [remoteBulkOp], 'task-2'),
+    ]);
+
+    expect(mergedOpArgs('task-2')).toBeUndefined();
+    const entries = await journal.list('history');
+    expect(entries.length).toBe(1);
+    expect(entries[0].winner).toBe('remote');
+    expect(entries[0].reason).not.toBe('disjoint-merge');
+  });
+
+  it('(a1 mirror) refuses disjoint merge for a legacy local bulk op', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-2', title: 'Remote title', timeSpent: 222 }),
+    );
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote title' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteOp], 'task-2'),
+    ]);
+
+    expect(mergedOpArgs('task-2')).toBeUndefined();
+    const entries = await journal.list('history');
+    expect(entries.length).toBe(1);
+    expect(entries[0].winner).toBe('remote');
+    expect(entries[0].reason).not.toBe('disjoint-merge');
+    const timeSpentDiff = entries[0].fieldDiffs.find(
+      (diff) => diff.field === 'timeSpent',
+    );
+    expect(timeSpentDiff?.localVal).toBe(222);
   });
 
   // ── (a2) merge-only sync counts the synthesized op for re-upload ────────────
@@ -594,6 +712,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         localOps: [localOp],
         remoteOps: [remoteDelete],
         payloadKey: 'task',
+        entityId: 'task-1',
       }),
     ).toBe(false);
 
@@ -639,6 +758,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         localOps: [localEdit],
         remoteOps: [remoteArchive],
         payloadKey: 'task',
+        entityId: 'task-1',
       }),
     ).toBe(true);
 
@@ -871,10 +991,20 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       const mA = a1.synthesized!;
       const mB = b1.synthesized!;
       expect(
-        isDisjointMergeEligible({ localOps: [mA], remoteOps: [mB], payloadKey: 'task' }),
+        isDisjointMergeEligible({
+          localOps: [mA],
+          remoteOps: [mB],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
       ).toBe(false);
       expect(
-        isDisjointMergeEligible({ localOps: [mB], remoteOps: [mA], payloadKey: 'task' }),
+        isDisjointMergeEligible({
+          localOps: [mB],
+          remoteOps: [mA],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
       ).toBe(false);
     });
   });
