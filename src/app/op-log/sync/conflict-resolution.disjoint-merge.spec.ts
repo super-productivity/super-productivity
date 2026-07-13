@@ -1534,7 +1534,16 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     });
   });
 
-  describe('(e2e) three-client: later overlapping edit beats the merged op', () => {
+  // A FOCUSED COMPOSITION TEST, not a transport e2e: it drives
+  // ConflictResolutionService with hand-built EntityConflicts and composes the
+  // ops it emits with a local LWW `applyOp` helper. It does NOT exercise real
+  // conflict detection, the OperationApplierService, or any sync transport —
+  // cross-client propagation is MODELLED (justified by the dominating-clock
+  // assertions below), not executed. Client B contributes only an input op, not
+  // a tracked client. Its value: it goes red if `_createLocalWinUpdateOp` ever
+  // emits a partial delta instead of a full snapshot, which is exactly what lets
+  // the three clients reconverge.
+  describe('composition (3-client): a later overlapping edit beats the merged op', () => {
     // Adjudicates the "partial merged delta is not closed under later LWW
     // composition" concern: after a merged op loses whole-op LWW to a newer
     // overlapping edit from a third client, the clients are TRANSIENTLY apart
@@ -1560,14 +1569,17 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
       const opLogStore = jasmine.createSpyObj('OperationLogStoreService', [
         'appendBatchSkipDuplicates',
+        'appendMixedSourceBatchSkipDuplicates',
         'appendWithVectorClockUpdate',
         'markApplied',
         'markRejected',
         'markFailed',
         'getUnsyncedByEntity',
         'mergeRemoteOpClocks',
+        'markReducersCommittedAndMergeClocks',
       ]);
       opLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
+      opLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
       opLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
       opLogStore.markRejected.and.resolveTo(undefined);
       opLogStore.markApplied.and.resolveTo(undefined);
@@ -1580,6 +1592,18 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
           skippedCount: 0,
         }),
       );
+      // #8900 seam: local-win / merged ops now persist through the atomic
+      // mixed-source batch, mirroring the outer suite's setup.
+      opLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
+        written: batches.flatMap((batch) =>
+          batch.ops.map((batchOp, index) => ({
+            seq: index + 1,
+            op: batchOp,
+            source: batch.source,
+          })),
+        ),
+        skippedCount: 0,
+      }));
 
       const validate = jasmine.createSpyObj('ValidateStateService', [
         'validateAndRepairCurrentState',
@@ -1614,10 +1638,12 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       const svc = TestBed.inject(ConflictResolutionService);
       await svc.autoResolveConflictsLWW([conflict]);
 
-      const appended = opLogStore.appendWithVectorClockUpdate.calls
+      const appended = opLogStore.appendMixedSourceBatchSkipDuplicates.calls
         .allArgs()
-        .map(([o]) => o as Operation)
-        .filter((o) => o.entityId === 'task-1' && o.opType === OpType.Update);
+        .flatMap(([batches]) => batches)
+        .filter((batch) => batch.source === 'local')
+        .flatMap((batch) => [...batch.ops])
+        .filter((o: Operation) => o.entityId === 'task-1' && o.opType === OpType.Update);
       const applied = applier.applyOperations.calls
         .allArgs()
         .flatMap(([ops]) => ops as Operation[])
@@ -1647,7 +1673,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       notes: s['notes'],
     });
 
-    it('reconverges all clients via the full-snapshot local-win op (loss is consistent, not divergent)', async () => {
+    it('the full-snapshot local-win op reconciles the transient split (loss is consistent, not divergent)', async () => {
       // Round 1: A (title) and B (notes) conflict -> disjoint merge on A.
       const opA = op({
         id: 'op-A',
@@ -1689,6 +1715,10 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         id: 'task-1',
         title: 'C-title',
         notes: 'base',
+        // A field touched by NEITHER opC nor the merged delta. A partial
+        // (changed-fields-only) local-win op would drop it, so it makes the
+        // "full snapshot" assertion below test more than the two edited fields.
+        tagIds: ['keep-me'],
       };
 
       // Round 2 on A: local merged op vs remote opC. Fields overlap on title
@@ -1720,21 +1750,47 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       }
       const localWinOp = r2c.appended[0];
       expect(localWinOp).toBeDefined();
-      // Full snapshot, not a partial delta: it must carry notes (=base), the
-      // field opC never touched — this is the closure property. If this op
-      // were partial, nothing would ever reconcile A's B-notes with C.
-      const localWinPayload = localWinOp.payload as Record<string, unknown>;
-      expect('notes' in localWinPayload).toBe(true);
+      // Full snapshot, not a partial changed-fields-only delta: applied to a
+      // BARE base the op alone must reconstruct C's COMPLETE entity — every
+      // field, including notes (=base, untouched by opC) AND tagIds (touched by
+      // neither opC nor the merged delta). This is the closure property; a
+      // partial op would drop these and never reconcile A's B-notes with C.
+      expect(applyOp({ id: 'task-1' }, localWinOp)).toEqual({
+        id: 'task-1',
+        title: 'C-title',
+        notes: 'base',
+        tagIds: ['keep-me'],
+      });
 
-      // Propagation: the local-win op's clock dominates both sides, so it
-      // reaches A as a plain (non-conflicting) remote op and applies directly.
+      // The local-win op's clock DOMINATES both inputs (opC and the merged op),
+      // so in production it reaches A as a plain non-conflicting remote op that
+      // applies directly — which is what the modelled propagation below assumes.
+      expect(compareVectorClocks(localWinOp.vectorClock, opC.vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      expect(compareVectorClocks(localWinOp.vectorClock, mergedOp.vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+
+      // Modelled propagation (justified by the dominating clock above): the
+      // local-win op reaches A as a plain remote op and applies directly.
       stateA = applyOp(stateA, localWinOp);
 
-      // CONVERGENCE: every client ends on the identical entity. B-notes are
-      // lost to LWW — but CONSISTENTLY on all clients (and journaled by the
-      // round-2 resolutions for review/flip), never as silent divergence.
-      expect(pick(stateA)).toEqual(pick(stateC));
-      expect(pick(stateA)).toEqual({ title: 'C-title', notes: 'base' });
+      // CONVERGENCE (for THIS upload ordering — the merged op reaches C, so C
+      // emits the reconciling op): A and C end byte-identical, tagIds and all.
+      // B-notes are lost to LWW but CONSISTENTLY across clients (and journaled by
+      // the round-2 resolutions for review/flip), never as silent divergence.
+      // The inverse ordering (opC globally accepted first, so C never downloads
+      // the merged op) is a real-transport concern out of scope for this
+      // service-level composition test — it belongs to the multi-client sync
+      // harness (SPAP-34).
+      expect(stateA).toEqual(stateC);
+      expect(stateA).toEqual({
+        id: 'task-1',
+        title: 'C-title',
+        notes: 'base',
+        tagIds: ['keep-me'],
+      });
     });
   });
 });
