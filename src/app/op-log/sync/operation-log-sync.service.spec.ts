@@ -2039,6 +2039,79 @@ describe('OperationLogSyncService', () => {
           ]);
         });
 
+        it('applies split-file operations newer than the downloaded snapshot before advancing the cursor', async () => {
+          const snapshotIncludedOp: Operation = {
+            id: 'snapshot-included-op',
+            clientId: 'client-B',
+            actionType: 'test' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-in-snapshot',
+            payload: { title: 'Already in snapshot' },
+            vectorClock: { clientB: 4 },
+            timestamp: 4,
+            schemaVersion: 1,
+          };
+          const postSnapshotOp: Operation = {
+            id: 'post-snapshot-op',
+            clientId: 'client-B',
+            actionType: 'test' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-after-snapshot',
+            payload: { title: 'Created after snapshot' },
+            vectorClock: { clientB: 5 },
+            timestamp: 5,
+            schemaVersion: 1,
+          };
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotIncludedOp, postSnapshotOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['task-in-snapshot'] } },
+            snapshotVectorClock: { clientB: 4 },
+            snapshotAppliedOpIds: [snapshotIncludedOp.id],
+            latestServerSeq: 5,
+          } as unknown as DownloadResult);
+          const callOrder: string[] = [];
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(async () => {
+            callOrder.push('processRemoteOps');
+            return {
+              localWinOpsCreated: 0,
+              allOpsFilteredBySyncImport: false,
+              filteredOpCount: 0,
+              isLocalUnsyncedImport: false,
+              blockedByIncompatibleOp: false,
+            };
+          });
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.callFake(async () => {
+              callOrder.push('setLastServerSeq');
+            });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as unknown as OperationSyncCapable;
+
+          await service.downloadRemoteOps(mockProvider);
+
+          expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+            [snapshotIncludedOp],
+            'remote',
+          );
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
+            [postSnapshotOp],
+          );
+          expect(callOrder).toEqual(['processRemoteOps', 'setLastServerSeq']);
+        });
+
         it('does NOT throw LocalDataConflictError when store + pending ops contain only example tasks (#7985)', async () => {
           opLogStoreSpy.getUnsynced.and.returnValue(
             Promise.resolve([exampleCreateEntry('ex-task-1')]),
@@ -2188,6 +2261,7 @@ describe('OperationLogSyncService', () => {
 
           const remoteSnapshot = { tasks: [{ id: 'remote-task' }] };
           const remoteVectorClock = { clientB: 5, clientC: 3 };
+          const remoteLastModified = 1_720_000_000_000;
 
           downloadServiceSpy.downloadRemoteOps.and.returnValue(
             Promise.resolve({
@@ -2200,6 +2274,7 @@ describe('OperationLogSyncService', () => {
               failedFileCount: 0,
               snapshotState: remoteSnapshot,
               snapshotVectorClock: remoteVectorClock,
+              remoteLastModified,
             }),
           );
 
@@ -2217,6 +2292,7 @@ describe('OperationLogSyncService', () => {
             expect(conflictError.unsyncedCount).toBe(2);
             expect(conflictError.remoteSnapshotState).toEqual(remoteSnapshot);
             expect(conflictError.remoteVectorClock).toEqual(remoteVectorClock);
+            expect(conflictError.remoteLastModified).toBe(remoteLastModified);
           }
         });
 

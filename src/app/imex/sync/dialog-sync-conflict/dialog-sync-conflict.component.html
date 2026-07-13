@@ -16,10 +16,18 @@
     <tr [class.isHighlight]="isHighlightRemote">
       <td>{{ T.F.SYNC.D_CONFLICT.REMOTE | translate }}</td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.DATE | translate">
-        {{ remote.lastUpdate | localeDate: 'shortDate' : undefined : locale() }}
+        @if (remote.lastUpdate !== null) {
+          {{ remote.lastUpdate | localeDate: 'shortDate' : undefined : locale() }}
+        } @else {
+          {{ T.F.SYNC.D_CONFLICT.CHANGES_UNKNOWN | translate }}
+        }
       </td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.TIME | translate">
-        {{ remote.lastUpdate | shortTime }}
+        {{
+          remote.lastUpdate !== null
+            ? (remote.lastUpdate | shortTime)
+            : (T.F.SYNC.D_CONFLICT.CHANGES_UNKNOWN | translate)
+        }}
       </td>
       <td [attr.data-label]="T.F.SYNC.D_CONFLICT.CHANGES | translate">
         <span [class.isHighlight]="isHighlightRemoteChanges">{{

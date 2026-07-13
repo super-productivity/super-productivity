@@ -139,7 +139,9 @@ interface MainModelData {
   [modelId: string]: ModelBase;
 }
 
-interface RemoteMeta extends MetaFileBase {
+interface RemoteMeta extends Omit<MetaFileBase, 'lastUpdate'> {
+  /** Null when the remote format does not provide a trustworthy timestamp. */
+  lastUpdate: number | null;
   mainModelData: MainModelData;
   isFullData?: boolean;
 }

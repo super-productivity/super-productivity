@@ -54,6 +54,14 @@ export interface FileSyncProvider<
 
   getFileRev(targetPath: string, localRev: string | null): Promise<FileRevResponse>;
   downloadFile(targetPath: string): Promise<FileDownloadResponse>;
+  /**
+   * Conditionally replaces a file when `revToMatch` is a revision returned by a
+   * prior read. A `null` revision means "create only if absent"; force overwrite
+   * bypasses the condition. Network providers should enforce the comparison in
+   * the storage service itself. Providers backed by an API without atomic CAS
+   * may only offer a documented best-effort check and must not be presented as
+   * safe for concurrent multi-device writers.
+   */
   uploadFile(
     targetPath: string,
     dataStr: string,
@@ -135,6 +143,14 @@ export interface SuperSyncOpDownloadResponse extends OpDownloadResponseBase {
 
 export interface FileSnapshotOpDownloadResponse extends OpDownloadResponseBase {
   snapshotState?: unknown;
+  /** Last modification time recorded by the remote snapshot/ops file. */
+  remoteLastModified?: number;
+  /**
+   * Operation ids whose effects are already represented by `snapshotState`.
+   * Operations returned alongside a snapshot but absent from this list must be
+   * applied on top of the snapshot before the download cursor is committed.
+   */
+  snapshotAppliedOpIds?: string[];
 }
 
 export type OpDownloadResponse =

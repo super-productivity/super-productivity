@@ -986,6 +986,7 @@ describe('FileBasedSyncAdapterService', () => {
           Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
         );
         await adapter.downloadOps(1);
+        await adapter.setLastServerSeq(5);
 
         // Writer made ops 6..10 (client never saw them), took a snapshot compacting
         // 1..10 into `state` and reset recentOps, then made op 11. The file's clock
@@ -1006,6 +1007,64 @@ describe('FileBasedSyncAdapterService', () => {
         // The compacted ops 6..10 would be lost without a full seq-0 resync, so the
         // regression must be reported as a gap (was false under the EQUAL||GREATER_THAN
         // suppression).
+        expect(result.gapDetected).toBe(true);
+      });
+
+      it('does not commit reset metadata when snapshot application is cancelled', async () => {
+        const compactOp = (
+          id: string,
+          clock: Record<string, number>,
+          syncVersion: number,
+        ): FileBasedSyncData['recentOps'][number] => ({
+          id,
+          c: 'remote-client',
+          a: 'HA',
+          o: 'ADD',
+          e: 'TASK',
+          d: id,
+          v: clock,
+          t: Date.now(),
+          s: 1,
+          p: {},
+          sv: syncVersion,
+        });
+
+        const committed = createMockSyncData({
+          syncVersion: 5,
+          vectorClock: { original: 5 },
+          recentOps: [compactOp('op-5', { original: 5 }, 5)],
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(committed), rev: 'rev-5' }),
+        );
+        await adapter.downloadOps(0);
+        await adapter.setLastServerSeq(5);
+
+        const cancelledReset = createMockSyncData({
+          syncVersion: 1,
+          vectorClock: { reset: 1 },
+          recentOps: [],
+          state: { tasks: [{ id: 'remote-reset' }] },
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(cancelledReset), rev: 'rev-reset' }),
+        );
+        expect((await adapter.downloadOps(5, 'local-client')).gapDetected).toBe(true);
+        await adapter.downloadOps(0, 'local-client');
+        // No setLastServerSeq: the user cancelled applying the remote snapshot.
+
+        const remoteAfterCancel = createMockSyncData({
+          syncVersion: 2,
+          vectorClock: { reset: 2 },
+          recentOps: [compactOp('op-after-reset', { reset: 2 }, 2)],
+          state: { tasks: [{ id: 'remote-reset' }] },
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(remoteAfterCancel), rev: 'rev-reset-2' }),
+        );
+
+        const result = await adapter.downloadOps(5, 'local-client');
+
         expect(result.gapDetected).toBe(true);
       });
     });
@@ -2055,6 +2114,7 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
       );
       await adapter.downloadOps(1);
+      await adapter.setLastServerSeq(5);
 
       // Second download: syncVersion regressed 5 -> 2 (would normally look like a
       // reset), but the causal vector clock is IDENTICAL, so nothing was actually
@@ -2085,6 +2145,7 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
       );
       await adapter.downloadOps(1);
+      await adapter.setLastServerSeq(5);
 
       const second = createMockSyncData({
         syncVersion: 2,
@@ -2108,6 +2169,7 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.resolve({ dataStr: addPrefix(first), rev: 'rev-1' }),
       );
       await adapter.downloadOps(1);
+      await adapter.setLastServerSeq(5);
 
       const second = createMockSyncData({
         syncVersion: 2,
@@ -3009,6 +3071,39 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockStateSnapshotService.getStateSnapshot).not.toHaveBeenCalled();
     });
 
+    it('(a1) identifies the split ops already represented by the snapshot', async () => {
+      const snapshotClock = { client1: 4 };
+      const remoteLastModified = 1_720_000_000_000;
+      const opsFile = makeOpsFile({
+        syncVersion: 5,
+        vectorClock: { client1: 5 },
+        lastModified: remoteLastModified,
+        recentOps: [
+          makeCompactOp({ id: 'op-in-snapshot', sv: 4, v: snapshotClock }),
+          makeCompactOp({ id: 'op-after-snapshot', sv: 5, v: { client1: 5 } }),
+        ],
+        snapshotRef: { syncVersion: 4, vectorClock: snapshotClock },
+      });
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(opsFile, 3),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({ syncVersion: 4, vectorClock: snapshotClock }),
+          3,
+        ),
+      });
+
+      const result = await adapter.downloadOps(0, 'client2');
+
+      expect(result.snapshotState).toBeDefined();
+      expect(
+        (result as { snapshotAppliedOpIds?: string[] }).snapshotAppliedOpIds,
+      ).toEqual(['op-in-snapshot']);
+      expect(result.snapshotVectorClock).toEqual(snapshotClock);
+      expect((result as { remoteLastModified?: number }).remoteLastModified).toBe(
+        remoteLastModified,
+      );
+    });
+
     // (a2) Regression: the split ops buffer floor is SPLIT_COMPACTION_THRESHOLD
     // (1000), so it routinely exceeds DOWNLOAD_PAGE_SIZE (500). A behind client
     // must receive the NEWEST ops in a single page — the old code returned only
@@ -3086,6 +3181,7 @@ describe('FileBasedSyncAdapterService', () => {
         ),
       });
       await adapter.downloadOps(5, 'client2');
+      await adapter.setLastServerSeq(5);
 
       // A strictly-ahead client snapshot-reset the folder (compacting ops this
       // client never saw into the snapshot) and then made one more edit.
@@ -3109,6 +3205,68 @@ describe('FileBasedSyncAdapterService', () => {
 
       expect(result.gapDetected).toBe(true);
       expect(result.snapshotState).toBeDefined();
+    });
+
+    it('(a5) split download keeps reset metadata pending when snapshot application is cancelled', async () => {
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(
+          makeOpsFile({
+            syncVersion: 5,
+            vectorClock: { original: 5 },
+            recentOps: [makeCompactOp({ id: 'op-5', sv: 5, v: { original: 5 } })],
+          }),
+          3,
+        ),
+      });
+      await adapter.downloadOps(0, 'local-client');
+      await adapter.setLastServerSeq(5);
+
+      const resetClock = { reset: 1 };
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(
+          makeOpsFile({
+            syncVersion: 1,
+            vectorClock: resetClock,
+            recentOps: [],
+            snapshotRef: { syncVersion: 1, vectorClock: resetClock },
+          }),
+          3,
+        ),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({ syncVersion: 1, vectorClock: resetClock }),
+          3,
+        ),
+      });
+      expect((await adapter.downloadOps(5, 'local-client')).gapDetected).toBe(true);
+      await adapter.downloadOps(0, 'local-client');
+      // No setLastServerSeq: the user cancelled applying the remote snapshot.
+
+      const advancedClock = { reset: 2 };
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(
+          makeOpsFile({
+            syncVersion: 2,
+            vectorClock: advancedClock,
+            recentOps: [
+              makeCompactOp({
+                id: 'op-after-reset',
+                sv: 2,
+                v: advancedClock,
+              }),
+            ],
+            snapshotRef: { syncVersion: 1, vectorClock: resetClock },
+          }),
+          3,
+        ),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({ syncVersion: 1, vectorClock: resetClock }),
+          3,
+        ),
+      });
+
+      const result = await adapter.downloadOps(5, 'local-client');
+
+      expect(result.gapDetected).toBe(true);
     });
 
     // (b) compaction triggers when the buffer exceeds MAX_RECENT_OPS, writing
@@ -3235,21 +3393,29 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       const paths = uploadedPaths();
-      // state written before ops before the tombstone.
+      // A conditional pending marker is acquired first. State is then written,
+      // followed by the legacy tombstone and the finalized ops commit point.
       const stateIdx = paths.indexOf(C.STATE_FILE);
-      const opsIdx = paths.indexOf(C.OPS_FILE);
+      const pendingOpsIdx = paths.indexOf(C.OPS_FILE);
       const tombIdx = paths.indexOf(C.SYNC_FILE);
+      const finalizedOpsIdx = paths.findIndex(
+        (path, index) => path === C.OPS_FILE && index > tombIdx,
+      );
       expect(stateIdx).toBeGreaterThanOrEqual(0);
-      expect(opsIdx).toBeGreaterThanOrEqual(0);
+      expect(pendingOpsIdx).toBeGreaterThanOrEqual(0);
       expect(tombIdx).toBeGreaterThanOrEqual(0);
-      expect(stateIdx).toBeLessThan(opsIdx);
-      expect(opsIdx).toBeLessThan(tombIdx);
+      expect(finalizedOpsIdx).toBeGreaterThanOrEqual(0);
+      expect(pendingOpsIdx).toBeLessThan(stateIdx);
+      expect(stateIdx).toBeLessThan(tombIdx);
+      expect(tombIdx).toBeLessThan(finalizedOpsIdx);
 
       // sync-data.json overwritten with a v3 split tombstone (never removed).
       expect(mockProvider.removeFile).not.toHaveBeenCalled();
       const tombCall = mockProvider.uploadFile.calls
         .allArgs()
         .find((a) => a[0] === C.SYNC_FILE);
+      expect(tombCall![2]).toBe(`${C.SYNC_FILE}-rev`);
+      expect(tombCall![3]).toBe(false);
       const tomb = parseWithPrefix(tombCall![1] as string) as unknown as {
         version: number;
         format: string;
@@ -3271,6 +3437,179 @@ describe('FileBasedSyncAdapterService', () => {
         version: number;
       };
       expect(bak.version).toBe(C.SPLIT_FILE_VERSION);
+    });
+
+    it('(e2) resumes a pending migration marker after restart before appending ops', async () => {
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: { client1: 7 },
+        recentOps: [makeCompactOp({ id: 'legacy-op', sv: 7 })],
+        state: { tasks: ['legacy'] },
+      });
+      const pendingOps = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: { client1: 7 },
+        recentOps: legacy.recentOps,
+        snapshotRef: { syncVersion: 7, vectorClock: { client1: 7 } },
+        migration: {
+          status: 'pending',
+          legacyRev: `${C.SYNC_FILE}-rev`,
+        },
+      });
+      routeDownloads({
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_FILE]: addPrefix(pendingOps, 3),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 7,
+            vectorClock: { client1: 7 },
+            state: { tasks: ['legacy'] },
+          }),
+          3,
+        ),
+      });
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      const paths = uploadedPaths();
+      expect(paths).toContain(C.SYNC_FILE);
+      const opsUploads = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter((args) => args[0] === C.OPS_FILE);
+      expect(opsUploads.length).toBeGreaterThanOrEqual(2);
+      const finalized = parseWithPrefix(
+        opsUploads[opsUploads.length - 1][1] as string,
+      ) as unknown as FileBasedOpsFile;
+      expect(finalized.migration).toBeUndefined();
+      expect(finalized.recentOps.some((op) => op.id === 'legacy-op')).toBe(true);
+    });
+
+    it('(e2b) resumes a pending migration during the next download cycle', async () => {
+      const clock = { client1: 7 };
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: clock,
+        state: { tasks: ['legacy'] },
+      });
+      const pendingOps = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: clock,
+        snapshotRef: { syncVersion: 7, vectorClock: clock },
+        migration: {
+          status: 'pending',
+          legacyRev: `${C.SYNC_FILE}-rev`,
+        },
+      });
+      routeDownloads({
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_FILE]: addPrefix(pendingOps, 3),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 7,
+            vectorClock: clock,
+            state: { tasks: ['legacy'] },
+          }),
+          3,
+        ),
+      });
+
+      const result = await adapter.downloadOps(0, 'client2');
+
+      expect(result.snapshotState).toBeDefined();
+      expect(uploadedPaths()).toContain(C.SYNC_FILE);
+      const finalizedMarker = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter((args) => args[0] === C.OPS_FILE)
+        .map((args) => parseWithPrefix(args[1] as string) as unknown as FileBasedOpsFile)
+        .find((opsFile) => opsFile.migration === undefined);
+      expect(finalizedMarker).toBeDefined();
+    });
+
+    it('(e3) retries migration from a newer legacy revision instead of tombstoning over it', async () => {
+      const legacyV7 = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: { legacy: 7 },
+        recentOps: [makeCompactOp({ id: 'legacy-v7', sv: 7, v: { legacy: 7 } })],
+        state: { tasks: ['v7'] },
+      });
+      const legacyV8 = createMockSyncData({
+        syncVersion: 8,
+        vectorClock: { legacy: 8 },
+        recentOps: [makeCompactOp({ id: 'legacy-v8', sv: 8, v: { legacy: 8 } })],
+        state: { tasks: ['v8'] },
+      });
+      let legacyData: unknown = legacyV7;
+      let legacyRev = 'legacy-rev-7';
+      let stateData: unknown;
+      let stateRev = 'state-rev-0';
+      let opsData: unknown;
+      let opsRev: string | undefined;
+      let revCounter = 0;
+      let firstTombstoneAttempt = true;
+
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.SYNC_FILE) {
+          return { dataStr: addPrefix(legacyData, 2), rev: legacyRev };
+        }
+        if (path === C.OPS_FILE) {
+          if (!opsData || !opsRev) throw new RemoteFileNotFoundAPIError(path);
+          return { dataStr: addPrefix(opsData, 3), rev: opsRev };
+        }
+        if (path === C.STATE_FILE && stateData) {
+          return { dataStr: addPrefix(stateData, 3), rev: stateRev };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      mockProvider.uploadFile.and.callFake(
+        async (
+          path: string,
+          dataStr: string,
+          revToMatch: string | null,
+          isForceOverwrite?: boolean,
+        ) => {
+          if (path === C.STATE_FILE) {
+            stateData = parseWithPrefix(dataStr);
+            stateRev = `state-rev-${++revCounter}`;
+            return { rev: stateRev };
+          }
+          if (path === C.OPS_FILE) {
+            if (
+              (!opsRev && revToMatch !== null) ||
+              (opsRev && revToMatch !== opsRev && !isForceOverwrite)
+            ) {
+              throw new UploadRevToMatchMismatchAPIError();
+            }
+            opsData = parseWithPrefix(dataStr);
+            opsRev = `ops-rev-${++revCounter}`;
+            return { rev: opsRev };
+          }
+          if (path === C.SYNC_FILE) {
+            if (firstTombstoneAttempt) {
+              firstTombstoneAttempt = false;
+              // A legacy writer wins the race after the migrator's first read.
+              legacyData = legacyV8;
+              legacyRev = 'legacy-rev-8';
+              if (!isForceOverwrite) {
+                throw new UploadRevToMatchMismatchAPIError();
+              }
+            }
+            legacyData = parseWithPrefix(dataStr);
+            legacyRev = `legacy-rev-${++revCounter}`;
+            return { rev: legacyRev };
+          }
+          return { rev: `${path}-rev-${++revCounter}` };
+        },
+      );
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      const finalState = stateData as FileBasedStateFile;
+      const finalOps = opsData as FileBasedOpsFile;
+      expect(finalState.syncVersion).toBe(8);
+      expect((finalState.state as { tasks: string[] }).tasks).toEqual(['v8']);
+      expect(finalOps.migration).toBeUndefined();
+      expect(finalOps.recentOps.some((op) => op.id === 'legacy-v8')).toBe(true);
+      expect(finalOps.recentOps.some((op) => op.id === 'op-123')).toBe(true);
     });
 
     // (f) setting-OFF client seeing the tombstone raises the actionable notice

@@ -747,6 +747,7 @@ export class OperationLogSyncService {
               result.snapshotState as Record<string, unknown>,
               result.snapshotVectorClock,
               lastSyncedVectorClock,
+              result.remoteLastModified,
             );
           }
 
@@ -764,6 +765,7 @@ export class OperationLogSyncService {
               result.snapshotState as Record<string, unknown>,
               result.snapshotVectorClock,
               lastSyncedVectorClock,
+              result.remoteLastModified,
             );
           }
 
@@ -806,6 +808,7 @@ export class OperationLogSyncService {
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
             null,
+            result.remoteLastModified,
           );
         }
 
@@ -848,14 +851,26 @@ export class OperationLogSyncService {
       // so the next attempt can retry.
       await this._discardStartupOps(startupOpIdsToDiscard);
 
-      // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
-      // File-based providers return ALL recentOps on every download, relying on
-      // getAppliedOpIds() (from IndexedDB) to filter already-applied ops.
-      // Without writing these ops, they bypass the filter on the next sync cycle
-      // and get applied again, duplicating entities.
-      if (result.newOps.length > 0) {
+      // Single-file snapshots are current through every returned recent op. Split
+      // snapshots can lag behind sync-ops.json, so only the explicitly-listed
+      // snapshot ops may be recorded as already applied; the remaining suffix
+      // must run through normal remote-op processing before the cursor advances.
+      // An absent list keeps the legacy single-file contract (all ops included).
+      const snapshotAppliedOpIds = result.snapshotAppliedOpIds
+        ? new Set(result.snapshotAppliedOpIds)
+        : null;
+      const snapshotIncludedOps = snapshotAppliedOpIds
+        ? result.newOps.filter((op) => snapshotAppliedOpIds.has(op.id))
+        : result.newOps;
+      const postSnapshotOps = snapshotAppliedOpIds
+        ? result.newOps.filter((op) => !snapshotAppliedOpIds.has(op.id))
+        : [];
+
+      // Record operations already represented by the snapshot so future whole-
+      // file downloads deduplicate them without replaying their effects twice.
+      if (snapshotIncludedOps.length > 0) {
         const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-          result.newOps,
+          snapshotIncludedOps,
           'remote',
         );
         OpLog.normal(
@@ -865,6 +880,17 @@ export class OperationLogSyncService {
               ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
               : ''),
         );
+      }
+
+      if (postSnapshotOps.length > 0) {
+        const processResult = await this._processRemoteOpsWithStartupCleanup(
+          postSnapshotOps,
+          undefined,
+          [],
+        );
+        if (processResult.blockedByIncompatibleOp) {
+          return { kind: 'blocked_incompatible' };
+        }
       }
 
       // Persist lastServerSeq after hydration

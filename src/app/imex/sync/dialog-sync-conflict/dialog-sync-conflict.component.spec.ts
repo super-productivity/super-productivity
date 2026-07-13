@@ -13,11 +13,13 @@ const buildConflictData = (overrides: {
   remoteVectorClock?: VectorClock;
   lastSyncedVectorClock?: VectorClock | null;
   localUnsyncedOpsCount?: number;
+  remoteLastUpdate?: number | null;
 }): ConflictData => ({
   reason: ConflictReason.NoLastSync,
   localUnsyncedOpsCount: overrides.localUnsyncedOpsCount,
   remote: {
-    lastUpdate: 1000,
+    lastUpdate:
+      overrides.remoteLastUpdate === undefined ? 1000 : overrides.remoteLastUpdate,
     lastUpdateAction: 'Remote data',
     revMap: {},
     crossModelVersion: 1,
@@ -61,6 +63,15 @@ describe('DialogSyncConflictComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: buildConflictData({}) },
       ],
     }).compileComponents();
+  });
+
+  describe('timestamp highlighting', () => {
+    it('does not present an unknown remote timestamp as the newest write', () => {
+      const component = createComponent(buildConflictData({ remoteLastUpdate: null }));
+
+      expect(component.isHighlightRemote).toBe(false);
+      expect(component.isHighlightLocal).toBe(true);
+    });
   });
 
   describe('getChangeCount()', () => {

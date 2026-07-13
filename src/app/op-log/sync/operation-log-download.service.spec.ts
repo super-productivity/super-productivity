@@ -1129,6 +1129,49 @@ describe('OperationLogDownloadService', () => {
           expect(result.snapshotVectorClock).toEqual(snapshotClock);
         });
 
+        it('should propagate the snapshot operation boundary for file providers', async () => {
+          const remoteLastModified = 1_720_000_000_000;
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockApiProvider.downloadOps.and.returnValue(
+            Promise.resolve({
+              ops: [],
+              hasMore: false,
+              latestSeq: 5,
+              snapshotState: { tasks: [] },
+              snapshotAppliedOpIds: ['op-in-snapshot'],
+              remoteLastModified,
+            }),
+          );
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(result.providerMode).toBe('fileSnapshotOps');
+          if (result.success && result.providerMode === 'fileSnapshotOps') {
+            expect(result.snapshotAppliedOpIds).toEqual(['op-in-snapshot']);
+            expect(result.remoteLastModified).toBe(remoteLastModified);
+          }
+        });
+
+        it('should omit a malformed remote last-modified timestamp', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockApiProvider.downloadOps.and.returnValue(
+            Promise.resolve({
+              ops: [],
+              hasMore: false,
+              latestSeq: 5,
+              snapshotState: { tasks: [] },
+              remoteLastModified: 'not-a-timestamp' as unknown as number,
+            }),
+          );
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(result.providerMode).toBe('fileSnapshotOps');
+          if (result.success && result.providerMode === 'fileSnapshotOps') {
+            expect(result.remoteLastModified).toBeUndefined();
+          }
+        });
+
         it('should return snapshotVectorClock even when no new ops', async () => {
           const snapshotClock = { clientA: 10, clientB: 5 };
           mockApiProvider.downloadOps.and.returnValue(

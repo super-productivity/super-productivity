@@ -25,6 +25,7 @@ import {
   NetworkUnavailableSPError,
   OperationIntegrityError,
   PotentialCorsError,
+  ConflictData,
   SyncProviderId,
   SyncStatus,
 } from '../../op-log/sync-exports';
@@ -1705,6 +1706,28 @@ describe('SyncWrapperService', () => {
 
         // Should open conflict dialog
         expect(mockMatDialog.open).toHaveBeenCalled();
+      });
+
+      it('uses the remote file timestamp in the conflict dialog', async () => {
+        const remoteLastModified = 1_720_000_000_000;
+        const conflictError = new LocalDataConflictError(
+          3,
+          { tasks: [{ id: 'remote-task' }] },
+          { clientB: 5 },
+          null,
+          remoteLastModified,
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as any);
+
+        await service.sync();
+
+        const dialogConfig = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(dialogConfig.data.remote.lastUpdate).toBe(remoteLastModified);
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {

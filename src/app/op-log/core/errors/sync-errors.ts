@@ -81,6 +81,8 @@ export class LocalDataConflictError extends Error {
     // display heuristic, not an exact "unsynced" figure. `null` for genuinely-fresh
     // clients that have never synced (SPAP-7).
     public readonly lastSyncedVectorClock?: Record<string, number> | null,
+    /** Actual `lastModified` recorded by the downloaded remote file. */
+    public readonly remoteLastModified?: number,
   ) {
     super(`Local data conflict: ${unsyncedCount} unsynced changes would be lost`);
   }
