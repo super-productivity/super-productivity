@@ -12,6 +12,7 @@ import { OperationLogEffects } from '../capture/operation-log.effects';
 import {
   bufferDeferredAction,
   clearDeferredActions,
+  getDeferredActions,
 } from '../capture/operation-capture.meta-reducer';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { ConflictResolutionService } from './conflict-resolution.service';
@@ -1764,6 +1765,33 @@ describe('OperationLogSyncService', () => {
           });
           const mockStore = TestBed.inject(MockStore);
           const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
+          const durabilityOrder: string[] = [];
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async () => {
+            if (
+              getDeferredActions().includes(localAction) &&
+              !durabilityOrder.includes('persist')
+            ) {
+              const wasAlreadyReplayed = dispatchSpy.calls
+                .allArgs()
+                .some(([dispatched]) => {
+                  const action = dispatched as unknown;
+                  return (
+                    typeof action === 'object' &&
+                    action !== null &&
+                    'type' in action &&
+                    action.type === localAction.type &&
+                    'meta' in action &&
+                    typeof action.meta === 'object' &&
+                    action.meta !== null &&
+                    'isRemote' in action.meta &&
+                    action.meta.isRemote === true
+                  );
+                });
+              durabilityOrder.push(
+                wasAlreadyReplayed ? 'replay-before-persist' : 'persist',
+              );
+            }
+          });
           const mockProvider = {
             supportsOperationSync: true,
             setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
@@ -1799,6 +1827,7 @@ describe('OperationLogSyncService', () => {
               .map((action) => action.task?.id);
             expect(remotelyReplayedTaskIds).toContain('task-local');
             expect(remotelyReplayedTaskIds).not.toContain('task-after-load');
+            expect(durabilityOrder).toEqual(['persist']);
             expect(operationLogEffectsSpy.processDeferredActions.calls.allArgs()).toEqual(
               [
                 [{ callerHoldsOperationLogLock: false }],

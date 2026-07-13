@@ -28,6 +28,8 @@ import {
   applyLocalOnlySyncSettingsToAppData,
   stripLocalOnlySyncSettingsFromAppData,
 } from '../../features/config/local-only-sync-settings.util';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 interface SnapshotHydrationHooks {
   /** Runs synchronously immediately before loadAllData replaces live NgRx state. */
@@ -57,6 +59,7 @@ export class SyncHydrationService {
   private sessionValidation = inject(SyncSessionValidationService);
   private snackService = inject(SnackService);
   private archiveDbAdapter = inject(ArchiveDbAdapter);
+  private lockService = inject(LockService);
 
   /**
    * Handles hydration after a remote sync download.
@@ -110,31 +113,35 @@ export class SyncHydrationService {
         isManualSyncOnly: currentSyncConfig.isManualSyncOnly,
       };
 
-      // 1. Write archives to IndexedDB if they were included in the downloaded data.
-      // This is critical for file-based sync where archives are bundled with the snapshot.
-      // Archives must be written BEFORE we read them back via getAllSyncModelDataFromStoreAsync().
-      // NOTE: This only happens when actually applying remote state (not during conflict
-      // detection - the downloadOps method no longer writes archives prematurely).
-      if (downloadedMainModelData) {
-        const typedData = downloadedMainModelData as Record<string, unknown>;
-        if (typedData['archiveYoung']) {
-          await this.archiveDbAdapter.saveArchiveYoung(
-            typedData['archiveYoung'] as ArchiveModel,
-          );
-          OpLog.normal('SyncHydrationService: Wrote archiveYoung to IndexedDB from sync');
+      // 1. Replace downloaded archives and read the resulting snapshot under one
+      // archive lock. Otherwise a local archive read-modify-write can start from
+      // the old archive, then save it after this replacement and silently erase
+      // downloaded entries. TASK_ARCHIVE is independent from OPERATION_LOG.
+      const dbData = await this.lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+        if (downloadedMainModelData) {
+          const typedData = downloadedMainModelData as Record<string, unknown>;
+          if (typedData['archiveYoung']) {
+            await this.archiveDbAdapter.saveArchiveYoung(
+              typedData['archiveYoung'] as ArchiveModel,
+            );
+            OpLog.normal(
+              'SyncHydrationService: Wrote archiveYoung to IndexedDB from sync',
+            );
+          }
+          if (typedData['archiveOld']) {
+            await this.archiveDbAdapter.saveArchiveOld(
+              typedData['archiveOld'] as ArchiveModel,
+            );
+            OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
+          }
         }
-        if (typedData['archiveOld']) {
-          await this.archiveDbAdapter.saveArchiveOld(
-            typedData['archiveOld'] as ArchiveModel,
-          );
-          OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
-        }
-      }
 
-      // 2. Read archive data from IndexedDB and merge with passed entity data
-      // Entity models (task, tag, project, etc.) come from downloadedMainModelData
-      // Archive models (archiveYoung, archiveOld) come from IndexedDB (now with synced data)
-      const dbData = await this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
+        // Archives must be read after the optional replacement while the same
+        // lock is still held so the state cache and loadAllData use one view.
+        return this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
+      });
+
+      // 2. Merge the serialized archive data with passed entity data.
 
       const mergedData = downloadedMainModelData
         ? { ...dbData, ...downloadedMainModelData }

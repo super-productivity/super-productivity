@@ -812,6 +812,7 @@ export class OperationLogSyncService {
         // persisted against the old state and then silently overwritten by
         // loadAllData while this async hydration is in progress.
         this.hydrationState.startApplyingRemoteOps();
+        let hasEndedRemoteApplyWindow = false;
         try {
           const pendingAtHydrationCutoff = await this.opLogStore.getUnsynced();
           const lateDurableOps = pendingAtHydrationCutoff.filter(
@@ -848,11 +849,23 @@ export class OperationLogSyncService {
             },
           );
 
+          // The hydration service has durably stored the remote snapshot clock
+          // by this point. Persist buffered local intents with clocks based on
+          // that snapshot before making their replay visible again. This keeps
+          // a reducer replay failure from widening the non-durable window.
+          await processDeferredActions(this.injector, true);
+
+          // loadAllData has committed the new baseline. Leave deferred mode
+          // before replaying remote-marked clones; subsequent user events now
+          // run on the new state and follow the normal persistence path.
+          this.hydrationState.endApplyingRemoteOps();
+          hasEndedRemoteApplyWindow = true;
+
           // Persistent actions dispatched during hydration already ran once on
           // the old NgRx state, then loadAllData replaced that state. Re-dispatch
           // remote-marked clones synchronously on top of the snapshot. The
-          // originals stay in the deferred queue and are persisted below with
-          // clocks that include the remote snapshot.
+          // originals were persisted above with clocks that include the remote
+          // snapshot.
           for (const action of deferredActionsOverwrittenBySnapshot) {
             this.store.dispatch({
               ...action,
@@ -863,10 +876,10 @@ export class OperationLogSyncService {
             });
           }
         } finally {
-          this.hydrationState.endApplyingRemoteOps();
+          if (!hasEndedRemoteApplyWindow) {
+            this.hydrationState.endApplyingRemoteOps();
+          }
         }
-
-        await processDeferredActions(this.injector, true);
 
         // Hydration also replaces archive stores. Re-run archive side effects
         // for the just-persisted local intents without dispatching their reducers
