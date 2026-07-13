@@ -5,6 +5,56 @@ import { isSingletonEntityId } from '../core/entity-registry';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { ACTION_TYPE_ALIASES } from '../apply/operation-converter.util';
 import { SyncLog } from '../../core/log';
+import { FULL_STATE_OP_TYPES, OpType } from '../core/operation.types';
+import {
+  CURRENT_SCHEMA_VERSION,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  migrateState,
+} from '@sp/shared-schema';
+
+let _validateAllDataPromise:
+  | Promise<typeof import('../validation/validation-fn').validateAllData>
+  | undefined;
+
+const _loadValidateAllData = (): Promise<
+  typeof import('../validation/validation-fn').validateAllData
+> => {
+  if (!_validateAllDataPromise) {
+    _validateAllDataPromise = import('../validation/validation-fn')
+      .then((m) => m.validateAllData)
+      .catch((err) => {
+        _validateAllDataPromise = undefined;
+        throw err;
+      });
+  }
+  return _validateAllDataPromise;
+};
+
+const _extractFullState = (payload: unknown): unknown => {
+  if (typeof payload === 'object' && payload !== null && 'appDataComplete' in payload) {
+    return (payload as { appDataComplete: unknown }).appDataComplete;
+  }
+  return payload;
+};
+
+const _migrateFullStateForValidation = (
+  op: SyncOperation,
+  fullState: unknown,
+): unknown => {
+  const rawSchemaVersion = (op as { schemaVersion?: unknown }).schemaVersion;
+  const schemaVersion = rawSchemaVersion === undefined ? 1 : rawSchemaVersion;
+  if (
+    typeof schemaVersion !== 'number' ||
+    !Number.isInteger(schemaVersion) ||
+    schemaVersion < MIN_SUPPORTED_SCHEMA_VERSION ||
+    schemaVersion >= CURRENT_SCHEMA_VERSION
+  ) {
+    return fullState;
+  }
+
+  const migrationResult = migrateState(fullState, schemaVersion, CURRENT_SCHEMA_VERSION);
+  return migrationResult.success ? migrationResult.data : fullState;
+};
 
 /**
  * Verifies that a just-decrypted operation's UNAUTHENTICATED metadata is
@@ -37,9 +87,9 @@ import { SyncLog } from '../../core/log';
  * NOTE: interim hardening only. The plaintext-injection downgrade (a forged op
  * with `isPayloadEncrypted=false` that would skip decryption AND this check) is
  * handled separately by `assertOpsEncryptedWhenExpected` at the download
- * boundary. Still OPEN pending the durable fix (bind metadata as GCM AAD behind
- * an envelope-versioned migration):
- *  - `opType` promotion to a full-state (`loadAllData`) op.
+ * boundary. Full-state `opType` promotion is handled below by
+ * `assertDecryptedFullStateOpIntegrity`. Still OPEN pending the durable fix
+ * (bind metadata as GCM AAD behind an envelope-versioned migration):
  *  - Within-LWW `entityType`/`actionType` swap (ids left equal so this passes).
  *  - `vectorClock`/`timestamp` reorder/replay.
  * See GHSA-8pxh-mgc7-gp3g and
@@ -92,6 +142,60 @@ export const assertDecryptedOpMetadataIntegrity = (
   throw new OperationIntegrityError(
     `Operation ${op.id} failed metadata integrity check: encrypted payload id ` +
       `does not match op.entityId (possible sync-server tampering). ` +
+      `GHSA-8pxh-mgc7-gp3g`,
+  );
+};
+
+/**
+ * Rejects an encrypted operation whose unauthenticated `opType` was promoted
+ * to a full-state operation while its authenticated payload is not complete
+ * application data.
+ *
+ * Full-state payloads exist in two legitimate formats: direct app data for
+ * SYNC_IMPORT/BACKUP_IMPORT and an `appDataComplete` wrapper for REPAIR (plus
+ * legacy wrapped imports). Validation is loaded lazily because Typia's
+ * generated full-state validator is large and must stay out of the initial
+ * application bundle.
+ *
+ * Supported legacy state is migrated on a copy before validation because this
+ * boundary runs before RemoteOpsProcessingService's normal operation processing.
+ * The decrypted payload itself remains unchanged for the existing downstream path.
+ * This check intentionally uses structural Typia validation only. Cross-model
+ * relationship validation would turn recoverable data inconsistencies into a
+ * security failure and is not needed to distinguish ordinary entity payloads
+ * from complete state.
+ *
+ * @throws OperationIntegrityError when a full-state op carries a non-full-state payload.
+ */
+export const assertDecryptedFullStateOpIntegrity = async (
+  op: SyncOperation,
+  decryptedPayload: unknown,
+): Promise<void> => {
+  if (!FULL_STATE_OP_TYPES.has(op.opType as OpType)) {
+    return;
+  }
+
+  const validateAllData = await _loadValidateAllData();
+  const fullState = _extractFullState(decryptedPayload);
+  const stateToValidate = _migrateFullStateForValidation(op, fullState);
+  const validationResult = validateAllData(stateToValidate);
+  if (validationResult.success) {
+    return;
+  }
+
+  // Never log validator values: they can contain task titles, notes, and other
+  // user content. `opType` is safe here because it matched the fixed allowlist.
+  SyncLog.err(
+    '[assertDecryptedFullStateOpIntegrity] encrypted full-state op payload is not complete app data — rejecting (possible sync-server tampering)',
+    {
+      opId: op.id,
+      opType: op.opType,
+      validationErrorCount: validationResult.errors.length,
+    },
+  );
+  throw new OperationIntegrityError(
+    `Operation ${op.id} failed metadata integrity check: encrypted payload is not ` +
+      `valid full-state data for ${op.opType} (possible sync-server tampering). ` +
       `GHSA-8pxh-mgc7-gp3g`,
   );
 };

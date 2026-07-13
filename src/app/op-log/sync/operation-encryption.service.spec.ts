@@ -2,9 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError, OperationIntegrityError } from '../core/errors/sync-errors';
-import { ActionType } from '../core/operation.types';
+import { ActionType, OpType } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
+import { createValidAppData } from '../validation/state-validity-test-utils';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -23,6 +24,8 @@ describe('OperationEncryptionService', () => {
     timestamp: Date.now(),
     schemaVersion: 1,
   });
+
+  const jsonRoundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
   // Use real encryption with weakened Argon2 params (8KiB memory, 1 iteration).
   // The session cache derives the key once per password across the whole spec,
@@ -278,6 +281,141 @@ describe('OperationEncryptionService', () => {
       expect(decrypted.payload).toEqual({
         id: 'task-123',
         changes: { title: 'legit change' },
+      });
+    });
+
+    describe('full-state opType promotion', () => {
+      const createFullStateOp = (
+        opType: OpType.SyncImport | OpType.BackupImport | OpType.Repair,
+        payload: unknown,
+      ): SyncOperation => ({
+        ...createMockSyncOp(payload),
+        actionType:
+          opType === OpType.Repair ? ActionType.REPAIR_AUTO : ActionType.LOAD_ALL_DATA,
+        opType,
+        entityType: 'ALL',
+        entityId: opType === OpType.BackupImport ? 'backup-import-1' : undefined,
+      });
+
+      const createLegacyV1AppData = (): unknown => {
+        const state = jsonRoundTrip(createValidAppData());
+        const {
+          isAutoMarkParentAsDone,
+          isAutoAddWorkedOnToToday,
+          isConfirmBeforeDelete,
+          isTrayShowCurrent,
+          isMarkdownFormattingInNotesEnabled,
+          defaultProjectId,
+          notesTemplate,
+          ...unmigratedTaskSettings
+        } = state.globalConfig.tasks;
+
+        return {
+          ...state,
+          globalConfig: {
+            ...state.globalConfig,
+            misc: {
+              ...state.globalConfig.misc,
+              isAutMarkParentAsDone: isAutoMarkParentAsDone,
+              isAutoAddWorkedOnToToday,
+              isConfirmBeforeTaskDelete: isConfirmBeforeDelete,
+              isTrayShowCurrentTask: isTrayShowCurrent,
+              isTurnOffMarkdown: !isMarkdownFormattingInNotesEnabled,
+              defaultProjectId,
+              taskNotesTpl: notesTemplate,
+            },
+            tasks: unmigratedTaskSettings,
+          },
+        };
+      };
+
+      it('rejects an ordinary encrypted op promoted to SYNC_IMPORT (single)', async () => {
+        const encrypted = await service.encryptOperation(
+          createMockSyncOp({ task: { id: 'task-123', changes: { title: 'x' } } }),
+          TEST_PASSWORD,
+        );
+        const tampered: SyncOperation = {
+          ...encrypted,
+          opType: OpType.SyncImport,
+        };
+
+        await expectAsync(
+          service.decryptOperation(tampered, TEST_PASSWORD),
+        ).toBeRejectedWithError(OperationIntegrityError);
+      });
+
+      it('rejects an ordinary encrypted op promoted to REPAIR (batch)', async () => {
+        const [encrypted] = await service.encryptOperations(
+          [createMockSyncOp({ task: { id: 'task-123', changes: { title: 'x' } } })],
+          TEST_PASSWORD,
+        );
+        const tampered: SyncOperation = {
+          ...encrypted,
+          opType: OpType.Repair,
+        };
+
+        await expectAsync(
+          service.decryptOperations([tampered], TEST_PASSWORD),
+        ).toBeRejectedWithError(OperationIntegrityError);
+      });
+
+      it('accepts a legitimate direct SYNC_IMPORT payload', async () => {
+        const state = createValidAppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(state));
+      });
+
+      it('accepts a legitimate schema-v1 SYNC_IMPORT payload', async () => {
+        const state = createLegacyV1AppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(state);
+      });
+
+      it('accepts a legitimate direct BACKUP_IMPORT payload', async () => {
+        const state = createValidAppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.BackupImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(state));
+      });
+
+      it('accepts a legitimate wrapped REPAIR payload', async () => {
+        const state = createValidAppData();
+        const payload = {
+          appDataComplete: state,
+          repairSummary: {
+            entityStateFixed: 1,
+            orphanedEntitiesRestored: 0,
+            invalidReferencesRemoved: 0,
+            relationshipsFixed: 0,
+            structureRepaired: 0,
+            typeErrorsFixed: 0,
+          },
+        };
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.Repair, payload),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(payload));
       });
     });
   });
