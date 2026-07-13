@@ -51,6 +51,7 @@ import { selectSyncConfig } from '../../features/config/store/global-config.redu
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 
 describe('OperationLogSyncService', () => {
   let service: OperationLogSyncService;
@@ -1397,6 +1398,49 @@ describe('OperationLogSyncService', () => {
           expect(result.localWinOpsCreated).toBe(1);
           expect(result.newOpsCount).toBe(1);
         }
+      });
+
+      it('should expose the downloaded server cursor while validation may create a REPAIR', async () => {
+        const remoteOp = {
+          id: 'remote-for-repair',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK' as const,
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+        downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+          newOps: [remoteOp],
+          latestServerSeq: 17,
+          needsFullStateUpload: false,
+          success: true,
+          providerMode: 'superSyncOps',
+          failedFileCount: 0,
+        });
+        const repairContext = TestBed.inject(RepairSyncContextService);
+        let observedBaseServerSeq: number | undefined;
+        remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(async () => {
+          observedBaseServerSeq = repairContext.baseServerSeq;
+          return {
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+          };
+        });
+
+        await service.downloadRemoteOps({
+          isReady: async () => true,
+          setLastServerSeq: async () => undefined,
+        } as any);
+
+        expect(observedBaseServerSeq).toBe(17);
+        expect(repairContext.baseServerSeq).toBeUndefined();
       });
 
       it('should NOT advance lastServerSeq when processing blocked at an incompatible op', async () => {

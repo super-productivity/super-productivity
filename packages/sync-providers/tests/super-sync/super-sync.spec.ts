@@ -1285,6 +1285,10 @@ describe('SuperSyncProvider', () => {
         2,
         undefined,
         'test-op-id-fields',
+        false,
+        'REPAIR',
+        'REPAIR',
+        17,
       );
 
       expect(capturedBody).not.toBeNull();
@@ -1296,6 +1300,8 @@ describe('SuperSyncProvider', () => {
       expect(payload.requestId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
       expect(payload.vectorClock).toEqual({ clientA: 5 });
       expect(payload.schemaVersion).toBe(2);
+      expect(payload.snapshotOpType).toBe('REPAIR');
+      expect(payload.repairBaseServerSeq).toBe(17);
     });
 
     it('produces a stable snapshot requestId for the same clientId+opId, regardless of state', async () => {

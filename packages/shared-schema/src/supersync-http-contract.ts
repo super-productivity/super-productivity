@@ -124,6 +124,7 @@ export const SuperSyncUploadSnapshotRequestSchema = z
     opId: z.string().uuid().optional(),
     isCleanSlate: z.boolean().optional(),
     snapshotOpType: z.enum(SUPER_SYNC_SNAPSHOT_OP_TYPES).optional(),
+    repairBaseServerSeq: z.number().int().min(0).optional(),
     requestId: SuperSyncRequestIdSchema.optional(),
   })
   .superRefine((request, context) => {
@@ -132,6 +133,16 @@ export const SuperSyncUploadSnapshotRequestSchema = z
         code: 'custom',
         path: ['opId'],
         message: 'opId is required for clean-slate snapshot idempotency',
+      });
+    }
+    if (
+      request.snapshotOpType === 'REPAIR' &&
+      request.repairBaseServerSeq === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['repairBaseServerSeq'],
+        message: 'repairBaseServerSeq is required for causal REPAIR uploads',
       });
     }
   });
@@ -190,6 +201,7 @@ export const SuperSyncSnapshotUploadResponseSchema = z
     accepted: z.boolean(),
     serverSeq: z.number().optional(),
     error: z.string().optional(),
+    errorCode: z.string().optional(),
   })
   .passthrough();
 

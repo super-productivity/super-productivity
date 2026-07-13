@@ -18,6 +18,7 @@ import { devError } from '../../util/dev-error';
 import { TranslateService } from '@ngx-translate/core';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { alertDialog } from '../../util/native-dialogs';
+import { RepairSyncContextService } from './repair-sync-context.service';
 
 /**
  * Service responsible for creating REPAIR operations.
@@ -33,6 +34,7 @@ export class RepairOperationService {
   private lockService = inject(LockService);
   private translateService = inject(TranslateService);
   private vectorClockService = inject(VectorClockService);
+  private repairSyncContext = inject(RepairSyncContextService);
 
   /**
    * Creates a REPAIR operation with the repaired state and saves it to the operation log.
@@ -57,6 +59,9 @@ export class RepairOperationService {
     const payload: RepairPayload = {
       appDataComplete: repairedState,
       repairSummary,
+      ...(this.repairSyncContext.baseServerSeq !== undefined
+        ? { repairBaseServerSeq: this.repairSyncContext.baseServerSeq }
+        : {}),
     };
 
     let seq: number = 0;

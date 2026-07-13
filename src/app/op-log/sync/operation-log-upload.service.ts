@@ -118,13 +118,14 @@ export class OperationLogUploadService {
     // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
     let encryptionRequiredKeyMissing = false;
 
-    await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
-      // Execute pre-upload callback INSIDE the lock, BEFORE checking for pending ops.
-      // This ensures operations like server migration checks are atomic with the upload.
-      if (options?.preUploadCallback) {
-        await options.preUploadCallback();
-      }
+    // Migration discovery may perform network probes or wait on a dialog. Keep
+    // that work outside the cross-tab upload lock; the callback is responsible
+    // for protecting its final local mutation with a narrower lock.
+    if (options?.preUploadCallback) {
+      await options.preUploadCallback();
+    }
 
+    await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
       const pendingOps = await this.opLogStore.getUnsynced();
       selectedPendingOps = pendingOps;
 
@@ -202,15 +203,22 @@ export class OperationLogUploadService {
 
       // Upload full-state operations via snapshot endpoint
       let fullStateOpUploaded = false;
+      let fullStateUploadBlocked = false;
       // Local append order (seq), not op id: UUIDv7 ids follow the wall clock and
       // can order a post-snapshot op BEFORE the full-state op after a clock
       // rollback, which would mark it synced without ever uploading it.
       let lastUploadedFullStateOpSeq: number | undefined;
       for (const entry of fullStateOps) {
-        // BackupImport/Repair: always wipe server (recovery operations replace all state)
-        // SyncImport: only wipe when explicitly requested (preserves SYNC_IMPORT_EXISTS check)
+        // BACKUP_IMPORT is an explicit restore and intentionally wipes remote
+        // history. SYNC_IMPORT only does so when explicitly requested. REPAIR
+        // must never wipe first: the server validates its base sequence so a
+        // concurrent remote edit is rejected instead of destroyed.
         const isCleanSlateForOp =
-          entry.op.opType === OpType.SyncImport ? options?.isCleanSlate : true;
+          entry.op.opType === OpType.BackupImport
+            ? true
+            : entry.op.opType === OpType.SyncImport
+              ? options?.isCleanSlate
+              : false;
         const result = await this._uploadFullStateOpAsSnapshot(
           syncProvider,
           entry,
@@ -254,14 +262,30 @@ export class OperationLogUploadService {
             );
             // Don't mark as rejected - leave as unsynced for retry
           } else {
-            await this.opLogStore.markRejected([entry.op.id]);
-            rejectedOps.push({ opId: entry.op.id, error: result.error });
+            // Keep the op pending until OperationLogSyncService has processed
+            // piggybacked ops and the central rejection handler has classified
+            // it. Marking it here made the handler skip the entry entirely,
+            // hiding the permanent rejection from the UI.
+            rejectedOps.push({
+              opId: entry.op.id,
+              error: result.error,
+              ...(result.errorCode !== undefined ? { errorCode: result.errorCode } : {}),
+            });
             rejectedCount++;
             OpLog.warn(
               `OperationLogUploadService: Full-state op ${entry.op.id} rejected: ${result.error}`,
             );
           }
+          // Regular operations after this baseline may refer to state that the
+          // server never received. Keep them pending until the full-state failure
+          // is retried or surfaced and resolved.
+          fullStateUploadBlocked = true;
+          break;
         }
+      }
+
+      if (fullStateUploadBlocked) {
+        return;
       }
 
       // Skip regular ops processing if none exist
@@ -594,6 +618,15 @@ export class OperationLogUploadService {
       `OperationLogUploadService: Uploading ${op.opType} operation via snapshot endpoint`,
     );
 
+    const repairBaseServerSeq =
+      op.opType === OpType.Repair &&
+      typeof op.payload === 'object' &&
+      op.payload !== null &&
+      'repairBaseServerSeq' in op.payload &&
+      typeof op.payload.repairBaseServerSeq === 'number'
+        ? op.payload.repairBaseServerSeq
+        : undefined;
+
     // Extract state from payload, handling both wrapped and unwrapped formats.
     // Uses shared utility to ensure consistent handling across the codebase.
     let state: unknown = stripLocalOnlySyncSettingsFromAppData(
@@ -630,6 +663,7 @@ export class OperationLogUploadService {
         isCleanSlate,
         op.opType as RestorePointType,
         op.syncImportReason,
+        repairBaseServerSeq,
       );
       return response;
     } catch (err) {

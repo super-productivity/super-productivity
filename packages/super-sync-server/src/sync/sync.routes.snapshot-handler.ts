@@ -91,6 +91,7 @@ export const uploadSnapshotHandler = async (
 
     const snapshotRequest = parseResult.data as typeof parseResult.data & {
       requestId?: string;
+      repairBaseServerSeq?: number;
     };
     const {
       state,
@@ -103,8 +104,10 @@ export const uploadSnapshotHandler = async (
       isCleanSlate,
       snapshotOpType,
       syncImportReason,
+      repairBaseServerSeq,
       requestId,
     } = snapshotRequest;
+    const shouldCleanSlate = snapshotOpType === 'REPAIR' ? false : isCleanSlate;
     const syncService = getSyncService();
     // Lazy + memoized: fingerprinting stable-stringifies + SHA-256-hashes the
     // full (possibly multi-MB plaintext) snapshot state. It must not run
@@ -122,8 +125,9 @@ export const uploadSnapshotHandler = async (
         isPayloadEncrypted,
         syncImportReason,
         opId,
-        isCleanSlate,
+        isCleanSlate: shouldCleanSlate,
         snapshotOpType,
+        repairBaseServerSeq,
       }));
 
     if (requestId) {
@@ -154,8 +158,10 @@ export const uploadSnapshotHandler = async (
     // the cached counter; if it says we're already at quota, reconcile
     // once before rejecting — a stale-high counter would otherwise lock
     // out a user whose new snapshot would actually shrink storage. Skip
-    // for clean-slate which wipes existing usage.
-    if (!isCleanSlate) {
+    // for clean-slate which wipes existing usage. REPAIR also skips this cheap
+    // gate so a response-loss retry can reach the durable op-id check inside
+    // the lock; a genuinely new REPAIR still gets the full quota check below.
+    if (!shouldCleanSlate && snapshotOpType !== 'REPAIR') {
       let cachedInfo = await syncService.getStorageInfo(userId);
       if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
         try {
@@ -191,7 +197,7 @@ export const uploadSnapshotHandler = async (
     // - 'migration': Legacy data migration (should be allowed to override)
     // - 'isCleanSlate': Password change or explicit clean slate request
     // Only 'initial' (first-time server migration) should be rejected if one exists.
-    if (reason === 'initial' && !isCleanSlate) {
+    if (reason === 'initial' && !shouldCleanSlate) {
       const existingImport = await findExistingSyncImport(userId, opId);
 
       if (existingImport) {
@@ -237,46 +243,47 @@ export const uploadSnapshotHandler = async (
     const result = await syncService.runWithStorageUsageLock<UploadResult | null>(
       userId,
       async () => {
-        // Clean-slate uploads are destructive, so request-cache deduplication is
-        // not sufficient: it is process-local and expires. The client-supplied
-        // opId is the durable idempotency key. Check it inside the per-user lock
-        // before quota work or uploadOps can delete any existing data.
-        if (isCleanSlate && opId) {
-          const existingCleanSlateOp = await prisma.operation.findUnique({
+        // Request-cache deduplication is process-local and expires. Destructive
+        // clean-slate uploads need a durable check before deletion; REPAIR needs
+        // the same check before its old base cursor can be rejected as stale
+        // after a response-loss retry. The client-supplied opId is the durable
+        // idempotency key.
+        if ((shouldCleanSlate || snapshotOpType === 'REPAIR') && opId) {
+          const existingFullStateOp = await prisma.operation.findUnique({
             where: { id: opId },
             select: { ...DUPLICATE_OP_SELECT, serverSeq: true },
           });
-          if (existingCleanSlateOp) {
+          if (existingFullStateOp) {
             const existingOperation: Operation = {
-              id: existingCleanSlateOp.id,
-              clientId: existingCleanSlateOp.clientId,
-              actionType: existingCleanSlateOp.actionType,
-              opType: existingCleanSlateOp.opType as Operation['opType'],
-              entityType: existingCleanSlateOp.entityType,
-              entityId: existingCleanSlateOp.entityId ?? undefined,
-              entityIds: existingCleanSlateOp.entityIds,
-              payload: existingCleanSlateOp.payload,
-              vectorClock: existingCleanSlateOp.vectorClock as Operation['vectorClock'],
+              id: existingFullStateOp.id,
+              clientId: existingFullStateOp.clientId,
+              actionType: existingFullStateOp.actionType,
+              opType: existingFullStateOp.opType as Operation['opType'],
+              entityType: existingFullStateOp.entityType,
+              entityId: existingFullStateOp.entityId ?? undefined,
+              entityIds: existingFullStateOp.entityIds,
+              payload: existingFullStateOp.payload,
+              vectorClock: existingFullStateOp.vectorClock as Operation['vectorClock'],
               timestamp: op.timestamp,
-              schemaVersion: existingCleanSlateOp.schemaVersion,
-              isPayloadEncrypted: existingCleanSlateOp.isPayloadEncrypted,
-              syncImportReason: existingCleanSlateOp.syncImportReason ?? undefined,
+              schemaVersion: existingFullStateOp.schemaVersion,
+              isPayloadEncrypted: existingFullStateOp.isPayloadEncrypted,
+              syncImportReason: existingFullStateOp.syncImportReason ?? undefined,
             };
             const isExactRetry =
-              existingCleanSlateOp.userId === userId &&
-              (existingCleanSlateOp.opType === 'SYNC_IMPORT' ||
-                existingCleanSlateOp.opType === 'BACKUP_IMPORT' ||
-                existingCleanSlateOp.opType === 'REPAIR') &&
+              existingFullStateOp.userId === userId &&
+              (existingFullStateOp.opType === 'SYNC_IMPORT' ||
+                existingFullStateOp.opType === 'BACKUP_IMPORT' ||
+                existingFullStateOp.opType === 'REPAIR') &&
               isSameIncomingOperation(existingOperation, op, 0, 0);
             if (isExactRetry) {
               Logger.info(
-                `[user:${userId}] Idempotent clean-slate retry from client ${clientId} ` +
-                  `for existing op seq=${existingCleanSlateOp.serverSeq}`,
+                `[user:${userId}] Idempotent full-state retry from client ${clientId} ` +
+                  `for existing op seq=${existingFullStateOp.serverSeq}`,
               );
               return {
                 opId,
                 accepted: true,
-                serverSeq: existingCleanSlateOp.serverSeq,
+                serverSeq: existingFullStateOp.serverSeq,
               };
             }
             return {
@@ -288,7 +295,7 @@ export const uploadSnapshotHandler = async (
           }
         }
 
-        if (reason === 'initial' && !isCleanSlate) {
+        if (reason === 'initial' && !shouldCleanSlate) {
           const existingImport = await findExistingSyncImport(userId, opId);
 
           if (existingImport) {
@@ -314,7 +321,7 @@ export const uploadSnapshotHandler = async (
         // snapshots, include the operation payload plus the cached snapshot
         // replacement delta; checking only the request body can under-count by
         // nearly 2x because the server stores both the op and snapshot cache.
-        if (isCleanSlate) {
+        if (shouldCleanSlate) {
           const finalStorageBytes =
             estimatedOpStorageBytes +
             (preparedSnapshot.cacheable ? preparedSnapshot.bytes : 0);
@@ -346,7 +353,14 @@ export const uploadSnapshotHandler = async (
           if (!quotaOk) return null;
         }
 
-        const results = await syncService.uploadOps(userId, clientId, [op], isCleanSlate);
+        const results = await syncService.uploadOps(
+          userId,
+          clientId,
+          [op],
+          shouldCleanSlate,
+          undefined,
+          repairBaseServerSeq,
+        );
         const uploadResult = results[0];
 
         if (uploadResult.accepted && uploadResult.serverSeq !== undefined) {
@@ -425,6 +439,7 @@ export const uploadSnapshotHandler = async (
       accepted: finalResult.accepted,
       serverSeq: finalResult.serverSeq,
       error: finalResult.error,
+      errorCode: finalResult.errorCode,
     };
     // Skip caching when the result is a residual DUPLICATE_OPERATION (the
     // existing-op lookup just above failed) so a concurrent retry that

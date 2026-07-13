@@ -330,6 +330,14 @@ vi.mock('../src/db', async () => {
     // returning their existing default shape.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('FROM user_sync_state') && sql.includes('FOR UPDATE')) {
+        const [txUserId] = params as [number];
+        return [
+          {
+            lastSeq: state.userSyncStates.get(txUserId)?.lastSeq ?? 0,
+          },
+        ];
+      }
       if (sql.includes('INSERT INTO user_sync_state')) {
         const [txUserId, delta] = params as [number, number];
         const existing = state.userSyncStates.get(txUserId);
@@ -1721,6 +1729,56 @@ describe('SyncService', () => {
       expect(results[0].serverSeq).toBeDefined();
     });
 
+    it('should reject a stale REPAIR without deleting concurrent operations', async () => {
+      const service = getSyncService();
+      const concurrentOp = makeOp({ id: 'concurrent-op' });
+      const repair = makeOp({
+        id: 'stale-repair',
+        actionType: '[Repair] Auto Repair',
+        opType: 'REPAIR',
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { repaired: true },
+      });
+
+      expect(
+        (await service.uploadOps(userId, clientId, [concurrentOp]))[0].accepted,
+      ).toBe(true);
+
+      const staleResult = await service.uploadOps(
+        userId,
+        clientId,
+        [repair],
+        true,
+        undefined,
+        0,
+      );
+
+      expect(staleResult).toEqual([
+        expect.objectContaining({
+          opId: repair.id,
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+        }),
+      ]);
+      expect(testState.operations.has(concurrentOp.id)).toBe(true);
+      expect(testState.operations.has(repair.id)).toBe(false);
+
+      const freshRepair = { ...repair, id: 'fresh-repair' };
+      const freshResult = await service.uploadOps(
+        userId,
+        clientId,
+        [freshRepair],
+        true,
+        undefined,
+        1,
+      );
+
+      expect(freshResult[0].accepted).toBe(true);
+      expect(testState.operations.has(concurrentOp.id)).toBe(true);
+      expect(testState.operations.has(freshRepair.id)).toBe(true);
+    });
+
     it('should accept complex payloads for BACKUP_IMPORT operations', async () => {
       const service = getSyncService();
 
@@ -1769,7 +1827,14 @@ describe('SyncService', () => {
         schemaVersion: 1,
       };
 
-      const results = await service.uploadOps(userId, clientId, [op]);
+      const results = await service.uploadOps(
+        userId,
+        clientId,
+        [op],
+        false,
+        undefined,
+        0,
+      );
 
       expect(results[0].accepted).toBe(true);
       expect(results[0].serverSeq).toBeDefined();
@@ -2977,19 +3042,26 @@ describe('SyncService', () => {
     it('should return REPAIR operations as restore points', async () => {
       const service = getSyncService();
 
-      await service.uploadOps(userId, clientId, [
-        {
-          id: uuidv7(),
-          clientId,
-          actionType: '[SP_ALL] Load(import) all data',
-          opType: 'REPAIR',
-          entityType: 'ALL',
-          payload: { globalConfig: {}, tasks: {} },
-          vectorClock: {},
-          timestamp: Date.now(),
-          schemaVersion: 1,
-        },
-      ]);
+      await service.uploadOps(
+        userId,
+        clientId,
+        [
+          {
+            id: uuidv7(),
+            clientId,
+            actionType: '[SP_ALL] Load(import) all data',
+            opType: 'REPAIR',
+            entityType: 'ALL',
+            payload: { globalConfig: {}, tasks: {} },
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ],
+        false,
+        undefined,
+        0,
+      );
 
       const restorePoints = await service.getRestorePoints(userId);
 

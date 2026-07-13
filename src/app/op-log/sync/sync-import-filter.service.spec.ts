@@ -204,6 +204,31 @@ describe('SyncImportFilterService', () => {
       expect(result.invalidatedOps[0].clientId).toBe('client-A');
     });
 
+    it('should replay concurrent operations that land after a REPAIR', async () => {
+      const repair = createOp({
+        id: '019afd68-0050-7000-0000-000000000000',
+        opType: OpType.Repair,
+        clientId: 'client-A',
+        entityType: 'ALL',
+        vectorClock: { clientA: 5 },
+      });
+      const concurrentOp = createOp({
+        id: '019afd68-0060-7000-0000-000000000000',
+        opType: OpType.Create,
+        clientId: 'client-B',
+        entityId: 'task-from-b',
+        vectorClock: { clientB: 20 },
+      });
+
+      const result = await service.filterOpsInvalidatedBySyncImport([
+        repair,
+        concurrentOp,
+      ]);
+
+      expect(result.validOps).toEqual([repair, concurrentOp]);
+      expect(result.invalidatedOps).toEqual([]);
+    });
+
     it('should use the LATEST import when multiple imports exist', async () => {
       const ops: Operation[] = [
         // Client A's early op - CONCURRENT with latest import (no knowledge of imports)
@@ -589,7 +614,7 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(1);
       });
 
-      it('should handle REPAIR operations the same as SYNC_IMPORT', async () => {
+      it('should replay a concurrent pre-REPAIR operation on top of the repair', async () => {
         const ops: Operation[] = [
           {
             id: '019afd60-0001-7000-0000-000000000000',
@@ -619,9 +644,14 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Client B has a stale clientA counter and no causal knowledge of the repair.
-        expect(result.validOps.length).toBe(1); // REPAIR only
-        expect(result.invalidatedOps.length).toBe(1);
+        // Automatic repair is narrower than an explicit import. Even though the
+        // concurrent op reached the server first, replay it after the repaired
+        // snapshot so the automatic repair cannot erase unrelated work.
+        expect(result.validOps.map((op) => op.opType)).toEqual([
+          OpType.Repair,
+          OpType.Update,
+        ]);
+        expect(result.invalidatedOps).toEqual([]);
       });
     });
 
@@ -1049,17 +1079,18 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should return the LATEST import when multiple imports exist in batch', async () => {
+      it('should return the last-applied import when multiple imports exist in batch', async () => {
         const ops: Operation[] = [
           createOp({
-            id: '019afd68-0010-7000-0000-000000000000',
+            id: '019afd68-0050-7000-0000-000000000000',
             opType: OpType.SyncImport,
             clientId: 'client-A',
             entityType: 'ALL',
             vectorClock: { clientA: 1 },
           }),
           createOp({
-            id: '019afd68-0050-7000-0000-000000000000', // Later UUIDv7 = latest
+            // Applied later despite a lower UUID (for example after clock rollback).
+            id: '019afd68-0010-7000-0000-000000000000',
             opType: OpType.SyncImport,
             clientId: 'client-B',
             entityType: 'ALL',
@@ -1069,15 +1100,15 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Should return the latest import (by UUIDv7)
+        // Download batches are in server sequence order, so the final import wins.
         expect(result.filteringImport).toBeDefined();
-        expect(result.filteringImport!.id).toBe('019afd68-0050-7000-0000-000000000000');
+        expect(result.filteringImport!.id).toBe('019afd68-0010-7000-0000-000000000000');
         expect(result.filteringImport!.clientId).toBe('client-B');
       });
 
-      it('should return stored import when it is newer than batch import', async () => {
+      it('should prefer a newly downloaded import over a stored import regardless of UUID order', async () => {
         const storedImport: Operation = {
-          id: '019afd68-0100-7000-0000-000000000000', // Newer than batch import
+          id: '019afd68-0100-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
           opType: OpType.SyncImport,
           entityType: 'ALL',
@@ -1101,7 +1132,8 @@ describe('SyncImportFilterService', () => {
         );
 
         const batchImport = createOp({
-          id: '019afd68-0050-7000-0000-000000000000', // Older than stored
+          // Lower UUID, but a later server sequence than the already-stored import.
+          id: '019afd68-0050-7000-0000-000000000000',
           opType: OpType.SyncImport,
           clientId: 'client-B',
           entityType: 'ALL',
@@ -1110,10 +1142,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([batchImport]);
 
-        // Should return stored import (newer by UUIDv7)
+        // Anything in this download batch was applied after the stored baseline.
         expect(result.filteringImport).toBeDefined();
-        expect(result.filteringImport!.id).toBe(storedImport.id);
-        expect(result.filteringImport!.clientId).toBe('client-A');
+        expect(result.filteringImport!.id).toBe(batchImport.id);
+        expect(result.filteringImport!.clientId).toBe('client-B');
       });
 
       it('should return filteringImport for BACKUP_IMPORT as well', async () => {
@@ -1218,6 +1250,30 @@ describe('SyncImportFilterService', () => {
 
         expect(result.isLocalUnsyncedImport).toBe(true);
         expect(result.invalidatedOps.length).toBe(1);
+      });
+
+      it('should not treat an automatic local REPAIR as an explicit import conflict', async () => {
+        const storedRepair = createOp({
+          id: '019afd68-0050-7000-0000-000000000000',
+          opType: OpType.Repair,
+          clientId: 'client-A',
+          entityType: 'ALL',
+          vectorClock: { clientA: 3, clientB: 2 },
+        });
+        opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(
+          createEntry(storedRepair, 'local'),
+        );
+        const representedOp = createOp({
+          id: '019afd68-0001-7000-0000-000000000000',
+          opType: OpType.Update,
+          clientId: 'client-B',
+          vectorClock: { clientB: 1 },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([representedOp]);
+
+        expect(result.invalidatedOps).toEqual([representedOp]);
+        expect(result.isLocalUnsyncedImport).toBe(false);
       });
 
       it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {

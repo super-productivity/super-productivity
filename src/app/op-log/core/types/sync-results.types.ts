@@ -173,8 +173,9 @@ export interface UploadResult {
  */
 export interface UploadOptions {
   /**
-   * Optional callback executed INSIDE the upload lock, BEFORE checking for pending ops.
-   * Use this for operations that must be atomic with the upload, such as server migration checks.
+   * Optional preparation callback executed BEFORE acquiring the upload lock and
+   * before checking pending ops. Potentially interactive/network-bound checks
+   * belong here; their final local mutation must provide its own narrow lock.
    */
   preUploadCallback?: () => Promise<void>;
 

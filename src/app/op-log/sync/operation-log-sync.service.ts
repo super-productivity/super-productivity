@@ -32,6 +32,7 @@ import {
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 import { RemoteOpsProcessingService } from './remote-ops-processing.service';
 import { ConflictJournalService } from './conflict-journal.service';
 import { VectorClockService } from './vector-clock.service';
@@ -155,6 +156,7 @@ export class OperationLogSyncService {
   private writeFlushService = inject(OperationWriteFlushService);
   private schemaMigrationService = inject(SchemaMigrationService);
   private validateStateService = inject(ValidateStateService);
+  private repairSyncContext = inject(RepairSyncContextService);
 
   // Extracted services
   private remoteOpsProcessingService = inject(RemoteOpsProcessingService);
@@ -251,9 +253,9 @@ export class OperationLogSyncService {
       return { kind: 'blocked_fresh_client' };
     }
 
-    // SERVER MIGRATION CHECK: Passed as callback to execute INSIDE the upload lock.
-    // This prevents race conditions where multiple tabs could both detect migration
-    // and create duplicate SYNC_IMPORT operations.
+    // SERVER MIGRATION CHECK: Network probes and dialogs run before the upload
+    // lock. ServerMigrationService deduplicates the final append inside the
+    // cross-tab operation-log barrier.
     // Skip migration check for force uploads (e.g., after password change) to avoid
     // DecryptError when downloading ops encrypted with a different key.
     const result = await this.uploadService.uploadPendingOps(syncProvider, {
@@ -358,6 +360,7 @@ export class OperationLogSyncService {
         result.piggybackedOps,
         startupCleanupFullStateOpId,
         startupOpIdsToDiscard,
+        result.lastServerSeqToPersist,
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
       // Validation failure (if any) is on the session-validation latch.
@@ -966,6 +969,7 @@ export class OperationLogSyncService {
       result.newOps,
       startupCleanupFullStateOpId,
       startupOpIdsToDiscard,
+      result.latestServerSeq,
     );
 
     if (processResult.blockedByIncompatibleOp) {
@@ -1054,9 +1058,13 @@ export class OperationLogSyncService {
     remoteOps: Operation[],
     fullStateOpId: string | undefined,
     startupOpIds: string[],
+    repairBaseServerSeq?: number,
   ): Promise<RemoteOpsProcessingResult> {
     try {
-      const result = await this.remoteOpsProcessingService.processRemoteOps(remoteOps);
+      const result = await this.repairSyncContext.runWithBaseServerSeq(
+        repairBaseServerSeq,
+        () => this.remoteOpsProcessingService.processRemoteOps(remoteOps),
+      );
       await this._discardStartupOpsIfFullStateCommitted(
         fullStateOpId,
         startupOpIds,
@@ -1223,8 +1231,9 @@ export class OperationLogSyncService {
         'auto-merging via LWW conflict resolution instead of the conflict dialog.',
     );
 
-    const processResult = await this.remoteOpsProcessingService.processRemoteOps(
-      result.newOps,
+    const processResult = await this.repairSyncContext.runWithBaseServerSeq(
+      result.latestServerSeq,
+      () => this.remoteOpsProcessingService.processRemoteOps(result.newOps),
     );
 
     if (processResult.blockedByIncompatibleOp) {
@@ -1592,12 +1601,13 @@ export class OperationLogSyncService {
           // Skip conflict detection because the NgRx store was just reset to empty state,
           // which causes all entities to appear missing and CONCURRENT ops to be discarded.
           // Validation failure is surfaced via the session-validation latch. (#7330)
-          const processResult = await this.remoteOpsProcessingService.processRemoteOps(
-            migratedRemoteOps,
-            {
-              skipConflictDetection: true,
-              callerHoldsOperationLogLock: true,
-            },
+          const processResult = await this.repairSyncContext.runWithBaseServerSeq(
+            result.latestServerSeq,
+            () =>
+              this.remoteOpsProcessingService.processRemoteOps(migratedRemoteOps, {
+                skipConflictDetection: true,
+                callerHoldsOperationLogLock: true,
+              }),
           );
 
           if (processResult.blockedByIncompatibleOp) {

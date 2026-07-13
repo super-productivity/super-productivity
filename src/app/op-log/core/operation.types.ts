@@ -125,6 +125,8 @@ export interface RepairSummary {
 export interface RepairPayload {
   appDataComplete: unknown; // AppDataComplete - using unknown to avoid circular deps
   repairSummary: RepairSummary;
+  /** Server cursor at which this repaired snapshot was built. */
+  repairBaseServerSeq?: number;
 }
 
 /**

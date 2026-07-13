@@ -1,12 +1,12 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { isFullStateOpType, Operation } from '../core/operation.types';
+import { isFullStateOpType, Operation, OpType } from '../core/operation.types';
 import { vectorClockToString } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { classifyOpAgainstSyncImport } from '@sp/sync-core';
 
 /**
- * Service responsible for filtering operations invalidated by SYNC_IMPORT, BACKUP_IMPORT, or REPAIR operations.
+ * Service responsible for filtering operations invalidated by full-state operations.
  *
  * ## The Problem
  * ```
@@ -19,7 +19,7 @@ import { classifyOpAgainstSyncImport } from '@sp/sync-core';
  *   - Applying them causes "Task not found" errors
  * ```
  *
- * ## The Solution: Clean Slate Semantics
+ * ## The Solution: Import vs. Repair Semantics
  * SYNC_IMPORT and BACKUP_IMPORT are explicit user actions to restore ALL clients
  * to a specific state. ALL operations without knowledge of the import are dropped:
  *
@@ -30,6 +30,11 @@ import { classifyOpAgainstSyncImport } from '@sp/sync-core';
  * This ensures a true "restore to point in time" semantic. Concurrent work from
  * other clients is intentionally discarded because the user explicitly chose to
  * reset all state to the imported snapshot.
+ *
+ * REPAIR is automatic, so it is narrower: causally older operations are already
+ * represented by its snapshot, while CONCURRENT operations replay on top. The
+ * SuperSync server separately rejects a repair whose captured server cursor is
+ * stale, ensuring an accepted repair cannot have an unknown concurrent prefix.
  *
  * We use vector clock comparison (not UUIDv7 timestamps) because vector clocks
  * track CAUSALITY (did the client know about the import?) rather than wall-clock
@@ -43,7 +48,7 @@ export class SyncImportFilterService {
   private opLogStore = inject(OperationLogStoreService);
 
   /**
-   * Filters out operations invalidated by a SYNC_IMPORT, BACKUP_IMPORT, or REPAIR.
+   * Filters out operations invalidated by a full-state operation.
    *
    * ## Clean Slate Semantics
    * Imports are explicit user actions to restore all clients to a specific state.
@@ -83,24 +88,17 @@ export class SyncImportFilterService {
     const storedEntry = await this.opLogStore.getLatestFullStateOpEntry();
     const storedImport = storedEntry?.op;
 
-    // Determine the latest import (from batch or store)
-    // Also track whether we're using the stored entry (needed for isLocalUnsyncedImport check)
+    // Determine the latest import by durable apply order. Download batches are
+    // ordered by server sequence, and every op in this batch is newer than the
+    // already-applied local baseline. UUIDv7 IDs cannot provide this ordering:
+    // they are generated from independent client wall clocks.
+    // Also track whether we're using the stored entry (needed for isLocalUnsyncedImport check).
     let latestImport: Operation | undefined;
     let usingStoredEntry = false;
 
     if (fullStateImportsInBatch.length > 0) {
-      // Find the latest in the current batch
-      const latestInBatch = fullStateImportsInBatch.reduce((latest, op) =>
-        op.id > latest.id ? op : latest,
-      );
-      // Compare with stored import (if any)
-      if (storedImport && storedImport.id > latestInBatch.id) {
-        latestImport = storedImport;
-        usingStoredEntry = true;
-      } else {
-        latestImport = latestInBatch;
-        usingStoredEntry = false;
-      }
+      latestImport = fullStateImportsInBatch[fullStateImportsInBatch.length - 1];
+      usingStoredEntry = false;
     } else if (storedImport) {
       // No import in batch, but we have one from a previous sync
       latestImport = storedImport;
@@ -119,8 +117,11 @@ export class SyncImportFilterService {
     // 1. We're using the stored entry (not a batch import)
     // 2. The stored entry was created locally (source='local')
     // 3. The import has NOT been synced yet (!syncedAt)
+    // 4. The boundary is an explicit import/restore, not automatic REPAIR
     //
-    // Once a local import has been synced to the server (syncedAt is set),
+    // Automatic REPAIR never opens the explicit import/restore conflict dialog;
+    // its concurrent work is replayed on top instead. Once a local import has
+    // been synced to the server (syncedAt is set),
     // the import is established as the new baseline. Old remote ops that are
     // CONCURRENT with it are just stragglers that should be silently discarded
     // — the user already made their choice when they created the import, and
@@ -130,7 +131,8 @@ export class SyncImportFilterService {
       usingStoredEntry &&
       !!storedEntry &&
       storedEntry.source === 'local' &&
-      !storedEntry.syncedAt;
+      !storedEntry.syncedAt &&
+      latestImport.opType !== OpType.Repair;
 
     OpLog.normal(
       `SyncImportFilterService: Filtering ops against SYNC_IMPORT from client ${latestImport.clientId} (op: ${latestImport.id})`,
@@ -140,11 +142,13 @@ export class SyncImportFilterService {
     );
 
     const importClockForComparison = latestImport.vectorClock;
+    const latestImportBatchIndex = usingStoredEntry ? -1 : ops.lastIndexOf(latestImport);
 
     const validOps: Operation[] = [];
     const invalidatedOps: Operation[] = [];
+    const repairConcurrentPrefixOps: Operation[] = [];
 
-    for (const op of ops) {
+    for (const [opIndex, op] of ops.entries()) {
       // Full state import operations themselves are always valid
       if (isFullStateOpType(op.opType)) {
         validOps.push(op);
@@ -211,6 +215,22 @@ export class SyncImportFilterService {
             `${importClockForComparison[latestImport.clientId]} (post-import via clock reset).`,
         );
         validOps.push(op);
+      } else if (
+        latestImport.opType === OpType.Repair &&
+        decision.reason === 'concurrent'
+      ) {
+        // Automatic repair is not an explicit clean-slate user action. An op
+        // concurrent with an accepted repair must have landed after the repair's
+        // server-cursor precondition was checked, so replay it on top and let
+        // post-sync validation verify the combined state.
+        OpLog.normal(
+          `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) concurrent with REPAIR ${latestImport.id}.`,
+        );
+        if (latestImportBatchIndex !== -1 && opIndex < latestImportBatchIndex) {
+          repairConcurrentPrefixOps.push(op);
+        } else {
+          validOps.push(op);
+        }
       } else {
         // CONCURRENT or LESS_THAN: Op was created without knowledge of import
         // Filter it to ensure clean slate semantics
@@ -223,6 +243,15 @@ export class SyncImportFilterService {
         );
         invalidatedOps.push(op);
       }
+    }
+
+    if (repairConcurrentPrefixOps.length > 0) {
+      // A concurrent op that reached the server before an automatic REPAIR is
+      // not represented by that repair snapshot. Move it just after the repair
+      // boundary so the full-state apply cannot erase it. Preserve prefix order
+      // and keep all originally post-repair operations after the replayed prefix.
+      const repairIndex = validOps.lastIndexOf(latestImport);
+      validOps.splice(repairIndex + 1, 0, ...repairConcurrentPrefixOps);
     }
 
     return {

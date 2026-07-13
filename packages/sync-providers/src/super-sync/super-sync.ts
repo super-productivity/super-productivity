@@ -302,6 +302,7 @@ export class SuperSyncProvider
     isCleanSlate?: boolean,
     snapshotOpType?: string,
     syncImportReason?: string,
+    repairBaseServerSeq?: number,
   ): Promise<SnapshotUploadResponse> {
     this._deps.logger.normal(`${this._logLabel}: uploadSnapshot: Starting...`, {
       clientId,
@@ -311,6 +312,7 @@ export class SuperSyncProvider
       opId,
       isCleanSlate,
       snapshotOpType,
+      repairBaseServerSeq,
     });
     const cfg = await this._cfgOrError();
 
@@ -326,6 +328,7 @@ export class SuperSyncProvider
       isCleanSlate,
       snapshotOpType,
       ...(syncImportReason ? { syncImportReason } : {}),
+      ...(repairBaseServerSeq !== undefined ? { repairBaseServerSeq } : {}),
       requestId,
     });
 

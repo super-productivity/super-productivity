@@ -662,10 +662,29 @@ describe('OperationLogStoreService', () => {
       )._adapter;
       spyOn(adapter, 'iterate').and.callThrough();
 
-      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(
-        latestExistingImport.id,
-      );
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(lowerNewImport.id);
       expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a rejected full-state op when choosing the active baseline', async () => {
+      const priorImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000051',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000052',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(priorImport, 'remote');
+      await service.append(rejectedRepair);
+      await service.markRejected([rejectedRepair.id]);
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
     });
 
     it('should rebuild malformed metadata instead of throwing', async () => {

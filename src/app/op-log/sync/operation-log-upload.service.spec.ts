@@ -882,6 +882,7 @@ describe('OperationLogUploadService', () => {
           undefined, // isCleanSlate
           'SYNC_IMPORT', // snapshotOpType
           undefined, // syncImportReason
+          undefined, // repairBaseServerSeq
         );
       });
 
@@ -902,10 +903,11 @@ describe('OperationLogUploadService', () => {
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
           undefined, // syncImportReason
+          undefined, // repairBaseServerSeq
         );
       });
 
-      it('should use correct reason for Repair (recovery) with auto isCleanSlate', async () => {
+      it('should upload Repair without destructive clean-slate semantics', async () => {
         const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.Repair);
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
@@ -919,10 +921,25 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           false, // isPayloadEncrypted
           'op-1', // op.id
-          true, // isCleanSlate - auto true for Repair
+          false, // REPAIR must preserve server history and concurrent work
           'REPAIR', // snapshotOpType
           undefined, // syncImportReason
+          undefined, // repairBaseServerSeq
         );
+      });
+
+      it('should pass the server cursor captured with a Repair snapshot', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.Repair);
+        entry.op.payload = {
+          appDataComplete: entry.op.payload,
+          repairSummary: {},
+          repairBaseServerSeq: 17,
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([entry]);
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadSnapshot.calls.mostRecent().args[10]).toBe(17);
       });
 
       it('should mark full-state ops as synced after successful upload', async () => {
@@ -934,7 +951,7 @@ describe('OperationLogUploadService', () => {
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
       });
 
-      it('should mark full-state ops as rejected when snapshot fails with permanent error', async () => {
+      it('should defer permanent full-state rejection to the central rejection handler', async () => {
         const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.BackupImport);
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
         mockApiProvider.uploadSnapshot.and.returnValue(
@@ -943,8 +960,11 @@ describe('OperationLogUploadService', () => {
 
         const result = await service.uploadPendingOps(mockApiProvider);
 
-        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
         expect(result.rejectedCount).toBe(1);
+        expect(result.rejectedOps).toEqual([
+          { opId: 'op-1', error: 'Invalid payload structure' },
+        ]);
       });
 
       it('should NOT mark full-state ops as rejected when snapshot fails with transient error (transaction rolled back)', async () => {
@@ -1152,18 +1172,18 @@ describe('OperationLogUploadService', () => {
         expect(result.uploadedCount).toBe(2);
       });
 
-      it('should NOT auto-set isCleanSlate for SyncImport unlike BackupImport/Repair', async () => {
+      it('should NOT auto-set isCleanSlate for SyncImport unlike BackupImport', async () => {
         const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
         await service.uploadPendingOps(mockApiProvider);
 
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
-        // SyncImport should NOT get auto isCleanSlate=true (unlike BackupImport/Repair)
+        // SyncImport should NOT get auto isCleanSlate=true (unlike BackupImport)
         expect(callArgs[7]).toBeUndefined();
       });
 
-      it('should still upload regular ops when full-state op is rejected', async () => {
+      it('should block dependent regular ops when a full-state op is rejected', async () => {
         const fullStateEntry = createFullStateEntry(
           1,
           'op-1',
@@ -1187,11 +1207,11 @@ describe('OperationLogUploadService', () => {
 
         const result = await service.uploadPendingOps(mockApiProvider);
 
-        // Full-state op was rejected
-        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
-        // Regular op should still be uploaded via normal path
-        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
-        expect(result.uploadedCount).toBe(1);
+        // The central rejection handler still needs to see and classify the full-state op.
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        // The regular op depends on the snapshot baseline and must remain pending.
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(0);
         expect(result.rejectedCount).toBe(1);
       });
 
@@ -1236,8 +1256,8 @@ describe('OperationLogUploadService', () => {
         // Get the call arguments
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
 
-        // Verify all 10 args are passed including op.id, isCleanSlate, snapshotOpType, and syncImportReason
-        expect(callArgs.length).toBe(10);
+        // The final optional argument carries a REPAIR snapshot's causal server base.
+        expect(callArgs.length).toBe(11);
 
         // Verify specific args
         expect(callArgs[1]).toBe('client-1'); // clientId
@@ -1289,6 +1309,7 @@ describe('OperationLogUploadService', () => {
           true, // isCleanSlate - auto true for BackupImport
           'BACKUP_IMPORT', // snapshotOpType
           undefined, // syncImportReason
+          undefined, // repairBaseServerSeq
         );
       });
 
@@ -1683,7 +1704,7 @@ describe('OperationLogUploadService', () => {
         mockApiProvider.setLastServerSeq.and.returnValue(Promise.resolve());
       });
 
-      it('should call preUploadCallback inside the lock for API-based sync', async () => {
+      it('should call preUploadCallback before acquiring the upload lock', async () => {
         const callOrder: string[] = [];
 
         mockLockService.request.and.callFake(
@@ -1702,10 +1723,9 @@ describe('OperationLogUploadService', () => {
         await service.uploadPendingOps(mockApiProvider, { preUploadCallback: callback });
 
         expect(callback).toHaveBeenCalled();
-        // Verify callback was called INSIDE the lock
         expect(callOrder).toEqual([
-          'lock-acquired',
           'callback-executed',
+          'lock-acquired',
           'lock-released',
         ]);
       });

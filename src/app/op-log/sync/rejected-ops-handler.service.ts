@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { Operation, VectorClock } from '../core/operation.types';
+import { Operation, OpType, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -99,6 +99,7 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }> = [];
     const permanentlyRejectedOps: string[] = [];
+    const staleRepairOps: string[] = [];
 
     for (const rejected of rejectedOps) {
       // Check for storage quota exceeded - show strong alert and skip marking as rejected
@@ -145,6 +146,15 @@ export class RejectedOpsHandlerService {
         continue;
       }
 
+      if (rejected.errorCode === 'REPAIR_STALE' && entry.op.opType === OpType.Repair) {
+        staleRepairOps.push(rejected.opId);
+        OpLog.normal(
+          `RejectedOpsHandlerService: Repair ${rejected.opId} was based on a stale server cursor; ` +
+            'retiring it before downloading the concurrent suffix.',
+        );
+        continue;
+      }
+
       // Check if this is a conflict that needs resolution via merge
       // These happen when another client uploaded a conflicting operation.
       // Use errorCode for reliable detection (string matching is fragile).
@@ -185,6 +195,16 @@ export class RejectedOpsHandlerService {
         msg: T.F.SYNC.S.UPLOAD_OPS_REJECTED,
         translateParams: { count: permanentlyRejectedOps.length },
       });
+    }
+
+    if (staleRepairOps.length > 0) {
+      // Retire the local full-state boundary before downloading. Otherwise the
+      // import filter would treat the rejected REPAIR as authoritative and drop
+      // exactly the concurrent server operations that made it stale.
+      await this.opLogStore.markRejected(staleRepairOps);
+      if (downloadCallback) {
+        await downloadCallback();
+      }
     }
 
     // For concurrent modifications: try download first, then resolve locally if needed

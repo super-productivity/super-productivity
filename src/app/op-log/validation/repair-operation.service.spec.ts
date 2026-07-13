@@ -6,6 +6,7 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { ActionType, RepairSummary, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { TranslateService } from '@ngx-translate/core';
+import { RepairSyncContextService } from './repair-sync-context.service';
 
 describe('RepairOperationService', () => {
   let service: RepairOperationService;
@@ -13,6 +14,7 @@ describe('RepairOperationService', () => {
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockTranslateService: jasmine.SpyObj<TranslateService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
+  let repairSyncContext: RepairSyncContextService;
   let alertSpy: jasmine.Spy;
   let confirmSpy: jasmine.Spy;
 
@@ -85,6 +87,7 @@ describe('RepairOperationService', () => {
     });
 
     service = TestBed.inject(RepairOperationService);
+    repairSyncContext = TestBed.inject(RepairSyncContextService);
   });
 
   describe('createRepairOperation', () => {
@@ -127,6 +130,20 @@ describe('RepairOperationService', () => {
         appDataComplete: mockRepairedState,
         repairSummary: summary,
       });
+    });
+
+    it('should include the server cursor used to build a sync repair', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 1 });
+
+      await repairSyncContext.runWithBaseServerSeq(17, () =>
+        service.createRepairOperation(mockRepairedState, summary, 'test-client'),
+      );
+
+      const operation =
+        mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+      expect(operation.payload).toEqual(
+        jasmine.objectContaining({ repairBaseServerSeq: 17 }),
+      );
     });
 
     it('should acquire lock before creating operation', async () => {

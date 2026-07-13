@@ -4,7 +4,7 @@ import { Injectable } from '@angular/core';
  * In-tab mutual-exclusion guard for the three top-level sync entry points:
  * - `SyncWrapperService.sync()`        (periodic / user-triggered full sync)
  * - `ImmediateUploadService._performUpload()` (side channel)
- * - `WsTriggeredDownloadService._downloadOps()` (side channel)
+ * - `WsTriggeredDownloadService._drainPending()` (queued side channel)
  *
  * ## Why (#8309)
  * These flows share the per-tab {@link SyncSessionValidationService} latch,
@@ -22,11 +22,9 @@ import { Injectable } from '@angular/core';
  *   that wait would stall other tabs until the 30s lock timeout.
  * - Every entry point claims the cycle with {@link tryBegin} *before its first
  *   `await`*, so the check-and-set is atomic on the single-threaded event loop,
- *   and skips when a cycle is already active. Skipping (rather than queuing) is
- *   the correct semantics: an opportunistic side channel must not mutate state
- *   while another cycle (or its conflict dialog) is open, and a user-triggered
- *   sync that collides with a short-lived side channel is simply retried on the
- *   next trigger. Because nothing ever waits on the guard, it cannot deadlock.
+ *   and returns false when a cycle is already active. Callers never wait on the
+ *   guard itself: immediate/user-triggered flows skip, while the WebSocket
+ *   high-watermark queue retries later. Therefore the guard cannot deadlock.
  *
  * Cross-tab apply-phase serialization remains the job of the existing Web
  * Locks; cross-tab gate/seq staleness is out of scope for this guard.

@@ -188,6 +188,26 @@ describe('SuperSync HTTP contract schemas', () => {
     expect(parsed.requestId).toBe('snapshot-v1-request');
   });
 
+  it('requires and preserves the causal base sequence for repair snapshots', () => {
+    const repairRequest = {
+      state: { tasks: {} },
+      clientId: 'client_1',
+      reason: 'recovery' as const,
+      vectorClock: { client_1: 2 },
+      schemaVersion: 1,
+      opId: '018f2f0b-1c2d-7a1b-8c3d-123456789abc',
+      snapshotOpType: 'REPAIR' as const,
+    };
+
+    expect(() => SuperSyncUploadSnapshotRequestSchema.parse(repairRequest)).toThrow();
+
+    const parsed = SuperSyncUploadSnapshotRequestSchema.parse({
+      ...repairRequest,
+      repairBaseServerSeq: 42,
+    });
+    expect(parsed.repairBaseServerSeq).toBe(42);
+  });
+
   it('requires an operation ID for destructive clean-slate snapshots', () => {
     expect(() =>
       SuperSyncUploadSnapshotRequestSchema.parse({

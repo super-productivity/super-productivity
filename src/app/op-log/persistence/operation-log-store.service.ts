@@ -1045,9 +1045,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Finds the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, or REPAIR)
    * in the local operation log.
    *
-   * This is used to filter incoming ops - any operation with a UUIDv7 timestamp
-   * BEFORE the latest full-state op should be discarded, as it references state
-   * that no longer exists.
+   * This is used to filter incoming ops against the last durably applied
+   * full-state baseline. Rejected full-state ops are skipped because they were
+   * never established remotely and must not invalidate later downloads.
    *
    * Convenience wrapper over {@link getLatestFullStateOpEntry} returning only the op.
    *
@@ -1070,39 +1070,75 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * - Remote/synced imports → silently filter old ops (already accepted)
    *
    * Uses the persistent full-state metadata pointer. Existing databases rebuild
-   * that metadata once on first read, then future calls are O(1).
+   * that metadata once on first read. The normal case reads the metadata and
+   * its latest op; if that op was rejected, older refs are checked until an
+   * active baseline is found.
    *
    * @returns The latest full-state operation entry, or undefined if none exists
    */
   async getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
 
+    const findLatestActive = async (
+      meta: FullStateOpsMetaEntry,
+    ): Promise<{ entry?: OperationLogEntry; hasStaleRef: boolean }> => {
+      let hasStaleRef = false;
+      if (!meta.latest) {
+        return { hasStaleRef };
+      }
+
+      const latestRef = meta.latest;
+      const readRef = async (
+        ref: FullStateOpRef,
+      ): Promise<
+        { status: 'active'; entry: OperationLogEntry } | { status: 'rejected' | 'stale' }
+      > => {
+        const stored = await this._adapter.get<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          ref.seq,
+        );
+        if (
+          !stored ||
+          getOpId(stored.op) !== ref.opId ||
+          !isFullStateOpType(getStoredOpType(stored.op))
+        ) {
+          return { status: 'stale' };
+        }
+        if (!stored.rejectedAt) {
+          return { status: 'active', entry: decodeStoredEntry(stored) };
+        }
+        return { status: 'rejected' };
+      };
+
+      const latestResult = await readRef(latestRef);
+      if (latestResult.status === 'active') {
+        return { entry: latestResult.entry, hasStaleRef };
+      }
+      hasStaleRef = latestResult.status === 'stale';
+
+      const olderRefsNewestFirst = meta.refs
+        .filter((ref) => ref.seq !== latestRef.seq)
+        .sort((a, b) => b.seq - a.seq);
+      for (const ref of olderRefsNewestFirst) {
+        const result = await readRef(ref);
+        if (result.status === 'stale') {
+          hasStaleRef = true;
+          continue;
+        }
+        if (result.status === 'active') {
+          return { entry: result.entry, hasStaleRef };
+        }
+      }
+      return { hasStaleRef };
+    };
+
     const meta = await this._getFullStateOpsMetaOrRebuild();
-    if (!meta.latest) {
-      return undefined;
+    const firstRead = await findLatestActive(meta);
+    if (firstRead.entry || !firstRead.hasStaleRef) {
+      return firstRead.entry;
     }
 
-    const stored = await this._adapter.get<StoredOperationLogEntry>(
-      STORE_NAMES.OPS,
-      meta.latest.seq,
-    );
-    if (
-      stored &&
-      getOpId(stored.op) === meta.latest.opId &&
-      isFullStateOpType(getStoredOpType(stored.op))
-    ) {
-      return decodeStoredEntry(stored);
-    }
-
-    const rebuiltMeta = await this._rebuildFullStateOpsMeta();
-    if (!rebuiltMeta.latest) {
-      return undefined;
-    }
-    const rebuiltStored = await this._adapter.get<StoredOperationLogEntry>(
-      STORE_NAMES.OPS,
-      rebuiltMeta.latest.seq,
-    );
-    return rebuiltStored ? decodeStoredEntry(rebuiltStored) : undefined;
+    return (await findLatestActive(await this._rebuildFullStateOpsMeta())).entry;
   }
 
   /**
@@ -1130,7 +1166,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
    * 2. Client B uploads new SYNC_IMPORT
    * 3. Client A downloads and stores B's SYNC_IMPORT
-   * 4. Without clearing, getLatestFullStateOpEntry might return X's old import (if newer by UUIDv7)
+   * 4. Clearing keeps only the newly committed baseline and bounds future metadata reads
    * 5. New operations would appear CONCURRENT with X's import and get filtered
    *
    * @param excludeIds - IDs of operations to NOT delete (typically the newly stored import)

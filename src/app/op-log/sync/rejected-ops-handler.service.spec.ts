@@ -193,6 +193,36 @@ describe('RejectedOpsHandlerService', () => {
       expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
     });
 
+    it('should retire a stale Repair and download the concurrent server suffix', async () => {
+      const repair = createOp({
+        id: 'repair-1',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      opLogStoreSpy.getOpById.and.resolveTo(mockEntry(repair));
+      opLogStoreSpy.markRejected.and.resolveTo();
+      const downloadCallback = jasmine
+        .createSpy<DownloadCallback>('downloadCallback')
+        .and.resolveTo({ newOpsCount: 1 });
+
+      const result = await service.handleRejectedOps(
+        [
+          {
+            opId: repair.id,
+            error: 'Repair base is stale',
+            errorCode: 'REPAIR_STALE',
+          },
+        ],
+        downloadCallback,
+      );
+
+      expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith([repair.id]);
+      expect(downloadCallback).toHaveBeenCalledTimes(1);
+      expect(result.permanentRejectionCount).toBe(0);
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    });
+
     it('should handle multiple DUPLICATE_OPERATION rejections', async () => {
       opLogStoreSpy.getOpById.and.callFake(async (opId: string) => {
         const seqMap: Record<string, number> = {

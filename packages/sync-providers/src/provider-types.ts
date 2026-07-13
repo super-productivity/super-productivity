@@ -146,6 +146,7 @@ export interface SnapshotUploadResponse {
   accepted: boolean;
   serverSeq?: number;
   error?: string;
+  errorCode?: string;
 }
 
 export interface OperationSyncCapable<
@@ -184,6 +185,7 @@ export interface OperationSyncCapable<
     isCleanSlate?: boolean,
     snapshotOpType?: TRestorePointType,
     syncImportReason?: string,
+    repairBaseServerSeq?: number,
   ): Promise<SnapshotUploadResponse>;
   deleteAllData(): Promise<{ success: boolean }>;
   getEncryptKey?(): Promise<string | undefined>;

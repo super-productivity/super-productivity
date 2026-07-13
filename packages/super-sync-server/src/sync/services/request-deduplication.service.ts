@@ -33,6 +33,7 @@ export interface SnapshotDedupResponse {
   accepted: boolean;
   serverSeq?: number;
   error?: string;
+  errorCode?: string;
 }
 
 /**
@@ -193,6 +194,7 @@ export interface SnapshotRequestFingerprintInput {
   opId?: string;
   isCleanSlate?: boolean;
   snapshotOpType?: string;
+  repairBaseServerSeq?: number;
 }
 
 export const createSnapshotRequestFingerprint = (
