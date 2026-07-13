@@ -182,29 +182,25 @@ The change made later (by timestamp) wins:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### File-Based (Dropbox/WebDAV)
+### File-Based (Dropbox/OneDrive/WebDAV/Local File)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                      │
-│   Your Device              Cloud File          Other Device          │
-│   ┌────────┐              ┌────────┐           ┌────────┐           │
-│   │        │              │        │           │        │           │
-│   │Download│ ◄──────────  │ sync-  │ ──────►   │Download│           │
-│   │ whole  │              │ data.  │           │ whole  │           │
-│   │ file   │              │ json   │           │ file   │           │
-│   │        │ ──────────►  │        │ ◄──────   │        │           │
-│   │Upload  │              │(state +│           │Upload  │           │
-│   │ whole  │              │ ops)   │           │ whole  │           │
-│   │ file   │              │        │           │ file   │           │
-│   └────────┘              └────────┘           └────────┘           │
+│   Your Device             Remote commit        Other Device          │
+│   ┌────────┐              ┌────────────┐        ┌────────┐           │
+│   │Download│ ◄──────────  │ default v2 │ ─────► │Download│           │
+│   │+ merge │              │ sync-data  │        │+ merge │           │
+│   │        │              │            │        │        │           │
+│   │CAS     │ ──────────►  │ opt-in v3  │ ◄───── │CAS     │           │
+│   │upload  │              │ sync-ops   │        │upload  │           │
+│   └────────┘              └────────────┘        └────────┘           │
 │                                                                      │
-│   File contains EVERYTHING:                                          │
-│   - Current state (all your data)                                    │
-│   - Recent operations (last 200)                                     │
-│   - Vector clock (for conflict detection)                           │
+│   Default v2: snapshot + archives + up to 2,000 recent ops.          │
+│   Opt-in v3: sync-ops references a separate sync-state snapshot.     │
+│   A losing conditional upload re-downloads, merges, and retries.     │
 │                                                                      │
-│   Less efficient, but works with any storage                        │
+│   Strong provider revisions are required for concurrent writers.     │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -261,7 +257,7 @@ The change made later (by timestamp) wins:
 | **Operation**    | A record of one change (create, update, delete)    |
 | **Vector Clock** | Tracks which device made changes when              |
 | **LWW**          | "Last Write Wins" - later timestamp wins conflicts |
-| **Piggybacking** | Getting other devices' changes during your upload  |
+| **Piggybacking** | SuperSync returning missing server ops with an upload response; file providers instead re-download after a revision mismatch |
 | **syncVersion**  | Counter that increases with each file update       |
 
 ## Key Files

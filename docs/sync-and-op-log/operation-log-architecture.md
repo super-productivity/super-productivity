@@ -52,13 +52,17 @@ This is efficient and precise.
   - _Conflict:_ If Device B _also_ made a change and is at "Version 2", it knows "Wait, we both changed Version 1 at the same time!" -> **Conflict Detected**.
 - **Resolution:** The user is shown a dialog to pick the winner. The loser isn't deleted; it's marked as "Rejected" in the log but kept for history.
 
-**B. "File-Based Sync" (Dropbox, WebDAV, Local File)**
-This uses a single-file approach with embedded operations.
+**B. "File-Based Sync" (Dropbox, OneDrive, WebDAV/Nextcloud, Local File)**
 
-- File-based providers sync a single `sync-data.json` file containing: full state snapshot + recent operations buffer
-- When syncing, the system downloads the remote file, merges any new operations, and uploads the combined state
-- Conflict detection uses vector clocks - if two clients sync concurrently, the "piggybacking" mechanism ensures no operations are lost
-- This provides entity-level conflict resolution (vs old model-level "last write wins")
+- The default v2 layout stores the snapshot and recent operations in
+  `sync-data.json`.
+- Opt-in Surgical sync migrates the folder to a v3 `sync-ops.json` commit point
+  plus `sync-state.json`, so ordinary sync transfers only the smaller ops file.
+- Uploads conditionally match the revision returned by the read. A losing writer
+  re-downloads, merges the winner's operations, and retries; providers do not
+  piggyback operations in their upload response.
+- Vector clocks and the shared replay/conflict layer retain entity-level
+  conflict handling in either remote layout.
 
 ### 4. Safety & Self-Healing
 
@@ -1052,137 +1056,139 @@ Before releasing any migration:
 
 # Part B: File-Based Sync
 
-File-based sync providers (WebDAV, Dropbox, LocalFile) use a single-file approach via the `FileBasedSyncAdapter`.
+File-based providers (Dropbox, OneDrive, WebDAV/Nextcloud, and Local File) use
+`FileBasedSyncAdapterService`. The adapter has two remote layouts:
+
+- **Version 2, default:** one `sync-data.json` containing the snapshot, archives,
+  vector clock, and recent operations.
+- **Version 3, opt-in “Surgical sync”:** a small `sync-ops.json` commit point plus
+  a `sync-state.json` snapshot. This reduces ordinary syncs to the operation file.
+
+The split layout is a one-way folder migration. Every client using that folder
+must be updated and have Surgical sync enabled before migration.
 
 ## B.1 How File-Based Sync Works
 
 ```
-Sync Triggered (WebDAV/Dropbox/LocalFile)
+Sync triggered
     │
     ▼
-FileBasedSyncAdapter.downloadOps()
+Download commit point
     │
-    └──► Downloads sync-data.json from remote
+    ├── v2: sync-data.json
+    └── v3: sync-ops.json
               │
-              ├──► Contains: state snapshot + recent ops buffer
-              │
-              └──► Compares vector clocks for conflict detection
-                        │
-                        ▼
-                   Process new ops, merge state
-                        │
-                        ▼
-                   FileBasedSyncAdapter.uploadOps()
-                        │
-                        └──► Upload merged state + ops
+              ├── Incremental: return unseen recent ops
+              └── seq 0 / gap: load and validate snapshot
+                    ├── v2: snapshot is in sync-data.json
+                    └── v3: snapshotRef must match sync-state.json
+                              │
+                              ▼
+                         Apply snapshot/ops
+                              │
+                              ▼
+                         Merge local ops
+                              │
+                              ▼
+                    Conditional upload against the
+                    revision returned by the read
+                              │
+                    mismatch ─┴─► re-download and retry
 ```
 
 **Key file:** `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts`
 
-## B.2 FileBasedSyncData Format
+## B.2 Remote Formats
+
+The provider package owns the transport envelopes in
+`packages/sync-providers/src/file-based-sync-data.ts`; the app binds its state,
+archive, and compact-operation types in `file-based-sync.types.ts`.
+
+### Default v2
 
 ```typescript
 interface FileBasedSyncData {
   version: 2;
   schemaVersion: number;
   vectorClock: VectorClock;
-  syncVersion: number; // Content-based optimistic locking
-  lastSeq: number;
+  syncVersion: number;
   lastModified: number;
-
-  // Full state snapshot (~95% of file size)
-  state: AppDataComplete;
-
-  // Recent operations for conflict detection (last 200, ~5% of file)
+  clientId: string;
+  state: unknown;
+  archiveYoung?: ArchiveModel;
+  archiveOld?: ArchiveModel;
   recentOps: CompactOperation[];
-
-  // Checksum for integrity verification
-  checksum?: string;
+  oldestOpSyncVersion?: number;
 }
 ```
 
-## B.3 Piggybacking Mechanism
+The recent-operation cap is `MAX_RECENT_OPS` (currently 2,000). A client that
+falls behind the retained window takes the snapshot/gap path.
 
-When two clients sync concurrently, the adapter uses "piggybacking" to ensure no operations are lost:
+### Opt-in v3
 
-1. Client A uploads state (syncVersion 1 → 2)
-2. Client B tries to upload, detects version mismatch
-3. Client B downloads A's changes, finds ops it hasn't seen
-4. Client B merges A's ops into its state, uploads (syncVersion 2 → 3)
-5. Both clients end up with all operations
+| File | Role |
+| --- | --- |
+| `sync-ops.json` | Small commit point read and conditionally rewritten on ordinary sync; contains vector clock, recent ops, and `snapshotRef`. |
+| `sync-state.json` | Full state and archives; rewritten for compaction, authoritative snapshots, migration, and repair. |
+| `sync-data.json` | Replaced by a v3 split tombstone after migration so clients with the setting off stop instead of recreating v2 data. |
+| `*.bak` | Recovery artifacts. A recovered split state is adopted only when it matches `snapshotRef`. |
 
-```typescript
-// In FileBasedSyncAdapter.uploadOps()
-const remote = await this._downloadRemoteData(provider);
-if (remote && remote.syncVersion !== expectedSyncVersion) {
-  // Another client synced - find ops we haven't processed
-  const newOps = remote.recentOps.filter((op) => op.seq > lastProcessedSeq);
-  // Return these as "piggybacked" ops for the caller to process
-  return { localOps, newOps };
-}
-```
+Compaction starts only when the operation buffer exceeds `MAX_RECENT_OPS`, then
+retains `SPLIT_COMPACTION_THRESHOLD` operations (currently 1,000). The state
+file is written before the ops commit point. A crash between those writes is
+recovered through the previous validated state backup.
 
-## B.4 Sync Download Persistence
+## B.3 Conditional Write Contract
 
-When remote data is downloaded, the sync system creates a SYNC_IMPORT operation:
+`FileSyncProvider.uploadFile(path, data, revToMatch, force)` has one shared
+meaning across providers:
 
-```typescript
-async hydrateFromRemoteSync(downloadedMainModelData?: Record<string, unknown>): Promise<void> {
-  // 1. Create SYNC_IMPORT operation with downloaded state
-  const op: Operation = {
-    id: uuidv7(),
-    opType: 'SYNC_IMPORT',
-    entityType: 'ALL',
-    payload: downloadedMainModelData,
-    // ...
-  };
-  await this.opLogStore.append(op, 'remote');
+- a string revision replaces only that exact remote revision;
+- `null` creates only when the target is absent;
+- `force: true` intentionally bypasses the precondition.
 
-  // 2. Force snapshot for crash safety
-  await this.opLogStore.saveStateCache({
-    state: downloadedMainModelData,
-    lastAppliedOpSeq: lastSeq,
-    // ...
-  });
+Dropbox uses its atomic update/add modes. OneDrive uses `If-Match` or
+`conflictBehavior=fail`. WebDAV uses strong ETags with `If-Match` and
+`If-None-Match`; servers without strong ETags fall back to a best-effort content
+hash check and are not safe for simultaneous writers. Local File is likewise a
+single-writer target.
 
-  // 3. Dispatch to NgRx
-  this.store.dispatch(loadAllData({ appDataComplete: downloadedMainModelData }));
-}
-```
+On a revision mismatch the adapter re-downloads, merges, and retries with
+bounded exponential backoff. There is no file-provider “piggyback” response;
+concurrent remote operations are learned from that re-download.
 
-### loadAllData Variants
+## B.4 Snapshot Hydration and Archives
 
-| Source               | Create Op?          | Force Snapshot? |
-| -------------------- | ------------------- | --------------- |
-| Hydration (startup)  | No                  | No              |
-| Remote sync download | Yes (SYNC_IMPORT)   | Yes             |
-| Backup file import   | Yes (BACKUP_IMPORT) | Yes             |
+File snapshots are applied without creating a `SYNC_IMPORT` operation. That
+preserves normal causality instead of giving a bootstrap download clean-slate
+semantics. Before `loadAllData` replaces NgRx state, hydration:
 
-## B.5 Archive Data Handling
+1. replaces downloaded archives and reads the resulting snapshot while holding
+   `TASK_ARCHIVE`;
+2. validates/repairs the snapshot;
+3. persists the state cache and merged vector clock;
+4. loads the snapshot into NgRx;
+5. persists local actions buffered during the hydration window with the fresh
+   clock, then replays only actions whose reducer result was overwritten.
 
-Archive data (`archiveYoung`, `archiveOld`) is included in the state snapshot for file-based sync.
-Archives are written directly to IndexedDB via `ArchiveDbAdapter` (bypassing the operation log for performance).
+Archive side effects for those local operations are replayed explicitly after
+the archive replacement. The archive lock is separate from the operation-log
+lock, avoiding re-entrant locking.
 
-### Why Archives Bypass Operation Log
+## B.5 Migration and Recovery
 
-1. **Size**: Archived tasks can grow to tens of thousands of entries over years
-2. **Frequency**: Archive updates are rare (only when archiving tasks or flushing old data)
-3. **Sync needs**: Archives sync as part of the state snapshot, but don't need operation-level granularity
+Surgical-sync migration first writes a conditional pending marker to
+`sync-ops.json`, writes the state file, neutralizes the legacy backup, and
+conditionally tombstones the legacy primary. Only then is the ops marker
+finalized. A required migration backup is itself conditionally owned: a stale
+migrator cannot overwrite a causally newer or concurrent recovery artifact.
 
-### Archive Write Path
-
-```
-Archive Operation (e.g., archiving a completed task)
-    │
-    ├──► 1. Update archive directly via ArchiveDbAdapter
-    │
-    └──► 2. On next sync, archive is included in state snapshot
-```
-
-**Key files:**
-
-- `src/app/op-log/archive/archive-db-adapter.service.ts`
-- `src/app/op-log/archive/archive-operation-handler.service.ts`
+Primary files are backed up before ordinary replacement. Corrupt split-state
+primaries can be healed from a backup only when that backup matches the ops
+file’s `snapshotRef`; the heal conditionally matches the corrupt primary’s own
+revision. A newer but valid unreferenced state is never overwritten during
+recovery.
 
 ---
 
@@ -1192,13 +1198,13 @@ For server-based sync, the operation log IS the sync mechanism. Individual opera
 
 ## C.1 How Server Sync Differs from File-Based
 
-| Aspect              | File-Based Sync (Part B)     | Server Sync (Part C)  |
-| ------------------- | ---------------------------- | --------------------- |
-| What syncs          | State snapshot + recent ops  | Individual operations |
-| Conflict detection  | Vector clock on snapshot     | Entity-level per-op   |
-| Transport           | Single file (sync-data.json) | HTTP API              |
-| Op-log role         | Builds snapshot from ops     | IS the sync           |
-| `syncedAt` tracking | Not needed                   | Required              |
+| Aspect              | File-Based Sync (Part B)                               | Server Sync (Part C)  |
+| ------------------- | ------------------------------------------------------ | --------------------- |
+| What syncs          | State snapshot + recent ops                            | Individual operations |
+| Conflict detection  | Vector clock on snapshot                               | Entity-level per-op   |
+| Transport           | v2 single file or opt-in v3 split files on a provider | HTTP API              |
+| Op-log role         | Builds snapshot from ops                               | IS the sync           |
+| `syncedAt` tracking | Not needed                                             | Required              |
 
 ## C.2 Operation Sync Protocol
 
@@ -2232,15 +2238,16 @@ When adding new entities or relationships:
 
 > **Note**: A.7.11 is required for cross-version sync. Currently safe because `CURRENT_SCHEMA_VERSION = 1` (all clients on same version). See [A.7.11 Interim Guardrails](#interim-guardrails-until-implementation) for pre-release checklist.
 
-## Part B: Legacy Sync Bridge
+## Part B: File-Based Sync
 
 ### Complete ✅
 
-- `PfapiStoreDelegateService` (reads all NgRx models for sync)
-- META_MODEL vector clock update (B.2)
-- Sync download persistence via `hydrateFromRemoteSync()` (B.3)
-- All models in NgRx (no hybrid persistence)
-- Skip META_MODEL update during sync (prevents lock errors)
+- Unified adapter for Dropbox, OneDrive, WebDAV/Nextcloud, and Local File
+- Default v2 `sync-data.json` layout with snapshot, archives, and recent ops
+- Opt-in v3 Surgical sync layout with a small ops commit file and referenced state file
+- Conditional provider revisions with re-download, merge, and retry on contention
+- Revision-owned backups, split-state validation, and crash-resumable v2-to-v3 migration
+- Snapshot/archive hydration with buffered-action persistence and replay across state replacement
 
 ## Part C: Server Sync
 
@@ -2394,6 +2401,7 @@ src/app/op-log/sync-providers/
 │   ├── file-based-sync.types.ts          # FileBasedSyncData types
 │   ├── webdav/                           # WebDAV provider
 │   ├── dropbox/                          # Dropbox provider
+│   ├── onedrive/                         # OneDrive provider
 │   └── local-file/                       # Local file sync provider
 ├── provider-manager.service.ts           # Provider activation/management
 ├── wrapped-provider.service.ts           # Provider wrapper with encryption
