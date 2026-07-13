@@ -37,6 +37,7 @@ import { DateService } from '../../../core/date/date.service';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { devError } from '../../../util/dev-error';
 import { TaskLog } from '../../../core/log';
+import { TaskTimeSyncService } from '../task-time-sync.service';
 
 @Injectable()
 export class ShortSyntaxEffects {
@@ -50,6 +51,7 @@ export class ShortSyntaxEffects {
   private _layoutService = inject(LayoutService);
   private _workContextService = inject(WorkContextService);
   private _dateService = inject(DateService);
+  private _taskTimeSyncService = inject(TaskTimeSyncService);
 
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
@@ -231,6 +233,13 @@ export class ShortSyntaxEffects {
             );
 
             delete finalTaskChanges.hasDeadlineTime;
+
+            // The parser writes an absolute per-day total. Persist any earlier
+            // additive timer batch first so replay observes the same order as
+            // the live store: delta, then absolute replacement.
+            if (finalTaskChanges.timeSpentOnDay) {
+              this._taskTimeSyncService.flushOne(task.id);
+            }
 
             actions.push(
               TaskSharedActions.applyShortSyntax({

@@ -1,6 +1,6 @@
 # Operation Log: Design Rules & Guidelines
 
-**Last Updated:** December 2025
+**Last Updated:** July 2026
 **Related:** [Operation Log Architecture](./operation-log-architecture.md)
 
 This document establishes the core rules and principles for designing the Operation Log store and defining new Operations. Adherence to these rules ensures data integrity, synchronization reliability, and system performance.
@@ -9,17 +9,18 @@ This document establishes the core rules and principles for designing the Operat
 
 ### 1.1 Append-Only Persistence
 
-- **Rule:** The `ops` table in the store must be strictly **append-only** for active operations.
+- **Rule:** Operation payloads in the `ops` table are append-only. Lifecycle metadata may advance in place as described in 1.2.
 - **Reasoning:** History preservation is critical for event sourcing and conflict resolution.
-- **Exception:** Operations can only be deleted by the **Compaction Service**, and only if they are:
-  1.  Older than the retention window.
-  2.  Successfully synced (`syncedAt` is set).
-  3.  "Baked" into a secure snapshot.
+- **Exception:** Operations can only be deleted by the **Compaction Service**, and only if they are older than the retention window, baked into the current snapshot (`seq <= lastAppliedOpSeq`), and either:
+  1. Successfully synced and application-complete; or
+  2. Terminally rejected.
+- **Never compact:** Non-rejected `pending`, `archive_pending`, and `failed` remote work is retained regardless of age.
 
 ### 1.2 Immutable History
 
-- **Rule:** Once an operation is written to `SUP_OPS`, it **MUST NOT** be modified.
+- **Rule:** Once an operation is written to `SUP_OPS`, its operation ID, payload, action, vector clock, source, and sequence **MUST NOT** be modified.
 - **Reasoning:** Modifying history breaks the cryptographic chain (if implemented later) and confuses sync peers who have already received the operation.
+- **Lifecycle exception:** Local bookkeeping metadata advances in place: `syncedAt`, `rejectedAt`, `reducerRejectedAt`, `applicationStatus`, `retryCount`, `lastRetryAt`, and `error`. These fields describe local delivery/application state; they do not rewrite the operation peers exchange.
 - **Correction:** If an operation was incorrect, append a new _compensating operation_ (e.g., an undo or correction op) rather than editing the old one.
 
 ### 1.3 Single Source of Truth

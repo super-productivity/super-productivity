@@ -118,7 +118,8 @@ export class ValidateStateService {
     // State is invalid — load the full snapshot including archives so the REPAIR
     // operation carries archive data. A REPAIR op built from the sync snapshot
     // would ship empty archives and wipe them on every client that applies it.
-    const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
+    const currentState =
+      await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
 
     const result = await this.validateAndRepair(
       currentState as unknown as Record<string, unknown>,

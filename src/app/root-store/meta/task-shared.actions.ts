@@ -42,6 +42,9 @@ export const TaskSharedActions = createActionGroup({
       isPlanForToday?: boolean;
       afterTaskId?: string | null;
       isDone?: boolean;
+      today?: string;
+      doneOn?: number;
+      modified?: number;
     }) => ({
       ...taskProps,
       meta: {
@@ -176,6 +179,7 @@ export const TaskSharedActions = createActionGroup({
       id: string;
       isSkipToast?: boolean;
       isLeaveInToday?: boolean;
+      today?: string;
     }) => ({
       ...taskProps,
       meta: {

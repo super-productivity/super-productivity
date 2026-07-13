@@ -14,7 +14,7 @@ import { DB_NAME, DB_VERSION } from './db-keys.const';
  */
 describe('OP_LOG_DB_SCHEMA', () => {
   it('blocks v2-era readers from opening replacement-LWW history', () => {
-    expect(DB_VERSION).toBeGreaterThan(8);
+    expect(DB_VERSION).toBeGreaterThan(9);
   });
 
   it('reuses DB_NAME/DB_VERSION (no third source of truth)', () => {

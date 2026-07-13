@@ -19,7 +19,6 @@ import {
   selectIsTaskDataLoaded,
 } from '../../tasks/store/task.selectors';
 import { DroidLog } from '../../../core/log';
-import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
 import { combineLatest, firstValueFrom, Subject } from 'rxjs';
@@ -28,7 +27,6 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
-import { syncTimeSpent } from '../../time-tracking/store/time-tracking.actions';
 
 export type NativeTrackingData = {
   taskId: string;
@@ -174,7 +172,6 @@ export const handleAndroidResume = async (
 export class AndroidForegroundTrackingEffects {
   private _store = inject(Store);
   private _taskService = inject(TaskService);
-  private _dateService = inject(DateService);
   private _hydrationState = inject(HydrationStateService);
   private _snackService = inject(SnackService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
@@ -646,16 +643,7 @@ export class AndroidForegroundTrackingEffects {
       }
 
       if (duration > 0) {
-        this._taskService.addTimeSpent(task, duration, this._dateService.todayStr());
-        // Also dispatch syncTimeSpent to capture in operation log
-        // addTimeSpent only updates local state, syncTimeSpent creates the operation
-        this._store.dispatch(
-          syncTimeSpent({
-            taskId: task.id,
-            date: this._dateService.todayStr(),
-            duration,
-          }),
-        );
+        this._taskService.addTimeSpentAndSync(task, duration);
         // Reset the tracking interval to prevent double-counting
         // The native service has the authoritative time, so we reset the app's
         // interval timer to avoid adding the same time again from tick$

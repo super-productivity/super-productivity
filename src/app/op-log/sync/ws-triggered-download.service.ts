@@ -11,7 +11,11 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { lazyInject } from '../../util/lazy-inject';
 import { SyncLog } from '../../core/log';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+} from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -170,6 +174,20 @@ export class WsTriggeredDownloadService implements OnDestroy {
           this._providerManager.setSyncStatus('ERROR');
         }
       } catch (err) {
+        if (err instanceof ForceUploadPendingOpsError) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return;
+        }
+
+        if (err instanceof ForceUploadFailedError) {
+          this._providerManager.setSyncStatus('ERROR');
+          this._snackService.open({
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+            type: 'ERROR',
+          });
+          return;
+        }
+
         if (err instanceof IncompleteRemoteOperationsError) {
           SyncLog.err(
             'WsTriggeredDownloadService: Remote operation application is incomplete',

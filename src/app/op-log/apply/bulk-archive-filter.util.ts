@@ -311,7 +311,7 @@ const isTaskDeleteOp = (op: Operation): boolean =>
   op.actionType === ActionType.TASK_SHARED_DELETE ||
   op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE;
 
-const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
+export const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
   isTaskArchiveOp(op) || isTaskDeleteOp(op);
 
 const addOperationEntityIds = (op: Operation, sink: Set<string>): void => {

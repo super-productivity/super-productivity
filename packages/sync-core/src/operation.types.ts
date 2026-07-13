@@ -148,6 +148,14 @@ export interface OperationLogEntry<TOperation extends Operation<string> = Operat
   rejectedAt?: number;
 
   /**
+   * Timestamp (epoch ms) when replay skipped this operation because conversion,
+   * schema migration, or reducer application could not produce state. Unlike
+   * ordinary conflict rejection, this operation must never be replayed during
+   * hydration.
+   */
+  reducerRejectedAt?: number;
+
+  /**
    * For remote ops only: tracks whether the op was successfully applied to
    * local state. `archive_pending` means reducers and clocks committed but
    * archive side effects are outstanding; `failed` means an attempted archive

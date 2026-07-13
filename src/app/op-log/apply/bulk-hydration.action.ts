@@ -25,7 +25,16 @@ import { Operation } from '../core/operation.types';
  */
 export const bulkApplyOperations = createAction(
   '[OperationLog] Bulk Apply Operations',
-  props<{ operations: Operation[]; localClientId?: string }>(),
+  props<{
+    operations: Operation[];
+    localClientId?: string;
+    /**
+     * Ephemeral replay groups whose operations came from one durable source op.
+     * If one member fails, the meta-reducer excludes the whole group so a split
+     * schema migration cannot leave a state that the durable log cannot rebuild.
+     */
+    atomicReplayGroups?: string[][];
+  }>(),
 );
 
 /**

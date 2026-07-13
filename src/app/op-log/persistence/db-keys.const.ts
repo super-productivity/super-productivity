@@ -14,12 +14,12 @@ export const DB_NAME = 'SUP_OPS';
 /**
  * Current database schema version.
  *
- * Version 9 is a downgrade barrier for schema-v3 replacement LWW operations.
- * Version 8 readers treat them as patches, so IndexedDB must reject an older
- * app before it can replay omitted fields incorrectly. Version 8 previously
- * served the same purpose for the `archive_pending` reducer checkpoint.
+ * Versions 8–10 are deliberate downgrade barriers. Version 8 protects the
+ * `archive_pending` reducer checkpoint, version 9 protects the
+ * `reducerRejectedAt` replay quarantine, and version 10 protects schema-v3
+ * replacement LWW operations from readers that would treat them as patches.
  */
-export const DB_VERSION = 9;
+export const DB_VERSION = 10;
 
 /** Object store names */
 export const STORE_NAMES = {

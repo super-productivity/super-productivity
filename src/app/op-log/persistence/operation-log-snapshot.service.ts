@@ -104,7 +104,7 @@ export class OperationLogSnapshotService {
         // NOTE: compaction reads in the opposite order (state, then lastSeq);
         // its failure mode if the lock is bypassed is missed-op data loss.
         const lastSeq = await this.opLogStore.getLastSeq();
-        const currentState = this.stateSnapshotService.getStateSnapshot();
+        const currentState = this.stateSnapshotService.getStateSnapshotForOperationLog();
 
         // GUARD (#7892): never cache an empty/degraded state over a good one.
         // The snapshot is only a load-time cache — the op-log is the source of

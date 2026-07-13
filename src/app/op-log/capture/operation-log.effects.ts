@@ -153,7 +153,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       // shared effect stream is never torn down by a single failed write.
       OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
     } finally {
-      this.operationCaptureService.decrementPending();
+      this.operationCaptureService.decrementPending(action);
     }
   }
 
@@ -446,7 +446,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     OpLog.normal('OperationLogEffects: Triggering compaction...');
     this.compactionService
       .compact()
-      .then(() => {
+      .then((didCompact) => {
+        if (!didCompact) {
+          return;
+        }
         this.compactionFailures = 0;
         // Reset in-memory counter on successful compaction
         this.inMemoryCompactionCounter = 0;

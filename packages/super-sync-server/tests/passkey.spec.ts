@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 
 // Mock prisma - use factory function to avoid hoisting issues
@@ -19,6 +20,7 @@ vi.mock('../src/db', () => {
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
     },
     passkey: {
@@ -57,6 +59,7 @@ vi.mock('@simplewebauthn/server', () => ({
 
 // Import mocked modules to get references
 import { prisma } from '../src/db';
+import { sendPasskeyRecoveryEmail, sendVerificationEmail } from '../src/email';
 import * as simplewebauthn from '@simplewebauthn/server';
 
 // Import module under test
@@ -73,6 +76,20 @@ import {
 describe('Passkey Authentication', () => {
   const testEmail = 'test@example.com';
   const testChallenge = 'test-challenge-base64';
+  const registrationResponse = {
+    message: 'Registration successful. Please check your email to verify your account.',
+  };
+  const recoveryResponse = {
+    message: 'If an account with that email exists, a recovery link has been sent.',
+  };
+
+  type RecoveryTransaction = {
+    user: { updateMany: Mock };
+    passkey: { deleteMany: Mock; create: Mock };
+  };
+  type RecoveryTransactionCallback = (
+    transaction: RecoveryTransaction,
+  ) => Promise<unknown>;
 
   // Cast to access mock functions
   const mockPrisma = prisma as unknown as {
@@ -81,6 +98,7 @@ describe('Passkey Authentication', () => {
       findFirst: Mock;
       create: Mock;
       update: Mock;
+      updateMany: Mock;
       delete: Mock;
     };
     passkey: {
@@ -139,7 +157,7 @@ describe('Passkey Authentication', () => {
       );
     });
 
-    it('should reject registration for existing verified user', async () => {
+    it('should generate the same registration options for an existing verified user', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
@@ -147,12 +165,15 @@ describe('Passkey Authentication', () => {
         passkeys: [],
       });
 
-      await expect(generateRegistrationOptions(testEmail)).rejects.toThrow(
-        'An account with this email already exists',
+      const options = await generateRegistrationOptions(testEmail);
+
+      expect(options.challenge).toBe(testChallenge);
+      expect(mockGenerateRegistration).toHaveBeenCalledWith(
+        expect.objectContaining({ excludeCredentials: [] }),
       );
     });
 
-    it('should allow re-registration for unverified user', async () => {
+    it('should not disclose an unverified user passkey through excluded credentials', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
@@ -164,11 +185,7 @@ describe('Passkey Authentication', () => {
 
       expect(options).toBeDefined();
       expect(mockGenerateRegistration).toHaveBeenCalledWith(
-        expect.objectContaining({
-          excludeCredentials: expect.arrayContaining([
-            expect.objectContaining({ id: expect.any(String) }),
-          ]),
-        }),
+        expect.objectContaining({ excludeCredentials: [] }),
       );
     });
 
@@ -221,6 +238,113 @@ describe('Passkey Authentication', () => {
           result.message.includes('automatically verified'),
       ).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalled();
+    });
+
+    it('should return the neutral response without changing an existing verified user', async () => {
+      const mockCredentialId = new Uint8Array([1, 2, 3, 4]);
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: mockCredentialId,
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 0,
+          },
+          credentialDeviceType: 'multiDevice',
+          credentialBackedUp: true,
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 1,
+      });
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'credential-id-base64',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+          transports: ['internal'],
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(result).toEqual(registrationResponse);
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('should return the neutral response when an unverified user reaches the resend cap', async () => {
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([1, 2, 3, 4]),
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+        verificationResendCount: 20,
+      });
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(result).toEqual(registrationResponse);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('should return the neutral response when verification email delivery fails', async () => {
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([1, 2, 3, 4]),
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 1, email: testEmail, isVerified: 0 });
+      mockPrisma.user.create.mockResolvedValue({ id: 1 });
+      (sendVerificationEmail as Mock).mockResolvedValueOnce(false);
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(result).toEqual(registrationResponse);
+      expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 1 } });
     });
 
     it('should reject verification with expired challenge', async () => {
@@ -474,21 +598,91 @@ describe('Passkey Authentication', () => {
         passwordHash: null, // Passkey-only user
         isVerified: 1,
         passkeys: [mockPasskey],
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
       });
 
-      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await requestPasskeyRecovery(testEmail);
 
-      expect(result.message).toContain('recovery link has been sent');
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            passkeyRecoveryToken: expect.any(String),
-            passkeyRecoveryTokenExpiresAt: expect.any(BigInt),
-          }),
-        }),
-      );
+      expect(result).toEqual(recoveryResponse);
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 1,
+          OR: [
+            { passkeyRecoveryToken: null },
+            { passkeyRecoveryTokenExpiresAt: null },
+            { passkeyRecoveryTokenExpiresAt: { lte: expect.any(BigInt) } },
+          ],
+        },
+        data: {
+          passkeyRecoveryToken: expect.any(String),
+          passkeyRecoveryTokenExpiresAt: expect.any(BigInt),
+        },
+      });
+    });
+
+    it('should not rotate or resend a still-valid recovery token', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passwordHash: null,
+        isVerified: 1,
+        passkeys: [mockPasskey],
+        passkeyRecoveryToken: 'active-token',
+        passkeyRecoveryTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      await requestPasskeyRecovery(testEmail);
+
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+      expect(sendPasskeyRecoveryEmail).not.toHaveBeenCalled();
+    });
+
+    it('should return the neutral response and clear only its claimed token when email fails', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passwordHash: null,
+        isVerified: 1,
+        passkeys: [mockPasskey],
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
+      });
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 });
+      (sendPasskeyRecoveryEmail as Mock).mockResolvedValueOnce(false);
+
+      const result = await requestPasskeyRecovery(testEmail);
+
+      expect(result).toEqual(recoveryResponse);
+      const claimedToken =
+        mockPrisma.user.updateMany.mock.calls[0][0].data.passkeyRecoveryToken;
+      expect(mockPrisma.user.updateMany.mock.calls[1][0]).toEqual({
+        where: { id: 1, passkeyRecoveryToken: claimedToken },
+        data: {
+          passkeyRecoveryToken: null,
+          passkeyRecoveryTokenExpiresAt: null,
+        },
+      });
+    });
+
+    it('should not send when another recovery request wins the token claim race', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passwordHash: null,
+        isVerified: 1,
+        passkeys: [mockPasskey],
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await requestPasskeyRecovery(testEmail);
+
+      expect(sendPasskeyRecoveryEmail).not.toHaveBeenCalled();
     });
 
     it('should return success message for non-existent user (no enumeration)', async () => {
@@ -497,7 +691,7 @@ describe('Passkey Authentication', () => {
       const result = await requestPasskeyRecovery(testEmail);
 
       // Should return same message to prevent user enumeration
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -513,7 +707,7 @@ describe('Passkey Authentication', () => {
       const result = await requestPasskeyRecovery(testEmail);
 
       // Should not send recovery email for password users
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -552,21 +746,20 @@ describe('Passkey Authentication', () => {
         passkeys: [],
       });
 
-      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
 
       await expect(getRecoveryRegistrationOptions('expired-token')).rejects.toThrow(
         'Invalid or expired recovery token',
       );
 
       // Should clear expired token
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            passkeyRecoveryToken: null,
-            passkeyRecoveryTokenExpiresAt: null,
-          }),
-        }),
-      );
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 1, passkeyRecoveryToken: 'expired-token' },
+        data: {
+          passkeyRecoveryToken: null,
+          passkeyRecoveryTokenExpiresAt: null,
+        },
+      });
     });
 
     it('should complete recovery and invalidate old tokens', async () => {
@@ -593,18 +786,23 @@ describe('Passkey Authentication', () => {
         },
       });
 
-      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
-        const tx = {
-          passkey: {
-            deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
-            create: vi.fn().mockResolvedValue({}),
-          },
-          user: {
-            update: vi.fn().mockResolvedValue({}),
-          },
-        };
-        return callback(tx);
-      });
+      const txPasskeyDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
+      const txPasskeyCreate = vi.fn().mockResolvedValue({});
+      const txUserUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+      mockPrisma.$transaction.mockImplementation(
+        async (callback: RecoveryTransactionCallback) => {
+          const tx = {
+            passkey: {
+              deleteMany: txPasskeyDeleteMany,
+              create: txPasskeyCreate,
+            },
+            user: {
+              updateMany: txUserUpdateMany,
+            },
+          };
+          return callback(tx);
+        },
+      );
 
       // First get recovery options to store challenge
       await getRecoveryRegistrationOptions(recoveryToken);
@@ -633,10 +831,118 @@ describe('Passkey Authentication', () => {
 
       expect(result.message).toContain('reset successfully');
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(txUserUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: 1,
+          passkeyRecoveryToken: recoveryToken,
+          OR: [
+            { passkeyRecoveryTokenExpiresAt: null },
+            { passkeyRecoveryTokenExpiresAt: { gte: expect.any(BigInt) } },
+          ],
+        },
+        data: {
+          passkeyRecoveryToken: null,
+          passkeyRecoveryTokenExpiresAt: null,
+          tokenVersion: { increment: 1 },
+        },
+      });
+      expect(txPasskeyDeleteMany).toHaveBeenCalledWith({ where: { userId: 1 } });
+      expect(txPasskeyCreate).toHaveBeenCalledOnce();
+    });
+
+    it('should reject recovery already consumed by another request before replacing passkeys', async () => {
+      const recoveryToken = 'raced-recovery-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passkeyRecoveryToken: recoveryToken,
+        passkeyRecoveryTokenExpiresAt: BigInt(Date.now() + 3600000),
+      });
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([9, 10, 11, 12]),
+            publicKey: new Uint8Array([13, 14, 15, 16]),
+            counter: 0,
+          },
+        },
+      });
+      const txPasskeyDeleteMany = vi.fn();
+      mockPrisma.$transaction.mockImplementation(
+        async (callback: RecoveryTransactionCallback) =>
+          callback({
+            user: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+            passkey: { deleteMany: txPasskeyDeleteMany, create: vi.fn() },
+          }),
+      );
+      await getRecoveryRegistrationOptions(recoveryToken);
+
+      await expect(
+        completePasskeyRecovery(recoveryToken, {
+          id: 'new-credential-id',
+          rawId: 'raw-id',
+          type: 'public-key',
+          response: {
+            clientDataJSON: 'client-data',
+            attestationObject: 'attestation',
+          },
+          clientExtensionResults: {},
+        } as RegistrationResponseJSON),
+      ).rejects.toThrow('Invalid or expired recovery token');
+      expect(txPasskeyDeleteMany).not.toHaveBeenCalled();
     });
   });
 
   describe('Challenge Expiration', () => {
+    it('should isolate registration challenges from authentication challenges', async () => {
+      const registrationChallenge = 'registration-challenge';
+      const authenticationChallenge = 'authentication-challenge';
+      mockGenerateRegistration.mockResolvedValueOnce({
+        challenge: registrationChallenge,
+        rp: { name: 'Test', id: 'localhost' },
+        user: { id: 'user-id', name: testEmail, displayName: testEmail },
+        pubKeyCredParams: [],
+      });
+      mockGenerateAuthentication.mockResolvedValueOnce({
+        challenge: authenticationChallenge,
+        rpId: 'localhost',
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 1,
+        passkeys: [{}],
+      });
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([1, 2, 3, 4]),
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 0,
+          },
+        },
+      });
+
+      await generateRegistrationOptions(testEmail);
+      await generateAuthenticationOptions(testEmail);
+      await verifyRegistration(testEmail, {
+        id: 'credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(mockVerifyRegistration).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedChallenge: registrationChallenge }),
+      );
+    });
+
     it('should reject verification if challenge used twice', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 

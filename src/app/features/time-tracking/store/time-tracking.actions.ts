@@ -68,7 +68,8 @@ export const TimeTrackingActions = createActionGroup({
  * Dispatched every 5 minutes during active tracking and when tracking stops.
  *
  * Local dispatch: Ignored by reducer (state already updated by addTimeSpent ticks)
- * Remote dispatch: Applied to update timeSpentOnDay and timeTracking state
+ * Replay: Adds the duration. Replay-safe snapshots exclude still-pending batches,
+ * so the delta cannot overlap the state from which replay starts.
  */
 export const syncTimeSpent = createAction(
   '[TimeTracking] Sync time spent',

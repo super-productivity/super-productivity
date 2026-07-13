@@ -1,12 +1,11 @@
 /**
  * Tests for unified retention configuration.
  *
- * The retention system uses a single `retentionMs` value (45 days) for:
- * - Operation age validation (rejecting old incoming ops)
- * - Old operation cleanup (deleteOldSyncedOpsForAllUsers)
- * - Stale device cleanup (deleteStaleDevices)
+ * The retention system uses a single `retentionMs` value (45 days) for stored
+ * operation cleanup and stale-device cleanup. Client operation timestamps are
+ * intentionally independent so long-offline devices can still sync.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   DEFAULT_SYNC_CONFIG,
   RETENTION_DAYS,
@@ -45,7 +44,7 @@ describe('Retention Configuration', () => {
     });
   });
 
-  describe('ValidationService - operation age validation', () => {
+  describe('ValidationService - offline operation age', () => {
     let validationService: ValidationService;
     const clientId = 'test-client';
 
@@ -80,18 +79,16 @@ describe('Retention Configuration', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('should reject operation beyond retention window (46 days old)', () => {
+    it('should accept operation beyond retention window (46 days old)', () => {
       const fortysSixDaysAgo = Date.now() - 46 * MS_PER_DAY;
       const result = validationService.validateOp(createOp(fortysSixDaysAgo), clientId);
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('too old');
+      expect(result.valid).toBe(true);
     });
 
-    it('should reject operation just past retention window (45 days + 1 second)', () => {
+    it('should accept operation just past retention window (45 days + 1 second)', () => {
       const justPastRetention = Date.now() - DEFAULT_SYNC_CONFIG.retentionMs - 1000;
       const result = validationService.validateOp(createOp(justPastRetention), clientId);
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('too old');
+      expect(result.valid).toBe(true);
     });
 
     it('should accept recent operations', () => {
@@ -132,38 +129,6 @@ describe('Retention Configuration', () => {
       const devicesCutoff = now - DEFAULT_SYNC_CONFIG.retentionMs;
 
       expect(opsCutoff).toBe(devicesCutoff);
-    });
-  });
-
-  describe('Custom retention configuration', () => {
-    it('should allow overriding retentionMs via constructor', () => {
-      const customRetention = 7 * MS_PER_DAY; // 7 days
-      const customConfig = { ...DEFAULT_SYNC_CONFIG, retentionMs: customRetention };
-
-      const validationService = new ValidationService(customConfig);
-
-      // 6-day-old op should be valid with 7-day retention
-      const sixDaysAgo = Date.now() - 6 * MS_PER_DAY;
-      const validOp = {
-        id: 'test-op',
-        clientId: 'test',
-        actionType: 'ADD_TASK',
-        opType: 'CRT' as const,
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'Test' },
-        vectorClock: { test: 1 },
-        timestamp: sixDaysAgo,
-        schemaVersion: 1,
-      };
-
-      expect(validationService.validateOp(validOp, 'test').valid).toBe(true);
-
-      // 8-day-old op should be invalid with 7-day retention
-      const eightDaysAgo = Date.now() - 8 * MS_PER_DAY;
-      const invalidOp = { ...validOp, id: 'test-op-2', timestamp: eightDaysAgo };
-
-      expect(validationService.validateOp(invalidOp, 'test').valid).toBe(false);
     });
   });
 });

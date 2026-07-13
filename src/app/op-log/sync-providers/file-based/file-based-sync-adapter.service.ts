@@ -341,6 +341,7 @@ export class FileBasedSyncAdapterService {
         ops: SyncOperation[],
         clientId: string,
         lastKnownServerSeq?: number,
+        localStateSnapshot?: unknown,
       ): Promise<OpUploadResponse> => {
         return this._uploadOps(
           provider,
@@ -349,6 +350,7 @@ export class FileBasedSyncAdapterService {
           ops,
           clientId,
           lastKnownServerSeq,
+          localStateSnapshot,
         );
       },
 
@@ -495,6 +497,7 @@ export class FileBasedSyncAdapterService {
     ops: SyncOperation[],
     clientId: string,
     currentSyncVersion: number,
+    localStateSnapshot?: unknown,
   ): Promise<FileBasedSyncData> {
     const newSyncVersion = currentSyncVersion + 1;
 
@@ -527,7 +530,7 @@ export class FileBasedSyncAdapterService {
 
     // Get current state from NgRx store - this keeps the snapshot up-to-date
     const currentState = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
+      localStateSnapshot ?? this._stateSnapshotService.getStateSnapshotForOperationLog(),
     );
 
     // Compute oldestOpSyncVersion from the first (oldest) op in mergedOps.
@@ -655,6 +658,7 @@ export class FileBasedSyncAdapterService {
     ops: SyncOperation[],
     clientId: string,
     lastKnownServerSeq?: number,
+    localStateSnapshot?: unknown,
   ): Promise<OpUploadResponse> {
     const providerKey = this._getProviderKey(provider);
 
@@ -662,7 +666,15 @@ export class FileBasedSyncAdapterService {
     // reached when the opt-in setting is ON. The single-file path below is
     // byte-for-byte unchanged when the setting is OFF (the default).
     if (this._isSplitSyncEnabled()) {
-      return this._uploadOpsSplit(provider, cfg, encryptKey, ops, clientId, providerKey);
+      return this._uploadOpsSplit(
+        provider,
+        cfg,
+        encryptKey,
+        ops,
+        clientId,
+        providerKey,
+        localStateSnapshot,
+      );
     }
 
     // Step 1: Get current sync state
@@ -696,6 +708,7 @@ export class FileBasedSyncAdapterService {
       ops,
       clientId,
       currentSyncVersion,
+      localStateSnapshot,
     );
 
     // Step 2.5: Backup-before-overwrite (two-phase write). Copy the CURRENT remote
@@ -1114,7 +1127,7 @@ export class FileBasedSyncAdapterService {
     provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
-    _state: unknown,
+    state: unknown,
     clientId: string,
     reason: 'initial' | 'recovery' | 'migration',
     vectorClock: Record<string, number>,
@@ -1136,21 +1149,17 @@ export class FileBasedSyncAdapterService {
         vectorClock,
         schemaVersion,
         providerKey,
+        state,
       );
     }
 
     // For snapshots, we start fresh with syncVersion = 1
     const newSyncVersion = 1;
 
-    // Always use fresh state from the NgRx store instead of the passed `_state` parameter.
-    // 1. Consistency: _buildMergedSyncData also uses getStateSnapshot() for its state.
-    // 2. Freshness: the passed state may come from an op payload created earlier in the
-    //    sync cycle, so fetching directly ensures we capture the latest store state.
-    // Note: double-encryption is not a concern here — file-based providers don't expose
-    // getEncryptKey, so the upload service never applies payload-level encryption for them.
-    const currentState = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
-    );
+    // The caller captures this state at the same boundary as the full-state op.
+    // Re-reading the live store here would let later timer deltas leak into a
+    // snapshot whose vector clock does not cover them.
+    const currentState = stripLocalOnlySyncSettingsFromAppData(state);
 
     // Load archive data from IndexedDB to include in snapshot
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
@@ -1481,15 +1490,16 @@ export class FileBasedSyncAdapterService {
     return null;
   }
 
-  /** Builds a full snapshot (`sync-state.json` payload) from the live store. */
+  /** Builds a full snapshot (`sync-state.json` payload). */
   private async _buildStateFileData(
     clientId: string,
     syncVersion: number,
     vectorClock: VectorClock,
     schemaVersion: number,
+    localStateSnapshot?: unknown,
   ): Promise<FileBasedStateFile> {
     const state = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
+      localStateSnapshot ?? this._stateSnapshotService.getStateSnapshotForOperationLog(),
     );
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
@@ -1708,6 +1718,7 @@ export class FileBasedSyncAdapterService {
     ops: SyncOperation[],
     clientId: string,
     providerKey: string,
+    localStateSnapshot?: unknown,
   ): Promise<OpUploadResponse> {
     let opsFile: FileBasedOpsFile | null = null;
     let opsRev: string | null = null;
@@ -1783,6 +1794,7 @@ export class FileBasedSyncAdapterService {
         newSyncVersion,
         mergedClock,
         schemaVersion,
+        localStateSnapshot,
       );
       // Preserve the pre-compaction snapshot for snapshotRef-mismatch recovery.
       await this._backupStateFile(provider, cfg, encryptKey);
@@ -2099,6 +2111,7 @@ export class FileBasedSyncAdapterService {
     vectorClock: Record<string, number>,
     schemaVersion: number,
     providerKey: string,
+    state: unknown,
   ): Promise<SnapshotUploadResponse> {
     const newSyncVersion = 1;
     const clock = vectorClock as VectorClock;
@@ -2108,6 +2121,7 @@ export class FileBasedSyncAdapterService {
       newSyncVersion,
       clock,
       schemaVersion,
+      state,
     );
     // sync-state.json.bak is deliberately NOT refreshed here: its adoption is
     // ref-validated (_loadValidatedSnapshot requires an EQUAL clock against the

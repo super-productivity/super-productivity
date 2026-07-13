@@ -43,6 +43,7 @@ import {
   stripLocalOnlySyncSettingsFromGlobalConfig,
 } from '../../features/config/local-only-sync-settings.util';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
 
 // Re-export for consumers that import from this service
 export type {
@@ -66,6 +67,7 @@ export class OperationLogUploadService {
   private opLogStore = inject(OperationLogStoreService);
   private lockService = inject(LockService);
   private encryptionService = inject(OperationEncryptionService);
+  private stateSnapshotService = inject(StateSnapshotService);
 
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
@@ -122,13 +124,28 @@ export class OperationLogUploadService {
     let encryptionRequiredKeyMissing = false;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
-      // Execute pre-upload callback INSIDE the lock, BEFORE checking for pending ops.
-      // This ensures operations like server migration checks are atomic with the upload.
+      // Execute migration/recovery preparation while upload serialization is
+      // held. The migration service owns its own operation-log transaction.
       if (options?.preUploadCallback) {
         await options.preUploadCallback();
       }
 
-      const pendingOps = await this.opLogStore.getUnsynced();
+      // Fix the pending-op set and the file snapshot under the same operation-log
+      // boundary. A task-time action applied by reducers while waiting for this
+      // lock remains visible to snapshot projection as an in-flight delta.
+      const { pendingOps, localStateSnapshot } = await this.lockService.request(
+        LOCK_NAMES.OPERATION_LOG,
+        async () => {
+          const capturedPendingOps = await this.opLogStore.getUnsynced();
+          return {
+            pendingOps: capturedPendingOps,
+            localStateSnapshot:
+              syncProvider.providerMode === 'fileSnapshotOps'
+                ? this.stateSnapshotService.getStateSnapshotForOperationLog()
+                : undefined,
+          };
+        },
+      );
       selectedPendingOps = pendingOps;
 
       if (pendingOps.length === 0) {
@@ -213,7 +230,9 @@ export class OperationLogUploadService {
         // BackupImport/Repair: always wipe server (recovery operations replace all state)
         // SyncImport: only wipe when explicitly requested (preserves SYNC_IMPORT_EXISTS check)
         const isCleanSlateForOp =
-          entry.op.opType === OpType.SyncImport ? options?.isCleanSlate : true;
+          entry.op.opType === OpType.SyncImport
+            ? entry.op.syncImportReason === 'FORCE_UPLOAD' || options?.isCleanSlate
+            : true;
         const result = await this._uploadFullStateOpAsSnapshot(
           syncProvider,
           entry,
@@ -333,8 +352,17 @@ export class OperationLogUploadService {
       }
 
       // Upload in batches to avoid 413 Payload Too Large errors
-      const chunks = chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
-      const correspondingEntries = chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
+      // A file upload embeds one full snapshot. Keep its atomically captured op
+      // set in one request so a partial chunk failure cannot publish state that
+      // already contains operations left for a later retry.
+      const chunks =
+        syncProvider.providerMode === 'fileSnapshotOps'
+          ? [syncOps]
+          : chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
+      const correspondingEntries =
+        syncProvider.providerMode === 'fileSnapshotOps'
+          ? [uploadEntries]
+          : chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -346,7 +374,12 @@ export class OperationLogUploadService {
 
         let response;
         try {
-          response = await syncProvider.uploadOps(chunk, clientId, lastKnownServerSeq);
+          response = await syncProvider.uploadOps(
+            chunk,
+            clientId,
+            lastKnownServerSeq,
+            localStateSnapshot,
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);

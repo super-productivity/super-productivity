@@ -84,6 +84,26 @@ describe('OperationCaptureService', () => {
       service.clear();
       expect(service.getPendingCount()).toBe(0);
     });
+
+    it('should expose pending task-time deltas until their write attempt completes', () => {
+      const action = createPersistentAction(
+        '[TimeTracking] Sync time spent',
+        'TASK',
+        'task-1',
+        OpType.Update,
+        { taskId: 'task-1', date: '2024-01-15', duration: 5000 },
+      );
+
+      service.incrementPending(action);
+
+      expect(service.getPendingTaskTimeEntries()).toEqual([
+        { id: 'task-1', date: '2024-01-15', duration: 5000 },
+      ]);
+
+      service.decrementPending(action);
+
+      expect(service.getPendingTaskTimeEntries()).toEqual([]);
+    });
   });
 
   describe('extractEntityChanges', () => {

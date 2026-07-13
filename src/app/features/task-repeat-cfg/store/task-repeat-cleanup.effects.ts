@@ -22,6 +22,7 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 
 const _sameStringSet = (a: readonly string[], b: readonly string[]): boolean => {
   if (a.length !== b.length) {
@@ -119,6 +120,7 @@ export class TaskRepeatCleanupEffects {
   private _hydrationState = inject(HydrationStateService);
   private _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private _dateService = inject(DateService);
+  private _taskTimeSync = inject(TaskTimeSyncService);
 
   /**
    * After initial sync + date change, detect and remove stale duplicate
@@ -278,6 +280,12 @@ export class TaskRepeatCleanupEffects {
                       issueProviderId: t.issueProviderId!,
                     })),
                 );
+                for (const task of deleteTasks) {
+                  this._taskTimeSync.clearOne(task.id);
+                  task.subTasks.forEach((subTask) =>
+                    this._taskTimeSync.clearOne(subTask.id),
+                  );
+                }
                 this._store.dispatch(
                   TaskSharedActions.deleteTasks({
                     taskIds: deleteIds,

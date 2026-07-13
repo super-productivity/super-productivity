@@ -14,6 +14,7 @@ import { OperationLogStoreService } from '../../op-log/persistence/operation-log
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import { LockService } from '../../op-log/sync/lock.service';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;
@@ -26,6 +27,7 @@ describe('SnapshotUploadService', () => {
   };
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
+  let mockLockService: jasmine.SpyObj<LockService>;
   let mockSyncProvider: jasmine.SpyObj<
     SyncProviderBase<SyncProviderId> & OperationSyncCapable
   >;
@@ -75,9 +77,11 @@ describe('SnapshotUploadService', () => {
     mockProviderManager.setProviderConfig.and.resolveTo();
 
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
-      'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
-    mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo({} as any);
+    mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+      {} as any,
+    );
 
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -102,6 +106,10 @@ describe('SnapshotUploadService', () => {
     ]);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
     mockOpLogStore.markSynced.and.resolveTo(undefined);
+    mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockLockService.request.and.callFake(
+      async <T>(_name: string, callback: () => Promise<T>) => callback(),
+    );
 
     TestBed.configureTestingModule({
       providers: [
@@ -112,6 +120,7 @@ describe('SnapshotUploadService', () => {
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: OperationEncryptionService, useValue: mockEncryptionService },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
+        { provide: LockService, useValue: mockLockService },
       ],
     });
 
@@ -178,7 +187,9 @@ describe('SnapshotUploadService', () => {
     it('should gather all required data', async () => {
       const mockState = { tasks: [] };
       const mockVectorClock = { clientA: 1 };
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        mockState as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo(mockVectorClock);
       mockSyncProvider.privateCfg.load = jasmine
         .createSpy('load')
@@ -206,7 +217,9 @@ describe('SnapshotUploadService', () => {
           },
         },
       };
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        mockState as any,
+      );
 
       const result = await service.gatherSnapshotData();
       const globalConfig = result.state.globalConfig as Record<string, unknown>;
@@ -286,7 +299,9 @@ describe('SnapshotUploadService', () => {
   describe('deleteAndReuploadWithNewEncryption', () => {
     it('should gather data, delete, update config, and upload when disabling encryption', async () => {
       const mockState = { task: [] };
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        mockState as any,
+      );
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ c1: 1 });
 
       const result = await service.deleteAndReuploadWithNewEncryption({
@@ -364,6 +379,10 @@ describe('SnapshotUploadService', () => {
         });
 
         expect(callOrder).toEqual(['getUnsynced', 'deleteAllData']);
+        expect(mockLockService.request).toHaveBeenCalledWith(
+          'sp_op_log',
+          jasmine.any(Function),
+        );
       });
     });
 
@@ -406,7 +425,9 @@ describe('SnapshotUploadService', () => {
 
       it('still succeeds when enabling with a usable key', async () => {
         mockCryptoSubtleAvailable();
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo({ task: [] } as any);
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo({
+          task: [],
+        } as any);
 
         await service.deleteAndReuploadWithNewEncryption({
           encryptKey: 'my-key',
@@ -422,7 +443,9 @@ describe('SnapshotUploadService', () => {
     it('should encrypt payload when enabling encryption', async () => {
       mockCryptoSubtleAvailable();
       const mockState = { task: [] };
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        mockState as any,
+      );
 
       await service.deleteAndReuploadWithNewEncryption({
         encryptKey: 'my-key',
@@ -580,10 +603,12 @@ describe('SnapshotUploadService', () => {
       mockCryptoSubtleAvailable();
       const callOrder: string[] = [];
 
-      mockStateSnapshotService.getStateSnapshotAsync.and.callFake(async () => {
-        callOrder.push('getStateSnapshotAsync');
-        return {} as any;
-      });
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.callFake(
+        async () => {
+          callOrder.push('getStateSnapshotForOperationLogAsync');
+          return {} as any;
+        },
+      );
 
       mockEncryptionService.encryptPayload.and.callFake(async () => {
         callOrder.push('encryptPayload');
@@ -615,7 +640,7 @@ describe('SnapshotUploadService', () => {
       });
 
       expect(callOrder).toEqual([
-        'getStateSnapshotAsync',
+        'getStateSnapshotForOperationLogAsync',
         'encryptPayload',
         'deleteAllData',
         'setProviderConfig',
@@ -635,7 +660,9 @@ describe('SnapshotUploadService', () => {
         }),
       ).toBeRejectedWithError(WebCryptoNotAvailableError);
 
-      expect(mockStateSnapshotService.getStateSnapshotAsync).not.toHaveBeenCalled();
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync,
+      ).not.toHaveBeenCalled();
       expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
       expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
       expect(mockSyncProvider.uploadSnapshot).not.toHaveBeenCalled();
