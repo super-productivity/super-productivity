@@ -26,9 +26,24 @@ struct TaskListProvider: TimelineProvider {
         TaskListEntry(
             date: Date(),
             tasks: [
-                WidgetTask(id: "ph-1", title: "Plan the day", isDone: false, projectColor: nil),
-                WidgetTask(id: "ph-2", title: "Deep work block", isDone: false, projectColor: nil),
-                WidgetTask(id: "ph-3", title: "Inbox review", isDone: true, projectColor: nil),
+                WidgetTask(
+                    id: "ph-1",
+                    title: WidgetStrings.placeholderPlanDay,
+                    isDone: false,
+                    projectColor: nil
+                ),
+                WidgetTask(
+                    id: "ph-2",
+                    title: WidgetStrings.placeholderDeepWork,
+                    isDone: false,
+                    projectColor: nil
+                ),
+                WidgetTask(
+                    id: "ph-3",
+                    title: WidgetStrings.placeholderInboxReview,
+                    isDone: true,
+                    projectColor: nil
+                ),
             ],
             totalTaskCount: 3,
             validUntil: nil,
@@ -88,7 +103,7 @@ struct TaskListWidgetView: View {
     // Unlike the Android ListView the widget cannot scroll; cap rows to what
     // the family fits and summarize the rest as "+N more".
     private var maxRows: Int {
-        family == .systemLarge ? 9 : 3
+        family == .systemLarge ? 7 : 2
     }
 
     var body: some View {
@@ -114,7 +129,7 @@ struct TaskListWidgetView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(WidgetStyle.brand)
-            Text("Today")
+            Text(WidgetStrings.today)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(WidgetStyle.ink)
             Spacer()
@@ -126,11 +141,7 @@ struct TaskListWidgetView: View {
             Spacer()
             HStack {
                 Spacer()
-                Text(
-                    entry.isExpired
-                        ? "Open Super Productivity to refresh"
-                        : "No tasks for today"
-                )
+                Text(entry.isExpired ? WidgetStrings.expired : WidgetStrings.empty)
                     .font(.system(size: 14))
                     .foregroundStyle(WidgetStyle.inkMuted)
                 Spacer()
@@ -145,13 +156,14 @@ struct TaskListWidgetView: View {
                 TaskRowView(task: task)
             }
             if entry.totalTaskCount > maxRows {
-                Text("+\(entry.totalTaskCount - maxRows) more")
+                Text(WidgetStrings.more(entry.totalTaskCount - maxRows))
                     .font(.system(size: 12))
                     .foregroundStyle(WidgetStyle.inkMuted)
                     .padding(.leading, 30)
             }
             Spacer(minLength: 0)
         }
+        .privacySensitive()
     }
 }
 
@@ -166,10 +178,19 @@ private struct TaskRowView: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
                     .foregroundStyle(task.isDone ? WidgetStyle.brand : WidgetStyle.inkMuted)
+                    .frame(
+                        width: WidgetLayout.taskToggleHitTarget,
+                        height: WidgetLayout.taskToggleHitTarget
+                    )
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                task.isDone ? "Mark \(task.title) as not done" : "Mark \(task.title) as done"
+                Text(
+                    task.isDone
+                        ? WidgetStrings.markUndone(task.title)
+                        : WidgetStrings.markDone(task.title)
+                )
             )
 
             // Project dot: tinted with the project color, hidden entirely for
@@ -201,8 +222,8 @@ struct TaskListWidget: Widget {
         ) { entry in
             TaskListWidgetView(entry: entry)
         }
-        .configurationDisplayName("Today's Tasks")
-        .description("Shows today's tasks with quick done action")
+        .configurationDisplayName("WIDGET.IOS.TITLE")
+        .description("WIDGET.IOS.DESCRIPTION")
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }

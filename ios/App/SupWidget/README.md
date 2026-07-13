@@ -27,11 +27,15 @@ applied by the app on next resume.
   `WidgetCenter.reloadTimelines` pushes; there is no polling.
 - `WidgetShared.swift` and `DoneQueue.swift` are members of BOTH targets (app +
   extension); `WidgetData.swift`, `ToggleDoneIntent.swift`,
-  `TaskListWidget.swift` are extension-only.
+  `TaskListWidget.swift`, and `WidgetPresentation.swift` are extension-only.
 
 Known v1 limitations are documented in the plan (the new day's tasks stay empty
 until the app next opens, taps while the app is alive apply on next resume,
-iOS 17+ only — the app itself stays at iOS 16, English-only chrome).
+iOS 17+ only — the app itself stays at iOS 16).
+
+Widget strings live under `WIDGET.IOS` in `src/assets/i18n/en.json`.
+`npm run sync:ios` regenerates `en.lproj/Localizable.strings`; never edit the
+generated native resource directly.
 
 ## Capacitor
 

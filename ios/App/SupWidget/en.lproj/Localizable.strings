@@ -1,0 +1,15 @@
+/* Generated from src/assets/i18n/en.json. Do not edit directly. */
+"WIDGET.IOS.DESCRIPTION" = "Shows today's tasks with quick done action";
+"WIDGET.IOS.EMPTY" = "No tasks for today";
+"WIDGET.IOS.EXPIRED" = "Open Super Productivity to refresh";
+"WIDGET.IOS.INTENT_SET_DONE" = "Set done";
+"WIDGET.IOS.INTENT_TASK_ID" = "Task ID";
+"WIDGET.IOS.INTENT_TOGGLE_DONE" = "Toggle task done";
+"WIDGET.IOS.MARK_DONE" = "Mark %@ as done";
+"WIDGET.IOS.MARK_UNDONE" = "Mark %@ as not done";
+"WIDGET.IOS.MORE" = "+%@ more";
+"WIDGET.IOS.PLACEHOLDER_DEEP_WORK" = "Deep work block";
+"WIDGET.IOS.PLACEHOLDER_INBOX_REVIEW" = "Inbox review";
+"WIDGET.IOS.PLACEHOLDER_PLAN_DAY" = "Plan the day";
+"WIDGET.IOS.TITLE" = "Today's Tasks";
+"WIDGET.IOS.TODAY" = "Today";

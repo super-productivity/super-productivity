@@ -36,6 +36,10 @@
 		DDBEEF0000000000000000B4 /* WidgetShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCAFE0000000000000000A2 /* WidgetShared.swift */; };
 		DDC0DE0000000000000000B1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DDC0DE0000000000000000A1 /* PrivacyInfo.xcprivacy */; };
 		DDC0DE0000000000000000B2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */; };
+		DD10CA0000000000000000B1 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DD10CA0000000000000000A1 /* Localizable.strings */; };
+		DD10CA0000000000000000B2 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DD10CA0000000000000000A1 /* Localizable.strings */; };
+		DD10CA0000000000000000B3 /* WidgetPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD10CA0000000000000000A3 /* WidgetPresentation.swift */; };
+		DD10CA0000000000000000B4 /* WidgetPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD10CA0000000000000000A3 /* WidgetPresentation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +75,8 @@
 		DDBEEF0000000000000000A1 /* SupWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SupWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DDC0DE0000000000000000A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DD10CA0000000000000000A2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD10CA0000000000000000A3 /* WidgetPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPresentation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -171,11 +177,13 @@
 			isa = PBXGroup;
 			children = (
 				DDC0DE0000000000000000A2 /* PrivacyInfo.xcprivacy */,
+				DD10CA0000000000000000A1 /* Localizable.strings */,
 				DDCAFE0000000000000000A2 /* WidgetShared.swift */,
 				DDCAFE0000000000000000A3 /* DoneQueue.swift */,
 				DDCAFE0000000000000000A4 /* WidgetData.swift */,
 				DDCAFE0000000000000000A5 /* ToggleDoneIntent.swift */,
 				DDCAFE0000000000000000A6 /* TaskListWidget.swift */,
+				DD10CA0000000000000000A3 /* WidgetPresentation.swift */,
 				DDCAFE0000000000000000A7 /* Info.plist */,
 				DDCAFE0000000000000000A8 /* SupWidget.entitlements */,
 			);
@@ -323,6 +331,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DDC0DE0000000000000000B2 /* PrivacyInfo.xcprivacy in Resources */,
+				DD10CA0000000000000000B1 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,6 +339,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DD10CA0000000000000000B2 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,6 +408,7 @@
 				DDCAFE0000000000000000B7 /* WidgetData.swift in Sources */,
 				DDCAFE0000000000000000B8 /* ToggleDoneIntent.swift in Sources */,
 				DDCAFE0000000000000000B9 /* TaskListWidget.swift in Sources */,
+				DD10CA0000000000000000B3 /* WidgetPresentation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -409,6 +420,7 @@
 				DDBEEF0000000000000000B2 /* WidgetData.swift in Sources */,
 				DDBEEF0000000000000000B3 /* DoneQueue.swift in Sources */,
 				DDBEEF0000000000000000B4 /* WidgetShared.swift in Sources */,
+				DD10CA0000000000000000B4 /* WidgetPresentation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -433,6 +445,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXVariantGroup section */
+		DD10CA0000000000000000A1 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				DD10CA0000000000000000A2 /* en */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (

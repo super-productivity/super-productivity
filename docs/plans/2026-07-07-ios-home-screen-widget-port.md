@@ -145,8 +145,8 @@ No `getWidgetTaskQueue` equivalent — share-intent handling is out of scope.
   suspended requires the same phase-2 background refresh, because the extension
   does not own the task store.
 - **iOS 17+ only** (app itself stays iOS 16).
-- Widget chrome strings are inline and English-only in v1 (parity with Android v1's
-  English `strings.xml`).
+- Widget chrome uses native localization keys generated from the canonical
+  `WIDGET.IOS` section in `en.json`.
 - No task creation / undo / per-task deep link from the widget.
 
 ## Resolved decisions

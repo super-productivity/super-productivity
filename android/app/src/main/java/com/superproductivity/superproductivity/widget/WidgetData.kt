@@ -11,8 +11,8 @@ data class WidgetTask(
 
 /**
  * Native end of the `widget_data` KeyValStore contract. The writer is Angular's
- * WidgetDataService; the blob shape is defined by AndroidWidgetData in
- * src/app/features/android/android-widget.model.ts — keep both ends in sync and
+ * WidgetDataService; the blob shape is defined by WidgetData in
+ * src/app/features/widget/widget-data.model.ts — keep both ends in sync and
  * bump `v` on breaking changes.
  */
 object WidgetData {

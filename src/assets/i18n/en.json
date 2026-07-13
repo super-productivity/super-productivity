@@ -3170,6 +3170,24 @@
     "E_MIN_LENGTH": "Must be at least {{val}} characters long",
     "E_REQUIRED": "This field is required"
   },
+  "WIDGET": {
+    "IOS": {
+      "DESCRIPTION": "Shows today's tasks with quick done action",
+      "EMPTY": "No tasks for today",
+      "EXPIRED": "Open Super Productivity to refresh",
+      "INTENT_SET_DONE": "Set done",
+      "INTENT_TASK_ID": "Task ID",
+      "INTENT_TOGGLE_DONE": "Toggle task done",
+      "MARK_DONE": "Mark %@ as done",
+      "MARK_UNDONE": "Mark %@ as not done",
+      "MORE": "+%@ more",
+      "PLACEHOLDER_DEEP_WORK": "Deep work block",
+      "PLACEHOLDER_INBOX_REVIEW": "Inbox review",
+      "PLACEHOLDER_PLAN_DAY": "Plan the day",
+      "TITLE": "Today's Tasks",
+      "TODAY": "Today"
+    }
+  },
   "WW": {
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",

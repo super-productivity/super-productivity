@@ -6,16 +6,16 @@ import AppIntents
 /// the timeline provider overlays the pending target so the checkbox flips
 /// immediately. The queued change is applied in the app on next resume.
 struct ToggleDoneIntent: AppIntent {
-    static var title: LocalizedStringResource = "Toggle task done"
+    static var title: LocalizedStringResource = "WIDGET.IOS.INTENT_TOGGLE_DONE"
     // widget-internal plumbing, not useful from Shortcuts/Spotlight
     static var isDiscoverable: Bool = false
 
-    @Parameter(title: "Task ID")
+    @Parameter(title: "WIDGET.IOS.INTENT_TASK_ID")
     var taskId: String
 
     /// Target state computed at render time from the DISPLAYED state, so
     /// repeated taps toggle back and forth (last-wins in the queue).
-    @Parameter(title: "Set done")
+    @Parameter(title: "WIDGET.IOS.INTENT_SET_DONE")
     var setDone: Bool
 
     init() {}

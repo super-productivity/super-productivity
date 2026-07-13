@@ -121,6 +121,27 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertNil(WidgetColor.parse("rgb(1, , 3)"))
         XCTAssertNil(WidgetColor.parse("#ff000g"))
     }
+
+    func testTaskToggleMeetsTheMinimumWidgetHitTarget() {
+        XCTAssertGreaterThanOrEqual(WidgetLayout.taskToggleHitTarget, 28)
+    }
+
+    func testGeneratedWidgetLocalizationIsBundled() {
+        let testBundle = Bundle(for: WidgetDataTests.self)
+
+        XCTAssertEqual(
+            WidgetStrings.localized(
+                "WIDGET.IOS.TODAY",
+                bundle: testBundle
+            ),
+            "Today"
+        )
+        XCTAssertEqual(WidgetStrings.more(3, bundle: testBundle), "+3 more")
+        XCTAssertEqual(
+            WidgetStrings.markDone("Review", bundle: testBundle),
+            "Mark Review as done"
+        )
+    }
 }
 
 final class DoneQueueStoreTests: XCTestCase {

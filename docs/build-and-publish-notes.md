@@ -1,6 +1,7 @@
 # Publish notes
 
 > **Related macOS docs:**
+>
 > - [mac-app-store-code-signing-guide.md](./mac-app-store-code-signing-guide.md) -- Code signing setup and troubleshooting
 > - [update-mac-certificates.md](./update-mac-certificates.md) -- Annual certificate renewal
 
@@ -32,24 +33,35 @@ The iOS build is automated via `.github/workflows/build-ios.yml`. It triggers on
 
 ### Required GitHub Secrets
 
-| Secret                        | Description                                                            |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `mac_certs`                   | Apple Distribution certificate (.p12, base64) - shared with Mac builds |
-| `mac_certs_password`          | Certificate password - shared with Mac builds                          |
-| `IOS_PROVISION_PROFILE`       | iOS App Store provisioning profile (base64)                            |
-| `APPLE_ID`                    | Apple ID for App Store Connect                                         |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password                                                  |
-| `APPLE_TEAM_ID`               | Apple Developer Team ID                                                |
+| Secret                         | Description                                                            |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `mac_certs`                    | Apple Distribution certificate (.p12, base64) - shared with Mac builds |
+| `mac_certs_password`           | Certificate password - shared with Mac builds                          |
+| `IOS_PROVISION_PROFILE`        | iOS App Store provisioning profile (base64)                            |
+| `IOS_WIDGET_PROVISION_PROFILE` | iOS widget App Store provisioning profile (base64)                     |
+| `APPLE_ID`                     | Apple ID for App Store Connect                                         |
+| `APPLE_APP_SPECIFIC_PASSWORD`  | App-specific password                                                  |
+| `APPLE_TEAM_ID`                | Apple Developer Team ID                                                |
 
 ### Creating the Provisioning Profile
 
-1. Go to [Apple Developer Portal → Profiles](https://developer.apple.com/account/resources/profiles/list)
-2. Click **+** → **App Store Connect** (under Distribution)
-3. Select App ID: `com.super-productivity.app`
-4. Select your **Apple Distribution** certificate
-5. Download the `.mobileprovision` file
-6. Base64 encode: `base64 -i profile.mobileprovision | pbcopy`
-7. Add to GitHub Secrets as `IOS_PROVISION_PROFILE`
+1. In [Apple Developer Portal → Identifiers](https://developer.apple.com/account/resources/identifiers/list),
+   register `com.super-productivity.app.widget` and the App Group
+   `group.com.super-productivity.app`.
+2. Enable the App Group for both `com.super-productivity.app` and
+   `com.super-productivity.app.widget`.
+3. In [Profiles](https://developer.apple.com/account/resources/profiles/list),
+   regenerate the app profile for `com.super-productivity.app` so it includes the
+   App Group.
+4. Create a second **App Store Connect** profile for
+   `com.super-productivity.app.widget` using the same distribution certificate.
+5. Download and base64 encode both profiles:
+   `base64 -i profile.mobileprovision | pbcopy`.
+6. Store the app profile as `IOS_PROVISION_PROFILE` and the widget profile as
+   `IOS_WIDGET_PROVISION_PROFILE`.
+
+See [`ios/App/SupWidget/README.md`](../ios/App/SupWidget/README.md) for the full
+one-time widget target setup.
 
 ### iOS Screenshots
 
