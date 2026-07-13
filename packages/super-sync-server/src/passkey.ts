@@ -16,7 +16,12 @@ import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
-import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
+import {
+  VERIFICATION_TOKEN_EXPIRY_MS,
+  MAX_VERIFICATION_RESEND_COUNT,
+  isMagicLinkVerificationToken,
+  verifyEmail,
+} from './auth';
 import { authCache } from './auth-cache';
 
 // Constants
@@ -177,8 +182,6 @@ export const verifyRegistration = async (
 
   try {
     const config = loadConfigFromEnv();
-    let createdUserId: number | undefined;
-    let verificationEmailSent = false;
 
     // Check if unverified user exists (re-registration attempt)
     const existingUser = await prisma.user.findUnique({
@@ -194,66 +197,58 @@ export const verifyRegistration = async (
         Logger.warn(`Verification resend cap reached (ID: ${existingUser.id})`);
         return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
+    }
 
-      // A registration ceremony proves possession of the submitted passkey,
-      // not ownership of the email address. Keep the original credential until
-      // the existing account has been verified; otherwise an attacker could
-      // replace it and rely on the victim to activate the attacker's passkey.
-      if (!config.testMode?.autoVerifyUsers) {
-        verificationEmailSent = await sendVerificationEmail(email, verificationToken);
-        if (!verificationEmailSent) {
-          return { message: REGISTRATION_SUCCESS_MESSAGE };
-        }
+    const pendingCreated = await prisma.$transaction(async (tx) => {
+      let userId: number;
+      if (existingUser) {
+        const claim = await tx.user.updateMany({
+          where: {
+            id: existingUser.id,
+            isVerified: 0,
+            verificationResendCount: { lt: MAX_VERIFICATION_RESEND_COUNT },
+          },
+          data: {
+            ...(!isMagicLinkVerificationToken(existingUser.verificationToken) && {
+              verificationToken: null,
+              verificationTokenExpiresAt: null,
+            }),
+            verificationResendCount: { increment: 1 },
+          },
+        });
+        if (claim.count !== 1) return false;
+        userId = existingUser.id;
+      } else {
+        const createdUser = await tx.user.create({
+          data: {
+            email: email.toLowerCase(),
+            passwordHash: null,
+            termsAcceptedAt: acceptedAt,
+          },
+        });
+        userId = createdUser.id;
       }
 
-      await prisma.user.update({
-        where: { id: existingUser.id },
+      await tx.pendingPasskeyRegistration.create({
         data: {
+          userId,
           verificationToken,
           verificationTokenExpiresAt: tokenExpiresAt,
-          verificationResendCount: { increment: 1 },
+          credentialId: credentialIdRawBytes,
+          publicKey: Buffer.from(credentialInfo.publicKey),
+          counter: BigInt(credentialInfo.counter),
+          transports: credential.response.transports
+            ? JSON.stringify(credential.response.transports)
+            : null,
         },
       });
-
-      Logger.info(
-        `Updated verification token for unverified user (ID: ${existingUser.id})`,
-      );
-    } else {
-      // Create new user with passkey
-      const createdUser = await prisma.user.create({
-        data: {
-          email: email.toLowerCase(),
-          passwordHash: null, // Passkey-only user
-          verificationToken,
-          verificationTokenExpiresAt: tokenExpiresAt,
-          termsAcceptedAt: acceptedAt,
-          passkeys: {
-            create: {
-              credentialId: credentialIdRawBytes,
-              publicKey: Buffer.from(credentialInfo.publicKey),
-              counter: BigInt(credentialInfo.counter),
-              transports: credential.response.transports
-                ? JSON.stringify(credential.response.transports)
-                : null,
-            },
-          },
-        },
-      });
-      createdUserId = createdUser.id;
-
-      Logger.info(`Created new passkey user`);
-    }
+      return true;
+    });
+    if (!pendingCreated) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
     if (config.testMode?.autoVerifyUsers) {
-      await prisma.user.update({
-        where: { email: email.toLowerCase() },
-        data: {
-          isVerified: 1,
-          verificationToken: null,
-          verificationTokenExpiresAt: null,
-        },
-      });
+      await verifyEmail(verificationToken);
       Logger.info(`[TEST_MODE] Auto-verified passkey user`);
       return {
         message: 'Registration successful. Your account has been automatically verified.',
@@ -261,31 +256,8 @@ export const verifyRegistration = async (
     }
 
     // Normal flow: send verification email
-    const emailSent =
-      verificationEmailSent || (await sendVerificationEmail(email, verificationToken));
-
-    if (!emailSent) {
-      // Only remove the exact unverified row created by this attempt. A
-      // concurrent registration may already have rotated the token or verified
-      // the account, in which case cleanup must leave it alone.
-      if (createdUserId !== undefined) {
-        // AUTH_CACHE_INVALIDATION: bracket the delete pre + post, matching every
-        // other user-delete site, so the convention stays uniformly auditable.
-        authCache.invalidate(createdUserId);
-        const cleanup = await prisma.user.deleteMany({
-          where: {
-            id: createdUserId,
-            isVerified: 0,
-            verificationToken,
-          },
-        });
-        authCache.invalidate(createdUserId);
-        if (cleanup.count > 0) {
-          Logger.info(`Cleaned up failed passkey registration (ID: ${createdUserId})`);
-        }
-      }
-      return { message: REGISTRATION_SUCCESS_MESSAGE };
-    }
+    const emailSent = await sendVerificationEmail(email, verificationToken);
+    if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     Logger.info(`Passkey registration initiated`);
     return { message: REGISTRATION_SUCCESS_MESSAGE };

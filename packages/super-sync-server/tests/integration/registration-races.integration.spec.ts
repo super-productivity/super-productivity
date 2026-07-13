@@ -42,7 +42,7 @@ vi.mock('@simplewebauthn/server', async (importOriginal) => ({
 import { disconnectDb } from '../../src/db';
 import { sendVerificationEmail } from '../../src/email';
 import * as webAuthn from '@simplewebauthn/server';
-import { registerWithMagicLink } from '../../src/auth';
+import { registerWithMagicLink, verifyEmail } from '../../src/auth';
 import { generateRegistrationOptions, verifyRegistration } from '../../src/passkey';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -90,6 +90,17 @@ const registerPasskey = async (email: string, credentialId: Buffer): Promise<voi
   );
 };
 
+const deferred = <T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
 describeWithDb('Registration races (PostgreSQL)', () => {
   let observer: PrismaClient;
 
@@ -113,10 +124,10 @@ describeWithDb('Registration races (PostgreSQL)', () => {
     await disconnectDb();
   });
 
-  it('keeps the original passkey when an unverified email is registered again', async () => {
+  it('activates only the passkey bound to the verification link', async () => {
     const email = `${EMAIL_PREFIX}-existing@test.local`;
-    const originalCredentialId = Buffer.from(`original-${RUN_ID}`);
-    const submittedCredentialId = Buffer.from(`submitted-${RUN_ID}`);
+    const attackerCredentialId = Buffer.from(`attacker-${RUN_ID}`);
+    const ownerCredentialId = Buffer.from(`owner-${RUN_ID}`);
     await observer.user.create({
       data: {
         email,
@@ -125,60 +136,110 @@ describeWithDb('Registration races (PostgreSQL)', () => {
         verificationResendCount: 1,
         passkeys: {
           create: {
-            credentialId: originalCredentialId,
+            credentialId: attackerCredentialId,
             publicKey: Buffer.from([1, 2, 3, 4]),
           },
         },
       },
     });
 
-    await registerPasskey(email, submittedCredentialId);
+    await registerPasskey(email, ownerCredentialId);
+    const verificationToken = mockSendVerificationEmail.mock.calls[0][1] as string;
+    await verifyEmail(verificationToken);
 
     const storedUser = await observer.user.findUniqueOrThrow({
       where: { email },
       include: { passkeys: true },
     });
     expect(storedUser.passkeys).toHaveLength(1);
-    expect(storedUser.passkeys[0].credentialId).toEqual(originalCredentialId);
-    expect(storedUser.verificationToken).not.toBe('original-verification-token');
-    expect(storedUser.verificationResendCount).toBe(2);
+    expect(storedUser.passkeys[0].credentialId).toEqual(ownerCredentialId);
+    expect(storedUser.isVerified).toBe(1);
   });
 
-  it('does not delete a new passkey user after a concurrent token rotation', async () => {
+  it('keeps a passkey registration valid when a concurrent email delivery fails', async () => {
     const email = `${EMAIL_PREFIX}-passkey-cleanup@test.local`;
-    const rotatedToken = 'concurrently-rotated-passkey-token';
-    mockSendVerificationEmail.mockImplementationOnce(async () => {
-      await observer.user.update({
-        where: { email },
-        data: { verificationToken: rotatedToken },
+    const firstCredentialId = Buffer.from(`first-${RUN_ID}`);
+    const secondCredentialId = Buffer.from(`second-${RUN_ID}`);
+    const firstEmailStarted = deferred<void>();
+    const secondEmailStarted = deferred<void>();
+    const firstEmailResult = deferred<boolean>();
+    const secondEmailResult = deferred<boolean>();
+    mockSendVerificationEmail
+      .mockImplementationOnce(async () => {
+        firstEmailStarted.resolve();
+        return firstEmailResult.promise;
+      })
+      .mockImplementationOnce(async () => {
+        secondEmailStarted.resolve();
+        return secondEmailResult.promise;
       });
-      return false;
-    });
 
-    await registerPasskey(email, Buffer.from(`cleanup-${RUN_ID}`));
+    const firstRegistration = registerPasskey(email, firstCredentialId);
+    await firstEmailStarted.promise;
+    const secondRegistration = registerPasskey(email, secondCredentialId);
+    await secondEmailStarted.promise;
+    firstEmailResult.resolve(false);
+    await firstRegistration;
+    secondEmailResult.resolve(true);
+    await secondRegistration;
+    const secondVerificationToken = mockSendVerificationEmail.mock.calls[1][1] as string;
+    await verifyEmail(secondVerificationToken);
 
     const storedUser = await observer.user.findUnique({
       where: { email },
       include: { passkeys: true },
     });
-    expect(storedUser?.verificationToken).toBe(rotatedToken);
     expect(storedUser?.passkeys).toHaveLength(1);
+    expect(storedUser?.passkeys[0].credentialId).toEqual(secondCredentialId);
+    expect(storedUser?.isVerified).toBe(1);
   });
 
-  it('does not delete a new magic-link user after a concurrent token rotation', async () => {
+  it('keeps a magic-link registration valid when a concurrent email delivery fails', async () => {
     const email = `${EMAIL_PREFIX}-magic-link-cleanup@test.local`;
-    const rotatedToken = 'concurrently-rotated-magic-link-token';
-    mockSendVerificationEmail.mockImplementationOnce(async () => {
-      await observer.user.update({
-        where: { email },
-        data: { verificationToken: rotatedToken },
+    const firstEmailStarted = deferred<void>();
+    const secondEmailStarted = deferred<void>();
+    const firstEmailResult = deferred<boolean>();
+    const secondEmailResult = deferred<boolean>();
+    mockSendVerificationEmail
+      .mockImplementationOnce(async () => {
+        firstEmailStarted.resolve();
+        return firstEmailResult.promise;
+      })
+      .mockImplementationOnce(async () => {
+        secondEmailStarted.resolve();
+        return secondEmailResult.promise;
       });
-      return false;
-    });
 
-    await registerWithMagicLink(email, Date.now());
+    const firstRegistration = registerWithMagicLink(email, Date.now());
+    await firstEmailStarted.promise;
+    const secondRegistration = registerWithMagicLink(email, Date.now());
+    await secondEmailStarted.promise;
+    firstEmailResult.resolve(false);
+    await firstRegistration;
+    secondEmailResult.resolve(true);
+    await secondRegistration;
+    const secondVerificationToken = mockSendVerificationEmail.mock.calls[1][1] as string;
+    await verifyEmail(secondVerificationToken);
 
     const storedUser = await observer.user.findUnique({ where: { email } });
-    expect(storedUser?.verificationToken).toBe(rotatedToken);
+    expect(storedUser).not.toBeNull();
+    expect(storedUser?.isVerified).toBe(1);
+  });
+
+  it('does not let a later passkey attempt invalidate a magic-link verification', async () => {
+    const email = `${EMAIL_PREFIX}-magic-before-passkey@test.local`;
+    await registerWithMagicLink(email, Date.now());
+    const magicLinkToken = mockSendVerificationEmail.mock.calls[0][1] as string;
+
+    await registerPasskey(email, Buffer.from(`untrusted-${RUN_ID}`));
+    await verifyEmail(magicLinkToken);
+
+    const storedUser = await observer.user.findUniqueOrThrow({
+      where: { email },
+      include: { passkeys: true, pendingPasskeyRegistrations: true },
+    });
+    expect(storedUser.isVerified).toBe(1);
+    expect(storedUser.passkeys).toHaveLength(0);
+    expect(storedUser.pendingPasskeyRegistrations).toHaveLength(0);
   });
 });

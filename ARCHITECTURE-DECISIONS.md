@@ -198,6 +198,54 @@ The atomic op's headline benefit — reversing the whole thing as one unit — w
 
 ---
 
+### 6. Passkeys Stay Pending Until Email Verification
+
+**Status**: ✅ Active (since July 2026)
+
+**Decision**: A passkey submitted during account registration is stored as a
+`PendingPasskeyRegistration` tied to its exact email-verification token. It is
+promoted to the user's active `Passkey` set only when that token is consumed.
+
+**Rationale**:
+
+- A WebAuthn registration ceremony proves possession of a credential, not
+  ownership of the email address entered alongside it.
+- Storing the first submitted credential directly on an unverified user lets an
+  attacker pre-register a victim's address and rely on the victim to activate
+  the attacker's passkey later.
+- Keeping separate pending attempts prevents concurrent registrations from
+  replacing or activating one another. The email owner chooses the credential
+  by consuming the link produced by that same registration attempt.
+- Failed email delivery leaves the bounded, expiring pending attempt in place.
+  Deleting the shared unverified user can race a concurrent registration and
+  invalidate a link that was successfully delivered.
+
+**Implementation**:
+
+- Passkey registration stores no active credential and creates one pending row
+  per verification token.
+- Email verification atomically claims the unverified user, replaces active
+  passkeys with the credential bound to that token, and deletes the user's
+  remaining pending attempts.
+- New magic-link verification tokens use a distinct prefix. Consuming one
+  verifies the email but removes untrusted active and pending passkeys.
+- The resend cap bounds pending rows per unverified account; rows also expire
+  with their verification tokens.
+
+**Key Files**:
+
+- [`auth.ts`](packages/super-sync-server/src/auth.ts)
+- [`passkey.ts`](packages/super-sync-server/src/passkey.ts)
+- [`schema.prisma`](packages/super-sync-server/prisma/schema.prisma)
+
+**When to Update This Pattern**:
+
+- Changing passkey enrollment or email-verification flows
+- Adding another credential type to registration
+- Changing verification-token persistence or cleanup
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

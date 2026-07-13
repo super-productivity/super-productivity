@@ -36,6 +36,7 @@ model User {
   syncState                  UserSyncState?
   devices                    SyncDevice[]
   passkeys                   Passkey[]
+  pendingPasskeyRegistrations PendingPasskeyRegistration[]
 
   @@index([verificationToken])
   @@index([resetPasswordToken])
@@ -58,6 +59,23 @@ model Passkey {
 
   @@index([userId])
   @@map("passkeys")
+}
+
+model PendingPasskeyRegistration {
+  id                         String   @id @default(cuid())
+  verificationToken          String   @unique @map("verification_token")
+  verificationTokenExpiresAt BigInt   @map("verification_token_expires_at")
+  credentialId               Bytes    @map("credential_id")
+  publicKey                  Bytes    @map("public_key")
+  counter                    BigInt   @default(0)
+  transports                 String?
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("pending_passkey_registrations")
 }
 
 model Operation {
