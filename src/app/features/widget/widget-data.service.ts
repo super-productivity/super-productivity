@@ -96,14 +96,10 @@ export class WidgetDataService {
     }
   }
 
-  /**
-   * Read pending widget done targets. The iOS bridge leases without deleting;
-   * Android keeps its existing destructive native read.
-   */
+  /** Read pending iOS widget targets without deleting the native lease. */
   async readDoneQueue(): Promise<WidgetDoneQueueLease | null> {
     if (IS_ANDROID_WEB_VIEW) {
-      const queueJson = androidInterface.getWidgetDoneQueue?.() ?? null;
-      return queueJson ? { queueJson } : null;
+      throw new Error('Android widget queue reads must use the synchronous drain path');
     }
     const { json, token } = await WidgetBridge.readDoneQueue();
     if (!json) {
@@ -116,17 +112,18 @@ export class WidgetDataService {
   }
 
   /**
-   * Acknowledge an iOS queue lease after the matching task operations are
-   * durable. Android's legacy read already clears its queue, so this is a no-op.
+   * Acknowledge an iOS queue lease after the matching task operations and
+   * updated native snapshot are durable.
    */
   async acknowledgeDoneQueue(lease: WidgetDoneQueueLease): Promise<void> {
-    if (!IS_ANDROID_WEB_VIEW) {
-      if (!lease.acknowledgementToken) {
-        throw new Error('Cannot acknowledge iOS widget queue without a lease token');
-      }
-      await WidgetBridge.acknowledgeDoneQueue({
-        token: lease.acknowledgementToken,
-      });
+    if (IS_ANDROID_WEB_VIEW) {
+      throw new Error('Android widget queues do not support acknowledgement');
     }
+    if (!lease.acknowledgementToken) {
+      throw new Error('Cannot acknowledge iOS widget queue without a lease token');
+    }
+    await WidgetBridge.acknowledgeDoneQueue({
+      token: lease.acknowledgementToken,
+    });
   }
 }

@@ -1,4 +1,9 @@
-import { drainWidgetDoneQueue, getTaskDoneChangesToApply } from './widget.effects';
+import {
+  drainDestructiveWidgetDoneQueue,
+  drainDestructiveWidgetDoneQueueOutsideSyncWindow,
+  drainWidgetDoneQueue,
+  getTaskDoneChangesToApply,
+} from './widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
 import type { WidgetDoneQueueLease } from '../widget-data.service';
@@ -63,6 +68,97 @@ describe('WidgetEffects - getTaskDoneChangesToApply', () => {
 
   it('should skip non-boolean target values', () => {
     expect(getTaskDoneChangesToApply('{"a":"true"}', entities({ id: 'a' }))).toEqual([]);
+  });
+});
+
+describe('drainDestructiveWidgetDoneQueue', () => {
+  it('reads, computes, and dispatches without an asynchronous handoff', () => {
+    const callOrder: string[] = [];
+    const setDone = jasmine.createSpy('setDone').and.callFake(() => {
+      callOrder.push('setDone');
+    });
+
+    const changeCount = drainDestructiveWidgetDoneQueue({
+      readAndClearQueue: () => {
+        callOrder.push('readAndClearQueue');
+        return '{"a":true}';
+      },
+      taskEntities: {
+        a: { id: 'a', isDone: false } as Task,
+      },
+      setDone,
+      setUnDone: () => undefined,
+    });
+
+    expect(changeCount).toBe(1);
+    expect(callOrder).toEqual(['readAndClearQueue', 'setDone']);
+  });
+
+  it('does not dispatch when the destructive queue is empty', () => {
+    const setDone = jasmine.createSpy('setDone');
+
+    expect(
+      drainDestructiveWidgetDoneQueue({
+        readAndClearQueue: () => null,
+        taskEntities: {},
+        setDone,
+        setUnDone: () => undefined,
+      }),
+    ).toBe(0);
+    expect(setDone).not.toHaveBeenCalled();
+  });
+
+  it('does not clear until a state read and final sync check share a safe turn', async () => {
+    let isInSyncWindow = false;
+    let readCount = 0;
+    const readAndClearQueue = jasmine
+      .createSpy('readAndClearQueue')
+      .and.returnValue('{"a":true}');
+    const setDone = jasmine.createSpy('setDone');
+
+    const changeCount = await drainDestructiveWidgetDoneQueueOutsideSyncWindow({
+      waitUntilOutsideSyncWindow: async () => {
+        isInSyncWindow = false;
+      },
+      readTaskEntities: async () => {
+        readCount++;
+        if (readCount === 1) {
+          isInSyncWindow = true;
+        }
+        return { a: { id: 'a', isDone: false } as Task };
+      },
+      hasUnrecoveredPersistFailure: () => false,
+      isInSyncWindow: () => isInSyncWindow,
+      readAndClearQueue,
+      setDone,
+      setUnDone: () => undefined,
+    });
+
+    expect(readCount).toBe(2);
+    expect(readAndClearQueue).toHaveBeenCalledTimes(1);
+    expect(setDone).toHaveBeenCalledOnceWith('a');
+    expect(changeCount).toBe(1);
+  });
+
+  it('preserves the native queue when live state is known to be non-durable', async () => {
+    const readAndClearQueue = jasmine.createSpy('readAndClearQueue');
+
+    await expectAsync(
+      drainDestructiveWidgetDoneQueueOutsideSyncWindow({
+        waitUntilOutsideSyncWindow: async () => undefined,
+        readTaskEntities: async () => ({
+          a: { id: 'a', isDone: true } as Task,
+        }),
+        hasUnrecoveredPersistFailure: () => true,
+        isInSyncWindow: () => false,
+        readAndClearQueue,
+        setDone: () => undefined,
+        setUnDone: () => undefined,
+      }),
+    ).toBeRejectedWithError(
+      'Cannot drain widget queue after an op-log persistence failure',
+    );
+    expect(readAndClearQueue).not.toHaveBeenCalled();
   });
 });
 

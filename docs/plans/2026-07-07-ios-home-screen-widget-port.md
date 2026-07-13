@@ -36,10 +36,9 @@ shape WidgetKit wants, so this is a view-layer + plumbing port, not a redesign.
   The timeline contains an explicit empty entry at that instant and requests a
   reload, so stale tasks disappear even if WidgetKit delays the provider call.
   Other refreshes are explicit `reloadTimelines` pushes. No polling or background sync.
-- **Contract:** identical `v: 1` blob (`AndroidWidgetData` in
-  `src/app/features/android/android-widget.model.ts`). The Swift parser becomes the
-  third named end; unknown `v` renders an empty widget, same as Kotlin. Rename the
-  TS types to platform-neutral (`WidgetData`) as part of the Angular step.
+- **Contract:** identical `v: 1` blob (`WidgetData` in
+  `src/app/features/widget/widget-data.model.ts`). The Swift parser is the third
+  named end; unknown `v` renders an empty widget, same as Kotlin.
 
 ## Work items
 
@@ -74,18 +73,18 @@ shape WidgetKit wants, so this is a view-layer + plumbing port, not a redesign.
   same golden JSON used by `WidgetDataTest.kt` — copy the fixture so both parsers
   are locked to one shape.
 - `DoneQueue.swift`: last-wins entries containing the target boolean plus a unique
-  revision in an atomically replaced App Group file. `flock` serializes the app and
-  extension processes; `read` creates a non-destructive lease, `acknowledge` removes
-  only identical per-tap revisions (preventing same-value ABA loss), and `peek`
-  supplies the render overlay.
+  revision in an atomically replaced App Group file. A blocking POSIX `lockf` lock
+  serializes the app and extension processes; `read` creates a non-destructive lease,
+  `acknowledge` removes only identical per-tap revisions (preventing same-value ABA
+  loss), and `peek` supplies the render overlay.
 - `ToggleDoneIntent` (AppIntent): parameters `taskId` + `setDone` (target computed
   at render time from the _displayed_ state, so repeated taps toggle — same fix as
   Android punch-list item 1's spiritual sibling). Writes queue, returns; WidgetKit
   re-renders automatically after an intent, overlay shows the new state.
 - `TaskListWidget.swift`: `TimelineProvider` (current entry plus an explicit empty
   entry at logical-day expiry), SwiftUI view
-  — header (app name + count, tap = `widgetURL`), task rows (project color bar,
-  title, checkbox `Button(intent:)`), empty state. `.systemMedium` + `.systemLarge`
+  — `Today` header (tap = `widgetURL`), task rows (project color dot, title,
+  checkbox `Button(intent:)`), empty state. `.systemMedium` + `.systemLarge`
   families for v1. Static dark-leaning styling to match the Android v1 look;
   follow the system `colorScheme` only if free.
 
@@ -110,7 +109,7 @@ No `getWidgetTaskQueue` equivalent — share-intent handling is out of scope.
   `IS_ANDROID_WEB_VIEW` → `androidInterface`, `Capacitor.getPlatform() === 'ios'` →
   `registerPlugin<WidgetBridgePlugin>('WidgetBridge')` (pattern:
   `src/app/features/dialog-please-rate/store-review/index.ts`).
-- Effects: reuse `android-widget.effects.ts` triggers by widening the gate to
+- Effects: `features/widget/store/widget.effects.ts` gates shared triggers on
   "android webview OR iOS native". Triggers on iOS: state change (debounced, with
   the existing hydration-guard), sync-window falling edge, and Capacitor `pause`
   (App Group write is fast; fits the ~5s background grace). Drain trigger: Capacitor
@@ -118,8 +117,8 @@ No `getWidgetTaskQueue` equivalent — share-intent handling is out of scope.
   pure `getTaskDoneChangesToApply()`. The iOS lease is acknowledged only after
   `OperationWriteFlushService` confirms the generated operations are durable and
   the updated native snapshot has been saved.
-- Move/rename `features/android/android-widget.*` →
-  `features/widget/` with platform-neutral names; `android-interface.ts` keeps its
+- Move/rename landed as `features/widget/` with platform-neutral names;
+  `android-interface.ts` keeps its
   role as the Android sink. Same aggregated `WIDGET_TASKS_UPDATED` snack (already in
   `en.json`).
 - Sync-correctness check: unchanged risk profile — effects stay `dispatch: false`
@@ -150,14 +149,11 @@ No `getWidgetTaskQueue` equivalent — share-intent handling is out of scope.
   English `strings.xml`).
 - No task creation / undo / per-task deep link from the widget.
 
-## Open decisions (settle before implementing)
+## Resolved decisions
 
-1. App Group ID string — proposed `group.com.super-productivity.app`; hard to
-   change after ship (stale data stranded in the old container), pick once.
-2. Whether the TS rename (`features/android/android-widget.*` → `features/widget/`)
-   lands as a preparatory refactor PR or inside the feature PR. Preparatory is
-   cleaner for review; the Android widget PR #8737 must merge first either way to
-   avoid rebasing it over the rename.
+1. App Group ID: `group.com.super-productivity.app`.
+2. The TS rename (`features/android/android-widget.*` → `features/widget/`) landed
+   inside this feature change after Android widget PR #8737.
 
 ## Effort estimate
 

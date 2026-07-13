@@ -99,10 +99,10 @@ final class DoneQueueStore {
         }
         defer { Darwin.close(descriptor) }
 
-        guard Darwin.flock(descriptor, LOCK_EX) == 0 else {
+        guard Darwin.lockf(descriptor, F_LOCK, 0) == 0 else {
             throw DoneQueueStoreError.lockFailed
         }
-        defer { Darwin.flock(descriptor, LOCK_UN) }
+        defer { _ = Darwin.lockf(descriptor, F_ULOCK, 0) }
 
         return try body()
     }

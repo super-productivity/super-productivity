@@ -77,6 +77,80 @@ interface DrainWidgetDoneQueueDependencies {
   acknowledgeQueue: (lease: WidgetDoneQueueLease) => Promise<void>;
 }
 
+interface DrainDestructiveWidgetDoneQueueDependencies {
+  readAndClearQueue: () => string | null;
+  taskEntities: Dictionary<Task>;
+  setDone: (taskId: string) => void;
+  setUnDone: (taskId: string) => void;
+}
+
+interface DrainDestructiveWidgetDoneQueueOutsideSyncWindowDependencies extends Omit<
+  DrainDestructiveWidgetDoneQueueDependencies,
+  'taskEntities'
+> {
+  readTaskEntities: () => Promise<Dictionary<Task>>;
+  hasUnrecoveredPersistFailure: () => boolean;
+  isInSyncWindow: () => boolean;
+  waitUntilOutsideSyncWindow: () => Promise<void>;
+}
+
+/**
+ * Preserves Android's legacy destructive queue contract. Task state and sync
+ * readiness must be resolved before calling this function: once native storage
+ * is cleared, target calculation and dispatch happen synchronously in the same
+ * JavaScript turn so no additional failure window is introduced.
+ */
+export const drainDestructiveWidgetDoneQueue = (
+  dependencies: DrainDestructiveWidgetDoneQueueDependencies,
+): number => {
+  const queueJson = dependencies.readAndClearQueue();
+  if (!queueJson) {
+    return 0;
+  }
+  const changes = getTaskDoneChangesToApply(queueJson, dependencies.taskEntities);
+  for (const change of changes) {
+    if (change.isDone) {
+      dependencies.setDone(change.id);
+    } else {
+      dependencies.setUnDone(change.id);
+    }
+  }
+  return changes.length;
+};
+
+/**
+ * Resolves asynchronous prerequisites before touching Android's destructive
+ * queue. The final sync check and synchronous drain deliberately share one
+ * continuation, leaving no awaited handoff where sync can reopen after clear.
+ */
+export const drainDestructiveWidgetDoneQueueOutsideSyncWindow = async (
+  dependencies: DrainDestructiveWidgetDoneQueueOutsideSyncWindowDependencies,
+): Promise<number> => {
+  while (true) {
+    await dependencies.waitUntilOutsideSyncWindow();
+    const taskEntities = await dependencies.readTaskEntities();
+    if (dependencies.isInSyncWindow()) {
+      continue;
+    }
+    // This check and the destructive native read below share one synchronous
+    // continuation. A no-op computed from non-durable live state must not
+    // consume the only copy of the Android intent.
+    if (dependencies.hasUnrecoveredPersistFailure()) {
+      throw new Error('Cannot drain widget queue after an op-log persistence failure');
+    }
+    const changeCount = drainDestructiveWidgetDoneQueue({
+      readAndClearQueue: dependencies.readAndClearQueue,
+      taskEntities,
+      setDone: dependencies.setDone,
+      setUnDone: dependencies.setUnDone,
+    });
+    if (changeCount > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return changeCount;
+  }
+};
+
 /**
  * Applies a leased native queue snapshot and acknowledges it only after every
  * emitted task operation is durable and the updated native snapshot is saved.
@@ -112,6 +186,10 @@ export const drainWidgetDoneQueue = async (
     } else {
       dependencies.setUnDone(change.id);
     }
+  }
+
+  if (changes.length > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   await dependencies.flushPendingWrites();
@@ -186,8 +264,8 @@ export class WidgetEffects {
   // initial emission stands in for the missing first resume; taps while the
   // app is foregrounded apply on the next resume (no LocalBroadcast
   // equivalent, see the iOS widget plan doc). concatMap serializes overlapping
-  // triggers; iOS queue reads are leases acknowledged after durable writes,
-  // while Android retains its legacy destructive read.
+  // triggers. iOS uses a lease acknowledged after durable writes; Android's
+  // legacy get-and-clear is kept on a synchronous read→dispatch path.
   drainWidgetDoneQueue$ =
     IS_WIDGET_PLATFORM &&
     createEffect(
@@ -209,29 +287,35 @@ export class WidgetEffects {
   private async _drainDoneQueue(): Promise<void> {
     let changeCount: number;
     try {
-      changeCount = await drainWidgetDoneQueue({
-        readQueue: () => this._widgetDataService.readDoneQueue(),
-        readTaskEntities: () =>
-          firstValueFrom(this._store.select(selectTaskEntities).pipe(first())),
-        setDone: (taskId) => this._taskService.setDone(taskId),
-        setUnDone: (taskId) => this._taskService.setUnDone(taskId),
-        flushPendingWrites: () => this._operationWriteFlushService.flushPendingWrites(),
-        hasUnrecoveredPersistFailure: () =>
-          this._operationCaptureService.hasUnrecoveredPersistFailure(),
-        isInSyncWindow: () => this._hydrationState.isInSyncWindow(),
-        waitUntilOutsideSyncWindow: async () => {
-          if (this._hydrationState.isInSyncWindow()) {
-            await firstValueFrom(
-              this._hydrationState.isInSyncWindow$.pipe(
-                filter((isInSyncWindow) => !isInSyncWindow),
-                first(),
-              ),
-            );
-          }
-        },
-        pushSnapshot: () => this._widgetDataService.pushCurrent(),
-        acknowledgeQueue: (lease) => this._widgetDataService.acknowledgeDoneQueue(lease),
-      });
+      if (IS_ANDROID_WEB_VIEW) {
+        changeCount = await drainDestructiveWidgetDoneQueueOutsideSyncWindow({
+          readAndClearQueue: () => androidInterface.getWidgetDoneQueue?.() ?? null,
+          readTaskEntities: () =>
+            firstValueFrom(this._store.select(selectTaskEntities).pipe(first())),
+          hasUnrecoveredPersistFailure: () =>
+            this._operationCaptureService.hasUnrecoveredPersistFailure(),
+          isInSyncWindow: () => this._hydrationState.isInSyncWindow(),
+          waitUntilOutsideSyncWindow: () => this._waitUntilOutsideSyncWindow(),
+          setDone: (taskId) => this._taskService.setDone(taskId),
+          setUnDone: (taskId) => this._taskService.setUnDone(taskId),
+        });
+      } else {
+        changeCount = await drainWidgetDoneQueue({
+          readQueue: () => this._widgetDataService.readDoneQueue(),
+          readTaskEntities: () =>
+            firstValueFrom(this._store.select(selectTaskEntities).pipe(first())),
+          setDone: (taskId) => this._taskService.setDone(taskId),
+          setUnDone: (taskId) => this._taskService.setUnDone(taskId),
+          flushPendingWrites: () => this._operationWriteFlushService.flushPendingWrites(),
+          hasUnrecoveredPersistFailure: () =>
+            this._operationCaptureService.hasUnrecoveredPersistFailure(),
+          isInSyncWindow: () => this._hydrationState.isInSyncWindow(),
+          waitUntilOutsideSyncWindow: () => this._waitUntilOutsideSyncWindow(),
+          pushSnapshot: () => this._widgetDataService.pushCurrent(),
+          acknowledgeQueue: (lease) =>
+            this._widgetDataService.acknowledgeDoneQueue(lease),
+        });
+      }
     } catch (e) {
       Log.err('Failed to drain widget done queue', e);
       return;
@@ -244,6 +328,17 @@ export class WidgetEffects {
         msg: T.F.ANDROID.WIDGET_TASKS_UPDATED,
         translateParams: { count: changeCount },
       });
+    }
+  }
+
+  private async _waitUntilOutsideSyncWindow(): Promise<void> {
+    if (this._hydrationState.isInSyncWindow()) {
+      await firstValueFrom(
+        this._hydrationState.isInSyncWindow$.pipe(
+          filter((isInSyncWindow) => !isInSyncWindow),
+          first(),
+        ),
+      );
     }
   }
 }
