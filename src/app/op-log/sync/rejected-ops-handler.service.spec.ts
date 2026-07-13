@@ -481,6 +481,94 @@ describe('RejectedOpsHandlerService', () => {
         expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
       });
 
+      it('should not consume the resolution-attempt budget when forced downloads are cancelled', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.callFake(async (options) =>
+          options?.forceFromSeq0
+            ? { kind: 'cancelled' }
+            : { kind: 'completed', newOpsCount: 0 },
+        );
+
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          await service.handleRejectedOps(
+            [
+              {
+                opId: 'op-1',
+                error: 'concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+                existingClock: { serverClient: 2 },
+              },
+            ],
+            downloadCallback,
+          );
+        }
+
+        expect(downloadCallback).toHaveBeenCalledTimes(
+          (MAX_CONCURRENT_RESOLUTION_ATTEMPTS + 1) * 2,
+        );
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      it('should keep retry-exceeded rejection terminal when another conflict is cancelled', async () => {
+        const entriesById = new Map<string, ReturnType<typeof mockEntry>>();
+        opLogStoreSpy.getOpById.and.callFake(async (opId) => entriesById.get(opId));
+        opLogStoreSpy.markRejected.and.resolveTo();
+        supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+        downloadCallback.and.callFake(async (options) =>
+          options?.forceFromSeq0
+            ? {
+                kind: 'completed',
+                newOpsCount: 0,
+                allOpClocks: [{ remoteClient: 2 }],
+              }
+            : { kind: 'completed', newOpsCount: 0 },
+        );
+
+        for (let i = 0; i < MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          const op = createOp({
+            id: `at-limit-${i}`,
+            entityId: 'at-limit-entity',
+          });
+          entriesById.set(op.id, mockEntry(op));
+          await service.handleRejectedOps(
+            [
+              {
+                opId: op.id,
+                error: 'concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+              },
+            ],
+            downloadCallback,
+          );
+        }
+
+        const atLimitOp = createOp({
+          id: 'at-limit-cancelled',
+          entityId: 'at-limit-entity',
+        });
+        const resolvableOp = createOp({
+          id: 'resolvable-cancelled',
+          entityId: 'resolvable-entity',
+        });
+        entriesById.set(atLimitOp.id, mockEntry(atLimitOp));
+        entriesById.set(resolvableOp.id, mockEntry(resolvableOp));
+        opLogStoreSpy.markRejected.calls.reset();
+        downloadCallback.and.resolveTo({ kind: 'cancelled' });
+
+        const cancelledResult = await service.handleRejectedOps(
+          [atLimitOp, resolvableOp].map((op) => ({
+            opId: op.id,
+            error: 'concurrent',
+            errorCode: 'CONFLICT_CONCURRENT' as const,
+          })),
+          downloadCallback,
+        );
+
+        expect(cancelledResult).toEqual({ kind: 'cancelled' });
+        expect(opLogStoreSpy.markRejected).toHaveBeenCalledOnceWith([atLimitOp.id]);
+      });
+
       it('should NOT reject pending ops when the download throws transiently, and re-throw (#8331)', async () => {
         // REGRESSION TEST: A network blip during the concurrent-modification
         // download must not permanently drop the user's pending local edits.

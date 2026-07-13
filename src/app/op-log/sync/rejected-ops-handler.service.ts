@@ -279,7 +279,9 @@ export class RejectedOpsHandlerService {
       }
     }
 
-    // Mark exceeded-limit ops as permanently rejected to break the infinite loop
+    // Mark exceeded-limit ops as permanently rejected before downloading. Keeping
+    // them pending would let conflict resolution replace them with fresh ops and
+    // silently reset the per-entity retry budget.
     if (opsExceededRetries.length > 0) {
       OpLog.err(
         `RejectedOpsHandlerService: ${opsExceededRetries.length} ops exceeded max concurrent resolution attempts ` +
@@ -291,7 +293,6 @@ export class RejectedOpsHandlerService {
         type: 'ERROR',
         msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
       });
-      // Clean up tracking for rejected entities
       for (const item of opsExceededRetries) {
         this._resolutionAttemptsByEntity.delete(this._getEntityKey(item.op));
       }

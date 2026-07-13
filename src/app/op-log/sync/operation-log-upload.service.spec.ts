@@ -1163,6 +1163,22 @@ describe('OperationLogUploadService', () => {
         expect(callArgs[7]).toBeUndefined();
       });
 
+      it('should preserve clean-slate intent when retrying a FORCE_UPLOAD SyncImport', async () => {
+        const entry = createFullStateEntry(
+          1,
+          'force-import',
+          'client-1',
+          OpType.SyncImport,
+        );
+        entry.op.syncImportReason = 'FORCE_UPLOAD';
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
+        expect(callArgs[7]).toBe(true);
+      });
+
       it('should still upload regular ops when full-state op is rejected', async () => {
         const fullStateEntry = createFullStateEntry(
           1,

@@ -406,9 +406,31 @@ vi.mock('../src/db', async () => {
 
   return {
     prisma: {
-      $transaction: vi
-        .fn()
-        .mockImplementation(async (callback: any) => callback(createTxMock())),
+      $transaction: vi.fn().mockImplementation(async (callback: any) => {
+        const transactionStart = {
+          operations: new Map(
+            Array.from(state.operations, ([id, op]) => [id, { ...op }]),
+          ),
+          syncDevices: new Map(
+            Array.from(state.syncDevices, ([id, device]) => [id, { ...device }]),
+          ),
+          userSyncStates: new Map(
+            Array.from(state.userSyncStates, ([id, syncState]) => [id, { ...syncState }]),
+          ),
+          users: new Map(Array.from(state.users, ([id, user]) => [id, { ...user }])),
+          serverSeqCounter: state.serverSeqCounter,
+        };
+        try {
+          return await callback(createTxMock());
+        } catch (error) {
+          state.operations = transactionStart.operations;
+          state.syncDevices = transactionStart.syncDevices;
+          state.userSyncStates = transactionStart.userSyncStates;
+          state.users = transactionStart.users;
+          state.serverSeqCounter = transactionStart.serverSeqCounter;
+          throw error;
+        }
+      }),
       operation: {
         findFirst: vi.fn().mockImplementation(async (args: any) => {
           if (args.where?.opType?.in) {
@@ -741,6 +763,77 @@ describe('SyncService', () => {
 
       const latestSeq = await service.getLatestSeq(userId);
       expect(latestSeq).toBe(1);
+    });
+
+    it('preserves existing data when a clean-slate replacement fails validation', async () => {
+      const service = new SyncService({ maxPayloadSizeBytes: 500 });
+      const existingOp = makeOp({
+        id: 'existing-before-clean-slate',
+        payload: { title: 'Keep me' },
+      });
+      const invalidReplacement = makeOp({
+        id: 'invalid-clean-slate-replacement',
+        opType: 'SYNC_IMPORT',
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { data: 'x'.repeat(1_000) },
+      });
+
+      const initialResult = await service.uploadOps(userId, clientId, [existingOp]);
+      vi.mocked(prisma.$transaction).mockClear();
+      const replacementResult = await service.uploadOps(
+        userId,
+        clientId,
+        [invalidReplacement],
+        true,
+      );
+
+      expect(initialResult[0].accepted).toBe(true);
+      expect(replacementResult[0]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+        }),
+      );
+      expect(testState.operations.has(existingOp.id)).toBe(true);
+      expect(testState.operations.has(invalidReplacement.id)).toBe(false);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('preserves existing data when any clean-slate operation is rejected', async () => {
+      const service = getSyncService();
+      const existingOp = makeOp({ id: 'existing-before-rejected-clean-slate' });
+      const replacement = makeOp({
+        id: 'duplicate-clean-slate-replacement',
+        opType: 'SYNC_IMPORT',
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      await service.uploadOps(userId, clientId, [existingOp]);
+
+      const results = await service.uploadOps(
+        userId,
+        clientId,
+        [replacement, { ...replacement }],
+        true,
+      );
+
+      expect(results).toHaveLength(2);
+      expect(results.every(({ accepted }) => !accepted)).toBe(true);
+      expect(results[1].errorCode).toBe(SYNC_ERROR_CODES.DUPLICATE_OPERATION);
+      expect(testState.operations.has(existingOp.id)).toBe(true);
+      expect(testState.operations.has(replacement.id)).toBe(false);
+    });
+
+    it('does not wipe existing data for an empty clean-slate upload', async () => {
+      const service = getSyncService();
+      const existingOp = makeOp({ id: 'existing-before-empty-clean-slate' });
+      await service.uploadOps(userId, clientId, [existingOp]);
+
+      const results = await service.uploadOps(userId, clientId, [], true);
+
+      expect(results).toEqual([]);
+      expect(testState.operations.has(existingOp.id)).toBe(true);
     });
 
     it('should handle multiple operations in order', async () => {

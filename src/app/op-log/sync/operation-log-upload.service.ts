@@ -210,7 +210,9 @@ export class OperationLogUploadService {
         // BackupImport/Repair: always wipe server (recovery operations replace all state)
         // SyncImport: only wipe when explicitly requested (preserves SYNC_IMPORT_EXISTS check)
         const isCleanSlateForOp =
-          entry.op.opType === OpType.SyncImport ? options?.isCleanSlate : true;
+          entry.op.opType === OpType.SyncImport
+            ? entry.op.syncImportReason === 'FORCE_UPLOAD' || options?.isCleanSlate
+            : true;
         const result = await this._uploadFullStateOpAsSnapshot(
           syncProvider,
           entry,

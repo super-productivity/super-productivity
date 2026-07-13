@@ -12,7 +12,11 @@ import { SyncSessionValidationService } from './sync-session-validation.service'
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+} from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -267,6 +271,33 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+    expect(mockSnackService.open).not.toHaveBeenCalled();
+  }));
+
+  it('should surface a force-upload failure raised by conflict resolution', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.rejectWith(new ForceUploadFailedError());
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+    expect(mockSnackService.open).toHaveBeenCalledWith({
+      msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+      type: 'ERROR',
+    });
+  }));
+
+  it('should keep sync pending when force upload leaves unresolved ops', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.rejectWith(new ForceUploadPendingOpsError());
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('UNKNOWN_OR_CHANGED');
     expect(mockSnackService.open).not.toHaveBeenCalled();
   }));
 

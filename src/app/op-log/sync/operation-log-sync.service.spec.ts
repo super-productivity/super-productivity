@@ -37,6 +37,8 @@ import {
 import { TranslateService } from '@ngx-translate/core';
 import {
   EncryptNoPasswordError,
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
@@ -2851,6 +2853,10 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
         localWinOpsCreated: 0,
       });
+      serverMigrationServiceSpy.handleServerMigration.and.resolveTo('force-import');
+      opLogStoreSpy.getOpById.and.resolveTo({
+        syncedAt: Date.now(),
+      } as OperationLogEntry);
     });
 
     it('should call handleServerMigration to create SYNC_IMPORT', async () => {
@@ -2859,18 +2865,21 @@ describe('OperationLogSyncService', () => {
         setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
       } as unknown as OperationSyncCapable;
 
-      await service.forceUploadLocalState(mockProvider);
+      const result = await service.forceUploadLocalState(mockProvider);
 
       expect(serverMigrationServiceSpy.handleServerMigration).toHaveBeenCalledWith(
         mockProvider,
         { skipServerEmptyCheck: true, syncImportReason: 'FORCE_UPLOAD' },
       );
+      expect(opLogStoreSpy.getOpById).toHaveBeenCalledOnceWith('force-import');
+      expect(result).toEqual({ hasUnresolvedOps: false });
     });
 
     it('should upload pending ops after creating SYNC_IMPORT', async () => {
       const callOrder: string[] = [];
       serverMigrationServiceSpy.handleServerMigration.and.callFake(async () => {
         callOrder.push('handleServerMigration');
+        return 'force-import';
       });
       uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
         callOrder.push('uploadPendingOps');
@@ -2906,6 +2915,19 @@ describe('OperationLogSyncService', () => {
       );
     });
 
+    it('should reject when no FORCE_UPLOAD operation was created', async () => {
+      serverMigrationServiceSpy.handleServerMigration.and.resolveTo();
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError(ForceUploadFailedError);
+      expect(uploadServiceSpy.uploadPendingOps).not.toHaveBeenCalled();
+    });
+
     it('should propagate errors from uploadPendingOps', async () => {
       const error = new Error('Upload failed');
       uploadServiceSpy.uploadPendingOps.and.rejectWith(error);
@@ -2939,7 +2961,7 @@ describe('OperationLogSyncService', () => {
       ).toBeRejectedWithError(EncryptNoPasswordError);
     });
 
-    it('should reject when the clean-slate upload contains rejected operations', async () => {
+    it('should reject with a typed error when the FORCE_UPLOAD op is not acknowledged', async () => {
       uploadServiceSpy.uploadPendingOps.and.resolveTo({
         uploadedCount: 0,
         piggybackedOps: [],
@@ -2952,6 +2974,7 @@ describe('OperationLogSyncService', () => {
           },
         ],
       });
+      opLogStoreSpy.getOpById.and.resolveTo({} as OperationLogEntry);
 
       const mockProvider = {
         supportsOperationSync: true,
@@ -2960,25 +2983,32 @@ describe('OperationLogSyncService', () => {
 
       await expectAsync(
         service.forceUploadLocalState(mockProvider),
-      ).toBeRejectedWithError('Force upload failed because 1 operation was rejected.');
+      ).toBeRejectedWithError(ForceUploadFailedError);
     });
 
-    it('should reject when the clean-slate upload accepts no operations', async () => {
+    it('should succeed when the FORCE_UPLOAD op is accepted despite an unrelated rejection', async () => {
       uploadServiceSpy.uploadPendingOps.and.resolveTo({
-        uploadedCount: 0,
+        uploadedCount: 1,
         piggybackedOps: [],
-        rejectedCount: 0,
-        rejectedOps: [],
+        rejectedCount: 1,
+        rejectedOps: [
+          {
+            opId: 'older-op',
+            error: 'superseded',
+            errorCode: 'VALIDATION_ERROR',
+          },
+        ],
+        localWinOpsCreated: 0,
       });
 
       const mockProvider = {
         supportsOperationSync: true,
-        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
       } as unknown as OperationSyncCapable;
 
-      await expectAsync(
-        service.forceUploadLocalState(mockProvider),
-      ).toBeRejectedWithError('Force upload failed because no operations were uploaded.');
+      const result = await service.forceUploadLocalState(mockProvider);
+
+      expect(result).toEqual({ hasUnresolvedOps: true });
+      expect(opLogStoreSpy.getOpById).toHaveBeenCalledOnceWith('force-import');
     });
 
     it('should upload with isCleanSlate=true to delete server data before accepting new data', async () => {
@@ -5279,7 +5309,9 @@ describe('OperationLogSyncService', () => {
 
       syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('USE_LOCAL');
 
-      const forceUploadSpy = spyOn(service, 'forceUploadLocalState').and.resolveTo();
+      const forceUploadSpy = spyOn(service, 'forceUploadLocalState').and.resolveTo({
+        hasUnresolvedOps: false,
+      });
 
       const mockProvider = {
         isReady: () => Promise.resolve(true),
@@ -5288,6 +5320,11 @@ describe('OperationLogSyncService', () => {
       await service.uploadPendingOps(mockProvider);
 
       expect(forceUploadSpy).toHaveBeenCalledWith(mockProvider);
+
+      forceUploadSpy.and.resolveTo({ hasUnresolvedOps: true });
+      await expectAsync(service.uploadPendingOps(mockProvider)).toBeRejectedWithError(
+        ForceUploadPendingOpsError,
+      );
     });
 
     it('should call forceDownloadRemoteState when user chooses USE_REMOTE', async () => {

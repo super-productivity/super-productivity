@@ -11,7 +11,11 @@ import { handleStorageQuotaError } from './sync-error-utils';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+} from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -328,6 +332,20 @@ export class ImmediateUploadService implements OnDestroy {
           );
         }
       } catch (e) {
+        if (e instanceof ForceUploadPendingOpsError) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return;
+        }
+
+        if (e instanceof ForceUploadFailedError) {
+          this._providerManager.setSyncStatus('ERROR');
+          this._snackService.open({
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+            type: 'ERROR',
+          });
+          return;
+        }
+
         if (e instanceof IncompleteRemoteOperationsError) {
           this._providerManager.setSyncStatus('ERROR');
           if (!this._snackService.hasPendingPersistentAction()) {

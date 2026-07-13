@@ -177,11 +177,12 @@ export class ServerMigrationService {
    * @param options - Optional configuration
    * @param options.skipServerEmptyCheck - If true, creates SYNC_IMPORT even if server has data.
    *   Used for "USE_LOCAL" conflict resolution to force overwrite remote with local state.
+   * @returns The created SYNC_IMPORT operation ID, or undefined when creation was skipped.
    */
   async handleServerMigration(
     syncProvider: OperationSyncCapable,
     options?: { skipServerEmptyCheck?: boolean; syncImportReason?: SyncImportReason },
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     // Double-check server is still empty (in case another client just uploaded)
     // This is called inside the upload lock, but network timing could still race
     // Skip this check when forcing upload (conflict resolution "USE_LOCAL")
@@ -207,7 +208,7 @@ export class ServerMigrationService {
     // flushThenRunExclusive owns the flush→lock→recheck retry loop (bounded, so
     // continuous dispatch cannot livelock the migration; it re-triggers on the
     // next sync).
-    await this.writeFlushService.flushThenRunExclusive(async () => {
+    return this.writeFlushService.flushThenRunExclusive(async () => {
       // Get current full state from NgRx store (async to include archives from IndexedDB)
       // Cast to Record for validation compatibility
       let currentState: Record<string, unknown> =
@@ -310,6 +311,7 @@ export class ServerMigrationService {
         'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +
           'Will be uploaded immediately via follow-up upload.',
       );
+      return op.id;
     });
   }
 

@@ -321,9 +321,10 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      await service.handleServerMigration(defaultProvider);
+      const createdOpId = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(createdOpId).toBe(opLogStoreSpy.append.calls.mostRecent().args[0].id);
     });
 
     it('should proceed if non-entity sync state differs from defaults', async () => {

@@ -57,7 +57,10 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { getDefaultMainModelData, MODEL_CONFIGS } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { SyncLocalStateService } from './sync-local-state.service';
-import { SyncImportConflictCoordinatorService } from './sync-import-conflict-coordinator.service';
+import {
+  ForceUploadResult,
+  SyncImportConflictCoordinatorService,
+} from './sync-import-conflict-coordinator.service';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
 import { Operation } from '../core/operation.types';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -1293,8 +1296,10 @@ export class OperationLogSyncService {
    *
    * @param syncProvider - The sync provider to upload to
    */
-  async forceUploadLocalState(syncProvider: OperationSyncCapable): Promise<void> {
-    await this.syncImportConflictCoordinator.forceUploadLocalState(syncProvider);
+  async forceUploadLocalState(
+    syncProvider: OperationSyncCapable,
+  ): Promise<ForceUploadResult> {
+    return this.syncImportConflictCoordinator.forceUploadLocalState(syncProvider);
   }
 
   /**

@@ -60,6 +60,12 @@ const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
   );
 };
 
+class CleanSlateUploadRejectedError extends Error {
+  constructor(readonly results: UploadResult[]) {
+    super('Clean-slate replacement was rejected');
+  }
+}
+
 /**
  * Main sync orchestration service.
  *
@@ -134,6 +140,10 @@ export class SyncService {
     isCleanSlate?: boolean,
     requestStartOccupiedIds?: ReadonlySet<string>,
   ): Promise<UploadResult[]> {
+    if (isCleanSlate && ops.length === 0) {
+      return [];
+    }
+
     const results: UploadResult[] = [];
     const now = Date.now();
     const txStartedAt = Date.now();
@@ -143,6 +153,33 @@ export class SyncService {
       const validation = this.prevalidatedOps.get(op);
       if (validation) {
         prevalidatedResults.set(op, validation);
+      }
+    }
+
+    if (isCleanSlate) {
+      const validations = ops.map((op) => {
+        const validation =
+          prevalidatedResults.get(op) ?? this.validationService.validateOp(op, clientId);
+        prevalidatedResults.set(op, validation);
+        return validation;
+      });
+      if (validations.some(({ valid }) => !valid)) {
+        return ops.map((op, index) => {
+          const validation = validations[index];
+          return validation.valid
+            ? {
+                opId: op.id,
+                accepted: false,
+                error: 'Clean-slate batch contains an invalid operation',
+                errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+              }
+            : {
+                opId: op.id,
+                accepted: false,
+                error: validation.error ?? 'Invalid operation',
+                errorCode: validation.errorCode,
+              };
+        });
       }
     }
 
@@ -266,6 +303,25 @@ export class SyncService {
             );
           }
 
+          if (
+            isCleanSlate &&
+            (results.length !== ops.length || results.some(({ accepted }) => !accepted))
+          ) {
+            throw new CleanSlateUploadRejectedError(
+              ops.map((op, index) => {
+                const result = results[index];
+                return result && !result.accepted
+                  ? result
+                  : {
+                      opId: op.id,
+                      accepted: false,
+                      error: 'Clean-slate replacement was rolled back',
+                      errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+                    };
+              }),
+            );
+          }
+
           // Update device last seen
           await tx.syncDevice.upsert({
             where: {
@@ -349,6 +405,13 @@ export class SyncService {
         batchUpload: this.config.batchUpload,
       });
     } catch (err) {
+      if (err instanceof CleanSlateUploadRejectedError) {
+        Logger.warn(
+          `[user:${userId}] Clean-slate replacement rejected; existing data preserved`,
+        );
+        return err.results;
+      }
+
       // Transaction failed - all operations were rolled back
       const errorMessage = (err as Error).message || 'Unknown error';
 
