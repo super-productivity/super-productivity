@@ -8,7 +8,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { ActionType, OpType } from '../core/operation.types';
+import { ActionType, OperationLogEntry, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
@@ -456,6 +456,46 @@ describe('SyncHydrationService', () => {
         expect(mockOpLogStore.append).not.toHaveBeenCalled();
       });
 
+      it('should reject only the pending ops captured before snapshot hydration starts', async () => {
+        const makeEntry = (id: string, seq: number): OperationLogEntry => ({
+          seq,
+          op: {
+            id,
+            clientId: 'localClient',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: `task-${seq}`,
+            payload: { title: id },
+            vectorClock: { localClient: seq },
+            timestamp: seq,
+            schemaVersion: 1,
+          },
+          appliedAt: seq,
+          source: 'local',
+        });
+        const pendingBeforeHydration = makeEntry('pending-before-hydration', 1);
+        const pendingDuringHydration = makeEntry('pending-during-hydration', 2);
+        let snapshotReadStarted = false;
+        mockOpLogStore.getUnsynced.and.callFake(async () =>
+          snapshotReadStarted
+            ? [pendingBeforeHydration, pendingDuringHydration]
+            : [pendingBeforeHydration],
+        );
+        mockStateSnapshotService.getAllSyncModelDataFromStoreAsync.and.callFake(
+          async () => {
+            snapshotReadStarted = true;
+            return {} as never;
+          },
+        );
+
+        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([
+          pendingBeforeHydration.op.id,
+        ]);
+      });
+
       it('should still save state cache when createSyncImportOp is false', async () => {
         mockOpLogStore.getLastSeq.and.resolveTo(42);
 
@@ -488,6 +528,19 @@ describe('SyncHydrationService', () => {
             }) as any,
           }),
         );
+      });
+
+      it('should invoke beforeStateLoad immediately before replacing NgRx state', async () => {
+        let dispatchCountAtHook = -1;
+
+        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+          beforeStateLoad: () => {
+            dispatchCountAtHook = mockStore.dispatch.calls.count();
+          },
+        });
+
+        expect(dispatchCountAtHook).toBe(0);
+        expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
       });
 
       it('should still merge remote vector clock when createSyncImportOp is false', async () => {

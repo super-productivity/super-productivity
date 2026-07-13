@@ -7,7 +7,13 @@ import { SnackService } from '../../core/snack/snack.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
+import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
+import {
+  bufferDeferredAction,
+  clearDeferredActions,
+} from '../capture/operation-capture.meta-reducer';
+import { PersistentAction } from '../core/persistent-action.interface';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
@@ -69,6 +75,7 @@ describe('OperationLogSyncService', () => {
   let validateStateServiceSpy: jasmine.SpyObj<ValidateStateService>;
   let lockServiceSpy: jasmine.SpyObj<LockService>;
   let operationApplierSpy: jasmine.SpyObj<OperationApplierService>;
+  let hydrationStateServiceSpy: jasmine.SpyObj<HydrationStateService>;
   let operationLogEffectsSpy: jasmine.SpyObj<OperationLogEffects>;
   let hydratorServiceSpy: jasmine.SpyObj<OperationLogHydratorService>;
   const defaultBackupRef = { backupId: 'backup-1', savedAt: 1 };
@@ -239,6 +246,10 @@ describe('OperationLogSyncService', () => {
       'applyOperations',
     ]);
     operationApplierSpy.applyOperations.and.resolveTo({ appliedOps: [] });
+    hydrationStateServiceSpy = jasmine.createSpyObj('HydrationStateService', [
+      'startApplyingRemoteOps',
+      'endApplyingRemoteOps',
+    ]);
     operationLogEffectsSpy = jasmine.createSpyObj('OperationLogEffects', [
       'processDeferredActions',
     ]);
@@ -268,6 +279,7 @@ describe('OperationLogSyncService', () => {
           provide: OperationApplierService,
           useValue: operationApplierSpy,
         },
+        { provide: HydrationStateService, useValue: hydrationStateServiceSpy },
         { provide: OperationLogEffects, useValue: operationLogEffectsSpy },
         { provide: OperationLogHydratorService, useValue: hydratorServiceSpy },
         {
@@ -1627,6 +1639,187 @@ describe('OperationLogSyncService', () => {
       });
 
       describe('LocalDataConflictError for file-based sync', () => {
+        it('should abort snapshot hydration when a local op becomes durable after conflict detection', async () => {
+          const lateLocalEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'late-local-op',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-late',
+              payload: { task: { id: 'task-late', changes: { title: 'Keep me' } } },
+              vectorClock: { clientA: 2 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([lateLocalEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          await expectAsync(
+            service.downloadRemoteOps(mockProvider),
+          ).toBeRejectedWithError(LocalDataConflictError);
+
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+        });
+
+        it('should restore and persist a local action buffered during snapshot hydration', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const actionAfterStateLoad: PersistentAction = {
+            ...localAction,
+            task: { id: 'task-after-load', changes: { title: 'Already restored' } },
+            meta: { ...localAction.meta, entityId: 'task-after-load' },
+          };
+          const persistedEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'buffered-local-op',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              payload: { task: localAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          const persistedAfterLoadEntry: OperationLogEntry = {
+            ...persistedEntry,
+            seq: 3,
+            op: {
+              ...persistedEntry.op,
+              id: 'after-load-local-op',
+              entityId: 'task-after-load',
+              payload: { task: actionAfterStateLoad.task },
+              vectorClock: { clientA: 3, clientB: 5 },
+              timestamp: 3,
+            },
+            appliedAt: 3,
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([persistedEntry, persistedAfterLoadEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              bufferDeferredAction(localAction);
+              hooks?.beforeStateLoad?.();
+              bufferDeferredAction(actionAfterStateLoad);
+            },
+          );
+          operationApplierSpy.applyOperations.and.resolveTo({
+            appliedOps: [persistedEntry.op],
+          });
+          const mockStore = TestBed.inject(MockStore);
+          const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await service.downloadRemoteOps(mockProvider);
+
+            expect(hydrationStateServiceSpy.startApplyingRemoteOps).toHaveBeenCalledTimes(
+              1,
+            );
+            expect(hydrationStateServiceSpy.endApplyingRemoteOps).toHaveBeenCalledTimes(
+              1,
+            );
+            expect(dispatchSpy).toHaveBeenCalledWith(
+              jasmine.objectContaining({
+                type: localAction.type,
+                meta: jasmine.objectContaining({ isRemote: true }),
+              }),
+            );
+            const remotelyReplayedTaskIds = dispatchSpy.calls
+              .allArgs()
+              .map(([action]) => action as unknown)
+              .filter(
+                (
+                  action,
+                ): action is {
+                  task?: { id?: string };
+                  meta?: { isRemote?: boolean };
+                } => typeof action === 'object' && action !== null,
+              )
+              .filter((action) => action.meta?.isRemote)
+              .map((action) => action.task?.id);
+            expect(remotelyReplayedTaskIds).toContain('task-local');
+            expect(remotelyReplayedTaskIds).not.toContain('task-after-load');
+            expect(operationLogEffectsSpy.processDeferredActions.calls.allArgs()).toEqual(
+              [
+                [{ callerHoldsOperationLogLock: false }],
+                [{ callerHoldsOperationLogLock: true }],
+                [{ callerHoldsOperationLogLock: true }],
+              ],
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledOnceWith(
+              [persistedEntry.op],
+              {
+                isLocalHydration: false,
+                skipDeferredLocalActions: true,
+                skipReducerDispatch: true,
+              },
+            );
+            expect(mockProvider.setLastServerSeq).toHaveBeenCalledOnceWith(1);
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
         it('should NOT throw LocalDataConflictError on normal incremental sync (no snapshotState)', async () => {
           // This tests the regression fix: normal incremental syncs should NOT throw
           // LocalDataConflictError, even if the client has unsynced ops.
@@ -3541,7 +3734,7 @@ describe('OperationLogSyncService', () => {
       );
     });
 
-    it('should reset lastServerSeq to 0', async () => {
+    it('should acknowledge only the final cursor after a successful rebuild', async () => {
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [makeRemoteOp()],
         needsFullStateUpload: false,
@@ -3560,10 +3753,10 @@ describe('OperationLogSyncService', () => {
 
       await service.forceDownloadRemoteState(mockProvider);
 
-      expect(setLastServerSeqSpy).toHaveBeenCalledWith(0);
+      expect(setLastServerSeqSpy).toHaveBeenCalledOnceWith(1);
     });
 
-    it('should reset the external cursor before committing the local replacement', async () => {
+    it('should commit the local replacement before acknowledging the external cursor', async () => {
       const callOrder: string[] = [];
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [makeRemoteOp()],
@@ -3581,13 +3774,13 @@ describe('OperationLogSyncService', () => {
         setLastServerSeq: jasmine
           .createSpy('setLastServerSeq')
           .and.callFake(async (seq: number) => {
-            if (seq === 0) callOrder.push('cursor-zero');
+            callOrder.push(`cursor-${seq}`);
           }),
       } as unknown as OperationSyncCapable;
 
       await service.forceDownloadRemoteState(mockProvider);
 
-      expect(callOrder.slice(0, 2)).toEqual(['cursor-zero', 'replace']);
+      expect(callOrder).toEqual(['replace', 'cursor-1']);
     });
 
     it('should download raw history: forceFromSeq0 AND includeOwnAndAppliedOps', async () => {
@@ -3791,7 +3984,7 @@ describe('OperationLogSyncService', () => {
       );
     });
 
-    it('should NOT advance the cursor past 0 when replay blocks on a migration failure', async () => {
+    it('should not acknowledge the cursor when replay blocks on a migration failure', async () => {
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
         newOps: [makeRemoteOp()],
         needsFullStateUpload: false,
@@ -3817,8 +4010,7 @@ describe('OperationLogSyncService', () => {
       await expectAsync(
         service.forceDownloadRemoteState(mockProvider),
       ).toBeRejectedWithError(/USE_REMOTE incomplete/);
-      expect(setLastServerSeqSpy).toHaveBeenCalledWith(0);
-      expect(setLastServerSeqSpy).not.toHaveBeenCalledWith(50);
+      expect(setLastServerSeqSpy).not.toHaveBeenCalled();
     });
 
     it('should process downloaded ops without confirmation', async () => {
@@ -3894,9 +4086,7 @@ describe('OperationLogSyncService', () => {
 
       await service.forceDownloadRemoteState(mockProvider);
 
-      // First call is reset to 0, second call is update to latestServerSeq
-      expect(setLastServerSeqSpy).toHaveBeenCalledWith(0);
-      expect(setLastServerSeqSpy).toHaveBeenCalledWith(50);
+      expect(setLastServerSeqSpy).toHaveBeenCalledOnceWith(50);
     });
 
     it('should REJECT an empty remote instead of silently succeeding', async () => {
@@ -3982,14 +4172,19 @@ describe('OperationLogSyncService', () => {
         latestServerSeq: 1,
       });
 
+      const setLastServerSeqSpy = jasmine.createSpy('setLastServerSeq').and.resolveTo();
       const mockProvider = {
         supportsOperationSync: true,
-        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+        setLastServerSeq: setLastServerSeqSpy,
       } as any;
 
       await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejectedWith(
         error,
       );
+      // A failed replacement must not acknowledge the staged download baseline.
+      // The raw-rebuild marker drives seq-0 recovery after a committed crash, so
+      // there is no need for an eager external cursor reset before the transaction.
+      expect(setLastServerSeqSpy).not.toHaveBeenCalled();
     });
 
     // Issue #7330: post-sync validation failure must be surfaced so
