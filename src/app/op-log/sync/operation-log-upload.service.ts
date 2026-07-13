@@ -118,7 +118,7 @@ export class OperationLogUploadService {
     // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
     let encryptionRequiredKeyMissing = false;
     let blockedByRejectedFullState = false;
-    let rejectedImportBarrierSeq: number | undefined;
+    let rejectedFullStateBarrierSeq: number | undefined;
 
     // Migration discovery may perform network probes or wait on a dialog. Keep
     // that work outside the cross-tab upload lock; the callback is responsible
@@ -131,18 +131,18 @@ export class OperationLogUploadService {
       const pendingOps = await this.opLogStore.getUnsynced();
       selectedPendingOps = pendingOps;
 
-      const rejectedImport = await this.opLogStore.getLatestRejectedImportOpEntry();
-      const latestActiveFullState = rejectedImport
+      const rejectedFullState = await this.opLogStore.getLatestRejectedFullStateOpEntry();
+      const latestActiveFullState = rejectedFullState
         ? await this.opLogStore.getLatestFullStateOpEntry()
         : undefined;
       if (
-        rejectedImport &&
-        (!latestActiveFullState || latestActiveFullState.seq <= rejectedImport.seq)
+        rejectedFullState &&
+        (!latestActiveFullState || latestActiveFullState.seq <= rejectedFullState.seq)
       ) {
         blockedByRejectedFullState = true;
         OpLog.warn(
           `OperationLogUploadService: Upload remains blocked because rejected ` +
-            `${rejectedImport.op.opType} ${rejectedImport.op.id} has not been ` +
+            `${rejectedFullState.op.opType} ${rejectedFullState.op.id} has not been ` +
             'superseded by a newer full-state operation.',
         );
         return;
@@ -220,7 +220,7 @@ export class OperationLogUploadService {
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
-      if (rejectedImport) {
+      if (rejectedFullState) {
         if (
           latestActiveFullState?.source === 'local' &&
           !latestActiveFullState.syncedAt
@@ -228,7 +228,7 @@ export class OperationLogUploadService {
           // A pending recovery snapshot is allowed to try, but it does not
           // release the durable barrier until the server actually accepts it.
           blockedByRejectedFullState = true;
-          rejectedImportBarrierSeq = rejectedImport.seq;
+          rejectedFullStateBarrierSeq = rejectedFullState.seq;
         }
       }
 
@@ -269,11 +269,11 @@ export class OperationLogUploadService {
           fullStateOpUploaded = true;
           lastUploadedFullStateOpSeq = entry.seq;
           if (
-            rejectedImportBarrierSeq !== undefined &&
-            entry.seq > rejectedImportBarrierSeq
+            rejectedFullStateBarrierSeq !== undefined &&
+            entry.seq > rejectedFullStateBarrierSeq
           ) {
             blockedByRejectedFullState = false;
-            rejectedImportBarrierSeq = undefined;
+            rejectedFullStateBarrierSeq = undefined;
           }
         } else {
           // Special handling for SYNC_IMPORT_EXISTS: another client already uploaded

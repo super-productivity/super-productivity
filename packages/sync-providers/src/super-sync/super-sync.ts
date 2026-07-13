@@ -189,6 +189,7 @@ export class SuperSyncProvider
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
     this._cachedServerSeqKey = null;
+    this._causalRepairSnapshotsSupported = false;
     await this.privateCfg.setComplete(cfg);
   }
 

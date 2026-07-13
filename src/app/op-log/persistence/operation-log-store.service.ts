@@ -1081,20 +1081,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
-   * Finds the newest rejected local explicit import/restore boundary.
+   * Finds the newest rejected local full-state boundary.
    *
-   * A rejected local SYNC_IMPORT or BACKUP_IMPORT means later incremental
-   * operations may depend on a baseline the server never accepted. Rejected
-   * remote imports are conflict-resolution history, not upload barriers.
-   * Automatic REPAIR is also excluded: a stale repair is deliberately retired
-   * so concurrent server ops can download and trigger a fresh repair if needed.
+   * Later incremental operations may depend on a baseline the server never
+   * accepted. Rejected remote full-state ops are conflict-resolution history,
+   * not upload barriers. A stale repair is replaced by a newer active repair,
+   * whose greater local sequence releases this barrier.
    */
-  async getLatestRejectedImportOpEntry(): Promise<OperationLogEntry | undefined> {
+  async getLatestRejectedFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
     return this._getLatestFullStateOpEntryMatching(
-      (stored) =>
-        stored.source === 'local' &&
-        !!stored.rejectedAt &&
-        getStoredOpType(stored.op) !== 'REPAIR',
+      (stored) => stored.source === 'local' && !!stored.rejectedAt,
     );
   }
 

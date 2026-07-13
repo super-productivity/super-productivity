@@ -377,6 +377,26 @@ describe('SuperSyncProvider', () => {
       const lastCallUrl = fetchMock.mock.calls.at(-1)?.[0];
       expect(String(lastCallUrl)).toContain('server2.com');
     });
+
+    it('clears learned server capabilities when the config changes', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        okResponse({
+          ops: [],
+          hasMore: false,
+          latestSeq: 0,
+          capabilities: { causalRepairSnapshots: true },
+        }),
+      );
+
+      await provider.downloadOps(0);
+      expect(provider.supportsCausalRepairSnapshots()).toBe(true);
+
+      await provider.setPrivateCfg(testConfig);
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(false);
+    });
   });
 
   describe('config loading', () => {

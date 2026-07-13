@@ -44,7 +44,7 @@ describe('OperationLogUploadService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getUnsynced',
       'getLatestFullStateOpEntry',
-      'getLatestRejectedImportOpEntry',
+      'getLatestRejectedFullStateOpEntry',
       'markSynced',
       'markRejected',
       'deleteOpsWhere',
@@ -57,7 +57,7 @@ describe('OperationLogUploadService', () => {
     );
     mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([]));
     mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(undefined);
-    mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(undefined);
+    mockOpLogStore.getLatestRejectedFullStateOpEntry.and.resolveTo(undefined);
     mockOpLogStore.markSynced.and.returnValue(Promise.resolve());
     mockOpLogStore.deleteOpsWhere.and.returnValue(Promise.resolve());
 
@@ -1260,7 +1260,7 @@ describe('OperationLogUploadService', () => {
         rejectedImport.rejectedAt = Date.now();
         const dependentOp = createMockEntry(2, 'dependent-op', 'client-1');
         mockOpLogStore.getUnsynced.and.resolveTo([dependentOp]);
-        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestRejectedFullStateOpEntry.and.resolveTo(rejectedImport);
         mockApiProvider.uploadOps.and.resolveTo({
           results: [{ opId: dependentOp.op.id, accepted: true }],
           latestSeq: 2,
@@ -1284,11 +1284,11 @@ describe('OperationLogUploadService', () => {
         );
         rejectedImport.rejectedAt = Date.now();
         mockOpLogStore.getUnsynced.and.resolveTo([]);
-        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestRejectedFullStateOpEntry.and.resolveTo(rejectedImport);
 
         const result = await service.uploadPendingOps(mockApiProvider);
 
-        expect(mockOpLogStore.getLatestRejectedImportOpEntry).toHaveBeenCalled();
+        expect(mockOpLogStore.getLatestRejectedFullStateOpEntry).toHaveBeenCalled();
         expect(result.uploadedCount).toBe(0);
         expect(result.blockedByRejectedFullState).toBe(true);
       });
@@ -1309,7 +1309,7 @@ describe('OperationLogUploadService', () => {
         );
         const dependentOp = createMockEntry(3, 'dependent-op', 'client-1');
         mockOpLogStore.getUnsynced.and.resolveTo([recoveryImport, dependentOp]);
-        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestRejectedFullStateOpEntry.and.resolveTo(rejectedImport);
         mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(recoveryImport);
         mockApiProvider.uploadSnapshot.and.resolveTo({ accepted: true, serverSeq: 2 });
         mockApiProvider.uploadOps.and.resolveTo({
@@ -1342,7 +1342,7 @@ describe('OperationLogUploadService', () => {
         );
         const dependentOp = createMockEntry(3, 'dependent-op', 'client-1');
         mockOpLogStore.getUnsynced.and.resolveTo([recoveryImport, dependentOp]);
-        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+        mockOpLogStore.getLatestRejectedFullStateOpEntry.and.resolveTo(rejectedImport);
         mockOpLogStore.getLatestFullStateOpEntry.and.resolveTo(recoveryImport);
         mockApiProvider.uploadSnapshot.and.resolveTo({
           accepted: false,

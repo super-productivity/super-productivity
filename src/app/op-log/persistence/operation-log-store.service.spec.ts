@@ -687,7 +687,7 @@ describe('OperationLogStoreService', () => {
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
     });
 
-    it('should expose the latest rejected explicit import without treating stale Repair as a barrier', async () => {
+    it('should expose the latest rejected local full-state operation as an upload barrier', async () => {
       const rejectedImport = createTestOperation({
         id: '01900000-0000-7000-8000-000000000053',
         opType: OpType.SyncImport,
@@ -716,8 +716,8 @@ describe('OperationLogStoreService', () => {
         rejectedRemoteImport.id,
       ]);
 
-      expect((await service.getLatestRejectedImportOpEntry())?.op.id).toBe(
-        rejectedImport.id,
+      expect((await service.getLatestRejectedFullStateOpEntry())?.op.id).toBe(
+        rejectedRepair.id,
       );
     });
 

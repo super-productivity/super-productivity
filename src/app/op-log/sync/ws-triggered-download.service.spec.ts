@@ -274,7 +274,7 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
-  it('should survive non-auth errors and continue the pipeline', fakeAsync(() => {
+  it('should preserve the latest notification across a transient error', fakeAsync(() => {
     let callCount = 0;
     mockSyncService.downloadRemoteOps.and.callFake(async () => {
       callCount++;
@@ -290,10 +290,10 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     notification$.next({ latestSeq: 2 });
-    tick(500);
+    tick(1_000);
     flushMicrotasks();
 
-    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(3);
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
   }));
 
   it('should retry a transient failure without requiring another WS notification', fakeAsync(() => {
@@ -313,13 +313,36 @@ describe('WsTriggeredDownloadService', () => {
 
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
 
-    tick(249);
+    tick(999);
     flushMicrotasks();
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
 
     tick(1);
     flushMicrotasks();
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should stop retrying and report an error after repeated download failures', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.rejectWith(new Error('network timeout'));
+
+    service.start();
+    notification$.next({ latestSeq: 6 });
+    tick(500);
+    flushMicrotasks();
+
+    tick(1_000);
+    flushMicrotasks();
+    tick(2_000);
+    flushMicrotasks();
+    tick(4_000);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(4);
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+
+    tick(60_000);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(4);
   }));
 
   it('should report incomplete remote application as a sticky translated error', fakeAsync(() => {

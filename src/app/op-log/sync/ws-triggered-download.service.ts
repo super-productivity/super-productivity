@@ -16,7 +16,9 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
 const WS_DOWNLOAD_DEBOUNCE_MS = 500;
-const WS_DOWNLOAD_RETRY_MS = 250;
+const WS_GATE_RETRY_MS = 250;
+const WS_DOWNLOAD_RETRY_BASE_MS = 1_000;
+const WS_DOWNLOAD_MAX_RETRIES = 3;
 
 /**
  * Triggers operation downloads when WebSocket notifications arrive.
@@ -50,6 +52,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
   private _pendingLatestSeq: number | undefined;
   private _drainTimer: ReturnType<typeof setTimeout> | null = null;
   private _isDraining = false;
+  private _downloadRetryCount = 0;
 
   /**
    * Whether an encryption operation (password change, enable/disable, force
@@ -86,6 +89,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
     this._subscription?.unsubscribe();
     this._subscription = null;
     this._pendingLatestSeq = undefined;
+    this._downloadRetryCount = 0;
     if (this._drainTimer !== null) {
       clearTimeout(this._drainTimer);
       this._drainTimer = null;
@@ -120,7 +124,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
 
     if (this._providerManager.isSyncInProgress) {
       SyncLog.log('WsTriggeredDownloadService: Sync in progress, queueing WS download');
-      this._scheduleDrain(WS_DOWNLOAD_RETRY_MS);
+      this._scheduleDrain(WS_GATE_RETRY_MS);
       return;
     }
 
@@ -128,7 +132,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
       SyncLog.log(
         'WsTriggeredDownloadService: Encryption operation in progress, queueing WS download',
       );
-      this._scheduleDrain(WS_DOWNLOAD_RETRY_MS);
+      this._scheduleDrain(WS_GATE_RETRY_MS);
       return;
     }
 
@@ -143,7 +147,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
       SyncLog.log(
         'WsTriggeredDownloadService: Another sync cycle is active, queueing WS download',
       );
-      this._scheduleDrain(WS_DOWNLOAD_RETRY_MS);
+      this._scheduleDrain(WS_GATE_RETRY_MS);
       return;
     }
 
@@ -154,8 +158,20 @@ export class WsTriggeredDownloadService implements OnDestroy {
     try {
       const shouldRetry = await this._downloadOpsInner(latestSeq);
       if (shouldRetry && this._subscription) {
-        this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
-        retryDelayMs = WS_DOWNLOAD_RETRY_MS;
+        if (this._downloadRetryCount < WS_DOWNLOAD_MAX_RETRIES) {
+          this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
+          const retryMultiplier = 2 ** this._downloadRetryCount;
+          retryDelayMs = WS_DOWNLOAD_RETRY_BASE_MS * retryMultiplier;
+          this._downloadRetryCount++;
+        } else {
+          this._downloadRetryCount = 0;
+          SyncLog.err(
+            'WsTriggeredDownloadService: Download retry limit reached — reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+        }
+      } else {
+        this._downloadRetryCount = 0;
       }
     } finally {
       this._syncCycleGuard.end();
