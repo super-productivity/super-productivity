@@ -164,6 +164,7 @@ export interface FileBasedSplitTombstone {
 export const FILE_BASED_SYNC_CONSTANTS = {
   SYNC_FILE: 'sync-data.json',
   BACKUP_FILE: 'sync-data.json.bak',
+  SNAPSHOT_TRANSACTION_FILE: 'sync-data.snapshot-transaction.json',
   MIGRATION_LOCK_FILE: 'migration.lock',
   FILE_VERSION: 2 as const,
   // SPAP-9: raised 500 -> 2000 to shrink the gap window. A client that missed up
@@ -181,6 +182,7 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   // old and new clients must agree on these names forever.
   OPS_BACKUP_FILE: 'sync-ops.json.bak',
   STATE_BACKUP_FILE: 'sync-state.json.bak',
+  OPS_SNAPSHOT_TRANSACTION_FILE: 'sync-ops.snapshot-transaction.json',
   SPLIT_FILE_VERSION: 3 as const,
   // Post-compaction RETAINED size for the split ops file (≈ MAX_RECENT_OPS/2).
   // NOTE: this is the trim target, NOT the trigger — a recompaction fires when the

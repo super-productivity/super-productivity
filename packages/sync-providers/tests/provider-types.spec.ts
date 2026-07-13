@@ -128,6 +128,12 @@ describe('sync provider contracts', () => {
 
     expect(data.recentOps[0].sv).toBe(7);
     expect(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).toBe('sync-data.json');
+    expect(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE).toBe(
+      'sync-data.snapshot-transaction.json',
+    );
+    expect(FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE).toBe(
+      'sync-ops.snapshot-transaction.json',
+    );
   });
 
   // SPAP-9: shrink the gap window so slow-syncing clients that miss up to
