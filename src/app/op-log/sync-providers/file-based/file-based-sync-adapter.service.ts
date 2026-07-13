@@ -1319,6 +1319,24 @@ export class FileBasedSyncAdapterService {
     return data.migration?.status === 'pending' && !!data.migration.legacyRev;
   }
 
+  private _pendingSplitMigrationMatchesLegacy(
+    pending: FileBasedOpsFile,
+    legacy: FileBasedSyncData,
+  ): boolean {
+    const legacySchemaVersion = legacy.schemaVersion ?? 1;
+    const legacyOps = legacy.recentOps ?? [];
+    return (
+      pending.syncVersion === legacy.syncVersion &&
+      pending.schemaVersion === legacySchemaVersion &&
+      compareVectorClocks(pending.vectorClock, legacy.vectorClock) === 'EQUAL' &&
+      pending.oldestOpSyncVersion === legacy.oldestOpSyncVersion &&
+      pending.snapshotRef.syncVersion === legacy.syncVersion &&
+      compareVectorClocks(pending.snapshotRef.vectorClock, legacy.vectorClock) ===
+        'EQUAL' &&
+      JSON.stringify(pending.recentOps) === JSON.stringify(legacyOps)
+    );
+  }
+
   /** Surfaces the actionable "turn on Surgical sync" notice (non-fatal if no snack). */
   private _notifySplitFormatDetected(): void {
     this._injector
@@ -1534,9 +1552,11 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Neutralizes `sync-data.json.bak` and then overwrites `sync-data.json` with a
-   * v3 split tombstone (NEVER deletes it), so an old client's SPAP-8 `.bak`
-   * recovery cannot resurrect a v2 file and diverge. Order matters — see the
-   * inline comment.
+   * v3 split tombstone (NEVER deletes it), so compatible clients cannot recover
+   * a stale v2 backup after observing the migration. Order matters — see the
+   * inline comment. A pre-split binary already mid-upload cannot participate in
+   * this protocol, which is why the setting instructs users to stop and update
+   * every device before migration.
    */
   private async _writeTombstoneAndNeutralizeBak(
     provider: FileSyncProvider<SyncProviderId>,
@@ -1568,9 +1588,11 @@ export class FileBasedSyncAdapterService {
     // a tombstone with a resurrectable v2 .bak beside it.
     //
     // Migration passes the exact downloaded legacy rev, making the primary
-    // tombstone conditional. A mismatch leaves the pending ops marker intact;
-    // the recovery loop imports the newer v2 payload and retries. Explicit
-    // snapshot replacement omits the rev and intentionally force-overwrites.
+    // tombstone conditional when the provider offers atomic CAS. A mismatch
+    // leaves the pending marker intact; the recovery loop imports the newer v2
+    // payload and retries. Weak/no-ETag WebDAV and Local File retain their
+    // documented single-writer limitation. Explicit snapshot replacement omits
+    // the rev and intentionally force-overwrites.
     await provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE, encoded, null, true);
     // Overwrite the legacy single file in place (never remove it).
     await provider.uploadFile(
@@ -1713,7 +1735,10 @@ export class FileBasedSyncAdapterService {
         throw e;
       }
 
-      if (legacy.rev !== current.data.migration?.legacyRev) {
+      if (
+        legacy.rev !== current.data.migration?.legacyRev ||
+        !this._pendingSplitMigrationMatchesLegacy(current.data, legacy.data)
+      ) {
         try {
           current = await this._writePendingSplitMigration(
             provider,

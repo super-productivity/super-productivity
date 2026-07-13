@@ -3511,6 +3511,54 @@ describe('FileBasedSyncAdapterService', () => {
       expect(finalizedMarker).toBeDefined();
     });
 
+    it('(e2c) rebuilds a matching-revision pending marker from the legacy source before tombstoning', async () => {
+      const legacyOp = makeCompactOp({
+        id: 'legacy-authoritative-op',
+        sv: 7,
+        v: { client1: 7 },
+      });
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: { client1: 7 },
+        recentOps: [legacyOp],
+        state: { tasks: ['legacy-authoritative-state'] },
+      });
+      const malformedPending = makeOpsFile({
+        syncVersion: 99,
+        vectorClock: { stale: 99 },
+        recentOps: [makeCompactOp({ id: 'stale-op', sv: 99, v: { stale: 99 } })],
+        snapshotRef: { syncVersion: 99, vectorClock: { stale: 99 } },
+        migration: {
+          status: 'pending',
+          legacyRev: `${C.SYNC_FILE}-rev`,
+        },
+      });
+      routeDownloads({
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_FILE]: addPrefix(malformedPending, 3),
+      });
+
+      await adapter.downloadOps(0, 'client2');
+
+      const finalized = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter((args) => args[0] === C.OPS_FILE)
+        .map((args) => parseWithPrefix(args[1] as string) as unknown as FileBasedOpsFile)
+        .find((opsFile) => opsFile.migration === undefined);
+      expect(finalized).toBeDefined();
+      expect(finalized!.syncVersion).toBe(7);
+      expect(finalized!.vectorClock).toEqual({ client1: 7 });
+      expect(finalized!.snapshotRef).toEqual(
+        jasmine.objectContaining({
+          syncVersion: 7,
+          vectorClock: { client1: 7 },
+        }),
+      );
+      expect(finalized!.recentOps.map((op) => op.id)).toEqual([
+        'legacy-authoritative-op',
+      ]);
+    });
+
     it('(e3) retries migration from a newer legacy revision instead of tombstoning over it', async () => {
       const legacyV7 = createMockSyncData({
         syncVersion: 7,

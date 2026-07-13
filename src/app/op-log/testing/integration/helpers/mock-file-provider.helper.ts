@@ -168,17 +168,22 @@ export class MockFileProvider implements FileSyncProvider<SyncProviderId> {
 
     const existingFile = this._files.get(targetPath);
 
-    // Check revision match (conditional upload) unless force overwrite
-    if (!isForceOverwrite && revToMatch !== null) {
-      if (!existingFile) {
-        // File doesn't exist but revToMatch was provided - mismatch
+    // Enforce the same conditional contract as real providers: null creates
+    // only when absent; a concrete revision replaces only that exact version.
+    if (!isForceOverwrite) {
+      if (revToMatch === null && existingFile) {
+        throw new UploadRevToMatchMismatchAPIError(
+          `File ${targetPath} already exists but create-if-absent was requested`,
+        );
+      }
+      if (revToMatch !== null && !existingFile) {
         throw new UploadRevToMatchMismatchAPIError(
           `File ${targetPath} does not exist but revToMatch was provided`,
         );
       }
-      if (existingFile.rev !== revToMatch) {
+      if (revToMatch !== null && existingFile?.rev !== revToMatch) {
         throw new UploadRevToMatchMismatchAPIError(
-          `Rev mismatch for ${targetPath}: expected ${revToMatch}, found ${existingFile.rev}`,
+          `Rev mismatch for ${targetPath}: expected ${revToMatch}, found ${existingFile?.rev ?? 'missing'}`,
         );
       }
     }

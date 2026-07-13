@@ -158,3 +158,26 @@ describe('Dropbox.getAuthHelper — PKCE lifecycle (issue #7139)', () => {
     expect(second.codeVerifier).not.toBe(first.codeVerifier);
   });
 });
+
+describe('Dropbox.uploadFile conditional semantics', () => {
+  it('preserves a null revision as atomic create-if-absent', async () => {
+    const dropbox = makeDropbox();
+    const api = (dropbox as unknown as { _api: DropboxApi })._api;
+    const getFileRevSpy = vi
+      .spyOn(dropbox, 'getFileRev')
+      .mockResolvedValue({ rev: 'concurrent-winner' });
+    const uploadSpy = vi.spyOn(api, 'upload').mockResolvedValue({
+      rev: 'created-rev',
+    } as Awaited<ReturnType<DropboxApi['upload']>>);
+
+    await dropbox.uploadFile('sync-ops.json', 'candidate', null, false);
+
+    expect(getFileRevSpy).not.toHaveBeenCalled();
+    expect(uploadSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        revToMatch: null,
+        isForceOverwrite: false,
+      }),
+    );
+  });
+});

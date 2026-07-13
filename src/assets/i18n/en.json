@@ -1478,7 +1478,7 @@
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
-        "L_USE_SPLIT_SYNC_FILES": "Surgical sync (experimental) – Faster syncing using a split ops/snapshot file layout. Once enabled, all devices syncing this folder must also enable it.",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync (experimental) – Faster syncing using a split ops/snapshot file layout. Before enabling it, stop sync on every other device. Then enable it on every device using this folder before resuming sync.",
         "LOCAL_FILE": {
           "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",

@@ -1172,6 +1172,26 @@ describe('OperationLogDownloadService', () => {
           }
         });
 
+        it('should omit a finite timestamp outside the JavaScript date range', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockApiProvider.downloadOps.and.returnValue(
+            Promise.resolve({
+              ops: [],
+              hasMore: false,
+              latestSeq: 5,
+              snapshotState: { tasks: [] },
+              remoteLastModified: Number.MAX_SAFE_INTEGER,
+            }),
+          );
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(result.providerMode).toBe('fileSnapshotOps');
+          if (result.success && result.providerMode === 'fileSnapshotOps') {
+            expect(result.remoteLastModified).toBeUndefined();
+          }
+        });
+
         it('should return snapshotVectorClock even when no new ops', async () => {
           const snapshotClock = { clientA: 10, clientB: 5 };
           mockApiProvider.downloadOps.and.returnValue(

@@ -549,7 +549,10 @@ export class OperationLogSyncService {
           `OperationLogSyncService: Local vector clock ${hydrationPlan.comparison} remote snapshot — ` +
             'skipping snapshot hydration (local already has all remote data).',
         );
-        // Deliberately do NOT call appendBatchSkipDuplicates(result.newOps).
+        // Deliberately do NOT append operations already represented by the
+        // snapshot. Split files can also return a newer suffix, however, and
+        // snapshot-clock dominance says nothing about that suffix. Apply it
+        // normally before advancing the cursor.
         // VectorClockService.getEntityFrontier() builds per-entity frontiers
         // by iterating the op log in seq order with last-write-wins semantics.
         // Appending historical remote ops at the current tail would regress
@@ -557,21 +560,44 @@ export class OperationLogSyncService {
         // which then lets future remote ops be classified as non-conflicting
         // and silently overwrite local changes.
         //
-        // The trade-off: those ops keep coming back in result.newOps on each
+        // The trade-off: snapshot-included ops keep coming back in result.newOps on each
         // sync until the file's snapshot advances or the user uploads their
         // own snapshot. They are never re-applied to state, because (a) the
         // dominate-check skips state mutation, and (b) the regular hydration
         // path replaces state wholesale from snapshotState, not by replaying
         // individual ops. So the cost is bounded re-download bandwidth, not
         // data corruption.
+        const { postSnapshotOps } = this._partitionSnapshotOps(
+          result.newOps,
+          result.snapshotAppliedOpIds,
+        );
+        let suffixProcessResult: RemoteOpsProcessingResult | undefined;
+        if (postSnapshotOps.length > 0) {
+          suffixProcessResult = await this._processRemoteOpsWithStartupCleanup(
+            postSnapshotOps,
+            undefined,
+            [],
+          );
+          if (suffixProcessResult.blockedByIncompatibleOp) {
+            return { kind: 'blocked_incompatible' };
+          }
+        }
         if (result.latestServerSeq !== undefined) {
           await syncProvider.setLastServerSeq(result.latestServerSeq);
         }
-        return {
-          kind: 'no_new_ops',
-          allOpClocks: result.allOpClocks,
-          snapshotVectorClock: result.snapshotVectorClock,
-        };
+        return suffixProcessResult
+          ? {
+              kind: 'ops_processed',
+              newOpsCount: postSnapshotOps.length,
+              localWinOpsCreated: suffixProcessResult.localWinOpsCreated,
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            }
+          : {
+              kind: 'no_new_ops',
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            };
       }
 
       OpLog.normal(
@@ -795,15 +821,10 @@ export class OperationLogSyncService {
       // snapshot ops may be recorded as already applied; the remaining suffix
       // must run through normal remote-op processing before the cursor advances.
       // An absent list keeps the legacy single-file contract (all ops included).
-      const snapshotAppliedOpIds = result.snapshotAppliedOpIds
-        ? new Set(result.snapshotAppliedOpIds)
-        : null;
-      const snapshotIncludedOps = snapshotAppliedOpIds
-        ? result.newOps.filter((op) => snapshotAppliedOpIds.has(op.id))
-        : result.newOps;
-      const postSnapshotOps = snapshotAppliedOpIds
-        ? result.newOps.filter((op) => !snapshotAppliedOpIds.has(op.id))
-        : [];
+      const { snapshotIncludedOps, postSnapshotOps } = this._partitionSnapshotOps(
+        result.newOps,
+        result.snapshotAppliedOpIds,
+      );
 
       // Record operations already represented by the snapshot so future whole-
       // file downloads deduplicate them without replaying their effects twice.
@@ -821,13 +842,14 @@ export class OperationLogSyncService {
         );
       }
 
+      let suffixProcessResult: RemoteOpsProcessingResult | undefined;
       if (postSnapshotOps.length > 0) {
-        const processResult = await this._processRemoteOpsWithStartupCleanup(
+        suffixProcessResult = await this._processRemoteOpsWithStartupCleanup(
           postSnapshotOps,
           undefined,
           [],
         );
-        if (processResult.blockedByIncompatibleOp) {
+        if (suffixProcessResult.blockedByIncompatibleOp) {
           return { kind: 'blocked_incompatible' };
         }
       }
@@ -839,11 +861,19 @@ export class OperationLogSyncService {
 
       OpLog.normal('OperationLogSyncService: Snapshot hydration complete.');
 
-      return {
-        kind: 'snapshot_hydrated',
-        allOpClocks: result.allOpClocks,
-        snapshotVectorClock: result.snapshotVectorClock,
-      };
+      return suffixProcessResult
+        ? {
+            kind: 'ops_processed',
+            newOpsCount: postSnapshotOps.length,
+            localWinOpsCreated: suffixProcessResult.localWinOpsCreated,
+            allOpClocks: result.allOpClocks,
+            snapshotVectorClock: result.snapshotVectorClock,
+          }
+        : {
+            kind: 'snapshot_hydrated',
+            allOpClocks: result.allOpClocks,
+            snapshotVectorClock: result.snapshotVectorClock,
+          };
     }
 
     if (result.newOps.length === 0) {
@@ -1110,6 +1140,20 @@ export class OperationLogSyncService {
       }
       throw error;
     }
+  }
+
+  private _partitionSnapshotOps(
+    ops: Operation[],
+    snapshotAppliedOpIds: string[] | undefined,
+  ): { snapshotIncludedOps: Operation[]; postSnapshotOps: Operation[] } {
+    if (snapshotAppliedOpIds === undefined) {
+      return { snapshotIncludedOps: ops, postSnapshotOps: [] };
+    }
+    const includedIds = new Set(snapshotAppliedOpIds);
+    return {
+      snapshotIncludedOps: ops.filter((op) => includedIds.has(op.id)),
+      postSnapshotOps: ops.filter((op) => !includedIds.has(op.id)),
+    };
   }
 
   private async _discardStartupOpsIfFullStateCommitted(
@@ -1381,7 +1425,24 @@ export class OperationLogSyncService {
       throw new Error('USE_REMOTE aborted: remote returned no data to rebuild from.');
     }
 
-    const migratedRemoteOps = this._preflightRemoteOperations(result.newOps);
+    let migratedRemoteOps: Operation[];
+    let migratedSnapshotIncludedOps: Operation[] = [];
+    let migratedPostSnapshotOps: Operation[] = [];
+    if (hasSnapshotState && result.providerMode === 'fileSnapshotOps') {
+      const snapshotOps = this._partitionSnapshotOps(
+        result.newOps,
+        result.snapshotAppliedOpIds,
+      );
+      migratedSnapshotIncludedOps = this._preflightRemoteOperations(
+        snapshotOps.snapshotIncludedOps,
+      );
+      migratedPostSnapshotOps = this._preflightRemoteOperations(
+        snapshotOps.postSnapshotOps,
+      );
+      migratedRemoteOps = [...migratedSnapshotIncludedOps, ...migratedPostSnapshotOps];
+    } else {
+      migratedRemoteOps = this._preflightRemoteOperations(result.newOps);
+    }
 
     const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
     const localOnlySyncSettings: LocalOnlySyncSettings = {
@@ -1567,12 +1628,11 @@ export class OperationLogSyncService {
               false, // Don't create SYNC_IMPORT
             );
 
-            // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
-            // Same rationale as downloadRemoteOps: file-based providers return ALL
-            // recentOps on every download and rely on getAppliedOpIds() to filter them.
-            if (migratedRemoteOps.length > 0) {
+            // Record only operations already represented by the snapshot. A
+            // split-file suffix must still be dispatched on top of that state.
+            if (migratedSnapshotIncludedOps.length > 0) {
               const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-                migratedRemoteOps,
+                migratedSnapshotIncludedOps,
                 'remote',
               );
               OpLog.normal(
@@ -1582,6 +1642,22 @@ export class OperationLogSyncService {
                     ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
                     : ''),
               );
+            }
+
+            if (migratedPostSnapshotOps.length > 0) {
+              const processResult =
+                await this.remoteOpsProcessingService.processRemoteOps(
+                  migratedPostSnapshotOps,
+                  {
+                    skipConflictDetection: true,
+                    callerHoldsOperationLogLock: true,
+                  },
+                );
+              if (processResult.blockedByIncompatibleOp) {
+                throw new Error(
+                  'USE_REMOTE incomplete: a post-snapshot op failed schema migration during replay.',
+                );
+              }
             }
 
             await this._restorePreservedLocalOps(preservedLocalOps);
