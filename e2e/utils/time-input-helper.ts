@@ -15,10 +15,12 @@ export const fillTimeInput = async (
   const d = new Date(scheduleTime);
   const timeValue = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 
-  // Try multiple selectors for the time input
+  // Try multiple selectors for the time input. The datetime-picker renders a
+  // native <input type="time"> on touch and a mat-timepicker text input on
+  // desktop; both carry data-test-id="time-input".
   const timeInput = page
-    .locator('mat-dialog-container input[type="time"]')
-    .or(page.locator('mat-form-field input[type="time"]'))
+    .locator('mat-dialog-container [data-test-id="time-input"]')
+    .or(page.locator('[data-test-id="time-input"]'))
     .or(page.locator('input[type="time"]'))
     .first();
   await timeInput.waitFor({ state: 'visible', timeout: 10000 });
@@ -36,7 +38,7 @@ export const fillTimeInput = async (
     await page.evaluate(
       ({ value }: { value: string }) => {
         const timeInputEl = document.querySelector(
-          'mat-form-field input[type="time"]',
+          '[data-test-id="time-input"]',
         ) as HTMLInputElement;
         if (timeInputEl) {
           timeInputEl.value = value;

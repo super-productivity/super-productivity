@@ -89,6 +89,26 @@ describe('DateTimePickerComponent', () => {
     );
   });
 
+  it('should emit canonical HH:mm when the mat-timepicker Date changes (onTimeDateChange)', () => {
+    spyOn(component.timeChanged, 'emit');
+    component.onTimeDateChange(new Date(2026, 4, 6, 14, 30));
+    expect(component.timeChanged.emit).toHaveBeenCalledWith('14:30');
+
+    component.onTimeDateChange(null);
+    expect(component.timeChanged.emit).toHaveBeenCalledWith(null);
+  });
+
+  it('should bridge selectedTime string to a Date for the mat-timepicker (timeAsDate)', () => {
+    fixture.componentRef.setInput('selectedDate', new Date(2026, 4, 6));
+    fixture.componentRef.setInput('selectedTime', '14:30');
+    const d = component.timeAsDate()!;
+    expect(d.getHours()).toBe(14);
+    expect(d.getMinutes()).toBe(30);
+
+    fixture.componentRef.setInput('selectedTime', null);
+    expect(component.timeAsDate()).toBeNull();
+  });
+
   it('should autofill time on focus', () => {
     spyOn(component.timeChanged, 'emit');
     spyOn(component.dateSelected, 'emit');
@@ -233,7 +253,19 @@ describe('DateTimePickerComponent', () => {
     expect(component.isShowEnterMsg).toBeTrue();
   });
 
-  it('should require two Enter presses to emit enterSubmit on time input', () => {
+  it('should commit and submit on a single Enter on the desktop (mat-timepicker) path', () => {
+    // Default in the (non-touch) test env: useMatTimepicker === true.
+    spyOn(component.enterSubmit, 'emit');
+    fixture.componentRef.setInput('selectedTime', '10:30');
+    fixture.detectChanges();
+
+    component.onTimeKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(component.enterSubmit.emit).toHaveBeenCalled();
+  });
+
+  it('should require two Enter presses on the native time input path', () => {
+    // Force the native (touch) branch so the double-Enter confirm is exercised.
+    Object.defineProperty(component, 'useMatTimepicker', { value: false });
     spyOn(component.enterSubmit, 'emit');
     fixture.componentRef.setInput('selectedTime', '10:30');
     fixture.detectChanges();

@@ -95,7 +95,7 @@ test.describe('Default task reminder option', () => {
     await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
 
     // Click on the time input in the schedule dialog to reveal the reminder input
-    const timeInput = scheduleDialog.locator('input[type="time"]');
+    const timeInput = scheduleDialog.locator('[data-test-id="time-input"]');
     await timeInput.waitFor({ state: 'visible', timeout: 10000 });
     await timeInput.click();
 
