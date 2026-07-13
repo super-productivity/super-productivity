@@ -171,6 +171,20 @@ export class ValidationService {
       }
     }
 
+    // A non-integer or non-finite timestamp cannot be persisted: uploads store
+    // clientTimestamp as BigInt, and BigInt() throws on such values, which would
+    // abort the whole batch mid-insert with an unstructured 500. Reject it here as
+    // a per-op error instead. Age is deliberately NOT bounded — old-but-valid ops
+    // are accepted so long-offline devices keep their backlog (#8961); causality
+    // is resolved by vector clocks, not by the client timestamp.
+    if (!Number.isSafeInteger(op.timestamp)) {
+      return {
+        valid: false,
+        error: 'Invalid timestamp',
+        errorCode: SYNC_ERROR_CODES.INVALID_TIMESTAMP,
+      };
+    }
+
     const clockValidation = sanitizeVectorClock(op.vectorClock);
     if (!clockValidation.valid) {
       return {

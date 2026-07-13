@@ -452,6 +452,26 @@ describe('ValidationService', () => {
       const result = validationService.validateOp(op, clientId);
       expect(result.valid).toBe(true);
     });
+
+    it('should reject a non-integer timestamp that would throw on BigInt persistence', () => {
+      const result = validationService.validateOp(
+        createValidOp({ timestamp: Date.now() + 0.5 }),
+        clientId,
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
+    });
+
+    it('should reject a non-finite timestamp', () => {
+      for (const timestamp of [Infinity, NaN]) {
+        const result = validationService.validateOp(
+          createValidOp({ timestamp }),
+          clientId,
+        );
+        expect(result.valid).toBe(false);
+        expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_TIMESTAMP);
+      }
+    });
   });
 
   describe('validatePayloadComplexity', () => {
