@@ -1649,7 +1649,7 @@ describe('SyncService', () => {
       const results = await service.uploadOps(userId, clientId, [op]);
 
       expect(results[0].accepted).toBe(true);
-      expect(testState.operations.has(op.id)).toBe(true);
+      expect(testState.operations.get(op.id)?.clientTimestamp).toBe(BigInt(tooOld));
     });
 
     it('should reject operations with payload exceeding size limit', async () => {
@@ -2370,6 +2370,7 @@ describe('SyncService', () => {
 
     it('should not delete old operations when no full-state base exists', async () => {
       const service = getSyncService();
+      const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
 
       // Upload operations
       for (let i = 1; i <= 5; i++) {
@@ -2406,15 +2407,22 @@ describe('SyncService', () => {
         snapshotAt: BigInt(Date.now()), // Snapshot taken recently (>= cutoffTime)
       });
 
-      const { totalDeleted, affectedUserIds } =
-        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+      try {
+        const { totalDeleted, affectedUserIds } =
+          await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
 
-      expect(totalDeleted).toBe(0);
-      expect(affectedUserIds).not.toContain(userId);
+        expect(totalDeleted).toBe(0);
+        expect(affectedUserIds).not.toContain(userId);
+        expect(warnSpy).toHaveBeenCalledWith(
+          'Cleanup [old-ops]: 1 user(s) have no full-state replay base; retention cleanup is disabled for those histories.',
+        );
 
-      const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
-        .ops;
-      expect(remaining).toHaveLength(5);
+        const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
+          .ops;
+        expect(remaining).toHaveLength(5);
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
 
     it('should preserve the latest full-state operation and its replay tail', async () => {
@@ -2422,17 +2430,18 @@ describe('SyncService', () => {
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
       for (let i = 1; i <= 5; i++) {
+        const isFullState = i === 2 || i === 4;
         testState.operations.set(`old-op-${i}`, {
           id: `old-op-${i}`,
           userId,
           clientId,
           serverSeq: i,
-          actionType: i === 3 ? 'LOAD_ALL_DATA' : 'ADD',
-          opType: i === 3 ? 'SYNC_IMPORT' : 'CRT',
-          entityType: i === 3 ? 'ALL' : 'TASK',
-          entityId: i === 3 ? null : `t${i}`,
+          actionType: isFullState ? 'LOAD_ALL_DATA' : 'ADD',
+          opType: i === 2 ? 'BACKUP_IMPORT' : i === 4 ? 'REPAIR' : 'CRT',
+          entityType: isFullState ? 'ALL' : 'TASK',
+          entityId: isFullState ? null : `t${i}`,
           entityIds: [],
-          payload: i === 3 ? { appDataComplete: { TASK: {} } } : {},
+          payload: isFullState ? { appDataComplete: { TASK: {} } } : {},
           vectorClock: {},
           schemaVersion: 1,
           clientTimestamp: BigInt(Date.now()),
@@ -2445,18 +2454,18 @@ describe('SyncService', () => {
       testState.userSyncStates.set(userId, {
         userId,
         lastSeq: 5,
-        lastSnapshotSeq: 5,
+        lastSnapshotSeq: 4,
         snapshotAt: BigInt(Date.now()),
       });
 
       const { totalDeleted } = await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
 
-      expect(totalDeleted).toBe(2);
-      expect(Array.from(testState.operations.keys())).toEqual([
-        'old-op-3',
-        'old-op-4',
-        'old-op-5',
-      ]);
+      expect(totalDeleted).toBe(3);
+      expect(Array.from(testState.operations.keys())).toEqual(['old-op-4', 'old-op-5']);
+      const freshClientOps = (
+        await operationDownloadService.getOpsSinceWithSeq(userId, 0)
+      ).ops;
+      expect(freshClientOps.map((op) => op.serverSeq)).toEqual([4, 5]);
     });
 
     it('drains a single user up to the per-run budget', async () => {

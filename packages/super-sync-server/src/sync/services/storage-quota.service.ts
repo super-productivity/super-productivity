@@ -416,6 +416,7 @@ export class StorageQuotaService {
     const affectedUserIds: number[] = [];
     const deleteBatchSize = getOldOpsCleanupDeleteBatchSize();
     let remainingDeleteBudget = getOldOpsCleanupMaxDeletedPerRun();
+    let usersWithoutReplayBase = 0;
 
     for (const state of states) {
       if (remainingDeleteBudget <= 0) break;
@@ -437,7 +438,11 @@ export class StorageQuotaService {
         orderBy: { serverSeq: 'desc' },
         select: { serverSeq: true },
       });
-      if (!latestFullStateOp || latestFullStateOp.serverSeq <= 1) continue;
+      if (!latestFullStateOp) {
+        usersWithoutReplayBase++;
+        continue;
+      }
+      if (latestFullStateOp.serverSeq <= 1) continue;
 
       // Drain this user across multiple batches until either they're empty or
       // the global per-run budget is exhausted. Without this, a single user
@@ -483,6 +488,13 @@ export class StorageQuotaService {
         // user is empty and another findMany would only confirm zero rows.
         if (deletedCount < batchLimit) break;
       }
+    }
+
+    if (usersWithoutReplayBase > 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: ${usersWithoutReplayBase} user(s) have no full-state replay base; ` +
+          'retention cleanup is disabled for those histories.',
+      );
     }
 
     if (remainingDeleteBudget <= 0) {

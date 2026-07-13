@@ -18,6 +18,7 @@ vi.mock('../src/db', () => {
   const mockPrisma = {
     user: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -71,7 +72,11 @@ import { sendLoginMagicLinkEmail, sendVerificationEmail } from '../src/email';
 import { Prisma } from '@prisma/client';
 
 // Import module under test
-import { registerWithMagicLink, requestLoginMagicLink } from '../src/auth';
+import {
+  registerWithMagicLink,
+  requestLoginMagicLink,
+  verifyLoginMagicLink,
+} from '../src/auth';
 
 describe('Magic Link Registration', () => {
   const testEmail = 'test@example.com';
@@ -80,6 +85,7 @@ describe('Magic Link Registration', () => {
   const mockPrisma = prisma as unknown as {
     user: {
       findUnique: Mock;
+      findFirst: Mock;
       create: Mock;
       update: Mock;
       updateMany: Mock;
@@ -211,7 +217,7 @@ describe('Magic Link Registration', () => {
       );
     });
 
-    it('should reject when verification resend cap is reached', async () => {
+    it('should return the neutral response when verification resend cap is reached', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
@@ -219,10 +225,9 @@ describe('Magic Link Registration', () => {
         verificationResendCount: 20,
       });
 
-      await expect(registerWithMagicLink(testEmail, Date.now())).rejects.toThrow(
-        'Too many verification attempts',
-      );
+      const result = await registerWithMagicLink(testEmail, Date.now());
 
+      expect(result.message).toContain('check your email');
       expect(mockSendVerificationEmail).not.toHaveBeenCalled();
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
@@ -241,10 +246,9 @@ describe('Magic Link Registration', () => {
       mockSendVerificationEmail.mockResolvedValueOnce(false);
       mockPrisma.user.deleteMany.mockResolvedValue({ count: 1 });
 
-      await expect(registerWithMagicLink(testEmail, Date.now())).rejects.toThrow(
-        'Failed to send verification email',
-      );
+      const result = await registerWithMagicLink(testEmail, Date.now());
 
+      expect(result.message).toContain('check your email');
       expect(mockPrisma.user.deleteMany).toHaveBeenCalledWith({
         where: { email: testEmail, isVerified: 0 },
       });
@@ -259,10 +263,9 @@ describe('Magic Link Registration', () => {
       });
       mockSendVerificationEmail.mockResolvedValueOnce(false);
 
-      await expect(registerWithMagicLink(testEmail, Date.now())).rejects.toThrow(
-        'Failed to send verification email',
-      );
+      const result = await registerWithMagicLink(testEmail, Date.now());
 
+      expect(result.message).toContain('check your email');
       // Should NOT delete the pre-existing user
       expect(mockPrisma.user.delete).not.toHaveBeenCalled();
       expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
@@ -353,13 +356,81 @@ describe('Magic Link Registration', () => {
       mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 });
       mockSendLoginMagicLinkEmail.mockResolvedValueOnce(false);
 
-      await expect(requestLoginMagicLink(testEmail)).rejects.toThrow(
-        'Failed to send login email',
-      );
+      const result = await requestLoginMagicLink(testEmail);
 
+      expect(result.message).toContain('login link has been sent');
       const claimedToken = mockPrisma.user.updateMany.mock.calls[0][0].data.loginToken;
       expect(mockPrisma.user.updateMany.mock.calls[1][0]).toEqual({
         where: { id: verifiedUser.id, loginToken: claimedToken },
+        data: { loginToken: null, loginTokenExpiresAt: null },
+      });
+    });
+
+    it('should consume a login token with a token-scoped atomic update', async () => {
+      const loginToken = 'single-use-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: verifiedUser.id,
+        email: testEmail,
+        loginToken,
+        loginTokenExpiresAt: BigInt(Date.now() + 60_000),
+        tokenVersion: 0,
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await verifyLoginMagicLink(loginToken);
+
+      expect(result.user).toEqual({ id: verifiedUser.id, email: testEmail });
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: verifiedUser.id,
+          loginToken,
+          OR: [
+            { loginTokenExpiresAt: null },
+            { loginTokenExpiresAt: { gte: expect.any(BigInt) } },
+          ],
+        },
+        data: {
+          loginToken: null,
+          loginTokenExpiresAt: null,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+    });
+
+    it('should reject a login token already consumed by another request', async () => {
+      const loginToken = 'already-consumed-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: verifiedUser.id,
+        email: testEmail,
+        loginToken,
+        loginTokenExpiresAt: BigInt(Date.now() + 60_000),
+        tokenVersion: 0,
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(verifyLoginMagicLink(loginToken)).rejects.toThrow(
+        'Invalid or expired login link',
+      );
+    });
+
+    it('should not clear a replacement when an expired login token races renewal', async () => {
+      const expiredToken = 'expired-login-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: verifiedUser.id,
+        email: testEmail,
+        loginToken: expiredToken,
+        loginTokenExpiresAt: BigInt(Date.now() - 1),
+        tokenVersion: 0,
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(verifyLoginMagicLink(expiredToken)).rejects.toThrow(
+        'Invalid or expired login link',
+      );
+
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: verifiedUser.id, loginToken: expiredToken },
         data: { loginToken: null, loginTokenExpiresAt: null },
       });
     });

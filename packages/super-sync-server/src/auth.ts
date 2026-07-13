@@ -269,7 +269,7 @@ export const requestLoginMagicLink = async (
         loginTokenExpiresAt: null,
       },
     });
-    throw new Error('Failed to send login email. Please try again later.');
+    return successMessage;
   }
 
   Logger.info(`Magic link login requested (ID: ${user.id})`);
@@ -290,9 +290,10 @@ export const verifyLoginMagicLink = async (
     throw new Error('Invalid or expired login link');
   }
 
-  if (user.loginTokenExpiresAt && user.loginTokenExpiresAt < BigInt(Date.now())) {
-    await prisma.user.update({
-      where: { id: user.id },
+  const now = BigInt(Date.now());
+  if (user.loginTokenExpiresAt && user.loginTokenExpiresAt < now) {
+    await prisma.user.updateMany({
+      where: { id: user.id, loginToken: token },
       data: {
         loginToken: null,
         loginTokenExpiresAt: null,
@@ -301,9 +302,14 @@ export const verifyLoginMagicLink = async (
     throw new Error('Invalid or expired login link');
   }
 
-  // Clear the token (single use) and reset any failed attempts
-  await prisma.user.update({
-    where: { id: user.id },
+  // Consume the exact token atomically. A concurrent redemption or renewal
+  // must not issue a second JWT or clear a replacement token.
+  const consume = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      loginToken: token,
+      OR: [{ loginTokenExpiresAt: null }, { loginTokenExpiresAt: { gte: now } }],
+    },
     data: {
       loginToken: null,
       loginTokenExpiresAt: null,
@@ -311,6 +317,9 @@ export const verifyLoginMagicLink = async (
       lockedUntil: null,
     },
   });
+  if (consume.count !== 1) {
+    throw new Error('Invalid or expired login link');
+  }
 
   const tokenVersion = user.tokenVersion ?? 0;
   const jwtToken = jwt.sign(
@@ -353,16 +362,15 @@ export const registerWithMagicLink = async (
 
     if (existingUser) {
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
-        throw new Error(
-          'Too many verification attempts. Please try again later or contact support.',
-        );
+        Logger.warn(`Verification resend cap reached (ID: ${existingUser.id})`);
+        return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
 
       if (!config.testMode?.autoVerifyUsers) {
         // Send email BEFORE updating DB to avoid invalidating the old token on failure
         const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
         if (!emailSent) {
-          throw new Error('Failed to send verification email. Please try again later.');
+          return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }
 
@@ -407,7 +415,7 @@ export const registerWithMagicLink = async (
             where: { email: normalizedEmail, isVerified: 0 },
           });
           Logger.info(`Cleaned up failed magic-link registration for new user`);
-          throw new Error('Failed to send verification email. Please try again later.');
+          return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }
     }
