@@ -313,7 +313,6 @@ describe('sectionReducer', () => {
     });
 
     it('moves an in-section task to the front', () => {
-      // Caller pattern: null anchor, section as its own source.
       const start = stateWithSections([
         makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
       ]);
@@ -330,7 +329,6 @@ describe('sectionReducer', () => {
     });
 
     it('moves an in-section task to the end', () => {
-      // Caller pattern: anchor is the current last task excluding the moved one.
       const start = stateWithSections([
         makeSection({ id: 's1', taskIds: ['a', 'b', 'c'] }),
       ]);

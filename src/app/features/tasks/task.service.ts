@@ -720,8 +720,7 @@ export class TaskService {
       const workContextId = this._workContextService.activeWorkContextId as string;
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
-      // Sections only exist in the today/regular list, so skip the lookup for
-      // the backlog.
+      // The backlog does not have sections, so no need to check for a section in that case
       const section = isBacklog ? null : this._getSectionForTask(workContextId, id);
 
       if (isBacklog) {
@@ -740,12 +739,7 @@ export class TaskService {
             );
           });
       } else if (section) {
-        // A sectioned task's visible order comes from section.taskIds (see
-        // WorkViewComponent.undoneTasksBySection), so "top" is a within-section
-        // reorder to the front — the same op drag-to-top dispatches. A null
-        // anchor prepends; passing the section as its own source keeps it a
-        // single-entity in-place move.
-        this._sectionService.addTaskToSection(section.id, id, null, section.id);
+        this._sectionService.moveTaskToTop(section.id, id);
       } else {
         this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
           this._store.dispatch(
@@ -803,12 +797,7 @@ export class TaskService {
             );
           });
       } else if (section) {
-        // Mirror of moveToTop: append after the section's current last task
-        // (excluding this one) so the task lands at the bottom of its section,
-        // matching drag-to-bottom. No anchor when it would be alone.
-        const others = section.taskIds.filter((tId) => tId !== id);
-        const afterTaskId = others.length ? others[others.length - 1] : null;
-        this._sectionService.addTaskToSection(section.id, id, afterTaskId, section.id);
+        this._sectionService.moveTaskToBottom(section, id);
       } else {
         this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
           this._store.dispatch(

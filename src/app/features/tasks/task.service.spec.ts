@@ -456,7 +456,6 @@ describe('TaskService', () => {
 
       service.moveToTop('task-1', null, false);
 
-      // null anchor => prepend; section as its own source => in-place reorder.
       expect(store.dispatch).toHaveBeenCalledWith(
         addTaskToSection({
           sectionId: 'sec-1',
@@ -522,7 +521,6 @@ describe('TaskService', () => {
 
       service.moveToBottom('task-1', null, false);
 
-      // Anchor is the current last task excluding the moved one (task-2).
       expect(store.dispatch).toHaveBeenCalledWith(
         addTaskToSection({
           sectionId: 'sec-1',

@@ -92,6 +92,16 @@ export class SectionService {
     );
   }
 
+  moveTaskToTop(targetSectionId: string, taskId: string): void {
+    this.addTaskToSection(targetSectionId, taskId, null, targetSectionId);
+  }
+
+  moveTaskToBottom(targetSection: Section, taskId: string): void {
+    const others = targetSection.taskIds.filter((tId) => tId !== taskId);
+    const afterTaskId = others.length ? others[others.length - 1] : null;
+    this.addTaskToSection(targetSection.id, taskId, afterTaskId, targetSection.id);
+  }
+
   /**
    * Atomic: strips `taskId` from `sourceSectionId` AND repositions it in
    * the work-context's `taskIds` so the task lands at the dropped slot
