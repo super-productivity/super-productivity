@@ -19,6 +19,7 @@ vi.mock('../src/db', () => {
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
     },
     passkey: {
@@ -57,6 +58,7 @@ vi.mock('@simplewebauthn/server', () => ({
 
 // Import mocked modules to get references
 import { prisma } from '../src/db';
+import { sendPasskeyRecoveryEmail, sendVerificationEmail } from '../src/email';
 import * as simplewebauthn from '@simplewebauthn/server';
 
 // Import module under test
@@ -81,6 +83,7 @@ describe('Passkey Authentication', () => {
       findFirst: Mock;
       create: Mock;
       update: Mock;
+      updateMany: Mock;
       delete: Mock;
     };
     passkey: {
@@ -139,7 +142,7 @@ describe('Passkey Authentication', () => {
       );
     });
 
-    it('should reject registration for existing verified user', async () => {
+    it('should generate the same registration options for an existing verified user', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
@@ -147,12 +150,15 @@ describe('Passkey Authentication', () => {
         passkeys: [],
       });
 
-      await expect(generateRegistrationOptions(testEmail)).rejects.toThrow(
-        'An account with this email already exists',
+      const options = await generateRegistrationOptions(testEmail);
+
+      expect(options.challenge).toBe(testChallenge);
+      expect(mockGenerateRegistration).toHaveBeenCalledWith(
+        expect.objectContaining({ excludeCredentials: [] }),
       );
     });
 
-    it('should allow re-registration for unverified user', async () => {
+    it('should not disclose an unverified user passkey through excluded credentials', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
@@ -164,11 +170,7 @@ describe('Passkey Authentication', () => {
 
       expect(options).toBeDefined();
       expect(mockGenerateRegistration).toHaveBeenCalledWith(
-        expect.objectContaining({
-          excludeCredentials: expect.arrayContaining([
-            expect.objectContaining({ id: expect.any(String) }),
-          ]),
-        }),
+        expect.objectContaining({ excludeCredentials: [] }),
       );
     });
 
@@ -221,6 +223,45 @@ describe('Passkey Authentication', () => {
           result.message.includes('automatically verified'),
       ).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalled();
+    });
+
+    it('should return the neutral response without changing an existing verified user', async () => {
+      const mockCredentialId = new Uint8Array([1, 2, 3, 4]);
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: mockCredentialId,
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 0,
+          },
+          credentialDeviceType: 'multiDevice',
+          credentialBackedUp: true,
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 1,
+      });
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'credential-id-base64',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+          transports: ['internal'],
+        },
+        clientExtensionResults: {},
+      } as any);
+
+      expect(result.message).toContain('check your email');
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
     });
 
     it('should reject verification with expired challenge', async () => {
@@ -474,14 +515,16 @@ describe('Passkey Authentication', () => {
         passwordHash: null, // Passkey-only user
         isVerified: 1,
         passkeys: [mockPasskey],
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
       });
 
-      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await requestPasskeyRecovery(testEmail);
 
       expect(result.message).toContain('recovery link has been sent');
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             passkeyRecoveryToken: expect.any(String),
@@ -489,6 +532,40 @@ describe('Passkey Authentication', () => {
           }),
         }),
       );
+    });
+
+    it('should not rotate or resend a still-valid recovery token', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passwordHash: null,
+        isVerified: 1,
+        passkeys: [mockPasskey],
+        passkeyRecoveryToken: 'active-token',
+        passkeyRecoveryTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      await requestPasskeyRecovery(testEmail);
+
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+      expect(sendPasskeyRecoveryEmail).not.toHaveBeenCalled();
+    });
+
+    it('should not send when another recovery request wins the token claim race', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        passwordHash: null,
+        isVerified: 1,
+        passkeys: [mockPasskey],
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await requestPasskeyRecovery(testEmail);
+
+      expect(sendPasskeyRecoveryEmail).not.toHaveBeenCalled();
     });
 
     it('should return success message for non-existent user (no enumeration)', async () => {

@@ -22,6 +22,8 @@ import { authCache } from './auth-cache';
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const RECOVERY_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const REGISTRATION_SUCCESS_MESSAGE =
+  'Registration successful. Please check your email to verify your account.';
 
 // WebAuthn configuration from environment
 const getWebAuthnConfig = (): { rpName: string; rpID: string; origin: string } => {
@@ -85,28 +87,15 @@ export const generateRegistrationOptions = async (
 ): Promise<PublicKeyCredentialCreationOptionsJSON> => {
   const { rpName, rpID } = getWebAuthnConfig();
 
-  // Check if email already exists and is verified
-  const existingUser = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    include: { passkeys: true },
-  });
-
-  if (existingUser?.isVerified === 1) {
-    throw new Error('An account with this email already exists');
-  }
-
   // Generate options
   const options = await webAuthnGenerateRegistration({
     rpName,
     rpID,
     userName: email,
     userDisplayName: email,
-    // Prevent re-registering existing passkeys
-    excludeCredentials:
-      existingUser?.passkeys.map((pk) => ({
-        id: Buffer.from(pk.credentialId).toString('base64url'),
-        transports: pk.transports ? JSON.parse(pk.transports) : undefined,
-      })) || [],
+    // Registration options must not reveal whether this email or any of its
+    // credentials already exist.
+    excludeCredentials: [],
     authenticatorSelection: {
       residentKey: 'required', // Required for synced passkeys (Google Password Manager)
       userVerification: 'preferred',
@@ -183,7 +172,7 @@ export const verifyRegistration = async (
 
     if (existingUser) {
       if (existingUser.isVerified === 1) {
-        throw new Error('An account with this email already exists');
+        return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
 
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
@@ -285,12 +274,10 @@ export const verifyRegistration = async (
     }
 
     Logger.info(`Passkey registration initiated`);
-    return {
-      message: 'Registration successful. Please check your email to verify your account.',
-    };
+    return { message: REGISTRATION_SUCCESS_MESSAGE };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      throw new Error('An account with this email already exists');
+      return { message: REGISTRATION_SUCCESS_MESSAGE };
     }
     throw err;
   }
@@ -459,21 +446,38 @@ export const requestPasskeyRecovery = async (
     return successMessage;
   }
 
-  const recoveryToken = randomBytes(32).toString('hex');
-  const expiresAt = BigInt(Date.now() + RECOVERY_TOKEN_EXPIRY_MS);
+  const now = Date.now();
+  if (
+    user.passkeyRecoveryToken &&
+    user.passkeyRecoveryTokenExpiresAt !== null &&
+    user.passkeyRecoveryTokenExpiresAt > BigInt(now)
+  ) {
+    return successMessage;
+  }
 
-  await prisma.user.update({
-    where: { id: user.id },
+  const recoveryToken = randomBytes(32).toString('hex');
+  const expiresAt = BigInt(now + RECOVERY_TOKEN_EXPIRY_MS);
+
+  const claim = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      OR: [
+        { passkeyRecoveryToken: null },
+        { passkeyRecoveryTokenExpiresAt: null },
+        { passkeyRecoveryTokenExpiresAt: { lte: BigInt(now) } },
+      ],
+    },
     data: {
       passkeyRecoveryToken: recoveryToken,
       passkeyRecoveryTokenExpiresAt: expiresAt,
     },
   });
+  if (claim.count === 0) return successMessage;
 
   const emailSent = await sendPasskeyRecoveryEmail(email, recoveryToken);
   if (!emailSent) {
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.user.updateMany({
+      where: { id: user.id, passkeyRecoveryToken: recoveryToken },
       data: {
         passkeyRecoveryToken: null,
         passkeyRecoveryTokenExpiresAt: null,

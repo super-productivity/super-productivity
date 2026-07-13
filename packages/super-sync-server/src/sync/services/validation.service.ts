@@ -226,17 +226,6 @@ export class ValidationService {
       };
     }
 
-    // Note: Future timestamp check removed - clamping is handled during operation upload
-    // to preserve data instead of rejecting. Only "too old" check remains.
-    const now = Date.now();
-    if (op.timestamp < now - this.config.retentionMs) {
-      return {
-        valid: false,
-        error: 'Operation too old',
-        errorCode: SYNC_ERROR_CODES.INVALID_TIMESTAMP,
-      };
-    }
-
     return { valid: true, payloadBytes };
   }
 

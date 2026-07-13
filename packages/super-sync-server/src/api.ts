@@ -101,7 +101,6 @@ const SAFE_ERROR_MESSAGES = new Set([
   'Registration successful. Please check your email to verify your account.',
   'Failed to send verification email. Please try again later.',
   // Passkey-specific messages
-  'An account with this email already exists',
   'Challenge expired or not found. Please try again.',
   'Passkey verification failed. Please try again.',
   'Passkey verification failed',

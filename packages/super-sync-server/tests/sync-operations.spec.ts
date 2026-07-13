@@ -370,6 +370,11 @@ vi.mock('../src/db', async () => {
               )
                 return false;
               if (
+                args.where?.serverSeq?.lt !== undefined &&
+                op.serverSeq >= args.where.serverSeq.lt
+              )
+                return false;
+              if (
                 args.where?.receivedAt?.lt !== undefined &&
                 op.receivedAt >= args.where.receivedAt.lt
               )
@@ -942,15 +947,28 @@ describe('Sync Operations', () => {
         createOp('task-1', 'CRT'),
         createOp('task-2', 'CRT'),
       ]);
+      await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: {},
+          vectorClock: { [clientId]: 2 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
 
       // Set up userSyncState with snapshot info (required for cleanup logic)
       const now = Date.now();
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: 2,
-        lastSnapshotSeq: 2,
+        lastSeq: 3,
+        lastSnapshotSeq: 3,
         snapshotAt: BigInt(now),
-        opCount: 2,
+        opCount: 3,
       });
 
       // Manually set one operation to be "old" (received 100 days ago)
@@ -970,9 +988,11 @@ describe('Sync Operations', () => {
       expect(result.affectedUserIds).toContain(userId);
 
       // Verify correct operation was deleted
-      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
-      expect(ops.length).toBe(1);
-      expect(ops[0].serverSeq).toBe(2);
+      const remainingSeqs = Array.from(testState.operations.values())
+        .filter((op) => op.userId === userId)
+        .map((op) => op.serverSeq)
+        .sort((a, b) => a - b);
+      expect(remainingSeqs).toEqual([2, 3]);
     });
 
     it('should delete stale devices', async () => {

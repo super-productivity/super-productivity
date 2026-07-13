@@ -20,6 +20,7 @@ vi.mock('../src/db', () => {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
@@ -66,11 +67,11 @@ vi.mock('../src/auth', async (importOriginal) => {
 
 // Import mocked modules to get references
 import { prisma } from '../src/db';
-import { sendVerificationEmail } from '../src/email';
+import { sendLoginMagicLinkEmail, sendVerificationEmail } from '../src/email';
 import { Prisma } from '@prisma/client';
 
 // Import module under test
-import { registerWithMagicLink } from '../src/auth';
+import { registerWithMagicLink, requestLoginMagicLink } from '../src/auth';
 
 describe('Magic Link Registration', () => {
   const testEmail = 'test@example.com';
@@ -81,12 +82,14 @@ describe('Magic Link Registration', () => {
       findUnique: Mock;
       create: Mock;
       update: Mock;
+      updateMany: Mock;
       delete: Mock;
       deleteMany: Mock;
     };
   };
 
   const mockSendVerificationEmail = sendVerificationEmail as Mock;
+  const mockSendLoginMagicLinkEmail = sendLoginMagicLinkEmail as Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -164,17 +167,16 @@ describe('Magic Link Registration', () => {
   });
 
   describe('Existing user handling', () => {
-    it('should reject registration for existing verified user', async () => {
+    it('should return the neutral registration response for an existing verified user', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: 1,
         email: testEmail,
         isVerified: 1,
       });
 
-      await expect(registerWithMagicLink(testEmail, Date.now())).rejects.toThrow(
-        'An account with this email already exists',
-      );
+      const result = await registerWithMagicLink(testEmail, Date.now());
 
+      expect(result.message).toContain('check your email');
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
       expect(mockSendVerificationEmail).not.toHaveBeenCalled();
     });
@@ -270,7 +272,7 @@ describe('Magic Link Registration', () => {
   });
 
   describe('P2002 unique constraint handling', () => {
-    it('should convert P2002 race condition to user-friendly error', async () => {
+    it('should return the neutral response after a P2002 registration race', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
       // Use the mocked PrismaClientKnownRequestError so instanceof check matches
@@ -280,9 +282,86 @@ describe('Magic Link Registration', () => {
       );
       mockPrisma.user.create.mockRejectedValue(prismaError);
 
-      await expect(registerWithMagicLink(testEmail, Date.now())).rejects.toThrow(
-        'An account with this email already exists',
+      const result = await registerWithMagicLink(testEmail, Date.now());
+
+      expect(result.message).toContain('check your email');
+    });
+  });
+
+  describe('Login magic-link requests', () => {
+    const verifiedUser = {
+      id: 1,
+      email: testEmail,
+      isVerified: 1,
+      loginToken: null,
+      loginTokenExpiresAt: null,
+    };
+
+    it('should not rotate or resend a still-valid login token', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        ...verifiedUser,
+        loginToken: 'active-token',
+        loginTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      const result = await requestLoginMagicLink(testEmail);
+
+      expect(result.message).toContain('login link has been sent');
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+      expect(mockSendLoginMagicLinkEmail).not.toHaveBeenCalled();
+    });
+
+    it('should atomically claim an expired token slot before sending', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        ...verifiedUser,
+        loginToken: 'expired-token',
+        loginTokenExpiresAt: BigInt(Date.now() - 1),
+      });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+
+      await requestLoginMagicLink(testEmail);
+
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: verifiedUser.id,
+          OR: [
+            { loginToken: null },
+            { loginTokenExpiresAt: null },
+            { loginTokenExpiresAt: { lte: expect.any(BigInt) } },
+          ],
+        },
+        data: {
+          loginToken: expect.any(String),
+          loginTokenExpiresAt: expect.any(BigInt),
+        },
+      });
+      expect(mockSendLoginMagicLinkEmail).toHaveBeenCalledOnce();
+    });
+
+    it('should not send when another request wins the token claim race', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(verifiedUser);
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await requestLoginMagicLink(testEmail);
+
+      expect(mockSendLoginMagicLinkEmail).not.toHaveBeenCalled();
+    });
+
+    it('should only clear the token claimed by a failed email attempt', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(verifiedUser);
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockSendLoginMagicLinkEmail.mockResolvedValueOnce(false);
+
+      await expect(requestLoginMagicLink(testEmail)).rejects.toThrow(
+        'Failed to send login email',
       );
+
+      const claimedToken = mockPrisma.user.updateMany.mock.calls[0][0].data.loginToken;
+      expect(mockPrisma.user.updateMany.mock.calls[1][0]).toEqual({
+        where: { id: verifiedUser.id, loginToken: claimedToken },
+        data: { loginToken: null, loginTokenExpiresAt: null },
+      });
     });
   });
 });
