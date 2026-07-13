@@ -80,6 +80,12 @@ import {
 
 describe('Magic Link Registration', () => {
   const testEmail = 'test@example.com';
+  const registrationResponse = {
+    message: 'Registration successful. Please check your email to verify your account.',
+  };
+  const loginResponse = {
+    message: 'If an account with that email exists, a login link has been sent.',
+  };
 
   // Cast to access mock functions
   const mockPrisma = prisma as unknown as {
@@ -112,7 +118,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -182,7 +188,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
       expect(mockSendVerificationEmail).not.toHaveBeenCalled();
     });
@@ -198,7 +204,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
       // Email sent before DB update to avoid invalidating old token on failure
       expect(mockSendVerificationEmail).toHaveBeenCalledWith(
@@ -227,7 +233,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockSendVerificationEmail).not.toHaveBeenCalled();
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
@@ -248,7 +254,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.deleteMany).toHaveBeenCalledWith({
         where: { email: testEmail, isVerified: 0 },
       });
@@ -265,7 +271,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       // Should NOT delete the pre-existing user
       expect(mockPrisma.user.delete).not.toHaveBeenCalled();
       expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
@@ -287,7 +293,7 @@ describe('Magic Link Registration', () => {
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
     });
   });
 
@@ -309,7 +315,7 @@ describe('Magic Link Registration', () => {
 
       const result = await requestLoginMagicLink(testEmail);
 
-      expect(result.message).toContain('login link has been sent');
+      expect(result).toEqual(loginResponse);
       expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
       expect(mockSendLoginMagicLinkEmail).not.toHaveBeenCalled();
     });
@@ -358,7 +364,7 @@ describe('Magic Link Registration', () => {
 
       const result = await requestLoginMagicLink(testEmail);
 
-      expect(result.message).toContain('login link has been sent');
+      expect(result).toEqual(loginResponse);
       const claimedToken = mockPrisma.user.updateMany.mock.calls[0][0].data.loginToken;
       expect(mockPrisma.user.updateMany.mock.calls[1][0]).toEqual({
         where: { id: verifiedUser.id, loginToken: claimedToken },

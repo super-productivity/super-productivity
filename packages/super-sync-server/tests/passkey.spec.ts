@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 
 // Mock prisma - use factory function to avoid hoisting issues
@@ -75,6 +76,20 @@ import {
 describe('Passkey Authentication', () => {
   const testEmail = 'test@example.com';
   const testChallenge = 'test-challenge-base64';
+  const registrationResponse = {
+    message: 'Registration successful. Please check your email to verify your account.',
+  };
+  const recoveryResponse = {
+    message: 'If an account with that email exists, a recovery link has been sent.',
+  };
+
+  type RecoveryTransaction = {
+    user: { updateMany: Mock };
+    passkey: { deleteMany: Mock; create: Mock };
+  };
+  type RecoveryTransactionCallback = (
+    transaction: RecoveryTransaction,
+  ) => Promise<unknown>;
 
   // Cast to access mock functions
   const mockPrisma = prisma as unknown as {
@@ -256,9 +271,9 @@ describe('Passkey Authentication', () => {
           transports: ['internal'],
         },
         clientExtensionResults: {},
-      } as any);
+      } as RegistrationResponseJSON);
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(sendVerificationEmail).not.toHaveBeenCalled();
@@ -292,9 +307,9 @@ describe('Passkey Authentication', () => {
           attestationObject: 'attestation',
         },
         clientExtensionResults: {},
-      } as any);
+      } as RegistrationResponseJSON);
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(sendVerificationEmail).not.toHaveBeenCalled();
     });
@@ -326,9 +341,9 @@ describe('Passkey Authentication', () => {
           attestationObject: 'attestation',
         },
         clientExtensionResults: {},
-      } as any);
+      } as RegistrationResponseJSON);
 
-      expect(result.message).toContain('check your email');
+      expect(result).toEqual(registrationResponse);
       expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 1 } });
     });
 
@@ -591,7 +606,7 @@ describe('Passkey Authentication', () => {
 
       const result = await requestPasskeyRecovery(testEmail);
 
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
         where: {
           id: 1,
@@ -641,7 +656,7 @@ describe('Passkey Authentication', () => {
 
       const result = await requestPasskeyRecovery(testEmail);
 
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       const claimedToken =
         mockPrisma.user.updateMany.mock.calls[0][0].data.passkeyRecoveryToken;
       expect(mockPrisma.user.updateMany.mock.calls[1][0]).toEqual({
@@ -676,7 +691,7 @@ describe('Passkey Authentication', () => {
       const result = await requestPasskeyRecovery(testEmail);
 
       // Should return same message to prevent user enumeration
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -692,7 +707,7 @@ describe('Passkey Authentication', () => {
       const result = await requestPasskeyRecovery(testEmail);
 
       // Should not send recovery email for password users
-      expect(result.message).toContain('recovery link has been sent');
+      expect(result).toEqual(recoveryResponse);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -774,18 +789,20 @@ describe('Passkey Authentication', () => {
       const txPasskeyDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
       const txPasskeyCreate = vi.fn().mockResolvedValue({});
       const txUserUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
-      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
-        const tx = {
-          passkey: {
-            deleteMany: txPasskeyDeleteMany,
-            create: txPasskeyCreate,
-          },
-          user: {
-            updateMany: txUserUpdateMany,
-          },
-        };
-        return callback(tx);
-      });
+      mockPrisma.$transaction.mockImplementation(
+        async (callback: RecoveryTransactionCallback) => {
+          const tx = {
+            passkey: {
+              deleteMany: txPasskeyDeleteMany,
+              create: txPasskeyCreate,
+            },
+            user: {
+              updateMany: txUserUpdateMany,
+            },
+          };
+          return callback(tx);
+        },
+      );
 
       // First get recovery options to store challenge
       await getRecoveryRegistrationOptions(recoveryToken);
@@ -852,11 +869,12 @@ describe('Passkey Authentication', () => {
         },
       });
       const txPasskeyDeleteMany = vi.fn();
-      mockPrisma.$transaction.mockImplementation(async (callback: any) =>
-        callback({
-          user: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-          passkey: { deleteMany: txPasskeyDeleteMany, create: vi.fn() },
-        }),
+      mockPrisma.$transaction.mockImplementation(
+        async (callback: RecoveryTransactionCallback) =>
+          callback({
+            user: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+            passkey: { deleteMany: txPasskeyDeleteMany, create: vi.fn() },
+          }),
       );
       await getRecoveryRegistrationOptions(recoveryToken);
 
@@ -870,7 +888,7 @@ describe('Passkey Authentication', () => {
             attestationObject: 'attestation',
           },
           clientExtensionResults: {},
-        } as any),
+        } as RegistrationResponseJSON),
       ).rejects.toThrow('Invalid or expired recovery token');
       expect(txPasskeyDeleteMany).not.toHaveBeenCalled();
     });
@@ -918,7 +936,7 @@ describe('Passkey Authentication', () => {
           attestationObject: 'attestation',
         },
         clientExtensionResults: {},
-      } as any);
+      } as RegistrationResponseJSON);
 
       expect(mockVerifyRegistration).toHaveBeenCalledWith(
         expect.objectContaining({ expectedChallenge: registrationChallenge }),

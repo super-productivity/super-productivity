@@ -408,6 +408,7 @@ export class StorageQuotaService {
         userId: true,
         lastSnapshotSeq: true,
         snapshotAt: true,
+        latestFullStateSeq: true,
       },
       orderBy: { snapshotAt: 'asc' },
     });
@@ -416,7 +417,7 @@ export class StorageQuotaService {
     const affectedUserIds: number[] = [];
     const deleteBatchSize = getOldOpsCleanupDeleteBatchSize();
     let remainingDeleteBudget = getOldOpsCleanupMaxDeletedPerRun();
-    let usersWithoutReplayBase = 0;
+    let eligibleUsersWithoutReplayBase = 0;
 
     for (const state of states) {
       if (remainingDeleteBudget <= 0) break;
@@ -429,20 +430,33 @@ export class StorageQuotaService {
       // only remove the superseded prefix before the newest full-state op and
       // must keep that op plus its complete replay tail.
       if (!(snapshotAt >= cutoffTime && lastSnapshotSeq > 0)) continue;
-      const latestFullStateOp = await prisma.operation.findFirst({
-        where: {
-          userId: state.userId,
-          serverSeq: { lte: lastSnapshotSeq },
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
-        },
-        orderBy: { serverSeq: 'desc' },
-        select: { serverSeq: true },
-      });
-      if (!latestFullStateOp) {
-        usersWithoutReplayBase++;
+      let protectedFromSeq =
+        typeof state.latestFullStateSeq === 'number' &&
+        state.latestFullStateSeq <= lastSnapshotSeq
+          ? state.latestFullStateSeq
+          : null;
+
+      // Existing installations may have full-state rows created before the
+      // marker was introduced, and a snapshot can temporarily lag a newer
+      // marker. Fall back only for those legacy/stale-marker cases.
+      if (protectedFromSeq === null) {
+        const latestCoveredFullStateOp = await prisma.operation.findFirst({
+          where: {
+            userId: state.userId,
+            serverSeq: { lte: lastSnapshotSeq },
+            opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          },
+          orderBy: { serverSeq: 'desc' },
+          select: { serverSeq: true },
+        });
+        protectedFromSeq = latestCoveredFullStateOp?.serverSeq ?? null;
+      }
+
+      if (protectedFromSeq === null) {
+        eligibleUsersWithoutReplayBase++;
         continue;
       }
-      if (latestFullStateOp.serverSeq <= 1) continue;
+      if (protectedFromSeq <= 1) continue;
 
       // Drain this user across multiple batches until either they're empty or
       // the global per-run budget is exhausted. Without this, a single user
@@ -454,7 +468,7 @@ export class StorageQuotaService {
         const batchLimit = Math.min(deleteBatchSize, remainingDeleteBudget);
         const deletedCount = await this.deleteOldSyncedOpsBatch(
           state.userId,
-          latestFullStateOp.serverSeq,
+          protectedFromSeq,
           cutoffTime,
           batchLimit,
         );
@@ -490,10 +504,10 @@ export class StorageQuotaService {
       }
     }
 
-    if (usersWithoutReplayBase > 0) {
+    if (eligibleUsersWithoutReplayBase > 0) {
       Logger.warn(
-        `Cleanup [old-ops]: ${usersWithoutReplayBase} user(s) have no full-state replay base; ` +
-          'retention cleanup is disabled for those histories.',
+        `Cleanup [old-ops]: skipped ${eligibleUsersWithoutReplayBase} eligible user(s) ` +
+          'without a full-state replay base; their operation histories were left intact.',
       );
     }
 

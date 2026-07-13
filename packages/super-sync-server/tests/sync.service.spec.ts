@@ -2414,7 +2414,7 @@ describe('SyncService', () => {
         expect(totalDeleted).toBe(0);
         expect(affectedUserIds).not.toContain(userId);
         expect(warnSpy).toHaveBeenCalledWith(
-          'Cleanup [old-ops]: 1 user(s) have no full-state replay base; retention cleanup is disabled for those histories.',
+          'Cleanup [old-ops]: skipped 1 eligible user(s) without a full-state replay base; their operation histories were left intact.',
         );
 
         const remaining = (await operationDownloadService.getOpsSinceWithSeq(userId, 0))
@@ -2456,11 +2456,13 @@ describe('SyncService', () => {
         lastSeq: 5,
         lastSnapshotSeq: 4,
         snapshotAt: BigInt(Date.now()),
+        latestFullStateSeq: 4,
       });
 
       const { totalDeleted } = await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
 
       expect(totalDeleted).toBe(3);
+      expect(prisma.operation.findFirst).not.toHaveBeenCalled();
       expect(Array.from(testState.operations.keys())).toEqual(['old-op-4', 'old-op-5']);
       const freshClientOps = (
         await operationDownloadService.getOpsSinceWithSeq(userId, 0)
