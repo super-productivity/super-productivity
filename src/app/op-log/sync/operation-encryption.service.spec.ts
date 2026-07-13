@@ -6,6 +6,8 @@ import { ActionType, OpType } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
 import { createValidAppData } from '../validation/state-validity-test-utils';
+import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -288,6 +290,7 @@ describe('OperationEncryptionService', () => {
       const createFullStateOp = (
         opType: OpType.SyncImport | OpType.BackupImport | OpType.Repair,
         payload: unknown,
+        schemaVersion: number = CURRENT_SCHEMA_VERSION,
       ): SyncOperation => ({
         ...createMockSyncOp(payload),
         actionType:
@@ -295,6 +298,7 @@ describe('OperationEncryptionService', () => {
         opType,
         entityType: 'ALL',
         entityId: opType === OpType.BackupImport ? 'backup-import-1' : undefined,
+        schemaVersion,
       });
 
       const createLegacyV1AppData = (): unknown => {
@@ -371,10 +375,24 @@ describe('OperationEncryptionService', () => {
         expect(decrypted.payload).toEqual(jsonRoundTrip(state));
       });
 
-      it('accepts a legitimate schema-v1 SYNC_IMPORT payload', async () => {
-        const state = createLegacyV1AppData();
+      it('accepts a direct SYNC_IMPORT wire payload without local-only schedule settings', async () => {
+        const state = stripLocalOnlySyncSettingsFromAppData(
+          jsonRoundTrip(createValidAppData()),
+        );
         const encrypted = await service.encryptOperation(
           createFullStateOp(OpType.SyncImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(state);
+      });
+
+      it('accepts a schema-v1 SYNC_IMPORT at the decryption boundary without mutating it', async () => {
+        const state = createLegacyV1AppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state, 1),
           TEST_PASSWORD,
         );
 
@@ -416,6 +434,30 @@ describe('OperationEncryptionService', () => {
         const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
 
         expect(decrypted.payload).toEqual(jsonRoundTrip(payload));
+      });
+
+      it('accepts a wrapped REPAIR wire payload without the legacy section slice in a batch', async () => {
+        const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+        delete state['section'];
+        const payload = {
+          appDataComplete: state,
+          repairSummary: {
+            entityStateFixed: 1,
+            orphanedEntitiesRestored: 0,
+            invalidReferencesRemoved: 0,
+            relationshipsFixed: 0,
+            structureRepaired: 0,
+            typeErrorsFixed: 0,
+          },
+        };
+        const [encrypted] = await service.encryptOperations(
+          [createFullStateOp(OpType.Repair, payload)],
+          TEST_PASSWORD,
+        );
+
+        const [decrypted] = await service.decryptOperations([encrypted], TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(payload);
       });
     });
   });

@@ -263,7 +263,9 @@ privateCfg: {
 >   the authenticated payload as complete application data before the metadata can
 >   promote it to `loadAllData`. Both direct and `appDataComplete`-wrapped payloads
 >   are supported. Supported legacy payloads are migrated on a validation copy;
->   the original remains unchanged for the existing operation-processing pipeline
+>   known compatible omissions (pre-section backups and the device-local sync
+>   interval stripped from wire snapshots) are restored only on that copy. The
+>   original remains unchanged for the existing operation-processing pipeline
 >   (`assertDecryptedFullStateOpIntegrity`).
 >
 > This is **not** full integrity. Still open pending the durable fix:

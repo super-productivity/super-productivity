@@ -5,7 +5,11 @@ import { isSingletonEntityId } from '../core/entity-registry';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { ACTION_TYPE_ALIASES } from '../apply/operation-converter.util';
 import { SyncLog } from '../../core/log';
-import { FULL_STATE_OP_TYPES, OpType } from '../core/operation.types';
+import {
+  extractFullStateFromPayload,
+  FULL_STATE_OP_TYPES,
+  OpType,
+} from '../core/operation.types';
 import {
   CURRENT_SCHEMA_VERSION,
   MIN_SUPPORTED_SCHEMA_VERSION,
@@ -30,11 +34,36 @@ const _loadValidateAllData = (): Promise<
   return _validateAllDataPromise;
 };
 
-const _extractFullState = (payload: unknown): unknown => {
-  if (typeof payload === 'object' && payload !== null && 'appDataComplete' in payload) {
-    return (payload as { appDataComplete: unknown }).appDataComplete;
+const _isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const _restoreKnownFullStateOmissionsForValidation = (fullState: unknown): unknown => {
+  if (!_isRecord(fullState)) {
+    return fullState;
   }
-  return payload;
+
+  // Pre-section backups are still supported by the loadAllData reducers.
+  const stateForValidation = Object.hasOwn(fullState, 'section')
+    ? fullState
+    : { ...fullState, section: { ids: [], entities: {} } };
+  const globalConfig = stateForValidation['globalConfig'];
+  if (!_isRecord(globalConfig)) {
+    return stateForValidation;
+  }
+  const syncConfig = globalConfig['sync'];
+  if (!_isRecord(syncConfig) || Object.hasOwn(syncConfig, 'syncInterval')) {
+    return stateForValidation;
+  }
+
+  // Snapshot uploads intentionally omit this device-local setting. Its actual
+  // value is restored downstream; only its required numeric shape matters here.
+  return {
+    ...stateForValidation,
+    globalConfig: {
+      ...globalConfig,
+      sync: { ...syncConfig, syncInterval: 0 },
+    },
+  };
 };
 
 const _migrateFullStateForValidation = (
@@ -159,6 +188,8 @@ export const assertDecryptedOpMetadataIntegrity = (
  *
  * Supported legacy state is migrated on a copy before validation because this
  * boundary runs before RemoteOpsProcessingService's normal operation processing.
+ * Known compatible omissions are also restored on that copy: pre-section backups
+ * and the device-local sync interval intentionally stripped from wire snapshots.
  * The decrypted payload itself remains unchanged for the existing downstream path.
  * This check intentionally uses structural Typia validation only. Cross-model
  * relationship validation would turn recoverable data inconsistencies into a
@@ -176,8 +207,9 @@ export const assertDecryptedFullStateOpIntegrity = async (
   }
 
   const validateAllData = await _loadValidateAllData();
-  const fullState = _extractFullState(decryptedPayload);
-  const stateToValidate = _migrateFullStateForValidation(op, fullState);
+  const fullState = extractFullStateFromPayload(decryptedPayload);
+  const migratedState = _migrateFullStateForValidation(op, fullState);
+  const stateToValidate = _restoreKnownFullStateOmissionsForValidation(migratedState);
   const validationResult = validateAllData(stateToValidate);
   if (validationResult.success) {
     return;
