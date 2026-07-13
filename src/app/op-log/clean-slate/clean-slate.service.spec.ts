@@ -9,6 +9,7 @@ import { OpLog } from '../../core/log';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 describe('CleanSlateService', () => {
   let service: CleanSlateService;
@@ -16,6 +17,7 @@ describe('CleanSlateService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let mockTaskTimeSyncService: jasmine.SpyObj<TaskTimeSyncService>;
 
   const mockState = {
     task: { ids: [], entities: {} },
@@ -26,7 +28,7 @@ describe('CleanSlateService', () => {
 
   beforeEach(() => {
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
-      'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'runDestructiveStateReplacement',
@@ -37,6 +39,7 @@ describe('CleanSlateService', () => {
       'flushPendingWrites',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockTaskTimeSyncService = jasmine.createSpyObj('TaskTimeSyncService', ['flush']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -48,13 +51,16 @@ describe('CleanSlateService', () => {
           useValue: mockOperationWriteFlushService,
         },
         { provide: LockService, useValue: mockLockService },
+        { provide: TaskTimeSyncService, useValue: mockTaskTimeSyncService },
       ],
     });
 
     service = TestBed.inject(CleanSlateService);
 
     // Setup default mock responses
-    mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(mockState as any);
+    mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+      mockState as any,
+    );
     mockOpLogStore.runDestructiveStateReplacement.and.resolveTo();
     mockOpLogStore.getVectorClock.and.resolveTo(null);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
@@ -67,7 +73,9 @@ describe('CleanSlateService', () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       // Should get current state (async version to include archives)
-      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync,
+      ).toHaveBeenCalled();
 
       // Should route through the atomic helper (issues #7709, #7732)
       expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
@@ -91,16 +99,21 @@ describe('CleanSlateService', () => {
       mockOperationWriteFlushService.flushPendingWrites.and.callFake(async () => {
         callOrder.push('flush');
       });
+      mockTaskTimeSyncService.flush.and.callFake(() => {
+        callOrder.push('flush-task-time');
+      });
       mockLockService.request.and.callFake(async (lockName, fn) => {
         callOrder.push(`lock:${lockName}`);
         const r = await fn();
         callOrder.push('unlock');
         return r;
       });
-      mockStateSnapshotService.getStateSnapshotAsync.and.callFake(async () => {
-        callOrder.push('snapshot');
-        return mockState as any;
-      });
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.callFake(
+        async () => {
+          callOrder.push('snapshot');
+          return mockState as any;
+        },
+      );
       mockOpLogStore.runDestructiveStateReplacement.and.callFake(async () => {
         callOrder.push('replace');
       });
@@ -108,6 +121,7 @@ describe('CleanSlateService', () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       expect(callOrder).toEqual([
+        'flush-task-time',
         'flush',
         `lock:${LOCK_NAMES.OPERATION_LOG}`,
         'snapshot',
@@ -200,7 +214,7 @@ describe('CleanSlateService', () => {
     });
 
     it('should throw if state snapshot fails', async () => {
-      mockStateSnapshotService.getStateSnapshotAsync.and.rejectWith(
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.rejectWith(
         new Error('State error'),
       );
 

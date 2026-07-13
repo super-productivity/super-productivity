@@ -148,6 +148,9 @@ const handleConvertToMainTask = (
   isPlanForToday?: boolean,
   afterTaskId?: string | null,
   isDone?: boolean,
+  capturedToday?: string,
+  capturedDoneOn?: number,
+  capturedModified?: number,
 ): RootState => {
   // First, get the parent task to copy its properties
   const parentTask = state[TASK_FEATURE_NAME].entities[task.parentId as string] as Task;
@@ -155,7 +158,7 @@ const handleConvertToMainTask = (
     throw new Error('No parent for sub task');
   }
 
-  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const todayStr = capturedToday ?? state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   // `Array.isArray` guard (not `??`): a truthy non-array `parentTagIds`
   // from a captured op (seen on long-running SuperSync clients) bypasses
   // `??` and crashes the spread below. Same for `parentTask.tagIds`.
@@ -190,7 +193,7 @@ const handleConvertToMainTask = (
         tagIds: (Array.isArray(parentTask.tagIds) ? parentTask.tagIds : []).filter(
           (id) => id !== TODAY_TAG.id,
         ),
-        modified: Date.now(),
+        modified: capturedModified ?? Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
               dueDay: todayStr,
@@ -206,7 +209,7 @@ const handleConvertToMainTask = (
               isDone,
               ...(isDone
                 ? {
-                    doneOn: Date.now(),
+                    doneOn: capturedDoneOn ?? Date.now(),
                     dueDay: todayStr,
                     dueWithTime: undefined,
                   }
@@ -814,8 +817,16 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     return handleAddTask(state, task, isAddToBottom, isAddToBacklog);
   },
   [TaskSharedActions.convertToMainTask.type]: () => {
-    const { task, parentTagIds, isPlanForToday, afterTaskId, isDone } =
-      action as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+    const {
+      task,
+      parentTagIds,
+      isPlanForToday,
+      afterTaskId,
+      isDone,
+      today,
+      doneOn,
+      modified,
+    } = action as ReturnType<typeof TaskSharedActions.convertToMainTask>;
     return handleConvertToMainTask(
       state,
       task,
@@ -823,6 +834,9 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
       isPlanForToday,
       afterTaskId,
       isDone,
+      today,
+      doneOn,
+      modified,
     );
   },
   [TaskSharedActions.convertToSubTask.type]: () => {

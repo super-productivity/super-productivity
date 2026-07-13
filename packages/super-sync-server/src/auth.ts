@@ -21,10 +21,6 @@ export const MAX_VERIFICATION_RESEND_COUNT = 20;
 const REGISTRATION_SUCCESS_MESSAGE =
   'Registration successful. Please check your email to verify your account.';
 const LOGIN_MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
-const MAGIC_LINK_VERIFICATION_TOKEN_PREFIX = 'magic.';
-
-export const isMagicLinkVerificationToken = (token: string | null): boolean =>
-  token?.startsWith(MAGIC_LINK_VERIFICATION_TOKEN_PREFIX) ?? false;
 
 export const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
@@ -117,12 +113,11 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
     });
     if (claim.count !== 1) return false;
 
-    if (isMagicLinkVerificationToken(token)) {
-      // A magic-link verification proves email ownership, but not ownership of
-      // any passkey submitted in a separate registration attempt.
-      await tx.passkey.deleteMany({ where: { userId: user.id } });
-      await tx.pendingPasskeyRegistration.deleteMany({ where: { userId: user.id } });
-    }
+    // Reaching the user-token path means this is a magic-link registration:
+    // passkey registration tokens live only in pendingPasskeyRegistration.
+    // Email ownership does not prove ownership of a separately submitted key.
+    await tx.passkey.deleteMany({ where: { userId: user.id } });
+    await tx.pendingPasskeyRegistration.deleteMany({ where: { userId: user.id } });
     return true;
   });
   if (!verified) throw new Error('Invalid verification token');
@@ -413,8 +408,7 @@ export const registerWithMagicLink = async (
     return { message: REGISTRATION_SUCCESS_MESSAGE };
   }
 
-  const verificationToken =
-    MAGIC_LINK_VERIFICATION_TOKEN_PREFIX + randomBytes(32).toString('hex');
+  const verificationToken = randomBytes(32).toString('hex');
   const tokenExpiresAt = BigInt(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS);
   const acceptedAt = termsAcceptedAt !== undefined ? BigInt(termsAcceptedAt) : undefined;
 

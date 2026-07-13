@@ -833,11 +833,14 @@ describe('TaskListComponent', () => {
       );
 
       expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.convertToMainTask({
+        jasmine.objectContaining({
+          type: TaskSharedActions.convertToMainTask.type,
           task: dragged as unknown as TaskWithSubTasks,
           isPlanForToday: false,
           afterTaskId: 't1',
           isDone: false,
+          today: jasmine.any(String),
+          modified: jasmine.any(Number),
         }),
       );
     });
@@ -854,11 +857,15 @@ describe('TaskListComponent', () => {
       );
 
       expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.convertToMainTask({
+        jasmine.objectContaining({
+          type: TaskSharedActions.convertToMainTask.type,
           task: dragged as unknown as TaskWithSubTasks,
           isPlanForToday: false,
           afterTaskId: null,
           isDone: true,
+          today: jasmine.any(String),
+          doneOn: jasmine.any(Number),
+          modified: jasmine.any(Number),
         }),
       );
     });

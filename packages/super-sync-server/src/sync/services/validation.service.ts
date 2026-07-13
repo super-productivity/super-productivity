@@ -23,6 +23,33 @@ import { Logger } from '../../logger';
  * Typed as Set<string> since we're validating unknown input strings.
  */
 export const ALLOWED_ENTITY_TYPES: Set<string> = new Set(ENTITY_TYPES);
+const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
+
+const isValidCalendarDate = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return false;
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
+};
+
+const extractActionPayload = (payload: unknown): Record<string, unknown> | null => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+  const payloadObject = payload as Record<string, unknown>;
+  const actionPayload = payloadObject['actionPayload'];
+  return actionPayload &&
+    typeof actionPayload === 'object' &&
+    !Array.isArray(actionPayload)
+    ? (actionPayload as Record<string, unknown>)
+    : payloadObject;
+};
 
 export interface ValidationResult {
   valid: boolean;
@@ -157,6 +184,26 @@ export class ValidationService {
         errorCode: SYNC_ERROR_CODES.INVALID_PAYLOAD,
       };
     }
+
+    // Validate the visible form of additive task-time operations at the server
+    // boundary. Encrypted payloads are validated by the client after decryption.
+    if (op.actionType === TASK_TIME_DELTA_ACTION_TYPE && !op.isPayloadEncrypted) {
+      const actionPayload = extractActionPayload(op.payload);
+      if (
+        !actionPayload ||
+        actionPayload['taskId'] !== op.entityId ||
+        !isValidCalendarDate(actionPayload['date']) ||
+        typeof actionPayload['duration'] !== 'number' ||
+        !Number.isFinite(actionPayload['duration']) ||
+        actionPayload['duration'] < 0
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid task-time sync payload',
+          errorCode: SYNC_ERROR_CODES.INVALID_PAYLOAD,
+        };
+      }
+    }
     if (op.schemaVersion !== undefined) {
       if (
         !Number.isInteger(op.schemaVersion) ||
@@ -177,7 +224,7 @@ export class ValidationService {
     // a per-op error instead. Age is deliberately NOT bounded — old-but-valid ops
     // are accepted so long-offline devices keep their backlog (#8961); causality
     // is resolved by vector clocks, not by the client timestamp.
-    if (!Number.isSafeInteger(op.timestamp) || op.timestamp < 0) {
+    if (!Number.isSafeInteger(op.timestamp)) {
       return {
         valid: false,
         error: 'Invalid timestamp',

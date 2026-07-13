@@ -27,12 +27,14 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { signal } from '@angular/core';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
+import { TaskTimeSyncService } from './task-time-sync.service';
 
 describe('TaskService', () => {
   let service: TaskService;
   let store: MockStore;
   let archiveService: jasmine.SpyObj<ArchiveService>;
   let deletedTaskIssueSidecar: DeletedTaskIssueSidecarService;
+  let taskTimeSync: TaskTimeSyncService;
   let tickSubject: Subject<{ duration: number; date: string }>;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
@@ -166,6 +168,7 @@ describe('TaskService', () => {
     store = TestBed.inject(MockStore);
     archiveService = TestBed.inject(ArchiveService) as jasmine.SpyObj<ArchiveService>;
     deletedTaskIssueSidecar = TestBed.inject(DeletedTaskIssueSidecarService);
+    taskTimeSync = TestBed.inject(TaskTimeSyncService);
 
     spyOn(store, 'dispatch').and.callThrough();
   });
@@ -315,6 +318,20 @@ describe('TaskService', () => {
 
       expect(store.dispatch).toHaveBeenCalledWith(TaskSharedActions.deleteTask({ task }));
     });
+
+    it('should clear pending time for the task and its subtasks', () => {
+      const clearOneSpy = spyOn(taskTimeSync, 'clearOne');
+      const subTask = createMockTask('subtask-1', { parentId: 'task-1' });
+      const task = createMockTaskWithSubTasks(
+        createMockTask('task-1', { subTaskIds: ['subtask-1'] }),
+        [subTask],
+      );
+
+      service.remove(task);
+
+      expect(clearOneSpy).toHaveBeenCalledWith('task-1');
+      expect(clearOneSpy).toHaveBeenCalledWith('subtask-1');
+    });
   });
 
   describe('removeMultipleTasks', () => {
@@ -343,6 +360,24 @@ describe('TaskService', () => {
           task: { id: 'task-1', changes: { title: 'Updated Title' } },
         }),
       );
+    });
+
+    it('should flush pending time before replacing timeSpentOnDay', () => {
+      const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
+
+      service.update('task-1', {
+        timeSpentOnDay: { ['2026-01-05']: 30000 },
+      });
+
+      expect(flushOneSpy).toHaveBeenCalledWith('task-1');
+    });
+
+    it('should not flush pending time for unrelated task updates', () => {
+      const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
+
+      service.update('task-1', { title: 'Updated Title' });
+
+      expect(flushOneSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -864,12 +899,57 @@ describe('TaskService', () => {
     });
   });
 
+  describe('batched time sync', () => {
+    it('captures a delta-only operation when the accumulator flushes', () => {
+      const task = createMockTask('task-1', {
+        timeSpentOnDay: { ['2026-01-05']: 300000 },
+        timeSpent: 300000,
+      });
+      store.setState({
+        tasks: {
+          ids: ['task-1'],
+          entities: { ['task-1']: task },
+          currentTaskId: 'task-1',
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+      TestBed.inject(TaskTimeSyncService).accumulate('task-1', 60000, '2026-01-05');
+
+      service.flushAccumulatedTimeSpent();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Sync time spent',
+          taskId: 'task-1',
+          date: '2026-01-05',
+          duration: 60000,
+        }),
+      );
+      const action = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map(([dispatchedAction]) => dispatchedAction)
+        .find(
+          (dispatchedAction) =>
+            dispatchedAction.type === '[TimeTracking] Sync time spent',
+        ) as Record<string, unknown>;
+      expect(action['timeSpentForDay']).toBeUndefined();
+    });
+  });
+
   describe('addTimeSpentAndSync', () => {
     it('should dispatch both addTimeSpent and syncTimeSpent', () => {
-      const task = createMockTask('task-1');
+      const task = createMockTask('task-1', {
+        timeSpentOnDay: { ['2026-01-05']: 120000 },
+        timeSpent: 120000,
+      });
+      const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
 
       service.addTimeSpentAndSync(task, 60000);
 
+      expect(flushOneSpy).toHaveBeenCalledWith('task-1');
       expect(store.dispatch).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: '[TimeTracking] Add time spent',
@@ -927,8 +1007,11 @@ describe('TaskService', () => {
 
   describe('removeTimeSpent', () => {
     it('should dispatch removeTimeSpent action', () => {
+      const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
+
       service.removeTimeSpent('task-1', 30000);
 
+      expect(flushOneSpy).toHaveBeenCalledWith('task-1');
       expect(store.dispatch).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: '[Task] Remove time spent',

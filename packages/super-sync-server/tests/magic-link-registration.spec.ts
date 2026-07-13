@@ -327,7 +327,7 @@ describe('Magic Link Registration', () => {
     });
 
     it('should not activate passkeys when a magic-link token verifies the email', async () => {
-      const token = 'magic.verification-token';
+      const token = 'legacy-or-current-magic-token';
       mockPrisma.user.findFirst.mockResolvedValue({
         id: 1,
         verificationToken: token,

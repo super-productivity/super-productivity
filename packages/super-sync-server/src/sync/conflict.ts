@@ -15,6 +15,8 @@ import {
   limitVectorClockSize,
 } from './sync.types';
 
+const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
+
 /**
  * Check if an incoming operation conflicts with existing operations.
  * Returns conflict info if a concurrent modification is detected.
@@ -94,6 +96,7 @@ export const detectConflictForEntities = async (
       SELECT DISTINCT ON (eid)
         eid AS "entityId",
         o.client_id AS "clientId",
+        o.action_type AS "actionType",
         o.vector_clock AS "vectorClock"
       FROM operations o
       CROSS JOIN LATERAL unnest(
@@ -128,7 +131,7 @@ export const detectConflictForEntities = async (
 export const resolveConflictForExistingOp = (
   op: Operation,
   entityId: string,
-  existingOp: { clientId: string; vectorClock: unknown },
+  existingOp: { actionType?: string; clientId: string; vectorClock: unknown },
 ): ConflictResult => {
   // Stored JSON/vector_clock values arrive as unknown from both Prisma model
   // reads and raw SQL rows; cast only at the vector-clock comparison boundary.
@@ -136,6 +139,19 @@ export const resolveConflictForExistingOp = (
 
   // Compare vector clocks
   const comparison = compareVectorClocks(op.vectorClock, existingClock);
+
+  // Timer batches are additive and uniquely identified operations. Concurrent
+  // deltas commute, so entity-level LWW must not discard either contribution.
+  // Keep the causal checks below for EQUAL/LESS_THAN clocks: those operations
+  // may already be represented by the stored state and replaying them could
+  // double-count time.
+  if (
+    comparison === 'CONCURRENT' &&
+    op.actionType === TASK_TIME_DELTA_ACTION_TYPE &&
+    existingOp.actionType === TASK_TIME_DELTA_ACTION_TYPE
+  ) {
+    return { hasConflict: false };
+  }
 
   // If the incoming op's clock is GREATER_THAN existing, it's a valid successor
   if (comparison === 'GREATER_THAN') {
@@ -219,7 +235,7 @@ export const detectConflictForEntity = async (
       entityType: op.entityType,
       OR: [{ entityId }, { entityIds: { has: entityId } }],
     },
-    select: { clientId: true, vectorClock: true, serverSeq: true },
+    select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
     orderBy: { serverSeq: 'desc' },
   });
 
@@ -486,6 +502,7 @@ export const prefetchLatestEntityOpsForBatch = async (
         o.entity_type AS "entityType",
         eid AS "entityId",
         o.client_id AS "clientId",
+        o.action_type AS "actionType",
         o.vector_clock AS "vectorClock",
         o.server_seq AS "serverSeq"
       FROM operations o
@@ -521,7 +538,7 @@ export const prefetchLatestEntityOpsForBatch = async (
         entityId: 'misc',
         schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
       },
-      select: { clientId: true, vectorClock: true, serverSeq: true },
+      select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
       orderBy: { serverSeq: 'desc' },
     });
     const tasksKey = getEntityConflictKey('GLOBAL_CONFIG', 'tasks');

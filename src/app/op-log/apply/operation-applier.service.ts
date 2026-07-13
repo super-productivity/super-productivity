@@ -4,6 +4,7 @@ import { replayOperationBatch } from '@sp/sync-core';
 import type {
   ActionDispatchPort,
   OperationApplyPort,
+  RemoteApplyWindowPort,
   SyncActionLike,
 } from '@sp/sync-core';
 import { Operation } from '../core/operation.types';
@@ -19,12 +20,22 @@ import { bulkApplyOperations } from './bulk-hydration.action';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { ApplyOperationsResult, ApplyOperationsOptions } from '../core/types/apply.types';
+import {
+  BulkReplayReducerFailure,
+  runWithBulkReplayFailureCollector,
+} from './bulk-replay-failure-collector';
 
 // Re-export for consumers that import from this service
 export type {
   ApplyOperationsResult,
   ApplyOperationsOptions,
 } from '../core/types/apply.types';
+
+const CALLER_MANAGED_REMOTE_APPLY_WINDOW: RemoteApplyWindowPort = {
+  startApplyingRemoteOps: () => undefined,
+  startPostSyncCooldown: () => undefined,
+  endApplyingRemoteOps: () => undefined,
+};
 
 /**
  * Service responsible for applying operations to the local NgRx store.
@@ -104,16 +115,26 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
     // the unset flag's own-op default is the safe direction. See meta-reducer.
     const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
 
+    const reducerFailures: BulkReplayReducerFailure[] = [];
     const result = await replayOperationBatch({
       ops,
       applyOptions: {
         isLocalHydration,
         skipReducerDispatch: options.skipReducerDispatch,
       },
-      dispatcher: this.store,
+      dispatcher: {
+        dispatch: (action) =>
+          runWithBulkReplayFailureCollector(
+            (failure) => reducerFailures.push(failure),
+            () => this.store.dispatch(action),
+          ),
+      },
       createBulkApplyAction: (operations) =>
         bulkApplyOperations({ operations, localClientId }),
-      remoteApplyWindow: this.hydrationState,
+      getReducerFailures: () => reducerFailures,
+      remoteApplyWindow: options.remoteApplyWindowAlreadyOpen
+        ? CALLER_MANAGED_REMOTE_APPLY_WINDOW
+        : this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>
           options.skipDeferredLocalActions
@@ -144,6 +165,12 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
 
     if (!result.failedOp) {
       OpLog.normal('OperationApplierService: Finished applying operations.');
+    }
+
+    if (result.reducerFailures?.length) {
+      OpLog.err(
+        `OperationApplierService: Skipped ${result.reducerFailures.length} reducer-failed operation(s).`,
+      );
     }
 
     return result;

@@ -149,6 +149,7 @@ describe('FileBasedSyncAdapterService', () => {
 
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
     ]);
     mockStateSnapshotService.getStateSnapshot.and.returnValue({
       tasks: [],
@@ -164,6 +165,9 @@ describe('FileBasedSyncAdapterService', () => {
         },
       },
     } as any);
+    mockStateSnapshotService.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshotService.getStateSnapshot(),
+    );
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
@@ -816,7 +820,7 @@ describe('FileBasedSyncAdapterService', () => {
   });
 
   describe('uploadSnapshot', () => {
-    it('should create new sync file with state from getStateSnapshot (not the passed parameter)', async () => {
+    it('should create new sync file from the state captured by the upload boundary', async () => {
       mockProvider.downloadFile.and.throwError(
         new RemoteFileNotFoundAPIError('sync-data.json'),
       );
@@ -827,9 +831,17 @@ describe('FileBasedSyncAdapterService', () => {
         return Promise.resolve({ rev: 'rev-1' });
       });
 
-      // The passed state should be IGNORED — file adapter uses getStateSnapshot() instead
-      // to prevent double-encryption when the upload service encrypts the payload.
-      const passedState = { tasks: [{ id: 't1', title: 'Test' }] };
+      const passedState = {
+        tasks: [{ id: 't1', title: 'Test' }],
+        globalConfig: {
+          sync: {
+            syncProvider: SyncProviderId.WebDAV,
+            syncInterval: 300000,
+            isManualSyncOnly: true,
+            isCompressionEnabled: true,
+          },
+        },
+      };
       const vectorClock = { client1: 5 };
 
       const result = await adapter.uploadSnapshot(
@@ -843,10 +855,12 @@ describe('FileBasedSyncAdapterService', () => {
       );
 
       expect(result.accepted).toBe(true);
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLog,
+      ).not.toHaveBeenCalled();
       const uploadedData = parseWithPrefix(uploadedDataStr);
-      // State should come from getStateSnapshot(), not the passed parameter
       expect(uploadedData.state).toEqual(
-        jasmine.objectContaining({ tasks: [], projects: [] }) as any,
+        jasmine.objectContaining({ tasks: passedState.tasks }) as any,
       );
       const uploadedState = uploadedData.state as Record<string, unknown>;
       const globalConfig = uploadedState['globalConfig'] as Record<string, unknown>;

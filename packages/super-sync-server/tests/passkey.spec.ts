@@ -376,8 +376,6 @@ describe('Passkey Authentication', () => {
           verificationResendCount: { lt: 20 },
         },
         data: {
-          verificationToken: null,
-          verificationTokenExpiresAt: null,
           verificationResendCount: { increment: 1 },
         },
       });
@@ -1011,6 +1009,7 @@ describe('Passkey Authentication', () => {
   describe('Challenge Expiration', () => {
     it('should isolate registration challenges from authentication challenges', async () => {
       const registrationChallenge = 'registration-challenge';
+      const authenticationChallenge = 'authentication-challenge';
       mockGenerateRegistration.mockResolvedValueOnce({
         challenge: registrationChallenge,
         rp: { name: 'Test', id: 'localhost' },
@@ -1018,7 +1017,7 @@ describe('Passkey Authentication', () => {
         pubKeyCredParams: [],
       });
       mockGenerateAuthentication.mockResolvedValueOnce({
-        challenge: 'authentication-challenge',
+        challenge: authenticationChallenge,
         rpId: 'localhost',
       });
       mockPrisma.user.findUnique.mockResolvedValue({

@@ -471,7 +471,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         delay(50),
       )
       .subscribe((task) => {
-        this._store.dispatch(TaskSharedActions.deleteTask({ task }));
+        this._taskService.remove(task);
       });
   }
 

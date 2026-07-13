@@ -367,7 +367,7 @@ describe('Service Logic Integration', () => {
     const compactionSpy = jasmine.createSpyObj('OperationLogCompactionService', [
       'compact',
     ]);
-    compactionSpy.compact.and.returnValue(Promise.resolve());
+    compactionSpy.compact.and.returnValue(Promise.resolve(true));
 
     // Use real SyncImportFilterService for SYNC_IMPORT filtering integration tests
     // Note: This must be the real service, not a mock, because we're testing the

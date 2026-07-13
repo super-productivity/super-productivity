@@ -13,6 +13,7 @@ import { Task } from '../../features/tasks/task.model';
 import { Project } from '../../features/project/project.model';
 import { Tag } from '../../features/tag/tag.model';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { runWithBulkReplayFailureCollector } from './bulk-replay-failure-collector';
 
 // Set to true to run stress tests (10k+ operations)
 // These tests take 1-2 seconds each and are skipped by default to speed up test runs
@@ -581,19 +582,26 @@ describe('bulkHydrationMetaReducer', () => {
   });
 
   describe('error scenarios', () => {
-    it('should propagate errors from reducer', () => {
-      const errorReducer = jasmine
-        .createSpy('errorReducer')
-        .and.throwError('Reducer error');
+    it('should isolate errors from reducer', () => {
+      const reducerError = new Error('Reducer error');
+      const errorReducer = jasmine.createSpy('errorReducer').and.throwError(reducerError);
       const reducer = bulkHydrationMetaReducer(errorReducer);
       const state = createMockState();
       const operation = createMockOperation();
       const action = bulkApplyHydrationOperations({ operations: [operation] });
+      const failures: Array<{ op: Operation; error: Error }> = [];
 
-      expect(() => reducer(state, action)).toThrowError('Reducer error');
+      expect(() =>
+        runWithBulkReplayFailureCollector(
+          (failure) => failures.push(failure),
+          () => reducer(state, action),
+        ),
+      ).not.toThrow();
+      expect(errorReducer).toHaveBeenCalledTimes(1);
+      expect(failures).toEqual([{ op: operation, error: reducerError }]);
     });
 
-    it('should stop processing on first error', () => {
+    it('should continue processing after a per-operation error', () => {
       let callCount = 0;
       const errorReducer = jasmine.createSpy('errorReducer').and.callFake(() => {
         callCount++;
@@ -611,9 +619,85 @@ describe('bulkHydrationMetaReducer', () => {
       ];
       const action = bulkApplyHydrationOperations({ operations });
 
-      expect(() => reducer(state, action)).toThrowError('Second operation failed');
-      // Should have called reducer twice (second call threw)
-      expect(callCount).toBe(2);
+      expect(() => reducer(state, action)).not.toThrow();
+      expect(callCount).toBe(3);
+    });
+
+    it('should roll back every migrated child when one child reducer fails', () => {
+      const state = { applied: [] as string[] };
+      const firstChild = createMockOperation({
+        id: 'split-op-1',
+        actionType: '[Test] Split Child 1' as ActionType,
+      });
+      const failedChild = createMockOperation({
+        id: 'split-op-2',
+        actionType: '[Test] Split Child 2' as ActionType,
+      });
+      const laterOp = createMockOperation({
+        id: 'later-op',
+        actionType: '[Test] Later Operation' as ActionType,
+      });
+      const reducerError = new Error('second migrated child failed');
+      const atomicReducer = jasmine
+        .createSpy('atomicReducer')
+        .and.callFake(
+          (currentState: typeof state, reducerAction: Action): typeof state => {
+            if (reducerAction.type === failedChild.actionType) {
+              throw reducerError;
+            }
+            return {
+              applied: [...currentState.applied, reducerAction.type],
+            };
+          },
+        );
+      const reducer = bulkHydrationMetaReducer(atomicReducer);
+      const failures: Array<{ op: Operation; error: Error }> = [];
+
+      const result = runWithBulkReplayFailureCollector(
+        (failure) => failures.push(failure),
+        () =>
+          reducer(
+            state,
+            bulkApplyHydrationOperations({
+              operations: [firstChild, failedChild, laterOp],
+              atomicReplayGroups: [[firstChild.id, failedChild.id]],
+            }),
+          ),
+      );
+
+      expect(result.applied).toEqual([laterOp.actionType]);
+      expect(failures).toEqual([{ op: failedChild, error: reducerError }]);
+    });
+
+    it('should roll back the whole batch when a full-state reducer fails', () => {
+      const state = { value: 'before-import' };
+      const fullStateOp = createMockOperation({
+        id: 'sync-import',
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        actionType: ActionType.LOAD_ALL_DATA,
+        payload: { appDataComplete: { task: {}, project: {} } },
+      });
+      const laterOp = createMockOperation({ id: 'later-op' });
+      const errorReducer = jasmine
+        .createSpy('errorReducer')
+        .and.callFake(
+          (currentState: typeof state, reducerAction: Action): typeof state => {
+            if (reducerAction.type === ActionType.LOAD_ALL_DATA) {
+              throw new Error('full-state reducer failed');
+            }
+            return { ...currentState, value: 'later-op-applied' };
+          },
+        );
+      const reducer = bulkHydrationMetaReducer(errorReducer);
+
+      const result = reducer(
+        state,
+        bulkApplyHydrationOperations({ operations: [fullStateOp, laterOp] }),
+      );
+
+      expect(result).toBe(state);
+      expect(errorReducer).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -723,6 +807,34 @@ describe('bulkHydrationMetaReducer', () => {
       // Only the archive op should be applied (LWW Update skipped)
       expect(mockReducer).toHaveBeenCalledTimes(1);
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
+    it('should reapply an earlier LWW Update when the later archive reducer fails', () => {
+      const reducerError = new Error('archive reducer failed');
+      mockReducer.and.callFake((state, action) => {
+        reducerCalls.push({ state, action });
+        if (action.type === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE) {
+          throw reducerError;
+        }
+        return state;
+      });
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+      const lwwUpdate = createLwwUpdateOp(TASK_ID);
+      const archiveOp = createMoveToArchiveOp([TASK_ID]);
+      const failures: Array<{ op: Operation; error: Error }> = [];
+
+      runWithBulkReplayFailureCollector(
+        (failure) => failures.push(failure),
+        () =>
+          reducer(
+            state,
+            bulkApplyHydrationOperations({ operations: [lwwUpdate, archiveOp] }),
+          ),
+      );
+
+      expect(reducerCalls.map((call) => call.action.type)).toContain(TASK_LWW_TYPE);
+      expect(failures).toEqual([{ op: archiveOp, error: reducerError }]);
     });
 
     it('should skip multiple LWW Updates when multi-entity archive is in same batch', () => {

@@ -960,6 +960,104 @@ describe('Task Reducer', () => {
       expect(state.entities['task-r']!.timeSpent).toBe(8000);
     });
 
+    it('should add consecutive durations from stale task action snapshots', () => {
+      const staleTask = createTask('task-r', {
+        timeSpentOnDay: { '2024-01-01': 100 },
+        timeSpent: 100,
+      });
+      const stateWithTime: TaskState = {
+        ...initialTaskState,
+        ids: ['task-r'],
+        entities: { 'task-r': staleTask },
+      };
+
+      const afterFirstCredit = taskReducer(
+        stateWithTime,
+        TimeTrackingActions.addTimeSpent({
+          task: staleTask,
+          date: '2024-01-01',
+          duration: 20,
+          isFromTrackingReminder: false,
+        }),
+      );
+      const afterSecondCredit = taskReducer(
+        afterFirstCredit,
+        TimeTrackingActions.addTimeSpent({
+          task: staleTask,
+          date: '2024-01-01',
+          duration: 30,
+          isFromTrackingReminder: false,
+        }),
+      );
+
+      expect(afterSecondCredit.entities['task-r']!.timeSpentOnDay['2024-01-01']).toBe(
+        150,
+      );
+      expect(afterSecondCredit.entities['task-r']!.timeSpent).toBe(150);
+    });
+
+    it('should keep own time sync additive when client identity is unavailable', () => {
+      const taskWithLocalTime = createTask('task-r', {
+        timeSpentOnDay: { '2024-01-01': 3000 },
+        timeSpent: 3000,
+      });
+      const stateWithLocalTime: TaskState = {
+        ...initialTaskState,
+        ids: ['task-r'],
+        entities: { 'task-r': taskWithLocalTime },
+      };
+      const action = {
+        ...syncTimeSpent({
+          taskId: 'task-r',
+          date: '2024-01-01',
+          duration: 5000,
+        }),
+        timeSpentForDay: 5000,
+      };
+      const ownReplayAction = {
+        ...action,
+        meta: { ...action.meta, isRemote: true },
+      };
+
+      const state = taskReducer(stateWithLocalTime, ownReplayAction);
+
+      expect(state.entities['task-r']!.timeSpentOnDay['2024-01-01']).toBe(8000);
+      expect(state.entities['task-r']!.timeSpent).toBe(8000);
+    });
+
+    it('should keep foreign time sync additive to preserve concurrent tracking', () => {
+      const taskWithLocalTime = createTask('task-r', {
+        timeSpentOnDay: { '2024-01-01': 3000 },
+        timeSpent: 3000,
+      });
+      const stateWithLocalTime: TaskState = {
+        ...initialTaskState,
+        ids: ['task-r'],
+        entities: { 'task-r': taskWithLocalTime },
+      };
+      const action = {
+        ...syncTimeSpent({
+          taskId: 'task-r',
+          date: '2024-01-01',
+          duration: 5000,
+        }),
+        timeSpentForDay: 5000,
+      };
+      const foreignAction = {
+        ...action,
+        meta: {
+          ...action.meta,
+          isRemote: true,
+          isApplyingFromOtherClient: true,
+        },
+      };
+
+      const state = taskReducer(stateWithLocalTime, foreignAction);
+
+      expect(state.entities['task-r']!.timeSpentOnDay['2024-01-01']).toBe(8000);
+      expect(state.entities['task-r']!.timeSpent).toBe(8000);
+    });
+
     it('should handle remote dispatch for missing task gracefully', () => {
       const action = syncTimeSpent({
         taskId: 'nonexistent',

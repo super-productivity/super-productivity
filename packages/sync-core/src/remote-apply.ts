@@ -1,4 +1,4 @@
-import type { ApplyOperationsResult } from './apply.types';
+import type { ApplyOperationsResult, OperationApplyFailure } from './apply.types';
 import type { Operation } from './operation.types';
 import type { ReducerCommitAwareOperationApplyPort } from './ports';
 
@@ -25,7 +25,11 @@ export interface RemoteOperationApplyStorePort<
     options: { pendingApply: true },
   ): Promise<RemoteOperationAppendResult<TOperation>>;
   mergeRemoteOpClocks(ops: TOperation[]): Promise<void>;
-  markReducersCommittedAndMergeClocks(seqs: number[], ops: TOperation[]): Promise<void>;
+  markReducersCommittedAndMergeClocks(
+    seqs: number[],
+    ops: TOperation[],
+    rejectedOpIds?: string[],
+  ): Promise<void>;
   markApplied(seqs: number[]): Promise<void>;
   markFailed(opIds: string[]): Promise<void>;
   clearFullStateOpsExcept(excludeIds: string[]): Promise<number>;
@@ -52,6 +56,8 @@ export interface RemoteApplyOperationsResult<
   clearedFullStateOpCount: number;
   failedOp?: ApplyOperationsResult<TOperation>['failedOp'];
   failedOpIds: string[];
+  reducerFailures?: OperationApplyFailure<TOperation>[];
+  reducerFailedOpIds?: string[];
 }
 
 const emptyRemoteApplyResult = <
@@ -76,9 +82,9 @@ const emptyRemoteApplyResult = <
  * 2. durably merge all newly appended remote clocks before reducers or a
  *    deferred-local-action window can start;
  * 3. bulk-apply only the newly appended ops through the host applier;
- * 4. at reducer commit, atomically checkpoint the whole batch as
- *    `archive_pending` and merge all reducer-committed vector clocks before
- *    archive side effects begin;
+ * 4. at reducer commit, atomically checkpoint reducer-successful ops as
+ *    `archive_pending`, reject reducer-failed ops, and merge successful clocks
+ *    before archive side effects begin;
  * 5. mark archive-complete seqs applied;
  * 6. after applying a full-state op, clear older full-state ops while
  *    retaining every full-state op of this batch (incl. quarantined ones);
@@ -129,6 +135,8 @@ export const applyRemoteOperations = async <
   let reducerCommitCallbackCount = 0;
   let reducerCommitCallbackError: Error | undefined;
   let reducerCommitPromise: Promise<void> | undefined;
+  let reducerCommittedOps: TOperation[] | undefined;
+  let reducerFailures: OperationApplyFailure<TOperation>[] | undefined;
   let applyResult: ApplyOperationsResult<TOperation>;
   const observeReducerCommitPromisePreservingPrimaryError = async (): Promise<void> => {
     const promise = reducerCommitPromise;
@@ -145,7 +153,7 @@ export const applyRemoteOperations = async <
   };
   try {
     applyResult = await applier.applyOperations(appendResult.writtenOps, {
-      onReducersCommitted: (reducerCommittedOps) => {
+      onReducersCommitted: (reportedCommittedOps, reportedFailures = []) => {
         reducerCommitCallbackCount++;
         if (reducerCommitCallbackCount !== 1) {
           reducerCommitCallbackError = new Error(
@@ -154,31 +162,63 @@ export const applyRemoteOperations = async <
           throw reducerCommitCallbackError;
         }
 
-        const isEntireAppendedBatch =
-          reducerCommittedOps.length === appendResult.writtenOps.length &&
-          reducerCommittedOps.every(
-            (op, index) => op.id === appendResult.writtenOps[index]?.id,
-          );
-        if (!isEntireAppendedBatch) {
+        const authoritativeReducerFailures = getAuthoritativeReducerFailures(
+          appendResult.writtenOps,
+          reportedFailures,
+        );
+        const failedFullStateOp = authoritativeReducerFailures.find((failure) =>
+          isFullStateOperation(failure.op),
+        );
+        if (failedFullStateOp) {
           reducerCommitCallbackError = new Error(
-            'applyRemoteOperations: reducer-commit callback must contain the entire appended batch in order.',
+            `applyRemoteOperations: full-state operation ${failedFullStateOp.op.id} failed during reducer replay.`,
           );
           throw reducerCommitCallbackError;
         }
+        reducerFailures = authoritativeReducerFailures;
+        const reducerFailedIds = new Set(
+          authoritativeReducerFailures.map((failure) => failure.op.id),
+        );
+        const expectedCommittedOps = appendResult.writtenOps.filter(
+          (op) => !reducerFailedIds.has(op.id),
+        );
+        const isExactSuccessfulSubset =
+          reportedCommittedOps.length === expectedCommittedOps.length &&
+          reportedCommittedOps.every(
+            (op, index) => op.id === expectedCommittedOps[index]?.id,
+          );
+        if (!isExactSuccessfulSubset) {
+          reducerCommitCallbackError = new Error(
+            'applyRemoteOperations: reducer-commit callback and failures must partition the entire appended batch in order.',
+          );
+          throw reducerCommitCallbackError;
+        }
+        reducerCommittedOps = expectedCommittedOps;
 
         reducerCommitPromise = (async () => {
-          const reducerCommittedSeqs = appendResult.writtenOps
+          const reducerCommittedSeqs = expectedCommittedOps
             .map((op) => opIdToSeq.get(op.id))
             .filter((seq): seq is number => seq !== undefined);
-          if (reducerCommittedSeqs.length !== appendResult.writtenOps.length) {
+          if (reducerCommittedSeqs.length !== expectedCommittedOps.length) {
             throw new Error(
               'applyRemoteOperations: reducer commit contained an operation outside the appended batch.',
             );
           }
-          await store.markReducersCommittedAndMergeClocks(
-            reducerCommittedSeqs,
-            appendResult.writtenOps,
+          const reducerFailedOpIds = authoritativeReducerFailures.map(
+            (failure) => failure.op.id,
           );
+          if (reducerFailedOpIds.length > 0) {
+            await store.markReducersCommittedAndMergeClocks(
+              reducerCommittedSeqs,
+              expectedCommittedOps,
+              reducerFailedOpIds,
+            );
+          } else {
+            await store.markReducersCommittedAndMergeClocks(
+              reducerCommittedSeqs,
+              expectedCommittedOps,
+            );
+          }
         })();
         return reducerCommitPromise;
       },
@@ -194,7 +234,12 @@ export const applyRemoteOperations = async <
     await observeReducerCommitPromisePreservingPrimaryError();
     throw reducerCommitCallbackError;
   }
-  if (reducerCommitCallbackCount !== 1 || reducerCommitPromise === undefined) {
+  if (
+    reducerCommitCallbackCount !== 1 ||
+    reducerCommitPromise === undefined ||
+    reducerCommittedOps === undefined ||
+    reducerFailures === undefined
+  ) {
     throw new Error(
       'applyRemoteOperations: applier did not invoke the reducer-commit callback.',
     );
@@ -203,20 +248,37 @@ export const applyRemoteOperations = async <
   // awaiting its returned promise. Pending ops must never be marked applied
   // before the reducer/archive checkpoint is durable.
   await reducerCommitPromise;
+  const authoritativeReducerCommittedOps = reducerCommittedOps;
+  const authoritativeReducerFailures = reducerFailures;
 
-  const appliedOpCount = applyResult.appliedOps.length;
-  const hasExactAppliedPrefix =
-    appliedOpCount <= appendResult.writtenOps.length &&
-    applyResult.appliedOps.every(
-      (op, index) => op.id === appendResult.writtenOps[index]?.id,
+  const resultReducerFailures = getAuthoritativeReducerFailures(
+    appendResult.writtenOps,
+    applyResult.reducerFailures ?? [],
+  );
+  const hasMatchingReducerFailures =
+    resultReducerFailures.length === authoritativeReducerFailures.length &&
+    resultReducerFailures.every(
+      (failure, index) => failure.op.id === authoritativeReducerFailures[index]?.op.id,
     );
-  if (!hasExactAppliedPrefix) {
+  if (!hasMatchingReducerFailures) {
     throw new Error(
-      'applyRemoteOperations: applied operations must be the exact ordered prefix of the appended batch.',
+      'applyRemoteOperations: applier result must report the same reducer failures as the reducer-commit callback.',
     );
   }
 
-  const expectedFailedOp = appendResult.writtenOps[appliedOpCount];
+  const appliedOpCount = applyResult.appliedOps.length;
+  const hasExactAppliedPrefix =
+    appliedOpCount <= authoritativeReducerCommittedOps.length &&
+    applyResult.appliedOps.every(
+      (op, index) => op.id === authoritativeReducerCommittedOps[index]?.id,
+    );
+  if (!hasExactAppliedPrefix) {
+    throw new Error(
+      'applyRemoteOperations: applied operations must be the exact ordered prefix of the reducer-committed operations.',
+    );
+  }
+
+  const expectedFailedOp = authoritativeReducerCommittedOps[appliedOpCount];
   if (
     (applyResult.failedOp && applyResult.failedOp.op.id !== expectedFailedOp?.id) ||
     (!applyResult.failedOp && expectedFailedOp !== undefined)
@@ -229,7 +291,10 @@ export const applyRemoteOperations = async <
     );
   }
 
-  const authoritativeAppliedOps = appendResult.writtenOps.slice(0, appliedOpCount);
+  const authoritativeAppliedOps = authoritativeReducerCommittedOps.slice(
+    0,
+    appliedOpCount,
+  );
   const authoritativeFailedOp = applyResult.failedOp
     ? {
         op: expectedFailedOp!,
@@ -264,6 +329,7 @@ export const applyRemoteOperations = async <
   }
 
   const failedOpIds = authoritativeFailedOp ? [authoritativeFailedOp.op.id] : [];
+  const reducerFailedOpIds = authoritativeReducerFailures.map((failure) => failure.op.id);
 
   if (failedOpIds.length > 0) {
     await store.markFailed(failedOpIds);
@@ -277,5 +343,31 @@ export const applyRemoteOperations = async <
     clearedFullStateOpCount,
     failedOp: authoritativeFailedOp,
     failedOpIds,
+    ...(authoritativeReducerFailures.length > 0
+      ? { reducerFailures: authoritativeReducerFailures, reducerFailedOpIds }
+      : {}),
   };
+};
+
+const getAuthoritativeReducerFailures = <TOperation extends Operation<string>>(
+  writtenOps: TOperation[],
+  reportedFailures: OperationApplyFailure<TOperation>[],
+): OperationApplyFailure<TOperation>[] => {
+  const writtenOpById = new Map(writtenOps.map((op) => [op.id, op]));
+  const seenIds = new Set<string>();
+
+  return reportedFailures.map((failure) => {
+    const authoritativeOp = writtenOpById.get(failure.op.id);
+    if (!authoritativeOp || seenIds.has(failure.op.id)) {
+      throw new Error(
+        `applyRemoteOperations: invalid reducer failure for operation ${failure.op.id}.`,
+      );
+    }
+    seenIds.add(failure.op.id);
+    return {
+      op: authoritativeOp,
+      error:
+        failure.error instanceof Error ? failure.error : new Error(String(failure.error)),
+    };
+  });
 };

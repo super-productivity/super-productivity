@@ -19,7 +19,6 @@ import { loadConfigFromEnv } from './config';
 import {
   VERIFICATION_TOKEN_EXPIRY_MS,
   MAX_VERIFICATION_RESEND_COUNT,
-  isMagicLinkVerificationToken,
   verifyEmail,
 } from './auth';
 import { authCache } from './auth-cache';
@@ -209,10 +208,6 @@ export const verifyRegistration = async (
             verificationResendCount: { lt: MAX_VERIFICATION_RESEND_COUNT },
           },
           data: {
-            ...(!isMagicLinkVerificationToken(existingUser.verificationToken) && {
-              verificationToken: null,
-              verificationTokenExpiresAt: null,
-            }),
             verificationResendCount: { increment: 1 },
           },
         });

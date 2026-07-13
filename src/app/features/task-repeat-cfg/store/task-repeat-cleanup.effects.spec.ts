@@ -21,12 +21,14 @@ import { DateService } from '../../../core/date/date.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 
 describe('TaskRepeatCleanupEffects', () => {
   let effects: TaskRepeatCleanupEffects;
   let store: jasmine.SpyObj<Store>;
   let repeatableTasks$: BehaviorSubject<TaskWithSubTasks[]>;
   let repeatCfgs$: BehaviorSubject<TaskRepeatCfg[]>;
+  let taskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const todayMs = new Date().setHours(12, 0, 0, 0);
@@ -83,6 +85,7 @@ describe('TaskRepeatCleanupEffects', () => {
       'DeletedTaskIssueSidecarService',
       ['set'],
     );
+    taskTimeSync = jasmine.createSpyObj('TaskTimeSyncService', ['clearOne']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -93,6 +96,7 @@ describe('TaskRepeatCleanupEffects', () => {
         { provide: SyncWrapperService, useValue: syncWrapperSpy },
         { provide: HydrationStateService, useValue: hydrationStateSpy },
         { provide: DeletedTaskIssueSidecarService, useValue: sidecarSpy },
+        { provide: TaskTimeSyncService, useValue: taskTimeSync },
         { provide: DateService, useValue: { todayStr: () => getDbDateStr(todayMs) } },
       ],
     });
@@ -215,6 +219,7 @@ describe('TaskRepeatCleanupEffects', () => {
 
       // The older instance is removed; the newer one survives.
       expect(getDispatchedDeleteIds()).toEqual(['today-stale']);
+      expect(taskTimeSync.clearOne).toHaveBeenCalledOnceWith('today-stale');
 
       sub.unsubscribe();
     }));

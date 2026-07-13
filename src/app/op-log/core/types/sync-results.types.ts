@@ -214,11 +214,17 @@ export interface UploadOptions {
  * SyncSessionValidationService latch — the wrapper reads it once before
  * deciding IN_SYNC vs ERROR. (#7330)
  */
-export interface DownloadResultForRejection {
-  newOpsCount: number;
-  allOpClocks?: VectorClock[];
-  snapshotVectorClock?: VectorClock;
-}
+export type DownloadResultForRejection =
+  | {
+      kind: 'completed';
+      newOpsCount: number;
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+    }
+  | {
+      /** User declined the nested SYNC_IMPORT conflict resolution. */
+      kind: 'cancelled';
+    };
 
 /**
  * Callback type for triggering downloads during concurrent modification resolution.

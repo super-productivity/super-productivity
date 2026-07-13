@@ -12,6 +12,7 @@ import { WorkContextType } from '../../../features/work-context/work-context.mod
 import { Action, ActionReducer } from '@ngrx/store';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { IN_PROGRESS_TAG } from '../../../features/tag/tag.const';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import {
   createBaseState,
   createMockTag,
@@ -401,6 +402,49 @@ describe('taskSharedCrudMetaReducer', () => {
         expectTagUpdates({
           tag1: { taskIds: ['task1'] },
           TODAY: { taskIds: ['task1'] },
+        }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should use captured dates when replaying on a different day', () => {
+      const capturedToday = '2024-06-14';
+      const capturedTimestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+      const { action, testState: baseTestState } = createConvertAction(
+        {},
+        {
+          isPlanForToday: true,
+          isDone: true,
+          today: capturedToday,
+          doneOn: capturedTimestamp,
+          modified: capturedTimestamp,
+        },
+      );
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            task1: action.task,
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'task1'],
+        },
+        [appStateFeatureKey]: {
+          ...baseTestState[appStateFeatureKey],
+          todayStr: '2024-06-15',
+        },
+      };
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        expectTaskUpdate('task1', {
+          dueDay: capturedToday,
+          doneOn: capturedTimestamp,
+          modified: capturedTimestamp,
         }),
         action,
         mockReducer,

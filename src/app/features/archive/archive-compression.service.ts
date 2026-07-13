@@ -2,6 +2,8 @@ import { inject, Injectable } from '@angular/core';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveTask, TimeSpentOnDayCopy } from '../tasks/task.model';
 import { ArchiveModel } from './archive.model';
+import { LockService } from '../../op-log/sync/lock.service';
+import { LOCK_NAMES } from '../../op-log/core/operation-log.const';
 
 export interface CompressionPreview {
   subtasksToDelete: number;
@@ -21,6 +23,7 @@ const DEFAULT_ARCHIVE: ArchiveModel = {
 })
 export class ArchiveCompressionService {
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
+  private _lockService = inject(LockService);
 
   /**
    * Calculate compression preview statistics for UI display.
@@ -74,19 +77,24 @@ export class ArchiveCompressionService {
    * DETERMINISTIC: Same input produces same output across all clients.
    */
   async compressArchive(oneYearAgoTimestamp: number): Promise<void> {
-    const [archiveYoung, archiveOld] = await Promise.all([
-      this._archiveDbAdapter.loadArchiveYoung().then((a) => a ?? DEFAULT_ARCHIVE),
-      this._archiveDbAdapter.loadArchiveOld().then((a) => a ?? DEFAULT_ARCHIVE),
-    ]);
+    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+      const [archiveYoung, archiveOld] = await Promise.all([
+        this._archiveDbAdapter.loadArchiveYoung().then((a) => a ?? DEFAULT_ARCHIVE),
+        this._archiveDbAdapter.loadArchiveOld().then((a) => a ?? DEFAULT_ARCHIVE),
+      ]);
 
-    const newArchiveYoung = this._compressArchiveData(archiveYoung, oneYearAgoTimestamp);
-    const newArchiveOld = this._compressArchiveData(archiveOld, oneYearAgoTimestamp);
+      const newArchiveYoung = this._compressArchiveData(
+        archiveYoung,
+        oneYearAgoTimestamp,
+      );
+      const newArchiveOld = this._compressArchiveData(archiveOld, oneYearAgoTimestamp);
 
-    // Atomic write: both archives written in a single IndexedDB transaction.
-    // Two independent writes could tear on a crash between them, and since
-    // compression is op-replayed on other clients a half-compressed local
-    // result would diverge from replicas (#8843).
-    await this._archiveDbAdapter.saveArchivesAtomic(newArchiveYoung, newArchiveOld);
+      // Keep the complete read-modify-write cycle under the same cross-tab lock
+      // used by archive replacement and ordinary archive mutations. The atomic
+      // database write prevents a torn pair; the lock prevents overwriting a
+      // concurrent replacement with data read before that replacement.
+      await this._archiveDbAdapter.saveArchivesAtomic(newArchiveYoung, newArchiveOld);
+    });
   }
 
   private _compressArchiveData(

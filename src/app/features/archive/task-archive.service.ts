@@ -119,9 +119,9 @@ export class TaskArchiveService {
    * and silently drop one side's archive write.
    *
    * Known paths still OUTSIDE the lock (tracked in #8941):
-   * ArchiveCompressionService.compressArchive, the remote loadAllData archive
-   * import (holds no lock across its user-confirmation guard by design), and
-   * TimeTrackingService's project/tag archive cleanups.
+   * TimeTrackingService's project/tag archive cleanups. Compression and remote
+   * full-state archive replacement use the same lock for their complete
+   * read-modify-write cycles.
    */
   private _runTaskArchiveMutation(mutation: () => Promise<void>): Promise<void> {
     return this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, mutation);

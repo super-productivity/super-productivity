@@ -159,6 +159,11 @@ export interface OperationSyncCapable<
     ops: SyncOperation[],
     clientId: string,
     lastKnownServerSeq?: number,
+    /**
+     * Optional host snapshot captured atomically with `ops`. File-backed
+     * providers embed it beside their recent-op window; API providers ignore it.
+     */
+    localStateSnapshot?: unknown,
   ): Promise<OpUploadResponse>;
   /**
    * @param limit Best-effort page-size hint. Cursor-based providers (SuperSync)

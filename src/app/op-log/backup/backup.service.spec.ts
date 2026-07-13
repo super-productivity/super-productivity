@@ -11,6 +11,7 @@ import { OperationWriteFlushService } from '../sync/operation-write-flush.servic
 import { LockService } from '../sync/lock.service';
 import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -22,6 +23,7 @@ describe('BackupService', () => {
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockConflictJournal: jasmine.SpyObj<ConflictJournalService>;
   const backupRef = { backupId: 'backup-123', savedAt: 123 };
+  let mockTaskTimeSyncService: jasmine.SpyObj<TaskTimeSyncService>;
 
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const createMinimalValidBackup = () => ({
@@ -116,6 +118,7 @@ describe('BackupService', () => {
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockConflictJournal = jasmine.createSpyObj('ConflictJournalService', ['clearAll']);
     mockConflictJournal.clearAll.and.resolveTo();
+    mockTaskTimeSyncService = jasmine.createSpyObj('TaskTimeSyncService', ['clear']);
 
     // Default mock returns
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
@@ -141,10 +144,17 @@ describe('BackupService', () => {
         },
         { provide: LockService, useValue: mockLockService },
         { provide: ConflictJournalService, useValue: mockConflictJournal },
+        { provide: TaskTimeSyncService, useValue: mockTaskTimeSyncService },
       ],
     });
 
     service = TestBed.inject(BackupService);
+  });
+
+  it('should discard task-time accumulated against the replaced pre-import state', async () => {
+    await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
+
+    expect(mockTaskTimeSyncService.clear).toHaveBeenCalledBefore(mockStore.dispatch);
   });
 
   describe('captureImportBackup (#8107)', () => {

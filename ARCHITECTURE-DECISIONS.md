@@ -210,9 +210,9 @@ promoted to the user's active `Passkey` set only when that token is consumed.
 
 - A WebAuthn registration ceremony proves possession of a credential, not
   ownership of the email address entered alongside it.
-- Storing the first submitted credential directly on an unverified user lets an
-  attacker pre-register a victim's address and rely on the victim to activate
-  the attacker's passkey later.
+- Storing a submitted credential directly on an unverified user lets an attacker
+  pre-register a victim's address, then have the victim's later magic-link
+  verification activate the attacker's passkey.
 - Keeping separate pending attempts prevents concurrent registrations from
   replacing or activating one another. The email owner chooses the credential
   by consuming the link produced by that same registration attempt.
@@ -227,8 +227,11 @@ promoted to the user's active `Passkey` set only when that token is consumed.
 - Email verification atomically claims the unverified user, replaces active
   passkeys with the credential bound to that token, and deletes the user's
   remaining pending attempts.
-- New magic-link verification tokens use a distinct prefix. Consuming one
-  verifies the email but removes untrusted active and pending passkeys.
+- Passkey verification tokens live only on pending registrations; user-row
+  verification tokens belong to magic-link registrations. Consuming a user-row
+  token verifies the email but removes untrusted active and pending passkeys.
+- The migration moves the latest legacy credential for each unverified user to
+  the pending table and removes all active credentials from unverified users.
 - The resend cap bounds pending rows per unverified account; rows also expire
   with their verification tokens.
 

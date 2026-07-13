@@ -35,12 +35,16 @@ describe('Performance Integration', () => {
   beforeEach(async () => {
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
       'getAllSyncModelDataFromStore',
     ]);
     mockStateSnapshot.getStateSnapshot.and.returnValue({
       task: { ids: [], entities: {} },
       project: { ids: [], entities: {} },
     } as any);
+    mockStateSnapshot.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshot.getStateSnapshot(),
+    );
     mockStateSnapshot.getAllSyncModelDataFromStore.and.returnValue({
       task: { ids: [], entities: {} },
       project: { ids: [], entities: {} },

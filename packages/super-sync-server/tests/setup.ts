@@ -357,8 +357,6 @@ vi.mock('../src/auth', () => ({
     .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
   VERIFICATION_TOKEN_EXPIRY_MS: 24 * 60 * 60 * 1000,
   MAX_VERIFICATION_RESEND_COUNT: 20,
-  isMagicLinkVerificationToken: (token: string | null) =>
-    token?.startsWith('magic.') ?? false,
   verifyEmail: vi.fn().mockResolvedValue(true),
 }));
 
