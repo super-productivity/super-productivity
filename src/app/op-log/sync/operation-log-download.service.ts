@@ -112,6 +112,8 @@ export class OperationLogDownloadService implements OnDestroy {
     let finalLatestSeq = 0;
     let snapshotVectorClock: import('../core/operation.types').VectorClock | undefined;
     let snapshotState: unknown | undefined;
+    let snapshotAppliedOpIds: string[] | undefined;
+    let remoteLastModified: number | undefined;
     // Track encryption state of downloaded operations for detecting encryption config mismatch.
     // When another client disables encryption, all downloaded ops will be unencrypted.
     // We track this BEFORE decryption to detect the server's actual encryption state.
@@ -203,6 +205,18 @@ export class OperationLogDownloadService implements OnDestroy {
           response.snapshotState
         ) {
           snapshotState = response.snapshotState;
+          snapshotAppliedOpIds =
+            'snapshotAppliedOpIds' in response
+              ? response.snapshotAppliedOpIds
+              : undefined;
+          const receivedLastModified =
+            'remoteLastModified' in response ? response.remoteLastModified : undefined;
+          remoteLastModified =
+            typeof receivedLastModified === 'number' &&
+            Number.isFinite(receivedLastModified) &&
+            receivedLastModified >= 0
+              ? receivedLastModified
+              : undefined;
           OpLog.normal(
             'OperationLogDownloadService: Received snapshotState for fresh download bootstrap',
           );
@@ -225,6 +239,8 @@ export class OperationLogDownloadService implements OnDestroy {
           allOpClocks.length = 0; // Clear clocks too
           snapshotVectorClock = undefined; // Clear snapshot clock to capture fresh one after reset
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
+          snapshotAppliedOpIds = undefined; // Clear snapshot boundary with the stale state
+          remoteLastModified = undefined; // Clear timestamp belonging to the stale state
           sawAnyOps = false; // Reset encryption tracking
           sawEncryptedOp = false;
 
@@ -500,6 +516,8 @@ export class OperationLogDownloadService implements OnDestroy {
         providerMode: 'fileSnapshotOps',
         // Include snapshot state for file-based sync fresh downloads
         ...(snapshotState ? { snapshotState } : {}),
+        ...(snapshotAppliedOpIds ? { snapshotAppliedOpIds } : {}),
+        ...(remoteLastModified !== undefined ? { remoteLastModified } : {}),
       };
     }
 

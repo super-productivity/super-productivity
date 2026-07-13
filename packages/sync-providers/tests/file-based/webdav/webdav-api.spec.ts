@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { md5 as md5HashWasm } from 'hash-wasm';
 import { NOOP_SYNC_LOGGER, type SyncLogger } from '@sp/sync-core';
 import { WebdavApi } from '../../../src/file-based/webdav/webdav-api';
+import { WebDavHttpHeader } from '../../../src/file-based/webdav/webdav.const';
 import type {
   WebDavHttpAdapter,
   WebDavHttpResponse,
@@ -71,9 +72,13 @@ const makeApi = (
     httpAdapter: adapter as unknown as WebDavHttpAdapter,
   });
 
-const okResponse = (data: string, status = 200): WebDavHttpResponse => ({
+const okResponse = (
+  data: string,
+  status = 200,
+  headers: Record<string, string> = {},
+): WebDavHttpResponse => ({
   status,
-  headers: {},
+  headers,
   data,
 });
 
@@ -111,6 +116,28 @@ describe('WebdavApi', () => {
       const r = await makeApi(adapter).download({ path: 'op-1.json' });
       expect(r.dataStr).toBe('hello world');
       expect(r.rev).toBe(await md5HashWasm('hello world'));
+    });
+
+    it('uses a strong ETag as the download revision', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, { ETag: '"strong-rev"' }),
+      );
+
+      const result = await makeApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe('"strong-rev"');
+    });
+
+    it('does not trust a weak ETag as an atomic revision', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, { etag: 'W/"weak-rev"' }),
+      );
+
+      const result = await makeApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe(await md5HashWasm('hello world'));
     });
 
     it('throws EmptyRemoteBodySPError on empty body', async () => {
@@ -163,6 +190,63 @@ describe('WebdavApi', () => {
       expect(adapter.request).toHaveBeenCalledTimes(3);
     });
 
+    it('uses If-Match atomically when the expected revision is a strong ETag', async () => {
+      const adapter = makeAdapter();
+      const data = 'updated body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204));
+      adapter.request.mockResolvedValueOnce(okResponse(data, 200, { etag: '"new-rev"' }));
+
+      const result = await makeApi(adapter).upload({
+        path: 'op-1.json',
+        data,
+        expectedRev: '"old-rev"',
+      });
+
+      expect(result.rev).toBe('"new-rev"');
+      expect(adapter.request).toHaveBeenCalledTimes(2);
+      expect(adapter.request.mock.calls[0]?.[0]).toMatchObject({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          [WebDavHttpHeader.IF_MATCH]: '"old-rev"',
+        }),
+      });
+    });
+
+    it('uses If-None-Match for an atomic create', async () => {
+      const adapter = makeAdapter();
+      const data = 'new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 201));
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      await makeApi(adapter).upload({
+        path: 'op-1.json',
+        data,
+        expectedRev: null,
+      });
+
+      expect(adapter.request.mock.calls[0]?.[0]).toMatchObject({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          [WebDavHttpHeader.IF_NONE_MATCH]: '*',
+        }),
+      });
+    });
+
+    it('maps a failed HTTP precondition to RemoteFileChangedUnexpectedly', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockRejectedValueOnce(
+        new HttpNotOkAPIError(new Response('', { status: 412 })),
+      );
+
+      await expect(
+        makeApi(adapter).upload({
+          path: 'op-1.json',
+          data: 'mine',
+          expectedRev: '"stale-rev"',
+        }),
+      ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+    });
+
     it('throws RemoteFileChangedUnexpectedly when remote hash drift detected', async () => {
       const adapter = makeAdapter();
       // GET returns body whose hash differs from expectedRev
@@ -177,22 +261,18 @@ describe('WebdavApi', () => {
       ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
     });
 
-    it('proceeds on 404 conditional GET (file does not exist yet)', async () => {
+    it('rejects when a hash-matched file disappeared before upload', async () => {
       const adapter = makeAdapter();
-      const data = 'new content';
       adapter.request.mockRejectedValueOnce(new RemoteFileNotFoundAPIError('op-1.json'));
-      // PUT succeeds
-      adapter.request.mockResolvedValueOnce(okResponse('', 201));
-      // verify GET
-      adapter.request.mockResolvedValueOnce(okResponse(data));
 
-      const r = await makeApi(adapter).upload({
-        path: 'op-1.json',
-        data,
-        expectedRev: 'something',
-      });
-
-      expect(r.rev).toBe(await md5HashWasm(data));
+      await expect(
+        makeApi(adapter).upload({
+          path: 'op-1.json',
+          data: 'new content',
+          expectedRev: 'legacy-content-hash',
+        }),
+      ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+      expect(adapter.request).toHaveBeenCalledTimes(1);
     });
 
     it('throws RemoteFileChangedUnexpectedly when verify-after-upload hash mismatches', async () => {

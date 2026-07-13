@@ -39,6 +39,31 @@ export class WebdavApi {
     return computeContentRev(data);
   }
 
+  /**
+   * Returns an RFC-style strong entity tag from a response header. Weak or
+   * malformed values cannot safely drive `If-Match`, so callers fall back to a
+   * content hash and the legacy best-effort check instead.
+   */
+  private _readStrongEtag(headers: Record<string, string>): string | undefined {
+    const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === 'etag');
+    const etag = entry?.[1]?.trim();
+    return etag && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(etag) ? etag : undefined;
+  }
+
+  private _isStrongEtag(value: string): boolean {
+    return /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
+  }
+
+  private _isHttpStatus(error: unknown, status: number): boolean {
+    return error instanceof HttpNotOkAPIError && error.response?.status === status;
+  }
+
+  private _remoteChanged(path: string): RemoteFileChangedUnexpectedly {
+    return new RemoteFileChangedUnexpectedly(
+      `File ${path} no longer matches the revision downloaded before this upload.`,
+    );
+  }
+
   // ==============================
   // File Operations
   // ==============================
@@ -155,7 +180,7 @@ export class WebdavApi {
 
       const hash = await this._computeContentHash(response.data);
       return {
-        rev: hash,
+        rev: this._readStrongEtag(response.headers) ?? hash,
         dataStr: response.data,
       };
     } catch (e) {
@@ -193,8 +218,13 @@ export class WebdavApi {
     const expectedHash = await this._computeContentHash(data);
 
     try {
-      // Application-level conflict detection: download current file and compare hash
-      if (!isForceOverwrite && expectedRev) {
+      const strongExpectedRev =
+        expectedRev && this._isStrongEtag(expectedRev) ? expectedRev : undefined;
+
+      // Servers without a strong ETag retain the legacy content-hash check. This
+      // detects stale writers but cannot close the GET→PUT race; strong ETags do
+      // close it through the HTTP precondition attached to the PUT below.
+      if (!isForceOverwrite && expectedRev && !strongExpectedRev) {
         try {
           const currentResponse = await this._makeRequest({
             url: fullPath,
@@ -202,21 +232,24 @@ export class WebdavApi {
           });
           const currentHash = await this._computeContentHash(currentResponse.data);
           if (currentHash !== expectedRev) {
-            throw new RemoteFileChangedUnexpectedly(
-              `File ${path} was modified on remote (expected rev: ${expectedRev}, got: ${currentHash})`,
-            );
+            throw this._remoteChanged(path);
           }
         } catch (e) {
-          // 404 means file doesn't exist yet — safe to proceed with upload
-          if (!(e instanceof RemoteFileNotFoundAPIError)) {
-            throw e;
-          }
+          // A revision was supplied, so disappearance is itself a conflicting
+          // remote change. Proceeding would silently recreate over that change.
+          if (e instanceof RemoteFileNotFoundAPIError) throw this._remoteChanged(path);
+          throw e;
         }
       }
 
       const headers: Record<string, string> = {
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/octet-stream',
       };
+      if (!isForceOverwrite && strongExpectedRev) {
+        headers[WebDavHttpHeader.IF_MATCH] = strongExpectedRev;
+      } else if (!isForceOverwrite && expectedRev === null) {
+        headers[WebDavHttpHeader.IF_NONE_MATCH] = '*';
+      }
 
       // Try to upload the file
       try {
@@ -227,6 +260,12 @@ export class WebdavApi {
           headers,
         });
       } catch (uploadError) {
+        if (this._isHttpStatus(uploadError, WebDavHttpStatus.PRECONDITION_FAILED)) {
+          throw this._remoteChanged(path);
+        }
+        if (uploadError instanceof RemoteFileNotFoundAPIError && expectedRev !== null) {
+          throw this._remoteChanged(path);
+        }
         if (
           // 404 on upload indicates the directory does not exist (Nextcloud)
           uploadError instanceof RemoteFileNotFoundAPIError ||
@@ -252,6 +291,9 @@ export class WebdavApi {
               headers,
             });
           } catch (retryError) {
+            if (this._isHttpStatus(retryError, WebDavHttpStatus.PRECONDITION_FAILED)) {
+              throw this._remoteChanged(path);
+            }
             if (
               retryError instanceof HttpNotOkAPIError &&
               retryError.response &&
@@ -277,8 +319,8 @@ export class WebdavApi {
         }
       }
 
-      const verifiedHash = await this._verifyUpload(path, fullPath, expectedHash);
-      return { rev: verifiedHash };
+      const verifiedRev = await this._verifyUpload(path, fullPath, expectedHash);
+      return { rev: verifiedRev };
     } catch (e) {
       this._deps.logger.critical(`${WebdavApi.L}.upload() error`, errorMeta(e, { path }));
       throw e;
@@ -333,7 +375,7 @@ export class WebdavApi {
           `sync cycle will re-download and reconcile.`,
       );
     }
-    return remoteHash;
+    return this._readStrongEtag(remoteResponse.headers) ?? remoteHash;
   }
 
   async remove(path: string): Promise<void> {

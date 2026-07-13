@@ -59,8 +59,10 @@ export class DialogSyncConflictComponent {
   remote = this.data.remote;
   local = this.data.local;
 
-  isHighlightRemote = this.remote.lastUpdate >= this.local.lastUpdate;
-  isHighlightLocal = !this.isHighlightRemote;
+  isHighlightRemote =
+    this.remote.lastUpdate !== null && this.remote.lastUpdate >= this.local.lastUpdate;
+  isHighlightLocal =
+    this.remote.lastUpdate === null || this.local.lastUpdate > this.remote.lastUpdate;
 
   remoteChangeCount = this.getChangeCount('remote');
   localChangeCount = this.getLocalChangeCount();

@@ -116,6 +116,16 @@ export interface FileBasedOpsFile<
   recentOps: SyncFileCompactOp<TCompactOperation>[];
   oldestOpSyncVersion?: number;
   snapshotRef: FileBasedSnapshotRef;
+  /**
+   * Present only while converting a legacy v2 file. Readers must finish or
+   * retry the migration before treating this ops file as committed. Keeping
+   * the complete candidate ops payload in the commit-point file makes recovery
+   * possible after a crash on either side of the legacy tombstone write.
+   */
+  migration?: {
+    status: 'pending';
+    legacyRev: string;
+  };
 }
 
 /**
