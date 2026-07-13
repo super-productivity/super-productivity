@@ -1,6 +1,6 @@
 # Operation Log Architecture
 
-**Status:** Parts A, B, C, D Complete (single-version; cross-version sync A.7.11 documented, not implemented)
+**Status:** Parts A, B, C, D Complete (cross-version sync mostly implemented; server upload skip-window validation remains)
 **Branch:** `feat/operation-logs`
 **Last Updated:** January 8, 2026
 
@@ -81,16 +81,16 @@ If we kept every operation forever, the database would grow huge.
 
 The Operation Log serves **four distinct purposes**:
 
-| Purpose                    | Description                                       | Status                        |
-| -------------------------- | ------------------------------------------------- | ----------------------------- |
-| **A. Local Persistence**   | Fast writes, crash recovery, event sourcing       | Complete ✅                   |
-| **B. File-Based Sync**     | Single-file sync for WebDAV/Dropbox/LocalFile     | Complete ✅                   |
-| **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅ (single-version)¹ |
-| **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅                   |
+| Purpose                    | Description                                       | Status      |
+| -------------------------- | ------------------------------------------------- | ----------- |
+| **A. Local Persistence**   | Fast writes, crash recovery, event sourcing       | Complete ✅ |
+| **B. File-Based Sync**     | Single-file sync for WebDAV/Dropbox/LocalFile     | Complete ✅ |
+| **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅ |
+| **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅ |
 
-> ¹ **Cross-version sync limitation**: Part C is complete for clients on the same schema version. Cross-version sync (A.7.11) is not yet implemented—see [A.7.11 Conflict-Aware Migration](#a711-conflict-aware-migration-strategy) for guardrails.
+> ¹ **Cross-version sync status**: Client receive paths and server replay/snapshot generation migrate older operations before conflict handling or reconstruction. Server upload validation still only sanity-checks `schemaVersion` as `1..100`; it does not enforce the shared skip window yet.
 
-> **✅ Migration Ready**: Migration safety (A.7.12), tail ops consistency (A.7.13), and unified migration interface (A.7.15) are now implemented. The system is ready for schema migrations when `CURRENT_SCHEMA_VERSION > 1`.
+> **✅ Migration Active**: Migration safety (A.7.12), tail ops consistency (A.7.13), unified migration interface (A.7.15), and the v1→v2 misc-to-tasks-settings migration are implemented.
 
 This document is structured around these four purposes. Most complexity lives in **Part A** (local persistence). **Part B** handles file-based sync via the `FileBasedSyncAdapter`. **Part C** handles operation-based sync with SuperSync server. **Part D** integrates validation and automatic repair.
 
@@ -605,16 +605,16 @@ private async attemptRecovery(): Promise<void> {
 
 When Super Productivity's data model changes (new fields, renamed properties, restructured entities), schema migrations ensure existing data remains usable after app updates.
 
-> **Current Status:** Migration infrastructure is implemented, but no actual migrations exist yet. The `MIGRATIONS` array is empty and `CURRENT_SCHEMA_VERSION = 1`. This section documents the designed behavior for when migrations are needed.
+> **Current Status:** Migration infrastructure is active. `CURRENT_SCHEMA_VERSION = 2`, `MIN_SUPPORTED_SCHEMA_VERSION = 1`, and `MAX_VERSION_SKIP = 3` are defined in `packages/shared-schema/src/schema-version.ts`. The migration registry contains the v1→v2 `MiscToTasksSettingsMigration_v1v2`, which moves settings from `MiscConfig` to `TasksConfig` and includes operation migration.
 
 ### Configuration
 
-`CURRENT_SCHEMA_VERSION` is defined in `src/app/op-log/store/schema-migration.service.ts`:
+`CURRENT_SCHEMA_VERSION`, `MIN_SUPPORTED_SCHEMA_VERSION`, and `MAX_VERSION_SKIP` are defined in `packages/shared-schema/src/schema-version.ts` and re-exported for client code by `src/app/op-log/persistence/schema-migration.service.ts`:
 
 ```typescript
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
-export const MAX_VERSION_SKIP = 5; // Max versions ahead we'll attempt to load
+export const MAX_VERSION_SKIP = 3; // Max versions ahead we'll attempt to load
 ```
 
 ### Core Concepts
@@ -783,13 +783,14 @@ async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Prom
 
 ### A.7.5 Migration Implementation
 
-Migrations are defined in `src/app/op-log/store/schema-migration.service.ts`.
+Migrations are defined in `packages/shared-schema/src/migrations/` and registered in `packages/shared-schema/src/migrations/index.ts`. Client code uses them through `src/app/op-log/persistence/schema-migration.service.ts`; server replay and snapshot generation import the same shared migration helpers.
 
 **How to Create a New Migration:**
 
-1. Increment `CURRENT_SCHEMA_VERSION`
-2. Add entry to `MIGRATIONS` array with `fromVersion`, `toVersion`, `description`, `migrate()`
-3. Test migration chain (v1→v2→v3 should equal v1→v3)
+1. Increment `CURRENT_SCHEMA_VERSION` in `packages/shared-schema/src/schema-version.ts`
+2. Create a migration file under `packages/shared-schema/src/migrations/`
+3. Add the migration to the `MIGRATIONS` array in `packages/shared-schema/src/migrations/index.ts`
+4. Test migration chains for both state and operations when `requiresOperationMigration` is `true`
 
 ```typescript
 interface SchemaMigration {
@@ -848,22 +849,23 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 **Rule of thumb:** Additive changes (new optional fields, new entities) don't need operation migration. Field renames/removals require it.
 
-### A.7.8 Cross-Version Sync (Not Yet Implemented)
+### A.7.8 Cross-Version Sync Guardrails
 
-**Status:** Design ready, not implemented. Safe while `CURRENT_SCHEMA_VERSION = 1`.
+**Status:** Mostly implemented. Client-side receive paths reject versions below `MIN_SUPPORTED_SCHEMA_VERSION`, reject versions above `CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP`, and migrate older remote operations before conflict handling. Server replay and snapshot generation migrate stored older operations/snapshots to the current schema before reconstruction. The remaining gap is server upload validation: `packages/super-sync-server/src/sync/services/validation.service.ts` currently sanity-checks `schemaVersion` as `1..100`, but does not enforce `MIN_SUPPORTED_SCHEMA_VERSION`/`MAX_VERSION_SKIP`.
 
-**Strategy:** Receiver migrates incoming ops before conflict detection. Sender uploads ops as-is.
+**Strategy:** Receivers migrate incoming/stored ops before conflict detection or replay. Senders upload ops with their own schema version.
 
-**Interim guardrails:**
+**Current guardrails:**
 
-- Reject ops with `schemaVersion > CURRENT + MAX_VERSION_SKIP`
-- Prompt user to update app when receiving newer-version ops
-
-**Required before:** Any schema migration that renames/removes fields.
+- Client rejects ops with `schemaVersion < MIN_SUPPORTED_SCHEMA_VERSION`
+- Client rejects ops with `schemaVersion > CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP`
+- Client migrates older remote ops before applying them
+- Server migrates older stored ops/snapshots before replay and snapshot generation
+- Server upload validation still needs skip-window enforcement beyond the current `1..100` sanity check
 
 ### A.7.11 Cross-Version Sync Implementation Guide
 
-> **Status:** Not yet implemented. This section documents the design for when `CURRENT_SCHEMA_VERSION > 1`.
+> **Status:** Mostly implemented for client receive, local hydration, server replay, and server snapshot generation. Keep this section as the implementation guide for future schema migrations; the remaining server gap is explicit upload-time skip-window enforcement.
 
 This guide provides the implementation roadmap for supporting sync between clients on different schema versions.
 
@@ -946,14 +948,14 @@ Remote Op (v1)          Local Op (v2)
 
 #### Backward Compatibility Guarantees
 
-| Scenario                                   | Behavior                                             | User Experience           |
-| ------------------------------------------ | ---------------------------------------------------- | ------------------------- |
-| Newer client → Older client                | Ops uploaded as-is; older client migrates on receive | Seamless                  |
-| Older client → Newer client                | Newer client migrates incoming ops                   | Seamless                  |
-| Client too old (> MAX_VERSION_SKIP behind) | Reject ops, prompt update                            | "Please update app" modal |
-| Client too new (server rejects)            | N/A - server doesn't validate schema                 | No issue                  |
+| Scenario                                   | Behavior                                                                        | User Experience           |
+| ------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------- |
+| Newer client → Older client                | Ops uploaded as-is; older client migrates on receive                            | Seamless                  |
+| Older client → Newer client                | Newer client migrates incoming ops                                              | Seamless                  |
+| Client too old (> MAX_VERSION_SKIP behind) | Reject ops, prompt update                                                       | "Please update app" modal |
+| Client too new for server skip window      | Server currently accepts `1..100`; stricter upload rejection is a remaining gap | Follow-up needed          |
 
-**MAX_VERSION_SKIP = 5**: Clients more than 5 versions behind cannot sync until updated. This bounds the migration chain complexity.
+**MAX_VERSION_SKIP = 3**: Clients more than 3 versions ahead are rejected by client receive paths until the app is updated. Server upload validation currently only sanity-checks `1..100`; enforcing the same skip window server-side is a remaining gap.
 
 #### Migration Rollout Strategy
 
@@ -1210,7 +1212,7 @@ interface OperationSyncCapable {
   uploadOps(
     ops: SyncOperation[],
     clientId: string,
-    lastKnownSeq: number,
+    lastKnownServerSeq?: number,
   ): Promise<UploadResponse>;
   downloadOps(
     sinceSeq: number,
@@ -2213,24 +2215,25 @@ When adding new entities or relationships:
 - Genesis migration from legacy data
 - Compaction with 7-day retention window
 - Disaster recovery from legacy 'pf' database
-- Schema migration service infrastructure (no migrations defined yet)
+- Schema migration service infrastructure with the v1→v2 misc-to-tasks-settings migration
 - Persistent action metadata on all model actions
 - Rollback notification on persistence failure (shows snackbar with reload action)
 - Hydration optimizations (skip replay for SyncImport, save snapshot after >10 ops replayed)
 - **Migration safety backup (A.7.12)** - Creates backup before migration, restores on failure
 - **Tail ops migration (A.7.13)** - Migrates operations during hydration before replay
 - **Unified migration interface (A.7.15)** - `SchemaMigration` includes both `migrateState` and optional `migrateOperation`
+- **Conflict-aware operation migration (A.7.11, partial)** - Client receive paths and server replay/snapshot generation migrate older operations before conflict handling/replay
 - **Persistent compaction counter** - Counter stored in `state_cache`, shared across tabs/restarts
 - **`syncedAt` index** - Index on ops store for faster `getUnsynced()` queries
 - **Quota handling** - Emergency compaction on `QuotaExceededError` with circuit breaker to prevent infinite loops
 
 ### Not Implemented ⚠️
 
-| Item                            | Section | Risk if Missing                          | When Critical                                           |
-| ------------------------------- | ------- | ---------------------------------------- | ------------------------------------------------------- |
-| **Conflict-aware op migration** | A.7.11  | Conflicts may compare mismatched schemas | Before any schema migration that renames/removes fields |
+| Item                                             | Section | Risk if Missing                             | When Critical                         |
+| ------------------------------------------------ | ------- | ------------------------------------------- | ------------------------------------- |
+| **Server upload schema skip-window enforcement** | A.7.11  | Server accepts ops far outside client range | Before removing older migration paths |
 
-> **Note**: A.7.11 is required for cross-version sync. Currently safe because `CURRENT_SCHEMA_VERSION = 1` (all clients on same version). See [A.7.11 Interim Guardrails](#interim-guardrails-until-implementation) for pre-release checklist.
+> **Remaining gap**: Server upload validation still does not enforce the shared schema skip window; it only sanity-checks `schemaVersion` in the range `1..100`.
 
 ## Part B: Legacy Sync Bridge
 
@@ -2244,7 +2247,7 @@ When adding new entities or relationships:
 
 ## Part C: Server Sync
 
-### Complete ✅ (Single-Version)
+### Complete ✅
 
 - Operation sync protocol interface (`OperationSyncCapable`)
 - `OperationLogSyncService` (orchestration, processRemoteOps, detectConflicts)
@@ -2279,7 +2282,7 @@ When adding new entities or relationships:
   - Batch cleanup queries (replaced N+1 pattern)
   - Database index on `(user_id, received_at)` for cleanup queries
 
-> **Cross-version limitation**: Part C is complete for clients on the same schema version. When `CURRENT_SCHEMA_VERSION > 1` and clients run different versions, A.7.11 (conflict-aware op migration) is required to ensure correct conflict detection.
+> **Remaining gap**: Server upload validation still does not enforce the shared schema skip window; it only sanity-checks `schemaVersion` in the range `1..100`.
 
 ## Part D: Validation & Repair
 
@@ -2295,12 +2298,12 @@ When adding new entities or relationships:
 
 ## Future Enhancements 🔮
 
-| Component  | Description                                | Priority | Notes                                                                          |
-| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------ |
-| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                |
-| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                |
-| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation) |
-| A.7.11     | Conflict-aware operation migration         | High     | Required before `CURRENT_SCHEMA_VERSION > 1` for cross-version sync            |
+| Component  | Description                                  | Priority | Notes                                                                          |
+| ---------- | -------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| Auto-merge | Automatic merge for non-conflicting fields   | Low      |                                                                                |
+| Undo/Redo  | Leverage op-log for undo history             | Low      |                                                                                |
+| Tombstones | Soft delete with retention window            | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation) |
+| A.7.11     | Server upload schema skip-window enforcement | Medium   | Align server upload validation with client receive guardrails                  |
 
 > **Recently Completed (December 2025):**
 >
