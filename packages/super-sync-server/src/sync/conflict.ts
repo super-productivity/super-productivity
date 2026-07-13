@@ -538,7 +538,7 @@ export const prefetchLatestEntityOpsForBatch = async (
         entityId: 'misc',
         schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
       },
-      select: { clientId: true, vectorClock: true, serverSeq: true },
+      select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
       orderBy: { serverSeq: 'desc' },
     });
     const tasksKey = getEntityConflictKey('GLOBAL_CONFIG', 'tasks');
