@@ -14,12 +14,12 @@ export const DB_NAME = 'SUP_OPS';
 /**
  * Current database schema version.
  *
- * Version 8 is a deliberate downgrade barrier for the distinct
- * `archive_pending` reducer checkpoint. Released v7 readers only understand
- * `failed`; IndexedDB must reject their attempt to open a newer database rather
- * than let outstanding archive work become invisible.
+ * Version 9 is a downgrade barrier for schema-v3 replacement LWW operations.
+ * Version 8 readers treat them as patches, so IndexedDB must reject an older
+ * app before it can replay omitted fields incorrectly. Version 8 previously
+ * served the same purpose for the `archive_pending` reducer checkpoint.
  */
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 /** Object store names */
 export const STORE_NAMES = {

@@ -227,7 +227,7 @@ export interface LwwUpdatePayload<
   /**
    * Allows this synthetic update to recreate an entity removed by an earlier
    * DELETE in the same replay batch. Conflict resolution sets this only when
-   * a multi-entity delete wins for some entities but loses for this one.
+   * an earlier delete loses to this update during conflict resolution.
    *
    * Archive operations never set this flag: archive precedence remains
    * absolute and archived entities must not be resurrected by LWW updates.
@@ -263,6 +263,23 @@ export const extractActionPayload = (payload: unknown): Record<string, unknown> 
   return payload as Record<string, unknown>;
 };
 
+const findEntityByIdInPayloadArrays = (
+  actionPayload: Record<string, unknown>,
+  entityId: string,
+): Record<string, unknown> | undefined => {
+  for (const value of Object.values(actionPayload)) {
+    if (!Array.isArray(value)) continue;
+    const matchingPayload = value.find(
+      (candidate): candidate is Record<string, unknown> =>
+        typeof candidate === 'object' &&
+        candidate !== null &&
+        (candidate as Record<string, unknown>)['id'] === entityId,
+    );
+    if (matchingPayload) return matchingPayload;
+  }
+  return undefined;
+};
+
 /**
  * Extracts a full entity from an operation payload.
  *
@@ -273,11 +290,16 @@ export const extractActionPayload = (payload: unknown): Record<string, unknown> 
 export const extractEntityFromPayload = (
   payload: unknown,
   payloadKey: string,
+  entityId?: string,
 ): Record<string, unknown> | undefined => {
   const actionPayload = extractActionPayload(payload);
   const entity = actionPayload[payloadKey];
   if (entity && typeof entity === 'object') {
     return entity as Record<string, unknown>;
+  }
+  if (entityId) {
+    const matchingEntity = findEntityByIdInPayloadArrays(actionPayload, entityId);
+    if (matchingEntity) return matchingEntity;
   }
   if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
     return actionPayload as Record<string, unknown>;
@@ -322,19 +344,7 @@ export const extractUpdateChanges = (
     // pluralizing payloadKey — `${payloadKey}s` missed `taskUpdates` (and any
     // irregular plural), silently returning {} and dropping the remote winner's
     // changes. The direct payloadKey lookup above still takes precedence.
-    for (const value of Object.values(actionPayload)) {
-      if (!Array.isArray(value)) continue;
-      const matchingPayload = value.find(
-        (candidate): candidate is Record<string, unknown> =>
-          typeof candidate === 'object' &&
-          candidate !== null &&
-          (candidate as Record<string, unknown>)['id'] === entityId,
-      );
-      if (matchingPayload) {
-        entityPayload = matchingPayload;
-        break;
-      }
-    }
+    entityPayload = findEntityByIdInPayloadArrays(actionPayload, entityId);
   }
   if (!entityPayload) return {};
   if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {

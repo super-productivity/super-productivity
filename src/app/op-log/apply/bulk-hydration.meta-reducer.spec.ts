@@ -981,6 +981,40 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_DELETE_MULTIPLE);
     });
 
+    it('does not cascade-delete a child detached by an earlier replacement LWW', () => {
+      const parentId = 'parent-before-detach';
+      const childId = 'child-detached-before-delete';
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = buildParentWithSubtaskState(parentId, childId);
+      const detachChild = createMockOperation({
+        id: 'detach-child-replacement',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: childId,
+        payload: {
+          actionPayload: createMockTask({ id: childId, subTaskIds: [] }),
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [
+            detachChild,
+            buildParentOnlyDeleteOp(parentId, 'delete-detached-child-parent'),
+          ],
+        }),
+      );
+
+      expect(reducerCalls.map(({ action }) => action.type)).toEqual([
+        TASK_LWW_TYPE,
+        ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      ]);
+    });
+
     it('should filter using entityId fallback when entityIds array is missing', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();

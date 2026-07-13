@@ -281,6 +281,7 @@ export class TaskRepeatCleanupEffects {
                 this._store.dispatch(
                   TaskSharedActions.deleteTasks({
                     taskIds: deleteIds,
+                    tasks: deleteTasks,
                   }),
                 );
               }

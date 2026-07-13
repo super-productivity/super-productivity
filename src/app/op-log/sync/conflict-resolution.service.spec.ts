@@ -1014,6 +1014,9 @@ describe('ConflictResolutionService', () => {
 
       it('should resolve UPDATE vs DELETE conflict using LWW when UPDATE is newer', async () => {
         const now = Date.now();
+        mockStore.select.and.returnValue(
+          of({ id: 'task-1', title: 'Local winning task' }),
+        );
         const conflicts: EntityConflict[] = [
           createConflict(
             'task-1',
@@ -1037,6 +1040,10 @@ describe('ConflictResolutionService', () => {
         // Local UPDATE wins (newer timestamp)
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-upd']);
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-del']);
+        expect(
+          (getFirstMixedLocalOp().payload as { recreatesEntityAfterDelete?: boolean })
+            .recreatesEntityAfterDelete,
+        ).toBeTrue();
       });
 
       it('should resolve DELETE vs UPDATE conflict when DELETE is older (remote UPDATE wins)', async () => {
@@ -1405,7 +1412,13 @@ describe('ConflictResolutionService', () => {
           actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
           entityIds: ['task-1', 'task-2'],
           payload: {
-            actionPayload: { taskIds: ['task-1', 'task-2'] },
+            actionPayload: {
+              taskIds: ['task-1', 'task-2'],
+              tasks: [
+                { id: 'task-1', title: 'Task one' },
+                { id: 'task-2', title: 'Task two' },
+              ],
+            },
             entityChanges: [
               {
                 entityType: 'TASK',
@@ -1456,6 +1469,13 @@ describe('ConflictResolutionService', () => {
         ]);
         expect(
           (
+            extractActionPayload(replacementDelete.payload)['tasks'] as Array<{
+              id: string;
+            }>
+          ).map(({ id }) => id),
+        ).toEqual(['task-2']);
+        expect(
+          (
             replacementDelete.payload as { entityChanges?: Array<{ entityId: string }> }
           ).entityChanges?.map(({ entityId }) => entityId),
         ).toEqual(['task-2']);
@@ -1463,6 +1483,95 @@ describe('ConflictResolutionService', () => {
         expect(
           compareVectorClocks(replacementDelete.vectorClock, localBulkDelete.vectorClock),
         ).toBe(VectorClockComparison.GREATER_THAN);
+      });
+
+      it('preserves unaffected siblings from non-task bulk deletes', async () => {
+        const localBulkDelete: Operation = {
+          ...createOpWithTimestamp(
+            'local-tag-delete-multiple',
+            'client-a',
+            1000,
+            OpType.Delete,
+            'tag-1',
+          ),
+          actionType: ActionType.TAG_DELETE_MULTIPLE,
+          entityType: 'TAG',
+          entityIds: ['tag-1', 'tag-2'],
+          payload: {
+            actionPayload: { ids: ['tag-1', 'tag-2'] },
+            entityChanges: [],
+          },
+        };
+        const remoteWinner: Operation = {
+          ...createOpWithTimestamp(
+            'remote-tag-1',
+            'client-b',
+            2000,
+            OpType.Update,
+            'tag-1',
+          ),
+          entityType: 'TAG',
+        };
+
+        await service.autoResolveConflictsLWW([
+          {
+            entityType: 'TAG',
+            entityId: 'tag-1',
+            localOps: [localBulkDelete],
+            remoteOps: [remoteWinner],
+            suggestedResolution: 'manual',
+          },
+        ]);
+
+        const replacementDelete = getFirstMixedLocalOp();
+        expect(replacementDelete.actionType).toBe(ActionType.TAG_DELETE_MULTIPLE);
+        expect(replacementDelete.entityId).toBe('tag-2');
+        expect(replacementDelete.entityIds).toEqual(['tag-2']);
+        expect(extractActionPayload(replacementDelete.payload)['ids']).toEqual(['tag-2']);
+      });
+
+      it('preserves an unaffected sibling from a partially rejected local bulk update', async () => {
+        const localBulkUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'local-bulk-update',
+            'client-a',
+            1000,
+            OpType.Update,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_UPDATE_MULTIPLE,
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            actionPayload: {
+              tasks: [
+                { id: 'task-1', changes: { title: 'Local one' } },
+                { id: 'task-2', changes: { title: 'Local two' } },
+              ],
+            },
+            entityChanges: [],
+          },
+        };
+        const remoteWinner = createOpWithTimestamp(
+          'remote-task-1',
+          'client-b',
+          2000,
+          OpType.Update,
+          'task-1',
+        );
+        mockStore.select.and.returnValue(
+          of({ id: 'task-2', title: 'Local two', projectId: 'project-1' }),
+        );
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localBulkUpdate], [remoteWinner]),
+        ]);
+
+        expect(getMixedLocalOps()).toEqual([
+          jasmine.objectContaining({
+            actionType: '[TASK] LWW Update',
+            entityId: 'task-2',
+          }),
+        ]);
       });
 
       it('should not apply a multi-entity remote op when local wins every entity', async () => {
@@ -2347,6 +2456,62 @@ describe('ConflictResolutionService', () => {
           'mark-rejected',
           'apply-remote',
         ]);
+      });
+
+      it('persists a final remote winner after an older loser and its compensation', async () => {
+        const localOp = createOpWithTimestamp(
+          'local-op',
+          'client-a',
+          2000,
+          OpType.Update,
+          'task-1',
+        );
+        const remoteLoser = createOpWithTimestamp(
+          'remote-loser',
+          'client-b',
+          1000,
+          OpType.Update,
+          'task-1',
+        );
+        const remoteWinner = createOpWithTimestamp(
+          'remote-winner',
+          'client-b',
+          3000,
+          OpType.Update,
+          'task-1',
+        );
+        const persistenceOrder: string[] = [];
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+          async (batches) => {
+            persistenceOrder.push('loser-and-compensation');
+            return {
+              written: batches.flatMap((batch) =>
+                batch.ops.map((op, index) => ({
+                  seq: index + 1,
+                  op,
+                  source: batch.source,
+                })),
+              ),
+              skippedCount: 0,
+            };
+          },
+        );
+        mockOpLogStore.appendBatchSkipDuplicates.and.callFake(async (ops) => {
+          persistenceOrder.push('remote-winner');
+          return {
+            seqs: ops.map((_, index) => index + 100),
+            writtenOps: ops,
+            skippedCount: 0,
+          };
+        });
+        mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local state' }));
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localOp], [remoteLoser]),
+          createConflict('task-1', [localOp], [remoteWinner]),
+        ]);
+
+        expect(persistenceOrder).toEqual(['loser-and-compensation', 'remote-winner']);
       });
 
       it('should not reject or apply remote rows when local-win compensation cannot persist', async () => {
@@ -3998,7 +4163,7 @@ describe('ConflictResolutionService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');
-      expect(result[0].payload).toEqual({
+      expect(extractActionPayload(result[0].payload)).toEqual({
         id: 'task-1',
         title: 'Updated Title',
         projectId: 'proj-1',
@@ -4046,7 +4211,7 @@ describe('ConflictResolutionService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');
-      expect(result[0].payload).toEqual({
+      expect(extractActionPayload(result[0].payload)).toEqual({
         id: 'task-1',
         title: 'Updated Title',
         projectId: 'proj-1',
@@ -4086,12 +4251,13 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].payload.notes).toBe('Some notes');
-      expect(result[0].payload.projectId).toBe('proj-1');
-      expect(result[0].payload.tagIds).toEqual(['tag-1', 'tag-2']);
-      expect(result[0].payload.dueDay).toBe('2025-06-01');
-      expect(result[0].payload.timeEstimate).toBe(3600000);
-      expect(result[0].payload.title).toBe('New Title');
+      const payload = extractActionPayload(result[0].payload);
+      expect(payload['notes']).toBe('Some notes');
+      expect(payload['projectId']).toBe('proj-1');
+      expect(payload['tagIds']).toEqual(['tag-1', 'tag-2']);
+      expect(payload['dueDay']).toBe('2025-06-01');
+      expect(payload['timeEstimate']).toBe(3600000);
+      expect(payload['title']).toBe('New Title');
     });
 
     it('should not convert non-UPDATE remote ops even when local DELETE exists', () => {
@@ -4178,7 +4344,7 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
-      expect(result[0].payload).toEqual({
+      expect(extractActionPayload(result[0].payload)).toEqual({
         id: 'task-1',
         title: 'Flat Update',
         projectId: 'proj-1',
@@ -4273,8 +4439,9 @@ describe('ConflictResolutionService', () => {
       const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
 
       // Merged payload has top-level `id` — required by lwwUpdateMetaReducer
-      expect(result[0].payload.id).toBe('task-1');
-      expect(typeof result[0].payload.id).toBe('string');
+      const payload = extractActionPayload(result[0].payload);
+      expect(payload['id']).toBe('task-1');
+      expect(typeof payload['id']).toBe('string');
     });
   });
 
@@ -5010,9 +5177,10 @@ describe('ConflictResolutionService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');
-      expect(result[0].payload.id).toBe('task-1');
-      expect(result[0].payload.title).toBe('New title');
-      expect(result[0].payload.projectId).toBe('proj-1');
+      const payload = extractActionPayload(result[0].payload);
+      expect(payload['id']).toBe('task-1');
+      expect(payload['title']).toBe('New title');
+      expect(payload['projectId']).toBe('proj-1');
     });
 
     // Singletons (GLOBAL_CONFIG, app-state, time-tracking) use entityId='*'

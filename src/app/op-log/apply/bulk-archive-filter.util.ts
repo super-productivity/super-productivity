@@ -1,5 +1,6 @@
 import {
   ActionType,
+  isLwwUpdatePayload,
   isMultiEntityPayload,
   Operation,
   OpType,
@@ -161,26 +162,72 @@ const harvestTaskEntityMapSubTaskIdsForParents = (
   }
 };
 
+const syncProjectedParentMembership = (
+  projection: TaskEntityMap,
+  taskId: string,
+  previousParentId: unknown,
+  nextParentId: unknown,
+): void => {
+  if (previousParentId === nextParentId) return;
+
+  if (typeof previousParentId === 'string') {
+    const previousParent = projection[previousParentId];
+    if (previousParent && typeof previousParent === 'object') {
+      const parent = previousParent as Record<string, unknown>;
+      const subTaskIds = Array.isArray(parent['subTaskIds'])
+        ? parent['subTaskIds'].filter((subTaskId) => subTaskId !== taskId)
+        : [];
+      projection[previousParentId] = { ...parent, subTaskIds };
+    }
+  }
+
+  if (typeof nextParentId === 'string') {
+    const nextParent = projection[nextParentId];
+    if (nextParent && typeof nextParent === 'object') {
+      const parent = nextParent as Record<string, unknown>;
+      const subTaskIds = Array.isArray(parent['subTaskIds'])
+        ? parent['subTaskIds'].filter(
+            (subTaskId): subTaskId is string => typeof subTaskId === 'string',
+          )
+        : [];
+      projection[nextParentId] = {
+        ...parent,
+        subTaskIds: subTaskIds.includes(taskId) ? subTaskIds : [...subTaskIds, taskId],
+      };
+    }
+  }
+};
+
 const upsertTaskProjectionFromTaskLike = (
   projection: TaskEntityMap,
   taskLike: unknown,
   fallbackId?: string,
+  replaceExisting = false,
 ): void => {
   if (!taskLike || typeof taskLike !== 'object') return;
   const task = taskLike as Record<string, unknown>;
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   if (!id) return;
   const prev = projection[id];
-  projection[id] = {
-    ...(prev && typeof prev === 'object' ? (prev as Record<string, unknown>) : {}),
+  const previousTask =
+    prev && typeof prev === 'object' ? (prev as Record<string, unknown>) : undefined;
+  const nextTask = {
+    ...(replaceExisting ? {} : previousTask),
     ...task,
     id,
   };
+  projection[id] = nextTask;
+  syncProjectedParentMembership(
+    projection,
+    id,
+    previousTask?.['parentId'],
+    nextTask['parentId'],
+  );
 
   const subTasks = task.subTasks;
   if (Array.isArray(subTasks)) {
     for (const subTask of subTasks) {
-      upsertTaskProjectionFromTaskLike(projection, subTask);
+      upsertTaskProjectionFromTaskLike(projection, subTask, undefined, replaceExisting);
     }
   }
 };
@@ -189,16 +236,22 @@ const upsertTaskProjectionFromTaskOrUpdate = (
   projection: TaskEntityMap,
   taskLike: unknown,
   fallbackId?: string,
+  replaceExisting = false,
 ): void => {
   if (!taskLike || typeof taskLike !== 'object') return;
   const task = taskLike as Record<string, unknown>;
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   const changes = task.changes;
   if (id && changes && typeof changes === 'object') {
-    upsertTaskProjectionFromTaskLike(projection, { ...(changes as object), id }, id);
+    upsertTaskProjectionFromTaskLike(
+      projection,
+      { ...(changes as object), id },
+      id,
+      replaceExisting,
+    );
     return;
   }
-  upsertTaskProjectionFromTaskLike(projection, taskLike, fallbackId);
+  upsertTaskProjectionFromTaskLike(projection, taskLike, fallbackId, replaceExisting);
 };
 
 const isTaskLwwUpdateOp = (op: Operation): boolean =>
@@ -242,7 +295,12 @@ const applyTaskProjectionFromOp = (op: Operation, projection: TaskEntityMap): vo
   // TASK LWW Update stores the task partial directly in payload. Other
   // direct-looking task actions like unscheduleTask are commands, not entities.
   if (isTaskLwwUpdateOp(op)) {
-    upsertTaskProjectionFromTaskOrUpdate(projection, payload, op.entityId);
+    upsertTaskProjectionFromTaskOrUpdate(
+      projection,
+      payload,
+      op.entityId,
+      isLwwUpdatePayload(op.payload) && op.payload.lwwUpdateMode === 'replace',
+    );
   }
 };
 

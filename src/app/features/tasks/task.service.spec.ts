@@ -318,12 +318,14 @@ describe('TaskService', () => {
   });
 
   describe('removeMultipleTasks', () => {
-    it('should dispatch deleteTasks with only taskIds', () => {
+    it('should dispatch deleteTasks with snapshots for conflict recovery', () => {
       service.removeMultipleTasks(['task-1', 'task-2']);
 
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.deleteTasks({ taskIds: ['task-1', 'task-2'] }),
-      );
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent().args[0] as
+        | (ReturnType<typeof TaskSharedActions.deleteTasks> & { tasks?: Task[] })
+        | undefined;
+      expect(action?.taskIds).toEqual(['task-1', 'task-2']);
+      expect(action?.tasks?.map(({ id }) => id)).toEqual(['task-1', 'task-2']);
     });
 
     it('should populate sidecar with issue info before dispatch', () => {
