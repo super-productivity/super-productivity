@@ -83,6 +83,15 @@ describe('File-Based Sync Integration - Edge Cases', () => {
       expect(response.results).toEqual([]);
       expect(response.latestSeq).toBeGreaterThanOrEqual(0);
     });
+
+    it('should reject create-if-absent when the target already exists', async () => {
+      const provider = harness.getProvider();
+      provider.setFileContent(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, 'winner');
+
+      await expectAsync(
+        provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, 'loser', null, false),
+      ).toBeRejectedWith(jasmine.any(UploadRevToMatchMismatchAPIError));
+    });
   });
 
   describe('Provider Error Handling', () => {

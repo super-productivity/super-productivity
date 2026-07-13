@@ -131,7 +131,7 @@ export abstract class WebdavBaseProvider<
   async uploadFile(
     targetPath: string,
     dataStr: string,
-    localRev: string,
+    localRev: string | null,
     isForceOverwrite: boolean = false,
   ): Promise<{ rev: string }> {
     this._logger.normal(`${this.logLabel}.uploadFile()`, {

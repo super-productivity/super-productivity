@@ -214,7 +214,8 @@ export class OperationLogDownloadService implements OnDestroy {
           remoteLastModified =
             typeof receivedLastModified === 'number' &&
             Number.isFinite(receivedLastModified) &&
-            receivedLastModified >= 0
+            receivedLastModified >= 0 &&
+            Number.isFinite(new Date(receivedLastModified).getTime())
               ? receivedLastModified
               : undefined;
           OpLog.normal(
