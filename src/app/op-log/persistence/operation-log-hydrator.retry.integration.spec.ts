@@ -4,6 +4,7 @@ import { OperationLogHydratorService } from './operation-log-hydrator.service';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { OperationLogMigrationService } from './operation-log-migration.service';
 import { SchemaMigrationService } from './schema-migration.service';
+import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { SyncHydrationService } from './sync-hydration.service';
@@ -18,6 +19,9 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { ActionType, EntityType, Operation, OpType } from '../core/operation.types';
 import { ApplyOperationsResult } from '../core/types/apply.types';
 import { uuidv7 } from '../../util/uuid-v7';
+import { bulkApplyOperations } from '../apply/bulk-hydration.action';
+import { bulkOperationsMetaReducer } from '../apply/bulk-hydration.meta-reducer';
+import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-collector';
 
 /**
  * Integration coverage for retryFailedRemoteOps (#8305 fix (b)) against the REAL
@@ -31,7 +35,9 @@ import { uuidv7 } from '../../util/uuid-v7';
 describe('OperationLogHydratorService retryFailedRemoteOps (integration, real store)', () => {
   let hydrator: OperationLogHydratorService;
   let store: OperationLogStoreService;
+  let ngrxStore: jasmine.SpyObj<Store>;
   let applier: jasmine.SpyObj<OperationApplierService>;
+  let recovery: jasmine.SpyObj<OperationLogRecoveryService>;
 
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
@@ -69,9 +75,16 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
   };
 
   beforeEach(async () => {
+    ngrxStore = jasmine.createSpyObj<Store>('Store', ['dispatch']);
     applier = jasmine.createSpyObj<OperationApplierService>('OperationApplierService', [
       'applyOperations',
     ]);
+    recovery = jasmine.createSpyObj<OperationLogRecoveryService>(
+      'OperationLogRecoveryService',
+      ['recoverPendingRemoteOps', 'cleanupCorruptOps', 'attemptRecovery'],
+    );
+    recovery.cleanupCorruptOps.and.resolveTo();
+    recovery.attemptRecovery.and.resolveTo();
 
     TestBed.configureTestingModule({
       providers: [
@@ -82,17 +95,44 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
         { provide: OperationApplierService, useValue: applier },
         // retryFailedRemoteOps touches only the store + applier; the remaining
         // hydrator deps must exist for DI but are never called on this path.
-        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
-        { provide: OperationLogMigrationService, useValue: {} },
-        { provide: SchemaMigrationService, useValue: {} },
-        { provide: OperationLogSnapshotService, useValue: {} },
-        { provide: OperationLogRecoveryService, useValue: {} },
+        { provide: Store, useValue: ngrxStore },
+        {
+          provide: OperationLogMigrationService,
+          useValue: { checkAndMigrate: () => Promise.resolve() },
+        },
+        SchemaMigrationService,
+        {
+          provide: OperationLogSnapshotService,
+          useValue: {
+            isValidSnapshot: () => true,
+            migrateSnapshotWithBackup: (snapshot: unknown) => Promise.resolve(snapshot),
+            saveCurrentStateAsSnapshot: () => Promise.resolve(),
+          },
+        },
+        { provide: OperationLogRecoveryService, useValue: recovery },
         { provide: SyncHydrationService, useValue: {} },
-        { provide: ArchiveMigrationService, useValue: {} },
-        { provide: StateSnapshotService, useValue: {} },
+        {
+          provide: ArchiveMigrationService,
+          useValue: { migrateArchivesIfNeeded: () => Promise.resolve() },
+        },
+        {
+          provide: StateSnapshotService,
+          useValue: { getStateSnapshot: () => ({}) },
+        },
         { provide: SnackService, useValue: {} },
-        { provide: ValidateStateService, useValue: {} },
-        { provide: HydrationStateService, useValue: {} },
+        {
+          provide: ValidateStateService,
+          useValue: {
+            validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+          },
+        },
+        {
+          provide: HydrationStateService,
+          useValue: {
+            startApplyingRemoteOps: () => {},
+            endApplyingRemoteOps: () => {},
+          },
+        },
       ],
     });
 
@@ -100,6 +140,197 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
     store = TestBed.inject(OperationLogStoreService);
     await store.init();
     await store._clearAllDataForTesting();
+    recovery.recoverPendingRemoteOps.and.callFake(() => store.getPendingRemoteOps());
+  });
+
+  it('replays a split pending migration from its original durable row on two boots', async () => {
+    const legacyConfigOp = createOp({
+      id: 'legacy-config-op',
+      actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+      entityType: 'GLOBAL_CONFIG',
+      entityId: 'misc',
+      entityIds: ['misc'],
+      payload: {
+        actionPayload: {
+          sectionKey: 'misc',
+          sectionCfg: {
+            isConfirmBeforeTaskDelete: true,
+            unrelatedMiscSetting: 'keep-me',
+          },
+        },
+        entityChanges: [],
+      },
+      schemaVersion: 1,
+    });
+    await store.saveStateCache({
+      state: {},
+      lastAppliedOpSeq: 0,
+      vectorClock: {},
+      compactedAt: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    await store.appendBatchSkipDuplicates([legacyConfigOp], 'remote', {
+      pendingApply: true,
+    });
+    applier.applyOperations.and.callFake(async (ops) => ({ appliedOps: ops }));
+    const expectedMigratedIds = ['legacy-config-op_misc', 'legacy-config-op_tasks'];
+
+    await hydrator.hydrateStore();
+
+    expect(ngrxStore.dispatch.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({
+        type: bulkApplyOperations.type,
+        operations: jasmine.arrayWithExactContents([
+          jasmine.objectContaining({ id: expectedMigratedIds[0] }),
+          jasmine.objectContaining({ id: expectedMigratedIds[1] }),
+        ]),
+      }),
+    );
+    const durableAfterFirstBoot = await store.getOpById(legacyConfigOp.id);
+    expect(durableAfterFirstBoot?.applicationStatus).toBe('applied');
+    expect(durableAfterFirstBoot?.reducerRejectedAt).toBeUndefined();
+
+    ngrxStore.dispatch.calls.reset();
+    const rebootedHydrator = TestBed.runInInjectionContext(
+      () => new OperationLogHydratorService(),
+    );
+    await rebootedHydrator.hydrateStore();
+
+    expect(ngrxStore.dispatch.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({
+        type: bulkApplyOperations.type,
+        operations: jasmine.arrayWithExactContents([
+          jasmine.objectContaining({ id: expectedMigratedIds[0] }),
+          jasmine.objectContaining({ id: expectedMigratedIds[1] }),
+        ]),
+      }),
+    );
+  });
+
+  it('keeps a partially failing split migration absent across two boots', async () => {
+    const legacyConfigOp = createOp({
+      id: 'legacy-config-op-with-failing-child',
+      actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+      entityType: 'GLOBAL_CONFIG',
+      entityId: 'misc',
+      entityIds: ['misc'],
+      payload: {
+        actionPayload: {
+          sectionKey: 'misc',
+          sectionCfg: {
+            isConfirmBeforeTaskDelete: true,
+            unrelatedMiscSetting: 'keep-me',
+          },
+        },
+        entityChanges: [],
+      },
+      schemaVersion: 1,
+    });
+    await store.saveStateCache({
+      state: {},
+      lastAppliedOpSeq: 0,
+      vectorClock: {},
+      compactedAt: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    await store.appendBatchSkipDuplicates([legacyConfigOp], 'remote', {
+      pendingApply: true,
+    });
+    type ReplayState = { sections: string[] };
+    let replayState: ReplayState = { sections: [] };
+    let bulkDispatchCount = 0;
+    const replayReducer = bulkOperationsMetaReducer<ReplayState>(
+      (state = { sections: [] }, action) => {
+        const sectionKey = (action as { sectionKey?: string }).sectionKey;
+        if (sectionKey === 'tasks') {
+          throw new Error('tasks migration child failed');
+        }
+        return sectionKey ? { sections: [...state.sections, sectionKey] } : state;
+      },
+    );
+    ngrxStore.dispatch.and.callFake(((action: { type: string }) => {
+      if (action.type === bulkApplyOperations.type) {
+        bulkDispatchCount++;
+        replayState = replayReducer(replayState, action);
+      }
+    }) as never);
+
+    await hydrator.hydrateStore();
+
+    expect(replayState.sections).toEqual([]);
+    const durableAfterFirstBoot = await store.getOpById(legacyConfigOp.id);
+    expect(durableAfterFirstBoot?.reducerRejectedAt).toBeDefined();
+
+    ngrxStore.dispatch.calls.reset();
+    bulkDispatchCount = 0;
+    const rebootedHydrator = TestBed.runInInjectionContext(
+      () => new OperationLogHydratorService(),
+    );
+    await rebootedHydrator.hydrateStore();
+
+    expect(replayState.sections).toEqual([]);
+    expect(bulkDispatchCount).toBe(0);
+  });
+
+  it('keeps a failed full-state row pending until a healthy boot applies it', async () => {
+    const fullStateOp = createOp({
+      id: 'pending-sync-import',
+      actionType: ActionType.LOAD_ALL_DATA,
+      opType: OpType.SyncImport,
+      entityType: 'ALL',
+      entityId: undefined,
+      payload: { appDataComplete: {} },
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    await store.saveStateCache({
+      state: {},
+      lastAppliedOpSeq: 0,
+      vectorClock: {},
+      compactedAt: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    await store.appendBatchSkipDuplicates([fullStateOp], 'remote', {
+      pendingApply: true,
+    });
+    let shouldFailReducer = true;
+    ngrxStore.dispatch.and.callFake(((action: { type: string }) => {
+      if (shouldFailReducer && action.type === bulkApplyOperations.type) {
+        reportBulkReplayReducerFailure(
+          fullStateOp,
+          new Error('full-state reducer failed'),
+        );
+      }
+    }) as never);
+
+    await hydrator.hydrateStore();
+
+    const failedEntry = await store.getOpById(fullStateOp.id);
+    expect(failedEntry?.applicationStatus).toBe('pending');
+    expect(failedEntry?.rejectedAt).toBeUndefined();
+    expect(failedEntry?.reducerRejectedAt).toBeUndefined();
+    expect(recovery.attemptRecovery).toHaveBeenCalled();
+
+    shouldFailReducer = false;
+    applier.applyOperations.and.callFake(async (ops) => ({ appliedOps: ops }));
+    const rebootedHydrator = TestBed.runInInjectionContext(
+      () => new OperationLogHydratorService(),
+    );
+    await rebootedHydrator.hydrateStore();
+
+    expect((await store.getOpById(fullStateOp.id))?.applicationStatus).toBe('applied');
+    expect(applier.applyOperations).toHaveBeenCalledWith(
+      [
+        jasmine.objectContaining({
+          id: fullStateOp.id,
+          opType: OpType.SyncImport,
+          payload: fullStateOp.payload,
+        }),
+      ],
+      {
+        skipReducerDispatch: true,
+        skipDeferredLocalActions: true,
+      },
+    );
   });
 
   it('clears all failed ops to applied when the whole batch succeeds', async () => {

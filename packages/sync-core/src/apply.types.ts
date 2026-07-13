@@ -1,5 +1,10 @@
 import type { Operation } from './operation.types';
 
+export interface OperationApplyFailure<TOperation extends Operation<string> = Operation> {
+  op: TOperation;
+  error: Error;
+}
+
 /**
  * Result of applying a batch of operations.
  *
@@ -10,13 +15,14 @@ export interface ApplyOperationsResult<TOperation extends Operation<string> = Op
   /** Operations that were successfully applied. */
   appliedOps: TOperation[];
 
+  /** Operations skipped because their host reducer/conversion threw. */
+  reducerFailures?: OperationApplyFailure<TOperation>[];
+
   /**
    * If an error occurred, this contains the failed operation and the error.
-   * The failed op and the operations after it in the batch did NOT complete
-   * their archive side effects — but their reducer effects DID commit: the
-   * bulk dispatch is all-or-nothing and runs before archive handling, so
-   * archive side effects are the only per-op failure point. Retry paths must
-   * therefore use `skipReducerDispatch` to avoid double-applying reducers.
+   * The failed op and the successfully reducer-applied operations after it did
+   * NOT complete their archive side effects. Their reducer effects DID commit,
+   * so retry paths must use `skipReducerDispatch` to avoid double-applying them.
    */
   failedOp?: {
     op: TOperation;

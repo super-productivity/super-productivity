@@ -10,6 +10,142 @@ import {
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady } from '../../utils/waits';
+import { ImportPage } from '../../pages/import.page';
+import type { BrowserContext, Page } from '@playwright/test';
+
+const UPLOAD_LOCK_NAME = 'sp_op_log_upload';
+
+const installSecondTabTestInit = async (context: BrowserContext): Promise<void> => {
+  await context.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+
+    const testGlobal = globalThis as typeof globalThis & {
+      __SP_E2E_BLOCK_AUTO_SYNC?: boolean;
+      __SP_E2E_BLOCK_IMMEDIATE_UPLOAD?: boolean;
+      __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean;
+    };
+    testGlobal.__SP_E2E_BLOCK_AUTO_SYNC = true;
+    testGlobal.__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = true;
+    testGlobal.__SP_E2E_BLOCK_WS_DOWNLOAD = true;
+
+    const NativeBroadcastChannel = globalThis.BroadcastChannel;
+    class MultiTabTestBroadcastChannel extends NativeBroadcastChannel {
+      private readonly _isSingleInstanceChannel: boolean;
+
+      constructor(name: string) {
+        super(name);
+        this._isSingleInstanceChannel = name === 'superProductivityTab';
+      }
+
+      override postMessage(message: unknown): void {
+        if (this._isSingleInstanceChannel) {
+          return;
+        }
+        super.postMessage(message);
+      }
+    }
+
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      writable: true,
+      value: MultiTabTestBroadcastChannel,
+    });
+  });
+};
+
+const acquireUploadLock = async (page: Page): Promise<void> => {
+  await page.evaluate((lockName) => {
+    const testGlobal = globalThis as typeof globalThis & {
+      __SP_E2E_RELEASE_UPLOAD_LOCK?: () => void;
+      __SP_E2E_UPLOAD_LOCK_HELD?: boolean;
+      __SP_E2E_UPLOAD_LOCK_ERROR?: string;
+    };
+    let releaseLock: () => void = () => undefined;
+    const releasePromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    testGlobal.__SP_E2E_RELEASE_UPLOAD_LOCK = releaseLock;
+    testGlobal.__SP_E2E_UPLOAD_LOCK_HELD = false;
+    void navigator.locks
+      .request(lockName, async () => {
+        testGlobal.__SP_E2E_UPLOAD_LOCK_HELD = true;
+        try {
+          await releasePromise;
+        } finally {
+          testGlobal.__SP_E2E_UPLOAD_LOCK_HELD = false;
+        }
+      })
+      .catch((error: unknown) => {
+        testGlobal.__SP_E2E_UPLOAD_LOCK_ERROR = String(error);
+      });
+  }, UPLOAD_LOCK_NAME);
+
+  await page.waitForFunction(() => {
+    const testGlobal = globalThis as typeof globalThis & {
+      __SP_E2E_UPLOAD_LOCK_HELD?: boolean;
+      __SP_E2E_UPLOAD_LOCK_ERROR?: string;
+    };
+    if (testGlobal.__SP_E2E_UPLOAD_LOCK_ERROR) {
+      throw new Error(testGlobal.__SP_E2E_UPLOAD_LOCK_ERROR);
+    }
+    return testGlobal.__SP_E2E_UPLOAD_LOCK_HELD === true;
+  });
+};
+
+const releaseUploadLock = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    const testGlobal = globalThis as typeof globalThis & {
+      __SP_E2E_RELEASE_UPLOAD_LOCK?: () => void;
+    };
+    testGlobal.__SP_E2E_RELEASE_UPLOAD_LOCK?.();
+  });
+};
+
+const waitForQueuedUploadLock = async (page: Page): Promise<void> => {
+  await page.waitForFunction(
+    async (lockName) => {
+      const snapshot = await navigator.locks.query();
+      return snapshot.pending?.some((lock) => lock.name === lockName) ?? false;
+    },
+    UPLOAD_LOCK_NAME,
+    { timeout: 20000 },
+  );
+};
+
+const getUnsyncedOperationCount = async (page: Page): Promise<number> =>
+  page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    try {
+      const entries = await new Promise<{ syncedAt?: number; rejectedAt?: number }[]>(
+        (resolve, reject) => {
+          const transaction = db.transaction('ops', 'readonly');
+          const request = transaction.objectStore('ops').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+          transaction.onabort = () => reject(transaction.error);
+        },
+      );
+      return entries.filter((entry) => !entry.syncedAt && !entry.rejectedAt).length;
+    } finally {
+      db.close();
+    }
+  });
+
+const getSuperSyncCursor = async (page: Page): Promise<string | null> =>
+  page.evaluate(() => {
+    const key = Object.keys(localStorage).find((candidate) =>
+      candidate.startsWith('super_sync_last_server_seq_'),
+    );
+    return key ? localStorage.getItem(key) : null;
+  });
 
 /**
  * SuperSync Multi-Tab Same Account E2E Tests
@@ -18,9 +154,8 @@ import { waitForAppReady } from '../../utils/waits';
  * don't corrupt data when using SuperSync.
  *
  * NOTE: The app prevents two tabs from running simultaneously via BroadcastChannel.
- * This test works around that by navigating the inactive tab to about:blank before
- * opening the next tab, then reloading it later. This simulates the real-world
- * scenario of closing and reopening a tab.
+ * The convergence test navigates the inactive tab to about:blank. The race test
+ * suppresses only that startup channel so both tabs can exercise the shared locks.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -169,6 +304,85 @@ test.describe('@supersync Multi-Tab Same Account', () => {
       if (sharedContext) {
         await sharedContext.close().catch(() => {});
       }
+    }
+  });
+
+  test('late sibling-tab work blocks a downloaded full-state apply atomically', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(180000);
+    const appUrl = baseURL || 'http://localhost:4242';
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+      const baselineTask = `Full-State-Race-Baseline-${testRunId}`;
+      await clientA.workView.addTask(baselineTask);
+      await clientA.sync.syncAndWait();
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      const tab1 = clientB.page;
+      const tab1Sync = clientB.sync;
+      await tab1Sync.setupSuperSync(syncConfig);
+      await waitForTask(tab1, baselineTask);
+
+      await installSecondTabTestInit(clientB.context);
+      const tab2 = await clientB.context.newPage();
+      await tab2.goto('/');
+      await waitForAppReady(tab2);
+      const tab2WorkView = new WorkViewPage(tab2, `Sibling-${testRunId}`);
+      await tab2WorkView.waitForTaskList();
+      await waitForTask(tab2, baselineTask);
+
+      const importPage = new ImportPage(clientA.page);
+      await importPage.navigateToImportPage();
+      await importPage.importBackupFile(ImportPage.getFixturePath('test-backup.json'));
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
+      await clientA.sync.syncAndWait({ useLocal: true });
+
+      const cursorBeforeDownload = await getSuperSyncCursor(tab1);
+      expect(cursorBeforeDownload).not.toBeNull();
+      const pendingBeforeRace = await getUnsyncedOperationCount(tab2);
+      expect(pendingBeforeRace).toBe(0);
+
+      await acquireUploadLock(tab1);
+      await tab1Sync.syncBtn.click();
+      await waitForQueuedUploadLock(tab1);
+
+      const lateTask = `Sibling-Late-Task-${testRunId}`;
+      await tab2WorkView.addTask(lateTask);
+      await waitForTask(tab2, lateTask);
+      await expect
+        .poll(() => getUnsyncedOperationCount(tab2), { timeout: 10000 })
+        .toBeGreaterThan(pendingBeforeRace);
+
+      await releaseUploadLock(tab1);
+
+      const conflictDialog = tab1.locator('dialog-sync-import-conflict');
+      await expect(conflictDialog).toBeVisible({ timeout: 20000 });
+      await conflictDialog.getByRole('button', { name: /cancel/i }).click();
+      await expect(conflictDialog).not.toBeVisible({ timeout: 5000 });
+
+      expect(await getSuperSyncCursor(tab1)).toBe(cursorBeforeDownload);
+      expect(await getUnsyncedOperationCount(tab2)).toBeGreaterThan(pendingBeforeRace);
+      await expect(tab2.locator('task', { hasText: lateTask })).toBeVisible();
+    } finally {
+      if (clientB && !clientB.page.isClosed()) {
+        await releaseUploadLock(clientB.page).catch(() => undefined);
+      }
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 });

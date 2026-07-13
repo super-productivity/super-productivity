@@ -71,11 +71,16 @@
 }
 
 .connected-status-icon,
+.empty-status-icon,
 .error-status-icon {
   vertical-align: middle;
   font-size: 18px;
   width: 18px;
   height: 18px;
+}
+
+.empty-status {
+  margin-left: var(--s);
 }
 
 .error-status {

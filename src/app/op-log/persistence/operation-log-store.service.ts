@@ -139,6 +139,7 @@ interface StoredOperationLogEntry {
   source: 'local' | 'remote';
   syncedAt?: number;
   rejectedAt?: number;
+  reducerRejectedAt?: number;
   applicationStatus?: 'pending' | 'archive_pending' | 'applied' | 'failed';
   retryCount?: number;
 }
@@ -156,6 +157,7 @@ const decodeStoredEntry = (stored: StoredOperationLogEntry): OperationLogEntry =
     source: stored.source,
     syncedAt: stored.syncedAt,
     rejectedAt: stored.rejectedAt,
+    reducerRejectedAt: stored.reducerRejectedAt,
     applicationStatus: stored.applicationStatus,
     retryCount: stored.retryCount,
   };
@@ -586,7 +588,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   ): Promise<FullStateOpsMetaEntry> {
     const refs: FullStateOpRef[] = [];
     await tx.iterate<StoredOperationLogEntry>(STORE_NAMES.OPS, {}, (value, key) => {
-      const ref = this._getFullStateRef(value.op, key as number);
+      const ref =
+        value.rejectedAt === undefined
+          ? this._getFullStateRef(value.op, key as number)
+          : undefined;
       if (ref) {
         refs.push(ref);
       }
@@ -631,7 +636,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       STORE_NAMES.OPS,
       { mode: 'readonly' },
       (value, key) => {
-        const ref = this._getFullStateRef(value.op, key as number);
+        const ref =
+          value.rejectedAt === undefined
+            ? this._getFullStateRef(value.op, key as number)
+            : undefined;
         if (ref) {
           refs.push(ref);
         }
@@ -675,6 +683,54 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         STORE_NAMES.OPS,
         this._buildStoredEntry(op, source, options),
       );
+    } catch (e) {
+      this._handleAppendError(e);
+    }
+  }
+
+  /**
+   * Atomically installs a validated legacy recovery as one replay anchor.
+   * A crash must never leave the recovery operation without its matching
+   * snapshot/vector clock, because the fail-closed recovery guard will then
+   * correctly treat the log as non-empty on the next boot.
+   */
+  async appendRecoveryOperationAndSnapshot(
+    op: Operation,
+    state: unknown,
+  ): Promise<number> {
+    await this._ensureInit();
+    const now = Date.now();
+    try {
+      const seq = await this._adapter.transaction(
+        [STORE_NAMES.OPS, STORE_NAMES.STATE_CACHE, STORE_NAMES.VECTOR_CLOCK],
+        'readwrite',
+        async (tx) => {
+          const writtenSeq = await tx.add(
+            STORE_NAMES.OPS,
+            this._buildStoredEntry(op, 'local'),
+          );
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            id: SINGLETON_KEY,
+            state,
+            lastAppliedOpSeq: writtenSeq,
+            vectorClock: op.vectorClock,
+            compactedAt: now,
+            schemaVersion: op.schemaVersion,
+          } satisfies StateCacheEntry);
+          await tx.put(
+            STORE_NAMES.VECTOR_CLOCK,
+            {
+              clock: op.vectorClock,
+              lastUpdate: now,
+            } satisfies VectorClockEntry,
+            SINGLETON_KEY,
+          );
+          return writtenSeq;
+        },
+      );
+      this._vectorClockCache = { ...op.vectorClock };
+      this._invalidateUnsyncedCache();
+      return seq;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -891,22 +947,29 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   async markReducersCommittedAndMergeClocks(
     seqs: number[],
     ops: Operation[],
+    rejectedOpIds: string[] = [],
   ): Promise<void> {
     if (seqs.length !== ops.length) {
       throw new Error(
         'markReducersCommittedAndMergeClocks requires one sequence per operation.',
       );
     }
-    if (ops.length === 0) {
+    if (ops.length === 0 && rejectedOpIds.length === 0) {
       return;
+    }
+    const committedOpIds = new Set(ops.map((op) => op.id));
+    if (rejectedOpIds.some((opId) => committedOpIds.has(opId))) {
+      throw new Error('Reducer checkpoint cannot commit and reject the same operation.');
     }
 
     await this._ensureInit();
     const currentClientId = await this.clientIdProvider.loadClientId();
     let committedClock: VectorClock | undefined;
+    const rejectedAt = Date.now();
+    const rejectedFullStateOpIds = new Set<string>();
 
     await this._adapter.transaction(
-      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK],
+      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK, STORE_NAMES.META],
       'readwrite',
       async (tx) => {
         const currentEntry = await tx.get<VectorClockEntry>(
@@ -930,6 +993,32 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           await tx.put(STORE_NAMES.OPS, entry);
         }
 
+        for (const opId of rejectedOpIds) {
+          const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            opId,
+          );
+          if (!entry) {
+            throw new Error(`Reducer rejection requires persisted operation ${opId}.`);
+          }
+          entry.rejectedAt = rejectedAt;
+          entry.reducerRejectedAt = rejectedAt;
+          if (isFullStateOpType(getStoredOpType(entry.op))) {
+            rejectedFullStateOpIds.add(opId);
+          }
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
+
+        if (rejectedFullStateOpIds.size > 0) {
+          const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
+          await tx.put(
+            STORE_NAMES.META,
+            this._withoutFullStateRefs(meta, rejectedFullStateOpIds),
+            FULL_STATE_OPS_META_KEY,
+          );
+        }
+
         await tx.put(
           STORE_NAMES.VECTOR_CLOCK,
           { clock: committedClock, lastUpdate: Date.now() } satisfies VectorClockEntry,
@@ -939,6 +1028,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     );
 
     this._vectorClockCache = committedClock ? { ...committedClock } : null;
+    if (rejectedOpIds.length > 0) {
+      this._invalidateUnsyncedCache();
+    }
   }
 
   /**

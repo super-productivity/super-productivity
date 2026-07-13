@@ -33,8 +33,8 @@ export class OperationLogCompactionService {
   private vectorClockService = inject(VectorClockService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
 
-  async compact(): Promise<void> {
-    await this._doCompact(COMPACTION_RETENTION_MS, false);
+  async compact(): Promise<boolean> {
+    return this._doCompact(COMPACTION_RETENTION_MS, false);
   }
 
   /**
@@ -44,8 +44,7 @@ export class OperationLogCompactionService {
    */
   async emergencyCompact(): Promise<boolean> {
     try {
-      await this._doCompact(EMERGENCY_COMPACTION_RETENTION_MS, true);
-      return true;
+      return await this._doCompact(EMERGENCY_COMPACTION_RETENTION_MS, true);
     } catch (e) {
       OpLog.err('OperationLogCompactionService: Emergency compaction failed', e);
       return false;
@@ -57,10 +56,22 @@ export class OperationLogCompactionService {
    * @param retentionMs - How long to keep synced operations (in ms)
    * @param isEmergency - Whether this is an emergency compaction (for logging)
    */
-  private async _doCompact(retentionMs: number, isEmergency: boolean): Promise<void> {
-    await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+  private async _doCompact(retentionMs: number, isEmergency: boolean): Promise<boolean> {
+    return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
       const startTime = Date.now();
       const label = isEmergency ? 'emergency ' : '';
+
+      // A snapshot must never advance past remote operations whose reducers have
+      // not committed yet. Otherwise restart hydration would treat those ops as
+      // covered by the snapshot even though their state is missing from it.
+      const pendingRemoteOps = await this.opLogStore.getPendingRemoteOps();
+      this.checkCompactionTimeout(startTime, `${label}pending operation check`);
+      if (pendingRemoteOps.length > 0) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — remote reducer work is pending',
+        );
+        return false;
+      }
 
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshot();
@@ -82,7 +93,7 @@ export class OperationLogCompactionService {
           'OperationLogCompactionService: Skipping compaction — current state has no ' +
             'meaningful data (refusing to overwrite cache and prune ops against empty state)',
         );
-        return;
+        return false;
       }
 
       // 2. Get current vector clock (max of all ops)
@@ -120,16 +131,24 @@ export class OperationLogCompactionService {
       // 6. Reset compaction counter (persistent across tabs/restarts)
       await this.opLogStore.resetCompactionCounter();
 
-      // 7. Delete old operations (keep recent for conflict resolution window)
-      // Only delete ops that have been synced to remote
+      // 7. Delete old terminal operations (keep recent for conflict resolution)
       const cutoff = Date.now() - retentionMs;
 
-      await this.opLogStore.deleteOpsWhere(
-        (entry) =>
-          !!entry.syncedAt && // never drop unsynced ops
-          entry.appliedAt < cutoff &&
-          entry.seq <= lastSeq, // keep tail for conflict frontier
-      );
+      await this.opLogStore.deleteOpsWhere((entry) => {
+        const isRejected = entry.rejectedAt !== undefined;
+        const isApplicationComplete =
+          isRejected ||
+          entry.applicationStatus === undefined ||
+          entry.applicationStatus === 'applied';
+        const terminalAt = entry.rejectedAt ?? entry.appliedAt;
+
+        return (
+          (entry.syncedAt !== undefined || isRejected) &&
+          isApplicationComplete &&
+          terminalAt < cutoff &&
+          entry.seq <= lastSeq // keep tail for conflict frontier
+        );
+      });
 
       // Log metrics for slow compaction or emergency compaction
       const totalDuration = Date.now() - startTime;
@@ -140,6 +159,8 @@ export class OperationLogCompactionService {
           isEmergency,
         });
       }
+
+      return true;
     });
   }
 

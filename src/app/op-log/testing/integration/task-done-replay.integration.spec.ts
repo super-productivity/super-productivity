@@ -137,7 +137,7 @@ describe('done task operation replay', () => {
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ clientA: 1 }),
     );
-    mockCompactionService.compact.and.returnValue(Promise.resolve());
+    mockCompactionService.compact.and.returnValue(Promise.resolve(true));
     mockCompactionService.emergencyCompact.and.returnValue(Promise.resolve(true));
     mockOperationCaptureService.extractEntityChanges.and.returnValue([]);
     mockClientIdService.getOrGenerateClientId.and.returnValue(Promise.resolve('clientA'));
