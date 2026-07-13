@@ -97,6 +97,7 @@ export class RemoteOpsProcessingService {
     options?: {
       skipConflictDetection?: boolean;
       callerHoldsOperationLogLock?: boolean;
+      ignoredLocalFullStateOpIds?: readonly string[];
     },
   ): Promise<{
     localWinOpsCreated: number;
@@ -226,7 +227,9 @@ export class RemoteOpsProcessingService {
     // This also checks the LOCAL STORE for imports downloaded in previous sync cycles.
     // ─────────────────────────────────────────────────────────────────────────
     const { validOps, invalidatedOps, filteringImport, isLocalUnsyncedImport } =
-      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps);
+      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps, {
+        ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+      });
 
     if (invalidatedOps.length > 0) {
       OpLog.warn(

@@ -92,6 +92,7 @@ export interface SyncOperation {
   schemaVersion: number;
   isPayloadEncrypted?: boolean;
   syncImportReason?: string;
+  repairBaseServerSeq?: number;
 }
 
 export interface ServerSyncOperation {
@@ -123,6 +124,9 @@ export interface OpDownloadResponseBase {
   gapDetected?: boolean;
   snapshotVectorClock?: VectorClock;
   serverTime?: number;
+  capabilities?: {
+    causalRepairSnapshots?: true;
+  };
 }
 
 export interface SuperSyncOpDownloadResponse extends OpDownloadResponseBase {
@@ -174,6 +178,8 @@ export interface OperationSyncCapable<
   ): Promise<OpDownloadResponseForMode<M>>;
   getLastServerSeq(): Promise<number>;
   setLastServerSeq(seq: number): Promise<void>;
+  /** True only after this provider has observed an explicit server capability. */
+  supportsCausalRepairSnapshots?(): boolean;
   uploadSnapshot(
     state: unknown,
     clientId: string,

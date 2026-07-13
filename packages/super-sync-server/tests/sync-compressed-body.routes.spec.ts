@@ -103,6 +103,7 @@ const createStoredDuplicateOp = (op: ReturnType<typeof createOp>) => ({
   receivedAt: BigInt(op.timestamp),
   isPayloadEncrypted: false,
   syncImportReason: null,
+  repairBaseServerSeq: null,
 });
 
 const MiB = 1024 * 1024;
@@ -1159,6 +1160,7 @@ describe('Sync compressed body routes', () => {
       schemaVersion: 1,
       isPayloadEncrypted: false,
       syncImportReason: 'REPAIR',
+      repairBaseServerSeq: 10,
       serverSeq: 77,
     });
 
@@ -1180,7 +1182,76 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
     expect(response.json()).toEqual({ accepted: true, serverSeq: 77 });
+  });
+
+  it('should accept a legacy REPAIR request without a causal base non-destructively', async () => {
+    const repairId = '018f2f0b-1c2d-7a1b-8c3d-123456789abc';
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        state: { TASK: { repaired: true } },
+        clientId: 'legacy-repair-client',
+        reason: 'recovery',
+        vectorClock: { 'legacy-repair-client': 1 },
+        schemaVersion: 1,
+        opId: repairId,
+        snapshotOpType: 'REPAIR',
+        syncImportReason: 'REPAIR',
+        isCleanSlate: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.uploadOps).toHaveBeenCalledWith(
+      1,
+      'legacy-repair-client',
+      [expect.objectContaining({ opType: 'REPAIR', repairBaseServerSeq: undefined })],
+      false,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  });
+
+  it('should reject a stale causal REPAIR before quota cleanup', async () => {
+    mocks.syncService.getLatestSeq.mockResolvedValue(11);
+    mocks.syncService.checkStorageQuota.mockResolvedValue({
+      allowed: false,
+      currentUsage: 100 * MiB,
+      quota: 100 * MiB,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        state: { TASK: { repaired: true } },
+        clientId: 'stale-repair-client',
+        reason: 'recovery',
+        vectorClock: { 'stale-repair-client': 2 },
+        schemaVersion: 1,
+        opId: '018f2f0b-1c2d-7a1b-8c3d-123456789abc',
+        snapshotOpType: 'REPAIR',
+        syncImportReason: 'REPAIR',
+        repairBaseServerSeq: 10,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      accepted: false,
+      error: 'REPAIR snapshot does not include current server state',
+      errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+    });
+    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 

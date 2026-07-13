@@ -99,6 +99,7 @@ describe('OperationLogUploadService', () => {
           'getLastServerSeq',
           'uploadOps',
           'setLastServerSeq',
+          'supportsCausalRepairSnapshots',
         ]);
         mockApiProvider.supportsOperationSync = true;
         mockApiProvider.providerMode = 'superSyncOps';
@@ -118,6 +119,9 @@ describe('OperationLogUploadService', () => {
           }),
         );
         mockApiProvider.setLastServerSeq.and.returnValue(Promise.resolve());
+        (mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy).and.returnValue(
+          true,
+        );
       });
 
       it('should use API upload for operation-sync-capable providers', async () => {
@@ -820,6 +824,7 @@ describe('OperationLogUploadService', () => {
           'uploadOps',
           'setLastServerSeq',
           'uploadSnapshot',
+          'supportsCausalRepairSnapshots',
         ]);
         mockApiProvider.supportsOperationSync = true;
         mockApiProvider.providerMode = 'superSyncOps';
@@ -836,6 +841,9 @@ describe('OperationLogUploadService', () => {
         mockApiProvider.setLastServerSeq.and.returnValue(Promise.resolve());
         mockApiProvider.uploadSnapshot.and.returnValue(
           Promise.resolve({ accepted: true, serverSeq: 1 }),
+        );
+        (mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy).and.returnValue(
+          true,
         );
       });
 
@@ -944,6 +952,29 @@ describe('OperationLogUploadService', () => {
         await service.uploadPendingOps(mockApiProvider);
 
         expect(mockApiProvider.uploadSnapshot.calls.mostRecent().args[10]).toBe(17);
+      });
+
+      it('should fail closed before sending Repair to a server without causal support', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.Repair);
+        entry.op.payload = {
+          appDataComplete: entry.op.payload,
+          repairSummary: {},
+          repairBaseServerSeq: 17,
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([entry]);
+        (mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy).and.returnValue(
+          false,
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockApiProvider.uploadSnapshot).not.toHaveBeenCalled();
+        expect(result.rejectedOps).toEqual([
+          jasmine.objectContaining({
+            opId: entry.op.id,
+            errorCode: 'REPAIR_CAUSALITY_UNSUPPORTED',
+          }),
+        ]);
       });
 
       it('should mark full-state ops as synced after successful upload', async () => {
@@ -1240,6 +1271,24 @@ describe('OperationLogUploadService', () => {
 
         expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
         expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(0);
+        expect(result.blockedByRejectedFullState).toBe(true);
+      });
+
+      it('should retain the rejected-import barrier when no later ops are pending', async () => {
+        const rejectedImport = createFullStateEntry(
+          1,
+          'rejected-import',
+          'client-1',
+          OpType.BackupImport,
+        );
+        rejectedImport.rejectedAt = Date.now();
+        mockOpLogStore.getUnsynced.and.resolveTo([]);
+        mockOpLogStore.getLatestRejectedImportOpEntry.and.resolveTo(rejectedImport);
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(mockOpLogStore.getLatestRejectedImportOpEntry).toHaveBeenCalled();
         expect(result.uploadedCount).toBe(0);
         expect(result.blockedByRejectedFullState).toBe(true);
       });

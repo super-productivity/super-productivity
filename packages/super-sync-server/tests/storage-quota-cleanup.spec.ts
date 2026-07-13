@@ -13,6 +13,27 @@ let testUsers: Map<number, any>;
 let testUserSyncStates: Map<number, any>;
 let serverSeqCounter: number;
 
+const matchesOperationTypeWhere = (op: any, where: any): boolean => {
+  if (where?.opType?.in && !where.opType.in.includes(op.opType)) {
+    return false;
+  }
+  if (where?.OR) {
+    return where.OR.some((clause: any) => {
+      if (clause.opType?.in) {
+        return clause.opType.in.includes(op.opType);
+      }
+      if (typeof clause.opType === 'string' && clause.opType !== op.opType) {
+        return false;
+      }
+      if (clause.repairBaseServerSeq?.not === null) {
+        return op.repairBaseServerSeq !== null && op.repairBaseServerSeq !== undefined;
+      }
+      return true;
+    });
+  }
+  return true;
+};
+
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', () => {
   return {
@@ -52,9 +73,7 @@ vi.mock('../src/db', () => {
                 .filter((op) => {
                   if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                     return false;
-                  if (args.where?.opType?.in) {
-                    if (!args.where.opType.in.includes(op.opType)) return false;
-                  }
+                  if (!matchesOperationTypeWhere(op, args.where)) return false;
                   if (args.where?.serverSeq?.lte !== undefined) {
                     if (op.serverSeq > args.where.serverSeq.lte) return false;
                   }
@@ -133,9 +152,7 @@ vi.mock('../src/db', () => {
             .filter((op) => {
               if (args.where?.userId !== undefined && args.where.userId !== op.userId)
                 return false;
-              if (args.where?.opType?.in) {
-                if (!args.where.opType.in.includes(op.opType)) return false;
-              }
+              if (!matchesOperationTypeWhere(op, args.where)) return false;
               if (args.where?.serverSeq?.lte !== undefined) {
                 if (op.serverSeq > args.where.serverSeq.lte) return false;
               }
@@ -296,6 +313,7 @@ const createOp = (
     vectorClock: Record<string, number>;
     timestamp: number;
     schemaVersion: number;
+    repairBaseServerSeq: number;
   }> = {},
 ) => {
   serverSeqCounter++;
@@ -314,6 +332,7 @@ const createOp = (
     schemaVersion: overrides.schemaVersion || 1,
     serverSeq: serverSeqCounter,
     isPayloadEncrypted: false,
+    repairBaseServerSeq: overrides.repairBaseServerSeq,
   };
   testOperations.set(op.id, op);
   return op;
@@ -330,6 +349,7 @@ const createRestorePoint = (
     opType,
     entityType: 'ALL',
     payload: { globalConfig: {}, tasks: {} },
+    repairBaseServerSeq: opType === 'REPAIR' ? serverSeqCounter : undefined,
   });
 };
 
@@ -525,6 +545,26 @@ describe('Storage Quota Cleanup', () => {
 
       expect(result.success).toBe(true);
       expect(result.deletedCount).toBe(2); // ops 1, 2
+    });
+
+    it('should not prune history using a legacy REPAIR without a causal base', async () => {
+      const { initSyncService, getSyncService } =
+        await import('../src/sync/sync.service');
+      initSyncService();
+      const service = getSyncService();
+
+      createOp(clientId, userId); // seq 1
+      createOp(clientId, userId, {
+        opType: 'REPAIR',
+        entityType: 'ALL',
+        payload: { globalConfig: {}, tasks: {} },
+      }); // seq 2, legacy marker absent
+      createOp(clientId, userId); // seq 3
+
+      const result = await service.deleteOldestRestorePointAndOps(userId);
+
+      expect(result).toEqual({ deletedCount: 0, freedBytes: 0, success: false });
+      expect(testOperations.size).toBe(3);
     });
   });
 

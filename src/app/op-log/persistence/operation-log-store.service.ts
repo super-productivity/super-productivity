@@ -2353,6 +2353,67 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
+   * Atomically retires a stale local REPAIR and installs its rebased replacement.
+   * Keeping the rejection marker, replacement op, vector clock, and state cache in
+   * one transaction prevents a crash from leaving the repaired state without an
+   * uploadable full-state boundary.
+   */
+  async replaceRejectedRepair(opts: {
+    staleRepairOpId: string;
+    replacementOp: Operation;
+    repairedState: unknown;
+  }): Promise<number> {
+    await this._ensureInit();
+
+    const { staleRepairOpId, replacementOp, repairedState } = opts;
+    const seq = await this._adapter.transaction(
+      [
+        STORE_NAMES.OPS,
+        STORE_NAMES.VECTOR_CLOCK,
+        STORE_NAMES.META,
+        STORE_NAMES.STATE_CACHE,
+      ],
+      'readwrite',
+      async (tx) => {
+        const staleEntry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          staleRepairOpId,
+        );
+        if (!staleEntry) {
+          throw new Error(`Cannot rebase missing REPAIR operation ${staleRepairOpId}`);
+        }
+
+        staleEntry.rejectedAt = Date.now();
+        await tx.put(STORE_NAMES.OPS, staleEntry);
+
+        const replacementEntry = this._buildStoredEntry(replacementOp, 'local');
+        const replacementSeq = await tx.add(STORE_NAMES.OPS, replacementEntry);
+        await this._recordFullStateOpInTx(tx, replacementEntry.op, replacementSeq);
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          { clock: replacementOp.vectorClock, lastUpdate: Date.now() },
+          SINGLETON_KEY,
+        );
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          id: SINGLETON_KEY,
+          state: repairedState,
+          lastAppliedOpSeq: replacementSeq,
+          vectorClock: replacementOp.vectorClock,
+          compactedAt: Date.now(),
+          schemaVersion: replacementOp.schemaVersion,
+        });
+
+        return replacementSeq;
+      },
+    );
+
+    this._vectorClockCache = replacementOp.vectorClock;
+    this._invalidateUnsyncedCache();
+    return seq;
+  }
+
+  /**
    * Atomically replace local op-log + state_cache + vector_clock with a new
    * full-state baseline. Used by destructive flows (clean-slate, backup-restore)
    * to fix issue #7709 — interrupted destructive sequences could otherwise

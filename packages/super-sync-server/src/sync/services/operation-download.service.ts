@@ -6,6 +6,7 @@
  */
 import { prisma } from '../../db';
 import {
+  CAUSAL_FULL_STATE_OPERATION_WHERE,
   Operation,
   ServerOperation,
   VectorClock,
@@ -29,6 +30,7 @@ const OPERATION_DOWNLOAD_SELECT = {
   receivedAt: true,
   isPayloadEncrypted: true,
   syncImportReason: true,
+  repairBaseServerSeq: true,
 } as const;
 
 const DOWNLOAD_TRANSACTION_TIMEOUT_MS = 60000;
@@ -63,6 +65,7 @@ type OperationDownloadRow = {
   receivedAt: bigint;
   isPayloadEncrypted: boolean;
   syncImportReason: string | null;
+  repairBaseServerSeq: number | null;
 };
 
 const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
@@ -81,6 +84,7 @@ const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
     timestamp: Number(row.clientTimestamp),
     isPayloadEncrypted: row.isPayloadEncrypted,
     syncImportReason: row.syncImportReason ?? undefined,
+    repairBaseServerSeq: row.repairBaseServerSeq ?? undefined,
   },
   receivedAt: Number(row.receivedAt),
 });
@@ -165,7 +169,7 @@ export class OperationDownloadService {
           where: {
             userId,
             serverSeq: { lte: latestSeq },
-            opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
           },
           orderBy: { serverSeq: 'desc' },
           select: { serverSeq: true, clientId: true },

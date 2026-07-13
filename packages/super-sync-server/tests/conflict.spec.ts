@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getConflictEntityIds,
   isSameDuplicateOperation,
+  isSameIncomingOperation,
   isSameDuplicateTimestamp,
   pruneVectorClockForStorage,
   resolveConflictForExistingOp,
@@ -45,10 +46,29 @@ const duplicateCandidate = (
   receivedAt: 1_000,
   isPayloadEncrypted: false,
   syncImportReason: null,
+  repairBaseServerSeq: null,
   ...overrides,
 });
 
 describe('conflict helpers', () => {
+  it('matches causal REPAIR retries with the same base cursor', () => {
+    const repair = op({
+      opType: 'REPAIR',
+      entityType: 'ALL',
+      entityId: undefined,
+      repairBaseServerSeq: 10,
+    });
+
+    expect(
+      isSameIncomingOperation(
+        { ...repair, entityIds: [] },
+        { ...repair, entityIds: undefined },
+        0,
+        0,
+      ),
+    ).toBe(true);
+  });
+
   it('includes a divergent scalar entityId in the incoming conflict set', () => {
     expect(
       getConflictEntityIds(op({ entityId: 'task-scalar', entityIds: ['task-array'] })),

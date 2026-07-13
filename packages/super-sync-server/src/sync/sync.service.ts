@@ -134,6 +134,7 @@ export class SyncService {
     isCleanSlate?: boolean,
     requestStartOccupiedIds?: ReadonlySet<string>,
     repairBaseServerSeq?: number,
+    allowLegacyRepairWithoutBase: boolean = false,
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const now = Date.now();
@@ -141,6 +142,8 @@ export class SyncService {
     let uploadDbRoundtrips = 0;
     const prevalidatedResults = new Map<Operation, ValidationResult>();
     const containsRepair = ops.some((op) => op.opType === 'REPAIR');
+    const isLegacyRepairUpload =
+      containsRepair && repairBaseServerSeq === undefined && allowLegacyRepairWithoutBase;
     const shouldCleanSlate = !!isCleanSlate && !containsRepair;
     if (isCleanSlate && containsRepair) {
       Logger.warn(
@@ -158,7 +161,7 @@ export class SyncService {
       // Use transaction to acquire write lock and ensure atomicity
       await prisma.$transaction(
         async (tx) => {
-          if (containsRepair) {
+          if (containsRepair && !isLegacyRepairUpload) {
             // Serialize the causal precondition and the later insert through the
             // same per-user sequence row. A concurrent upload either commits
             // first (making this base stale) or waits and lands after REPAIR.

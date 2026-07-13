@@ -85,6 +85,7 @@ model Operation {
   receivedAt         BigInt  @map("received_at")
   isPayloadEncrypted Boolean @default(false) @map("is_payload_encrypted")
   syncImportReason   String? @map("sync_import_reason")
+  repairBaseServerSeq Int?   @map("repair_base_server_seq")
 
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 

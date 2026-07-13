@@ -293,6 +293,32 @@ describe('WsTriggeredDownloadService', () => {
     tick(500);
     flushMicrotasks();
 
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(3);
+  }));
+
+  it('should retry a transient failure without requiring another WS notification', fakeAsync(() => {
+    let callCount = 0;
+    mockSyncService.downloadRemoteOps.and.callFake(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error('network timeout');
+      }
+      return { kind: 'no_new_ops' as const };
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 6 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    tick(249);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    tick(1);
+    flushMicrotasks();
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
   }));
 

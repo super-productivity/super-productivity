@@ -3174,6 +3174,58 @@ describe('OperationLogStoreService', () => {
     });
   });
 
+  describe('replaceRejectedRepair', () => {
+    it('should reject the stale repair and append its replacement atomically', async () => {
+      const staleRepair = createTestOperation({
+        id: 'stale-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      await service.append(staleRepair);
+      const repairedState = { task: { ids: [], entities: {} } };
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { appDataComplete: repairedState },
+        vectorClock: { testClient: 2 },
+      });
+
+      const seq = await service.replaceRejectedRepair({
+        staleRepairOpId: staleRepair.id,
+        replacementOp: replacement,
+        repairedState,
+      });
+
+      expect((await service.getOpById(staleRepair.id))?.rejectedAt).toBeDefined();
+      expect((await service.getOpById(replacement.id))?.seq).toBe(seq);
+      expect((await service.loadStateCache())?.state).toEqual(repairedState);
+      expect(await service.getVectorClock()).toEqual(replacement.vectorClock);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(replacement.id);
+    });
+
+    it('should abort without appending when the stale repair is missing', async () => {
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+
+      await expectAsync(
+        service.replaceRejectedRepair({
+          staleRepairOpId: 'missing-repair',
+          replacementOp: replacement,
+          repairedState: {},
+        }),
+      ).toBeRejectedWithError(/missing-repair/);
+
+      expect(await service.getOpById(replacement.id)).toBeUndefined();
+    });
+  });
+
   describe('VectorClockService integration with vector_clock store', () => {
     it('should read from vector_clock store as fast path', async () => {
       // Set vector clock directly in the store

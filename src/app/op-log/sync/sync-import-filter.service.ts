@@ -74,7 +74,10 @@ export class SyncImportFilterService {
    * @returns Object with `validOps`, `invalidatedOps`, optionally `filteringImport`,
    *          and `isLocalUnsyncedImport` indicating if dialog should be shown
    */
-  async filterOpsInvalidatedBySyncImport(ops: Operation[]): Promise<{
+  async filterOpsInvalidatedBySyncImport(
+    ops: Operation[],
+    options?: { ignoredLocalFullStateOpIds?: readonly string[] },
+  ): Promise<{
     validOps: Operation[];
     invalidatedOps: Operation[];
     filteringImport?: Operation;
@@ -85,7 +88,13 @@ export class SyncImportFilterService {
 
     // Check local store for previously downloaded import
     // Use getLatestFullStateOpEntry to get metadata (source, syncedAt)
-    const storedEntry = await this.opLogStore.getLatestFullStateOpEntry();
+    const candidateStoredEntry = await this.opLogStore.getLatestFullStateOpEntry();
+    const ignoredLocalFullStateOpIds = new Set(options?.ignoredLocalFullStateOpIds ?? []);
+    const storedEntry =
+      candidateStoredEntry?.source === 'local' &&
+      ignoredLocalFullStateOpIds.has(candidateStoredEntry.op.id)
+        ? undefined
+        : candidateStoredEntry;
     const storedImport = storedEntry?.op;
 
     // Determine the latest import by durable apply order. Download batches are
@@ -219,16 +228,19 @@ export class SyncImportFilterService {
         latestImport.opType === OpType.Repair &&
         decision.reason === 'concurrent'
       ) {
-        // Automatic repair is not an explicit clean-slate user action. An op
-        // concurrent with an accepted repair must have landed after the repair's
-        // server-cursor precondition was checked, so replay it on top and let
-        // post-sync validation verify the combined state.
-        OpLog.normal(
-          `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) concurrent with REPAIR ${latestImport.id}.`,
-        );
-        if (latestImportBatchIndex !== -1 && opIndex < latestImportBatchIndex) {
+        const isPrefixOp =
+          latestImportBatchIndex !== -1 && opIndex < latestImportBatchIndex;
+        if (isPrefixOp && latestImport.repairBaseServerSeq !== undefined) {
+          // A causal repair was built from the exact server prefix named by its
+          // base cursor. Replaying a concurrent prefix op would apply it twice.
+          invalidatedOps.push(op);
+        } else if (isPrefixOp) {
+          // A legacy repair has no proof that its snapshot covered the server
+          // prefix. Move concurrent prefix work after the full-state boundary.
           repairConcurrentPrefixOps.push(op);
         } else {
+          // Concurrent operations after the repair (or downloaded after a
+          // previously stored repair) cannot be represented by its snapshot.
           validOps.push(op);
         }
       } else {
@@ -246,10 +258,10 @@ export class SyncImportFilterService {
     }
 
     if (repairConcurrentPrefixOps.length > 0) {
-      // A concurrent op that reached the server before an automatic REPAIR is
-      // not represented by that repair snapshot. Move it just after the repair
-      // boundary so the full-state apply cannot erase it. Preserve prefix order
-      // and keep all originally post-repair operations after the replayed prefix.
+      // A legacy repair cannot prove that concurrent prefix work is represented.
+      // Move it just after the repair boundary so the full-state apply cannot
+      // erase it. Preserve prefix order and keep all originally post-repair
+      // operations after the replayed prefix.
       const repairIndex = validOps.lastIndexOf(latestImport);
       validOps.splice(repairIndex + 1, 0, ...repairConcurrentPrefixOps);
     }

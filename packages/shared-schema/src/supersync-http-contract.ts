@@ -78,6 +78,8 @@ export const SuperSyncOperationSchema = z.object({
   schemaVersion: z.number().int().min(1).max(100),
   isPayloadEncrypted: z.boolean().optional(),
   syncImportReason: z.enum(SUPER_SYNC_IMPORT_REASONS).optional(),
+  /** Server cursor proven to be included in a causally accepted REPAIR snapshot. */
+  repairBaseServerSeq: z.number().int().min(0).optional(),
 });
 
 // Upload requests are envelopes for independently validated operations. Keep
@@ -135,16 +137,6 @@ export const SuperSyncUploadSnapshotRequestSchema = z
         message: 'opId is required for clean-slate snapshot idempotency',
       });
     }
-    if (
-      request.snapshotOpType === 'REPAIR' &&
-      request.repairBaseServerSeq === undefined
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['repairBaseServerSeq'],
-        message: 'repairBaseServerSeq is required for causal REPAIR uploads',
-      });
-    }
   });
 
 export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.passthrough();
@@ -185,6 +177,11 @@ export const SuperSyncDownloadOpsResponseSchema = z
     gapDetected: z.boolean().optional(),
     snapshotVectorClock: SuperSyncVectorClockSchema.optional(),
     serverTime: z.number().optional(),
+    capabilities: z
+      .object({
+        causalRepairSnapshots: z.literal(true).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

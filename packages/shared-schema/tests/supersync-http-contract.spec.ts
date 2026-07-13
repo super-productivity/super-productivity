@@ -188,7 +188,7 @@ describe('SuperSync HTTP contract schemas', () => {
     expect(parsed.requestId).toBe('snapshot-v1-request');
   });
 
-  it('requires and preserves the causal base sequence for repair snapshots', () => {
+  it('accepts legacy repair snapshots and preserves a causal base when present', () => {
     const repairRequest = {
       state: { tasks: {} },
       clientId: 'client_1',
@@ -199,13 +199,36 @@ describe('SuperSync HTTP contract schemas', () => {
       snapshotOpType: 'REPAIR' as const,
     };
 
-    expect(() => SuperSyncUploadSnapshotRequestSchema.parse(repairRequest)).toThrow();
+    expect(SuperSyncUploadSnapshotRequestSchema.parse(repairRequest)).toEqual(
+      repairRequest,
+    );
 
     const parsed = SuperSyncUploadSnapshotRequestSchema.parse({
       ...repairRequest,
       repairBaseServerSeq: 42,
     });
     expect(parsed.repairBaseServerSeq).toBe(42);
+  });
+
+  it('preserves causal repair metadata on downloaded operations', () => {
+    const parsed = SuperSyncOperationSchema.parse({
+      ...createValidOperation(),
+      opType: 'REPAIR',
+      repairBaseServerSeq: 42,
+    });
+
+    expect(parsed.repairBaseServerSeq).toBe(42);
+  });
+
+  it('preserves causal repair capability negotiation on downloads', () => {
+    const parsed = SuperSyncDownloadOpsResponseSchema.parse({
+      ops: [],
+      hasMore: false,
+      latestSeq: 0,
+      capabilities: { causalRepairSnapshots: true },
+    });
+
+    expect(parsed.capabilities?.causalRepairSnapshots).toBe(true);
   });
 
   it('requires an operation ID for destructive clean-slate snapshots', () => {

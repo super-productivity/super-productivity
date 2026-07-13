@@ -225,6 +225,8 @@ export interface DownloadResultForRejection {
   newOpsCount: number;
   allOpClocks?: VectorClock[];
   snapshotVectorClock?: VectorClock;
+  /** Server cursor after the downloaded operations were durably applied. */
+  latestServerSeq?: number;
 }
 
 /**
@@ -232,6 +234,8 @@ export interface DownloadResultForRejection {
  */
 export type DownloadCallback = (options?: {
   forceFromSeq0?: boolean;
+  /** Local full-state boundaries to ignore while processing this recovery download. */
+  ignoredLocalFullStateOpIds?: string[];
 }) => Promise<DownloadResultForRejection>;
 
 // ─────────────────────────────────────────────────────────────────────────────

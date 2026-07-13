@@ -753,6 +753,7 @@ describe('OperationLogSyncService', () => {
           mockProvider = {
             isReady: () => Promise.resolve(true),
             supportsOperationSync: true,
+            getLastServerSeq: () => Promise.resolve(12),
           };
         });
 
@@ -830,6 +831,15 @@ describe('OperationLogSyncService', () => {
             forceFromSeq0: true,
             isNeverSynced: true,
           });
+
+          const recoveryResult = await capturedCallback({
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+          });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+            isNeverSynced: true,
+          });
+          expect(recoveryResult.latestServerSeq).toBe(12);
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {

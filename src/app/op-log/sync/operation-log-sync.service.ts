@@ -395,11 +395,13 @@ export class OperationLogSyncService {
     // USE_REMOTE, CANCEL) — those paths return early above to avoid stale rejection handling.
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
+      ignoredLocalFullStateOpIds?: string[];
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, {
         ...downloadOptions,
         isNeverSynced: isNeverSyncedAtSyncStart,
       });
+      const latestServerSeq = await syncProvider.getLastServerSeq();
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — no need to thread the boolean back. (#7330)
       switch (outcome.kind) {
@@ -408,6 +410,7 @@ export class OperationLogSyncService {
             newOpsCount: outcome.newOpsCount,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
+            latestServerSeq,
           };
         case 'no_new_ops':
         case 'snapshot_hydrated':
@@ -415,10 +418,11 @@ export class OperationLogSyncService {
             newOpsCount: 0,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
+            latestServerSeq,
           };
         case 'server_migration_handled':
         case 'cancelled':
-          return { newOpsCount: 0 };
+          return { newOpsCount: 0, latestServerSeq };
         case 'blocked_incompatible':
           throw new Error('Nested download blocked by an incompatible remote operation.');
       }
@@ -477,7 +481,11 @@ export class OperationLogSyncService {
    */
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
-    options?: { forceFromSeq0?: boolean; isNeverSynced?: boolean },
+    options?: {
+      forceFromSeq0?: boolean;
+      isNeverSynced?: boolean;
+      ignoredLocalFullStateOpIds?: string[];
+    },
   ): Promise<DownloadOutcome> {
     // Crash-resume: a prior USE_REMOTE rebuild committed its baseline
     // replacement but crashed before the replay finished. The normal download
@@ -971,6 +979,7 @@ export class OperationLogSyncService {
       startupCleanupFullStateOpId,
       startupOpIdsToDiscard,
       result.latestServerSeq,
+      options?.ignoredLocalFullStateOpIds,
     );
 
     if (processResult.blockedByIncompatibleOp) {
@@ -1060,11 +1069,17 @@ export class OperationLogSyncService {
     fullStateOpId: string | undefined,
     startupOpIds: string[],
     repairBaseServerSeq?: number,
+    ignoredLocalFullStateOpIds?: readonly string[],
   ): Promise<RemoteOpsProcessingResult> {
     try {
       const result = await this.repairSyncContext.runWithBaseServerSeq(
         repairBaseServerSeq,
-        () => this.remoteOpsProcessingService.processRemoteOps(remoteOps),
+        () =>
+          ignoredLocalFullStateOpIds?.length
+            ? this.remoteOpsProcessingService.processRemoteOps(remoteOps, {
+                ignoredLocalFullStateOpIds,
+              })
+            : this.remoteOpsProcessingService.processRemoteOps(remoteOps),
       );
       await this._discardStartupOpsIfFullStateCommitted(
         fullStateOpId,

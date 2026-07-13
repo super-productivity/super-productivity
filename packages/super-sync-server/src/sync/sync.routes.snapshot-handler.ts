@@ -108,6 +108,10 @@ export const uploadSnapshotHandler = async (
       requestId,
     } = snapshotRequest;
     const shouldCleanSlate = snapshotOpType === 'REPAIR' ? false : isCleanSlate;
+    const isLegacyRepairUpload =
+      snapshotOpType === 'REPAIR' &&
+      repairBaseServerSeq === undefined &&
+      isCleanSlate === true;
     const syncService = getSyncService();
     // Lazy + memoized: fingerprinting stable-stringifies + SHA-256-hashes the
     // full (possibly multi-MB plaintext) snapshot state. It must not run
@@ -234,6 +238,7 @@ export const uploadSnapshotHandler = async (
       schemaVersion: schemaVersion ?? 1,
       isPayloadEncrypted: isPayloadEncrypted ?? false,
       syncImportReason,
+      repairBaseServerSeq,
     };
 
     const preparedSnapshot = await syncService.prepareSnapshotCache(state);
@@ -268,6 +273,7 @@ export const uploadSnapshotHandler = async (
               schemaVersion: existingFullStateOp.schemaVersion,
               isPayloadEncrypted: existingFullStateOp.isPayloadEncrypted,
               syncImportReason: existingFullStateOp.syncImportReason ?? undefined,
+              repairBaseServerSeq: existingFullStateOp.repairBaseServerSeq ?? undefined,
             };
             const isExactRetry =
               existingFullStateOp.userId === userId &&
@@ -292,6 +298,25 @@ export const uploadSnapshotHandler = async (
               error: 'Operation ID already belongs to a different operation',
               errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
             };
+          }
+        }
+
+        // The quota gate may delete restore points and old operations to make
+        // room. Reject stale or missing causal REPAIR bases before cleanup can
+        // mutate storage. uploadOps repeats this check under the database row
+        // lock, covering a concurrent writer between this check and the insert.
+        if (snapshotOpType === 'REPAIR' && !isLegacyRepairUpload) {
+          const currentServerSeq = await syncService.getLatestSeq(userId);
+          if (
+            repairBaseServerSeq === undefined ||
+            repairBaseServerSeq !== currentServerSeq
+          ) {
+            reply.send({
+              accepted: false,
+              error: 'REPAIR snapshot does not include current server state',
+              errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+            });
+            return null;
           }
         }
 
@@ -341,7 +366,7 @@ export const uploadSnapshotHandler = async (
           // on-disk change because the op-row is always counted via
           // estimatedOpStorageBytes.
           let estimatedSnapshotCacheDelta = 0;
-          if (!op.isPayloadEncrypted) {
+          if (!op.isPayloadEncrypted && !isLegacyRepairUpload) {
             const previousSnapshotBytes =
               await syncService.getCachedSnapshotBytes(userId);
             estimatedSnapshotCacheDelta = preparedSnapshot.cacheable
@@ -360,10 +385,15 @@ export const uploadSnapshotHandler = async (
           shouldCleanSlate,
           undefined,
           repairBaseServerSeq,
+          isLegacyRepairUpload,
         );
         const uploadResult = results[0];
 
-        if (uploadResult.accepted && uploadResult.serverSeq !== undefined) {
+        if (
+          uploadResult.accepted &&
+          uploadResult.serverSeq !== undefined &&
+          !isLegacyRepairUpload
+        ) {
           // Cache the snapshot — but only if the payload is server-replayable.
           // Encrypted snapshots remain available as ops but can't back
           // server-side restore, so we skip caching their blob.

@@ -12,6 +12,7 @@ import {
   ConflictResult,
   DEFAULT_SYNC_CONFIG,
   DUPLICATE_OP_SELECT,
+  isCausalFullStateOperation,
   isFullStateOpType,
   limitVectorClockSize,
   Operation,
@@ -386,7 +387,7 @@ export class OperationUploadService {
         op,
         resultIndex: i,
         originalTimestamp,
-        fullStateVectorClock: isFullStateOpType(op.opType)
+        fullStateVectorClock: isCausalFullStateOperation(op)
           ? { ...op.vectorClock }
           : undefined,
         payloadBytes: validation.payloadBytes,
@@ -618,6 +619,7 @@ export class OperationUploadService {
         receivedAt: BigInt(now),
         isPayloadEncrypted: candidate.op.isPayloadEncrypted ?? false,
         syncImportReason: candidate.op.syncImportReason ?? null,
+        repairBaseServerSeq: candidate.op.repairBaseServerSeq ?? null,
       })),
     });
     return 2;
@@ -721,7 +723,7 @@ export class OperationUploadService {
     // unpruned copy on `user_sync_state` lets the download path re-prune at
     // read time with knowledge of `preserveClientIds` (excludeClient, snapshot
     // author), keeping more relevant entries than a pre-pruned snapshot would.
-    const fullStateVectorClock = isFullStateOpType(op.opType)
+    const fullStateVectorClock = isCausalFullStateOperation(op)
       ? { ...op.vectorClock }
       : undefined;
 
@@ -877,6 +879,7 @@ export class OperationUploadService {
           receivedAt: BigInt(now),
           isPayloadEncrypted: op.isPayloadEncrypted ?? false,
           syncImportReason: op.syncImportReason ?? null,
+          repairBaseServerSeq: op.repairBaseServerSeq ?? null,
         },
       ],
       skipDuplicates: true,

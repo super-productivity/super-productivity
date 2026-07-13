@@ -131,6 +131,23 @@ export class OperationLogUploadService {
       const pendingOps = await this.opLogStore.getUnsynced();
       selectedPendingOps = pendingOps;
 
+      const rejectedImport = await this.opLogStore.getLatestRejectedImportOpEntry();
+      const latestActiveFullState = rejectedImport
+        ? await this.opLogStore.getLatestFullStateOpEntry()
+        : undefined;
+      if (
+        rejectedImport &&
+        (!latestActiveFullState || latestActiveFullState.seq <= rejectedImport.seq)
+      ) {
+        blockedByRejectedFullState = true;
+        OpLog.warn(
+          `OperationLogUploadService: Upload remains blocked because rejected ` +
+            `${rejectedImport.op.opType} ${rejectedImport.op.id} has not been ` +
+            'superseded by a newer full-state operation.',
+        );
+        return;
+      }
+
       if (pendingOps.length === 0) {
         OpLog.normal('OperationLogUploadService: No pending operations to upload.');
         return;
@@ -203,19 +220,11 @@ export class OperationLogUploadService {
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
-      const rejectedImport = await this.opLogStore.getLatestRejectedImportOpEntry();
       if (rejectedImport) {
-        const latestActiveFullState = await this.opLogStore.getLatestFullStateOpEntry();
-        if (!latestActiveFullState || latestActiveFullState.seq <= rejectedImport.seq) {
-          blockedByRejectedFullState = true;
-          OpLog.warn(
-            `OperationLogUploadService: Keeping ${regularOps.length} regular op(s) pending ` +
-              `because rejected ${rejectedImport.op.opType} ${rejectedImport.op.id} ` +
-              'has not been superseded by a newer full-state operation.',
-          );
-          return;
-        }
-        if (latestActiveFullState.source === 'local' && !latestActiveFullState.syncedAt) {
+        if (
+          latestActiveFullState?.source === 'local' &&
+          !latestActiveFullState.syncedAt
+        ) {
           // A pending recovery snapshot is allowed to try, but it does not
           // release the durable barrier until the server actually accepts it.
           blockedByRejectedFullState = true;
@@ -578,6 +587,9 @@ export class OperationLogUploadService {
       ...(entry.op.syncImportReason
         ? { syncImportReason: entry.op.syncImportReason }
         : {}),
+      ...(entry.op.repairBaseServerSeq !== undefined
+        ? { repairBaseServerSeq: entry.op.repairBaseServerSeq }
+        : {}),
     };
   }
 
@@ -656,6 +668,18 @@ export class OperationLogUploadService {
       typeof op.payload.repairBaseServerSeq === 'number'
         ? op.payload.repairBaseServerSeq
         : undefined;
+
+    if (
+      op.opType === OpType.Repair &&
+      syncProvider.providerMode === 'superSyncOps' &&
+      syncProvider.supportsCausalRepairSnapshots?.() !== true
+    ) {
+      return {
+        accepted: false,
+        error: 'Server does not advertise causal REPAIR snapshot support',
+        errorCode: 'REPAIR_CAUSALITY_UNSUPPORTED',
+      };
+    }
 
     // Extract state from payload, handling both wrapped and unwrapped formats.
     // Uses shared utility to ensure consistent handling across the codebase.

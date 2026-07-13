@@ -614,7 +614,7 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(1);
       });
 
-      it('should replay a concurrent pre-REPAIR operation on top of the repair', async () => {
+      it('should replay a concurrent pre-REPAIR operation for a legacy repair', async () => {
         const ops: Operation[] = [
           {
             id: '019afd60-0001-7000-0000-000000000000',
@@ -652,6 +652,41 @@ describe('SyncImportFilterService', () => {
           OpType.Update,
         ]);
         expect(result.invalidatedOps).toEqual([]);
+      });
+
+      it('should not replay a pre-REPAIR operation already covered by a causal repair', async () => {
+        const representedOp = createOp({
+          id: 'represented-op',
+          opType: OpType.Update,
+          clientId: 'client-B',
+          vectorClock: { clientA: 2, clientB: 3 },
+        });
+        const causalRepair = createOp({
+          id: 'causal-repair',
+          actionType: '[OpLog] Repair' as ActionType,
+          opType: OpType.Repair,
+          entityType: 'ALL',
+          entityId: undefined,
+          payload: { appDataComplete: {} },
+          clientId: 'client-A',
+          vectorClock: { clientA: 5 },
+          repairBaseServerSeq: 7,
+        });
+        const postRepairOp = createOp({
+          id: 'post-repair-op',
+          opType: OpType.Update,
+          clientId: 'client-C',
+          vectorClock: { clientA: 2, clientC: 1 },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([
+          representedOp,
+          causalRepair,
+          postRepairOp,
+        ]);
+
+        expect(result.validOps).toEqual([causalRepair, postRepairOp]);
+        expect(result.invalidatedOps).toEqual([representedOp]);
       });
     });
 
@@ -1274,6 +1309,34 @@ describe('SyncImportFilterService', () => {
 
         expect(result.invalidatedOps).toEqual([representedOp]);
         expect(result.isLocalUnsyncedImport).toBe(false);
+      });
+
+      it('should ignore a stale local REPAIR during its recovery download', async () => {
+        const storedRepair = createOp({
+          id: 'stale-repair',
+          opType: OpType.Repair,
+          clientId: 'client-A',
+          entityType: 'ALL',
+          vectorClock: { clientA: 3, clientB: 2 },
+        });
+        opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(
+          createEntry(storedRepair, 'local'),
+        );
+        const concurrentServerOp = createOp({
+          id: 'server-suffix-op',
+          opType: OpType.Update,
+          clientId: 'client-B',
+          vectorClock: { clientB: 3 },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport(
+          [concurrentServerOp],
+          { ignoredLocalFullStateOpIds: [storedRepair.id] },
+        );
+
+        expect(result.validOps).toEqual([concurrentServerOp]);
+        expect(result.invalidatedOps).toEqual([]);
+        expect(result.filteringImport).toBeUndefined();
       });
 
       it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {

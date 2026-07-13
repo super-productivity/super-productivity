@@ -133,6 +133,7 @@ export class SuperSyncProvider
   >;
 
   private _cachedServerSeqKey: string | null = null;
+  private _causalRepairSnapshotsSupported = false;
 
   constructor(private readonly _deps: SuperSyncDeps) {
     this.privateCfg = _deps.credentialStore;
@@ -277,7 +278,14 @@ export class SuperSyncProvider
       { method: 'GET' },
     );
 
-    return this._deps.responseValidators.validateOpDownload(response);
+    const validated = this._deps.responseValidators.validateOpDownload(response);
+    this._causalRepairSnapshotsSupported =
+      validated.capabilities?.causalRepairSnapshots === true;
+    return validated;
+  }
+
+  supportsCausalRepairSnapshots(): boolean {
+    return this._causalRepairSnapshotsSupported;
   }
 
   async getLastServerSeq(): Promise<number> {

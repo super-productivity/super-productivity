@@ -596,6 +596,24 @@ describe('SuperSyncProvider', () => {
   });
 
   describe('downloadOps', () => {
+    it('learns causal repair support from the download response', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        okResponse({
+          ops: [],
+          hasMore: false,
+          latestSeq: 0,
+          capabilities: { causalRepairSnapshots: true },
+        }),
+      );
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(false);
+      await provider.downloadOps(0);
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(true);
+    });
+
     it('downloads operations successfully', async () => {
       const { provider, cfgStore, fetchMock } = buildProvider();
       cfgStore.load.mockResolvedValue(testConfig);

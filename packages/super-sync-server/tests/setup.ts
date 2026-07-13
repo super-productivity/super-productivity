@@ -106,6 +106,13 @@ vi.mock('../src/db', () => {
       return true;
     }
 
+    if (
+      Array.isArray(where.OR) &&
+      !where.OR.some((alternative: any) => matchesWhere(op, alternative))
+    ) {
+      return false;
+    }
+
     if (where.userId !== undefined && op.userId !== where.userId) return false;
     if (where.id !== undefined && op.id !== where.id) return false;
     if (where.entityType !== undefined && op.entityType !== where.entityType) {
@@ -139,6 +146,12 @@ vi.mock('../src/db', () => {
       return false;
     }
     if (typeof where.opType === 'string' && op.opType !== where.opType) {
+      return false;
+    }
+    if (where.repairBaseServerSeq === null && op.repairBaseServerSeq != null) {
+      return false;
+    }
+    if (where.repairBaseServerSeq?.not === null && op.repairBaseServerSeq == null) {
       return false;
     }
     if (

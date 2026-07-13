@@ -133,6 +133,8 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   they read the same pre-insert snapshot
 - Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
   accepted writers for the same user to serialize on that row lock
+- A causal `REPAIR` snapshot must prove that its state includes the current
+  server prefix; the same row serializes that base-cursor check with later writes
 - If two batches race, the later writer blocks on the row and the transaction
   retry path handles the serialization failure rather than silently accepting
   conflicting operations
@@ -145,6 +147,12 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
 - The batch insert does not use `skipDuplicates`; an unexpected unique conflict
   aborts the transaction and lets the request retry
+- `REPAIR` uploads persist `repairBaseServerSeq` on the operation row. The HTTP
+  handler rejects an obviously stale base before quota cleanup, and the upload
+  transaction repeats the check under `SELECT ... FOR UPDATE` before insertion
+- Markerless legacy repairs are compatibility records, not causal boundaries:
+  they cannot drive download fast-forward, snapshot trust, history pruning, or
+  server-generated restore points; snapshot replay across one fails closed
 - Removing or sharding the `lastSeq` write requires replacing this safety
   mechanism with an equivalent per-user serialization primitive
 
@@ -154,12 +162,14 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 
 - [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
 - [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
+- [`packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts`](packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts) - Real-PostgreSQL race coverage
 
 **When to Update This Pattern**:
 
 - Changing upload conflict detection
 - Changing server sequence assignment
 - Changing transaction isolation for upload operations
+- Changing repair base-cursor validation or full-state history pruning
 - Introducing multi-writer or multi-region upload processing
 
 ---
