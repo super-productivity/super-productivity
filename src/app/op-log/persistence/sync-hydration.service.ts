@@ -29,6 +29,11 @@ import {
   stripLocalOnlySyncSettingsFromAppData,
 } from '../../features/config/local-only-sync-settings.util';
 
+interface SnapshotHydrationHooks {
+  /** Runs synchronously immediately before loadAllData replaces live NgRx state. */
+  beforeStateLoad?: () => void;
+}
+
 /**
  * Handles hydration after remote sync downloads.
  *
@@ -71,16 +76,27 @@ export class SyncHydrationService {
    *   for file-based sync bootstrap to avoid "clean slate" semantics that would filter
    *   concurrent ops from other clients. Default is true for backwards compatibility
    *   and for explicit "use local/remote" conflict resolution flows.
+   * @param hooks - Internal orchestration hooks around the final synchronous state load.
    */
   async hydrateFromRemoteSync(
     downloadedMainModelData?: Record<string, unknown>,
     remoteVectorClock?: Record<string, number>,
     createSyncImportOp: boolean = true,
     syncImportReason?: SyncImportReason,
+    hooks?: SnapshotHydrationHooks,
   ): Promise<void> {
     OpLog.normal('SyncHydrationService: Hydrating from remote sync...');
 
     try {
+      // Capture the exact pending set before any snapshot work can yield. The
+      // normal file-snapshot caller opens a remote-apply window around this
+      // method, so user actions arriving after this read are deferred and must
+      // be preserved on top of the downloaded snapshot rather than rejected as
+      // if they belonged to the superseded local baseline.
+      const unsyncedOpsToReject = createSyncImportOp
+        ? []
+        : await this.opLogStore.getUnsynced();
+
       // 0. Capture current local-only sync settings BEFORE overwriting
       // These settings should remain local to each client and not be overwritten by remote data.
       // FIX: isEnabled was not being preserved, causing sync to appear disabled after reload
@@ -207,12 +223,11 @@ export class SyncHydrationService {
         // CRITICAL: Reject any local pending ops since they're now based on superseded state.
         // Without SYNC_IMPORT, SyncImportFilterService won't automatically filter them.
         // These ops have superseded clocks and payloads that don't match the new snapshot.
-        const unsyncedOps = await this.opLogStore.getUnsynced();
-        if (unsyncedOps.length > 0) {
-          const opIds = unsyncedOps.map((entry) => entry.op.id);
+        if (unsyncedOpsToReject.length > 0) {
+          const opIds = unsyncedOpsToReject.map((entry) => entry.op.id);
           await this.opLogStore.markRejected(opIds);
           OpLog.normal(
-            `SyncHydrationService: Rejected ${unsyncedOps.length} local pending op(s) ` +
+            `SyncHydrationService: Rejected ${unsyncedOpsToReject.length} local pending op(s) ` +
               `(superseded after file-based sync snapshot)`,
           );
 
@@ -220,7 +235,7 @@ export class SyncHydrationService {
           this.snackService.open({
             msg: T.F.SYNC.S.LOCAL_CHANGES_DISCARDED_SNAPSHOT,
             translateParams: {
-              count: unsyncedOps.length,
+              count: unsyncedOpsToReject.length,
             },
           });
         }
@@ -298,6 +313,7 @@ export class SyncHydrationService {
       OpLog.normal('SyncHydrationService: Updated vector clock store after sync');
 
       // 11. Dispatch loadAllData to update NgRx
+      hooks?.beforeStateLoad?.();
       this.store.dispatch(loadAllData({ appDataComplete: dataToLoad }));
       OpLog.normal('SyncHydrationService: Dispatched loadAllData with synced data');
     } catch (e) {
