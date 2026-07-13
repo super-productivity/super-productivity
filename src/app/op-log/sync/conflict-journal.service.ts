@@ -59,6 +59,15 @@ export class ConflictJournalService {
   /** Number of entries still awaiting review (status === 'unreviewed'). */
   readonly unreviewedCount = this._unreviewedCount.asReadonly();
 
+  private readonly _revision = signal(0);
+  /**
+   * Monotonic counter bumped on EVERY journal mutation (record / status change /
+   * prune / clearAll), regardless of whether `unreviewedCount` changed. Consumers
+   * that must react to composition changes at an equal total (e.g. one remote-win
+   * reviewed while one local-win is recorded) key off this instead of the count.
+   */
+  readonly revision = this._revision.asReadonly();
+
   private _openDb(): Promise<IDBPDatabase<ConflictJournalDB>> {
     return openDB<ConflictJournalDB>(
       CONFLICT_JOURNAL_DB_NAME,
@@ -264,6 +273,12 @@ export class ConflictJournalService {
   private async _refreshUnreviewedCount(
     db: IDBPDatabase<ConflictJournalDB>,
   ): Promise<void> {
+    // Advance `revision` FIRST, so a committed mutation always notifies consumers
+    // even if the count query below throws (callers swallow that error). The
+    // banner keys off `revision` and re-reads the journal itself, so it still
+    // reflects the committed change; `unreviewedCount` catches up once the query
+    // succeeds. Fires on every mutation even when the count is unchanged.
+    this._revision.update((r) => r + 1);
     const count = await db.countFromIndex(
       CONFLICT_JOURNAL_STORE,
       CONFLICT_JOURNAL_INDEX_STATUS,

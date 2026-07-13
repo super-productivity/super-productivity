@@ -1,3 +1,4 @@
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import {
@@ -34,9 +35,13 @@ describe('SyncConflictBannerService', () => {
   let bannerService: jasmine.SpyObj<BannerService>;
   let router: jasmine.SpyObj<Router>;
 
-  /** Lets the count-change subscription's async refresh settle. */
+  /**
+   * Lets the revision-triggered live refresh settle. The service coalesces
+   * mutation bursts with a 100ms `auditTime` window, so this waits past it
+   * (plus the async journal read).
+   */
   const flushAsync = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve, 0));
+    new Promise((resolve) => setTimeout(resolve, 160));
 
   beforeEach(() => {
     bannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss', 'isShown']);
@@ -233,5 +238,106 @@ describe('SyncConflictBannerService', () => {
 
     // count stream says 1 (> 0) but the read is empty: don't dismiss a valid banner.
     expect(bannerService.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('coalesces a burst of reviews into a bounded number of journal scans (#8946)', async () => {
+    const entries = Array.from({ length: 12 }, () => makeEntry({ winner: 'remote' }));
+    for (const e of entries) {
+      await journal.record(e);
+    }
+    await service.maybeShowSummaryBanner();
+
+    bannerService.isShown.and.returnValue(true);
+    // Spy AFTER the open so only refresh-driven reads are counted.
+    const listSpy = spyOn(journal, 'list').and.callThrough();
+
+    // Bulk "Keep All": a burst of mutations. Each bumps the journal revision.
+    for (const e of entries) {
+      await journal.markKept(e.id);
+    }
+    await flushAsync();
+
+    // Coalesced: the whole burst collapses to a single trailing refresh (one
+    // scan), not one full journal scan per entry.
+    expect(listSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SyncConflictBannerService — mutation-aware trigger (#8946)', () => {
+  let bannerService: jasmine.SpyObj<BannerService>;
+  let revision: WritableSignal<number>;
+  let unreviewedCount: WritableSignal<number>;
+  let listSpy: jasmine.Spy;
+
+  // The live refresh coalesces bursts with a 100ms auditTime window.
+  const flushAsync = (): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, 160));
+
+  beforeEach(() => {
+    bannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss', 'isShown']);
+    bannerService.isShown.and.returnValue(false);
+    revision = signal(0);
+    unreviewedCount = signal(0);
+    listSpy = jasmine.createSpy('list').and.resolveTo([]);
+
+    // Mock journal: revision and unreviewedCount are controlled independently so
+    // the count-race is reproducible deterministically (both count queries run
+    // after both writes -> the count is unchanged while the content changed).
+    const mockJournal = {
+      revision: revision.asReadonly(),
+      unreviewedCount: unreviewedCount.asReadonly(),
+      list: listSpy,
+    } as unknown as ConflictJournalService;
+
+    TestBed.configureTestingModule({
+      providers: [
+        SyncConflictBannerService,
+        { provide: ConflictJournalService, useValue: mockJournal },
+        { provide: BannerService, useValue: bannerService },
+        {
+          provide: Router,
+          useValue: jasmine.createSpyObj('Router', ['navigate']),
+        },
+      ],
+    });
+  });
+
+  it('refreshes the breakdown on an equal-total composition change (count stays 1, remote -> local)', async () => {
+    const service = TestBed.inject(SyncConflictBannerService);
+    // Let the initial revision emission flush so skip(1) consumes it here (not a
+    // later, meaningful change).
+    await flushAsync();
+
+    // Open with a single remote-win.
+    listSpy.and.resolveTo([makeEntry({ winner: 'remote' })]);
+    unreviewedCount.set(1);
+    await service.maybeShowSummaryBanner();
+    expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
+      count: 1,
+      remoteWins: 1,
+      localWins: 0,
+    });
+
+    bannerService.isShown.and.returnValue(true);
+    // Drain any count-driven refresh (a count-keyed trigger would have fired one
+    // when the count went 0 -> 1 above) while the content is still the remote-win,
+    // so the change below is revision-only and the two triggers are distinguished.
+    await flushAsync();
+    await flushAsync();
+
+    // The race: one remote-win reviewed AND one local-win recorded, with both
+    // count queries observing the post-both-writes state -> unreviewedCount stays
+    // 1 (UNCHANGED) while the content flipped to one local-win. A trigger keyed on
+    // the count suppresses this refresh; keyed on the revision it must fire.
+    listSpy.and.resolveTo([makeEntry({ winner: 'local' })]);
+    revision.set(1); // NOTE: unreviewedCount deliberately left at 1
+    await flushAsync();
+    await flushAsync();
+
+    expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
+      count: 1,
+      remoteWins: 0,
+      localWins: 1,
+    });
   });
 });

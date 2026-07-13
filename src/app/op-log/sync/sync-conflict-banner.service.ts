@@ -9,9 +9,9 @@
  */
 
 import { inject, Injectable } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { distinctUntilChanged, skip } from 'rxjs';
+import { auditTime, skip } from 'rxjs';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { ConflictJournalService } from './conflict-journal.service';
@@ -20,6 +20,13 @@ import { T } from '../../t.const';
 
 /** Route path of the Sync Conflicts review page. */
 export const SYNC_CONFLICTS_ROUTE = '/sync-conflicts';
+
+/**
+ * Coalesce window for the live banner refresh. A burst of journal mutations
+ * (e.g. Keep All over the whole journal) collapses into one trailing refresh
+ * instead of one full journal scan per entry.
+ */
+const BANNER_REFRESH_COALESCE_MS = 100;
 
 const CR = T.F.SYNC.CONFLICT_REVIEW;
 
@@ -37,14 +44,20 @@ export class SyncConflictBannerService {
   private _bannerSeq = 0;
 
   constructor() {
-    // SPAP-35: the banner captures its counts when it opens; the sync-icon badge
-    // updates live but an OPEN banner would go stale while the user reviews
-    // entries on the page. Refresh (or dismiss at zero) the banner on every
-    // unreviewed-count change — but only while it is actually still shown, so a
-    // banner the user dismissed is never resurrected by reviewing activity.
-    this._journal.unreviewedCount$
-      .pipe(skip(1), distinctUntilChanged(), takeUntilDestroyed())
-      .subscribe((count) => void this._refreshOpenBanner(count));
+    // SPAP-35 / #8946: the banner captures its counts when it opens; the
+    // sync-icon badge updates live but an OPEN banner would go stale while the
+    // user reviews entries on the page. Refresh (or dismiss at zero) an
+    // already-open banner on every journal MUTATION — keyed on the `revision`
+    // signal, NOT the numeric unreviewed count, so an equal-total composition
+    // change (one remote-win reviewed while one local-win is recorded, total
+    // unchanged) still refreshes the "X remote, Y local" breakdown. `auditTime`
+    // coalesces a burst of mutations (e.g. Keep All over the whole journal) into
+    // one trailing refresh, so a bulk review can't fire one full journal scan per
+    // entry. Only refreshes while the banner is still shown, so reviewing never
+    // resurrects a dismissed banner.
+    toObservable(this._journal.revision)
+      .pipe(skip(1), auditTime(BANNER_REFRESH_COALESCE_MS), takeUntilDestroyed())
+      .subscribe(() => void this._refreshOpenBanner());
   }
 
   /** Navigate to the review page (shared by the banner action and elsewhere). */
@@ -61,7 +74,12 @@ export class SyncConflictBannerService {
     const seq = ++this._bannerSeq;
     const unreviewed = await this._journal.list('unreviewed');
     if (seq !== this._bannerSeq) return; // superseded by a newer banner update
-    this._renderSummaryBanner(computeWinCounts(unreviewed));
+    const wins = computeWinCounts(unreviewed);
+    // Ignore a phantom zero: list() returns [] on a transient DB error. If the
+    // authoritative count still reports >0, don't dismiss/skip a valid banner
+    // (same guard the live-refresh path applies).
+    if (wins.total === 0 && this._journal.unreviewedCount() > 0) return;
+    this._renderSummaryBanner(wins);
   }
 
   /**
@@ -73,17 +91,17 @@ export class SyncConflictBannerService {
    *     not resurrected (the pre-await check alone is a check-then-act TOCTOU);
    *   - re-check the sequence, so a slow older read can't clobber newer counts;
    *   - ignore a phantom zero: `list()` returns `[]` on a transient DB error, so
-   *     a zero read while the count stream still reports >0 must not dismiss a
-   *     valid banner.
+   *     a zero read while the authoritative count signal still reports >0 must
+   *     not dismiss a valid banner.
    */
-  private async _refreshOpenBanner(emittedCount: number): Promise<void> {
+  private async _refreshOpenBanner(): Promise<void> {
     if (!this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) return;
     const seq = ++this._bannerSeq;
     const unreviewed = await this._journal.list('unreviewed');
     if (seq !== this._bannerSeq) return; // a newer refresh/open superseded us
     if (!this._bannerService.isShown(BannerId.SyncConflictsAutoResolved)) return; // dismissed mid-read
     const wins = computeWinCounts(unreviewed);
-    if (wins.total === 0 && emittedCount > 0) return; // phantom zero from a failed read
+    if (wins.total === 0 && this._journal.unreviewedCount() > 0) return; // phantom zero
     this._renderSummaryBanner(wins);
   }
 
