@@ -1150,6 +1150,41 @@ describe('SyncService', () => {
       },
     );
 
+    it('should preserve concurrent additive task-time deltas within one batch', async () => {
+      const service = new SyncService({ batchUpload: true });
+      const makeTaskTimeOp = (
+        id: string,
+        vectorClock: Record<string, number>,
+        duration: number,
+      ): Operation => ({
+        id,
+        clientId,
+        actionType: '[TimeTracking] Sync time spent',
+        opType: 'UPD',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: {
+          actionPayload: {
+            taskId: 'task-1',
+            date: '2026-07-13',
+            duration,
+          },
+          entityChanges: [],
+        },
+        vectorClock,
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      });
+
+      const results = await service.uploadOps(userId, clientId, [
+        makeTaskTimeOp(uuidv7(), { [clientId]: 1 }, 5000),
+        makeTaskTimeOp(uuidv7(), { 'other-client': 1 }, 7000),
+      ]);
+
+      expect(results.every((result) => result.accepted)).toBe(true);
+      expect(testState.operations.size).toBe(2);
+    });
+
     it('should use entityIds when prefetching batch conflicts', async () => {
       const service = new SyncService({ batchUpload: true });
       testState.userSyncStates.set(userId, { userId, lastSeq: 1 });

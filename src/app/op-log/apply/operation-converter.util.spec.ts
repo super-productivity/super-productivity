@@ -81,6 +81,63 @@ describe('operation-converter utility', () => {
       expect(action.meta.opType).toBe(OpType.Create);
     });
 
+    describe('task-time sync payload validation', () => {
+      const createTaskTimeOp = (
+        payload: Record<string, unknown>,
+        entityId = 'task-1',
+      ): Operation =>
+        createMockOperation({
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          entityId,
+          payload,
+        });
+
+      it('should accept a valid task-time delta', () => {
+        const action = convertOpToAction(
+          createTaskTimeOp({
+            taskId: 'task-1',
+            date: '2024-02-29',
+            duration: 5000,
+          }),
+        );
+
+        expect((action as any).duration).toBe(5000);
+      });
+
+      it('should reject a taskId that differs from the canonical entityId', () => {
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-2',
+              date: '2024-01-15',
+              duration: 5000,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+      });
+
+      it('should reject impossible dates and negative durations', () => {
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-1',
+              date: '2024-02-30',
+              duration: 5000,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-1',
+              date: '2024-01-15',
+              duration: -1,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+      });
+    });
+
     it('should handle Create operation', () => {
       const op = createMockOperation({
         opType: OpType.Create,
@@ -418,6 +475,27 @@ describe('operation-converter utility', () => {
         });
 
         expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('replaces an impossible captured calendar day', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { taskIds: ['task-1'], today: '2024-99-99' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('uses a stable epoch fallback for a malformed legacy timestamp', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Number.NaN,
+          payload: { taskIds: ['task-1'] },
+        });
+
+        expect(() => convertOpToAction(op)).not.toThrow();
+        expect((convertOpToAction(op) as any).today).toBe('1970-01-01');
       });
     });
 

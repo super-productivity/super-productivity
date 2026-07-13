@@ -3312,6 +3312,33 @@ describe('ConflictResolutionService', () => {
       expect(mockStore.select).not.toHaveBeenCalled();
     });
 
+    it('should keep concurrent additive task-time deltas non-conflicting', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-time', 'clientB'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 3000 },
+        vectorClock: { clientB: 1 },
+      };
+      const localOp: Operation = {
+        ...createMockOp('local-time', 'clientA'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+        vectorClock: { clientA: 1 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localOp]],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity }),
+      );
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflict: null });
+    });
+
     it('should use entityId fallback when entityIds is an empty array', async () => {
       // Regression test: entityIds: [] is truthy in JS, so the old || fallback
       // would use the empty array instead of falling back to entityId.

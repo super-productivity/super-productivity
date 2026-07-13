@@ -23,3 +23,17 @@ export const isDBDateStr = (str: string): boolean => {
   }
   return true;
 };
+
+/** Validates both the YYYY-MM-DD shape and the actual Gregorian calendar day. */
+export const isValidDBDateStr = (str: string): boolean => {
+  if (!isDBDateStr(str)) return false;
+
+  const year = Number(str.slice(0, 4));
+  const month = Number(str.slice(5, 7));
+  const day = Number(str.slice(8, 10));
+  if (month < 1 || month > 12 || day < 1) return false;
+
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
+};

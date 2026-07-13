@@ -5,6 +5,7 @@ import {
   OpType,
   isMultiEntityPayload,
   EntityChange,
+  ActionType,
 } from '../core/operation.types';
 import {
   getPayloadKey,
@@ -14,6 +15,7 @@ import {
 import { isValidEntityId } from './is-valid-entity-id';
 import type { SyncLogMeta } from '@sp/sync-core';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { isValidDBDateStr } from '../../util/get-db-date-str';
 
 /**
  * Result of validating an operation payload.
@@ -201,11 +203,34 @@ const validateCreatePayload = (
  * Expects payload to contain entity ID and changes, or a task/entity with changes.
  */
 const validateUpdatePayload = (
-  entityType: EntityType,
+  op: Operation,
   payload: unknown,
 ): PayloadValidationResult => {
+  const entityType = op.entityType;
   const p = payload as Record<string, unknown>;
   const warnings: string[] = [];
+
+  if (op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) {
+    const taskId = p['taskId'];
+    const date = p['date'];
+    const duration = p['duration'];
+    if (!isValidEntityId(taskId) || taskId !== op.entityId) {
+      return {
+        success: false,
+        error: 'syncTimeSpent taskId must match the operation entityId',
+      };
+    }
+    if (typeof date !== 'string' || !isValidDBDateStr(date)) {
+      return { success: false, error: 'syncTimeSpent date must be a valid YYYY-MM-DD' };
+    }
+    if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) {
+      return {
+        success: false,
+        error: 'syncTimeSpent duration must be a finite non-negative number',
+      };
+    }
+    return { success: true };
+  }
 
   // TIME_TRACKING uses action-payload capture with specific shapes
   // that don't match standard entity update patterns (see operation-capture.service.ts)
@@ -219,12 +244,6 @@ const validateUpdatePayload = (
       return { success: true };
     }
     // Fall through to standard validation if unknown TIME_TRACKING shape
-  }
-
-  // TASK time tracking updates use a special shape: { taskId, date, duration }
-  // This comes from syncTimeSpent action (see time-tracking.actions.ts)
-  if (entityType === 'TASK' && 'taskId' in p && 'date' in p && 'duration' in p) {
-    return { success: true };
   }
 
   // convertToSubTask uses a compact intent shape rather than { task: { changes } }.
@@ -609,7 +628,7 @@ export const validateOperationPayload = (op: Operation): PayloadValidationResult
       break;
 
     case OpType.Update:
-      result = validateUpdatePayload(op.entityType, actionPayload);
+      result = validateUpdatePayload(op, actionPayload);
       break;
 
     case OpType.Delete:

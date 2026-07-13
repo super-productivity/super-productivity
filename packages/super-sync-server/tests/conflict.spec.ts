@@ -218,6 +218,41 @@ describe('conflict helpers', () => {
     });
   });
 
+  it('accepts concurrent additive task-time deltas for the same task', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-b',
+        vectorClock: { 'client-b': 1 },
+      },
+    );
+
+    expect(result).toEqual({ hasConflict: false });
+  });
+
+  it('still rejects a causally stale additive task-time delta', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-a',
+        vectorClock: { 'client-a': 2 },
+      },
+    );
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('superseded');
+  });
+
   it('classifies less-than vector clocks as superseded', () => {
     const result = resolveConflictForExistingOp(
       op({ vectorClock: { 'client-a': 1 } }),

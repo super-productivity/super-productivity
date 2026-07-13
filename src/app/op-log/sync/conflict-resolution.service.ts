@@ -1536,6 +1536,18 @@ export class ConflictResolutionService {
 
     // CONCURRENT = true conflict
     if (vcComparison === VectorClockComparison.CONCURRENT) {
+      // Task-time sync operations are positive deltas, so two concurrent timer
+      // batches commute. Sending them through entity-level LWW would discard one
+      // user's tracked time even though both can be applied safely.
+      if (
+        remoteOp.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT &&
+        ctx.localOpsForEntity.every(
+          (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        )
+      ) {
+        return { isSupersededOrDuplicate: false, conflict: null };
+      }
+
       const conflict: EntityConflict = {
         entityType: remoteOp.entityType,
         entityId,
