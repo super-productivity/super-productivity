@@ -468,9 +468,20 @@ export class ConflictResolutionService {
           remoteOp,
         );
         if (recreationOp === undefined) {
-          throw new Error(
-            `ConflictResolutionService: Cannot safely recreate remote winner ${remoteOp.id} for ${resolution.conflict.entityId}`,
+          // The local DELETE carries no reconstructable base entity (e.g. a bulk
+          // deleteTasks op stores only taskIds), so we cannot recreate the
+          // remote-winning entity. Degrade like the single-entity path
+          // (_convertToLWWUpdatesIfNeeded / onMissingBaseEntity) instead of
+          // throwing: throwing here aborts autoResolveConflictsLWW without
+          // advancing the cursor, so the same op re-downloads and wedges sync
+          // forever. The entity stays locally deleted (a bounded divergence for
+          // this one entity, logged below) while the rest of the batch resolves.
+          OpLog.err(
+            `ConflictResolutionService: Cannot recreate remote winner ${remoteOp.id} for ` +
+              `${resolution.conflict.entityType}:${resolution.conflict.entityId} — local delete ` +
+              `carried no base entity. Entity stays deleted on this client; skipping recreation.`,
           );
+          continue;
         }
         if (recreationOp === null) {
           continue;
@@ -533,6 +544,22 @@ export class ConflictResolutionService {
           newLocalWinOps[localWinOpIndex] = markedCompensation;
           newLocalWinOpsById.set(localWinOpId, markedCompensation);
           compensationOpIdsToApply.add(localWinOpId);
+
+          // The applied remote bulk delete cascade-deletes the winning parent's
+          // subtasks (handleDeleteTasks expands parent → subTaskIds), but only
+          // the parent has a compensation op. Without recreating the subtasks
+          // the parent resurfaces with its subtree silently lost on every
+          // device (#8956). Emit recreate-after-delete snapshots for them too.
+          const subtaskRecreationOps =
+            await this._createSubtaskRecreationOpsForWinningParent(
+              markedCompensation,
+              remoteOp,
+            );
+          for (const subtaskOp of subtaskRecreationOps) {
+            newLocalWinOps.push(subtaskOp);
+            newLocalWinOpsById.set(subtaskOp.id, subtaskOp);
+            compensationOpIdsToApply.add(subtaskOp.id);
+          }
         }
       } else {
         for (const localWinOpId of winners.localWinOpIds) {
@@ -1523,6 +1550,7 @@ export class ConflictResolutionService {
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ]);
     const originalPayload = group.deleteOp.payload;
+    const retainedEntityIdSet = new Set(retainedEntityIds);
     const scopedActionPayload = {
       ...extractActionPayload(originalPayload),
       taskIds: retainedEntityIds,
@@ -1532,7 +1560,7 @@ export class ConflictResolutionService {
           ...originalPayload,
           actionPayload: scopedActionPayload,
           entityChanges: originalPayload.entityChanges.filter((change) =>
-            retainedEntityIds.includes(change.entityId),
+            retainedEntityIdSet.has(change.entityId),
           ),
         }
       : scopedActionPayload;
@@ -1660,6 +1688,96 @@ export class ConflictResolutionService {
       this.mergeAndIncrementClocks(allClocks, clientId),
       remoteOp.timestamp,
     );
+  }
+
+  /**
+   * When a remote bulk delete wins for some tasks but a parent task wins
+   * locally (mixed multi-entity winner), the whole remote delete is applied and
+   * `handleDeleteTasks` cascade-deletes that parent's subtasks. Only the parent
+   * gets an LWW recreate compensation, so the subtasks — pure collateral of the
+   * cascade, carrying no local op and not in the delete's entityIds — would be
+   * silently and permanently lost across every device (#8956).
+   *
+   * Emit a recreate-after-delete snapshot for each still-present subtask so the
+   * whole surviving subtree propagates. Only TASK entities cascade; subtasks
+   * explicitly targeted by the remote op (already resolved on their own) and
+   * subtasks deleted on THIS device are left untouched.
+   */
+  private async _createSubtaskRecreationOpsForWinningParent(
+    parentCompensationOp: Operation,
+    remoteDeleteOp: Operation,
+  ): Promise<Operation[]> {
+    if (parentCompensationOp.entityType !== 'TASK' || !parentCompensationOp.entityId) {
+      return [];
+    }
+    const parentState = await this.getCurrentEntityState(
+      'TASK' as EntityType,
+      parentCompensationOp.entityId,
+    );
+    const subTaskIds =
+      parentState && typeof parentState === 'object'
+        ? ((parentState as Record<string, unknown>)['subTaskIds'] as string[] | undefined)
+        : undefined;
+    if (!Array.isArray(subTaskIds) || subTaskIds.length === 0) {
+      return [];
+    }
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        'ConflictResolutionService: Cannot recreate winning parent subtasks - no client ID',
+      );
+      return [];
+    }
+    // Subtasks the remote op names explicitly were resolved on their own; do not
+    // second-guess them via the parent path.
+    const explicitlyTargetedIds = new Set(getOpEntityIds(remoteDeleteOp));
+    const recreationOps: Operation[] = [];
+    for (const subTaskId of subTaskIds) {
+      if (explicitlyTargetedIds.has(subTaskId)) {
+        continue;
+      }
+      // Only resurrect subtasks still present locally: one this device deleted
+      // itself (getCurrentEntityState === undefined) must stay deleted.
+      const subTaskState = await this.getCurrentEntityState(
+        'TASK' as EntityType,
+        subTaskId,
+      );
+      if (subTaskState === undefined) {
+        continue;
+      }
+      // Dominate the remote delete so the recreation also wins on every client
+      // that cascade-deleted this subtask. This clock is a proxy: the subtask
+      // carries no local op of its own here (it is pure cascade collateral), so
+      // we merge the delete and the parent's compensation clock rather than the
+      // subtask's own history. A concurrent individual edit/delete of this
+      // subtask on a third device therefore resolves against this proxy clock
+      // (and the parent's timestamp) by LWW — the same bounded tradeoff the
+      // parent's own recreate-after-delete already makes, and strictly better
+      // than the silent total-subtree loss it replaces.
+      const newClock = this.mergeAndIncrementClocks(
+        [remoteDeleteOp.vectorClock, parentCompensationOp.vectorClock],
+        clientId,
+      );
+      const recreationOp = this.createLWWUpdateOp(
+        'TASK' as EntityType,
+        subTaskId,
+        subTaskState,
+        clientId,
+        newClock,
+        parentCompensationOp.timestamp,
+      );
+      if (!isLwwUpdatePayload(recreationOp.payload)) {
+        continue;
+      }
+      recreationOps.push({
+        ...recreationOp,
+        payload: {
+          ...recreationOp.payload,
+          recreatesEntityAfterDelete: true,
+        },
+      });
+    }
+    return recreationOps;
   }
 
   /**

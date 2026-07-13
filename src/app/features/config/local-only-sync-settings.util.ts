@@ -38,6 +38,10 @@ export type LocalOnlySyncSettings = Pick<
   (typeof LOCAL_ONLY_SYNC_KEYS)[number]
 >;
 
+// Overwrite every local-only key on the incoming config with the local value,
+// so replaying another client's (or our own) synced config never clobbers this
+// device's sync provider/enablement/encryption/schedule. Keys are sourced from
+// LOCAL_ONLY_SYNC_KEYS so adding a new local-only key above preserves it here too.
 export const withLocalOnlySyncSettings = (
   incomingSyncConfig: SyncConfig,
   localSyncConfig: SyncConfig,

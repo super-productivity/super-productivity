@@ -871,6 +871,116 @@ describe('bulkHydrationMetaReducer', () => {
       ]);
     });
 
+    // End-to-end seam for #8956: the subtree-recovery fix in
+    // conflict-resolution.service.ts emits a flagged recreate for a subtask that
+    // the remote deleteTasks removes only via cascade (the subtask is NOT in the
+    // op's entityIds — it is collected from the parent's subTaskIds in state).
+    // These two lock the guarantee that such a cascade-collected recreate is
+    // honored, and that without the flag it is correctly skipped.
+    const buildParentWithSubtaskState = (
+      parentId: string,
+      subId: string,
+    ): Partial<RootState> =>
+      ({
+        [TASK_FEATURE_NAME]: {
+          ids: [parentId, subId],
+          entities: {
+            [parentId]: createMockTask({ id: parentId, subTaskIds: [subId] }),
+            [subId]: createMockTask({ id: subId, parentId }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+      }) as unknown as Partial<RootState>;
+
+    const buildParentOnlyDeleteOp = (parentId: string, id: string): Operation =>
+      createMockOperation({
+        id,
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: parentId,
+        entityIds: [parentId], // subtask reached only via cascade, not listed here
+        payload: { actionPayload: { taskIds: [parentId] }, entityChanges: [] },
+      });
+
+    it('honors a flagged recreate for a cascade-collected subtask deleted by deleteTasks (#8956)', () => {
+      const PARENT_ID = 'parent-with-subs';
+      const SUB_ID = 'cascade-sub';
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = buildParentWithSubtaskState(PARENT_ID, SUB_ID);
+
+      const subtaskRecreate = createMockOperation({
+        id: 'lww-subtask-recreate',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: SUB_ID,
+        payload: {
+          actionPayload: createMockTask({ id: SUB_ID, parentId: PARENT_ID }),
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [
+            buildParentOnlyDeleteOp(PARENT_ID, 'delete-parent-only'),
+            subtaskRecreate,
+          ],
+        }),
+      );
+
+      // Both applied: the delete and the flagged subtask recreate survive the
+      // in-batch skip even though the subtask is only in the cascade set.
+      expect(reducerCalls.map(({ action }) => action.type)).toEqual([
+        ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        TASK_LWW_TYPE,
+      ]);
+    });
+
+    it('skips an unflagged recreate for a cascade-collected subtask, proving the cascade set catches it (#8956)', () => {
+      const PARENT_ID = 'parent-with-subs';
+      const SUB_ID = 'cascade-sub';
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = buildParentWithSubtaskState(PARENT_ID, SUB_ID);
+
+      const unflaggedSubtaskLww = createMockOperation({
+        id: 'lww-subtask-unflagged',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: SUB_ID,
+        payload: {
+          actionPayload: createMockTask({ id: SUB_ID, parentId: PARENT_ID }),
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+
+      reducer(
+        state,
+        bulkApplyHydrationOperations({
+          operations: [
+            buildParentOnlyDeleteOp(PARENT_ID, 'delete-parent-only-2'),
+            unflaggedSubtaskLww,
+          ],
+        }),
+      );
+
+      // Only the delete applies; the unflagged LWW for the cascade-deleted
+      // subtask is skipped. This confirms the subtask really is in the cascade
+      // set, so the flag in the test above is what rescues it.
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_DELETE_MULTIPLE);
+    });
+
     it('should filter using entityId fallback when entityIds array is missing', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();

@@ -30,6 +30,7 @@ import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
 import { SyncConfig } from '../../../features/config/global-config.model';
+import { LwwUpdateMode } from '../../../op-log/core/operation.types';
 
 /**
  * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
@@ -450,7 +451,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     const actionAny = action as unknown as Record<string, unknown>;
     const actionMeta = actionAny['meta'] as
       | {
-          lwwUpdateMode?: 'replace' | 'patch';
+          lwwUpdateMode?: LwwUpdateMode;
         }
       | undefined;
     let entityData: Record<string, unknown> = {};

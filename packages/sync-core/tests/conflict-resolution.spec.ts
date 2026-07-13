@@ -649,6 +649,27 @@ describe('delete-loses-to-update payload helpers', () => {
     ).toEqual({ title: 'Second' });
   });
 
+  it('extracts from an irregularly-keyed bulk-update payload (e.g. taskUpdates)', () => {
+    // __updateMultipleTaskSimple carries updates under `taskUpdates`, not `tasks`,
+    // and with empty entityChanges. The old `${payloadKey}s` guess missed it and
+    // returned {}, silently dropping the remote winner's changes (#8956).
+    expect(
+      extractUpdateChanges(
+        {
+          actionPayload: {
+            taskUpdates: [
+              { id: 'task-1', changes: { title: 'First' } },
+              { id: 'task-2', changes: { title: 'Second' } },
+            ],
+          },
+          entityChanges: [],
+        },
+        'task',
+        'task-2',
+      ),
+    ).toEqual({ title: 'Second' });
+  });
+
   it('falls back to capture-time entity changes for bulk updates', () => {
     expect(
       extractUpdateChanges(

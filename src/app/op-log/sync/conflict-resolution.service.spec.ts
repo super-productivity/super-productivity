@@ -1212,6 +1212,129 @@ describe('ConflictResolutionService', () => {
         ]);
       });
 
+      it('recreates a winning parent’s subtasks lost to the remote bulk-delete cascade (#8956)', async () => {
+        // Remote bulk delete of task-1 (a parent) + task-2. Applying it cascade-
+        // deletes task-1's subtask sub-1 (handleDeleteTasks expands parent →
+        // subTaskIds). task-1 wins LWW locally (newer edit), so the parent is
+        // recreated — but without recreating sub-1 the subtree is lost forever.
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 1000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            actionPayload: { taskIds: ['task-1', 'task-2'] },
+            entityChanges: [],
+          },
+        };
+        const localParentEdit = createOpWithTimestamp(
+          'local-parent-edit',
+          'client-a',
+          2000,
+          OpType.Update,
+          'task-1',
+        );
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'task-1') {
+            return of({ id: 'task-1', title: 'Winning parent', subTaskIds: ['sub-1'] });
+          }
+          if (props?.id === 'sub-1') {
+            return of({
+              id: 'sub-1',
+              title: 'Surviving subtask',
+              parentId: 'task-1',
+              subTaskIds: [],
+            });
+          }
+          return of(undefined);
+        });
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localParentEdit], [remoteMultiOp]),
+        ]);
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps[0].id).toBe(remoteMultiOp.id);
+
+        const lwwOps = appliedOps.filter(
+          (op) => op.actionType === toLwwUpdateActionType('TASK'),
+        );
+        const parentOp = lwwOps.find((op) => op.entityId === 'task-1');
+        const subtaskOp = lwwOps.find((op) => op.entityId === 'sub-1');
+        expect(parentOp).withContext('parent recreate op').toBeDefined();
+        expect(subtaskOp).withContext('subtask recreate op').toBeDefined();
+
+        // The subtask recreate must be flagged so bulk hydration does not skip it
+        // as an in-batch delete, and must carry the subtask's full snapshot.
+        expect(
+          (subtaskOp!.payload as { recreatesEntityAfterDelete?: boolean })
+            .recreatesEntityAfterDelete,
+        ).toBeTrue();
+        expect(extractActionPayload(subtaskOp!.payload)['title']).toBe(
+          'Surviving subtask',
+        );
+        // The remote delete cascade must be undone by an op that dominates it, so
+        // the subtree also survives on every other client that applied the delete.
+        expect(
+          compareVectorClocks(subtaskOp!.vectorClock, remoteMultiOp.vectorClock),
+        ).toBe(VectorClockComparison.GREATER_THAN);
+        // Parent recreate applies before its subtask recreate.
+        expect(appliedOps.indexOf(parentOp!)).toBeLessThan(
+          appliedOps.indexOf(subtaskOp!),
+        );
+      });
+
+      it('does not recreate a subtask the local device deleted itself (#8956)', async () => {
+        // Same shape as above, but sub-1 was also deleted locally (not present in
+        // current state), so it must stay deleted rather than be resurrected.
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 1000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            actionPayload: { taskIds: ['task-1', 'task-2'] },
+            entityChanges: [],
+          },
+        };
+        const localParentEdit = createOpWithTimestamp(
+          'local-parent-edit',
+          'client-a',
+          2000,
+          OpType.Update,
+          'task-1',
+        );
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'task-1') {
+            return of({ id: 'task-1', title: 'Winning parent', subTaskIds: ['sub-1'] });
+          }
+          // sub-1 is gone locally → undefined
+          return of(undefined);
+        });
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localParentEdit], [remoteMultiOp]),
+        ]);
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        const lwwOps = appliedOps.filter(
+          (op) => op.actionType === toLwwUpdateActionType('TASK'),
+        );
+        expect(lwwOps.some((op) => op.entityId === 'sub-1')).toBeFalse();
+      });
+
       it('persists but does not replay a local delete winner already effected by a remote multi-delete', async () => {
         const remoteMultiDelete: Operation = {
           ...createOpWithTimestamp('remote-delete', 'client-b', 2000),

@@ -336,20 +336,17 @@ export const collectTaskRemovalEntityIdsFromBatch = (
 ): {
   all: Set<string>;
   archiving: Set<string>;
-  deleting: Set<string>;
 } => {
   // Archive-free hydration/sync batches are common; skip projection work for them.
   if (!operations.some(isTaskArchiveOrDeleteOp)) {
     return {
       all: new Set<string>(),
       archiving: new Set<string>(),
-      deleting: new Set<string>(),
     };
   }
 
   const archivingOrDeletingEntityIds = new Set<string>();
   const archivingEntityIds = new Set<string>();
-  const deletingEntityIds = new Set<string>();
   const projectedTaskEntities = cloneTaskEntityMap(state);
 
   for (const op of operations) {
@@ -357,9 +354,10 @@ export const collectTaskRemovalEntityIdsFromBatch = (
       const removedByThisOp = new Set<string>();
       addOperationEntityIds(op, removedByThisOp);
       collectCascadedSubTaskIds(op, removedByThisOp, projectedTaskEntities);
+      const isArchive = isTaskArchiveOp(op);
       for (const id of removedByThisOp) {
         archivingOrDeletingEntityIds.add(id);
-        (isTaskArchiveOp(op) ? archivingEntityIds : deletingEntityIds).add(id);
+        if (isArchive) archivingEntityIds.add(id);
         delete projectedTaskEntities[id];
       }
       continue;
@@ -371,14 +369,8 @@ export const collectTaskRemovalEntityIdsFromBatch = (
   return {
     all: archivingOrDeletingEntityIds,
     archiving: archivingEntityIds,
-    deleting: deletingEntityIds,
   };
 };
-
-export const collectArchivingOrDeletingEntityIdsFromBatch = (
-  operations: Operation[],
-  state: unknown,
-): Set<string> => collectTaskRemovalEntityIdsFromBatch(operations, state).all;
 
 /**
  * Issue #7330: `lwwUpdateMetaReducer`'s orphan filter only sees taskState as

@@ -298,18 +298,11 @@ export const extractUpdateChanges = (
 ): Record<string, unknown> => {
   const actionPayload = extractActionPayload(payload);
   let entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
-  if (!entityPayload && entityId) {
-    const bulkPayload = actionPayload[`${payloadKey}s`];
-    if (Array.isArray(bulkPayload)) {
-      const matchingPayload = bulkPayload.find(
-        (candidate): candidate is Record<string, unknown> =>
-          typeof candidate === 'object' &&
-          candidate !== null &&
-          candidate['id'] === entityId,
-      );
-      entityPayload = matchingPayload;
-    }
-  }
+  // Prefer the authoritative capture-time entityChanges over the heuristic
+  // array scan below: entityChanges is keyed by the exact entityId, so it can
+  // never mis-attribute another entity's fields, whereas the scan matches by a
+  // shared `id` shape and could pick the wrong array if a payload ever carried
+  // two `{ id, … }` arrays.
   if (!entityPayload && entityId && isMultiEntityPayload(payload)) {
     const matchingChange = payload.entityChanges.find(
       (change) =>
@@ -320,6 +313,27 @@ export const extractUpdateChanges = (
     );
     if (matchingChange) {
       return matchingChange.changes as Record<string, unknown>;
+    }
+  }
+  if (!entityPayload && entityId) {
+    // Bulk action payloads carry per-entity updates in an array whose key varies
+    // by action (`tasks`, `taskUpdates`, …). Scan every array-valued property for
+    // an element matching this entity id instead of guessing the key by
+    // pluralizing payloadKey — `${payloadKey}s` missed `taskUpdates` (and any
+    // irregular plural), silently returning {} and dropping the remote winner's
+    // changes. The direct payloadKey lookup above still takes precedence.
+    for (const value of Object.values(actionPayload)) {
+      if (!Array.isArray(value)) continue;
+      const matchingPayload = value.find(
+        (candidate): candidate is Record<string, unknown> =>
+          typeof candidate === 'object' &&
+          candidate !== null &&
+          (candidate as Record<string, unknown>)['id'] === entityId,
+      );
+      if (matchingPayload) {
+        entityPayload = matchingPayload;
+        break;
+      }
     }
   }
   if (!entityPayload) return {};
