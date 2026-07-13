@@ -177,7 +177,7 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       // Separate TestBed for the hydration test — wider dependency surface.
       TestBed.resetTestingModule();
       validateStateForHydrationSpy = jasmine.createSpyObj('ValidateStateService', [
-        'validateAndRepair',
+        'validateState',
         'validateAndRepairCurrentState',
       ]);
       const opLogStoreHydrationSpy = jasmine.createSpyObj('OperationLogStoreService', [
@@ -239,16 +239,17 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       hydrationLatch._resetForTest();
     });
 
-    // Codex review found: hydrateFromRemoteSync runs validateAndRepair
-    // directly and was not flipping the latch on failure. Snapshot
-    // hydration (file-based providers, USE_REMOTE force-download) would
-    // therefore silently accept corrupt remote state.
-    it('flips the latch when validateAndRepair reports an unrepairable remote snapshot', async () => {
+    // Codex review found: hydrateFromRemoteSync was not flipping the latch on
+    // validation failure. Snapshot hydration (file-based providers, USE_REMOTE
+    // force-download) would therefore silently accept corrupt remote state.
+    // #8279: this path now detects-only (no auto-repair/modal) but must still
+    // flip the latch on failure.
+    it('flips the latch when validation reports an invalid remote snapshot', async () => {
       await hydrationLatch.withSession(async () => {
-        validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+        validateStateForHydrationSpy.validateState.and.resolveTo({
           isValid: false,
-          wasRepaired: false,
-          error: 'simulated corruption',
+          typiaErrors: [],
+          crossModelError: 'simulated corruption',
         } as never);
 
         await hydrationService.hydrateFromRemoteSync(
@@ -261,11 +262,11 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       });
     });
 
-    it('leaves the latch reset when validateAndRepair reports a clean snapshot', async () => {
+    it('leaves the latch reset when validation reports a clean snapshot', async () => {
       await hydrationLatch.withSession(async () => {
-        validateStateForHydrationSpy.validateAndRepair.and.resolveTo({
+        validateStateForHydrationSpy.validateState.and.resolveTo({
           isValid: true,
-          wasRepaired: false,
+          typiaErrors: [],
         } as never);
 
         await hydrationService.hydrateFromRemoteSync(
