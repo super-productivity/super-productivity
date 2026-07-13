@@ -20,7 +20,6 @@ import {
 import type { SnapshotDedupResponse } from './services';
 import {
   createValidationErrorResponse,
-  errorMessage,
   MAX_COMPRESSED_SIZE_SNAPSHOT,
   MAX_DECOMPRESSED_SIZE_SNAPSHOT,
   sendCompressedBodyParseFailure,
@@ -32,7 +31,6 @@ import {
   enforceStorageQuota,
   findExistingSyncImport,
   isIdempotentSyncImportRetry,
-  sendQuotaExceededReply,
   sendSyncImportExistsReply,
 } from './sync.routes.quota';
 import { createSnapshotRequestFingerprint } from './services/request-deduplication.service';
@@ -150,30 +148,15 @@ export const uploadSnapshotHandler = async (
     }
 
     // Cheap pre-quota gate BEFORE prepareSnapshotCache so quota-exhausted
-    // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Uses only
-    // the cached counter; if it says we're already at quota, reconcile
-    // once before rejecting — a stale-high counter would otherwise lock
-    // out a user whose new snapshot would actually shrink storage. Skip
-    // for clean-slate which wipes existing usage.
+    // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Use 1 byte
+    // so the cheap gate preserves the existing used >= quota rejection
+    // boundary, and disable cleanup so this early path never deletes data.
+    // Skip for clean-slate which wipes existing usage.
     if (!isCleanSlate) {
-      let cachedInfo = await syncService.getStorageInfo(userId);
-      if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
-        try {
-          await syncService.updateStorageUsage(userId);
-          cachedInfo = await syncService.getStorageInfo(userId);
-        } catch (err) {
-          Logger.warn(
-            `[user:${userId}] Snapshot pre-gate reconcile failed: ${errorMessage(err)}`,
-          );
-        }
-        if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
-          return sendQuotaExceededReply(reply, {
-            storageUsedBytes: cachedInfo.storageUsedBytes,
-            storageQuotaBytes: cachedInfo.storageQuotaBytes,
-            autoCleanupAttempted: false,
-          });
-        }
-      }
+      const quotaOk = await enforceStorageQuota(userId, 1, reply, {
+        allowCleanup: false,
+      });
+      if (!quotaOk) return;
     }
 
     // Pin the fingerprint BEFORE processing mutates anything, but AFTER the
