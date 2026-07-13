@@ -70,7 +70,15 @@ describe('DialogSyncConflictComponent', () => {
       const component = createComponent(buildConflictData({ remoteLastUpdate: null }));
 
       expect(component.isHighlightRemote).toBe(false);
-      expect(component.isHighlightLocal).toBe(true);
+      expect(component.isHighlightLocal).toBe(false);
+    });
+
+    it('does not recommend either side when timestamps are equal', () => {
+      const data = buildConflictData({ remoteLastUpdate: 2000 });
+      const component = createComponent(data);
+
+      expect(component.isHighlightRemote).toBeFalse();
+      expect(component.isHighlightLocal).toBeFalse();
     });
   });
 
@@ -102,6 +110,23 @@ describe('DialogSyncConflictComponent', () => {
       // Bug SPAP-7: previously summed the whole clock (3000 / 1400). Must be null now.
       expect(component.localChangeCount).toBeNull();
       expect(component.remoteChangeCount).toBeNull();
+      expect(component.isHighlightLocalChanges).toBeFalse();
+      expect(component.isHighlightRemoteChanges).toBeFalse();
+    });
+
+    it('does not recommend either side when known change counts are equal', () => {
+      const component = createComponent(
+        buildConflictData({
+          localVectorClock: { clientA: 10, clientB: 5 },
+          remoteVectorClock: { clientA: 3, clientB: 12 },
+          lastSyncedVectorClock: { clientA: 3, clientB: 5 },
+        }),
+      );
+
+      expect(component.localChangeCount).toBe(7);
+      expect(component.remoteChangeCount).toBe(7);
+      expect(component.isHighlightLocalChanges).toBeFalse();
+      expect(component.isHighlightRemoteChanges).toBeFalse();
     });
 
     it('shows the exact pending-op count when the clock delta under-counts (compaction fold)', () => {
