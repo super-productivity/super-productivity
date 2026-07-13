@@ -246,6 +246,7 @@ export const DUPLICATE_OP_SELECT = {
 export interface LatestEntityOperationRow {
   entityId: string;
   clientId: string;
+  actionType: string;
   vectorClock: unknown;
   serverSeq?: number;
 }

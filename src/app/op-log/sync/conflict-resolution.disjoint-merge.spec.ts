@@ -57,21 +57,25 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     ...over,
   });
 
-  const conflictOf = (localOps: Operation[], remoteOps: Operation[]): EntityConflict => ({
+  const conflictOf = (
+    localOps: Operation[],
+    remoteOps: Operation[],
+    entityId = 'task-1',
+  ): EntityConflict => ({
     entityType: 'TASK',
-    entityId: 'task-1',
+    entityId,
     localOps,
     remoteOps,
     suggestedResolution: 'manual',
   });
 
-  const mergedOpArgs = (): Operation | undefined =>
+  const mergedOpArgs = (entityId = 'task-1'): Operation | undefined =>
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
       .allArgs()
       .flatMap(([batches]) => batches)
       .filter((batch) => batch.source === 'local')
       .flatMap((batch) => [...batch.ops])
-      .find((o) => o.entityId === 'task-1' && o.opType === OpType.Update);
+      .find((o) => o.entityId === entityId && o.opType === OpType.Update);
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['select']);
@@ -305,6 +309,538 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(entries[0].reason).toBe('disjoint-merge');
     expect(entries[0].status).toBe('info');
     expect((await journal.list('unreviewed')).length).toBe(0);
+  });
+
+  it('(a1) fails closed before mutating the op log for a legacy remote bulk op', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-2', title: 'Local title', timeSpent: 0 }),
+    );
+
+    const localOp = op({
+      id: 'local-task-2',
+      entityId: 'task-2',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-2', changes: { title: 'Local title' } } },
+    });
+    const remoteBulkOp = op({
+      id: 'remote-bulk',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localOp], [remoteBulkOp], 'task-2')]),
+    ).toBeRejectedWithError(/Cannot safely auto-resolve remote multi-entity operation/);
+
+    expect(mergedOpArgs('task-2')).toBeUndefined();
+    expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+    expect(await journal.list('history')).toEqual([]);
+  });
+
+  it('(a1 mirror) refuses disjoint merge for a legacy local bulk op', async () => {
+    // A later local edit superseded the bulk's captured 111. Reconciliation
+    // must project the current 333, not resurrect the stale captured value.
+    let selectCount = 0;
+    mockStore.select.and.callFake(() =>
+      of(
+        selectCount++ === 0
+          ? { id: 'task-1', timeSpent: 333 }
+          : { id: 'task-2', timeSpent: 222 },
+      ),
+    );
+    mockOpLogStore.getUnsyncedByEntity.and.callFake(async () => {
+      const writtenTargetReconciliation =
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+          .allArgs()
+          .flatMap(([batches]) => batches)
+          .filter((batch) => batch.source === 'local')
+          .flatMap((batch) => batch.ops)
+          .find((batchOp) => batchOp.entityId === 'task-2');
+      return new Map([
+        ['TASK:task-2', writtenTargetReconciliation ? [writtenTargetReconciliation] : []],
+      ]);
+    });
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote title' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteOp], 'task-2'),
+    ]);
+
+    const entries = await journal.list('history');
+    expect(entries.length).toBe(1);
+    expect(entries[0].winner).toBe('remote');
+    expect(entries[0].reason).not.toBe('disjoint-merge');
+    const timeSpentDiff = entries[0].fieldDiffs.find(
+      (diff) => diff.field === 'timeSpent',
+    );
+    expect(timeSpentDiff?.localVal).toBe(222);
+
+    const localBatches = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local');
+    const siblingReconciliation = localBatches
+      .flatMap((batch) => batch.ops)
+      .find((batchOp) => batchOp.entityId === 'task-1');
+    const targetReconciliation = localBatches
+      .flatMap((batch) => batch.ops)
+      .find((batchOp) => batchOp.entityId === 'task-2');
+    expect(siblingReconciliation).toBeDefined();
+    expect(siblingReconciliation?.payload).toEqual({ id: 'task-1', timeSpent: 333 });
+    expect(targetReconciliation?.payload).toEqual({ id: 'task-2', timeSpent: 222 });
+    expect(compareVectorClocks(siblingReconciliation!.vectorClock, { A: 1 })).toBe(
+      VectorClockComparison.GREATER_THAN,
+    );
+    expect(compareVectorClocks(siblingReconciliation!.vectorClock, { B: 1 })).toBe(
+      VectorClockComparison.GREATER_THAN,
+    );
+    expect(compareVectorClocks(targetReconciliation!.vectorClock, { B: 1 })).toBe(
+      VectorClockComparison.GREATER_THAN,
+    );
+    const rejectedIds = mockOpLogStore.markRejected.calls
+      .allArgs()
+      .flatMap(([ids]) => ids);
+    expect(rejectedIds).toContain(localBulkOp.id);
+    expect(rejectedIds).not.toContain(targetReconciliation!.id);
+  });
+
+  it('does not preserve local bulk target fields that overlap a remote winner', async () => {
+    mockStore.select.and.returnValue(of({ id: 'task-1', timeSpent: 333 }));
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: { taskIds: ['task-1', 'task-2'] },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { timeSpent: 999 } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteOp], 'task-2'),
+    ]);
+
+    const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local')
+      .flatMap((batch) => batch.ops);
+    expect(localOps.map((batchOp) => batchOp.entityId)).toEqual(['task-1']);
+    expect(localOps[0].payload).toEqual({ id: 'task-1', timeSpent: 333 });
+  });
+
+  it('fails closed when a remote winner partially overlaps coupled bulk fields', async () => {
+    const day = '2026-07-10';
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: { taskIds: ['task-1', 'task-2'] },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111, timeSpentOnDay: { [day]: 111 } },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222, timeSpentOnDay: { [day]: 222 } },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { timeSpent: 999 } } },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localBulkOp], [remoteOp], 'task-2')]),
+    ).toBeRejectedWithError(/partially overlapping remote winner/);
+
+    expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+    expect(await journal.list('history')).toEqual([]);
+  });
+
+  it('fails closed when a remote winner is opaque for a local bulk target', async () => {
+    mockStore.select.and.returnValue(of({ id: 'task-1', timeSpent: 333 }));
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: { taskIds: ['task-1', 'task-2'] },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { actionPayload: { taskId: 'task-2' } },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localBulkOp], [remoteOp], 'task-2')]),
+    ).toBeRejectedWithError(/opaque remote winner/);
+
+    expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+    expect(await journal.list('history')).toEqual([]);
+  });
+
+  it('does not recreate a bulk sibling deleted by a later local operation', async () => {
+    let selectCount = 0;
+    mockStore.select.and.callFake(() =>
+      of(selectCount++ === 0 ? undefined : { id: 'task-2', timeSpent: 222 }),
+    );
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: { taskIds: ['task-1', 'task-2'] },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote title' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteOp], 'task-2'),
+    ]);
+
+    const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local')
+      .flatMap((batch) => batch.ops);
+    expect(localOps.map((batchOp) => batchOp.entityId)).toEqual(['task-2']);
+    expect(localOps[0].payload).toEqual({ id: 'task-2', timeSpent: 222 });
+  });
+
+  it('fails closed for a local bulk action without an explicit decomposition rule', async () => {
+    const localBulkOp = op({
+      id: 'local-opaque-bulk',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: {
+        actionPayload: { taskIds: ['task-1', 'task-2'] },
+        entityChanges: [],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote title' } } },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localBulkOp], [remoteOp], 'task-2')]),
+    ).toBeRejectedWithError(/Cannot safely auto-resolve local multi-entity operation/);
+
+    expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+    expect(await journal.list('history')).toEqual([]);
+  });
+
+  it('re-emits a decomposable local bulk sibling when the local bulk wins', async () => {
+    let selectCount = 0;
+    mockStore.select.and.callFake(() =>
+      of(
+        selectCount++ === 0
+          ? { id: 'task-1', timeSpent: 333 }
+          : { id: 'task-2', title: 'Base title', timeSpent: 222 },
+      ),
+    );
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteOp = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote title' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteOp], 'task-2'),
+    ]);
+
+    const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local')
+      .flatMap((batch) => batch.ops);
+    const targetWinner = localOps.find((batchOp) => batchOp.entityId === 'task-2');
+    const siblingReconciliation = localOps.find(
+      (batchOp) => batchOp.entityId === 'task-1',
+    );
+    expect(targetWinner?.payload).toEqual({
+      id: 'task-2',
+      title: 'Base title',
+      timeSpent: 222,
+    });
+    expect(siblingReconciliation?.payload).toEqual({ id: 'task-1', timeSpent: 333 });
+  });
+
+  it('does not duplicate targets when one local bulk op wins multiple conflicts', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'selected-task', title: 'Local title', timeSpent: 333 }),
+    );
+
+    const localBulkOp = op({
+      id: 'local-bulk',
+      actionType: ActionType.TASK_ROUND_TIME_SPENT,
+      entityId: 'task-1',
+      entityIds: ['task-1', 'task-2'],
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: {
+        actionPayload: {
+          day: '2026-07-10',
+          taskIds: ['task-1', 'task-2'],
+          roundTo: 15,
+          isRoundUp: true,
+        },
+        entityChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            opType: OpType.Update,
+            changes: { timeSpent: 111 },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-2',
+            opType: OpType.Update,
+            changes: { timeSpent: 222 },
+          },
+        ],
+      },
+    });
+    const remoteTask1 = op({
+      id: 'remote-task-1',
+      entityId: 'task-1',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Remote task 1' } } },
+    });
+    const remoteTask2 = op({
+      id: 'remote-task-2',
+      entityId: 'task-2',
+      clientId: 'B',
+      vectorClock: { B: 2 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-2', changes: { title: 'Remote task 2' } } },
+    });
+
+    await service.autoResolveConflictsLWW([
+      conflictOf([localBulkOp], [remoteTask1], 'task-1'),
+      conflictOf([localBulkOp], [remoteTask2], 'task-2'),
+    ]);
+
+    const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local')
+      .flatMap((batch) => batch.ops);
+    expect(localOps.filter((batchOp) => batchOp.entityId === 'task-1').length).toBe(1);
+    expect(localOps.filter((batchOp) => batchOp.entityId === 'task-2').length).toBe(1);
+    expect(localOps.length).toBe(2);
   });
 
   // ── (a2) merge-only sync counts the synthesized op for re-upload ────────────
@@ -594,6 +1130,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         localOps: [localOp],
         remoteOps: [remoteDelete],
         payloadKey: 'task',
+        entityId: 'task-1',
       }),
     ).toBe(false);
 
@@ -639,6 +1176,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         localOps: [localEdit],
         remoteOps: [remoteArchive],
         payloadKey: 'task',
+        entityId: 'task-1',
       }),
     ).toBe(true);
 
@@ -871,10 +1409,20 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       const mA = a1.synthesized!;
       const mB = b1.synthesized!;
       expect(
-        isDisjointMergeEligible({ localOps: [mA], remoteOps: [mB], payloadKey: 'task' }),
+        isDisjointMergeEligible({
+          localOps: [mA],
+          remoteOps: [mB],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
       ).toBe(false);
       expect(
-        isDisjointMergeEligible({ localOps: [mB], remoteOps: [mA], payloadKey: 'task' }),
+        isDisjointMergeEligible({
+          localOps: [mB],
+          remoteOps: [mA],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
       ).toBe(false);
     });
   });

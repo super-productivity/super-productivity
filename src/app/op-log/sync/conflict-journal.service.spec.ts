@@ -344,6 +344,105 @@ describe('buildConflictJournalEntry (taxonomy)', () => {
     expect(durationDiff?.localChanged).toBe(true);
   });
 
+  it('attributes legacy bulk-op field values to the conflicted non-primary entity', () => {
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-2',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            actionPayload: {
+              day: '2026-07-10',
+              taskIds: ['task-1', 'task-2'],
+              roundTo: 15,
+              isRoundUp: true,
+              task: { id: 'task-1', title: 'Wrong primary title' },
+            },
+            entityChanges: [
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-1',
+                opType: OpType.Update,
+                changes: { timeSpent: 111 },
+              },
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-2',
+                opType: OpType.Update,
+                changes: { timeSpent: 222 },
+              },
+            ],
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          entityId: 'task-2',
+          payload: { task: { id: 'task-2', changes: { notes: 'Remote' } } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    const timeSpentDiff = entry.fieldDiffs.find((d) => d.field === 'timeSpent');
+    expect(timeSpentDiff?.localVal).toBe(222);
+    expect(timeSpentDiff?.localChanged).toBe(true);
+    expect(entry.entityTitle).toBe('');
+  });
+
+  it('keeps a direct-format bulk payload opaque for a non-primary entity', () => {
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-2',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            task: {
+              id: 'task-1',
+              title: 'Wrong primary title',
+              changes: { notes: 'Task 1 notes' },
+            },
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          entityId: 'task-2',
+          payload: { task: { id: 'task-2', changes: { title: 'Remote' } } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    expect(entry.entityTitle).toBe('Remote');
+    expect(entry.fieldDiffs.some((diff) => diff.field === 'notes')).toBe(false);
+    const actionDiff = entry.fieldDiffs.find((diff) => diff.kind === 'action');
+    expect(actionDiff?.localChanged).toBe(true);
+    expect(actionDiff?.localVal).toEqual({
+      task: {
+        id: 'task-1',
+        title: 'Wrong primary title',
+        changes: { notes: 'Task 1 notes' },
+      },
+    });
+  });
+
   it('records per-side presence so winner-only fields are not attributed to the loser', () => {
     // local (loser) changed only title; remote (winner) changed title + notes.
     const entry = buildConflictJournalEntry({

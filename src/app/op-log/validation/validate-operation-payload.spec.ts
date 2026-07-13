@@ -230,6 +230,7 @@ describe('validateOperationPayload', () => {
 
     it('should validate TASK UPDATE with syncTimeSpent shape (taskId, date, duration)', () => {
       const op = createTestOperation({
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
         opType: OpType.Update,
         entityType: 'TASK' as EntityType,
         entityId: 'task-123',
@@ -246,6 +247,7 @@ describe('validateOperationPayload', () => {
 
     it('should validate TASK UPDATE with syncTimeSpent shape with zero duration', () => {
       const op = createTestOperation({
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
         opType: OpType.Update,
         entityType: 'TASK' as EntityType,
         entityId: 'task-456',
@@ -258,6 +260,45 @@ describe('validateOperationPayload', () => {
       const result = validateOperationPayload(op);
       expect(result.success).toBe(true);
       expect(result.warnings).toBeUndefined();
+    });
+
+    it('should reject syncTimeSpent when taskId does not match the operation entity', () => {
+      const result = validateOperationPayload(
+        createTestOperation({
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          entityId: 'task-123',
+          payload: { taskId: 'task-456', date: '2024-01-15', duration: 1000 },
+        }),
+      );
+
+      expect(result.success).toBeFalse();
+      expect(result.error).toContain('taskId');
+    });
+
+    it('should reject syncTimeSpent with an impossible calendar date', () => {
+      const result = validateOperationPayload(
+        createTestOperation({
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          entityId: 'task-123',
+          payload: { taskId: 'task-123', date: '2024-99-99', duration: 1000 },
+        }),
+      );
+
+      expect(result.success).toBeFalse();
+      expect(result.error).toContain('date');
+    });
+
+    it('should reject syncTimeSpent with negative or non-finite duration', () => {
+      for (const duration of [-1, Number.POSITIVE_INFINITY, Number.NaN]) {
+        const result = validateOperationPayload(
+          createTestOperation({
+            actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+            entityId: 'task-123',
+            payload: { taskId: 'task-123', date: '2024-01-15', duration },
+          }),
+        );
+        expect(result.success).withContext(`duration=${duration}`).toBeFalse();
+      }
     });
 
     it('should validate TIME_TRACKING UPDATE with syncTimeTracking shape', () => {

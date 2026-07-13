@@ -121,6 +121,54 @@ describe('BatchedTimeSyncAccumulator', () => {
 
       jasmine.clock().uninstall();
     });
+
+    it('should restore an entry when dispatch throws so it can be retried', () => {
+      dispatchSpy.and.throwError('dispatch failed');
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+
+      accumulator.flush();
+
+      expect(accumulator.getPendingEntries()).toEqual([
+        { id: 'entity1', date: '2024-01-15', duration: 1000 },
+      ]);
+      expect(accumulator.shouldFlush()).toBe(true);
+    });
+  });
+
+  describe('clear', () => {
+    it('should remove all entries without dispatching them', () => {
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+      accumulator.accumulate('entity2', 2000, '2024-01-15');
+
+      accumulator.clear();
+      accumulator.flush();
+
+      expect(accumulator.getPendingEntries()).toEqual([]);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPendingEntries', () => {
+    it('should return a detached snapshot of pending durations', () => {
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+
+      const entries = accumulator.getPendingEntries();
+      entries[0].duration = 9999;
+
+      expect(accumulator.getPendingEntries()).toEqual([
+        { id: 'entity1', date: '2024-01-15', duration: 1000 },
+      ]);
+    });
+
+    it('should not return entries that were flushed or cleared', () => {
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+      accumulator.accumulate('entity2', 2000, '2024-01-15');
+
+      accumulator.flushOne('entity1');
+      accumulator.clearOne('entity2');
+
+      expect(accumulator.getPendingEntries()).toEqual([]);
+    });
   });
 
   describe('flushOne', () => {
@@ -157,6 +205,17 @@ describe('BatchedTimeSyncAccumulator', () => {
       accumulator.flushOne('nonexistent');
 
       expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should restore the entity when dispatch throws', () => {
+      dispatchSpy.and.throwError('dispatch failed');
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+
+      accumulator.flushOne('entity1');
+
+      expect(accumulator.getPendingEntries()).toEqual([
+        { id: 'entity1', date: '2024-01-15', duration: 1000 },
+      ]);
     });
   });
 

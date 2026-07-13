@@ -559,6 +559,7 @@ export class OperationUploadService {
             entityType: op.entityType,
             entityId,
             clientId: op.clientId,
+            actionType: op.actionType,
             vectorClock: op.vectorClock,
           });
         }

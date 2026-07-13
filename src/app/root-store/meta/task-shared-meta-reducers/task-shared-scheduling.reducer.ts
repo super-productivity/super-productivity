@@ -124,9 +124,11 @@ const handleUnScheduleTask = (
   state: RootState,
   taskId: string,
   isLeaveInToday = false,
+  capturedToday?: string,
 ): RootState => {
   // First, update the task entity to clear scheduling data
-  const todayStrForUnschedule = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const todayStrForUnschedule =
+    capturedToday ?? state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const updatedState = {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
@@ -332,10 +334,10 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.unscheduleTask.type]: () => {
-    const { id, isLeaveInToday } = action as ReturnType<
+    const { id, isLeaveInToday, today } = action as ReturnType<
       typeof TaskSharedActions.unscheduleTask
     >;
-    return handleUnScheduleTask(state, id, isLeaveInToday);
+    return handleUnScheduleTask(state, id, isLeaveInToday, today);
   },
   [TaskSharedActions.dismissReminderOnly.type]: () => {
     const { id } = action as ReturnType<typeof TaskSharedActions.dismissReminderOnly>;

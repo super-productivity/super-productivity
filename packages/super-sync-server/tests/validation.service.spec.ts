@@ -16,11 +16,13 @@ describe('ValidationService', () => {
   const createValidOp = (overrides: Record<string, unknown> = {}) => ({
     id: 'op-1',
     clientId,
+    actionType: '[Task] Add Task',
     opType: 'CRT' as const,
     entityType: 'TASK',
     entityId: 'entity-1',
     payload: { name: 'Test' },
     timestamp: Date.now(),
+    schemaVersion: 1,
     vectorClock: { [clientId]: 1 },
     ...overrides,
   });
@@ -299,6 +301,61 @@ describe('ValidationService', () => {
       const result = validationService.validateOp(op, clientId);
       expect(result.valid).toBe(false);
       expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_PAYLOAD);
+    });
+
+    it('should validate additive task-time payload identity and arithmetic', () => {
+      const validPayload = {
+        actionPayload: {
+          taskId: 'entity-1',
+          date: '2024-02-29',
+          duration: 5000,
+        },
+        entityChanges: [],
+      };
+      expect(
+        validationService.validateOp(
+          createValidOp({
+            actionType: '[TimeTracking] Sync time spent',
+            opType: 'UPD',
+            payload: validPayload,
+          }),
+          clientId,
+        ).valid,
+      ).toBe(true);
+      expect(
+        validationService.validateOp(
+          createValidOp({
+            actionType: '[TimeTracking] Sync time spent',
+            opType: 'UPD',
+            payload: {
+              actionPayload: {
+                taskId: 'entity-1',
+                date: '0099-12-31',
+                duration: 5000,
+              },
+              entityChanges: [],
+            },
+          }),
+          clientId,
+        ).valid,
+      ).toBe(true);
+
+      for (const actionPayload of [
+        { taskId: 'other-task', date: '2024-02-29', duration: 5000 },
+        { taskId: 'entity-1', date: '2024-02-30', duration: 5000 },
+        { taskId: 'entity-1', date: '2024-02-29', duration: -1 },
+      ]) {
+        const result = validationService.validateOp(
+          createValidOp({
+            actionType: '[TimeTracking] Sync time spent',
+            opType: 'UPD',
+            payload: { actionPayload, entityChanges: [] },
+          }),
+          clientId,
+        );
+        expect(result.valid).toBe(false);
+        expect(result.errorCode).toBe(SYNC_ERROR_CODES.INVALID_PAYLOAD);
+      }
     });
 
     it('should reject schema version less than 1', () => {

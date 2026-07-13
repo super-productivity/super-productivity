@@ -219,21 +219,27 @@ export const taskReducer = createReducer<TaskState>(
       );
       return state;
     }
+    const currentTask = state.entities[task.id];
+    if (!currentTask) {
+      return state;
+    }
     const currentTimeSpentForTickDay =
-      (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
+      (currentTask.timeSpentOnDay && +currentTask.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
       task.id,
       {
-        ...task.timeSpentOnDay,
+        ...currentTask.timeSpentOnDay,
         [date]: currentTimeSpentForTickDay + duration,
       },
       state,
     );
   }),
 
-  // Sync time spent from remote clients
-  // Local: no-op (state already updated by addTimeSpent ticks)
-  // Remote: apply the batched duration
+  // Sync time spent from operation replay.
+  // Local: no-op (state already updated by addTimeSpent ticks).
+  // Replay is additive for every client so concurrent tracking contributions are
+  // preserved. Op-log/file snapshots project pending local batches out before they
+  // are persisted, preventing a snapshot from overlapping a later delta operation.
   on(syncTimeSpent, (state, action) => {
     // Only apply for remote actions - local state is already up-to-date
     if (!(action.meta as PersistentActionMeta).isRemote) {

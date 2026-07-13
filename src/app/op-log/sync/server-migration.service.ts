@@ -181,11 +181,12 @@ export class ServerMigrationService {
    * @param options - Optional configuration
    * @param options.skipServerEmptyCheck - If true, creates SYNC_IMPORT even if server has data.
    *   Used for "USE_LOCAL" conflict resolution to force overwrite remote with local state.
+   * @returns The created SYNC_IMPORT operation ID, or undefined when creation was skipped.
    */
   async handleServerMigration(
     syncProvider: OperationSyncCapable,
     options?: { skipServerEmptyCheck?: boolean; syncImportReason?: SyncImportReason },
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const isServerMigration =
       (options?.syncImportReason ?? 'SERVER_MIGRATION') === 'SERVER_MIGRATION';
     if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
@@ -193,8 +194,7 @@ export class ServerMigrationService {
     }
 
     // Double-check server is still empty (in case another client just uploaded).
-    // Network/dialog work intentionally runs outside the broad upload lock; the
-    // final append is deduplicated inside the operation-log mutation barrier.
+    // The final append is deduplicated inside the operation-log mutation barrier.
     // Skip this check when forcing upload (conflict resolution "USE_LOCAL").
     if (!options?.skipServerEmptyCheck) {
       const freshCheck = await syncProvider.downloadOps(0, undefined, 1);
@@ -218,7 +218,7 @@ export class ServerMigrationService {
     // flushThenRunExclusive owns the flush→lock→recheck retry loop (bounded, so
     // continuous dispatch cannot livelock the migration; it re-triggers on the
     // next sync).
-    await this.writeFlushService.flushThenRunExclusive(async () => {
+    return this.writeFlushService.flushThenRunExclusive(async () => {
       // Another tab may have appended the same multi-megabyte migration op
       // while this tab was probing the server or waiting for confirmation.
       // Re-check inside the cross-tab operation-log barrier before snapshotting.
@@ -229,7 +229,7 @@ export class ServerMigrationService {
       // Get current full state from NgRx store (async to include archives from IndexedDB)
       // Cast to Record for validation compatibility
       let currentState: Record<string, unknown> =
-        (await this.stateSnapshotService.getStateSnapshotAsync()) as unknown as Record<
+        (await this.stateSnapshotService.getStateSnapshotForOperationLogAsync()) as unknown as Record<
           string,
           unknown
         >;
@@ -328,6 +328,7 @@ export class ServerMigrationService {
         'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +
           'Will be uploaded immediately via follow-up upload.',
       );
+      return op.id;
     });
   }
 

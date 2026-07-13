@@ -1203,7 +1203,7 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-mov']);
       });
 
-      it('should handle BATCH operation conflicts using LWW', async () => {
+      it('should fail closed for BATCH conflicts that cannot be compensated atomically', async () => {
         const now = Date.now();
         const conflicts: EntityConflict[] = [
           {
@@ -1229,21 +1229,13 @@ describe('ConflictResolutionService', () => {
           },
         ];
 
-        mockOperationApplier.applyOperations.and.resolveTo({
-          appliedOps: conflicts[0].remoteOps,
-        });
-
-        await service.autoResolveConflictsLWW(conflicts);
-
-        // Remote BATCH wins (newer timestamp)
-        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
-          jasmine.arrayContaining([
-            jasmine.objectContaining({ id: 'remote-batch', opType: OpType.Batch }),
-          ]),
-          'remote',
-          jasmine.any(Object),
+        await expectAsync(
+          service.autoResolveConflictsLWW(conflicts),
+        ).toBeRejectedWithError(
+          /Cannot safely auto-resolve remote multi-entity operation/,
         );
-        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-batch']);
+        expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
       });
 
       it('should handle singleton entity (GLOBAL_CONFIG) conflicts', async () => {
@@ -3587,6 +3579,33 @@ describe('ConflictResolutionService', () => {
       expect(mockStore.select).not.toHaveBeenCalled();
     });
 
+    it('should keep concurrent additive task-time deltas non-conflicting', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-time', 'clientB'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 3000 },
+        vectorClock: { clientB: 1 },
+      };
+      const localOp: Operation = {
+        ...createMockOp('local-time', 'clientA'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+        vectorClock: { clientA: 1 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localOp]],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity }),
+      );
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflict: null });
+    });
+
     it('should use entityId fallback when entityIds is an empty array', async () => {
       // Regression test: entityIds: [] is truthy in JS, so the old || fallback
       // would use the empty array instead of falling back to entityId.
@@ -3618,6 +3637,30 @@ describe('ConflictResolutionService', () => {
       // Without the fix, entityIds: [] would be used as-is, skipping the entity entirely.
       expect(result.conflict).not.toBeNull();
       expect(result.conflict!.entityId).toBe('task-1');
+    });
+
+    it('should check both entityId and entityIds when both are present', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        entityIds: ['task-2'],
+        vectorClock: { clientB: 1 },
+      };
+      const localOp: Operation = {
+        ...createMockOp('local-1', 'clientA'),
+        entityId: 'task-1',
+        vectorClock: { clientA: 1 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localOp]],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity }),
+      );
+
+      expect(result.conflict?.entityId).toBe('task-1');
     });
   });
 

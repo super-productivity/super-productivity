@@ -29,6 +29,7 @@ import {
 import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
 import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
 import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';
+import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -37,6 +38,7 @@ describe('ProjectService', () => {
   let snackService: jasmine.SpyObj<SnackService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let timeTrackingService: jasmine.SpyObj<TimeTrackingService>;
+  let taskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
 
   /* eslint-disable @typescript-eslint/naming-convention */
   const initialTaskState: TaskState = {
@@ -142,6 +144,7 @@ describe('ProjectService', () => {
       'setUnDone',
       'getAllTasksForProject',
     ]);
+    taskTimeSync = jasmine.createSpyObj('TaskTimeSyncService', ['clearOne']);
     taskService.createNewTaskWithDefaults.and.callFake(() => {
       taskCounter++;
       return createTask({
@@ -187,6 +190,7 @@ describe('ProjectService', () => {
         }),
         provideMockActions(() => EMPTY),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskTimeSyncService, useValue: taskTimeSync },
         {
           provide: TranslateService,
           useValue: {
@@ -238,6 +242,25 @@ describe('ProjectService', () => {
   afterEach(() => {
     // Reset selector mocks to prevent interference with other test files
     store.resetSelectors();
+  });
+
+  describe('remove', () => {
+    it('should clear pending time for every task removed with the project', async () => {
+      const project = createProject({
+        id: 'project-1',
+        taskIds: ['task-1', 'task-2'],
+        backlogTaskIds: [],
+        noteIds: [],
+      });
+
+      await service.remove(project);
+
+      expect(taskTimeSync.clearOne.calls.allArgs()).toEqual([
+        ['task-1'],
+        ['task-2'],
+        ['sub-task-1'],
+      ]);
+    });
   });
 
   describe('tree order lists', () => {

@@ -74,7 +74,7 @@ export class OperationLogCompactionService {
       }
 
       // 1. Get current state from NgRx store
-      const currentState = this.stateSnapshot.getStateSnapshot();
+      const currentState = this.stateSnapshot.getStateSnapshotForOperationLog();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);
 
       // GUARD (#7892): never compact against an empty/degraded state. Compaction

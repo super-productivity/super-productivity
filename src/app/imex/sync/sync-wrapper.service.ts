@@ -24,6 +24,8 @@ import {
   IncompleteRemoteOperationsError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -967,6 +969,16 @@ export class SyncWrapperService {
           config: { duration: 15000 },
         });
         return 'HANDLED_ERROR';
+      } else if (error instanceof ForceUploadPendingOpsError) {
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      } else if (error instanceof ForceUploadFailedError) {
+        this._providerManager.setSyncStatus('ERROR');
+        this._snackService.open({
+          msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+          type: 'ERROR',
+        });
+        return 'HANDLED_ERROR';
       } else {
         this._providerManager.setSyncStatus('ERROR');
         const errStr = getSyncErrorStr(error);
@@ -1059,8 +1071,11 @@ export class SyncWrapperService {
           return;
         }
 
-        await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
-        this._providerManager.setSyncStatus('IN_SYNC');
+        const forceUploadResult =
+          await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
+        this._providerManager.setSyncStatus(
+          forceUploadResult.hasUnresolvedOps ? 'UNKNOWN_OR_CHANGED' : 'IN_SYNC',
+        );
         SyncLog.log('SyncWrapperService: Force upload complete');
       } catch (error) {
         // GHSA-9544-hjjr-fg8h: a keyless-but-encryption-enabled provider makes
@@ -1071,9 +1086,9 @@ export class SyncWrapperService {
           this._handleMissingPasswordDialog();
         } else {
           SyncLog.err('SyncWrapperService: Force upload failed:', error);
-          const errStr = getSyncErrorStr(error);
+          this._providerManager.setSyncStatus('ERROR');
           this._snackService.open({
-            msg: errStr,
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
             type: 'ERROR',
           });
         }
@@ -1337,7 +1352,12 @@ export class SyncWrapperService {
         SyncLog.log(
           'SyncWrapperService: User chose USE_LOCAL - uploading local state to overwrite remote',
         );
-        await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
+        const forceUploadResult =
+          await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
+        if (forceUploadResult.hasUnresolvedOps) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return 'HANDLED_ERROR';
+        }
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else if (resolution === 'USE_REMOTE') {
@@ -1378,9 +1398,12 @@ export class SyncWrapperService {
         'SyncWrapperService: Error during conflict resolution:',
         resolutionError,
       );
-      const errStr = getSyncErrorStr(resolutionError);
+      this._providerManager.setSyncStatus('ERROR');
       this._snackService.open({
-        msg: errStr,
+        msg:
+          resolutionError instanceof ForceUploadFailedError
+            ? T.F.SYNC.S.FORCE_UPLOAD_FAILED
+            : getSyncErrorStr(resolutionError),
         type: 'ERROR',
       });
       return 'HANDLED_ERROR';

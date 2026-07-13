@@ -112,6 +112,14 @@ export class UnknownSyncStateError extends Error {
   override name = 'UnknownSyncStateError';
 }
 
+export class ForceUploadFailedError extends Error {
+  override name = 'ForceUploadFailedError';
+}
+
+export class ForceUploadPendingOpsError extends Error {
+  override name = 'ForceUploadPendingOpsError';
+}
+
 /**
  * A deferred action can never be persisted (invalid entity identifiers or an
  * invalid operation payload) — a deterministic condition, not a transient

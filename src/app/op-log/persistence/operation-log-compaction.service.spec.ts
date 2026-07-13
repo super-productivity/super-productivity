@@ -46,6 +46,7 @@ describe('OperationLogCompactionService', () => {
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -67,6 +68,9 @@ describe('OperationLogCompactionService', () => {
     mockOpLogStore.deleteOpsWhere.and.returnValue(Promise.resolve());
     mockOpLogStore.getPendingRemoteOps.and.resolveTo([]);
     mockStateSnapshot.getStateSnapshot.and.returnValue(mockState);
+    mockStateSnapshot.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshot.getStateSnapshot(),
+    );
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve(mockVectorClock),
     );
@@ -98,7 +102,7 @@ describe('OperationLogCompactionService', () => {
     it('should get current state from store delegate', async () => {
       await service.compact();
 
-      expect(mockStateSnapshot.getStateSnapshot).toHaveBeenCalled();
+      expect(mockStateSnapshot.getStateSnapshotForOperationLog).toHaveBeenCalled();
     });
 
     it('should log metrics if compaction is slow', async () => {

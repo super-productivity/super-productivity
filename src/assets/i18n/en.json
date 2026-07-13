@@ -1619,6 +1619,7 @@
         "WARN_CLIENT_ID_REGENERATED": "Sync device ID was invalid and has been regenerated. A sync conflict may occur on next sync.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
+        "FORCE_UPLOAD_FAILED": "Failed to overwrite server data. Your local changes remain available.",
         "FRESH_CLIENT_SYNC_CANCELLED": "Initial sync cancelled. Remote data was not applied.",
         "HYDRATION_FAILED": "Failed to load data. Please reload the app.",
         "IMPORTING": "Importing data",

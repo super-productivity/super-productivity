@@ -153,7 +153,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       // shared effect stream is never torn down by a single failed write.
       OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
     } finally {
-      this.operationCaptureService.decrementPending();
+      this.operationCaptureService.decrementPending(action);
     }
   }
 

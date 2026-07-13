@@ -26,6 +26,7 @@ import { OperationWriteFlushService } from '../sync/operation-write-flush.servic
 import { LockService } from '../sync/lock.service';
 import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 /**
  * Service for handling backup import and export operations.
@@ -47,6 +48,7 @@ export class BackupService {
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
   private _conflictJournalService = inject(ConflictJournalService);
+  private _taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
    * Loads a complete backup of all application data.
@@ -179,6 +181,10 @@ export class BackupService {
         // fresh post-import journal entries cannot land before the clear and
         // be wiped. clearAll swallows its own errors (must not fail the import).
         await this._conflictJournalService.clearAll();
+
+        // The imported full state replaces the live task totals. Any batch from
+        // the pre-import state must not flush later onto that new baseline.
+        this._taskTimeSyncService.clear();
       });
 
       // 4c. Reset all sync providers' lastServerSeq to 0.

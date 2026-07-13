@@ -45,7 +45,11 @@ describe('OperationLogSnapshotService', () => {
     ]);
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
     ]);
+    mockStateSnapshotService.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshotService.getStateSnapshot(),
+    );
     mockSchemaMigrationService = jasmine.createSpyObj('SchemaMigrationService', [
       'migrateStateIfNeeded',
     ]);

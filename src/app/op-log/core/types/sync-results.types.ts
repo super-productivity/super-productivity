@@ -179,9 +179,9 @@ export interface UploadResult {
  */
 export interface UploadOptions {
   /**
-   * Optional preparation callback executed BEFORE acquiring the upload lock and
-   * before checking pending ops. Potentially interactive/network-bound checks
-   * belong here; their final local mutation must provide its own narrow lock.
+   * Optional preparation callback executed inside upload serialization and
+   * before capturing pending operations. The callback owns any narrower
+   * operation-log transaction needed for its local mutation.
    */
   preUploadCallback?: () => Promise<void>;
 
@@ -221,13 +221,19 @@ export interface UploadOptions {
  * SyncSessionValidationService latch — the wrapper reads it once before
  * deciding IN_SYNC vs ERROR. (#7330)
  */
-export interface DownloadResultForRejection {
-  newOpsCount: number;
-  allOpClocks?: VectorClock[];
-  snapshotVectorClock?: VectorClock;
-  /** Server cursor after the downloaded operations were durably applied. */
-  latestServerSeq?: number;
-}
+export type DownloadResultForRejection =
+  | {
+      kind: 'completed';
+      newOpsCount: number;
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+      /** Server cursor after the downloaded operations were durably applied. */
+      latestServerSeq?: number;
+    }
+  | {
+      /** User declined the nested SYNC_IMPORT conflict resolution. */
+      kind: 'cancelled';
+    };
 
 /**
  * Callback type for triggering downloads during concurrent modification resolution.

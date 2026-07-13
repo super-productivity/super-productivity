@@ -430,11 +430,12 @@ export const partitionLwwResolutions = <
       partitions.remoteWinsOps.push(...processRemoteWinnerOps(conflict));
 
       for (const op of conflict.remoteOps) {
-        const ids = op.entityIds?.length
-          ? op.entityIds
-          : op.entityId
-            ? [op.entityId]
-            : [];
+        const ids = Array.from(
+          new Set([
+            ...(op.entityId ? [op.entityId] : []),
+            ...(op.entityIds?.length ? op.entityIds : []),
+          ]),
+        );
         for (const id of ids) {
           partitions.remoteWinnerAffectedEntityKeys.add(toEntityKey(op.entityType, id));
         }

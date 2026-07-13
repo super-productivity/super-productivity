@@ -25,6 +25,7 @@ import { selectTodayTaskIds } from '../../work-context/store/work-context.select
 import { first } from 'rxjs/operators';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
+import { DateService } from '../../../core/date/date.service';
 
 interface PointerPosition {
   x: number;
@@ -49,6 +50,7 @@ export class ScheduleWeekDragService {
   private readonly _store = inject(Store);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _calendarEventActions = inject(CalendarEventActionsService);
+  private readonly _dateService = inject(DateService);
 
   private readonly _isShiftMode = signal(false);
   readonly isShiftMode: Signal<boolean> = this._isShiftMode.asReadonly();
@@ -874,6 +876,7 @@ export class ScheduleWeekDragService {
         TaskSharedActions.unscheduleTask({
           id: task.id,
           isLeaveInToday: true,
+          today: this._dateService.todayStr(),
         }),
       );
     }
