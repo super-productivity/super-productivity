@@ -44,6 +44,7 @@ import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
+  LOCK_NAMES,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
@@ -55,6 +56,7 @@ import {
   encodeOperation,
 } from './compact/operation-codec.service';
 import { uuidv7 } from '../../util/uuid-v7';
+import { LockService } from '../sync/lock.service';
 
 /**
  * Vector clock entry stored in the vector_clock object store.
@@ -322,6 +324,7 @@ type OpLogStoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
 })
 export class OperationLogStoreService implements RemoteOperationApplyStorePort<Operation> {
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private readonly _lockService = inject(LockService);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
   // Phase A migration seam: methods migrated off direct `idb` route through
@@ -2003,77 +2006,79 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     const now = Date.now();
     try {
-      await this._adapter.transaction(
-        [
-          STORE_NAMES.OPS,
-          STORE_NAMES.META,
-          STORE_NAMES.STATE_CACHE,
-          STORE_NAMES.VECTOR_CLOCK,
-          STORE_NAMES.ARCHIVE_YOUNG,
-          STORE_NAMES.ARCHIVE_OLD,
-          STORE_NAMES.IMPORT_BACKUP,
-        ],
-        'readwrite',
-        async (tx) => {
-          if (opts.backupRef) {
-            const currentBackup = await tx.get<{ backupId?: string }>(
-              STORE_NAMES.IMPORT_BACKUP,
+      await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+        this._adapter.transaction(
+          [
+            STORE_NAMES.OPS,
+            STORE_NAMES.META,
+            STORE_NAMES.STATE_CACHE,
+            STORE_NAMES.VECTOR_CLOCK,
+            STORE_NAMES.ARCHIVE_YOUNG,
+            STORE_NAMES.ARCHIVE_OLD,
+            STORE_NAMES.IMPORT_BACKUP,
+          ],
+          'readwrite',
+          async (tx) => {
+            if (opts.backupRef) {
+              const currentBackup = await tx.get<{ backupId?: string }>(
+                STORE_NAMES.IMPORT_BACKUP,
+                SINGLETON_KEY,
+              );
+              if (currentBackup?.backupId !== opts.backupRef.backupId) {
+                throw new Error(
+                  'Pre-replace backup was superseded before remote replacement.',
+                );
+              }
+            }
+            await tx.clear(STORE_NAMES.OPS);
+            await tx.put(
+              STORE_NAMES.META,
+              buildFullStateOpsMeta([]),
+              FULL_STATE_OPS_META_KEY,
+            );
+            // Set atomically with the replacement; the caller clears it after
+            // the post-replacement replay commits. A crash in between leaves the
+            // marker set so the next sync redoes the raw rebuild instead of a
+            // normal download (which excludes this client's own ops).
+            await tx.put(
+              STORE_NAMES.META,
+              {
+                incomplete: true,
+                startedAt: now,
+                preservedLocalOps: opts.preservedLocalOps ?? [],
+                backupRef: opts.backupRef,
+              } satisfies RawRebuildIncompleteEntry,
+              RAW_REBUILD_INCOMPLETE_META_KEY,
+            );
+            // A new replacement supersedes any earlier completed-rebuild Undo.
+            // The new backup token becomes authoritative only on completion.
+            await tx.delete(STORE_NAMES.META, RAW_REBUILD_RECOVERY_META_KEY);
+            await tx.put(STORE_NAMES.STATE_CACHE, {
+              id: SINGLETON_KEY,
+              state: opts.baselineState,
+              lastAppliedOpSeq: 0,
+              vectorClock: opts.vectorClock,
+              compactedAt: now,
+              schemaVersion: opts.schemaVersion,
+              snapshotEntityKeys: opts.snapshotEntityKeys,
+            });
+            await tx.put(
+              STORE_NAMES.VECTOR_CLOCK,
+              { clock: opts.vectorClock, lastUpdate: now },
               SINGLETON_KEY,
             );
-            if (currentBackup?.backupId !== opts.backupRef.backupId) {
-              throw new Error(
-                'Pre-replace backup was superseded before remote replacement.',
-              );
-            }
-          }
-          await tx.clear(STORE_NAMES.OPS);
-          await tx.put(
-            STORE_NAMES.META,
-            buildFullStateOpsMeta([]),
-            FULL_STATE_OPS_META_KEY,
-          );
-          // Set atomically with the replacement; the caller clears it after
-          // the post-replacement replay commits. A crash in between leaves the
-          // marker set so the next sync redoes the raw rebuild instead of a
-          // normal download (which excludes this client's own ops).
-          await tx.put(
-            STORE_NAMES.META,
-            {
-              incomplete: true,
-              startedAt: now,
-              preservedLocalOps: opts.preservedLocalOps ?? [],
-              backupRef: opts.backupRef,
-            } satisfies RawRebuildIncompleteEntry,
-            RAW_REBUILD_INCOMPLETE_META_KEY,
-          );
-          // A new replacement supersedes any earlier completed-rebuild Undo.
-          // The new backup token becomes authoritative only on completion.
-          await tx.delete(STORE_NAMES.META, RAW_REBUILD_RECOVERY_META_KEY);
-          await tx.put(STORE_NAMES.STATE_CACHE, {
-            id: SINGLETON_KEY,
-            state: opts.baselineState,
-            lastAppliedOpSeq: 0,
-            vectorClock: opts.vectorClock,
-            compactedAt: now,
-            schemaVersion: opts.schemaVersion,
-            snapshotEntityKeys: opts.snapshotEntityKeys,
-          });
-          await tx.put(
-            STORE_NAMES.VECTOR_CLOCK,
-            { clock: opts.vectorClock, lastUpdate: now },
-            SINGLETON_KEY,
-          );
-          await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
-            id: SINGLETON_KEY,
-            data: opts.archiveYoung,
-            lastModified: now,
-          });
-          await tx.put(STORE_NAMES.ARCHIVE_OLD, {
-            id: SINGLETON_KEY,
-            data: opts.archiveOld,
-            lastModified: now,
-          });
-        },
+            await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
+              id: SINGLETON_KEY,
+              data: opts.archiveYoung,
+              lastModified: now,
+            });
+            await tx.put(STORE_NAMES.ARCHIVE_OLD, {
+              id: SINGLETON_KEY,
+              data: opts.archiveOld,
+              lastModified: now,
+            });
+          },
+        ),
       );
 
       this._invalidateAppliedAndUnsyncedCaches();
@@ -2560,76 +2565,80 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // tests (#7709) spy on the shared connection's `transaction` and poison
       // `opsStore.add`; that still fires here because the adapter operates on
       // that same adopted connection.
-      await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        if (opts.requiredImportBackupId !== undefined) {
-          const currentBackup = await tx.get<{ backupId?: string }>(
-            STORE_NAMES.IMPORT_BACKUP,
+      await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+        this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+          if (opts.requiredImportBackupId !== undefined) {
+            const currentBackup = await tx.get<{ backupId?: string }>(
+              STORE_NAMES.IMPORT_BACKUP,
+              SINGLETON_KEY,
+            );
+            if (currentBackup?.backupId !== opts.requiredImportBackupId) {
+              throw new Error(
+                'Recovery backup was superseded before destructive restore.',
+              );
+            }
+          }
+          // Rotate the clientId first, inside this same atomic transaction.
+          // Writing it before the OPS clear means an interrupt injected into a
+          // later step still aborts this queued put — exercising the genuine
+          // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself
+          // is order-independent.
+          await tx.put(STORE_NAMES.CLIENT_ID, syncImportOp.clientId, SINGLETON_KEY);
+
+          await tx.clear(STORE_NAMES.OPS);
+
+          const seq = await tx.add(
+            STORE_NAMES.OPS,
+            this._buildStoredEntry(syncImportOp, 'local'),
+          );
+          // syncImportOp is always a full-state op (both callers pass SYNC_IMPORT);
+          // OPS was just cleared, so the pointer is exactly this one op. Use the
+          // shared builder so `latest` is derived, never hand-asserted.
+          await tx.put(
+            STORE_NAMES.META,
+            buildFullStateOpsMeta([{ opId: syncImportOp.id, seq }]),
+            FULL_STATE_OPS_META_KEY,
+          );
+
+          // This replacement supersedes any interrupted USE_REMOTE rebuild. Clear
+          // the marker in the same transaction as the restored/clean-slate
+          // baseline so a successful Undo cannot immediately re-enter recovery.
+          await tx.delete(STORE_NAMES.META, RAW_REBUILD_INCOMPLETE_META_KEY);
+          await tx.delete(STORE_NAMES.META, RAW_REBUILD_RECOVERY_META_KEY);
+
+          await tx.put(
+            STORE_NAMES.VECTOR_CLOCK,
+            { clock: newVectorClock, lastUpdate: Date.now() },
             SINGLETON_KEY,
           );
-          if (currentBackup?.backupId !== opts.requiredImportBackupId) {
-            throw new Error('Recovery backup was superseded before destructive restore.');
+
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            id: SINGLETON_KEY,
+            state: newState,
+            lastAppliedOpSeq: seq,
+            vectorClock: newVectorClock,
+            compactedAt,
+            schemaVersion: syncImportOp.schemaVersion,
+            snapshotEntityKeys,
+          });
+
+          if (archiveYoung != null) {
+            await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
+              id: SINGLETON_KEY,
+              data: archiveYoung,
+              lastModified: compactedAt,
+            });
           }
-        }
-        // Rotate the clientId first, inside this same atomic transaction.
-        // Writing it before the OPS clear means an interrupt injected into a
-        // later step still aborts this queued put — exercising the genuine
-        // "queued -> tx aborts -> client_id unchanged" path. Atomicity itself
-        // is order-independent.
-        await tx.put(STORE_NAMES.CLIENT_ID, syncImportOp.clientId, SINGLETON_KEY);
 
-        await tx.clear(STORE_NAMES.OPS);
-
-        const seq = await tx.add(
-          STORE_NAMES.OPS,
-          this._buildStoredEntry(syncImportOp, 'local'),
-        );
-        // syncImportOp is always a full-state op (both callers pass SYNC_IMPORT);
-        // OPS was just cleared, so the pointer is exactly this one op. Use the
-        // shared builder so `latest` is derived, never hand-asserted.
-        await tx.put(
-          STORE_NAMES.META,
-          buildFullStateOpsMeta([{ opId: syncImportOp.id, seq }]),
-          FULL_STATE_OPS_META_KEY,
-        );
-
-        // This replacement supersedes any interrupted USE_REMOTE rebuild. Clear
-        // the marker in the same transaction as the restored/clean-slate
-        // baseline so a successful Undo cannot immediately re-enter recovery.
-        await tx.delete(STORE_NAMES.META, RAW_REBUILD_INCOMPLETE_META_KEY);
-        await tx.delete(STORE_NAMES.META, RAW_REBUILD_RECOVERY_META_KEY);
-
-        await tx.put(
-          STORE_NAMES.VECTOR_CLOCK,
-          { clock: newVectorClock, lastUpdate: Date.now() },
-          SINGLETON_KEY,
-        );
-
-        await tx.put(STORE_NAMES.STATE_CACHE, {
-          id: SINGLETON_KEY,
-          state: newState,
-          lastAppliedOpSeq: seq,
-          vectorClock: newVectorClock,
-          compactedAt,
-          schemaVersion: syncImportOp.schemaVersion,
-          snapshotEntityKeys,
-        });
-
-        if (archiveYoung != null) {
-          await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
-            id: SINGLETON_KEY,
-            data: archiveYoung,
-            lastModified: compactedAt,
-          });
-        }
-
-        if (archiveOld != null) {
-          await tx.put(STORE_NAMES.ARCHIVE_OLD, {
-            id: SINGLETON_KEY,
-            data: archiveOld,
-            lastModified: compactedAt,
-          });
-        }
-      });
+          if (archiveOld != null) {
+            await tx.put(STORE_NAMES.ARCHIVE_OLD, {
+              id: SINGLETON_KEY,
+              data: archiveOld,
+              lastModified: compactedAt,
+            });
+          }
+        }),
+      );
 
       // Reached only on a committed transaction.
       this._invalidateAppliedAndUnsyncedCaches();

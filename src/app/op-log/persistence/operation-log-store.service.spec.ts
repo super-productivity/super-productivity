@@ -27,6 +27,7 @@ import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
+  LOCK_NAMES,
   MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -37,10 +38,12 @@ import {
   STORE_NAMES,
 } from './db-keys.const';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { LockService } from '../sync/lock.service';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
   let vectorClockService: VectorClockService;
+  let lockService: LockService;
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
@@ -72,6 +75,7 @@ describe('OperationLogStoreService', () => {
     });
     service = TestBed.inject(OperationLogStoreService);
     vectorClockService = TestBed.inject(VectorClockService);
+    lockService = TestBed.inject(LockService);
     await service.init();
     // Clear all data from previous tests to ensure test isolation
     await service._clearAllDataForTesting();
@@ -2671,6 +2675,7 @@ describe('OperationLogStoreService', () => {
     it('should write archives in the same destructive replacement', async () => {
       const archiveYoung = createArchive('young-task');
       const archiveOld = createArchive('old-task');
+      const lockRequestSpy = spyOn(lockService, 'request').and.callThrough();
 
       await service.runDestructiveStateReplacement({
         syncImportOp: createTestOperation({
@@ -2689,6 +2694,10 @@ describe('OperationLogStoreService', () => {
       const oldEntry = await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
       expect(youngEntry.data).toEqual(archiveYoung);
       expect(oldEntry.data).toEqual(archiveOld);
+      expect(lockRequestSpy).toHaveBeenCalledOnceWith(
+        LOCK_NAMES.TASK_ARCHIVE,
+        jasmine.any(Function),
+      );
     });
 
     it('should roll back ops, state_cache, vector_clock, and archives when an archive write fails', async () => {

@@ -30,7 +30,9 @@ describe('ArchiveCompressionService', () => {
     archiveDbAdapterMock.saveArchiveOld.and.resolveTo(undefined);
     archiveDbAdapterMock.saveArchivesAtomic.and.resolveTo(undefined);
     lockServiceMock = jasmine.createSpyObj<LockService>('LockService', ['request']);
-    lockServiceMock.request.and.callFake(async (_name, callback) => callback());
+    lockServiceMock.request.and.callFake(
+      <T>(_lockName: string, callback: () => Promise<T>): Promise<T> => callback(),
+    );
 
     TestBed.configureTestingModule({
       providers: [
