@@ -609,21 +609,31 @@ export class ConflictResolutionService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Atomically persist remote losers followed by their local-win
-    // compensations, before any final remote winners. Hydration is status-blind,
-    // so durable sequence order must end with the same winner as live apply.
+    // Atomically persist remote losers, local-win compensations, and final
+    // remote winners in live-apply order. Hydration is status-blind, so both
+    // durable ordering and the absence of crash gaps are required here.
     // ─────────────────────────────────────────────────────────────────────────
     if (localWinsRemoteOps.length > 0 || newLocalWinOps.length > 0) {
+      const remoteWinnerIds = new Set(remoteWinsOps.map((op) => op.id));
       const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
         { ops: localWinsRemoteOps, source: 'remote' },
         { ops: newLocalWinOps, source: 'local' },
+        ...(remoteWinsOps.length > 0
+          ? [
+              {
+                ops: remoteWinsOps,
+                source: 'remote' as const,
+                options: { pendingApply: true },
+              },
+            ]
+          : []),
       ]);
       writtenLocalWinOps = result.written
         .filter((entry) => entry.source === 'local')
         .map((entry) => entry.op);
       if (result.skippedCount > 0) {
         OpLog.verbose(
-          `ConflictResolutionService: Skipped ${result.skippedCount} duplicate mixed-resolution op(s)`,
+          `ConflictResolutionService: Skipped ${result.skippedCount} duplicate resolution op(s)`,
         );
       }
       for (const op of writtenLocalWinOps) {
@@ -645,15 +655,14 @@ export class ConflictResolutionService {
           checkpointExemptOpIds.add(compensation.id);
         }
       }
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Persist final remote winners after loser/compensation pairs. This also
-    // covers multiple conflicts for one entity: a newer remote winner remains
-    // the final durable reducer effect after restart.
-    // Uses retry to handle race condition (issue #6213).
-    // ─────────────────────────────────────────────────────────────────────────
-    if (remoteWinsOps.length > 0) {
+      for (const entry of result.written) {
+        if (entry.source === 'remote' && remoteWinnerIds.has(entry.op.id)) {
+          allStoredOps.push({ id: entry.op.id, seq: entry.seq });
+          allOpsToApply.push(entry.op);
+        }
+      }
+    } else if (remoteWinsOps.length > 0) {
       const result = await this._filterAndAppendOpsWithRetry(remoteWinsOps, 'remote', {
         pendingApply: true,
       });

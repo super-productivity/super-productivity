@@ -829,11 +829,10 @@ describe('ConflictResolutionService', () => {
 
       await service.autoResolveConflictsLWW(conflicts);
 
-      // First conflict: remote wins (newer timestamp) - goes to pendingApply batch
-      expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+      // First conflict: remote wins (newer timestamp) and shares the atomic
+      // resolution batch with the second conflict's loser/compensation pair.
+      expect(getMixedRemoteOps()).toEqual(
         jasmine.arrayContaining([jasmine.objectContaining({ id: 'remote-1' })]),
-        'remote',
-        jasmine.any(Object),
       );
 
       // Second conflict: local wins (newer timestamp)
@@ -2197,15 +2196,13 @@ describe('ConflictResolutionService', () => {
 
         await service.autoResolveConflictsLWW(conflicts);
 
-        // Task: remote wins (newer), Tag: remote wins (tie goes to remote)
-        // Both are appended in a single batch
-        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+        // Task: remote wins (newer), Tag: remote wins (tie goes to remote).
+        // Both share the atomic resolution append with the local PROJECT win.
+        expect(getMixedRemoteOps()).toEqual(
           jasmine.arrayContaining([
             jasmine.objectContaining({ id: 'remote-task' }),
             jasmine.objectContaining({ id: 'remote-tag' }),
           ]),
-          'remote',
-          jasmine.any(Object),
         );
 
         // All local ops from conflicts get rejected in one batch
@@ -2458,7 +2455,7 @@ describe('ConflictResolutionService', () => {
         ]);
       });
 
-      it('persists a final remote winner after an older loser and its compensation', async () => {
+      it('atomically persists a final remote winner after an older loser and its compensation', async () => {
         const localOp = createOpWithTimestamp(
           'local-op',
           'client-a',
@@ -2480,30 +2477,6 @@ describe('ConflictResolutionService', () => {
           OpType.Update,
           'task-1',
         );
-        const persistenceOrder: string[] = [];
-        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
-          async (batches) => {
-            persistenceOrder.push('loser-and-compensation');
-            return {
-              written: batches.flatMap((batch) =>
-                batch.ops.map((op, index) => ({
-                  seq: index + 1,
-                  op,
-                  source: batch.source,
-                })),
-              ),
-              skippedCount: 0,
-            };
-          },
-        );
-        mockOpLogStore.appendBatchSkipDuplicates.and.callFake(async (ops) => {
-          persistenceOrder.push('remote-winner');
-          return {
-            seqs: ops.map((_, index) => index + 100),
-            writtenOps: ops,
-            skippedCount: 0,
-          };
-        });
         mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local state' }));
 
         await service.autoResolveConflictsLWW([
@@ -2511,7 +2484,22 @@ describe('ConflictResolutionService', () => {
           createConflict('task-1', [localOp], [remoteWinner]),
         ]);
 
-        expect(persistenceOrder).toEqual(['loser-and-compensation', 'remote-winner']);
+        expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+          1,
+        );
+        const persistedBatches =
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0];
+        expect(persistedBatches.map((batch) => batch.source)).toEqual([
+          'remote',
+          'local',
+          'remote',
+        ]);
+        expect(persistedBatches[0].ops.map((op) => op.id)).toEqual(['remote-loser']);
+        expect(persistedBatches[1].ops.length).toBe(1);
+        expect(persistedBatches[1].ops[0].entityId).toBe('task-1');
+        expect(persistedBatches[2].ops.map((op) => op.id)).toEqual(['remote-winner']);
+        expect(persistedBatches[2].options).toEqual({ pendingApply: true });
+        expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
       });
 
       it('should not reject or apply remote rows when local-win compensation cannot persist', async () => {
