@@ -56,6 +56,10 @@ import { SyncHydrationService } from '../../persistence/sync-hydration.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
 import { OperationLogEffects } from '../../capture/operation-log.effects';
+import { createValidAppData } from '../../validation/state-validity-test-utils';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
+import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
+import { selectSyncConfig } from '../../../features/config/store/global-config.reducer';
 
 // Mock Sync Provider that supports operation sync
 class MockOperationSyncProvider
@@ -348,8 +352,12 @@ describe('Service Logic Integration', () => {
     // Mock OperationWriteFlushService
     const writeFlushSpy = jasmine.createSpyObj('OperationWriteFlushService', [
       'flushPendingWrites',
+      'flushThenRunExclusive',
     ]);
     writeFlushSpy.flushPendingWrites.and.returnValue(Promise.resolve());
+    writeFlushSpy.flushThenRunExclusive.and.callFake(
+      async <T>(fn: () => Promise<T>): Promise<T> => fn(),
+    );
 
     // Mock RejectedOpsHandlerService
     const rejectedOpsHandlerSpy = jasmine.createSpyObj('RejectedOpsHandlerService', [
@@ -384,7 +392,14 @@ describe('Service Logic Integration', () => {
         VectorClockService,
         SchemaMigrationService,
         RemoteOpsProcessingService,
-        provideMockStore(),
+        provideMockStore({
+          selectors: [
+            {
+              selector: selectSyncConfig,
+              value: DEFAULT_GLOBAL_CONFIG.sync,
+            },
+          ],
+        }),
         { provide: ConflictResolutionService, useValue: conflictServiceSpy },
         { provide: OperationApplierService, useValue: applierSpy },
         { provide: SuperSyncStatusService, useValue: superSyncStatusSpy },
@@ -527,6 +542,70 @@ describe('Service Logic Integration', () => {
       expect(appliedOps.length).toBe(1);
       expect(appliedOps[0].id).toBe('op-remote-1');
       expect(appliedOps[0].payload).toEqual(payload);
+    });
+
+    it('should upload, download, verify, and apply an encrypted full-state operation', async (): Promise<void> => {
+      mockProvider.setEncryption(true, TEST_KEY);
+      const uploadSnapshotSpy = spyOn(mockProvider, 'uploadSnapshot').and.callThrough();
+      const validState = structuredClone(createValidAppData());
+      const state = {
+        ...validState,
+        globalConfig: {
+          ...validState.globalConfig,
+          sync: {
+            ...validState.globalConfig.sync,
+            syncInterval: 123456,
+          },
+        },
+      };
+      const fullStateOp: Operation = {
+        id: 'encrypted-full-state-round-trip',
+        clientId: 'origin-client',
+        actionType: ActionType.LOAD_ALL_DATA,
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        payload: { appDataComplete: state },
+        vectorClock: { originClient: 1 },
+        timestamp: Date.now(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      };
+      await opLogStore.append(fullStateOp, 'local');
+
+      await syncService.uploadPendingOps(mockProvider);
+
+      const uploadArgs = uploadSnapshotSpy.calls.mostRecent().args;
+      expect(typeof uploadArgs[0]).toBe('string');
+      expect(uploadArgs[5]).toBe(true);
+
+      await opLogStore._clearAllDataForTesting();
+      await mockProvider.setLastServerSeq(0);
+      applierSpy.applyOperations.calls.reset();
+      spyOn(mockProvider, 'downloadOps').and.resolveTo({
+        ops: [
+          {
+            op: {
+              ...fullStateOp,
+              payload: uploadArgs[0],
+              isPayloadEncrypted: true,
+            },
+            serverSeq: 1,
+            receivedAt: Date.now(),
+          },
+        ],
+        hasMore: false,
+        latestSeq: 1,
+      });
+
+      await syncService.downloadRemoteOps(mockProvider);
+
+      expect(applierSpy.applyOperations).toHaveBeenCalledTimes(1);
+      const [appliedOp] = applierSpy.applyOperations.calls.mostRecent().args[0];
+      expect(appliedOp.opType).toBe(OpType.SyncImport);
+      const appliedState = appliedOp.payload as typeof state;
+      expect(appliedState.project.entities['INBOX']?.title).toBe('Inbox');
+      expect(appliedState.globalConfig.sync.syncInterval).toBe(
+        DEFAULT_GLOBAL_CONFIG.sync.syncInterval,
+      );
     });
   });
 

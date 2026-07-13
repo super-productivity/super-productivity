@@ -333,6 +333,25 @@ describe('OperationEncryptionService', () => {
         };
       };
 
+      const requiredFullStateKeys = [
+        'task',
+        'project',
+        'tag',
+        'note',
+        'menuTree',
+        'globalConfig',
+        'simpleCounter',
+        'taskRepeatCfg',
+        'reminders',
+        'planner',
+        'boards',
+        'issueProvider',
+        'metric',
+        'timeTracking',
+      ] as const;
+
+      const optionalFullStateKeys = ['pluginUserData', 'pluginMetadata'] as const;
+
       it('rejects an ordinary encrypted op promoted to SYNC_IMPORT (single)', async () => {
         const encrypted = await service.encryptOperation(
           createMockSyncOp({ task: { id: 'task-123', changes: { title: 'x' } } }),
@@ -361,6 +380,49 @@ describe('OperationEncryptionService', () => {
         await expectAsync(
           service.decryptOperations([tampered], TEST_PASSWORD),
         ).toBeRejectedWithError(OperationIntegrityError);
+      });
+
+      it('rejects missing or malformed required roots and malformed optional roots', async () => {
+        for (const key of requiredFullStateKeys) {
+          for (const invalidValue of ['missing', null] as const) {
+            const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+            if (invalidValue === 'missing') {
+              delete state[key];
+            } else {
+              state[key] = invalidValue;
+            }
+
+            const encrypted = await service.encryptOperation(
+              createMockSyncOp(state),
+              TEST_PASSWORD,
+            );
+            const promoted: SyncOperation = {
+              ...encrypted,
+              opType: OpType.SyncImport,
+            };
+
+            await expectAsync(service.decryptOperation(promoted, TEST_PASSWORD))
+              .withContext(`${key} must reject ${invalidValue}`)
+              .toBeRejectedWithError(OperationIntegrityError);
+          }
+        }
+
+        for (const key of optionalFullStateKeys) {
+          const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+          state[key] = null;
+          const encrypted = await service.encryptOperation(
+            createMockSyncOp(state),
+            TEST_PASSWORD,
+          );
+          const promoted: SyncOperation = {
+            ...encrypted,
+            opType: OpType.SyncImport,
+          };
+
+          await expectAsync(service.decryptOperation(promoted, TEST_PASSWORD))
+            .withContext(`${key} must reject malformed values when present`)
+            .toBeRejectedWithError(OperationIntegrityError);
+        }
       });
 
       it('accepts a legitimate direct SYNC_IMPORT payload', async () => {
