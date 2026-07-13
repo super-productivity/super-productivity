@@ -33,8 +33,8 @@ export class OperationLogCompactionService {
   private vectorClockService = inject(VectorClockService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
 
-  async compact(): Promise<void> {
-    await this._doCompact(COMPACTION_RETENTION_MS, false);
+  async compact(): Promise<boolean> {
+    return this._doCompact(COMPACTION_RETENTION_MS, false);
   }
 
   /**

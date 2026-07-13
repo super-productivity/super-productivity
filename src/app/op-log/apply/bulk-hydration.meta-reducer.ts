@@ -10,6 +10,7 @@ import {
 import { OpLog } from '../../core/log';
 import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
 import { reportBulkReplayReducerFailure } from './bulk-replay-failure-collector';
+import { isFullStateOpType } from '../core/operation.types';
 
 /**
  * Meta-reducer that applies multiple operations in a single reducer pass.
@@ -48,9 +49,11 @@ export const bulkOperationsMetaReducer = <T>(
 ): ActionReducer<T> => {
   return (state: T | undefined, action: Action): T => {
     if (action.type === bulkApplyOperations.type) {
-      const { operations, localClientId } = action as ReturnType<
-        typeof bulkApplyOperations
-      >;
+      const {
+        operations,
+        localClientId,
+        atomicReplayGroups = [],
+      } = action as ReturnType<typeof bulkApplyOperations>;
 
       // Apply every op in one synchronous reducer pass. Suppress the action
       // logger's per-op console line for the duration (see bulk-replay-log-guard):
@@ -58,6 +61,12 @@ export const bulkOperationsMetaReducer = <T>(
       // logs an "applying N ops" summary, so per-op `[a]` lines are just noise.
       const finalState = runWithBulkReplayLoggingSuppressed(() => {
         const failedOpIds = new Set<string>();
+        const atomicGroupByOpId = new Map<string, string[]>();
+        for (const group of atomicReplayGroups) {
+          for (const opId of group) {
+            atomicGroupByOpId.set(opId, group);
+          }
+        }
         const reportFailure = (
           op: (typeof operations)[number],
           error: unknown,
@@ -71,6 +80,16 @@ export const bulkOperationsMetaReducer = <T>(
             `bulkOperationsMetaReducer: Skipping reducer-failed operation ${op.id}`,
             { name: error instanceof Error ? error.name : 'UnknownError' },
           );
+          return true;
+        };
+        const excludeAtomicGroup = (opId: string): boolean => {
+          const group = atomicGroupByOpId.get(opId);
+          if (!group) {
+            return false;
+          }
+          for (const groupedOpId of group) {
+            failedOpIds.add(groupedOpId);
+          }
           return true;
         };
 
@@ -90,13 +109,14 @@ export const bulkOperationsMetaReducer = <T>(
             const unsafeArchiveOps = candidateOps.filter(isTaskArchiveOrDeleteOp);
             for (const op of unsafeArchiveOps) {
               reportFailure(op, error);
+              excludeAtomicGroup(op.id);
             }
             continue;
           }
 
           const hasArchives = archivingOrDeletingEntityIds.size > 0;
           let currentState = state;
-          let shouldReplayWithoutFailedArchive = false;
+          let shouldReplayWithoutFailedOperations = false;
           for (const op of candidateOps) {
             try {
               const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
@@ -145,12 +165,25 @@ export const bulkOperationsMetaReducer = <T>(
               currentState = reducer(currentState, finalAction);
             } catch (error) {
               const isNewFailure = reportFailure(op, error);
+              if (isFullStateOpType(op.opType)) {
+                // A full-state operation replaces the entire model. Continuing
+                // from the pre-import state would expose a projection that never
+                // existed in the log, so discard the speculative batch.
+                return state;
+              }
+              if (excludeAtomicGroup(op.id)) {
+                // The children of a split migration represent one durable
+                // intent. Discard this speculative pass and replay without all
+                // siblings so the resulting state is reconstructible.
+                shouldReplayWithoutFailedOperations = true;
+                break;
+              }
               if (isNewFailure && isTaskArchiveOrDeleteOp(op)) {
-                shouldReplayWithoutFailedArchive = true;
+                shouldReplayWithoutFailedOperations = true;
               }
             }
           }
-          if (!shouldReplayWithoutFailedArchive) {
+          if (!shouldReplayWithoutFailedOperations) {
             return currentState;
           }
         }

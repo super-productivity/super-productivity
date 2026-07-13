@@ -216,13 +216,17 @@ Downloaded operations use a durable status transition so reducer state, archive 
 4. `applied` — reducer and archive work both completed.
 
 Bulk replay isolates conversion/reducer exceptions per operation. The reducer-successful
-subsequence is checkpointed and receives archive side effects; reducer-failed rows are marked
-with terminal `rejectedAt` plus `reducerRejectedAt` metadata in the **same transaction**.
+subsequence is checkpointed and receives archive side effects; ordinary reducer-failed remote
+rows are marked with terminal `rejectedAt` plus `reducerRejectedAt` metadata in the **same transaction**.
 `reducerRejectedAt` is distinct from an ordinary sync rejection: hydration excludes that row
 because its migrated reducer effect never entered state. Pending rows deliberately removed by a
 schema migration receive the same terminal marker. This prevents one malformed operation from
 terminating NgRx's state pipeline or receiving archive work, without creating a crash window
 where startup could mistake it for incomplete reducer work.
+
+Full-state and local operations are exceptions: a full-state failure discards the entire
+speculative bulk batch, while a local replay failure aborts hydration without rejecting the user
+intent. Neither case is terminally acknowledged when its state never entered NgRx.
 
 Startup recovery leaves surviving `pending` rows pending, then hydration replays them through the
 same per-operation reducer-failure collector. Successful rows and reducer failures are durably
@@ -230,9 +234,9 @@ partitioned before archive retry or snapshot creation. A pending full-state oper
 the direct-load shortcut. During live sync, a full-state reducer failure aborts before the reducer
 checkpoint and server cursor advance, so the pending row remains recoverable. Hydration retries
 `archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download,
-upload, or advance its cursor while any incomplete rows remain. Database version 8 is a downgrade
-barrier: released readers that do not understand the distinct reducer checkpoint cannot open the
-newer store and silently overlook outstanding archive work.
+upload, or advance its cursor while any incomplete rows remain. Version 8 introduced a downgrade
+barrier for the reducer/archive checkpoint; version 9 similarly prevents older readers from replaying
+operations quarantined with `reducerRejectedAt`.
 
 Local actions buffered during a remote-apply window stay ordered until each operation is durable. Transient persistence failures keep the failed suffix queued and block the current sync so a later sync can retry. A deterministically invalid buffered action also remains queued, but requires reload: its reducer already changed live state, so discarding it would let live state diverge from the durable operation log.
 
@@ -1454,27 +1458,12 @@ Conflicts are automatically resolved using Last-Write-Wins (LWW) strategy via `C
 2. **Newer wins**: The side with the newer timestamp wins
 3. **Tie-breaker**: When timestamps are equal, remote wins (server-authoritative)
 
-```typescript
-async autoResolveConflictsLWW(conflicts: EntityConflict[], nonConflictingOps: Operation[]): Promise<void> {
-  for (const conflict of conflicts) {
-    const localMaxTimestamp = Math.max(...conflict.localOps.map(op => op.timestamp));
-    const remoteMaxTimestamp = Math.max(...conflict.remoteOps.map(op => op.timestamp));
-
-    if (localMaxTimestamp > remoteMaxTimestamp) {
-      // Local wins - create new UPDATE op with current entity state
-      const localWinOp = await this._createLocalWinUpdateOp(conflict);
-      // Reject both old local and remote ops
-      await this.opLogStore.markRejected([...localOpIds, ...remoteOpIds]);
-      // New op will sync local state on next upload
-      await this.opLogStore.append(localWinOp, 'local');
-    } else {
-      // Remote wins (including tie)
-      await this.operationApplier.applyOperations(conflict.remoteOps);
-      await this.opLogStore.markRejected(localOpIds);
-    }
-  }
-}
-```
+The selected operation or synthetic merge is persisted and applied before either original side
+is rejected. Only after reducer and archive work succeeds does the service finalize rejections
+and emit the conflict journal entry. A failed resolution therefore leaves the originals eligible
+for retry instead of recording a winner that never entered state. If a synthetic disjoint merge
+cannot pass reducer replay, that synthetic row is quarantined and the same conflict immediately
+falls back to ordinary LWW; a `merged` journal entry is emitted only when the merge itself succeeds.
 
 ### When Local Wins
 

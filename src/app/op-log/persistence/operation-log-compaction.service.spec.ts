@@ -376,6 +376,12 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.resetCompactionCounter).not.toHaveBeenCalled();
     });
 
+    it('should report when regular compaction is skipped', async () => {
+      mockStateSnapshot.getStateSnapshot.and.returnValue({} as never);
+
+      expect(await service.compact()).toBeFalse();
+    });
+
     it('should handle empty vector clock', async () => {
       mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
 

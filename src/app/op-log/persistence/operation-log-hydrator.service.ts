@@ -20,6 +20,7 @@ import {
   OperationLogEntry,
   OpType,
   RepairPayload,
+  isFullStateOpType,
 } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -44,6 +45,14 @@ import {
  * Exported for use in tests.
  */
 export const IDB_OPEN_ERROR_RELOAD_KEY = 'sp_idb_open_reload_attempt';
+
+interface HydrationReplayBatch {
+  operations: Operation[];
+  atomicReplayGroups: string[][];
+  sourceOpIdByReplayedOpId: Map<string, string>;
+  sourceOpIdsWithReplay: Set<string>;
+  sourceEntryByOpId: Map<string, OperationLogEntry>;
+}
 
 /**
  * Handles the hydration (loading) of the application state from the operation log
@@ -283,9 +292,10 @@ export class OperationLogHydratorService {
             // Snapshot will be saved after next batch of regular operations
           } else {
             // A.7.13: Migrate tail operations before replay
-            const opsToReplay = this._migrateTailOps(tailOps.map((e) => e.op));
+            const replayBatch = this._migrateTailOps(tailOps);
+            const opsToReplay = replayBatch.operations;
 
-            const droppedCount = tailOps.length - opsToReplay.length;
+            const droppedCount = tailOps.length - replayBatch.sourceOpIdsWithReplay.size;
             OpLog.normal(
               `OperationLogHydratorService: Replaying ${opsToReplay.length} tail ops ` +
                 `(${droppedCount} dropped during migration).`,
@@ -302,7 +312,7 @@ export class OperationLogHydratorService {
               (await this.clientIdProvider.loadClientId()) ?? undefined;
             const tailOpIds = new Set(tailOps.map((entry) => entry.op.id));
             await this._dispatchHydrationReplay(
-              opsToReplay,
+              replayBatch,
               localClientId,
               pendingRemoteOps.filter((entry) => tailOpIds.has(entry.op.id)),
             );
@@ -376,9 +386,10 @@ export class OperationLogHydratorService {
           // No snapshot save needed - full state ops already contain complete state
         } else {
           // A.7.13: Migrate all operations before replay
-          const opsToReplay = this._migrateTailOps(allOps.map((e) => e.op));
+          const replayBatch = this._migrateTailOps(allOps);
+          const opsToReplay = replayBatch.operations;
 
-          const droppedCount = allOps.length - opsToReplay.length;
+          const droppedCount = allOps.length - replayBatch.sourceOpIdsWithReplay.size;
           OpLog.normal(
             `OperationLogHydratorService: Replaying all ${opsToReplay.length} ops ` +
               `(${droppedCount} dropped during migration).`,
@@ -394,7 +405,7 @@ export class OperationLogHydratorService {
           const localClientId = (await this.clientIdProvider.loadClientId()) ?? undefined;
           const allOpIds = new Set(allOps.map((entry) => entry.op.id));
           await this._dispatchHydrationReplay(
-            opsToReplay,
+            replayBatch,
             localClientId,
             pendingRemoteOps.filter((entry) => allOpIds.has(entry.op.id)),
           );
@@ -466,39 +477,68 @@ export class OperationLogHydratorService {
    * startup can retry archive side effects or save a snapshot past the batch.
    */
   private async _dispatchHydrationReplay(
-    operations: Operation[],
+    replayBatch: HydrationReplayBatch,
     localClientId: string | undefined,
     pendingRemoteOps: OperationLogEntry[],
   ): Promise<void> {
+    const {
+      operations,
+      atomicReplayGroups,
+      sourceOpIdByReplayedOpId,
+      sourceOpIdsWithReplay,
+      sourceEntryByOpId,
+    } = replayBatch;
     const reducerFailures: BulkReplayReducerFailure[] = [];
     this.hydrationStateService.startApplyingRemoteOps();
     try {
       runWithBulkReplayFailureCollector(
         (failure) => reducerFailures.push(failure),
-        () => this.store.dispatch(bulkApplyOperations({ operations, localClientId })),
+        () =>
+          this.store.dispatch(
+            bulkApplyOperations({
+              operations,
+              localClientId,
+              ...(atomicReplayGroups.length > 0 ? { atomicReplayGroups } : {}),
+            }),
+          ),
       );
     } finally {
       this.hydrationStateService.endApplyingRemoteOps();
     }
 
-    const replayedOpIds = new Set(operations.map((op) => op.id));
-    const reducerFailedOpIds = new Set(reducerFailures.map((failure) => failure.op.id));
-    const pendingById = new Map(pendingRemoteOps.map((entry) => [entry.op.id, entry]));
-    const committedPendingOps = operations.filter(
-      (op) => pendingById.has(op.id) && !reducerFailedOpIds.has(op.id),
+    const failedFullStateOp = reducerFailures.find((failure) =>
+      isFullStateOpType(failure.op.opType),
     );
-    const committedPendingSeqs = committedPendingOps.map(
-      (op) => pendingById.get(op.id)!.seq,
+    if (failedFullStateOp) {
+      throw failedFullStateOp.error;
+    }
+
+    const failedLocalOp = reducerFailures.find((failure) => {
+      const sourceOpId = sourceOpIdByReplayedOpId.get(failure.op.id) ?? failure.op.id;
+      return sourceEntryByOpId.get(sourceOpId)?.source === 'local';
+    });
+    if (failedLocalOp) {
+      throw failedLocalOp.error;
+    }
+
+    const reducerFailedSourceOpIds = new Set(
+      reducerFailures.map(
+        (failure) => sourceOpIdByReplayedOpId.get(failure.op.id) ?? failure.op.id,
+      ),
     );
+    const committedPendingEntries = pendingRemoteOps.filter(
+      (entry) =>
+        sourceOpIdsWithReplay.has(entry.op.id) &&
+        !reducerFailedSourceOpIds.has(entry.op.id),
+    );
+    const committedPendingOps = committedPendingEntries.map((entry) => entry.op);
+    const committedPendingSeqs = committedPendingEntries.map((entry) => entry.seq);
     const migratedOutPendingEntries = pendingRemoteOps.filter(
-      (entry) => !replayedOpIds.has(entry.op.id),
+      (entry) => !sourceOpIdsWithReplay.has(entry.op.id),
     );
     const migratedOutPendingOpIds = migratedOutPendingEntries.map((entry) => entry.op.id);
     const rejectedOpIds = [
-      ...new Set([
-        ...reducerFailures.map((failure) => failure.op.id),
-        ...migratedOutPendingOpIds,
-      ]),
+      ...new Set([...reducerFailedSourceOpIds, ...migratedOutPendingOpIds]),
     ];
 
     // Make the entire replay frontier durable before terminally marking any
@@ -568,17 +608,17 @@ export class OperationLogHydratorService {
    * Migrates tail operations to current schema version (A.7.13).
    * Operations that should be dropped (e.g., for removed features) are filtered out.
    *
-   * @param ops - The operations to migrate
-   * @returns Array of migrated operations
+   * @param entries - The durable operation-log rows to migrate
+   * @returns Migrated operations plus their durable source-row lineage
    */
-  private _migrateTailOps(ops: Operation[]): Operation[] {
+  private _migrateTailOps(entries: OperationLogEntry[]): HydrationReplayBatch {
     // Lenient boundary: a malformed stored schemaVersion (legacy or corrupt
     // entry) must not abort the WHOLE hydration into attemptRecovery() — that
     // trades one questionable op for possible tail-data loss on every boot.
     // Strict parsing stays on the receive/upload paths; locally we replay the
     // op verbatim as a best effort (stamping the current version so
     // migrateOperations passes it through unchanged, preserving order).
-    const sanitizedOps = ops.map((op) => {
+    const sanitizedOps = entries.map(({ op }) => {
       try {
         getOperationSchemaVersion(op);
         return op;
@@ -596,15 +636,57 @@ export class OperationLogHydratorService {
       this.schemaMigrationService.operationNeedsMigration(op),
     );
 
+    const sourceOpIdByReplayedOpId = new Map<string, string>();
+    const sourceOpIdsWithReplay = new Set<string>();
+    const sourceEntryByOpId = new Map(entries.map((entry) => [entry.op.id, entry]));
+
     if (!needsMigration) {
-      return sanitizedOps;
+      for (const op of sanitizedOps) {
+        sourceOpIdByReplayedOpId.set(op.id, op.id);
+        sourceOpIdsWithReplay.add(op.id);
+      }
+      return {
+        operations: sanitizedOps,
+        atomicReplayGroups: [],
+        sourceOpIdByReplayedOpId,
+        sourceOpIdsWithReplay,
+        sourceEntryByOpId,
+      };
     }
 
     OpLog.normal(
       `OperationLogHydratorService: Migrating ${sanitizedOps.length} tail ops to current schema version...`,
     );
 
-    return this.schemaMigrationService.migrateOperations(sanitizedOps);
+    const atomicReplayGroups: string[][] = [];
+    const operations = sanitizedOps.flatMap((op) => {
+      const migrationResult = this.schemaMigrationService.operationNeedsMigration(op)
+        ? this.schemaMigrationService.migrateOperation(op)
+        : op;
+      const migratedOps = migrationResult
+        ? Array.isArray(migrationResult)
+          ? migrationResult
+          : [migrationResult]
+        : [];
+      if (migratedOps.length > 0) {
+        sourceOpIdsWithReplay.add(op.id);
+      }
+      if (migratedOps.length > 1) {
+        atomicReplayGroups.push(migratedOps.map((migratedOp) => migratedOp.id));
+      }
+      for (const migratedOp of migratedOps) {
+        sourceOpIdByReplayedOpId.set(migratedOp.id, op.id);
+      }
+      return migratedOps;
+    });
+
+    return {
+      operations,
+      atomicReplayGroups,
+      sourceOpIdByReplayedOpId,
+      sourceOpIdsWithReplay,
+      sourceEntryByOpId,
+    };
   }
 
   /**

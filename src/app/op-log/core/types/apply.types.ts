@@ -39,6 +39,12 @@ export interface ApplyOperationsOptions {
   skipDeferredLocalActions?: boolean;
 
   /**
+   * The caller already owns the remote-apply window and will close it after a
+   * larger multi-pass replay. The applier must not create a gap between passes.
+   */
+  remoteApplyWindowAlreadyOpen?: boolean;
+
+  /**
    * When true, skip the bulk reducer dispatch and run only the archive side
    * effects. Used to retry ops marked `failed`, whose reducer effects already
    * committed (see `ApplyOperationsResult.failedOp`): re-dispatching would

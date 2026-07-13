@@ -754,6 +754,19 @@ describe('OperationApplierService', () => {
       expect(mockOperationLogEffects.processDeferredActions).not.toHaveBeenCalled();
     });
 
+    it('should leave an already-open remote apply window to its caller', async () => {
+      const op = createMockOperation('op-1');
+
+      await service.applyOperations([op], {
+        remoteApplyWindowAlreadyOpen: true,
+        skipDeferredLocalActions: true,
+      });
+
+      expect(mockHydrationState.startApplyingRemoteOps).not.toHaveBeenCalled();
+      expect(mockHydrationState.startPostSyncCooldown).not.toHaveBeenCalled();
+      expect(mockHydrationState.endApplyingRemoteOps).not.toHaveBeenCalled();
+    });
+
     it('should call processDeferredActions after endApplyingRemoteOps', async () => {
       const callOrder: string[] = [];
 

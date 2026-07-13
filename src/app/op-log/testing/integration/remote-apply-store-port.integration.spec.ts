@@ -206,6 +206,44 @@ const defineStorePortContract = (
       });
     });
 
+    it('should keep a reducer-failed full-state operation pending and recoverable', async () => {
+      const importOp = createOperation('failed-import', {
+        opType: OpType.SyncImport,
+        clientId: 'importClient',
+        vectorClock: { importClient: 9 },
+      });
+      const reducerError = new Error('full-state reducer failed');
+      const applier: OperationApplyPort<Operation> = {
+        applyOperations: async (_ops, options) => {
+          await options?.onReducersCommitted?.(
+            [],
+            [{ op: importOp, error: reducerError }],
+          );
+          return {
+            appliedOps: [],
+            reducerFailures: [{ op: importOp, error: reducerError }],
+          };
+        },
+      };
+
+      await expectAsync(
+        applyRemoteOperations({
+          ops: [importOp],
+          store,
+          applier,
+          isFullStateOperation: (op) => op.opType === OpType.SyncImport,
+        }),
+      ).toBeRejectedWithError(/full-state operation.*failed/i);
+
+      const stored = await store.getOpById(importOp.id);
+      expect(stored?.applicationStatus).toBe('pending');
+      expect(stored?.rejectedAt).toBeUndefined();
+      expect(stored?.reducerRejectedAt).toBeUndefined();
+      expect((await store.getPendingRemoteOps()).map((entry) => entry.op.id)).toEqual([
+        importOp.id,
+      ]);
+    });
+
     it('should retain a third-client clock from an operation after a full-state import', async () => {
       const importOp = createOperation('ordered-import', {
         opType: OpType.SyncImport,

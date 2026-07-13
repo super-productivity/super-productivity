@@ -4,6 +4,7 @@ import { replayOperationBatch } from '@sp/sync-core';
 import type {
   ActionDispatchPort,
   OperationApplyPort,
+  RemoteApplyWindowPort,
   SyncActionLike,
 } from '@sp/sync-core';
 import { Operation } from '../core/operation.types';
@@ -29,6 +30,12 @@ export type {
   ApplyOperationsResult,
   ApplyOperationsOptions,
 } from '../core/types/apply.types';
+
+const CALLER_MANAGED_REMOTE_APPLY_WINDOW: RemoteApplyWindowPort = {
+  startApplyingRemoteOps: () => undefined,
+  startPostSyncCooldown: () => undefined,
+  endApplyingRemoteOps: () => undefined,
+};
 
 /**
  * Service responsible for applying operations to the local NgRx store.
@@ -125,7 +132,9 @@ export class OperationApplierService implements OperationApplyPort<Operation> {
       createBulkApplyAction: (operations) =>
         bulkApplyOperations({ operations, localClientId }),
       getReducerFailures: () => reducerFailures,
-      remoteApplyWindow: this.hydrationState,
+      remoteApplyWindow: options.remoteApplyWindowAlreadyOpen
+        ? CALLER_MANAGED_REMOTE_APPLY_WINDOW
+        : this.hydrationState,
       deferredLocalActions: {
         processDeferredActions: () =>
           options.skipDeferredLocalActions

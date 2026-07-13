@@ -622,6 +622,83 @@ describe('bulkHydrationMetaReducer', () => {
       expect(() => reducer(state, action)).not.toThrow();
       expect(callCount).toBe(3);
     });
+
+    it('should roll back every migrated child when one child reducer fails', () => {
+      const state = { applied: [] as string[] };
+      const firstChild = createMockOperation({
+        id: 'split-op-1',
+        actionType: '[Test] Split Child 1' as ActionType,
+      });
+      const failedChild = createMockOperation({
+        id: 'split-op-2',
+        actionType: '[Test] Split Child 2' as ActionType,
+      });
+      const laterOp = createMockOperation({
+        id: 'later-op',
+        actionType: '[Test] Later Operation' as ActionType,
+      });
+      const reducerError = new Error('second migrated child failed');
+      const atomicReducer = jasmine
+        .createSpy('atomicReducer')
+        .and.callFake(
+          (currentState: typeof state, reducerAction: Action): typeof state => {
+            if (reducerAction.type === failedChild.actionType) {
+              throw reducerError;
+            }
+            return {
+              applied: [...currentState.applied, reducerAction.type],
+            };
+          },
+        );
+      const reducer = bulkHydrationMetaReducer(atomicReducer);
+      const failures: Array<{ op: Operation; error: Error }> = [];
+
+      const result = runWithBulkReplayFailureCollector(
+        (failure) => failures.push(failure),
+        () =>
+          reducer(
+            state,
+            bulkApplyHydrationOperations({
+              operations: [firstChild, failedChild, laterOp],
+              atomicReplayGroups: [[firstChild.id, failedChild.id]],
+            }),
+          ),
+      );
+
+      expect(result.applied).toEqual([laterOp.actionType]);
+      expect(failures).toEqual([{ op: failedChild, error: reducerError }]);
+    });
+
+    it('should roll back the whole batch when a full-state reducer fails', () => {
+      const state = { value: 'before-import' };
+      const fullStateOp = createMockOperation({
+        id: 'sync-import',
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        actionType: ActionType.LOAD_ALL_DATA,
+        payload: { appDataComplete: { task: {}, project: {} } },
+      });
+      const laterOp = createMockOperation({ id: 'later-op' });
+      const errorReducer = jasmine
+        .createSpy('errorReducer')
+        .and.callFake(
+          (currentState: typeof state, reducerAction: Action): typeof state => {
+            if (reducerAction.type === ActionType.LOAD_ALL_DATA) {
+              throw new Error('full-state reducer failed');
+            }
+            return { ...currentState, value: 'later-op-applied' };
+          },
+        );
+      const reducer = bulkHydrationMetaReducer(errorReducer);
+
+      const result = reducer(
+        state,
+        bulkApplyHydrationOperations({ operations: [fullStateOp, laterOp] }),
+      );
+
+      expect(result).toBe(state);
+      expect(errorReducer).toHaveBeenCalledTimes(1);
+    });
   });
 
   // =========================================================================
