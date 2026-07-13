@@ -825,7 +825,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Keep saved version",
+        "MSG": "An unsaved draft of this note was recovered, but the note has changed in the meantime (e.g. through sync). Review the recovered draft in the editor or keep the saved version and delete the draft?",
+        "REVIEW_DRAFT": "Review draft"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "You have unsaved changes. Discard them?",
         "TOOLBAR": {
           "BOLD": "Bold",
           "BULLET_LIST": "Bulleted list",
@@ -2318,6 +2324,7 @@
     "CONFIRM": "Confirm",
     "CONTINUE": "Continue",
     "DELETE": "Delete",
+    "DISCARD": "Discard",
     "DISMISS": "Dismiss",
     "DO_IT": "Do it!",
     "DONT_SHOW_AGAIN": "Do not show again",

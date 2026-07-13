@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
-import { EMPTY } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
@@ -13,7 +13,7 @@ import { MOD, shortcutLabels } from './markdown-shortcuts.const';
 describe('DialogFullscreenMarkdownComponent', () => {
   let component: DialogFullscreenMarkdownComponent;
   let fixture: ComponentFixture<DialogFullscreenMarkdownComponent>;
-  let dialogData: { content: string; taskId?: string };
+  let dialogData: { content: string; taskId?: string; originalContent?: string };
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
 
   beforeEach(async () => {
@@ -358,6 +358,72 @@ describe('DialogFullscreenMarkdownComponent', () => {
       component.keydownHandler(event);
 
       expect(component.onApplyBold).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('close with discard', () => {
+    it('should close without confirmation when the content is unmodified', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+
+      component.close(true);
+
+      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({ action: 'DISCARD' });
+    });
+
+    it('should ask for confirmation and close when the user confirms discarding', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(confirmDialogSpy).toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({ action: 'DISCARD' });
+    });
+
+    it('should keep the dialog open when the user does not confirm discarding', () => {
+      spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(false),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(component._matDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it('should use originalContent as the modification reference when provided', () => {
+      dialogData.originalContent = 'persisted content that differs';
+      const recoveredFixture = TestBed.createComponent(DialogFullscreenMarkdownComponent);
+      const recoveredComponent = recoveredFixture.componentInstance;
+      const confirmDialogSpy = spyOn(
+        recoveredComponent['_matDialog'],
+        'open',
+      ).and.returnValue({
+        afterClosed: () => of(false),
+      } as any);
+
+      // content is untouched but differs from originalContent (recovered draft)
+      recoveredComponent.close(true);
+
+      expect(confirmDialogSpy).toHaveBeenCalled();
+      expect(recoveredComponent._matDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('close with save', () => {
+    it('should emit contentChanged synchronously with the final content before closing', () => {
+      // The auto-save stream is debounced; a close right after typing must not
+      // drop the pending emission (crash-safe draft would go stale otherwise).
+      spyOn(component.contentChanged, 'emit');
+      component.data.content = 'final content';
+
+      component.close();
+
+      expect(component.contentChanged.emit).toHaveBeenCalledWith('final content');
+      expect(component._matDialogRef.close).toHaveBeenCalledWith('final content');
     });
   });
 

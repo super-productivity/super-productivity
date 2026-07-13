@@ -46,6 +46,7 @@ import {
   insertTable,
 } from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
+import { DialogConfirmComponent } from '../dialog-confirm/dialog-confirm.component';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { toggleChecklistItemAtIndex } from '../../features/markdown-checklist/checklist-operations';
@@ -91,7 +92,13 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _dateService = inject(DateService);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
-  data: { content: string; taskId?: string } = inject(MAT_DIALOG_DATA) || { content: '' };
+  data: { content: string; taskId?: string; originalContent?: string } = inject(
+    MAT_DIALOG_DATA,
+  ) || { content: '' };
+  // Reference for the discard confirmation. `originalContent` wins when the
+  // dialog is seeded with recovered draft content that differs from the
+  // persisted entity content.
+  protected _initialContent: string = this.data.originalContent ?? this.data.content;
 
   T: typeof T = T;
   viewMode: ViewMode = isSmallScreen() ? 'TEXT_ONLY' : 'SPLIT';
@@ -306,16 +313,44 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   close(isSkipSave: boolean = false): void {
-    // When the "Close" button is hit by the user, the note is closed without saving.
+    // When the "Discard" button is hit by the user, the note is closed without saving
+    // (after confirmation if the content was modified). The explicit result lets
+    // callers tell a user-confirmed discard from the dialog being disposed some
+    // other way (e.g. MatDialog.closeAll()), which emits undefined.
     if (isSkipSave) {
-      this._matDialogRef.close();
+      this._confirmDiscardIfNeeded(() => this._matDialogRef.close({ action: 'DISCARD' }));
       // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
     } else if (!this.data?.content && this.data.content.trim().length < 1) {
       this._matDialogRef.close({ action: 'DELETE' });
       // When the "Save" button is clicked by the user and the note has content, it will save.
     } else {
+      // The auto-save stream is debounced (500ms), so a pending emission would be
+      // dropped on close. Emit synchronously so subscribers (e.g. the crash-safe
+      // draft) see the final content; duplicate emissions are harmless.
+      this.contentChanged.emit(this.data.content);
       this._matDialogRef.close(this.data?.content);
     }
+  }
+
+  protected _confirmDiscardIfNeeded(onDiscard: () => void): void {
+    if ((this.data?.content || '') === this._initialContent) {
+      onDiscard();
+      return;
+    }
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.F.NOTE.D_FULLSCREEN.CONFIRM_DISCARD_MSG,
+          okTxt: T.G.DISCARD,
+        },
+      })
+      .afterClosed()
+      .subscribe((isConfirm: boolean) => {
+        if (isConfirm) {
+          onDiscard();
+        }
+      });
   }
 
   onViewModeChange(): void {
