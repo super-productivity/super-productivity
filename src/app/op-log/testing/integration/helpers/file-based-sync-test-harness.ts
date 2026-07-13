@@ -114,6 +114,10 @@ class MockStateSnapshotService {
     return this._state;
   }
 
+  getStateSnapshotForOperationLog(): unknown {
+    return this._state;
+  }
+
   setState(state: unknown): void {
     this._state = state;
   }

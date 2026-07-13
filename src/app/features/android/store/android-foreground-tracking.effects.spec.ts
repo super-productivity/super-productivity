@@ -1402,12 +1402,7 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       timeSpentOnDay?: Record<string, number>;
     } | null>,
     addTimeSpent: (task: unknown, duration: number, date: string) => void,
-    dispatch: (action: {
-      taskId: string;
-      date: string;
-      duration: number;
-      timeSpentForDay: number;
-    }) => void,
+    dispatch: (action: { taskId: string; date: string; duration: number }) => void,
     resetTrackingStart: () => void,
     snackOpen: (params: { msg: string; type: string }) => void,
     todayStr: string,
@@ -1446,14 +1441,12 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       }
 
       if (duration > 0) {
-        const currentTimeSpentForDay = task.timeSpentOnDay?.[todayStr] || 0;
         addTimeSpent(task, duration, todayStr);
         // Also dispatch syncTimeSpent to capture in operation log
         dispatch({
           taskId: task.id,
           date: todayStr,
           duration,
-          timeSpentForDay: currentTimeSpentForDay + duration,
         });
         resetTrackingStart();
       }
@@ -1514,7 +1507,6 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       taskId: 'task-1',
       date: '2024-01-01',
       duration: expectedDuration,
-      timeSpentForDay: nativeElapsed,
     });
   });
 
@@ -1641,7 +1633,6 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       taskId: 'task-1',
       date: '2024-01-01',
       duration: syncDuration,
-      timeSpentForDay: existingTimeMs + syncDuration,
     });
 
     // Without the dispatch, the 12 minutes would be lost if app closes before flush

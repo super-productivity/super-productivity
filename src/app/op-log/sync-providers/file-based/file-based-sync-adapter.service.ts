@@ -527,7 +527,7 @@ export class FileBasedSyncAdapterService {
 
     // Get current state from NgRx store - this keeps the snapshot up-to-date
     const currentState = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
+      this._stateSnapshotService.getStateSnapshotForOperationLog(),
     );
 
     // Compute oldestOpSyncVersion from the first (oldest) op in mergedOps.
@@ -1149,7 +1149,7 @@ export class FileBasedSyncAdapterService {
     // Note: double-encryption is not a concern here — file-based providers don't expose
     // getEncryptKey, so the upload service never applies payload-level encryption for them.
     const currentState = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
+      this._stateSnapshotService.getStateSnapshotForOperationLog(),
     );
 
     // Load archive data from IndexedDB to include in snapshot
@@ -1489,7 +1489,7 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
   ): Promise<FileBasedStateFile> {
     const state = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshot(),
+      this._stateSnapshotService.getStateSnapshotForOperationLog(),
     );
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const archiveOld = await this._archiveDbAdapter.loadArchiveOld();

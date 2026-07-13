@@ -123,6 +123,29 @@ describe('BatchedTimeSyncAccumulator', () => {
     });
   });
 
+  describe('getPendingEntries', () => {
+    it('should return a detached snapshot of pending durations', () => {
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+
+      const entries = accumulator.getPendingEntries();
+      entries[0].duration = 9999;
+
+      expect(accumulator.getPendingEntries()).toEqual([
+        { id: 'entity1', date: '2024-01-15', duration: 1000 },
+      ]);
+    });
+
+    it('should not return entries that were flushed or cleared', () => {
+      accumulator.accumulate('entity1', 1000, '2024-01-15');
+      accumulator.accumulate('entity2', 2000, '2024-01-15');
+
+      accumulator.flushOne('entity1');
+      accumulator.clearOne('entity2');
+
+      expect(accumulator.getPendingEntries()).toEqual([]);
+    });
+  });
+
   describe('flushOne', () => {
     it('should flush only the specified entity', () => {
       accumulator.accumulate('entity1', 1000, '2024-01-15');

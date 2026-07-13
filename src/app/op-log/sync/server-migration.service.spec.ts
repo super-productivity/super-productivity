@@ -85,7 +85,11 @@ describe('ServerMigrationService', () => {
     stateSnapshotServiceSpy = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
       'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
+    stateSnapshotServiceSpy.getStateSnapshotForOperationLogAsync.and.callFake(() =>
+      stateSnapshotServiceSpy.getStateSnapshotAsync(),
+    );
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     clientIdProviderSpy = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
     matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);

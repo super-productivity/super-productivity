@@ -219,12 +219,16 @@ export const taskReducer = createReducer<TaskState>(
       );
       return state;
     }
+    const currentTask = state.entities[task.id];
+    if (!currentTask) {
+      return state;
+    }
     const currentTimeSpentForTickDay =
-      (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
+      (currentTask.timeSpentOnDay && +currentTask.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
       task.id,
       {
-        ...task.timeSpentOnDay,
+        ...currentTask.timeSpentOnDay,
         [date]: currentTimeSpentForTickDay + duration,
       },
       state,
@@ -233,16 +237,16 @@ export const taskReducer = createReducer<TaskState>(
 
   // Sync time spent from operation replay.
   // Local: no-op (state already updated by addTimeSpent ticks).
-  // Own replay: restore the captured absolute total, which is idempotent even if a
-  // snapshot contains part of the same batch. Foreign replay remains additive so
-  // two devices tracking concurrently do not overwrite each other's durations.
+  // Replay is additive for every client so concurrent tracking contributions are
+  // preserved. Op-log/file snapshots project pending local batches out before they
+  // are persisted, preventing a snapshot from overlapping a later delta operation.
   on(syncTimeSpent, (state, action) => {
     // Only apply for remote actions - local state is already up-to-date
     if (!(action.meta as PersistentActionMeta).isRemote) {
       return state;
     }
 
-    const { taskId, date, duration, timeSpentForDay } = action;
+    const { taskId, date, duration } = action;
     const task = state.entities[taskId];
     if (!task) {
       TaskLog.warn(`[syncTimeSpent] Task ${taskId} not found, skipping`);
@@ -257,19 +261,11 @@ export const taskReducer = createReducer<TaskState>(
 
     const currentTimeSpentForDay =
       (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
-    const hasCapturedTotal =
-      typeof timeSpentForDay === 'number' && Number.isFinite(timeSpentForDay);
-    const isOwnOpReplay = !(action.meta as PersistentActionMeta)
-      .isApplyingFromOtherClient;
-    const nextTimeSpentForDay =
-      hasCapturedTotal && isOwnOpReplay
-        ? timeSpentForDay
-        : currentTimeSpentForDay + duration;
     return updateTimeSpentForTask(
       taskId,
       {
         ...task.timeSpentOnDay,
-        [date]: nextTimeSpentForDay,
+        [date]: currentTimeSpentForDay + duration,
       },
       state,
     );

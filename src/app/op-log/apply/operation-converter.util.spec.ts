@@ -399,6 +399,26 @@ describe('operation-converter utility', () => {
 
         expect((action as any).today).toBe('2024-06-14');
       });
+
+      it('uses a timezone-independent UTC day near midnight', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 23, 30),
+          payload: { taskIds: ['task-1'] },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('replaces an invalid captured day with the deterministic fallback', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { taskIds: ['task-1'], today: '' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
     });
 
     describe('legacy convertToMainTask date backfill', () => {
@@ -440,6 +460,27 @@ describe('operation-converter utility', () => {
         expect(action.doneOn).toBe(1718352000000);
         expect(action.modified).toBe(1718352000000);
       });
+
+      it('replaces invalid captured dates and timestamps', () => {
+        const timestamp = Date.UTC(2024, 5, 14, 12);
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp,
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isDone: true,
+            today: 'invalid',
+            doneOn: Number.POSITIVE_INFINITY,
+            modified: Number.NaN,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(timestamp);
+        expect(action.modified).toBe(timestamp);
+      });
     });
 
     describe('legacy unscheduleTask date backfill', () => {
@@ -465,6 +506,16 @@ describe('operation-converter utility', () => {
         const action = convertOpToAction(op) as any;
 
         expect(action.today).toBeUndefined();
+      });
+
+      it('replaces an invalid captured day when leaving the task in Today', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { id: 'task-1', isLeaveInToday: true, today: '' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
       });
     });
 
@@ -528,6 +579,25 @@ describe('operation-converter utility', () => {
 
         expect(action.task.changes.doneOn).toBe(1718352000000);
         expect(action.task.changes.dueDay).toBe('2024-06-14');
+      });
+
+      it('replaces a non-finite doneOn timestamp', () => {
+        const timestamp = Date.UTC(2024, 5, 14, 12);
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: {
+                id: 'task-1',
+                changes: { isDone: true, doneOn: Number.NaN },
+              },
+            },
+            entityChanges: [],
+          },
+        });
+
+        expect((convertOpToAction(op) as any).task.changes.doneOn).toBe(timestamp);
       });
 
       it('does not inject done fields for undone updates', () => {

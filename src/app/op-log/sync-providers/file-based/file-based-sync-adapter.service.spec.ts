@@ -149,6 +149,7 @@ describe('FileBasedSyncAdapterService', () => {
 
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
     ]);
     mockStateSnapshotService.getStateSnapshot.and.returnValue({
       tasks: [],
@@ -164,6 +165,9 @@ describe('FileBasedSyncAdapterService', () => {
         },
       },
     } as any);
+    mockStateSnapshotService.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshotService.getStateSnapshot(),
+    );
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
@@ -816,7 +820,7 @@ describe('FileBasedSyncAdapterService', () => {
   });
 
   describe('uploadSnapshot', () => {
-    it('should create new sync file with state from getStateSnapshot (not the passed parameter)', async () => {
+    it('should create new sync file with replay-safe state (not the passed parameter)', async () => {
       mockProvider.downloadFile.and.throwError(
         new RemoteFileNotFoundAPIError('sync-data.json'),
       );
@@ -843,6 +847,7 @@ describe('FileBasedSyncAdapterService', () => {
       );
 
       expect(result.accepted).toBe(true);
+      expect(mockStateSnapshotService.getStateSnapshotForOperationLog).toHaveBeenCalled();
       const uploadedData = parseWithPrefix(uploadedDataStr);
       // State should come from getStateSnapshot(), not the passed parameter
       expect(uploadedData.state).toEqual(

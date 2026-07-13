@@ -220,11 +220,10 @@ export class OperationCaptureService {
    * so we capture from the action payload instead of state diffing.
    */
   private _captureTaskTimeSyncFromAction(action: PersistentAction): EntityChange[] {
-    const { taskId, date, duration, timeSpentForDay } = action as unknown as {
+    const { taskId, date, duration } = action as unknown as {
       taskId: string;
       date: string;
       duration: number;
-      timeSpentForDay?: number;
     };
 
     return [
@@ -236,7 +235,6 @@ export class OperationCaptureService {
           taskId,
           date,
           duration,
-          ...(typeof timeSpentForDay === 'number' ? { timeSpentForDay } : {}),
         },
       },
     ];

@@ -20,7 +20,9 @@ import { selectPluginMetadataFeatureState } from '../../plugins/store/plugin-met
 import { selectReminderFeatureState } from '../../features/reminder/store/reminder.reducer';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
-import { TaskState } from '../../features/tasks/task.model';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { DEFAULT_TASK, Task, TaskState } from '../../features/tasks/task.model';
+import { initialTaskState } from '../../features/tasks/store/task.reducer';
 
 describe('StateSnapshotService', () => {
   let service: StateSnapshotService;
@@ -171,6 +173,31 @@ describe('StateSnapshotService', () => {
 
       expect((snapshot.task as any).ids).toEqual(['task1']);
       expect((snapshot.task as any).entities).toBeDefined();
+    });
+
+    it('should exclude pending task time from an operation-log snapshot', () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 'task1',
+        title: 'Test Task',
+        created: 1,
+        projectId: 'project-1',
+        timeSpentOnDay: { ['2024-01-15']: 5000 },
+        timeSpent: 5000,
+      } as Task;
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        ids: ['task1'],
+        entities: { task1: task },
+      });
+      store.refreshState();
+      TestBed.inject(TaskTimeSyncService).accumulate('task1', 5000, '2024-01-15');
+
+      const liveSnapshot = service.getStateSnapshot();
+      const opLogSnapshot = service.getStateSnapshotForOperationLog();
+
+      expect((liveSnapshot.task as TaskState).entities['task1']!.timeSpent).toBe(5000);
+      expect((opLogSnapshot.task as TaskState).entities['task1']!.timeSpent).toBe(0);
     });
   });
 

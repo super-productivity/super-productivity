@@ -211,7 +211,7 @@ export class ServerMigrationService {
       // Get current full state from NgRx store (async to include archives from IndexedDB)
       // Cast to Record for validation compatibility
       let currentState: Record<string, unknown> =
-        (await this.stateSnapshotService.getStateSnapshotAsync()) as unknown as Record<
+        (await this.stateSnapshotService.getStateSnapshotForOperationLogAsync()) as unknown as Record<
           string,
           unknown
         >;

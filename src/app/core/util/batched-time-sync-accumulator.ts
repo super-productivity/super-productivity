@@ -1,5 +1,11 @@
 import { Log } from '../log';
 
+export interface BatchedTimeSyncEntry {
+  id: string;
+  duration: number;
+  date: string;
+}
+
 /**
  * Handles batched accumulation and flushing of time tracking data.
  * Used by TaskService and SimpleCounterService to reduce sync frequency.
@@ -33,6 +39,17 @@ export class BatchedTimeSyncAccumulator {
    */
   shouldFlush(): boolean {
     return Date.now() - this._lastSyncTime >= this._syncIntervalMs;
+  }
+
+  /**
+   * Returns a detached snapshot for replay-safe state projection.
+   */
+  getPendingEntries(): BatchedTimeSyncEntry[] {
+    return Array.from(this._unsyncedDuration, ([id, { duration, date }]) => ({
+      id,
+      duration,
+      date,
+    }));
   }
 
   /**

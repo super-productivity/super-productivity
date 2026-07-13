@@ -9,7 +9,21 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { isSingletonEntityId } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { SyncLog } from '../../core/log';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { isDBDateStr } from '../../util/get-db-date-str';
+
+const isValidDbDate = (value: unknown): value is string =>
+  typeof value === 'string' && isDBDateStr(value);
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+/**
+ * Legacy operations did not capture the originating logical day or timezone.
+ * UTC cannot recover that lost context, but it gives every replaying client the
+ * same deterministic best-effort fallback.
+ */
+const getDeterministicLegacyDay = (timestamp: number): string =>
+  new Date(timestamp).toISOString().slice(0, 10);
 
 /**
  * Maps old/renamed action types to their current names.
@@ -51,15 +65,11 @@ const addLegacyPlanForTodayDate = (
 ): Record<string, unknown> => {
   if (
     actionType === ActionType.TASK_SHARED_PLAN_FOR_TODAY &&
-    typeof actionPayload['today'] !== 'string'
+    !isValidDbDate(actionPayload['today'])
   ) {
-    // Legacy operations did not store the logical day, timezone, or start-of-next-day
-    // offset. The timestamp is the best available fallback, but it is interpreted in
-    // the replaying device's local timezone and can still be off near midnight or for
-    // dueWithTime values around a different original day-start offset.
     return {
       ...actionPayload,
-      today: getDbDateStr(op.timestamp),
+      today: getDeterministicLegacyDay(op.timestamp),
     };
   }
   return actionPayload;
@@ -76,20 +86,17 @@ const addLegacyConvertToMainTaskDates = (
 
   return {
     ...actionPayload,
-    today:
-      typeof actionPayload['today'] === 'string'
-        ? actionPayload['today']
-        : getDbDateStr(op.timestamp),
-    modified:
-      typeof actionPayload['modified'] === 'number'
-        ? actionPayload['modified']
-        : op.timestamp,
+    today: isValidDbDate(actionPayload['today'])
+      ? actionPayload['today']
+      : getDeterministicLegacyDay(op.timestamp),
+    modified: isFiniteNumber(actionPayload['modified'])
+      ? actionPayload['modified']
+      : op.timestamp,
     ...(actionPayload['isDone'] === true
       ? {
-          doneOn:
-            typeof actionPayload['doneOn'] === 'number'
-              ? actionPayload['doneOn']
-              : op.timestamp,
+          doneOn: isFiniteNumber(actionPayload['doneOn'])
+            ? actionPayload['doneOn']
+            : op.timestamp,
         }
       : {}),
   };
@@ -103,14 +110,14 @@ const addLegacyUnscheduleDate = (
   if (
     actionType !== ActionType.TASK_SHARED_UNSCHEDULE ||
     actionPayload['isLeaveInToday'] !== true ||
-    typeof actionPayload['today'] === 'string'
+    isValidDbDate(actionPayload['today'])
   ) {
     return actionPayload;
   }
 
   return {
     ...actionPayload,
-    today: getDbDateStr(op.timestamp),
+    today: getDeterministicLegacyDay(op.timestamp),
   };
 };
 
@@ -139,7 +146,7 @@ const addReplaySafeDoneFields = (
     return actionPayload;
   }
 
-  const hasDoneOn = typeof taskChanges['doneOn'] === 'number';
+  const hasDoneOn = isFiniteNumber(taskChanges['doneOn']);
 
   const replaySafeChanges = {
     ...taskChanges,
