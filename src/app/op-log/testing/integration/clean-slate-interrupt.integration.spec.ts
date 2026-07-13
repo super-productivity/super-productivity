@@ -7,6 +7,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
 import { Operation } from '../../core/operation.types';
 import { SINGLETON_KEY, STORE_NAMES } from '../../persistence/db-keys.const';
+import { TaskTimeSyncService } from '../../../features/tasks/task-time-sync.service';
 
 /**
  * Integration tests for issue #7709 — `createCleanSlate` / `BackupService` import
@@ -30,6 +31,7 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
   let cleanSlate: CleanSlateService;
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
   let mockTranslate: jasmine.SpyObj<TranslateService>;
+  let mockTaskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
 
   const meaningfulState = {
     task: {
@@ -46,10 +48,13 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
   beforeEach(async () => {
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
-      'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
     mockStateSnapshot.getStateSnapshot.and.returnValue(meaningfulState as any);
-    mockStateSnapshot.getStateSnapshotAsync.and.resolveTo(meaningfulState as any);
+    mockStateSnapshot.getStateSnapshotForOperationLogAsync.and.resolveTo(
+      meaningfulState as any,
+    );
+    mockTaskTimeSync = jasmine.createSpyObj('TaskTimeSyncService', ['flush']);
 
     mockTranslate = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslate.instant.and.callFake((k: string) => k);
@@ -60,6 +65,7 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         SyncLocalStateService,
         CleanSlateService,
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
+        { provide: TaskTimeSyncService, useValue: mockTaskTimeSync },
         { provide: TranslateService, useValue: mockTranslate },
       ],
     });

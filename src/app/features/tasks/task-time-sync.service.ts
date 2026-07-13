@@ -1,6 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
+import {
+  BatchedTimeSyncAccumulator,
+  BatchedTimeSyncEntry,
+} from '../../core/util/batched-time-sync-accumulator';
 import { AppStateSnapshot } from '../../op-log/core/types/backup.types';
 import { RootState } from '../../root-store/root-state';
 import { syncTimeSpent } from '../time-tracking/store/time-tracking.actions';
@@ -41,8 +44,18 @@ export class TaskTimeSyncService {
     this._accumulator.clearOne(taskId);
   }
 
-  projectSnapshot(snapshot: AppStateSnapshot): AppStateSnapshot {
-    const pendingEntries = this._accumulator.getPendingEntries();
+  clear(): void {
+    this._accumulator.clear();
+  }
+
+  projectSnapshot(
+    snapshot: AppStateSnapshot,
+    additionalPendingEntries: BatchedTimeSyncEntry[] = [],
+  ): AppStateSnapshot {
+    const pendingEntries = [
+      ...this._accumulator.getPendingEntries(),
+      ...additionalPendingEntries,
+    ];
     if (pendingEntries.length === 0) {
       return snapshot;
     }

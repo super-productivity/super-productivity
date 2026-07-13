@@ -11,6 +11,7 @@ import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 /**
  * Reason a clean-slate was triggered. Logged for diagnostic correlation
@@ -47,6 +48,7 @@ export class CleanSlateService {
   private opLogStore = inject(OperationLogStoreService);
   private operationWriteFlushService = inject(OperationWriteFlushService);
   private lockService = inject(LockService);
+  private taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
    * Creates a clean slate by resetting local operation log and preparing
@@ -67,6 +69,10 @@ export class CleanSlateService {
     reason: CleanSlateReason,
     syncImportReason: SyncImportReason,
   ): Promise<void> {
+    // Move the current timer batch into the op log before fixing the new
+    // baseline. Deltas that arrive after this flush remain projected out and
+    // are persisted as tail operations after the replacement.
+    this.taskTimeSyncService.flush();
     await this.operationWriteFlushService.flushPendingWrites();
 
     const { syncImportId } = await this.lockService.request(
@@ -98,7 +104,8 @@ export class CleanSlateService {
         // IMPORTANT: must use the async version to load real archives from
         // IndexedDB. The sync getStateSnapshot() returns DEFAULT_ARCHIVE (empty)
         // which causes data loss.
-        const currentState = await this.stateSnapshotService.getStateSnapshotAsync();
+        const currentState =
+          await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
 
         // Mint a fresh clientId for the new sync baseline. It is pure here —
         // persisted only inside runDestructiveStateReplacement's atomic

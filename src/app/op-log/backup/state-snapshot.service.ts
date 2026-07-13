@@ -24,6 +24,7 @@ import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { OperationCaptureService } from '../capture/operation-capture.service';
 
 import { AppStateSnapshot } from '../core/types/backup.types';
 
@@ -105,6 +106,7 @@ export class StateSnapshotService {
   private _store = inject(Store);
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
   private _taskTimeSync = inject(TaskTimeSyncService);
+  private _operationCapture = inject(OperationCaptureService);
 
   /**
    * Gets all sync model data from NgRx store.
@@ -127,7 +129,10 @@ export class StateSnapshotService {
    * that are still waiting in the local batch accumulator.
    */
   getStateSnapshotForOperationLog(): AppStateSnapshot {
-    return this._taskTimeSync.projectSnapshot(this.getStateSnapshot());
+    return this._taskTimeSync.projectSnapshot(
+      this.getStateSnapshot(),
+      this._operationCapture.getPendingTaskTimeEntries(),
+    );
   }
 
   /**
@@ -163,7 +168,15 @@ export class StateSnapshotService {
 
   /** Async archive-inclusive counterpart of getStateSnapshotForOperationLog(). */
   async getStateSnapshotForOperationLogAsync(): Promise<AppStateSnapshot> {
-    return this._taskTimeSync.projectSnapshot(await this.getStateSnapshotAsync());
+    // Capture immutable NgRx references synchronously at the operation boundary.
+    // Archive reads can await IndexedDB without allowing later reducer updates to
+    // drift into a snapshot whose operation sequence was already fixed.
+    const snapshot = this.getStateSnapshotForOperationLog();
+    const [archiveYoung, archiveOld] = await Promise.all([
+      this._loadArchive('archiveYoung'),
+      this._loadArchive('archiveOld'),
+    ]);
+    return { ...snapshot, archiveYoung, archiveOld };
   }
 
   /**

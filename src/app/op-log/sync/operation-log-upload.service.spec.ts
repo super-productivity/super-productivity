@@ -11,11 +11,13 @@ import { EncryptNoPasswordError } from '../core/errors/sync-errors';
 import { ActionType, OpType, OperationLogEntry } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
 
 describe('OperationLogUploadService', () => {
   let service: OperationLogUploadService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
 
   const createMockEntry = (
     seq: number,
@@ -48,6 +50,12 @@ describe('OperationLogUploadService', () => {
       'deleteOpsWhere',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
+    mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
+      'getStateSnapshotForOperationLog',
+    ]);
+    mockStateSnapshotService.getStateSnapshotForOperationLog.and.returnValue({
+      task: { ids: [], entities: {} },
+    } as any);
 
     // Default mock implementations
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
@@ -63,6 +71,7 @@ describe('OperationLogUploadService', () => {
         provideMockStore(),
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: LockService, useValue: mockLockService },
+        { provide: StateSnapshotService, useValue: mockStateSnapshotService },
         {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
@@ -282,6 +291,33 @@ describe('OperationLogUploadService', () => {
           'sp_op_log_upload',
           jasmine.any(Function),
         );
+      });
+
+      it('should capture and pass file state under the operation-log lock', async () => {
+        mockApiProvider.providerMode = 'fileSnapshotOps';
+        mockOpLogStore.getUnsynced.and.returnValue(
+          Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
+        );
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          }),
+        );
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const operationLockCall = mockLockService.request.calls
+          .allArgs()
+          .find(([name]) => name === 'sp_op_log');
+        expect(operationLockCall).toBeDefined();
+        expect(
+          mockStateSnapshotService.getStateSnapshotForOperationLog,
+        ).toHaveBeenCalled();
+        expect(mockApiProvider.uploadOps.calls.mostRecent().args[3]).toEqual({
+          task: { ids: [], entities: {} },
+        } as any);
       });
 
       it('should return empty result when no pending ops', async () => {
@@ -1687,10 +1723,10 @@ describe('OperationLogUploadService', () => {
         const callOrder: string[] = [];
 
         mockLockService.request.and.callFake(
-          async <T>(_name: string, fn: () => Promise<T>) => {
-            callOrder.push('lock-acquired');
+          async <T>(name: string, fn: () => Promise<T>) => {
+            callOrder.push(`${name}-acquired`);
             const r = await fn();
-            callOrder.push('lock-released');
+            callOrder.push(`${name}-released`);
             return r;
           },
         );
@@ -1702,11 +1738,14 @@ describe('OperationLogUploadService', () => {
         await service.uploadPendingOps(mockApiProvider, { preUploadCallback: callback });
 
         expect(callback).toHaveBeenCalled();
-        // Verify callback was called INSIDE the lock
+        // The callback owns its operation-log transaction; this service keeps
+        // it inside upload serialization and then captures the upload boundary.
         expect(callOrder).toEqual([
-          'lock-acquired',
+          'sp_op_log_upload-acquired',
           'callback-executed',
-          'lock-released',
+          'sp_op_log-acquired',
+          'sp_op_log-released',
+          'sp_op_log_upload-released',
         ]);
       });
 
@@ -1775,6 +1814,7 @@ describe('OperationLogUploadService', () => {
           [jasmine.objectContaining(callbackCreatedEntry.op)],
           'client-1',
           jasmine.any(Number),
+          undefined,
         );
       });
     });

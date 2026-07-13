@@ -25,6 +25,8 @@ import { OperationEncryptionService } from '../../op-log/sync/operation-encrypti
 import { isCryptoSubtleAvailable } from '@sp/sync-core';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { LockService } from '../../op-log/sync/lock.service';
+import { LOCK_NAMES } from '../../op-log/core/operation-log.const';
 
 /**
  * Data gathered for a snapshot upload operation.
@@ -71,6 +73,7 @@ export class SnapshotUploadService {
   private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _encryptionService = inject(OperationEncryptionService);
   private _opLogStore = inject(OperationLogStoreService);
+  private _lockService = inject(LockService);
 
   /**
    * Validates that the active provider is SuperSync and operation-sync capable.
@@ -122,7 +125,7 @@ export class SnapshotUploadService {
     // The sync getStateSnapshot() returns DEFAULT_ARCHIVE (empty) which causes data loss
     SyncLog.normal(`${prefix}Getting current state...`);
     const state = stripLocalOnlySyncSettingsFromAppData(
-      await this._stateSnapshotService.getStateSnapshotAsync(),
+      await this._stateSnapshotService.getStateSnapshotForOperationLogAsync(),
     ) as AppStateSnapshot;
     const vectorClock = await this._vectorClockService.getCurrentVectorClock();
     const clientId = await this._clientIdProvider.getOrGenerateClientId();
@@ -235,10 +238,14 @@ export class SnapshotUploadService {
     // otherwise re-push the entire local history on top of the snapshot). Mirrors
     // planRegularOpsAfterFullStateUpload in the op-log upload path, which this
     // direct snapshot upload bypasses.
-    const opsSubsumedBySnapshot = await this._opLogStore.getUnsynced();
-
-    const { syncProvider, existingCfg, state, vectorClock, clientId } =
-      await this.gatherSnapshotData(logPrefix);
+    const { opsSubsumedBySnapshot, snapshotData } = await this._lockService.request(
+      LOCK_NAMES.OPERATION_LOG,
+      async () => ({
+        opsSubsumedBySnapshot: await this._opLogStore.getUnsynced(),
+        snapshotData: await this.gatherSnapshotData(logPrefix),
+      }),
+    );
+    const { syncProvider, existingCfg, state, vectorClock, clientId } = snapshotData;
 
     // GHSA-9v8x-68pf-p5x7 defense-in-depth: a provider that mandates E2E
     // encryption (SuperSync) must never have a plaintext snapshot pushed. Fail

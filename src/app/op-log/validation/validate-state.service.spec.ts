@@ -65,7 +65,7 @@ describe('ValidateStateService', () => {
 
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
-      'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
     mockClientIdProvider = {
       loadClientId: jasmine
@@ -233,7 +233,9 @@ describe('ValidateStateService', () => {
       const result = await service.validateAndRepairCurrentState('test-context');
 
       expect(result).toBeTrue();
-      expect(mockStateSnapshotService.getStateSnapshotAsync).not.toHaveBeenCalled();
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync,
+      ).not.toHaveBeenCalled();
       expect(mockRepairService.createRepairOperation).not.toHaveBeenCalled();
       expect(store.dispatch).not.toHaveBeenCalled();
     });
@@ -250,7 +252,9 @@ describe('ValidateStateService', () => {
           projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
         };
         mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(invalidState as any);
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+          invalidState as any,
+        );
         mockClientIdProvider.loadClientId.and.returnValue(Promise.resolve(null));
 
         const result = await service.validateAndRepairCurrentState('sync');
@@ -265,7 +269,9 @@ describe('ValidateStateService', () => {
     it('should pass skipLock option to repair service when callerHoldsLock is true', async () => {
       const state = createEmptyState();
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        state as any,
+      );
 
       // Mock validateAndRepair to return repaired state
       spyOn(service, 'validateAndRepair').and.resolveTo({
@@ -288,7 +294,9 @@ describe('ValidateStateService', () => {
     it('should start/end hydration state for sync contexts', async () => {
       const state = createEmptyState();
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        state as any,
+      );
 
       // Mock validateAndRepair to return repaired state
       spyOn(service, 'validateAndRepair').and.resolveTo({
@@ -316,7 +324,9 @@ describe('ValidateStateService', () => {
           projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
         };
         mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(invalidState as any);
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+          invalidState as any,
+        );
 
         await service.validateAndRepairCurrentState('other-context');
 
@@ -338,7 +348,9 @@ describe('ValidateStateService', () => {
           projectTree: [{ id: 'ORPHAN', k: MenuTreeKind.PROJECT }],
         };
         mockStateSnapshotService.getStateSnapshot.and.returnValue(invalidState as any);
-        mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(invalidState as any);
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+          invalidState as any,
+        );
         mockHydrationStateService.isApplyingRemoteOps.and.returnValue(true);
 
         await service.validateAndRepairCurrentState('sync');
@@ -354,7 +366,9 @@ describe('ValidateStateService', () => {
     it('should dispatch loadAllData with isRemote flag for sync contexts', async () => {
       const state = createEmptyState();
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        state as any,
+      );
 
       // Mock validateAndRepair to return repaired state
       spyOn(service, 'validateAndRepair').and.resolveTo({
@@ -374,7 +388,9 @@ describe('ValidateStateService', () => {
     it('should dispatch loadAllData without isRemote flag for non-sync contexts', async () => {
       const state = createEmptyState();
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(state as any);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        state as any,
+      );
 
       // Mock validateAndRepair to return repaired state
       spyOn(service, 'validateAndRepair').and.resolveTo({
@@ -410,7 +426,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(
         createEmptyState() as any,
       );
-      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
         stateWithArchive as any,
       );
 
@@ -424,7 +440,9 @@ describe('ValidateStateService', () => {
       await service.validateAndRepairCurrentState('sync');
 
       // The repair path must load the async snapshot (archives from IndexedDB).
-      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync,
+      ).toHaveBeenCalled();
 
       // The state fed into validation/repair must include the archive...
       const validatedState = validateAndRepairSpy.calls.mostRecent().args[0];

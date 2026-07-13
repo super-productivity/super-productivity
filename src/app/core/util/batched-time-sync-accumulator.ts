@@ -63,13 +63,16 @@ export class BatchedTimeSyncAccumulator {
     this._unsyncedDuration.clear();
     this._lastSyncTime = Date.now();
 
-    // Dispatch each entry, catching errors individually
+    // Dispatch each entry, catching errors individually. A failed dispatch is
+    // restored to the accumulator so snapshot projection keeps excluding it and
+    // the next timer tick/explicit flush can retry it.
     for (const [id, { duration, date }] of entries) {
       if (duration > 0) {
         try {
           this._dispatchSync(id, date, duration);
         } catch (e) {
           Log.error('[BatchedTimeSyncAccumulator] Error dispatching sync for', id, e);
+          this._restoreAfterDispatchFailure(id, date, duration);
         }
       }
     }
@@ -88,6 +91,7 @@ export class BatchedTimeSyncAccumulator {
         this._dispatchSync(id, accumulated.date, accumulated.duration);
       } catch (e) {
         Log.error('[BatchedTimeSyncAccumulator] Error dispatching sync for', id, e);
+        this._restoreAfterDispatchFailure(id, accumulated.date, accumulated.duration);
       }
     }
   }
@@ -99,10 +103,34 @@ export class BatchedTimeSyncAccumulator {
     this._unsyncedDuration.delete(id);
   }
 
+  /** Clears all accumulated data without dispatching it. */
+  clear(): void {
+    this._unsyncedDuration.clear();
+    this._lastSyncTime = Date.now();
+  }
+
   /**
    * Resets last sync time (call after flushing secondary data).
    */
   resetSyncTime(): void {
     this._lastSyncTime = Date.now();
+  }
+
+  private _restoreAfterDispatchFailure(id: string, date: string, duration: number): void {
+    const current = this._unsyncedDuration.get(id);
+    if (!current) {
+      this._unsyncedDuration.set(id, { date, duration });
+    } else if (current.date === date) {
+      current.duration += duration;
+    } else {
+      // JavaScript dispatch is synchronous, so a different-date entry cannot
+      // normally appear here. Preserve the newer entry and surface the anomaly.
+      Log.error(
+        '[BatchedTimeSyncAccumulator] Could not restore failed sync for older date',
+        id,
+      );
+    }
+    // Make the next shouldFlush() check retry immediately.
+    this._lastSyncTime = 0;
   }
 }
