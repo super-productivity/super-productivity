@@ -2172,7 +2172,6 @@
       "HELP": "Pokaż okno dialogowe, gdy wykryto bezczynność (brak aktywności) podczas śledzenia czasu.",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Włącz wykrywanie bezczynności",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Pokazuj okno bezczynności tylko wtedy, gdy jest ustawione bieżące zadanie",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ukryj okno bezczynnosci podczas sesji skupienia",
       "MIN_IDLE_TIME": "Wykryj bezczynność po X",
       "TITLE": "Wykrywanie bezczynności"
     },

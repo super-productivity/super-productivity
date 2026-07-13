@@ -124,9 +124,9 @@ export class IdleEffects {
             ? of(resetIdle())
             : this._triggerIdleApis$.pipe(
                 withLatestFrom(
-                    this._store.select(selectIsIdle),
-                    this._isFocusSessionRunning$,
-                  ),
+                  this._store.select(selectIsIdle),
+                  this._isFocusSessionRunning$,
+                ),
                 switchMap(([idleTimeInMs, isAlreadyIdle, isFocusSessionRunning]) => {
                   // Skip if already in idle state - let internal poll timer handle updates
                   if (isAlreadyIdle) {

@@ -2341,7 +2341,6 @@
       "HELP": "<div><p>Wenn die Behandlung von Leerlaufzeiten aktiviert ist, wird nach einer festgelegten Zeit ein Dialogfeld geöffnet, in dem überprüft wird, ob und für welche Aufgabe du deine Zeit erfassen möchtest, wenn du im Leerlauf warst.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktiviere die Leerlaufbehandlung",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Leerlaufdialog nur anzeigen, wenn eine aktuelle Aufgabe ausgewählt ist",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Leerlaufdialog waehrend Fokus-Sitzungen unterdruecken",
       "MIN_IDLE_TIME": "Leerlauf nach X auslösen",
       "TITLE": "Leerlaufbehandlung"
     },

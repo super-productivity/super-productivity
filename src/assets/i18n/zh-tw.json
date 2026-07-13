@@ -2184,7 +2184,6 @@
       "HELP": "<div><p>啟用閒置時間處理後，在指定時間後將開啟對話方塊，以檢查您是否要在閒置時追蹤時間（以及追蹤在哪個工作上）。</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "啟用閒置時間處理",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "僅在選擇當前工作時觸發閒置時間對話方塊",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "專注模式下不顯示閒置彈窗",
       "MIN_IDLE_TIME": "在 X 後觸發閒置",
       "TITLE": "閒置處理"
     },

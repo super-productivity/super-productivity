@@ -2205,7 +2205,6 @@
       "HELP": "<div><p>Khi xử lý thời gian rảnh được bật, một hộp thoại sẽ mở ra sau một khoảng thời gian nhất định để kiểm tra xem bạn có muốn theo dõi thời gian cho công việc nào không khi bạn rảnh.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Bật xử lý thời gian rảnh",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Chỉ kích hoạt hộp thoại thời gian rảnh khi công việc hiện tại được chọn",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "An hop thoai khong hoat dong trong phien tap trung",
       "MIN_IDLE_TIME": "Kích hoạt rảnh sau X",
       "TITLE": "Xử lý thời gian rảnh"
     },

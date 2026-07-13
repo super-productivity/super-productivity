@@ -2127,7 +2127,6 @@
       "HELP": "<div><p>عند تمكين معالجة وقت الخمول ، سيتم فتح مربع حوار بعد فترة زمنية محددة للتحقق مما إذا كانت المهمة التي ترغب في تتبع وقتك عليها ، وعندما تكون خاملة.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "تمكين معالجة وقت الخمول",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "قم بتشغيل مربع حوار وقت الخمول فقط عند تحديد مهمة حالية",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suppress idle dialog during focus mode sessions",
       "MIN_IDLE_TIME": "الخمول الزناد بعد X",
       "TITLE": "الخمول المناولة"
     },

@@ -2197,7 +2197,6 @@
       "HELP": "<div><p>启用空闲时间处理后，将在指定时间后打开一个对话框，以检查您是否希望跟踪时间，以及希望跟踪哪个任务的时间，当您一直空闲时。</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "启用空闲时间处理",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "仅当选择了当前任务时才触发空闲时间对话框",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "专注模式下不显示闲置弹窗",
       "MIN_IDLE_TIME": "在 X 后触发空闲",
       "TITLE": "空闲处理"
     },

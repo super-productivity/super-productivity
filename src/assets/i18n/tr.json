@@ -2353,7 +2353,6 @@
       "HELP": "<div><p>Boşta kalma süresi işleme etkinleştirildiğinde, boşta olduğunuzda, hangi görevi ve zamanınızı izlemek istediğinizi kontrol etmek için belirli bir süre sonra bir iletişim kutusu açılır.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Boşta kalma süresini işlemeyi etkinleştir",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Yalnızca geçerli bir görev seçildiğinde boşta kalma zamanını tetikle",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Odak modunda bos kalma iletisimini gizle",
       "MIN_IDLE_TIME": "X'ten sonra boşta tektikle",
       "TITLE": "Boş vakit takibi"
     },

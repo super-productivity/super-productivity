@@ -2116,7 +2116,6 @@
       "HELP": "<div><p>유휴 시간 처리가 활성화되면 유휴 상태 일 때 지정된 시간 후에 대화 상자가 열리고 시간을 추적하려는 작업이 있는지 여부를 확인합니다.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "유휴 시간 처리 사용",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "현재 작업이 선택되면 유휴 시간 대화 상자 만 트리거합니다.",
-      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "포커스 모드 중 유휴 대화상자 숨기기",
       "MIN_IDLE_TIME": "X 후에 유휴 트리거",
       "TITLE": "유휴 처리"
     },
