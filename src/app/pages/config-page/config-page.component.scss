@@ -1,25 +1,24 @@
 @use '../../../styles/_globals.scss' as *;
 
+:host {
+  display: flex;
+}
+
 .page-settings {
   text-align: start;
+  display: flex;
+  flex: 1;
 
   .settings-container {
-    max-width: 100%;
+    display: flex;
+    flex: 1;
   }
 
   .settings-tabs {
-    // Prevent focus-induced scroll jumps: Material tab body containers default to
-    // overflow:auto/hidden, which makes the browser's focus-scrolling algorithm
-    // treat them as scroll boundaries and reset the parent scroll position.
-    ::ng-deep .mat-mdc-tab-body-wrapper,
-    ::ng-deep .mat-mdc-tab-body-active,
-    ::ng-deep .mat-mdc-tab-body-content {
-      overflow: visible !important;
-    }
+    flex: 1;
 
     ::ng-deep .mat-mdc-tab-header {
       border-bottom: 1px solid var(--divider-color);
-      margin-bottom: var(--s2);
     }
 
     ::ng-deep .mat-mdc-tab {
@@ -54,6 +53,7 @@
 
   .tab-content {
     padding-top: var(--s2);
+    padding-inline: var(--s2);
     max-width: 900px;
     margin-left: auto;
     margin-right: auto;

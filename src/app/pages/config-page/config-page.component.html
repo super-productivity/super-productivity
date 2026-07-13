@@ -1,4 +1,4 @@
-<div class="page-settings page-wrapper">
+<div class="page-settings">
   @if (globalCfg) {
     <div class="settings-container">
       <!-- Shared by every tab's `mat-tab-label`: an icon + translated title. -->
@@ -13,6 +13,58 @@
           >{{ icon }}</mat-icon
         >
         <span class="tab-label">{{ labelKey | translate }}</span>
+      </ng-template>
+
+      <!-- Rendered at the bottom of every tab so it scrolls away with the tab's
+           content (the tab body, not the page, is the scroll container). -->
+      <ng-template #versionFooter>
+        <footer
+          class="version-footer"
+          title="Rev {{ versions?.revision }} {{ versions?.branch }} {{
+            versions?.version
+          }}"
+        >
+          Super Productivity
+          <a
+            class="version"
+            [matTooltip]="T.PS.CLICK_TO_COPY_VERSION | translate"
+            (click)="copyVersionToClipboard(appVersion); $event?.preventDefault()"
+            href="#"
+            >{{ appVersion }}<mat-icon>content_copy</mat-icon></a
+          >
+          –
+          <a
+            href="https://github.com/super-productivity/super-productivity/releases/latest"
+            target="_blank"
+            >Changelog</a
+          >
+          @if (isUpdateCheckPossible) {
+            –
+            <a
+              (click)="checkForUpdates(); $event?.preventDefault()"
+              href="#"
+              >{{ T.PS.CHECK_FOR_UPDATES | translate }}</a
+            >
+          }
+          –
+          <a
+            (click)="showLogs(); $event?.preventDefault()"
+            href="#"
+            >Logs</a
+          >
+          –
+          <a
+            href="https://super-productivity.com/privacy/"
+            target="_blank"
+            >{{ T.PS.PRIVACY_POLICY | translate }}</a
+          >
+          –
+          <a
+            href="https://github.com/super-productivity/super-productivity/discussions/new"
+            target="_blank"
+            >{{ T.PS.PROVIDE_FEEDBACK | translate }}</a
+          >
+        </footer>
       </ng-template>
 
       <mat-tab-group
@@ -45,6 +97,7 @@
                 ></config-section>
               </section>
             }
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
 
@@ -82,6 +135,7 @@
                 (save)="saveGlobalCfg($event)"
               ></config-sound-form>
             </section>
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
 
@@ -109,6 +163,7 @@
                 ></config-section>
               </section>
             }
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
 
@@ -136,6 +191,7 @@
                 ></config-section>
               </section>
             }
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
 
@@ -166,6 +222,7 @@
                 ></config-section>
               </section>
             }
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
 
@@ -258,55 +315,10 @@
                 ></config-section>
               </section>
             }
+            <ng-container *ngTemplateOutlet="versionFooter"></ng-container>
           </div>
         </mat-tab>
       </mat-tab-group>
     </div>
   }
 </div>
-
-<footer
-  class="version-footer"
-  title="Rev {{ versions?.revision }} {{ versions?.branch }} {{ versions?.version }}"
->
-  Super Productivity
-  <a
-    class="version"
-    [matTooltip]="T.PS.CLICK_TO_COPY_VERSION | translate"
-    (click)="copyVersionToClipboard(appVersion); $event?.preventDefault()"
-    href="#"
-    >{{ appVersion }}<mat-icon>content_copy</mat-icon></a
-  >
-  –
-  <a
-    href="https://github.com/super-productivity/super-productivity/releases/latest"
-    target="_blank"
-    >Changelog</a
-  >
-  @if (isUpdateCheckPossible) {
-    –
-    <a
-      (click)="checkForUpdates(); $event?.preventDefault()"
-      href="#"
-      >{{ T.PS.CHECK_FOR_UPDATES | translate }}</a
-    >
-  }
-  –
-  <a
-    (click)="showLogs(); $event?.preventDefault()"
-    href="#"
-    >Logs</a
-  >
-  –
-  <a
-    href="https://super-productivity.com/privacy/"
-    target="_blank"
-    >{{ T.PS.PRIVACY_POLICY | translate }}</a
-  >
-  –
-  <a
-    href="https://github.com/super-productivity/super-productivity/discussions/new"
-    target="_blank"
-    >{{ T.PS.PROVIDE_FEEDBACK | translate }}</a
-  >
-</footer>
