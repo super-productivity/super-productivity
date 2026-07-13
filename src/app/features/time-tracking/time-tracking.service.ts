@@ -10,8 +10,9 @@ import { WorkContextType, WorkStartEnd } from '../work-context/work-context.mode
 import { ImpossibleError } from '../../op-log/sync-exports';
 import { toLegacyWorkStartEndMaps } from './to-legacy-work-start-end-maps';
 import { TimeTrackingActions } from './store/time-tracking.actions';
-import { Log } from '../../core/log';
 import { initialTimeTrackingState } from './store/time-tracking.reducer';
+import { LockService } from '../../op-log/sync/lock.service';
+import { LOCK_NAMES } from '../../op-log/core/operation-log.const';
 
 @Injectable({
   providedIn: 'root',
@@ -19,6 +20,7 @@ import { initialTimeTrackingState } from './store/time-tracking.reducer';
 export class TimeTrackingService {
   private _store = inject(Store);
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
+  private _lockService = inject(LockService);
 
   private _archiveYoungUpdateTrigger$ = new Subject();
   private _archiveOldUpdateTrigger$ = new Subject();
@@ -72,35 +74,35 @@ export class TimeTrackingService {
   }
 
   async cleanupDataEverywhereForProject(projectId: string): Promise<void> {
-    const current = await firstValueFrom(this.current$);
-    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+      const current = await firstValueFrom(this.current$);
+      const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+      const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    Log.log({ current, archiveYoung, archiveOld });
+      if (projectId in current.project) {
+        const newProject = { ...current.project };
+        delete newProject[projectId];
+        this._store.dispatch(
+          TimeTrackingActions.updateWholeState({
+            newState: {
+              ...current,
+              project: { ...newProject },
+            },
+          }),
+        );
+      }
+      if (archiveYoung && projectId in archiveYoung.timeTracking.project) {
+        delete archiveYoung.timeTracking.project[projectId];
+        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
+        this._archiveYoungUpdateTrigger$.next(undefined);
+      }
 
-    if (projectId in current.project) {
-      const newProject = { ...current.project };
-      delete newProject[projectId];
-      this._store.dispatch(
-        TimeTrackingActions.updateWholeState({
-          newState: {
-            ...current,
-            project: { ...newProject },
-          },
-        }),
-      );
-    }
-    if (archiveYoung && projectId in archiveYoung.timeTracking.project) {
-      delete archiveYoung.timeTracking.project[projectId];
-      await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-      this._archiveYoungUpdateTrigger$.next(undefined);
-    }
-
-    if (archiveOld && projectId in archiveOld.timeTracking.project) {
-      delete archiveOld.timeTracking.project[projectId];
-      await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-      this._archiveOldUpdateTrigger$.next(undefined);
-    }
+      if (archiveOld && projectId in archiveOld.timeTracking.project) {
+        delete archiveOld.timeTracking.project[projectId];
+        await this._archiveDbAdapter.saveArchiveOld(archiveOld);
+        this._archiveOldUpdateTrigger$.next(undefined);
+      }
+    });
   }
 
   /**
@@ -108,34 +110,36 @@ export class TimeTrackingService {
    * Current state cleanup is now handled atomically in tag-shared.reducer.ts.
    */
   async cleanupDataEverywhereForTag(tagId: string): Promise<void> {
-    const current = await firstValueFrom(this.current$);
-    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+      const current = await firstValueFrom(this.current$);
+      const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+      const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    if (tagId in current.tag) {
-      const newTag = { ...current.tag };
-      delete newTag[tagId];
-      this._store.dispatch(
-        TimeTrackingActions.updateWholeState({
-          newState: {
-            ...current,
-            tag: { ...newTag },
-          },
-        }),
-      );
-    }
+      if (tagId in current.tag) {
+        const newTag = { ...current.tag };
+        delete newTag[tagId];
+        this._store.dispatch(
+          TimeTrackingActions.updateWholeState({
+            newState: {
+              ...current,
+              tag: { ...newTag },
+            },
+          }),
+        );
+      }
 
-    if (archiveYoung && tagId in archiveYoung.timeTracking.tag) {
-      delete archiveYoung.timeTracking.tag[tagId];
-      await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-      this._archiveYoungUpdateTrigger$.next(undefined);
-    }
+      if (archiveYoung && tagId in archiveYoung.timeTracking.tag) {
+        delete archiveYoung.timeTracking.tag[tagId];
+        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
+        this._archiveYoungUpdateTrigger$.next(undefined);
+      }
 
-    if (archiveOld && tagId in archiveOld.timeTracking.tag) {
-      delete archiveOld.timeTracking.tag[tagId];
-      await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-      this._archiveOldUpdateTrigger$.next(undefined);
-    }
+      if (archiveOld && tagId in archiveOld.timeTracking.tag) {
+        delete archiveOld.timeTracking.tag[tagId];
+        await this._archiveDbAdapter.saveArchiveOld(archiveOld);
+        this._archiveOldUpdateTrigger$.next(undefined);
+      }
+    });
   }
 
   /**
@@ -143,20 +147,22 @@ export class TimeTrackingService {
    * Current state cleanup is handled atomically in tag-shared.reducer.ts.
    */
   async cleanupArchiveDataForTag(tagId: string): Promise<void> {
-    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+      const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+      const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    if (archiveYoung && tagId in archiveYoung.timeTracking.tag) {
-      delete archiveYoung.timeTracking.tag[tagId];
-      await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-      this._archiveYoungUpdateTrigger$.next(undefined);
-    }
+      if (archiveYoung && tagId in archiveYoung.timeTracking.tag) {
+        delete archiveYoung.timeTracking.tag[tagId];
+        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
+        this._archiveYoungUpdateTrigger$.next(undefined);
+      }
 
-    if (archiveOld && tagId in archiveOld.timeTracking.tag) {
-      delete archiveOld.timeTracking.tag[tagId];
-      await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-      this._archiveOldUpdateTrigger$.next(undefined);
-    }
+      if (archiveOld && tagId in archiveOld.timeTracking.tag) {
+        delete archiveOld.timeTracking.tag[tagId];
+        await this._archiveDbAdapter.saveArchiveOld(archiveOld);
+        this._archiveOldUpdateTrigger$.next(undefined);
+      }
+    });
   }
 
   async getWorkStartEndForWorkContext(ctx: {

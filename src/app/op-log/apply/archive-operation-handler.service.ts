@@ -24,7 +24,6 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
-import { confirmDialog } from '../../util/native-dialogs';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -483,38 +482,38 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
       .archiveYoung;
     const archiveOld = (appDataComplete as { archiveOld?: ArchiveModel }).archiveOld;
 
-    // Load original state for potential rollback and safety checks
-    const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+      // Load original state for potential rollback and safety checks.
+      const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+      const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-    // Write archiveYoung if present in the import data
-    if (archiveYoung !== undefined) {
+      // A backup restore is already an explicit destructive user action on its
+      // originating client. Remote clients must replay that decision without a
+      // blocking dialog while OPERATION_LOG is held.
       if (
-        await this._guardArchiveOverwrite({
+        archiveYoung !== undefined &&
+        (await this._guardArchiveOverwrite({
           label: 'archiveYoung',
           existing: originalArchiveYoung,
           incoming: archiveYoung,
           opType: action.meta.opType,
-        })
+        }))
       ) {
         await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
       }
-    }
 
-    // Write archiveOld if present in the import data
-    if (archiveOld !== undefined) {
       if (
-        await this._guardArchiveOverwrite({
+        archiveOld !== undefined &&
+        (await this._guardArchiveOverwrite({
           label: 'archiveOld',
           existing: originalArchiveOld,
           incoming: archiveOld,
           opType: action.meta.opType,
-        })
+        }))
       ) {
         try {
           await this._archiveDbAdapter.saveArchiveOld(archiveOld);
         } catch (e) {
-          // Attempt rollback: restore archiveYoung to original state
           OpLog.err(
             '[ArchiveOperationHandler] archiveOld write failed, attempting rollback...',
             e,
@@ -530,14 +529,14 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
               rollbackErr,
             );
           }
-          throw e; // Re-throw original error
+          throw e;
         }
       }
-    }
 
-    OpLog.log(
-      '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
-    );
+      OpLog.log(
+        '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
+      );
+    });
   }
 
   /**
@@ -546,7 +545,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    *
    * Handles three opType paths:
    * - SYNC_IMPORT / REPAIR: silently preserves local (empty incoming is likely a bug)
-   * - BACKUP_IMPORT: asks user for confirmation (explicit restore action)
+   * - BACKUP_IMPORT: applies the explicit restore authoritatively
    * - default: allows the write
    */
   private async _guardArchiveOverwrite(opts: {
@@ -570,18 +569,6 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
           'Preserving local archives (this is likely a bug in the full-state op source).',
       );
       return false;
-    }
-
-    if (opts.opType === OpType.BackupImport) {
-      const confirmed = confirmDialog(
-        `This backup has empty ${opts.label === 'archiveYoung' ? '' : 'old '}archives, but you have ${existingCount} ${opts.label === 'archiveYoung' ? '' : 'old '}archived tasks locally. ` +
-          `Restoring will delete your ${opts.label === 'archiveYoung' ? '' : 'old '}archived data. Continue?`,
-      );
-      if (!confirmed) {
-        throw new Error(
-          '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
-        );
-      }
     }
 
     return true;

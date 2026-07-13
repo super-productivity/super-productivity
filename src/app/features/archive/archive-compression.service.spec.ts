@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { ArchiveCompressionService } from './archive-compression.service';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from './archive.model';
+import { LockService } from '../../op-log/sync/lock.service';
+import { LOCK_NAMES } from '../../op-log/core/operation-log.const';
 
 const emptyArchive = (): ArchiveModel => ({
   task: { ids: [], entities: {} },
@@ -12,6 +14,7 @@ const emptyArchive = (): ArchiveModel => ({
 describe('ArchiveCompressionService', () => {
   let service: ArchiveCompressionService;
   let archiveDbAdapterMock: jasmine.SpyObj<ArchiveDbAdapter>;
+  let lockServiceMock: jasmine.SpyObj<LockService>;
 
   beforeEach(() => {
     archiveDbAdapterMock = jasmine.createSpyObj<ArchiveDbAdapter>('ArchiveDbAdapter', [
@@ -26,11 +29,16 @@ describe('ArchiveCompressionService', () => {
     archiveDbAdapterMock.saveArchiveYoung.and.resolveTo(undefined);
     archiveDbAdapterMock.saveArchiveOld.and.resolveTo(undefined);
     archiveDbAdapterMock.saveArchivesAtomic.and.resolveTo(undefined);
+    lockServiceMock = jasmine.createSpyObj<LockService>('LockService', ['request']);
+    lockServiceMock.request.and.callFake(
+      <T>(_lockName: string, callback: () => Promise<T>): Promise<T> => callback(),
+    );
 
     TestBed.configureTestingModule({
       providers: [
         ArchiveCompressionService,
         { provide: ArchiveDbAdapter, useValue: archiveDbAdapterMock },
+        { provide: LockService, useValue: lockServiceMock },
       ],
     });
 
@@ -58,6 +66,17 @@ describe('ArchiveCompressionService', () => {
 
       expect(archiveDbAdapterMock.saveArchiveYoung).not.toHaveBeenCalled();
       expect(archiveDbAdapterMock.saveArchiveOld).not.toHaveBeenCalled();
+    });
+
+    it('holds the archive mutex across the read-modify-write', async () => {
+      await service.compressArchive(Date.now());
+
+      expect(lockServiceMock.request).toHaveBeenCalledOnceWith(
+        LOCK_NAMES.TASK_ARCHIVE,
+        jasmine.any(Function),
+      );
+      expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalled();
+      expect(archiveDbAdapterMock.saveArchivesAtomic).toHaveBeenCalled();
     });
   });
 });
