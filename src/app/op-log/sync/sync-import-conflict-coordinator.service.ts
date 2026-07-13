@@ -8,6 +8,7 @@ import {
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { ServerMigrationService } from './server-migration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
+import { EncryptNoPasswordError } from '../core/errors/sync-errors';
 
 type SyncImportConflictActions = {
   useLocal: () => Promise<void>;
@@ -58,10 +59,28 @@ export class SyncImportConflictCoordinatorService {
       syncImportReason: 'FORCE_UPLOAD',
     });
 
-    await this.uploadService.uploadPendingOps(syncProvider, {
+    const uploadResult = await this.uploadService.uploadPendingOps(syncProvider, {
       skipPiggybackProcessing: true,
       isCleanSlate: true,
     });
+
+    if (uploadResult.encryptionRequiredKeyMissing) {
+      throw new EncryptNoPasswordError(
+        'Force upload requires an encryption key, but none is configured.',
+      );
+    }
+
+    if (uploadResult.rejectedCount > 0) {
+      const rejectionLabel =
+        uploadResult.rejectedCount === 1
+          ? '1 operation was'
+          : `${uploadResult.rejectedCount} operations were`;
+      throw new Error(`Force upload failed because ${rejectionLabel} rejected.`);
+    }
+
+    if (uploadResult.uploadedCount === 0) {
+      throw new Error('Force upload failed because no operations were uploaded.');
+    }
 
     OpLog.normal('SyncImportConflictCoordinatorService: Force upload complete.');
   }

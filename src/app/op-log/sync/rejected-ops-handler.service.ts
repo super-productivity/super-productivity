@@ -22,12 +22,28 @@ export type {
  * a nested download) is surfaced via the SyncSessionValidationService latch
  * — the wrapper reads it once before deciding IN_SYNC vs ERROR. (#7330)
  */
-export interface RejectionHandlingResult {
-  /** Number of merged ops created from conflict resolution (these need to be uploaded) */
-  mergedOpsCreated: number;
-  /** Number of operations that were permanently rejected (validation errors, etc.) */
-  permanentRejectionCount: number;
-}
+export type RejectionHandlingResult =
+  | {
+      kind: 'completed';
+      /** Number of merged ops created from conflict resolution (these need to be uploaded) */
+      mergedOpsCreated: number;
+      /** Number of operations that were permanently rejected (validation errors, etc.) */
+      permanentRejectionCount: number;
+    }
+  | {
+      /** User cancelled a nested SYNC_IMPORT conflict dialog. */
+      kind: 'cancelled';
+    };
+
+type ConcurrentResolutionResult =
+  | {
+      kind: 'completed';
+      mergedOpsCreated: number;
+      retryExceededCount: number;
+    }
+  | {
+      kind: 'cancelled';
+    };
 
 /**
  * Handles operations that were rejected by the server during upload.
@@ -86,7 +102,11 @@ export class RejectedOpsHandlerService {
     if (rejectedOps.length === 0) {
       // No rejections = sync is healthy, reset resolution attempt counters
       this._resolutionAttemptsByEntity.clear();
-      return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+      return {
+        kind: 'completed',
+        mergedOpsCreated: 0,
+        permanentRejectionCount: 0,
+      };
     }
 
     let mergedOpsCreated = 0;
@@ -194,11 +214,15 @@ export class RejectedOpsHandlerService {
         concurrentModificationOps,
         downloadCallback,
       );
+      if (result.kind === 'cancelled') {
+        return result;
+      }
       mergedOpsCreated = result.mergedOpsCreated;
       retryExceededCount = result.retryExceededCount;
     }
 
     return {
+      kind: 'completed',
       mergedOpsCreated,
       permanentRejectionCount: permanentlyRejectedOps.length + retryExceededCount,
     };
@@ -214,10 +238,7 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }>,
     downloadCallback: DownloadCallback,
-  ): Promise<{
-    mergedOpsCreated: number;
-    retryExceededCount: number;
-  }> {
+  ): Promise<ConcurrentResolutionResult> {
     let mergedOpsCreated = 0;
 
     // Check resolution attempt counts per entity to prevent infinite loops.
@@ -278,6 +299,7 @@ export class RejectedOpsHandlerService {
 
     if (opsToResolve.length === 0) {
       return {
+        kind: 'completed',
         mergedOpsCreated: 0,
         retryExceededCount: opsExceededRetries.length,
       };
@@ -293,6 +315,10 @@ export class RejectedOpsHandlerService {
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — wrapper reads it. (#7330)
       const downloadResult = await downloadCallback();
+      if (downloadResult.kind === 'cancelled') {
+        this._rollbackResolutionAttempts(opsToResolve);
+        return { kind: 'cancelled' };
+      }
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
@@ -336,6 +362,10 @@ export class RejectedOpsHandlerService {
           );
 
           const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
+          if (forceDownloadResult.kind === 'cancelled') {
+            this._rollbackResolutionAttempts(opsToResolve);
+            return { kind: 'cancelled' };
+          }
 
           // Use the clocks from force download to resolve superseded ops
           // Also merge in entity clocks from server rejection responses
@@ -435,25 +465,30 @@ export class RejectedOpsHandlerService {
       // keeps re-downloading. Upgrade path if that becomes a problem: a separate
       // transient-failure budget via markFailed() (retryable, NOT terminal) with
       // backoff — never markRejected().
-      const rolledBack = new Set<string>();
-      for (const { op } of opsToResolve) {
-        const entityKey = this._getEntityKey(op);
-        if (rolledBack.has(entityKey)) {
-          continue;
-        }
-        rolledBack.add(entityKey);
-        const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
-        if (attempts > 0) {
-          this._resolutionAttemptsByEntity.set(entityKey, attempts - 1);
-        }
-      }
+      this._rollbackResolutionAttempts(opsToResolve);
       throw e;
     }
 
     return {
+      kind: 'completed',
       mergedOpsCreated,
       retryExceededCount: opsExceededRetries.length,
     };
+  }
+
+  private _rollbackResolutionAttempts(ops: ReadonlyArray<{ op: Operation }>): void {
+    const rolledBack = new Set<string>();
+    for (const { op } of ops) {
+      const entityKey = this._getEntityKey(op);
+      if (rolledBack.has(entityKey)) {
+        continue;
+      }
+      rolledBack.add(entityKey);
+      const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
+      if (attempts > 0) {
+        this._resolutionAttemptsByEntity.set(entityKey, attempts - 1);
+      }
+    }
   }
 
   private _getEntityKey(op: Operation): string {

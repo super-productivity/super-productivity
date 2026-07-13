@@ -282,6 +282,7 @@ export class OperationLogSyncService {
     // state and get re-uploaded infinitely.
     let localWinOpsCreated = 0;
     let rejectionResult: RejectionHandlingResult = {
+      kind: 'completed',
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     };
@@ -402,6 +403,7 @@ export class OperationLogSyncService {
       switch (outcome.kind) {
         case 'ops_processed':
           return {
+            kind: 'completed',
             newOpsCount: outcome.newOpsCount,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
@@ -409,13 +411,15 @@ export class OperationLogSyncService {
         case 'no_new_ops':
         case 'snapshot_hydrated':
           return {
+            kind: 'completed',
             newOpsCount: 0,
             allOpClocks: outcome.allOpClocks,
             snapshotVectorClock: outcome.snapshotVectorClock,
           };
         case 'server_migration_handled':
+          return { kind: 'completed', newOpsCount: 0 };
         case 'cancelled':
-          return { newOpsCount: 0 };
+          return { kind: 'cancelled' };
         case 'blocked_incompatible':
           throw new Error('Nested download blocked by an incompatible remote operation.');
       }
@@ -425,6 +429,9 @@ export class OperationLogSyncService {
         result.rejectedOps,
         downloadCallback,
       );
+      if (rejectionResult.kind === 'cancelled') {
+        return { kind: 'cancelled' };
+      }
       localWinOpsCreated += rejectionResult.mergedOpsCreated;
     } catch (rejectionError) {
       // FIX #6571: Propagate rejection handler errors instead of swallowing them.

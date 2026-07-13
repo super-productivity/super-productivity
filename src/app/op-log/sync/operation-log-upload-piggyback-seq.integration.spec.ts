@@ -234,6 +234,7 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       ['handleRejectedOps'],
     );
     rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+      kind: 'completed',
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     });

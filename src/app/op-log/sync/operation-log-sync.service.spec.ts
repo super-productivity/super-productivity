@@ -36,6 +36,7 @@ import {
 } from '../core/operation.types';
 import { TranslateService } from '@ngx-translate/core';
 import {
+  EncryptNoPasswordError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
@@ -207,6 +208,7 @@ describe('OperationLogSyncService', () => {
       'handleRejectedOps',
     ]);
     rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+      kind: 'completed',
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     });
@@ -802,7 +804,11 @@ describe('OperationLogSyncService', () => {
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
             async (_ops, callback) => {
               capturedCallback = callback;
-              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
             },
           );
 
@@ -829,6 +835,39 @@ describe('OperationLogSyncService', () => {
             forceFromSeq0: true,
             isNeverSynced: true,
           });
+        });
+
+        it('should propagate nested download cancellation as a cancelled upload', async () => {
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [],
+            rejectedCount: 1,
+            rejectedOps: [
+              {
+                opId: 'local-op-1',
+                error: 'Concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+              },
+            ],
+          });
+          spyOn(service, 'downloadRemoteOps').and.resolveTo({ kind: 'cancelled' });
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              const nestedResult = await callback?.();
+              if (nestedResult?.kind === 'cancelled') {
+                return { kind: 'cancelled' };
+              }
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
+            },
+          );
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('cancelled');
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {
@@ -871,6 +910,7 @@ describe('OperationLogSyncService', () => {
 
           // handleRejectedOps returns 3 merged ops created
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+            kind: 'completed',
             mergedOpsCreated: 3,
             permanentRejectionCount: 0,
           });
@@ -1007,7 +1047,11 @@ describe('OperationLogSyncService', () => {
               // resolution. The latch is flipped inside the nested download's
               // validateAfterSync — here we just exercise the call.
               await callback?.();
-              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
             },
           );
 
@@ -2874,6 +2918,67 @@ describe('OperationLogSyncService', () => {
       await expectAsync(service.forceUploadLocalState(mockProvider)).toBeRejectedWith(
         error,
       );
+    });
+
+    it('should reject when mandatory encryption blocks the force upload', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 0,
+        piggybackedOps: [],
+        rejectedCount: 0,
+        rejectedOps: [],
+        encryptionRequiredKeyMissing: true,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+    });
+
+    it('should reject when the clean-slate upload contains rejected operations', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 0,
+        piggybackedOps: [],
+        rejectedCount: 1,
+        rejectedOps: [
+          {
+            opId: 'force-import',
+            error: 'snapshot rejected',
+            errorCode: 'VALIDATION_ERROR',
+          },
+        ],
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError('Force upload failed because 1 operation was rejected.');
+    });
+
+    it('should reject when the clean-slate upload accepts no operations', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 0,
+        piggybackedOps: [],
+        rejectedCount: 0,
+        rejectedOps: [],
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError('Force upload failed because no operations were uploaded.');
     });
 
     it('should upload with isCleanSlate=true to delete server data before accepting new data', async () => {

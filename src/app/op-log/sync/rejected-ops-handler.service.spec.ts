@@ -70,7 +70,11 @@ describe('RejectedOpsHandlerService', () => {
   describe('handleRejectedOps', () => {
     it('should return zero counts when no rejected ops provided', async () => {
       const result = await service.handleRejectedOps([]);
-      expect(result).toEqual({ mergedOpsCreated: 0, permanentRejectionCount: 0 });
+      expect(result).toEqual({
+        kind: 'completed',
+        mergedOpsCreated: 0,
+        permanentRejectionCount: 0,
+      });
     });
 
     it('should skip already synced ops', async () => {
@@ -286,12 +290,13 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ serverClient: 10 }],
               snapshotVectorClock: { serverClient: 10 },
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -317,7 +322,7 @@ describe('RejectedOpsHandlerService', () => {
         const op = createOp({ id: 'superseded-op-1' });
         opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
         downloadCallback.and.returnValue(
-          Promise.resolve({ newOpsCount: 1 } as DownloadResultForRejection),
+          Promise.resolve({ kind: 'completed', newOpsCount: 1 }),
         );
 
         await service.handleRejectedOps(
@@ -342,12 +347,13 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ serverClient: 10 }],
               snapshotVectorClock: { serverClient: 10 },
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -381,7 +387,7 @@ describe('RejectedOpsHandlerService', () => {
         const op = createOp({ id: 'op-1' });
         opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
         downloadCallback.and.returnValue(
-          Promise.resolve({ newOpsCount: 1 } as DownloadResultForRejection),
+          Promise.resolve({ kind: 'completed', newOpsCount: 1 }),
         );
 
         await service.handleRejectedOps(
@@ -390,6 +396,89 @@ describe('RejectedOpsHandlerService', () => {
         );
 
         expect(downloadCallback).toHaveBeenCalled();
+      });
+
+      it('should stop rejection handling when the nested download is cancelled', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.returnValue(Promise.resolve({ kind: 'cancelled' }));
+
+        const result = await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock: { serverClient: 2 },
+            },
+          ],
+          downloadCallback,
+        );
+
+        expect(result).toEqual({ kind: 'cancelled' });
+        expect(downloadCallback).toHaveBeenCalledTimes(1);
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      it('should stop rejection handling when the forced download is cancelled', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            return { kind: 'cancelled' };
+          }
+          return { kind: 'completed', newOpsCount: 0 };
+        });
+
+        const result = await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock: { serverClient: 2 },
+            },
+          ],
+          downloadCallback,
+        );
+
+        expect(result).toEqual({ kind: 'cancelled' });
+        expect(downloadCallback).toHaveBeenCalledTimes(2);
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
+      it('should not consume the resolution-attempt budget when downloads are cancelled', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.returnValue(Promise.resolve({ kind: 'cancelled' }));
+
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          await service.handleRejectedOps(
+            [
+              {
+                opId: 'op-1',
+                error: 'concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+                existingClock: { serverClient: 2 },
+              },
+            ],
+            downloadCallback,
+          );
+        }
+
+        expect(downloadCallback).toHaveBeenCalledTimes(
+          MAX_CONCURRENT_RESOLUTION_ATTEMPTS + 1,
+        );
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
       });
 
       it('should NOT reject pending ops when the download throws transiently, and re-throw (#8331)', async () => {
@@ -448,11 +537,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
 
         await service.handleRejectedOps(
@@ -472,12 +562,13 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [remoteClock],
               snapshotVectorClock: { snapshot: 1 },
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -493,7 +584,11 @@ describe('RejectedOpsHandlerService', () => {
           [remoteClock],
           { snapshot: 1 },
         );
-        expect(result).toEqual({ mergedOpsCreated: 1, permanentRejectionCount: 0 });
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
+        });
       });
 
       it('should pass existingClock from rejection to superseded resolver (FIX: encryption conflict loop)', async () => {
@@ -508,12 +603,13 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [],
               snapshotVectorClock: { snapshot: 1 },
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -548,12 +644,13 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: remoteClocks,
               snapshotVectorClock: { snapshot: 1 },
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -583,7 +680,7 @@ describe('RejectedOpsHandlerService', () => {
         const op = createOp({ id: 'op-1' });
         opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
         downloadCallback.and.callFake(async () => {
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         opLogStoreSpy.markRejected.and.resolveTo();
 
@@ -616,11 +713,12 @@ describe('RejectedOpsHandlerService', () => {
           downloadCallback.and.callFake(async (options) => {
             if (options?.forceFromSeq0) {
               return {
+                kind: 'completed',
                 newOpsCount: 0,
                 allOpClocks: [{ remoteClient: 2 }],
               } as DownloadResultForRejection;
             }
-            return { newOpsCount: 0 } as DownloadResultForRejection;
+            return { kind: 'completed', newOpsCount: 0 };
           });
           supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -671,11 +769,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
 
         // First batch: should resolve all 4 ops (1 attempt counted)
@@ -758,11 +857,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
 
         // Send MAX_CONCURRENT_RESOLUTION_ATTEMPTS mixed batches
@@ -831,11 +931,12 @@ describe('RejectedOpsHandlerService', () => {
           downloadCallback.and.callFake(async (options: any) => {
             if (options?.forceFromSeq0) {
               return {
+                kind: 'completed',
                 newOpsCount: 0,
                 allOpClocks: [{ remoteClient: 2 }],
               } as DownloadResultForRejection;
             }
-            return { newOpsCount: 0 } as DownloadResultForRejection;
+            return { kind: 'completed', newOpsCount: 0 };
           });
           supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -864,11 +965,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options: any) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -899,11 +1001,12 @@ describe('RejectedOpsHandlerService', () => {
           downloadCallback.and.callFake(async (options: any) => {
             if (options?.forceFromSeq0) {
               return {
+                kind: 'completed',
                 newOpsCount: 0,
                 allOpClocks: [{ remoteClient: 2 }],
               } as DownloadResultForRejection;
             }
-            return { newOpsCount: 0 } as DownloadResultForRejection;
+            return { kind: 'completed', newOpsCount: 0 };
           });
           supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -938,11 +1041,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options: any) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -1012,11 +1116,12 @@ describe('RejectedOpsHandlerService', () => {
           downloadCallback.and.callFake(async (options) => {
             if (options?.forceFromSeq0) {
               return {
+                kind: 'completed',
                 newOpsCount: 0,
                 allOpClocks: [{ remoteClient: 2 }],
               } as DownloadResultForRejection;
             }
-            return { newOpsCount: 0 } as DownloadResultForRejection;
+            return { kind: 'completed', newOpsCount: 0 };
           });
           supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
@@ -1036,11 +1141,12 @@ describe('RejectedOpsHandlerService', () => {
         downloadCallback.and.callFake(async (options) => {
           if (options?.forceFromSeq0) {
             return {
+              kind: 'completed',
               newOpsCount: 0,
               allOpClocks: [{ remoteClient: 2 }],
             } as DownloadResultForRejection;
           }
-          return { newOpsCount: 0 } as DownloadResultForRejection;
+          return { kind: 'completed', newOpsCount: 0 };
         });
         supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
 
