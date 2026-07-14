@@ -121,6 +121,11 @@ export interface FileBasedOpsFile<
    * retry the migration before treating this ops file as committed. Keeping
    * the complete candidate ops payload in the commit-point file makes recovery
    * possible after a crash on either side of the legacy tombstone write.
+   *
+   * On disk this file is stored with `version:
+   * SPLIT_MIGRATION_PENDING_OPS_VERSION` (not 3) so shipped split clients that
+   * predate the marker cannot mistake it for a committed ops file; readers
+   * normalize the version back to 3 in memory.
    */
   migration?: {
     status: 'pending';
@@ -184,6 +189,15 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   STATE_BACKUP_FILE: 'sync-state.json.bak',
   OPS_SNAPSHOT_TRANSACTION_FILE: 'sync-ops.snapshot-transaction.json',
   SPLIT_FILE_VERSION: 3 as const,
+  // On-disk `version` of a mid-migration `sync-ops.json` (migration: pending).
+  // Deliberately NOT 3: already-shipped split clients validate only
+  // `version === 3` and would otherwise treat the pending marker file as a
+  // committed ops file — bootstrapping truncated state (no sync-state.json
+  // exists yet) or finalizing the migration implicitly by uploading over it.
+  // Unknown versions make them fail safe with a transient corruption error
+  // until the migration completes. Never reuse this value as a real format
+  // version. Readers normalize it back to SPLIT_FILE_VERSION in memory.
+  SPLIT_MIGRATION_PENDING_OPS_VERSION: 203 as const,
   // Post-compaction RETAINED size for the split ops file (≈ MAX_RECENT_OPS/2).
   // NOTE: this is the trim target, NOT the trigger — a recompaction fires when the
   // ops buffer exceeds MAX_RECENT_OPS, then trims sync-ops.json back to this many

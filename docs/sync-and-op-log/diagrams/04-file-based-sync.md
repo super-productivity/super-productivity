@@ -136,16 +136,27 @@ matching previous state from `sync-state.json.bak`.
 A structurally corrupt primary state may be healed from the backup only when the
 backup matches `snapshotRef`. Healing conditionally matches the corrupt
 primary's own revision; a newer valid but unreferenced state is not overwritten.
+When NO snapshot matches the committed `snapshotRef` any more (state file
+deleted or replaced without commit), the next compaction self-heals by writing a
+fresh full snapshot — the ops-file CAS remains the concurrency gate. Rolling
+backup writes are non-fatal by contract: a provider that cannot write a `.bak`
+must still be able to sync.
 
 Authoritative snapshot replacement is separately crash-serialized. A durable
-pending transaction contains the exact encoded snapshot payloads (both state and
-ops in v3), then the adapter publishes the bound files before conditionally
-marking that same transaction complete. Startup/download completes a pending
-transaction before ordinary sync, and ordinary backup rotation verifies that the
-observed marker revision is unchanged. The completed marker keeps compact
-SHA-256 bindings plus the published revisions, allowing recovery to reject a
-stale backup written by a marker-unaware client. Replacement intent is never
-guessed from vector-clock order.
+pending transaction records the primary revision observed at begin time
+(`basePrimaryRev`) and the exact encoded snapshot payloads (both state and ops
+in v3), then the adapter publishes the bound files before conditionally marking
+that same transaction complete. Startup/download completes a pending transaction
+before ordinary sync — but ONLY while the primary still has `basePrimaryRev`;
+if the primary advanced after the crash (e.g. a marker-unaware client committed
+new data), recovery durably marks the transaction `aborted` instead of promoting
+the stale payload. A torn/unreadable marker is likewise treated as unusable (not
+as fatal corruption) and conditionally replaced by the next snapshot upload.
+Ordinary backup rotation verifies that the observed marker revision is
+unchanged. The completed marker keeps compact SHA-256 bindings plus the
+published revisions, allowing recovery to reject a stale backup written by a
+marker-unaware client. Replacement intent is never guessed from vector-clock
+order.
 
 ```mermaid
 sequenceDiagram
@@ -172,6 +183,13 @@ Migration uses a crash-resumable pending marker:
 3. neutralize `sync-data.json.bak` and conditionally replace the v2 primary with
    a v3 split tombstone;
 4. conditionally protect the recovery backup and finalize the ops marker.
+
+The pending candidate is stored with a sentinel `version`
+(`SPLIT_MIGRATION_PENDING_OPS_VERSION`, not 3) so already-shipped split clients
+— which know neither the `migration` field nor that `sync-state.json` does not
+exist yet — reject it with a transient error instead of adopting truncated
+state or implicitly finalizing a half-done migration. Readers normalize the
+version back to 3 in memory; the finalized ops file is written as version 3.
 
 The required ops backup is revision- and causality-owned. A stale migrator must
 not overwrite a newer or concurrent backup before losing the primary CAS.

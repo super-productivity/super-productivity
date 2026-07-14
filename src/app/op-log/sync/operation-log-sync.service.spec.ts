@@ -1976,6 +1976,108 @@ describe('OperationLogSyncService', () => {
           }
         });
 
+        it('should append snapshot-included remote ops BEFORE persisting deferred local intents', async () => {
+          clearDeferredActions();
+          const snapshotIncludedOp: Operation = {
+            id: 'snap-op-1',
+            clientId: 'client-B',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-x',
+            payload: { task: { id: 'task-x', changes: {} } },
+            vectorClock: { clientB: 4 },
+            timestamp: 1,
+            schemaVersion: 1,
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotIncludedOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            snapshotAppliedOpIds: ['snap-op-1'],
+            latestServerSeq: 1,
+          });
+          const callOrder: string[] = [];
+          opLogStoreSpy.appendBatchSkipDuplicates.and.callFake(async () => {
+            callOrder.push('append-snapshot-ops');
+            return { seqs: [10], writtenOps: [snapshotIncludedOp], skippedCount: 0 };
+          });
+          operationLogEffectsSpy.processDeferredActions.and.callFake(
+            async (options?: { callerHoldsOperationLogLock?: boolean }) => {
+              if (options?.callerHoldsOperationLogLock) {
+                callOrder.push('persist-deferred');
+              }
+            },
+          );
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          await service.downloadRemoteOps(mockProvider);
+
+          // Frontier ordering: getEntityFrontier() takes the LAST op per entity
+          // in seq order, so the snapshot's (older) remote ops must land at
+          // lower seqs than any local intents persisted during hydration —
+          // otherwise the frontier regresses and a later concurrent remote op
+          // is misclassified as non-conflicting.
+          expect(callOrder[0]).toBe('append-snapshot-ops');
+          expect(callOrder).toContain('persist-deferred');
+          expect(callOrder.indexOf('append-snapshot-ops')).toBeLessThan(
+            callOrder.indexOf('persist-deferred'),
+          );
+        });
+
+        it('should persist buffered local actions when snapshot hydration fails', async () => {
+          clearDeferredActions();
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.rejectWith(
+            new Error('hydration boom'),
+          );
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          await expectAsync(
+            service.downloadRemoteOps(mockProvider),
+          ).toBeRejectedWithError('hydration boom');
+
+          // The remote-apply window must be closed AND the deferred buffer
+          // persisted: edits made during the failed hydration are applied to
+          // live NgRx state but would otherwise be silently lost on app exit.
+          expect(hydrationStateServiceSpy.endApplyingRemoteOps).toHaveBeenCalled();
+          expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledWith({
+            callerHoldsOperationLogLock: true,
+          });
+          expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+        });
+
         it('should NOT throw LocalDataConflictError on normal incremental sync (no snapshotState)', async () => {
           // This tests the regression fix: normal incremental syncs should NOT throw
           // LocalDataConflictError, even if the client has unsynced ops.
