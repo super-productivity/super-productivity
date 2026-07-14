@@ -2997,6 +2997,33 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-upd']);
     });
 
+    it('should preserve the local winner operation footprint in its LWW op', async () => {
+      const now = Date.now();
+      const localOp = createOpWithTimestamp('local-upd', 'client-a', now);
+      localOp.actionType = ActionType.TASK_SHARED_UPDATE;
+      localOp.entityIds = ['task-1', 'subtask-1'];
+      localOp.payload = {
+        actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'project-2' } },
+          projectMoveSubTaskIds: ['subtask-1'],
+        },
+        entityChanges: [],
+      };
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'Local winner', projectId: 'project-2' }),
+      );
+
+      const lwwOp = await (service as any)._createLocalWinUpdateOp(
+        createConflict(
+          'task-1',
+          [localOp],
+          [createOpWithTimestamp('remote-upd', 'client-b', now - 1000)],
+        ),
+      );
+
+      expect(lwwOp.entityIds).toEqual(['task-1', 'subtask-1']);
+    });
+
     it('should not create local-win op when clientId is unavailable', async () => {
       const now = Date.now();
       mockClientIdProvider.loadClientId.and.returnValue(Promise.resolve(null));
@@ -4712,6 +4739,20 @@ describe('ConflictResolutionService', () => {
       );
 
       expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
+    });
+
+    it('should preserve and normalize an explicit operation footprint', () => {
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        { title: 'Local winner' },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+        ['subtask-1', 'task-canonical', 'subtask-1'],
+      );
+
+      expect(op.entityIds).toEqual(['task-canonical', 'subtask-1']);
     });
 
     it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {

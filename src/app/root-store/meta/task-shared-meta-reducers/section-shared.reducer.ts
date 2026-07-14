@@ -21,8 +21,10 @@ import { moveItemAfterAnchor } from '../../../features/work-context/store/work-c
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   collectTaskAndSubTaskIds,
+  getProjectOrUndefined,
   isValidTaskProjectIdUpdate,
 } from './task-shared-helpers';
+import { toLwwUpdateActionType } from '../../../op-log/core/lww-update-action-types';
 
 // Must run before taskSharedCrudMetaReducer — handlers read pre-update
 // task state to compute cleanups. Position pinned by
@@ -101,12 +103,13 @@ const removeProjectSections = (
 /**
  * Strip `taskIds` from sections owned by `projectId` (PROJECT context).
  * Used when a task leaves a project (moveToOtherProject) — its section
- * membership in the old project becomes stale.
+ * membership in the old project becomes stale. Omitting `projectId`
+ * strips from every project's sections (repair paths).
  */
 const removeTaskIdsFromProjectSections = (
   sectionState: SectionState,
   taskIds: string[],
-  projectId: string,
+  projectId?: string,
 ): SectionState => {
   if (taskIds.length === 0) return sectionState;
 
@@ -117,7 +120,7 @@ const removeTaskIdsFromProjectSections = (
     const s = sectionState.entities[id];
     if (!s) continue;
     if (s.contextType !== WorkContextType.PROJECT) continue;
-    if (s.contextId !== projectId) continue;
+    if (projectId !== undefined && s.contextId !== projectId) continue;
     const filtered = filterRemovingTaskIds(s.taskIds, taskIdSet);
     if (filtered !== null) {
       updates.push({ id: s.id, changes: { taskIds: filtered } });
@@ -316,11 +319,6 @@ const handleRemoveTaskFromSection = (
  *   tasks within its single-action transform. Sections it would
  *   otherwise affect aren't pruned. Handling it here requires walking
  *   the operations array, which is non-trivial.
- *
- * - LWW conflict-resolution can reassign a task's projectId; project-
- *   context section.taskIds can leak phantom references until the next
- *   `dataRepair` pass clears them. Visible impact bounded by render-time
- *   intersection in `undoneTasksBySection`.
  */
 const ACTION_HANDLERS: Record<string, Handler> = {
   [TaskSharedActions.deleteTask.type]: (state, action) => {
@@ -332,27 +330,18 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     return handleTaskRemoval(state, taskIds);
   },
   [TaskSharedActions.moveToArchive.type]: (state, action) => {
-    // Strip archived task ids from sections. Restore is intentionally
-    // NOT a counterpart — the task comes back without a section, mirror
-    // of how restore drops missing tagIds.
-    //
     // Union payload-subTasks with state-derived subtasks: payload covers
     // the replay-with-missing-state case; state covers callers who pass
     // an empty `subTasks` array.
     const { tasks } = action as ReturnType<typeof TaskSharedActions.moveToArchive>;
-    const idSet = new Set<string>();
-    for (const t of tasks) {
-      idSet.add(t.id);
-      if (t.subTasks?.length) for (const st of t.subTasks) idSet.add(st.id);
-    }
-    const stateExpanded = collectTaskAndSubTaskIds(
+    const affectedTaskIds = collectTaskAndSubTaskIds(
       state,
       tasks.map((t) => t.id),
+      tasks.flatMap((t) => [...(t.subTaskIds ?? []), ...t.subTasks.map((st) => st.id)]),
     );
-    for (const id of stateExpanded) idSet.add(id);
     return withSectionStateUpdate(
       state,
-      cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], Array.from(idSet)),
+      cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], affectedTaskIds),
     );
   },
   [TaskSharedActions.deleteProject.type]: (state, action) => {
@@ -382,17 +371,33 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     return handleMoveToOtherProject(state, task.id, targetProjectId);
   },
   [TaskSharedActions.restoreTask.type]: (state, action) => {
+    // Restored tasks come back without a section (mirror of how restore
+    // drops missing tagIds) — strip any stale refs left by a pre-fix
+    // archive. The guard mirrors the lifecycle reducer's idempotent
+    // replay: when the root is already active, task state is untouched,
+    // so section membership must survive too.
     const { task, subTasks } = action as ReturnType<typeof TaskSharedActions.restoreTask>;
-    const taskIds = Array.from(
-      new Set([
-        task.id,
-        ...(task.subTaskIds ?? []),
-        ...subTasks.map((subTask) => subTask.id),
-      ]),
-    );
+    if (Object.prototype.hasOwnProperty.call(Object.prototype, task.id)) return state;
+    if (state[TASK_FEATURE_NAME].entities[task.id]?.id === task.id) return state;
+    const taskIds = new Set(collectTaskAndSubTaskIds(state, [task.id]));
+    for (const subTaskId of task.subTaskIds ?? []) {
+      const existingSubTask = state[TASK_FEATURE_NAME].entities[subTaskId];
+      if (!existingSubTask || existingSubTask.parentId === task.id) {
+        taskIds.add(subTaskId);
+      }
+    }
+    for (const subTask of subTasks) {
+      const existingSubTask = state[TASK_FEATURE_NAME].entities[subTask.id];
+      if (
+        existingSubTask?.parentId === task.id ||
+        (!existingSubTask && subTask.parentId === task.id)
+      ) {
+        taskIds.add(subTask.id);
+      }
+    }
     return withSectionStateUpdate(
       state,
-      cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], taskIds),
+      removeTaskIdsFromProjectSections(state[SECTION_FEATURE_NAME], Array.from(taskIds)),
     );
   },
   [TaskSharedActions.updateTask.type]: (state, action) => {
@@ -421,6 +426,85 @@ const ACTION_HANDLERS: Record<string, Handler> = {
         affectedTaskIds,
         targetProjectId,
       ),
+    );
+  },
+  [toLwwUpdateActionType('TASK')]: (state, action) => {
+    const update = action as Action & {
+      id?: unknown;
+      parentId?: unknown;
+      projectId?: unknown;
+      meta?: { entityIds?: unknown };
+    };
+    if (typeof update.id !== 'string') return state;
+
+    const currentTaskCandidate = state[TASK_FEATURE_NAME].entities[update.id] as
+      | Task
+      | undefined;
+    const currentTask =
+      currentTaskCandidate?.id === update.id ? currentTaskCandidate : undefined;
+    const explicitEntityIds = Array.isArray(update.meta?.entityIds)
+      ? update.meta.entityIds.filter((id): id is string => typeof id === 'string')
+      : undefined;
+    const affectedTaskIds =
+      explicitEntityIds !== undefined
+        ? Array.from(new Set([update.id, ...explicitEntityIds]))
+        : collectTaskAndSubTaskIds(state, [update.id]);
+
+    const hasParentId = Object.prototype.hasOwnProperty.call(update, 'parentId');
+    const hasProjectId = Object.prototype.hasOwnProperty.call(update, 'projectId');
+    if (!hasParentId && !hasProjectId) return state;
+
+    if (!currentTask) {
+      return withSectionStateUpdate(
+        state,
+        removeTaskIdsFromProjectSections(state[SECTION_FEATURE_NAME], affectedTaskIds),
+      );
+    }
+
+    let targetProjectId: string | undefined = currentTask.projectId;
+    let requestedProjectId: string | undefined = currentTask.projectId;
+    if (hasProjectId) {
+      if (update.projectId == null) {
+        requestedProjectId = undefined;
+      } else if (
+        typeof update.projectId === 'string' &&
+        (update.projectId === '' || getProjectOrUndefined(state, update.projectId))
+      ) {
+        requestedProjectId = update.projectId;
+      }
+    }
+    const targetParentId =
+      hasParentId && typeof update.parentId === 'string' && update.parentId
+        ? update.parentId
+        : undefined;
+
+    if (targetParentId) {
+      const targetParentCandidate = state[TASK_FEATURE_NAME].entities[targetParentId] as
+        | Task
+        | undefined;
+      const targetParent =
+        targetParentCandidate?.id === targetParentId ? targetParentCandidate : undefined;
+      targetProjectId = targetParent?.projectId ?? requestedProjectId;
+    } else if (hasParentId || !currentTask.parentId) {
+      targetProjectId = requestedProjectId;
+    }
+
+    const becomesSubTask = hasParentId ? !!targetParentId : !!currentTask.parentId;
+    const leavesCurrentProjectSection =
+      (!currentTask.parentId && becomesSubTask) ||
+      targetProjectId !== currentTask.projectId;
+    const repairsRootProjectRefs = !becomesSubTask && hasProjectId;
+    if (!leavesCurrentProjectSection && !repairsRootProjectRefs) return state;
+
+    return withSectionStateUpdate(
+      state,
+      becomesSubTask
+        ? removeTaskIdsFromProjectSections(state[SECTION_FEATURE_NAME], affectedTaskIds)
+        : removeTaskIdsFromOtherProjectSections(
+            state[SECTION_FEATURE_NAME],
+            affectedTaskIds,
+            targetProjectId ?? '',
+          ),
     );
   },
   [TaskSharedActions.convertToSubTask.type]: (state, action) => {

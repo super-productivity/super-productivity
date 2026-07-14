@@ -1427,7 +1427,7 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should replay a project move using the captured subtask ids', () => {
+    it('should replay only the captured project-move footprint on divergent state', () => {
       const testState = createStateWithExistingTasks(['task1'], ['orphan-subtask']);
       testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
         id: 'task1',
@@ -1436,6 +1436,12 @@ describe('taskSharedCrudMetaReducer', () => {
       });
       testState[TASK_FEATURE_NAME].entities['orphan-subtask'] = createMockTask({
         id: 'orphan-subtask',
+        projectId: 'project1',
+        parentId: 'task1',
+      });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('receiver-only-subtask');
+      testState[TASK_FEATURE_NAME].entities['receiver-only-subtask'] = createMockTask({
+        id: 'receiver-only-subtask',
         projectId: 'project1',
         parentId: 'task1',
       });
@@ -1450,6 +1456,8 @@ describe('taskSharedCrudMetaReducer', () => {
       const action = createUpdateTaskAction('task1', { projectId: 'project2' }, [
         'orphan-subtask',
       ]);
+
+      expect(action.meta.entityIds).toEqual(['task1', 'orphan-subtask']);
 
       metaReducer(testState, action);
 
@@ -1468,6 +1476,9 @@ describe('taskSharedCrudMetaReducer', () => {
             entities: jasmine.objectContaining({
               task1: jasmine.objectContaining({ projectId: 'project2' }),
               'orphan-subtask': jasmine.objectContaining({ projectId: 'project2' }),
+              'receiver-only-subtask': jasmine.objectContaining({
+                projectId: 'project1',
+              }),
             }),
           }),
         },
@@ -1491,6 +1502,89 @@ describe('taskSharedCrudMetaReducer', () => {
           ...expectProjectUpdate('project1', { taskIds: ['task1'] }),
           ...expectTaskUpdate('task1', {
             projectId: 'project1',
+            title: 'Updated title',
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    for (const invalidTarget of [
+      { label: 'prototype-like', id: 'constructor' },
+      { label: 'prototype-like', id: '__proto__' },
+    ]) {
+      it(`should ignore a ${invalidTarget.label} project destination while applying other fields`, () => {
+        const testState = createStateWithExistingTasks(['task1']);
+        const action = createUpdateTaskAction('task1', {
+          projectId: invalidTarget.id,
+          title: 'Updated title',
+        });
+
+        metaReducer(testState, action);
+
+        expectStateUpdate(
+          {
+            ...expectProjectUpdate('project1', { taskIds: ['task1'] }),
+            ...expectTaskUpdate('task1', {
+              projectId: 'project1',
+              title: 'Updated title',
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+    }
+
+    it('should replay a move to an archived-but-existing project', () => {
+      const testState = createStateWithExistingTasks(['task1']);
+      testState[PROJECT_FEATURE_NAME].entities['archived-project'] = {
+        ...(testState[PROJECT_FEATURE_NAME].entities.project1 as Project),
+        id: 'archived-project',
+        isArchived: true,
+        taskIds: [],
+        backlogTaskIds: [],
+      };
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('archived-project');
+      const action = createUpdateTaskAction('task1', {
+        projectId: 'archived-project',
+        title: 'Updated title',
+      });
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: [] }),
+          ...expectProjectUpdate('archived-project', { taskIds: ['task1'] }),
+          ...expectTaskUpdate('task1', {
+            projectId: 'archived-project',
+            title: 'Updated title',
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should allow clearing the project with an empty project id', () => {
+      const testState = createStateWithExistingTasks(['task1']);
+      const action = createUpdateTaskAction('task1', {
+        projectId: '',
+        title: 'Updated title',
+      });
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: [] }),
+          ...expectTaskUpdate('task1', {
+            projectId: '',
             title: 'Updated title',
           }),
         },

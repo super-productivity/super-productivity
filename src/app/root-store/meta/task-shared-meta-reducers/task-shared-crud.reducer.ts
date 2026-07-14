@@ -660,14 +660,22 @@ const handleUpdateTask = (
     currentTask,
   );
 
-  const requestedProjectId = cleanedTaskUpdate.changes.projectId;
-  if (
-    typeof requestedProjectId === 'string' &&
-    !isValidTaskProjectIdUpdate(state, currentTask, requestedProjectId)
-  ) {
-    const changes = { ...cleanedTaskUpdate.changes };
-    delete changes.projectId;
-    cleanedTaskUpdate = { ...cleanedTaskUpdate, changes };
+  // Subtasks inherit their project from the parent, and only an existing
+  // project (or '' for no project) is a usable destination for a top-level
+  // task. Archived projects remain valid during replay because their archive
+  // op can race with this update. Strip null/undefined/unknown destinations
+  // as well as at API boundaries so malformed or legacy ops can neither split
+  // parent from child nor orphan a task from every project list.
+  if (Object.prototype.hasOwnProperty.call(cleanedTaskUpdate.changes, 'projectId')) {
+    const requestedProjectId = cleanedTaskUpdate.changes.projectId;
+    if (
+      typeof requestedProjectId !== 'string' ||
+      !isValidTaskProjectIdUpdate(state, currentTask, requestedProjectId)
+    ) {
+      const changes = { ...cleanedTaskUpdate.changes };
+      delete changes.projectId;
+      cleanedTaskUpdate = { ...cleanedTaskUpdate, changes };
+    }
   }
 
   // Handle tag changes if tagIds are being updated
@@ -690,7 +698,13 @@ const handleUpdateTask = (
   ) {
     const subTaskIds =
       projectMoveSubTaskIds !== undefined
-        ? unique(projectMoveSubTaskIds.filter((id) => id !== taskId))
+        ? unique(
+            projectMoveSubTaskIds.filter(
+              (id) =>
+                id !== taskId &&
+                !Object.prototype.hasOwnProperty.call(Object.prototype, id),
+            ),
+          )
         : collectTaskAndSubTaskIds(state, [taskId]).filter((id) => id !== taskId);
     const allTaskIds = [taskId, ...subTaskIds];
     const targetProjectBefore =
