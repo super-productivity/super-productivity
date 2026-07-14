@@ -27,6 +27,7 @@ import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
+import { BodyClass } from '../../../app.constants';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -268,6 +269,41 @@ describe('AddTaskBarComponent', () => {
 
     fixture = TestBed.createComponent(AddTaskBarComponent);
     component = fixture.componentInstance;
+  });
+
+  describe('mobile keyboard positioning', () => {
+    const root = document.documentElement;
+
+    beforeEach(() => {
+      document.body.classList.add(BodyClass.isTouchOnly);
+      fixture.nativeElement.classList.add('global');
+      root.style.setProperty('--keyboard-height', '336px');
+      root.style.setProperty('--keyboard-overlay-offset', '0px');
+      root.style.setProperty('--s2', '16px');
+      fixture.detectChanges();
+    });
+
+    afterEach(() => {
+      document.body.classList.remove(BodyClass.isTouchOnly, BodyClass.isIOS);
+      root.style.removeProperty('--keyboard-height');
+      root.style.removeProperty('--keyboard-overlay-offset');
+      root.style.removeProperty('--s2');
+    });
+
+    it('uses the overlay-only keyboard offset for the iOS global bar', () => {
+      const compiledStyles = (
+        AddTaskBarComponent as unknown as { ɵcmp: { styles: string[] } }
+      ).ɵcmp.styles.join('\n');
+
+      expect(compiledStyles).toContain('.isIOS.global');
+      expect(compiledStyles).toContain(
+        'bottom: calc(var(--keyboard-overlay-offset) + var(--s2))',
+      );
+    });
+
+    it('keeps the measured keyboard offset for non-iOS touch builds', () => {
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('352px');
+    });
   });
 
   describe('onTaskSuggestionSelected', () => {
