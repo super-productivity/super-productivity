@@ -902,6 +902,116 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     expect(alreadyAcceptedTaskServerState[TASK_FEATURE_NAME].ids)
       .withContext('stale later delete removes already accepted roots and children')
       .toEqual([]);
+
+    const project2 = { ...project, id: 'project2', taskIds: [], backlogTaskIds: [] };
+    const initialStateWithMoveTarget: RootState = {
+      ...initialTaskState,
+      [PROJECT_FEATURE_NAME]: {
+        ...initialTaskState[PROJECT_FEATURE_NAME],
+        ids: [...(initialTaskState[PROJECT_FEATURE_NAME].ids as string[]), 'project2'],
+        entities: {
+          ...initialTaskState[PROJECT_FEATURE_NAME].entities,
+          project2,
+        },
+      },
+    };
+    const remoteMove: Operation = {
+      id: 'remote-parent-move',
+      actionType: ActionType.TASK_SHARED_MOVE_TO_PROJECT,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: regularTaskId,
+      payload: {
+        actionPayload: {
+          task: { ...regularTask, subTasks: [subtask] },
+          targetProjectId: 'project2',
+        },
+        entityChanges: [],
+      },
+      clientId: 'third-client',
+      vectorClock: { ['third-client']: 2 },
+      timestamp: 4_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const parentRecreation = taskRecreations.find(
+      ({ entityId, payload }) =>
+        entityId === regularTaskId &&
+        (payload as { lwwUpdateMode?: string }).lwwUpdateMode === 'replace',
+    );
+    if (!parentRecreation) {
+      throw new Error('Expected the parent TASK recreation.');
+    }
+    const originalLocalOpIds = new Set(
+      storedEntries.filter(({ source }) => source === 'local').map(({ op }) => op.id),
+    );
+    const movedRegularTask = { ...regularTask, projectId: 'project2' };
+    const movedSubtask = { ...subtask, projectId: 'project2' };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(
+        props?.id === regularTaskId
+          ? movedRegularTask
+          : props?.id === subtaskId
+            ? movedSubtask
+            : props?.id === 'project2'
+              ? { ...project2, taskIds: [regularTaskId] }
+              : props?.id === 'project1'
+                ? { ...project, taskIds: [], backlogTaskIds: [backlogTaskId] }
+                : props?.id === backlogTaskId
+                  ? backlogTask
+                  : undefined,
+      ),
+    );
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'TASK',
+        entityId: regularTaskId,
+        localOps: [parentRecreation],
+        remoteOps: [remoteMove],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    const remoteWinnerCompensations = (await opLogStore.getOpsAfterSeq(0))
+      .filter(({ op, source }) => source === 'local' && !originalLocalOpIds.has(op.id))
+      .map(({ op }) => op);
+    expect(remoteWinnerCompensations.length).toBeGreaterThan(0);
+    const moveWinnerState = applyTaskOperations(
+      initialStateWithMoveTarget,
+      [
+        remoteProjectDelete,
+        // The move is accepted first but cannot recreate the task removed by
+        // deleteProject on a fresh client.
+        remoteMove,
+        projectCompensations[0],
+        // The parent recovery is rejected. Independently accepted sibling rows
+        // must stay harmless until the reconstructive remote-winner group lands.
+        ...taskRecreations.filter(({ entityId }) => entityId !== regularTaskId),
+        projectCompensations[projectCompensations.length - 1],
+        ...remoteWinnerCompensations,
+      ],
+      'fresh-client',
+    );
+
+    expect(moveWinnerState[TASK_FEATURE_NAME].entities[regularTaskId]?.projectId).toBe(
+      'project2',
+    );
+    expect(moveWinnerState[TASK_FEATURE_NAME].entities[subtaskId]?.projectId).toBe(
+      'project2',
+    );
+    expect(
+      moveWinnerState[TASK_FEATURE_NAME].entities[regularTaskId]?.subTaskIds,
+    ).toEqual([subtaskId]);
+    expect(moveWinnerState[TASK_FEATURE_NAME].entities[subtaskId]?.parentId).toBe(
+      regularTaskId,
+    );
+    expect(moveWinnerState[PROJECT_FEATURE_NAME].entities.project1?.taskIds).toEqual([]);
+    expect(
+      moveWinnerState[PROJECT_FEATURE_NAME].entities.project1?.backlogTaskIds,
+    ).toEqual([backlogTaskId]);
+    expect(moveWinnerState[PROJECT_FEATURE_NAME].entities.project2?.taskIds).toEqual([
+      regularTaskId,
+    ]);
   });
 
   it('keeps a winning remote archive as an archive on every client', async () => {
