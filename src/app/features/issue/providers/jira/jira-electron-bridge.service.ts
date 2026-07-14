@@ -33,4 +33,9 @@ export class JiraElectronBridgeService {
     this.initialize();
     return this.#api ? this.#api.setupImgHeaders(config) : Promise.resolve();
   }
+
+  clearImgHeaders(): Promise<void> {
+    this.initialize();
+    return this.#api ? this.#api.clearImgHeaders() : Promise.resolve();
+  }
 }

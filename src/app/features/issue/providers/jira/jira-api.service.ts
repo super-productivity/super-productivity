@@ -688,7 +688,7 @@ export class JiraApiService {
           requestId,
           url,
           requestInit: this._toElectronRequestInit(requestInit),
-          allowSelfSignedCertificate: jiraCfg.isAllowSelfSignedCertificate,
+          allowSelfSignedCertificate: jiraCfg.isAllowSelfSignedCertificate === true,
         })
         .then((response) => this._handleResponse(response))
         .catch((error: unknown) =>
@@ -709,10 +709,9 @@ export class JiraApiService {
     this._globalProgressBarService.countUp(url);
     return from(promise).pipe(
       catchError((err) => {
-        IssueLog.log(err);
-        IssueLog.log(getErrorTxt(err));
         const errTxt = `Jira: ${getErrorTxt(err)}`;
         const status = extractHttpStatus(err);
+        IssueLog.err('Jira request failed', { status });
         if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
@@ -755,10 +754,9 @@ export class JiraApiService {
             [HANDLED_ERROR_PROP_STR]: 'Jira: Request timed out',
           }));
         }
-        IssueLog.log(err);
-        IssueLog.log(getErrorTxt(err));
         const errTxt = `Jira: ${getErrorTxt(err)}`;
         const status = extractHttpStatus(err);
+        IssueLog.err('Jira request failed', { status });
         if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
@@ -887,7 +885,10 @@ export class JiraApiService {
         // NOTE: never log `currentRequest` — it holds `jiraCfg` (plaintext
         // password) and `requestInit.headers.authorization`. The log history
         // is exportable, so credentials must never reach it.
-        IssueLog.err('JIRA_RESPONSE_ERROR', res?.error, res?.requestId);
+        IssueLog.err('JIRA_RESPONSE_ERROR', {
+          requestId: res?.requestId,
+          status: res?.error?.status,
+        });
         // let msg =
         const blocked =
           res?.error && isUnauthorizedError(res.error) ? this._blockAccess() : undefined;
@@ -899,9 +900,9 @@ export class JiraApiService {
           // data can be invalid, that's why we check
           try {
             currentRequest.resolve(currentRequest.transform(res, currentRequest.jiraCfg));
-          } catch (e) {
+          } catch {
             // Do not log `currentRequest` (contains jiraCfg + auth header).
-            IssueLog.err('JIRA_TRANSFORM_ERROR', res?.requestId, e);
+            IssueLog.err('JIRA_TRANSFORM_ERROR', { requestId: res?.requestId });
             this._snackService.open({
               type: 'ERROR',
               msg: T.F.JIRA.S.INVALID_RESPONSE,
@@ -1011,8 +1012,8 @@ async function streamToJsonIfPossible(stream: ReadableStream): Promise<unknown> 
   const text = await streamToString(stream);
   try {
     return JSON.parse(text);
-  } catch (e) {
-    IssueLog.err('Jira: Could not parse response', text);
+  } catch {
+    IssueLog.err('Jira: Could not parse response');
     return text;
   }
 }

@@ -25,6 +25,11 @@ export interface JiraElectronResponse {
   };
 }
 
+export interface JiraCapabilityEnvelope<TPayload> {
+  capabilityToken: string;
+  payload: TPayload;
+}
+
 export interface JiraImageAuthConfig {
   host: string | null;
   userName: string | null;
@@ -35,4 +40,5 @@ export interface JiraImageAuthConfig {
 export interface JiraElectronApi {
   makeRequest(request: JiraElectronRequest): Promise<JiraElectronResponse>;
   setupImgHeaders(config: JiraImageAuthConfig): Promise<void>;
+  clearImgHeaders(): Promise<void>;
 }

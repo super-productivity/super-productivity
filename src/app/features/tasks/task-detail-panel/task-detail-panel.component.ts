@@ -443,8 +443,8 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
                   )
                   .pipe(
                     // Orphan issueProviderId — see #7135.
-                    catchError((err: unknown) => {
-                      IssueLog.warn('Jira header setup skipped', err);
+                    catchError(() => {
+                      IssueLog.warn('Jira header setup skipped');
                       return of(null);
                     }),
                   )
@@ -459,9 +459,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
                 host: jiraCfg.host,
                 userName: jiraCfg.userName,
                 password: jiraCfg.password,
-                usePAT: jiraCfg.usePAT,
+                usePAT: jiraCfg.usePAT === true,
               })
               .catch(() => IssueLog.err('Jira image authentication setup failed'));
+          } else {
+            void this._jiraElectronBridge
+              .clearImgHeaders()
+              .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
           }
         })
     : null;
@@ -592,6 +596,11 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   ngOnDestroy(): void {
+    if (IS_ELECTRON) {
+      void this._jiraElectronBridge
+        .clearImgHeaders()
+        .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
+    }
     if (window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL]) {
       window.history.back();
     }

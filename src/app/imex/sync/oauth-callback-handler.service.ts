@@ -77,7 +77,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
   }
 
   private _setupElectronOAuthListener(): void {
-    window.ea.on(IPC.OAUTH_CALLBACK, (_event, payload) => {
+    window.ea.on(IPC.OAUTH_CALLBACK, (payload) => {
       if (this._isDestroyed) {
         return;
       }

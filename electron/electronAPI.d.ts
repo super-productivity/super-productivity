@@ -1,4 +1,3 @@
-import { IpcRendererEvent } from 'electron';
 import {
   GlobalConfigState,
   TakeABreakConfig,
@@ -18,10 +17,7 @@ import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
 import { JiraElectronApi } from './shared-with-frontend/jira-request.model';
 
 export interface ElectronAPI {
-  on(
-    channel: string,
-    listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-  ): void;
+  on(channel: string, listener: (...args: unknown[]) => void): void;
 
   // SYNC
   // ----

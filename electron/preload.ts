@@ -1,10 +1,4 @@
-import {
-  ipcRenderer,
-  IpcRendererEvent,
-  webFrame,
-  contextBridge,
-  webUtils,
-} from 'electron';
+import { ipcRenderer, webFrame, contextBridge, webUtils } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
 import { IS_GNOME_DESKTOP, IS_GNOME_WAYLAND } from './common.const';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
@@ -22,10 +16,9 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import {
-  JiraElectronApi,
-  JiraElectronResponse,
-} from './shared-with-frontend/jira-request.model';
-import { createOneShotApiConsumer } from './shared-with-frontend/one-shot-api-consumer';
+  createJiraPreloadApiConsumer,
+  toPayloadOnlyIpcListener,
+} from './shared-with-frontend/preload-api';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -36,20 +29,12 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
 
-const consumeJiraApi = createOneShotApiConsumer<JiraElectronApi>(() => ({
-  makeRequest: (request) =>
-    _invoke(IPC.JIRA_MAKE_REQUEST_EVENT, request) as Promise<JiraElectronResponse>,
-  setupImgHeaders: (config) =>
-    _invoke(IPC.JIRA_SETUP_IMG_HEADERS, config) as Promise<void>,
-}));
+const consumeJiraApi = createJiraPreloadApiConsumer(_invoke);
 
 const ea: ElectronAPI = {
-  on: (
-    channel: string,
-    listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-  ) => {
+  on: (channel: string, listener: (...args: unknown[]) => void) => {
     // NOTE: there is no proper way to unsubscribe apart from unsubscribing all
-    ipcRenderer.on(channel, listener);
+    ipcRenderer.on(channel, toPayloadOnlyIpcListener(listener));
   },
   // SYNC
   // ----

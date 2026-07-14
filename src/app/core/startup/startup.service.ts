@@ -27,7 +27,6 @@ import { selectSyncConfig } from '../../features/config/store/global-config.redu
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
-import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
@@ -86,7 +85,7 @@ export class StartupService {
     // Initialize electron error handler in an effect
     if (IS_ELECTRON) {
       effect(() => {
-        window.ea.on(IPC.ERROR, (ev: IpcRendererEvent, ...args: unknown[]) => {
+        window.ea.on(IPC.ERROR, (...args: unknown[]) => {
           const data = args[0] as {
             error: unknown;
             stack: unknown;
