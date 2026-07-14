@@ -94,6 +94,38 @@ describe('GlobalConfigReducer', () => {
       expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
     });
 
+    it('should fill missing idle config fields with defaults', () => {
+      // Simulate loading config with a partial idle section that lacks the
+      // newly added isSuppressIdleDuringFocusMode field (e.g., existing user
+      // whose persisted idle config predates this setting).
+      const partialIdleConfig = {
+        isEnableIdleTimeTracking: true,
+        isOnlyOpenIdleWhenCurrentTask: false,
+        minIdleTime: 5 * 60 * 1000,
+        // isSuppressIdleDuringFocusMode is intentionally absent
+      };
+
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        idle: partialIdleConfig as any,
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: incomingConfig } as AppDataComplete,
+        }),
+      );
+
+      // Existing values preserved
+      expect(result.idle.isEnableIdleTimeTracking).toBe(true);
+      expect(result.idle.minIdleTime).toBe(5 * 60 * 1000);
+      // Missing value filled from default (must be false = opt-in)
+      expect(result.idle.isSuppressIdleDuringFocusMode).toBe(
+        DEFAULT_GLOBAL_CONFIG.idle.isSuppressIdleDuringFocusMode,
+      );
+    });
+
     it('should coerce a legacy null defaultProjectId to the Inbox default (#7891)', () => {
       // Older configs stored `null` (the removed "None" default). With the "None"
       // option gone, that value no longer matches a dropdown option, so it must be

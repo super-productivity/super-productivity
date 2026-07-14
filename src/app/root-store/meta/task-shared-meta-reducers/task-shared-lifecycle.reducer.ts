@@ -6,13 +6,11 @@ import {
   PROJECT_FEATURE_NAME,
   projectAdapter,
 } from '../../../features/project/store/project.reducer';
-import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import {
   TASK_FEATURE_NAME,
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Tag } from '../../../features/tag/tag.model';
-import { Project } from '../../../features/project/project.model';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
@@ -20,10 +18,12 @@ import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/
 import { unique } from '../../../util/unique';
 import {
   ActionHandlerMap,
-  getProject,
+  collectTaskAndSubTaskIds,
+  getProjectOrUndefined,
   getTag,
+  getTagOrUndefined,
+  removeTasksFromAllProjects,
   removeTasksFromAllTags,
-  removeTasksFromList,
   TaskEntity,
   updateTags,
 } from './task-shared-helpers';
@@ -33,44 +33,18 @@ import {
 // =============================================================================
 
 const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootState => {
-  const taskIdsToArchive = tasks.flatMap((t) => [t.id, ...t.subTasks.map((st) => st.id)]);
-
-  // Get tag/project associations from CURRENT STATE, not payload.
-  // This is critical for remote sync: the payload reflects the originating client's
-  // state, but this client may have different tag/project associations for the same tasks.
-  // Using current state ensures we clean up all references on THIS client.
-  const projectIds = unique(
-    taskIdsToArchive
-      .map((taskId) => state[TASK_FEATURE_NAME].entities[taskId]?.projectId)
-      .filter((pid): pid is string => !!pid),
+  const taskIdsToArchive = collectTaskAndSubTaskIds(
+    state,
+    tasks.map((task) => task.id),
+    tasks.flatMap((task) => [
+      ...(task.subTaskIds ?? []),
+      ...task.subTasks.map((subTask) => subTask.id),
+    ]),
   );
 
-  let updatedState = state;
-
-  if (projectIds.length > 0) {
-    const projectUpdates = projectIds
-      .filter((pid) => !!state[PROJECT_FEATURE_NAME].entities[pid])
-      .map((pid): Update<Project> => {
-        const project = getProject(state, pid);
-        return {
-          id: pid,
-          changes: {
-            taskIds: removeTasksFromList(project.taskIds, taskIdsToArchive),
-            backlogTaskIds: removeTasksFromList(project.backlogTaskIds, taskIdsToArchive),
-          },
-        };
-      });
-
-    if (projectUpdates.length > 0) {
-      updatedState = {
-        ...updatedState,
-        [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
-          projectUpdates,
-          updatedState[PROJECT_FEATURE_NAME],
-        ),
-      };
-    }
-  }
+  // Scan every project instead of trusting task.projectId. Older partial updates
+  // could leave a task referenced by a different project than the task claims.
+  const updatedState = removeTasksFromAllProjects(state, taskIdsToArchive);
 
   // Scan every tag, not just each task's own `tagIds` — see
   // removeTasksFromAllTags for why (one-sided tag refs after sync).
@@ -86,17 +60,18 @@ const normalizeRestoredTask = <T extends TaskEntity | Task>(
   t: T,
   state: RootState,
 ): T => {
-  // Reassign stale projectId to INBOX
+  // Reassign a deleted projectId to INBOX. Archived projects remain valid
+  // task owners and must survive reducer replay.
   let projectId = t.projectId;
-  if (projectId && !state[PROJECT_FEATURE_NAME].entities[projectId]) {
-    projectId = state[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id]
+  if (projectId && !getProjectOrUndefined(state, projectId)) {
+    projectId = getProjectOrUndefined(state, INBOX_PROJECT.id)
       ? INBOX_PROJECT.id
       : undefined;
   }
 
   // Strip stale tagIds and TODAY_TAG (must never be in task.tagIds)
   const tagIds = (t.tagIds || []).filter(
-    (tagId) => tagId !== TODAY_TAG.id && !!state[TAG_FEATURE_NAME].entities[tagId],
+    (tagId) => tagId !== TODAY_TAG.id && !!getTagOrUndefined(state, tagId),
   );
 
   // Clear stale repeatCfgId (only present on full Task, not minimal TaskEntity)
@@ -115,26 +90,92 @@ const handleRestoreTask = (
   task: TaskEntity,
   subTasks: Task[],
 ): RootState => {
+  if (Object.prototype.hasOwnProperty.call(Object.prototype, task.id)) return state;
+
+  // A replayed restore is idempotent when the root is already active. NgRx
+  // addMany would otherwise ignore the root but add payload children as
+  // orphans the root's subTaskIds never references.
+  if (state[TASK_FEATURE_NAME].entities[task.id]?.id === task.id) return state;
+
   // Normalize stale refs before adding to active state
-  const restoredTask = normalizeRestoredTask(
+  const normalizedRestoredTask = normalizeRestoredTask(
     { ...task, isDone: false, doneOn: undefined },
     state,
   );
-  const restoredSubTasks = subTasks.map((st) => normalizeRestoredTask(st, state));
+  const restoredTask = {
+    ...normalizedRestoredTask,
+    projectId: normalizedRestoredTask.projectId ?? '',
+  };
+  const declaredSubTaskIds = new Set(restoredTask.subTaskIds ?? []);
+  const restoredSubTasks = subTasks
+    .filter((subTask) => {
+      const existingSubTask = state[TASK_FEATURE_NAME].entities[subTask.id];
+      const belongsToRestoredTask =
+        subTask.parentId === restoredTask.id ||
+        (!subTask.parentId && declaredSubTaskIds.has(subTask.id));
+      return (
+        belongsToRestoredTask &&
+        (!existingSubTask || existingSubTask.parentId === restoredTask.id)
+      );
+    })
+    .map((subTask) => ({
+      ...normalizeRestoredTask(subTask, state),
+      parentId: restoredTask.id,
+      projectId: restoredTask.projectId,
+    }));
 
   const updatedTaskState = taskAdapter.addMany(
     [restoredTask as Task, ...restoredSubTasks],
     state[TASK_FEATURE_NAME],
   );
 
-  let updatedState = {
+  let updatedState: RootState = {
     ...state,
     [TASK_FEATURE_NAME]: updatedTaskState,
   };
 
+  // Adopt reverse-linked children (already active with parentId → root but
+  // missing from the payload/root's subTaskIds) so the restored parent and
+  // its children end up in one project with a two-sided relationship.
+  const restoreCandidateIds = collectTaskAndSubTaskIds(
+    updatedState,
+    [restoredTask.id],
+    [...(restoredTask.subTaskIds ?? []), ...restoredSubTasks.map((st) => st.id)],
+  );
+  const verifiedSubTaskIds = restoreCandidateIds.filter(
+    (id) =>
+      id !== restoredTask.id &&
+      updatedState[TASK_FEATURE_NAME].entities[id]?.parentId === restoredTask.id,
+  );
+  const normalizedSubTaskIds = unique(verifiedSubTaskIds);
+  const restoredTaskIds = [restoredTask.id, ...normalizedSubTaskIds];
+  const restoredTaskUpdates: Update<Task>[] = normalizedSubTaskIds.map((id) => ({
+    id,
+    changes: { projectId: restoredTask.projectId },
+  }));
+  if (
+    normalizedSubTaskIds.length !== (restoredTask.subTaskIds ?? []).length ||
+    normalizedSubTaskIds.some(
+      (id, index) => id !== (restoredTask.subTaskIds ?? [])[index],
+    )
+  ) {
+    restoredTaskUpdates.push({
+      id: restoredTask.id,
+      changes: { subTaskIds: normalizedSubTaskIds },
+    });
+  }
+  updatedState = {
+    ...updatedState,
+    [TASK_FEATURE_NAME]: taskAdapter.updateMany(
+      restoredTaskUpdates,
+      updatedState[TASK_FEATURE_NAME],
+    ),
+  };
+  updatedState = removeTasksFromAllProjects(updatedState, restoredTaskIds);
+
   // Update project
   if (restoredTask.projectId) {
-    const project = state[PROJECT_FEATURE_NAME].entities[restoredTask.projectId];
+    const project = getProjectOrUndefined(updatedState, restoredTask.projectId);
     if (project) {
       updatedState = {
         ...updatedState,
@@ -152,20 +193,20 @@ const handleRestoreTask = (
   }
 
   // Update tags
-  const allTasks = [restoredTask, ...restoredSubTasks];
-  const tagTaskMap = allTasks.reduce(
-    (map, t) => {
-      (t.tagIds || []).forEach((tagId) => {
-        if (!map[tagId]) map[tagId] = [];
-        map[tagId].push(t.id);
-      });
-      return map;
-    },
-    {} as Record<string, string[]>,
-  );
+  const allTasks = restoredTaskIds
+    .map((id) => updatedState[TASK_FEATURE_NAME].entities[id])
+    .filter((restoredEntity): restoredEntity is Task => !!restoredEntity);
+  const tagTaskMap = new Map<string, string[]>();
+  for (const restoredEntity of allTasks) {
+    for (const tagId of restoredEntity.tagIds ?? []) {
+      const taskIds = tagTaskMap.get(tagId) ?? [];
+      taskIds.push(restoredEntity.id);
+      tagTaskMap.set(tagId, taskIds);
+    }
+  }
 
-  const tagUpdates = Object.entries(tagTaskMap)
-    .filter(([tagId]) => state[TAG_FEATURE_NAME].entities[tagId])
+  const tagUpdates = Array.from(tagTaskMap.entries())
+    .filter(([tagId]) => getTagOrUndefined(state, tagId))
     .map(
       ([tagId, taskIds]): Update<Tag> => ({
         id: tagId,

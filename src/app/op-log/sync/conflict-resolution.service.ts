@@ -124,6 +124,70 @@ interface AutoResolveConflictsLwwOptions {
   remoteApplyLifecycleOwnedByCaller?: boolean;
 }
 
+const getTaskProjectMoveEntityIds = (operation: Operation): string[] | undefined => {
+  if (
+    operation.actionType === toLwwUpdateActionType('TASK') &&
+    operation.entityId &&
+    Array.isArray(operation.entityIds)
+  ) {
+    return Array.from(new Set([operation.entityId, ...operation.entityIds]));
+  }
+
+  if (
+    operation.actionType !== ActionType.TASK_SHARED_UPDATE ||
+    !operation.entityId ||
+    !operation.payload ||
+    typeof operation.payload !== 'object'
+  ) {
+    return undefined;
+  }
+
+  const payload = operation.payload as Record<string, unknown>;
+  const actionPayload =
+    payload['actionPayload'] && typeof payload['actionPayload'] === 'object'
+      ? (payload['actionPayload'] as Record<string, unknown>)
+      : payload;
+  const subTaskIds = actionPayload['projectMoveSubTaskIds'];
+  if (!Array.isArray(subTaskIds)) return undefined;
+
+  return Array.from(
+    new Set([
+      operation.entityId,
+      ...subTaskIds.filter((id): id is string => typeof id === 'string'),
+    ]),
+  );
+};
+
+export const getLatestTaskProjectMoveEntityIds = (
+  operations: Operation[],
+): string[] | undefined => {
+  let latest: { operation: Operation; entityIds: string[] } | undefined;
+  for (const operation of operations) {
+    const entityIds = getTaskProjectMoveEntityIds(operation);
+    if (!entityIds) continue;
+    if (
+      !latest ||
+      operation.timestamp > latest.operation.timestamp ||
+      (operation.timestamp === latest.operation.timestamp &&
+        operation.id > latest.operation.id)
+    ) {
+      latest = { operation, entityIds };
+    }
+  }
+
+  return latest?.entityIds;
+};
+
+const latestProjectMoveEntityIds = (
+  entityId: string,
+  operations: Operation[],
+): string[] | undefined => {
+  const projectMoveEntityIds = getLatestTaskProjectMoveEntityIds(operations);
+  if (!projectMoveEntityIds) return undefined;
+
+  return Array.from(new Set([entityId, ...projectMoveEntityIds]));
+};
+
 const markLwwDeleteRecreation = (op: Operation): Operation =>
   isLwwUpdatePayload(op.payload)
     ? {
@@ -272,6 +336,7 @@ export class ConflictResolutionService {
    * @param clientId - Client creating this operation
    * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
    * @param timestamp - Preserved timestamp for correct LWW semantics
+   * @param entityIds - Captured task-project-move footprint, when applicable
    * @returns New UPDATE operation ready for upload
    */
   createLWWUpdateOp(
@@ -282,6 +347,7 @@ export class ConflictResolutionService {
     vectorClock: VectorClock,
     timestamp: number,
     lwwUpdateMode: LwwUpdateMode = 'replace',
+    entityIds?: string[],
   ): Operation {
     // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
     // NOT in the ActionType enum. They are dynamically constructed here and matched
@@ -313,6 +379,9 @@ export class ConflictResolutionService {
       opType: OpType.Update,
       entityType,
       entityId,
+      ...(entityIds !== undefined && {
+        entityIds: Array.from(new Set([entityId, ...entityIds])),
+      }),
       payload,
       clientId,
       vectorClock,
@@ -2249,6 +2318,10 @@ export class ConflictResolutionService {
       newClock,
       mergedTimestamp,
       'patch',
+      latestProjectMoveEntityIds(conflict.entityId, [
+        ...conflict.localOps,
+        ...conflict.remoteOps,
+      ]),
     );
   }
 
@@ -2361,6 +2434,8 @@ export class ConflictResolutionService {
       clientId,
       newClock,
       preservedTimestamp,
+      'replace',
+      latestProjectMoveEntityIds(conflict.entityId, conflict.localOps),
     );
     if (
       conflict.remoteOps.some((op) => op.opType === OpType.Delete) ||
