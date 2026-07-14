@@ -1398,20 +1398,17 @@ describe('FileBasedSyncAdapterService', () => {
         ) as unknown as FileBasedSyncData;
         expect(primary.clientId).toBe('newClient');
         // Writes: 1 = pending marker, 2 = .bak, 3 = primary, 4 = complete marker.
-        // A crash BEFORE the primary write (1, 2) is recovered by promoting the
-        // pending payload (marker → complete). A crash AT/AFTER the primary
-        // write (3) leaves the primary already advanced past the marker's
-        // basePrimaryRev, so recovery must NOT re-promote (a marker-unaware
-        // client could have written in between) — the marker is abandoned while
-        // the already-committed primary stays authoritative. A crash after the
-        // complete write (4) needs no recovery.
+        // A crash before the primary write promotes the pending payload. A
+        // crash after it recognizes the exact encoded payload now at the new
+        // revision and completes the marker; a different payload would be
+        // abandoned as a concurrent commit.
         expect(
           JSON.parse(
             files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
           ),
         ).toEqual(
           jasmine.objectContaining({
-            status: crashAfterWrite === 3 ? 'aborted' : 'complete',
+            status: 'complete',
           }),
         );
 
@@ -1628,6 +1625,20 @@ describe('FileBasedSyncAdapterService', () => {
       return files;
     };
 
+    const createFreshAdapter = (): OperationSyncCapable => {
+      const freshService = TestBed.runInInjectionContext(
+        () => new FileBasedSyncAdapterService(),
+      );
+      return freshService.createAdapter(mockProvider, mockCfg, mockEncryptKey);
+    };
+
+    const digestEncodedPayload = async (encoded: string): Promise<string> =>
+      (
+        service as unknown as {
+          _digestEncodedPayload: (value: string) => Promise<string>;
+        }
+      )._digestEncodedPayload(encoded);
+
     it('abandons a stale pending snapshot instead of clobbering newer committed data', async () => {
       // Device A began a "Use Local" transaction at basePrimaryRev and crashed.
       // A marker-unaware client then committed days of work (primary advanced).
@@ -1679,6 +1690,325 @@ describe('FileBasedSyncAdapterService', () => {
         ),
       ).toEqual(
         jasmine.objectContaining({ status: 'aborted', transactionId: 'stale-tx' }),
+      );
+    });
+
+    it('abandons a pending snapshot when its primary was deleted', async () => {
+      const encodedPending = addPrefix(
+        createMockSyncData({
+          syncVersion: 2,
+          vectorClock: { pendingClient: 2 },
+          clientId: 'pendingClient',
+        }),
+      );
+      const files = installCasRemote([
+        [
+          FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'pending',
+              transactionId: 'deleted-primary',
+              basePrimaryRev: 'deleted-primary-rev',
+              encodedSnapshot: encodedPending,
+            }),
+            rev: 'marker-rev',
+          },
+        ],
+      ]);
+
+      const result = await adapter.downloadOps(0);
+
+      expect(result.latestSeq).toBe(0);
+      expect(
+        JSON.parse(
+          files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
+        ),
+      ).toEqual(
+        jasmine.objectContaining({
+          status: 'aborted',
+          transactionId: 'deleted-primary',
+        }),
+      );
+    });
+
+    it('completes an already committed pending snapshot before a backup refresh failure', async () => {
+      const encodedPending = addPrefix(
+        createMockSyncData({
+          syncVersion: 2,
+          vectorClock: { pendingClient: 2 },
+          clientId: 'pendingClient',
+        }),
+      );
+      const files = installCasRemote([
+        [
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          { dataStr: encodedPending, rev: 'committed-primary-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'pending',
+              transactionId: 'already-committed',
+              basePrimaryRev: 'primary-at-begin',
+              encodedSnapshot: encodedPending,
+            }),
+            rev: 'marker-rev',
+          },
+        ],
+      ]);
+      let nextRev = 0;
+      mockProvider.uploadFile.and.callFake(
+        async (
+          path: string,
+          dataStr: string,
+          revToMatch: string | null,
+          isForceOverwrite = false,
+        ) => {
+          if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+            throw new Error('backup refresh unavailable');
+          }
+          const current = files.get(path);
+          if (
+            !isForceOverwrite &&
+            (revToMatch === null ? current !== undefined : current?.rev !== revToMatch)
+          ) {
+            throw new UploadRevToMatchMismatchAPIError();
+          }
+          const rev = `${path}-rev-${++nextRev}`;
+          files.set(path, { dataStr, rev });
+          return { rev };
+        },
+      );
+
+      const result = await adapter.downloadOps(0);
+
+      expect(result.latestSeq).toBe(2);
+      expect(
+        JSON.parse(
+          files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
+        ),
+      ).toEqual(
+        jasmine.objectContaining({
+          status: 'complete',
+          transactionId: 'already-committed',
+        }),
+      );
+    });
+
+    it('inherits every rejected digest when an aborted snapshot is replaced', async () => {
+      const encodedA = addPrefix(
+        createMockSyncData({
+          syncVersion: 2,
+          vectorClock: { staleA: 2 },
+          clientId: 'staleA',
+        }),
+      );
+      const digestA = await digestEncodedPayload(encodedA);
+      const files = installCasRemote([
+        [
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          { dataStr: addPrefix(createMockSyncData()), rev: 'primary-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+          { dataStr: encodedA, rev: 'stale-a-backup-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'aborted',
+              transactionId: 'aborted-a',
+              snapshotDigest: digestA,
+              stateDigest: 'state-a',
+              rejectedSnapshotDigests: ['snapshot-before-a'],
+              rejectedStateDigests: ['state-before-a'],
+            }),
+            rev: 'aborted-a-rev',
+          },
+        ],
+      ]);
+
+      await adapter.uploadSnapshot(
+        {},
+        'snapshot-b',
+        'recovery',
+        { snapshotB: 1 },
+        1,
+        undefined,
+        'snapshot-b-op',
+      );
+
+      const pendingB = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter(([path]) => path === FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)
+        .map(([, dataStr]) => JSON.parse(dataStr as string) as Record<string, unknown>)
+        .find((marker) => marker['status'] === 'pending')!;
+      expect(pendingB['rejectedSnapshotDigests']).toEqual(['snapshot-before-a', digestA]);
+      expect(pendingB['rejectedStateDigests']).toEqual(['state-before-a', 'state-a']);
+      const completedB = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter(([path]) => path === FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)
+        .map(([, dataStr]) => JSON.parse(dataStr as string) as Record<string, unknown>)
+        .find((marker) => marker['status'] === 'complete')!;
+      expect(completedB['rejectedSnapshotDigests']).toEqual([
+        'snapshot-before-a',
+        digestA,
+      ]);
+      expect(completedB['rejectedStateDigests']).toEqual(['state-before-a', 'state-a']);
+
+      files.set(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE, {
+        dataStr: JSON.stringify(pendingB),
+        rev: 'pending-b-rev',
+      });
+      files.set(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE, {
+        dataStr: addPrefix(
+          createMockSyncData({
+            syncVersion: 3,
+            vectorClock: { concurrentClient: 3 },
+            clientId: 'concurrentClient',
+          }),
+        ),
+        rev: 'concurrent-primary-rev',
+      });
+      mockProvider.uploadFile.calls.reset();
+
+      await createFreshAdapter().downloadOps(0);
+
+      const abortedB = JSON.parse(
+        files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
+      ) as Record<string, unknown>;
+      expect(abortedB['status']).toBe('aborted');
+      expect(abortedB['rejectedSnapshotDigests']).toEqual(['snapshot-before-a', digestA]);
+      expect(abortedB['rejectedStateDigests']).toEqual(['state-before-a', 'state-a']);
+
+      files.set(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE, {
+        dataStr:
+          getSyncFilePrefix({
+            isCompress: true,
+            isEncrypt: false,
+            modelVersion: 2,
+          }) + 'not-valid-gzip',
+        rev: 'corrupt-primary-rev',
+      });
+
+      await expectAsync(createFreshAdapter().downloadOps(0)).toBeRejected();
+    });
+
+    it('does not abort a valid encrypted pending snapshot when the key is wrong', async () => {
+      const encryptedCfg: EncryptAndCompressCfg = {
+        isEncrypt: true,
+        isCompress: false,
+      };
+      const pendingData = createMockSyncData({
+        syncVersion: 1,
+        vectorClock: { pendingClient: 1 },
+        clientId: 'pendingClient',
+      });
+      const encodedPending = await (
+        service as unknown as {
+          _encryptAndCompressHandler: {
+            compressAndEncryptData: (
+              cfg: EncryptAndCompressCfg,
+              key: string,
+              data: unknown,
+              version: number,
+            ) => Promise<string>;
+          };
+        }
+      )._encryptAndCompressHandler.compressAndEncryptData(
+        encryptedCfg,
+        'correct-password',
+        pendingData,
+        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+      );
+      const files = installCasRemote([
+        [
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          { dataStr: addPrefix(createMockSyncData()), rev: 'primary-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'pending',
+              transactionId: 'encrypted-pending',
+              basePrimaryRev: 'primary-rev',
+              encodedSnapshot: encodedPending,
+            }),
+            rev: 'marker-rev',
+          },
+        ],
+      ]);
+      const wrongKeyAdapter = service.createAdapter(
+        mockProvider,
+        encryptedCfg,
+        'wrong-password',
+      );
+
+      await expectAsync(wrongKeyAdapter.downloadOps(0)).toBeRejected();
+
+      expect(
+        JSON.parse(
+          files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
+        ),
+      ).toEqual(jasmine.objectContaining({ status: 'pending' }));
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('refuses an abandoned snapshot payload left in the rolling backup', async () => {
+      const staleSnapshot = createMockSyncData({
+        syncVersion: 1,
+        vectorClock: { staleClient: 1 },
+        clientId: 'staleClient',
+      });
+      const encodedStale = addPrefix(staleSnapshot);
+      const corruptPrimary =
+        getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
+        'not-valid-gzip';
+      const files = installCasRemote([
+        [
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          { dataStr: corruptPrimary, rev: 'newer-primary-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+          { dataStr: encodedStale, rev: 'stale-backup-rev' },
+        ],
+        [
+          FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'pending',
+              transactionId: 'stale-pending',
+              basePrimaryRev: 'old-primary-rev',
+              encodedSnapshot: encodedStale,
+            }),
+            rev: 'marker-rev',
+          },
+        ],
+      ]);
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejected();
+
+      expect(
+        JSON.parse(
+          files.get(FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE)!.dataStr,
+        ),
+      ).toEqual(
+        jasmine.objectContaining({
+          status: 'aborted',
+          snapshotDigest: jasmine.any(String),
+        }),
+      );
+      expect(files.get(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)!.rev).toBe(
+        'newer-primary-rev',
       );
     });
 
@@ -3395,7 +3725,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
-    it('(a2) an unchanged-rev poll performs no snapshot-transaction marker request', async () => {
+    it('(a2) an unchanged-rev poll checks snapshot recovery before returning early', async () => {
       const syncData = createMockSyncData({ syncVersion: 2, recentOps: [] });
       mockProvider.downloadFile.and.returnValue(
         Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
@@ -3413,11 +3743,11 @@ describe('FileBasedSyncAdapterService', () => {
 
       await adapter.downloadOps(2);
 
-      // The whole idle poll costs exactly ONE metadata request: the cheap rev
-      // pre-check runs BEFORE the marker read, so an unchanged remote skips the
-      // marker GET entirely (previously every poll paid 2+ round trips).
+      // Recovery intent cannot remain hidden behind an unchanged primary rev.
       expect(mockProvider.getFileRev.calls.count()).toBe(1);
-      expect(mockProvider.downloadFile.calls.count()).toBe(0);
+      expect(mockProvider.downloadFile).toHaveBeenCalledOnceWith(
+        FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+      );
     });
 
     it('(b) proceeds with the full download when the remote rev changed', async () => {
@@ -3748,6 +4078,10 @@ describe('FileBasedSyncAdapterService', () => {
         throw new RemoteFileNotFoundAPIError(path);
       };
       mockProvider.downloadFile.and.callFake(downloadByPath);
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path in map) return { rev: `${path}-rev` };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
       for (const markerPath of [
         C.SNAPSHOT_TRANSACTION_FILE,
         C.OPS_SNAPSHOT_TRANSACTION_FILE,
@@ -3845,6 +4179,13 @@ describe('FileBasedSyncAdapterService', () => {
       );
       return freshService.createAdapter(mockProvider, mockCfg, mockEncryptKey);
     };
+
+    const digestEncodedPayload = async (encoded: string): Promise<string> =>
+      (
+        service as unknown as {
+          _digestEncodedPayload: (value: string) => Promise<string>;
+        }
+      )._digestEncodedPayload(encoded);
 
     beforeEach(() => {
       splitSyncEnabled = true;
@@ -4146,6 +4487,137 @@ describe('FileBasedSyncAdapterService', () => {
       expect(stateUpload![3]).toBe(false);
     });
 
+    it('(b1) recovers transactional compaction after every publication write', async () => {
+      for (let crashAfterWrite = 1; crashAfterWrite <= 7; crashAfterWrite++) {
+        const many = Array.from({ length: C.MAX_RECENT_OPS }, (_, index) =>
+          makeCompactOp({ id: `op-${index}`, sv: 5 }),
+        );
+        const committedClock = { client1: 1 };
+        const remote = installStatefulCasRemote(createMockSyncData(), crashAfterWrite);
+        remote.files.delete(C.SYNC_FILE);
+        remote.files.set(C.OPS_FILE, {
+          dataStr: addPrefix(
+            makeOpsFile({
+              syncVersion: 5,
+              vectorClock: committedClock,
+              recentOps: many,
+              snapshotRef: { syncVersion: 1, vectorClock: committedClock },
+            }),
+            3,
+          ),
+          rev: 'ops-before-compaction',
+        });
+        remote.files.set(C.STATE_FILE, {
+          dataStr: addPrefix(
+            makeStateFile({ syncVersion: 1, vectorClock: committedClock }),
+            3,
+          ),
+          rev: 'state-before-compaction',
+        });
+
+        await expectAsync(
+          createFreshAdapter().uploadOps(
+            [
+              createMockSyncOp({
+                id: `compaction-op-${crashAfterWrite}`,
+                vectorClock: { client1: 2 },
+              }),
+            ],
+            'compactor-a',
+          ),
+        ).toBeRejectedWithError(
+          `simulated process crash after remote write ${crashAfterWrite}`,
+        );
+
+        remote.disableCrash();
+        const recovered = await createFreshAdapter().downloadOps(0);
+
+        expect(recovered.latestSeq).toBe(6);
+        expect(
+          JSON.parse(remote.files.get(C.OPS_SNAPSHOT_TRANSACTION_FILE)!.dataStr),
+        ).toEqual(jasmine.objectContaining({ status: 'complete' }));
+        const recoveredOps = parseWithPrefix(
+          remote.files.get(C.OPS_FILE)!.dataStr,
+        ) as unknown as FileBasedOpsFile;
+        const recoveredState = parseWithPrefix(
+          remote.files.get(C.STATE_FILE)!.dataStr,
+        ) as unknown as FileBasedStateFile;
+        expect(recoveredOps.syncVersion).toBe(6);
+        expect(recoveredState.syncVersion).toBe(6);
+
+        mockProvider.downloadFile.calls.reset();
+        mockProvider.uploadFile.calls.reset();
+      }
+    });
+
+    it('(b1) completes compactor A instead of letting compactor B replace its in-flight state', async () => {
+      const many = Array.from({ length: C.MAX_RECENT_OPS }, (_, index) =>
+        makeCompactOp({ id: `op-${index}`, sv: 5 }),
+      );
+      const committedClock = { client1: 1 };
+      const remote = installStatefulCasRemote(createMockSyncData(), 3);
+      remote.files.delete(C.SYNC_FILE);
+      remote.files.set(C.OPS_FILE, {
+        dataStr: addPrefix(
+          makeOpsFile({
+            syncVersion: 5,
+            vectorClock: committedClock,
+            recentOps: many,
+            snapshotRef: { syncVersion: 1, vectorClock: committedClock },
+          }),
+          3,
+        ),
+        rev: 'ops-before-compaction',
+      });
+      remote.files.set(C.STATE_FILE, {
+        dataStr: addPrefix(
+          makeStateFile({ syncVersion: 1, vectorClock: committedClock }),
+          3,
+        ),
+        rev: 'state-before-compaction',
+      });
+
+      await expectAsync(
+        createFreshAdapter().uploadOps(
+          [
+            createMockSyncOp({
+              id: 'compactor-a-op',
+              vectorClock: { client1: 2 },
+            }),
+          ],
+          'compactor-a',
+        ),
+      ).toBeRejectedWithError('simulated process crash after remote write 3');
+      const statePublishedByA = remote.files.get(C.STATE_FILE)!;
+      expect(
+        (parseWithPrefix(statePublishedByA.dataStr) as unknown as FileBasedStateFile)
+          .clientId,
+      ).toBe('compactor-a');
+
+      remote.disableCrash();
+      mockProvider.uploadFile.calls.reset();
+      await expectAsync(
+        createFreshAdapter().uploadOps(
+          [
+            createMockSyncOp({
+              id: 'compactor-b-op',
+              vectorClock: { client1: 3 },
+            }),
+          ],
+          'compactor-b',
+        ),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+      expect(remote.files.get(C.STATE_FILE)!.dataStr).toBe(statePublishedByA.dataStr);
+      expect(
+        mockProvider.uploadFile.calls.allArgs().some(([path]) => path === C.STATE_FILE),
+      ).toBeFalse();
+      const committedOps = parseWithPrefix(
+        remote.files.get(C.OPS_FILE)!.dataStr,
+      ) as unknown as FileBasedOpsFile;
+      expect(committedOps.clientId).toBe('compactor-a');
+    });
+
     // (b2) Review regression: once the folder is past SPLIT_COMPACTION_THRESHOLD but
     // still under MAX_RECENT_OPS, op-bearing syncs must stay cheap (no snapshot
     // rebuild). The old code triggered compaction at SPLIT_COMPACTION_THRESHOLD, so
@@ -4347,15 +4819,26 @@ describe('FileBasedSyncAdapterService', () => {
         vectorClock: { abandoned: 4 },
         state: { tasks: ['unreferenced'] },
       });
+      const encodedAbandonedPrimary = addPrefix(abandonedPrimary, 3);
       const files = new Map<string, { dataStr: string; rev: string }>([
         [C.OPS_FILE, { dataStr: addPrefix(opsFile, 3), rev: 'ops-rev-5' }],
-        [
-          C.STATE_FILE,
-          { dataStr: addPrefix(abandonedPrimary, 3), rev: 'state-abandoned-rev' },
-        ],
+        [C.STATE_FILE, { dataStr: encodedAbandonedPrimary, rev: 'state-abandoned-rev' }],
         [
           C.STATE_BACKUP_FILE,
           { dataStr: addPrefix(referencedBackup, 3), rev: 'state-backup-rev' },
+        ],
+        [
+          C.OPS_SNAPSHOT_TRANSACTION_FILE,
+          {
+            dataStr: JSON.stringify({
+              version: 1,
+              status: 'aborted',
+              transactionId: 'abandoned-compaction',
+              snapshotDigest: 'abandoned-ops-digest',
+              stateDigest: await digestEncodedPayload(encodedAbandonedPrimary),
+            }),
+            rev: 'aborted-compaction-rev',
+          },
         ],
       ]);
       let revCounter = 0;
@@ -4363,6 +4846,20 @@ describe('FileBasedSyncAdapterService', () => {
         const file = files.get(path);
         if (!file) throw new RemoteFileNotFoundAPIError(path);
         return file;
+      });
+      mockProvider.downloadFile
+        .withArgs(C.OPS_SNAPSHOT_TRANSACTION_FILE)
+        .and.callFake(async () => {
+          const file = files.get(C.OPS_SNAPSHOT_TRANSACTION_FILE);
+          if (!file) {
+            throw new RemoteFileNotFoundAPIError(C.OPS_SNAPSHOT_TRANSACTION_FILE);
+          }
+          return file;
+        });
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        const file = files.get(path);
+        if (!file) throw new RemoteFileNotFoundAPIError(path);
+        return { rev: file.rev };
       });
       mockProvider.uploadFile.and.callFake(
         async (
@@ -4399,7 +4896,72 @@ describe('FileBasedSyncAdapterService', () => {
       expect((preserved.state as { tasks: string[] }).tasks).toEqual(['committed']);
     });
 
-    it('(d3) proceeds with compaction when the referenced-state backup cannot be written (non-fatal)', async () => {
+    it('(d2) replaces a rejected state backup with the state referenced by committed ops', async () => {
+      const many = Array.from({ length: C.MAX_RECENT_OPS }, (_, index) =>
+        makeCompactOp({ id: `op-${index}`, sv: 5 }),
+      );
+      const committedClock = { committed: 1 };
+      const committedState = makeStateFile({
+        syncVersion: 1,
+        vectorClock: committedClock,
+        state: { tasks: ['committed'] },
+      });
+      const rejectedState = makeStateFile({
+        syncVersion: 1,
+        vectorClock: committedClock,
+        state: { tasks: ['rejected-with-same-ref'] },
+      });
+      const encodedRejectedState = addPrefix(rejectedState, 3);
+      const remote = installStatefulCasRemote(createMockSyncData());
+      remote.files.delete(C.SYNC_FILE);
+      remote.files.set(C.OPS_FILE, {
+        dataStr: addPrefix(
+          makeOpsFile({
+            syncVersion: 5,
+            vectorClock: committedClock,
+            recentOps: many,
+            snapshotRef: { syncVersion: 1, vectorClock: committedClock },
+          }),
+          3,
+        ),
+        rev: 'committed-ops-rev',
+      });
+      remote.files.set(C.STATE_FILE, {
+        dataStr: addPrefix(committedState, 3),
+        rev: 'committed-state-rev',
+      });
+      remote.files.set(C.STATE_BACKUP_FILE, {
+        dataStr: encodedRejectedState,
+        rev: 'rejected-state-backup-rev',
+      });
+      remote.files.set(C.OPS_SNAPSHOT_TRANSACTION_FILE, {
+        dataStr: JSON.stringify({
+          version: 1,
+          status: 'aborted',
+          transactionId: 'rejected-state-backup',
+          snapshotDigest: 'rejected-ops-digest',
+          stateDigest: await digestEncodedPayload(encodedRejectedState),
+        }),
+        rev: 'aborted-marker-rev',
+      });
+      mockProvider.uploadFile.calls.reset();
+
+      const result = await createFreshAdapter().uploadOps(
+        [createMockSyncOp({ vectorClock: { committed: 2 } })],
+        'client1',
+      );
+
+      expect(result.results[0].accepted).toBeTrue();
+      const firstStateBackup = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === C.STATE_BACKUP_FILE)!;
+      const preserved = parseWithPrefix(
+        firstStateBackup[1] as string,
+      ) as unknown as FileBasedStateFile;
+      expect((preserved.state as { tasks: string[] }).tasks).toEqual(['committed']);
+    });
+
+    it('(d3) aborts compaction when the referenced-state backup cannot be written', async () => {
       const many = Array.from({ length: C.MAX_RECENT_OPS }, (_, index) =>
         makeCompactOp({ id: `op-${index}`, sv: 5 }),
       );
@@ -4421,16 +4983,16 @@ describe('FileBasedSyncAdapterService', () => {
         return { rev: `${path}-newrev` };
       });
 
-      // Backup writes are non-fatal by contract: a provider that cannot write
-      // the .bak (lock, quota, per-file permission) must still be able to sync.
-      // The compaction immediately rewrites a fresh sync-state.json and CAS-es
-      // the ops commit point, so the remote pair stays consistent.
-      const result = await adapter.uploadOps([createMockSyncOp()], 'client1');
+      // This backup is part of the split commit protocol, not an optional
+      // rolling recovery point. Replacing state without it would make the
+      // still-committed ops file unreadable after a crash or lost ops CAS.
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError('backup unavailable');
 
-      expect(result.results[0].accepted).toBeTrue();
       const paths = uploadedPaths();
-      expect(paths).toContain(C.STATE_FILE);
-      expect(paths).toContain(C.OPS_FILE);
+      expect(paths).not.toContain(C.STATE_FILE);
+      expect(paths).not.toContain(C.OPS_FILE);
     });
 
     it('(d4) compaction self-heals when NO snapshot matches the committed snapshotRef', async () => {
@@ -4535,6 +5097,10 @@ describe('FileBasedSyncAdapterService', () => {
         });
       expect(pendingRecoveryBakIdx).toBeGreaterThan(tombIdx);
       expect(pendingRecoveryBakIdx).toBeLessThan(finalizedOpsIdx);
+      const pendingRecoveryBackup = parseWithPrefix(
+        mockProvider.uploadFile.calls.allArgs()[pendingRecoveryBakIdx][1] as string,
+      ) as unknown as { version: number };
+      expect(pendingRecoveryBackup.version).toBe(C.SPLIT_MIGRATION_PENDING_OPS_VERSION);
     });
 
     it('(e1b) writes the pending migration ops file with the sentinel version', async () => {
@@ -4569,6 +5135,42 @@ describe('FileBasedSyncAdapterService', () => {
       expect(pending!.version).toBe(C.SPLIT_MIGRATION_PENDING_OPS_VERSION);
       expect(finalized).toBeDefined();
       expect(finalized!.version).toBe(C.SPLIT_FILE_VERSION);
+    });
+
+    it('(e1c) rewrites a matching finalized v3 recovery backup to the pending sentinel', async () => {
+      const clock = { client1: 7 };
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: clock,
+        recentOps: [],
+        state: { tasks: ['legacy'] },
+      });
+      const matchingFinalizedBackup = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: clock,
+        recentOps: [],
+        snapshotRef: { syncVersion: 7, vectorClock: clock },
+      });
+      routeDownloads({
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_BACKUP_FILE]: addPrefix(matchingFinalizedBackup, 3),
+      });
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      const pendingRecoveryBackup = mockProvider.uploadFile.calls
+        .allArgs()
+        .filter(([path]) => path === C.OPS_BACKUP_FILE)
+        .map(
+          ([, dataStr]) =>
+            parseWithPrefix(dataStr as string) as unknown as Omit<
+              FileBasedOpsFile,
+              'version'
+            > & { version: number },
+        )
+        .find((opsFile) => opsFile.migration?.status === 'pending');
+      expect(pendingRecoveryBackup).toBeDefined();
+      expect(pendingRecoveryBackup!.version).toBe(C.SPLIT_MIGRATION_PENDING_OPS_VERSION);
     });
 
     it('(e2) resumes a pending migration marker after restart before appending ops', async () => {
@@ -5520,6 +6122,10 @@ describe('FileBasedSyncAdapterService', () => {
           3,
         ),
       });
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) return { rev: `${C.OPS_FILE}-rev` };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
 
       await adapter.uploadSnapshot(
         {},
@@ -5534,7 +6140,7 @@ describe('FileBasedSyncAdapterService', () => {
       const paths = uploadedPaths();
       const oBak = paths.indexOf(C.OPS_BACKUP_FILE);
       const oMain = paths.indexOf(C.OPS_FILE);
-      const sBak = paths.indexOf(C.STATE_BACKUP_FILE);
+      const sBak = paths.lastIndexOf(C.STATE_BACKUP_FILE);
       const sMain = paths.indexOf(C.STATE_FILE);
       const pending = paths.indexOf(C.OPS_SNAPSHOT_TRANSACTION_FILE);
       const complete = paths.lastIndexOf(C.OPS_SNAPSHOT_TRANSACTION_FILE);
@@ -5549,8 +6155,8 @@ describe('FileBasedSyncAdapterService', () => {
       expect(oMain).toBeLessThan(sBak);
       expect(sBak).toBeLessThan(complete);
       const stateUpload = mockProvider.uploadFile.calls.allArgs()[sMain];
-      expect(stateUpload[2]).toBeNull();
-      expect(stateUpload[3]).toBeTrue();
+      expect(stateUpload[2]).toBe(`${C.STATE_FILE}-rev`);
+      expect(stateUpload[3]).toBeFalse();
       // Both backups carry the fresh transaction payload, so no stale key or
       // pre-snapshot state remains recoverable after completion.
       const argAt = (i: number): string =>
@@ -5560,6 +6166,80 @@ describe('FileBasedSyncAdapterService', () => {
       const publishedState = parseWithPrefix(argAt(sBak));
       expect(publishedState.syncVersion).toBe(1);
       expect(publishedState.vectorClock).toEqual({ client1: 1 });
+    });
+
+    it('(i) refuses to overwrite a state candidate whose ops commit is still in flight', async () => {
+      const committedClock = { committedClient: 1 };
+      const pendingClock = { pendingClient: 2 };
+      const candidateClock = { candidateClient: 3 };
+      const pendingState = makeStateFile({
+        syncVersion: 2,
+        vectorClock: pendingClock,
+        clientId: 'pendingClient',
+      });
+      const pendingOps = makeOpsFile({
+        syncVersion: 2,
+        vectorClock: pendingClock,
+        clientId: 'pendingClient',
+        snapshotRef: { syncVersion: 2, vectorClock: pendingClock },
+      });
+      const inFlightCandidate = makeStateFile({
+        syncVersion: 3,
+        vectorClock: candidateClock,
+        clientId: 'candidateClient',
+      });
+      const remote = installStatefulCasRemote(createMockSyncData());
+      remote.files.delete(C.SYNC_FILE);
+      remote.files.set(C.OPS_FILE, {
+        dataStr: addPrefix(
+          makeOpsFile({
+            syncVersion: 1,
+            vectorClock: committedClock,
+            snapshotRef: { syncVersion: 1, vectorClock: committedClock },
+          }),
+          3,
+        ),
+        rev: 'committed-ops-rev',
+      });
+      remote.files.set(C.STATE_FILE, {
+        dataStr: addPrefix(inFlightCandidate, 3),
+        rev: 'in-flight-state-rev',
+      });
+      remote.files.set(C.STATE_BACKUP_FILE, {
+        dataStr: addPrefix(
+          makeStateFile({
+            syncVersion: 1,
+            vectorClock: committedClock,
+            clientId: 'committedClient',
+          }),
+          3,
+        ),
+        rev: 'committed-state-backup-rev',
+      });
+      remote.files.set(C.OPS_SNAPSHOT_TRANSACTION_FILE, {
+        dataStr: JSON.stringify({
+          version: 1,
+          status: 'pending',
+          transactionId: 'pending-split-snapshot',
+          basePrimaryRev: 'committed-ops-rev',
+          encodedSnapshot: addPrefix(pendingOps, 3),
+          encodedState: addPrefix(pendingState, 3),
+        }),
+        rev: 'pending-marker-rev',
+      });
+      mockProvider.uploadFile.calls.reset();
+
+      await expectAsync(createFreshAdapter().downloadOps(0)).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+
+      expect(remote.files.get(C.STATE_FILE)).toEqual({
+        dataStr: addPrefix(inFlightCandidate, 3),
+        rev: 'in-flight-state-rev',
+      });
+      expect(
+        mockProvider.uploadFile.calls.allArgs().some(([path]) => path === C.STATE_FILE),
+      ).toBeFalse();
     });
 
     it('(i) recovers a split snapshot after every transaction write', async () => {
@@ -5603,17 +6283,14 @@ describe('FileBasedSyncAdapterService', () => {
         expect(state.clientId).toBe('newClient');
         // Writes: 1 = pending marker, 2 = state, 3 = ops.bak, 4 = OPS (the
         // primary/commit point), 5 = state.bak, 6 = complete marker. A crash
-        // BEFORE the OPS write (1-3) is recovered by promoting the pending
-        // payload (marker → complete). A crash AT/AFTER the OPS write (4, 5)
-        // leaves the primary already advanced past the marker's basePrimaryRev,
-        // so recovery abandons the marker while the committed state/ops pair
-        // stays authoritative. After the complete write (6) nothing recovers.
+        // before the OPS write promotes the pending payload. A crash after the
+        // OPS commit recognizes the exact state/ops payloads and completes the
+        // marker; a different primary payload would be abandoned instead.
         expect(
           JSON.parse(remote.files.get(C.OPS_SNAPSHOT_TRANSACTION_FILE)!.dataStr),
         ).toEqual(
           jasmine.objectContaining({
-            status:
-              crashAfterWrite === 4 || crashAfterWrite === 5 ? 'aborted' : 'complete',
+            status: 'complete',
           }),
         );
 

@@ -126,37 +126,72 @@ File snapshot bootstrap does not create a `SYNC_IMPORT`; it retains ordinary
 causality. Explicit Use Local/Use Remote and backup-import flows still use their
 full-state operation semantics.
 
+The downloaded state cache, vector clock, archives, and operations already
+represented by the snapshot commit in one IndexedDB transaction. A failed write
+therefore leaves the previous baseline intact. Buffered local intents are made
+durable against whichever complete baseline committed before their overwritten
+reducers are replayed; archive effects are then restored in sequence, including
+any additional local intents that arrive during restoration.
+
 ## Split Compaction and Recovery
 
-For v3 compaction, `sync-state.json` is backed up and conditionally written
-before `sync-ops.json` is changed to reference it. If the process stops between
-the two writes, readers keep using the previous ops commit point and recover the
-matching previous state from `sync-state.json.bak`.
+V3 compaction uses the same durable snapshot transaction as an authoritative
+snapshot replacement. The pending marker is written before either primary and
+binds the observed ops revision plus the exact encoded state/ops pair. The
+still-committed state is then backed up, the new state is conditionally written,
+the pending ops candidate is backed up, and `sync-ops.json` is CAS-written as the
+commit point. Only after the fresh state backup succeeds is the marker completed.
+The compacted ops payload omits the optional `snapshotRef.rev`: readers bind the
+state by `syncVersion`/vector clock, while the transaction marker binds its exact
+digest and published revision without a state-revision/encoded-ops cycle.
+
+If the process stops before the ops CAS, recovery owns the pending pair and
+finishes it while the original ops revision is still current. If the ops primary
+advanced to the marker's exact payload, recovery completes the marker first and
+refreshes backups best-effort. A different advanced payload proves a concurrent
+commit, so recovery aborts the marker rather than promoting stale compaction
+state. A second compactor encountering the pending marker recovers that owner and
+retries from the resulting commit point; it never publishes a competing state.
 
 A structurally corrupt primary state may be healed from the backup only when the
 backup matches `snapshotRef`. Healing conditionally matches the corrupt
 primary's own revision; a newer valid but unreferenced state is not overwritten.
-When NO snapshot matches the committed `snapshotRef` any more (state file
-deleted or replaced without commit), the next compaction self-heals by writing a
-fresh full snapshot — the ops-file CAS remains the concurrency gate. Rolling
+When NO snapshot matches the committed `snapshotRef` any more (for example, the
+state file and its backup were deleted), the next compaction self-heals by
+writing a fresh full snapshot — the ops-file CAS remains the concurrency gate.
+An unreferenced primary beside a valid committed backup is not overwritten unless
+an aborted marker's digest proves that candidate was abandoned; an unowned
+candidate may still belong to an in-flight older client and therefore fails
+closed. Rolling
 backup writes are non-fatal by contract: a provider that cannot write a `.bak`
-must still be able to sync.
+must still be able to sync. The state copy referenced by the still-committed ops
+file is the exception: that backup is part of the split commit protocol, so its
+failure aborts the state replacement.
 
-Authoritative snapshot replacement is separately crash-serialized. A durable
-pending transaction records the primary revision observed at begin time
+Split compaction and authoritative snapshot replacement are crash-serialized by
+a durable pending transaction. It records the primary revision observed at begin time
 (`basePrimaryRev`) and the exact encoded snapshot payloads (both state and ops
 in v3), then the adapter publishes the bound files before conditionally marking
-that same transaction complete. Startup/download completes a pending transaction
-before ordinary sync — but ONLY while the primary still has `basePrimaryRev`;
-if the primary advanced after the crash (e.g. a marker-unaware client committed
-new data), recovery durably marks the transaction `aborted` instead of promoting
-the stale payload. A torn/unreadable marker is likewise treated as unusable (not
-as fatal corruption) and conditionally replaced by the next snapshot upload.
+that same transaction complete. Startup/download checks a pending transaction
+before the unchanged-revision fast path. Recovery promotes it while the primary
+still has `basePrimaryRev`; if the revision advanced, the exact encoded payload
+at the new revision proves that this transaction already committed and lets the
+marker complete. Any different payload is a concurrent commit, so recovery
+durably marks the transaction `aborted` instead. A torn/unreadable marker is
+likewise treated as unusable (not as fatal corruption) and conditionally replaced
+by the next snapshot upload.
 Ordinary backup rotation verifies that the observed marker revision is
 unchanged. The completed marker keeps compact SHA-256 bindings plus the
 published revisions, allowing recovery to reject a stale backup written by a
-marker-unaware client. Replacement intent is never guessed from vector-clock
-order.
+marker-unaware client. Aborted markers bind the rejected state and ops payloads;
+their deduplicated rejection sets are inherited by every replacement and its
+completed or aborted marker, so an older rejected backup cannot re-enter after a
+later transaction. The sets intentionally have no fixed cap: they grow only once
+per distinct abandoned transaction, and dropping an old digest would make that
+payload recoverable again if cloud history or a marker-unaware client restored
+the stale `.bak`. Replacement intent is never guessed from vector-clock order.
+Encryption/authentication failures leave pending markers untouched because the
+payload may be valid with the correct key.
 
 ```mermaid
 sequenceDiagram
@@ -164,14 +199,18 @@ sequenceDiagram
     participant B as Compactor B
     participant R as Remote storage
 
-    A->>R: read state rev S1
-    B->>R: read state rev S1
-    A->>R: backup S1
-    A->>R: write new state if S1
-    R-->>A: state rev S2
-    A->>R: write ops if O1, snapshotRef=S2
-    B->>R: write new state if S1
-    R-->>B: mismatch; re-download/retry
+    A->>R: read ops O1 and marker M1
+    B->>R: read ops O1 and marker M1
+    A->>R: write pending A if M1
+    R-->>A: marker M2
+    B->>R: write pending B if M1
+    R-->>B: mismatch; recover A/retry
+    A->>R: preserve state referenced by O1
+    A->>R: write state S2 conditionally
+    A->>R: write pending ops recovery backup
+    A->>R: write ops O2 if O1
+    A->>R: refresh state backup with S2
+    A->>R: complete marker if M2
 ```
 
 ## One-Way v2 to v3 Migration
@@ -184,7 +223,7 @@ Migration uses a crash-resumable pending marker:
    a v3 split tombstone;
 4. conditionally protect the recovery backup and finalize the ops marker.
 
-The pending candidate is stored with a sentinel `version`
+The pending candidate and its required recovery backup are stored with a sentinel `version`
 (`SPLIT_MIGRATION_PENDING_OPS_VERSION`, not 3) so already-shipped split clients
 — which know neither the `migration` field nor that `sync-state.json` does not
 exist yet — reject it with a transient error instead of adopting truncated

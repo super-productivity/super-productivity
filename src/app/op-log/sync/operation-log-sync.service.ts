@@ -876,31 +876,9 @@ export class OperationLogSyncService {
         result.snapshotAppliedOpIds,
       );
 
-      await this.writeFlushService.flushThenRunExclusive(async () => {
-        try {
-          await this._hydrateSnapshotExclusive(
-            result,
-            initialUnsyncedOpIds,
-            snapshotIncludedOps,
-          );
-        } catch (e) {
-          // A throw anywhere above (validation failure, late-durable conflict,
-          // archive-restore failure) can leave user intents that were buffered
-          // during a remote-apply window applied to live NgRx state but not yet
-          // durable. Persist them before surfacing the error — otherwise
-          // closing the app afterwards silently drops those edits. (The apply
-          // window itself is already closed by the inner finally.)
-          try {
-            await processDeferredActions(this.injector, true);
-          } catch (drainError) {
-            OpLog.err(
-              'OperationLogSyncService: failed to persist deferred actions after hydration error',
-              drainError,
-            );
-          }
-          throw e;
-        }
-      });
+      await this.writeFlushService.flushThenRunExclusive(() =>
+        this._hydrateSnapshotExclusive(result, initialUnsyncedOpIds, snapshotIncludedOps),
+      );
 
       // Now that the remote snapshot is applied, it's safe to drop the
       // startup ops we previously decided were obsolete. Doing this
@@ -1315,135 +1293,153 @@ export class OperationLogSyncService {
     snapshotIncludedOps: Operation[],
   ): Promise<void> {
     let deferredActionsOverwrittenBySnapshot: ReturnType<typeof getDeferredActions> = [];
+    let didReplaceArchive = false;
+    let didCommitStateLoad = false;
+    let hydrationFailed = false;
+    let hydrationError: unknown;
+    let isRemoteApplyWindowOpen = true;
     // Keep capture in deferred mode from the last pre-hydration durability
     // check through the snapshot dispatch. Otherwise an action can be
     // persisted against the old state and then silently overwritten by
     // loadAllData while this async hydration is in progress.
     this.hydrationState.startApplyingRemoteOps();
-    let hasEndedRemoteApplyWindow = false;
     try {
-      const pendingAtHydrationCutoff = await this.opLogStore.getUnsynced();
-      const lateDurableOps = pendingAtHydrationCutoff.filter(
-        (entry) => !initialUnsyncedOpIds.has(entry.op.id),
-      );
-      if (lateDurableOps.length > 0) {
-        const lastSyncedVectorClock =
-          (await this.vectorClockService.getSnapshotVectorClock()) ?? null;
-        throw new LocalDataConflictError(
-          pendingAtHydrationCutoff.length,
+      try {
+        const pendingAtHydrationCutoff = await this.opLogStore.getUnsynced();
+        const lateDurableOps = pendingAtHydrationCutoff.filter(
+          (entry) => !initialUnsyncedOpIds.has(entry.op.id),
+        );
+        if (lateDurableOps.length > 0) {
+          const lastSyncedVectorClock =
+            (await this.vectorClockService.getSnapshotVectorClock()) ?? null;
+          throw new LocalDataConflictError(
+            pendingAtHydrationCutoff.length,
+            result.snapshotState as Record<string, unknown>,
+            result.snapshotVectorClock,
+            lastSyncedVectorClock,
+            result.remoteLastModified,
+          );
+        }
+
+        // Hydrate state from snapshot - DON'T create SYNC_IMPORT for file-based
+        // bootstrap. Creating it would trigger clean-slate filtering of concurrent
+        // ops from other clients.
+        await this.syncHydrationService.hydrateFromRemoteSync(
           result.snapshotState as Record<string, unknown>,
           result.snapshotVectorClock,
-          lastSyncedVectorClock,
-          result.remoteLastModified,
-        );
-      }
-
-      // Hydrate state from snapshot - DON'T create SYNC_IMPORT for file-based
-      // bootstrap. Creating it would trigger clean-slate filtering of concurrent
-      // ops from other clients.
-      await this.syncHydrationService.hydrateFromRemoteSync(
-        result.snapshotState as Record<string, unknown>,
-        result.snapshotVectorClock,
-        false,
-        undefined,
-        {
-          // Capture only actions that ran on the old state. Actions emitted
-          // by loadAllData effects run after the snapshot reducer and are
-          // already valid on top of the new state, so replaying those would
-          // double-apply additive reducers.
-          beforeStateLoad: () => {
-            deferredActionsOverwrittenBySnapshot = getDeferredActions();
+          false,
+          undefined,
+          {
+            snapshotIncludedOps,
+            // Capture only actions that ran on the old state. Actions emitted
+            // by loadAllData effects run after the snapshot reducer and are
+            // already valid on top of the new state, so replaying those would
+            // double-apply additive reducers.
+            beforeStateLoad: () => {
+              deferredActionsOverwrittenBySnapshot = getDeferredActions();
+            },
+            afterStateLoad: () => {
+              didCommitStateLoad = true;
+            },
+            afterArchiveReplacement: () => {
+              didReplaceArchive = true;
+            },
           },
-        },
-      );
-
-      // Record the remote ops the snapshot already represents BEFORE any
-      // mid-hydration local intents are persisted below.
-      // VectorClockService.getEntityFrontier() derives per-entity frontiers
-      // from the LAST op per entity in seq order; appending these older remote
-      // ops after the fresh-clock local intents would regress the frontier and
-      // let a later concurrent remote op be classified as non-conflicting,
-      // silently overwriting the user's mid-hydration edit. (Also prevents
-      // re-applying these ops on the next whole-file download.)
-      if (snapshotIncludedOps.length > 0) {
-        const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-          snapshotIncludedOps,
-          'remote',
         );
-        OpLog.normal(
-          `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +
-            '(prevents duplication on next sync cycle).' +
-            (appendResult.skippedCount > 0
-              ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
-              : ''),
-        );
+      } catch (error) {
+        hydrationFailed = true;
+        hydrationError = error;
       }
 
-      // The hydration service has durably stored the remote snapshot clock
-      // by this point. Persist buffered local intents with clocks based on
-      // that snapshot before making their replay visible again. This keeps
-      // a reducer replay failure from widening the non-durable window.
-      await processDeferredActions(this.injector, true);
+      // The file snapshot baseline transaction either committed state, clock,
+      // archives, and included remote ops together or left the old baseline
+      // intact. Deferred intents therefore always drain against a complete
+      // frontier, including when hydration failed before live-state dispatch.
+      await this._processSnapshotDeferredActionsWithRetry();
 
-      // loadAllData has committed the new baseline. Leave deferred mode
-      // before replaying remote-marked clones; subsequent user events now
-      // run on the new state and follow the normal persistence path.
-      this.hydrationState.endApplyingRemoteOps();
-      hasEndedRemoteApplyWindow = true;
-
-      // Persistent actions dispatched during hydration already ran once on
-      // the old NgRx state, then loadAllData replaced that state. Re-dispatch
-      // remote-marked clones synchronously on top of the snapshot. The
-      // originals were persisted above with clocks that include the remote
-      // snapshot.
-      for (const action of deferredActionsOverwrittenBySnapshot) {
-        this.store.dispatch({
-          ...action,
-          meta: {
-            ...action.meta,
-            isRemote: true,
-          },
-        });
+      if (didCommitStateLoad) {
+        // Persistent actions dispatched before loadAllData already ran once on
+        // the old NgRx state. Re-dispatch remote-marked clones synchronously on
+        // top of the snapshot without capturing a second operation.
+        for (const action of deferredActionsOverwrittenBySnapshot) {
+          this.store.dispatch({
+            ...action,
+            meta: {
+              ...action.meta,
+              isRemote: true,
+            },
+          });
+        }
       }
+
+      if (didReplaceArchive) {
+        // Hydration also replaces archive stores. Re-run archive side effects
+        // for every local intent created since the cutoff, in durable seq order.
+        // Keep looping until both the deferred queue and durable archive work
+        // are empty. The final queue check and remote-window close are
+        // synchronous, so an action cannot land in the handoff gap.
+        const restoredLocalOpIds = new Set(initialUnsyncedOpIds);
+        while (true) {
+          while (getDeferredActions().length > 0) {
+            await this._processSnapshotDeferredActionsWithRetry();
+          }
+
+          const localOpsNeedingArchiveRestore = (await this.opLogStore.getUnsynced())
+            .filter((entry) => !restoredLocalOpIds.has(entry.op.id))
+            .sort((a, b) => a.seq - b.seq)
+            .map((entry) => entry.op);
+          if (localOpsNeedingArchiveRestore.length === 0) {
+            if (getDeferredActions().length > 0) continue;
+            this.hydrationState.endApplyingRemoteOps();
+            isRemoteApplyWindowOpen = false;
+            break;
+          }
+
+          const applyResult = await this.operationApplier.applyOperations(
+            localOpsNeedingArchiveRestore,
+            {
+              isLocalHydration: false,
+              skipDeferredLocalActions: true,
+              skipReducerDispatch: true,
+              remoteApplyWindowAlreadyOpen: true,
+            },
+          );
+          if (
+            applyResult.failedOp ||
+            applyResult.appliedOps.length !== localOpsNeedingArchiveRestore.length
+          ) {
+            throw new Error(
+              'Snapshot hydration incomplete: local archive changes could not be restored.',
+            );
+          }
+          for (const op of localOpsNeedingArchiveRestore) {
+            restoredLocalOpIds.add(op.id);
+          }
+        }
+      } else {
+        while (getDeferredActions().length > 0) {
+          await this._processSnapshotDeferredActionsWithRetry();
+        }
+        this.hydrationState.endApplyingRemoteOps();
+        isRemoteApplyWindowOpen = false;
+      }
+
+      if (hydrationFailed) throw hydrationError;
     } finally {
-      if (!hasEndedRemoteApplyWindow) {
+      if (isRemoteApplyWindowOpen) {
         this.hydrationState.endApplyingRemoteOps();
       }
     }
+  }
 
-    // Hydration also replaces archive stores. Re-run archive side effects
-    // for the just-persisted local intents without dispatching their reducers
-    // a third time. No other writer can enter while this lock is held.
-    const localOpsCreatedDuringHydration = (await this.opLogStore.getUnsynced())
-      .filter((entry) => !initialUnsyncedOpIds.has(entry.op.id))
-      .sort((a, b) => a.seq - b.seq);
-    const localOpsNeedingArchiveRestore = localOpsCreatedDuringHydration
-      // Deferred actions are persisted in queue order. Only the prefix
-      // captured before loadAllData had its earlier archive effects
-      // overwritten by the remote snapshot; post-load actions already ran
-      // against the new archive and must not be applied twice.
-      .slice(0, deferredActionsOverwrittenBySnapshot.length)
-      .map((entry) => entry.op);
-    if (localOpsNeedingArchiveRestore.length > 0) {
-      const applyResult = await this.operationApplier.applyOperations(
-        localOpsNeedingArchiveRestore,
-        {
-          isLocalHydration: false,
-          skipDeferredLocalActions: true,
-          skipReducerDispatch: true,
-        },
+  private async _processSnapshotDeferredActionsWithRetry(): Promise<void> {
+    try {
+      await processDeferredActions(this.injector, true);
+    } catch (error) {
+      OpLog.warn(
+        'OperationLogSyncService: deferred snapshot action drain failed; retrying once',
+        { name: (error as Error | undefined)?.name },
       );
-      if (
-        applyResult.failedOp ||
-        applyResult.appliedOps.length !== localOpsNeedingArchiveRestore.length
-      ) {
-        throw new Error(
-          'Snapshot hydration incomplete: local archive changes could not be restored.',
-        );
-      }
-
-      // User actions arriving during archive replay remain valid atop the
-      // restored state; only their durable fresh-clock entries are pending.
       await processDeferredActions(this.injector, true);
     }
   }
@@ -1926,9 +1922,8 @@ export class OperationLogSyncService {
             // Record only operations already represented by the snapshot. A
             // split-file suffix must still be dispatched on top of that state.
             if (migratedSnapshotIncludedOps.length > 0) {
-              const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
+              const appendResult = await this.opLogStore.appendSnapshotIncludedOps(
                 migratedSnapshotIncludedOps,
-                'remote',
               );
               OpLog.normal(
                 `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +

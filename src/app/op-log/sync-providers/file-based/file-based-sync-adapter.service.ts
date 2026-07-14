@@ -55,7 +55,12 @@ import {
 } from '../../persistence/compact/operation-codec.service';
 import { uuidv7 } from '../../../util/uuid-v7';
 
-interface PendingSnapshotTransaction {
+interface SnapshotRejectionHistory {
+  rejectedSnapshotDigests?: string[];
+  rejectedStateDigests?: string[];
+}
+
+interface PendingSnapshotTransaction extends SnapshotRejectionHistory {
   version: 1;
   status: 'pending';
   transactionId: string;
@@ -70,7 +75,7 @@ interface PendingSnapshotTransaction {
   encodedState?: string;
 }
 
-interface CompleteSnapshotTransaction {
+interface CompleteSnapshotTransaction extends SnapshotRejectionHistory {
   version: 1;
   status: 'complete';
   transactionId: string;
@@ -81,10 +86,12 @@ interface CompleteSnapshotTransaction {
 }
 
 /** A pending transaction that recovery gave up on (stale or undecodable). */
-interface AbortedSnapshotTransaction {
+interface AbortedSnapshotTransaction extends SnapshotRejectionHistory {
   version: 1;
   status: 'aborted';
   transactionId: string;
+  snapshotDigest: string;
+  stateDigest?: string;
 }
 
 type SnapshotTransaction =
@@ -96,12 +103,22 @@ interface SnapshotTransactionObservation {
   didRecover: boolean;
   rev: string | null;
   complete?: CompleteSnapshotTransaction;
+  aborted?: AbortedSnapshotTransaction;
 }
 
 interface SnapshotTransactionGuard {
   path: string;
   rev: string | null;
+  pending?: PendingSnapshotTransaction;
   complete?: CompleteSnapshotTransaction;
+  aborted?: AbortedSnapshotTransaction;
+}
+
+interface ReadBakFileOptions {
+  onReadRev?: (rev: string) => void;
+  expectedDigest?: string;
+  rejectedDigests?: readonly string[];
+  normalize?: (data: unknown) => unknown;
 }
 
 /**
@@ -930,6 +947,24 @@ export class FileBasedSyncAdapterService {
       );
     }
 
+    // A pending authoritative snapshot is user intent, not an optimization
+    // detail: recover it before an unchanged-primary early return can hide it.
+    const snapshotTransaction =
+      await this._recoverPendingSnapshotTransaction<FileBasedSyncData>(
+        provider,
+        cfg,
+        encryptKey,
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
+        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+        (data): data is FileBasedSyncData => this._isFileBasedSyncData(data),
+      );
+    if (snapshotTransaction.didRecover) {
+      this._clearCachedSyncData(providerKey);
+      this._lastSeenRevs.delete(providerKey);
+    }
+
     // SPAP-10: cheap remote-rev pre-check. If we already know the last-seen rev
     // AND nothing in this cycle has cached a fresh download, ask the provider for
     // the current rev WITHOUT downloading the full file. An unchanged rev proves
@@ -939,12 +974,9 @@ export class FileBasedSyncAdapterService {
     // the file to have CHANGED, which an identical rev rules out. We therefore
     // safely bypass the gap-detection block below.
     //
-    // Runs BEFORE the snapshot-transaction marker check so an idle poll costs a
-    // single metadata request. Skipping the marker on the short-circuit is
-    // sound: an unchanged primary rev means either no transaction happened, or
-    // one is still pending with nothing promoted yet — completing it is a
-    // write-side concern handled by every upload and by the next changed-rev
-    // download.
+    // Runs after snapshot-transaction recovery. An idle poll pays the small
+    // marker read so a crash-before-primary transaction cannot remain hidden
+    // forever behind an unchanged primary revision.
     //
     // Gating on cache absence is a correctness guard, not just an optimization:
     // during multi-page pagination `_downloadOps` is called repeatedly with the
@@ -993,22 +1025,6 @@ export class FileBasedSyncAdapterService {
       }
     }
 
-    const snapshotTransaction =
-      await this._recoverPendingSnapshotTransaction<FileBasedSyncData>(
-        provider,
-        cfg,
-        encryptKey,
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-        FILE_BASED_SYNC_CONSTANTS.SNAPSHOT_TRANSACTION_FILE,
-        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
-        (data): data is FileBasedSyncData => this._isFileBasedSyncData(data),
-      );
-    if (snapshotTransaction.didRecover) {
-      this._clearCachedSyncData(providerKey);
-      this._lastSeenRevs.delete(providerKey);
-    }
-
     let syncData: FileBasedSyncData;
     let rev: string;
     let recoveredFromBackup = false;
@@ -1050,8 +1066,13 @@ export class FileBasedSyncAdapterService {
           FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
           FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
           (data): data is FileBasedSyncData => this._isFileBasedSyncData(data),
-          undefined,
-          expectedSnapshotDigest,
+          {
+            expectedDigest: expectedSnapshotDigest,
+            rejectedDigests: this._getRejectedBackupDigests(
+              snapshotTransaction.complete ?? snapshotTransaction.aborted,
+              FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+            ),
+          },
         );
         if (recovered) {
           recoveredFromBackup = true;
@@ -1510,6 +1531,10 @@ export class FileBasedSyncAdapterService {
     return typeof data === 'object' && data !== null && !Array.isArray(data);
   }
 
+  private _isStringArray(data: unknown): data is string[] {
+    return Array.isArray(data) && data.every((value) => typeof value === 'string');
+  }
+
   private _isNonNegativeInteger(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0;
   }
@@ -1668,6 +1693,23 @@ export class FileBasedSyncAdapterService {
     this._splitOpsCache.delete(providerKey);
   }
 
+  private _normalizePendingMigrationOpsVersion(data: unknown): unknown {
+    if (
+      !this._isRecord(data) ||
+      data['version'] !== FILE_BASED_SYNC_CONSTANTS.SPLIT_MIGRATION_PENDING_OPS_VERSION
+    ) {
+      return data;
+    }
+    const normalized = {
+      ...data,
+      version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+    };
+    return this._isFileBasedOpsFile(normalized) &&
+      this._isPendingSplitMigration(normalized)
+      ? normalized
+      : data;
+  }
+
   /** Downloads + decodes `sync-ops.json` and validates its version. */
   private async _downloadOpsFile(
     provider: FileSyncProvider<SyncProviderId>,
@@ -1690,9 +1732,7 @@ export class FileBasedSyncAdapterService {
         this._isRecord(decoded) &&
         decoded['version'] ===
           FILE_BASED_SYNC_CONSTANTS.SPLIT_MIGRATION_PENDING_OPS_VERSION;
-      const data = isPendingMigrationVersion
-        ? { ...decoded, version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION }
-        : decoded;
+      const data = this._normalizePendingMigrationOpsVersion(decoded);
       if (
         !this._isRecord(data) ||
         data['version'] !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION
@@ -1817,7 +1857,7 @@ export class FileBasedSyncAdapterService {
     }
 
     if (!committedOpsFile) {
-      if (snapshotTransaction) {
+      if (snapshotTransaction && !snapshotTransaction.pending) {
         await this._assertSnapshotTransactionUnchanged(provider, snapshotTransaction);
       }
       if (!current) return primaryRev === null ? null : { rev: primaryRev };
@@ -1845,14 +1885,21 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
       FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
       (data): data is FileBasedStateFile => this._isFileBasedStateFile(data),
-      undefined,
-      this._getSnapshotBoundBackupDigest(
-        snapshotTransaction,
-        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
-        primaryRev,
-      ),
+      {
+        expectedDigest: this._getSnapshotBoundBackupDigest(
+          snapshotTransaction,
+          FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+          primaryRev,
+        ),
+        rejectedDigests: this._getRejectedBackupDigests(
+          snapshotTransaction?.pending ??
+            snapshotTransaction?.complete ??
+            snapshotTransaction?.aborted,
+          FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+        ),
+      },
     );
-    if (snapshotTransaction) {
+    if (snapshotTransaction && !snapshotTransaction.pending) {
       await this._assertSnapshotTransactionUnchanged(provider, snapshotTransaction);
     }
     if (backup && this._validateSnapshotRef(committedOpsFile, backup.data)) {
@@ -1885,6 +1932,7 @@ export class FileBasedSyncAdapterService {
         primaryPath: FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
         primaryRev,
         snapshotTransaction,
+        isRequired: true,
       },
     );
     return current;
@@ -1896,6 +1944,7 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     expectedDigest?: string,
+    rejectedDigests?: readonly string[],
   ): Promise<FileBasedStateFile | null> {
     const recovered = await this._readBakFile<FileBasedStateFile>(
       provider,
@@ -1904,8 +1953,7 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
       FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
       (data): data is FileBasedStateFile => this._isFileBasedStateFile(data),
-      undefined,
-      expectedDigest,
+      { expectedDigest, rejectedDigests },
     );
     return recovered?.data ?? null;
   }
@@ -1933,6 +1981,7 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
     opsFile: FileBasedOpsFile,
     completeTransaction?: CompleteSnapshotTransaction,
+    abortedTransaction?: AbortedSnapshotTransaction,
   ): Promise<FileBasedStateFile | null> {
     let corruptPrimaryRev: string | undefined;
     let observedPrimaryRev: string | undefined;
@@ -1970,6 +2019,10 @@ export class FileBasedSyncAdapterService {
       cfg,
       encryptKey,
       expectedStateDigest,
+      this._getRejectedBackupDigests(
+        completeTransaction ?? abortedTransaction,
+        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+      ),
     );
     if (bak && this._validateSnapshotRef(opsFile, bak)) {
       if (corruptPrimaryRev) {
@@ -2157,7 +2210,10 @@ export class FileBasedSyncAdapterService {
     const encoded = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
       encryptKey,
-      pending,
+      {
+        ...pending,
+        version: FILE_BASED_SYNC_CONSTANTS.SPLIT_MIGRATION_PENDING_OPS_VERSION,
+      },
       FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(
@@ -2173,13 +2229,19 @@ export class FileBasedSyncAdapterService {
       backupRev = response.rev;
 
       let existing: unknown;
+      let existingIsPendingSentinel = false;
       try {
-        existing =
+        const decoded =
           await this._encryptAndCompressHandler.decompressAndDecryptData<unknown>(
             cfg,
             encryptKey,
             response.dataStr,
           );
+        existingIsPendingSentinel =
+          this._isRecord(decoded) &&
+          decoded['version'] ===
+            FILE_BASED_SYNC_CONSTANTS.SPLIT_MIGRATION_PENDING_OPS_VERSION;
+        existing = this._normalizePendingMigrationOpsVersion(decoded);
       } catch (e) {
         // A corrupt backup is replaceable, but only while its exact revision is
         // still current. The conditional write below owns that decision.
@@ -2215,13 +2277,16 @@ export class FileBasedSyncAdapterService {
           JSON.stringify(existing.recentOps) === JSON.stringify(pending.recentOps) &&
           (existing.migration === undefined ||
             existing.migration.legacyRev === pending.migration?.legacyRev);
-        if (sameRecoveryPayload) {
-          // A matching pending marker or its already-finalized form is at least
-          // as useful for recovery as rewriting the same backup again.
+        if (
+          sameRecoveryPayload &&
+          existingIsPendingSentinel &&
+          this._isPendingSplitMigration(existing)
+        ) {
+          // The required backup is already the same fail-closed pending marker.
           return;
         }
 
-        if (clockOrder === 'EQUAL') {
+        if (!sameRecoveryPayload && clockOrder === 'EQUAL') {
           // Equal clocks with different payloads are inconsistent; neither may
           // silently replace the other.
           throw new UploadRevToMatchMismatchAPIError();
@@ -2587,6 +2652,7 @@ export class FileBasedSyncAdapterService {
       path: FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
       rev: snapshotTransaction.rev,
       ...(snapshotTransaction.complete ? { complete: snapshotTransaction.complete } : {}),
+      ...(snapshotTransaction.aborted ? { aborted: snapshotTransaction.aborted } : {}),
     };
 
     let opsFile: FileBasedOpsFile | null = null;
@@ -2670,38 +2736,26 @@ export class FileBasedSyncAdapterService {
       !snapshotRef || combinedOps.length > FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;
 
     let finalOps = combinedOps;
+    let compactionState: FileBasedStateFile | undefined;
     if (needsCompaction) {
       // The ONLY normal path that reads the full store snapshot.
-      const stateData = await this._buildStateFileData(
+      compactionState = await this._buildStateFileData(
         clientId,
         newSyncVersion,
         mergedClock,
         schemaVersion,
         localStateSnapshot,
       );
-      // Preserve the pre-compaction snapshot for snapshotRef-mismatch recovery.
-      const previousState = await this._backupStateFile(
-        provider,
-        cfg,
-        encryptKey,
-        opsFile ?? undefined,
-        snapshotTransactionGuard,
-      );
-      // Atomicity: sync-state.json FIRST, then the ops file that references it.
-      const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData, {
-        revToMatch: previousState?.rev ?? null,
-        isForceOverwrite: false,
-      });
+      // `rev` is intentionally omitted. It is an optional best-effort hint;
+      // readers bind by syncVersion/vectorClock, while the durable transaction
+      // marker binds the exact encoded state and its published revision. This
+      // removes the state-rev/encoded-ops circularity so the transaction can be
+      // written before either split primary changes.
       snapshotRef = {
         syncVersion: newSyncVersion,
         vectorClock: mergedClock,
-        rev: stateRev,
       };
       finalOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.SPLIT_COMPACTION_THRESHOLD);
-      OpLog.normal(
-        `FileBasedSyncAdapter: split compaction wrote sync-state.json (syncVersion=${newSyncVersion}), ` +
-          `trimmed recentOps ${combinedOps.length} → ${finalOps.length}`,
-      );
     } else {
       finalOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS);
     }
@@ -2726,35 +2780,75 @@ export class FileBasedSyncAdapterService {
       snapshotRef,
     };
 
-    // Backup-before-overwrite (SPAP-8, same as the single-file path): preserve
-    // the CURRENT remote ops file in .bak so an interrupted/corrupt write of the
-    // hot file (rewritten on every op-bearing sync — the highest torn-write
-    // exposure of any sync file) can be recovered on the next download.
-    if (opsFile) {
-      await this._writeBakFile(
-        provider,
+    let finalRev: string;
+    if (compactionState) {
+      const stateEncoded = await this._encryptAndCompressHandler.compressAndEncryptData(
         cfg,
         encryptKey,
-        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
-        opsFile,
+        compactionState,
         FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
-        (data): data is FileBasedOpsFile => this._isFileBasedOpsFile(data),
-        {
-          primaryPath: FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
-          primaryRev: opsRev,
-          snapshotTransaction: snapshotTransactionGuard,
-        },
       );
-    }
+      const opsEncoded = await this._encryptAndCompressHandler.compressAndEncryptData(
+        cfg,
+        encryptKey,
+        newOpsFile,
+        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+      );
+      this._assertUploadDataNotEmpty(
+        stateEncoded,
+        'FileBasedSyncAdapter._uploadOpsSplit compacted state',
+      );
+      this._assertUploadDataNotEmpty(
+        opsEncoded,
+        'FileBasedSyncAdapter._uploadOpsSplit compacted ops',
+      );
+      finalRev = (
+        await this._forceUploadSplitSnapshot(
+          provider,
+          cfg,
+          encryptKey,
+          stateEncoded,
+          opsEncoded,
+          opsRev,
+        )
+      ).rev;
+      OpLog.normal(
+        `FileBasedSyncAdapter: transactional compaction committed (syncVersion=${newSyncVersion}), ` +
+          `trimmed recentOps ${combinedOps.length} → ${finalOps.length}`,
+      );
+    } else {
+      // Backup-before-overwrite (SPAP-8, same as the single-file path): preserve
+      // the CURRENT remote ops file in .bak so an interrupted/corrupt write of the
+      // hot file (rewritten on every op-bearing sync — the highest torn-write
+      // exposure of any sync file) can be recovered on the next download.
+      if (opsFile) {
+        await this._writeBakFile(
+          provider,
+          cfg,
+          encryptKey,
+          FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+          opsFile,
+          FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+          (data): data is FileBasedOpsFile => this._isFileBasedOpsFile(data),
+          {
+            primaryPath: FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+            primaryRev: opsRev,
+            snapshotTransaction: snapshotTransactionGuard,
+          },
+        );
+      }
 
-    // Commit point.
-    const { finalRev } = await this._uploadOpsFileWithMismatchFallback(
-      provider,
-      cfg,
-      encryptKey,
-      newOpsFile,
-      opsRev,
-    );
+      // Commit point.
+      finalRev = (
+        await this._uploadOpsFileWithMismatchFallback(
+          provider,
+          cfg,
+          encryptKey,
+          newOpsFile,
+          opsRev,
+        )
+      ).finalRev;
+    }
 
     this._clearCachedOpsData(providerKey);
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
@@ -2789,12 +2883,36 @@ export class FileBasedSyncAdapterService {
     limit: number,
     providerKey: string,
   ): Promise<FileSnapshotOpDownloadResponse> {
+    const snapshotTransaction =
+      await this._recoverPendingSnapshotTransaction<FileBasedOpsFile>(
+        provider,
+        cfg,
+        encryptKey,
+        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+        FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
+        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+        (data): data is FileBasedOpsFile => this._isFileBasedOpsFile(data),
+        {
+          primaryPath: FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+          bakPath: FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
+          expectedVersion: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+          isValid: (data): data is FileBasedStateFile => this._isFileBasedStateFile(data),
+          matchesSnapshot: (snapshot, state) =>
+            this._isFileBasedStateFile(state) &&
+            this._validateSnapshotRef(snapshot, state),
+        },
+      );
+    if (snapshotTransaction.didRecover) {
+      this._clearCachedOpsData(providerKey);
+      this._lastSeenRevs.delete(providerKey);
+    }
+
     // SPAP-10 rev pre-check, extended to the ops file. Gated on `sinceSeq > 0`
     // (review follow-up): a forceFromSeq0 download (sinceSeq === 0) re-pulls the
     // full snapshot to REBUILD local state (e.g. USE_REMOTE), so it must never be
     // short-circuited by an unchanged rev — the same guard as the single-file path.
-    // Runs BEFORE the snapshot-transaction marker check so an idle poll costs a
-    // single metadata request (see the single-file path for why this is sound).
+    // Runs after snapshot-transaction recovery; see the single-file path.
     const lastSeenRev = this._lastSeenRevs.get(providerKey);
     if (
       sinceSeq > 0 &&
@@ -2822,34 +2940,11 @@ export class FileBasedSyncAdapterService {
       }
     }
 
-    const snapshotTransaction =
-      await this._recoverPendingSnapshotTransaction<FileBasedOpsFile>(
-        provider,
-        cfg,
-        encryptKey,
-        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
-        FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
-        FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
-        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
-        (data): data is FileBasedOpsFile => this._isFileBasedOpsFile(data),
-        {
-          primaryPath: FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
-          bakPath: FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
-          expectedVersion: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
-          isValid: (data): data is FileBasedStateFile => this._isFileBasedStateFile(data),
-          matchesSnapshot: (snapshot, state) =>
-            this._isFileBasedStateFile(state) &&
-            this._validateSnapshotRef(snapshot, state),
-        },
-      );
-    if (snapshotTransaction.didRecover) {
-      this._clearCachedOpsData(providerKey);
-      this._lastSeenRevs.delete(providerKey);
-    }
     const snapshotTransactionGuard: SnapshotTransactionGuard = {
       path: FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
       rev: snapshotTransaction.rev,
       ...(snapshotTransaction.complete ? { complete: snapshotTransaction.complete } : {}),
+      ...(snapshotTransaction.aborted ? { aborted: snapshotTransaction.aborted } : {}),
     };
 
     let opsFile: FileBasedOpsFile;
@@ -2884,8 +2979,14 @@ export class FileBasedSyncAdapterService {
           FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
           FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
           (data): data is FileBasedOpsFile => this._isFileBasedOpsFile(data),
-          undefined,
-          expectedSnapshotDigest,
+          {
+            expectedDigest: expectedSnapshotDigest,
+            rejectedDigests: this._getRejectedBackupDigests(
+              snapshotTransaction.complete ?? snapshotTransaction.aborted,
+              FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+            ),
+            normalize: (data) => this._normalizePendingMigrationOpsVersion(data),
+          },
         );
         if (!recovered) throw e;
         recoveredFromBackup = true;
@@ -2994,6 +3095,7 @@ export class FileBasedSyncAdapterService {
         encryptKey,
         opsFile,
         snapshotTransaction.complete,
+        snapshotTransaction.aborted,
       );
       if (snap) {
         snapshot = snap;
@@ -3114,8 +3216,9 @@ export class FileBasedSyncAdapterService {
         bakPath: FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
         expectedVersion: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
         isValid: (data): data is FileBasedStateFile => this._isFileBasedStateFile(data),
-        matchesSnapshot: (snapshot, state) =>
-          this._isFileBasedStateFile(state) && this._validateSnapshotRef(snapshot, state),
+        matchesSnapshot: (snapshot, stateFile) =>
+          this._isFileBasedStateFile(stateFile) &&
+          this._validateSnapshotRef(snapshot, stateFile),
       },
     );
 
@@ -3162,6 +3265,8 @@ export class FileBasedSyncAdapterService {
     );
     const opsRes = await this._forceUploadSplitSnapshot(
       provider,
+      cfg,
+      encryptKey,
       stateEncoded,
       opsEncoded,
     );
@@ -3217,13 +3322,36 @@ export class FileBasedSyncAdapterService {
     return complete.primaryRev === primaryRev ? complete.snapshotDigest : undefined;
   }
 
+  private _getRejectedBackupDigests(
+    transaction: SnapshotTransaction | undefined,
+    primaryPath: string | undefined,
+  ): string[] {
+    if (!transaction) return [];
+    const isState = primaryPath === FILE_BASED_SYNC_CONSTANTS.STATE_FILE;
+    const inherited = isState
+      ? transaction.rejectedStateDigests
+      : transaction.rejectedSnapshotDigests;
+    const currentRejectedDigest =
+      transaction.status === 'aborted'
+        ? isState
+          ? transaction.stateDigest
+          : transaction.snapshotDigest
+        : undefined;
+    return [
+      ...new Set([
+        ...(inherited ?? []),
+        ...(currentRejectedDigest ? [currentRejectedDigest] : []),
+      ]),
+    ];
+  }
+
   /**
    * Writes a recovery backup without replacing a causally newer artifact.
    *
-   * Backup writes are non-fatal by contract: a provider that cannot write the
-   * backup must still be able to sync (only the semantic concurrency signal
-   * UploadRevToMatchMismatchAPIError is rethrown — it means the WORLD moved,
-   * not that the backup failed, and the caller must re-observe before writing).
+   * Rolling backup writes are normally non-fatal. Callers set `isRequired`
+   * when this copy preserves data still referenced by a commit point; those
+   * failures abort the replacement. A semantic revision mismatch is always
+   * rethrown because the caller must re-observe before writing.
    */
   private async _writeBakFile<
     T extends { version: number; syncVersion: number; vectorClock: VectorClock },
@@ -3239,6 +3367,7 @@ export class FileBasedSyncAdapterService {
       primaryPath?: string;
       primaryRev?: string | null;
       snapshotTransaction?: SnapshotTransactionGuard;
+      isRequired?: boolean;
     } = {},
   ): Promise<void> {
     const bakRevCacheKey = `${this._getProviderKey(provider)}:${bakPath}`;
@@ -3294,12 +3423,20 @@ export class FileBasedSyncAdapterService {
         bakPath,
         fileVersion,
         isValid,
-        (rev) => {
-          backupRev = rev;
+        {
+          onReadRev: (rev) => {
+            backupRev = rev;
+          },
+          expectedDigest: expectedBackupDigest,
+          rejectedDigests: this._getRejectedBackupDigests(
+            options.snapshotTransaction?.pending ??
+              options.snapshotTransaction?.complete ??
+              options.snapshotTransaction?.aborted,
+            options.primaryPath,
+          ),
         },
-        expectedBackupDigest,
       );
-      if (options.snapshotTransaction) {
+      if (options.snapshotTransaction && !options.snapshotTransaction.pending) {
         await this._assertSnapshotTransactionUnchanged(
           provider,
           options.snapshotTransaction,
@@ -3341,7 +3478,7 @@ export class FileBasedSyncAdapterService {
       this._bakRevCache.set(bakRevCacheKey, uploadRes.rev);
       OpLog.normal(`FileBasedSyncAdapter: Wrote ${bakPath} before overwrite`);
     } catch (e) {
-      if (e instanceof UploadRevToMatchMismatchAPIError) throw e;
+      if (options.isRequired || e instanceof UploadRevToMatchMismatchAPIError) throw e;
       OpLog.warn(
         `FileBasedSyncAdapter: ${bakPath} write failed (non-fatal), proceeding`,
         e,
@@ -3361,18 +3498,24 @@ export class FileBasedSyncAdapterService {
     bakPath: string,
     expectedVersion: number,
     isValid: (data: unknown) => data is T,
-    onReadRev?: (rev: string) => void,
-    expectedDigest?: string,
+    options: ReadBakFileOptions = {},
   ): Promise<{ data: T; rev: string } | null> {
     try {
       const response = await provider.downloadFile(bakPath);
-      onReadRev?.(response.rev);
-      if (
-        expectedDigest !== undefined &&
-        (await this._digestEncodedPayload(response.dataStr)) !== expectedDigest
-      ) {
+      options.onReadRev?.(response.rev);
+      const digest =
+        options.expectedDigest !== undefined || options.rejectedDigests?.length
+          ? await this._digestEncodedPayload(response.dataStr)
+          : undefined;
+      if (options.expectedDigest !== undefined && digest !== options.expectedDigest) {
         OpLog.warn(
           `FileBasedSyncAdapter: ${bakPath} does not match the authoritative snapshot marker — refusing recovery`,
+        );
+        return null;
+      }
+      if (digest !== undefined && options.rejectedDigests?.includes(digest)) {
+        OpLog.warn(
+          `FileBasedSyncAdapter: ${bakPath} belongs to an abandoned snapshot — refusing recovery`,
         );
         return null;
       }
@@ -3390,12 +3533,13 @@ export class FileBasedSyncAdapterService {
         );
         return null;
       }
-      const data =
+      const decoded =
         await this._encryptAndCompressHandler.decompressAndDecryptData<unknown>(
           cfg,
           encryptKey,
           response.dataStr,
         );
+      const data = options.normalize ? options.normalize(decoded) : decoded;
       const version = this._isRecord(data) ? data['version'] : undefined;
       if (version !== expectedVersion) {
         OpLog.warn(
@@ -3455,6 +3599,10 @@ export class FileBasedSyncAdapterService {
         data['status'] !== 'complete' &&
         data['status'] !== 'aborted') ||
       typeof data['transactionId'] !== 'string' ||
+      (data['rejectedSnapshotDigests'] !== undefined &&
+        !this._isStringArray(data['rejectedSnapshotDigests'])) ||
+      (data['rejectedStateDigests'] !== undefined &&
+        !this._isStringArray(data['rejectedStateDigests'])) ||
       (data['status'] === 'pending' &&
         (typeof data['encodedSnapshot'] !== 'string' ||
           (data['basePrimaryRev'] !== null &&
@@ -3468,6 +3616,10 @@ export class FileBasedSyncAdapterService {
             (data['stateDigest'] === undefined) ||
           (data['statePrimaryRev'] !== undefined &&
             typeof data['statePrimaryRev'] !== 'string') ||
+          (data['stateDigest'] !== undefined &&
+            typeof data['stateDigest'] !== 'string'))) ||
+      (data['status'] === 'aborted' &&
+        (typeof data['snapshotDigest'] !== 'string' ||
           (data['stateDigest'] !== undefined && typeof data['stateDigest'] !== 'string')))
     ) {
       OpLog.warn(
@@ -3483,7 +3635,11 @@ export class FileBasedSyncAdapterService {
     guard: SnapshotTransactionGuard,
   ): Promise<void> {
     const current = await this._readSnapshotTransaction(provider, guard.path);
-    if (current?.data?.status === 'pending' || (current?.rev ?? null) !== guard.rev) {
+    const pendingChanged = guard.pending
+      ? current?.data?.status !== 'pending' ||
+        current.data.transactionId !== guard.pending.transactionId
+      : current?.data?.status === 'pending';
+    if (pendingChanged || (current?.rev ?? null) !== guard.rev) {
       throw new UploadRevToMatchMismatchAPIError(
         `FileBasedSyncAdapter: ${guard.path} changed while preparing the upload`,
       );
@@ -3505,18 +3661,112 @@ export class FileBasedSyncAdapterService {
     OpLog.warn(
       `FileBasedSyncAdapter: abandoning pending snapshot transaction (${reason})`,
     );
-    const aborted = JSON.stringify({
+    const abortedData: AbortedSnapshotTransaction = {
       version: 1,
       status: 'aborted',
       transactionId: transaction.data.transactionId,
-    } satisfies AbortedSnapshotTransaction);
+      snapshotDigest: await this._digestEncodedPayload(transaction.data.encodedSnapshot),
+      ...(transaction.data.rejectedSnapshotDigests?.length
+        ? { rejectedSnapshotDigests: transaction.data.rejectedSnapshotDigests }
+        : {}),
+      ...(transaction.data.rejectedStateDigests?.length
+        ? { rejectedStateDigests: transaction.data.rejectedStateDigests }
+        : {}),
+      ...(transaction.data.encodedState === undefined
+        ? {}
+        : {
+            stateDigest: await this._digestEncodedPayload(transaction.data.encodedState),
+          }),
+    };
+    const aborted = JSON.stringify(abortedData);
     const result = await provider.uploadFile(
       transactionPath,
       aborted,
       transaction.rev,
       false,
     );
-    return { didRecover: false, rev: result.rev };
+    return { didRecover: false, rev: result.rev, aborted: abortedData };
+  }
+
+  private async _prepareSplitStatePublication(
+    provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
+    baseOpsRev: string | null,
+    encodedState: string,
+    snapshotTransaction: SnapshotTransactionGuard,
+  ): Promise<{ revToMatch: string | null; publishedRev?: string }> {
+    let currentState:
+      | {
+          dataStr: string;
+          rev: string;
+        }
+      | undefined;
+    try {
+      currentState = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.STATE_FILE);
+    } catch (e) {
+      if (!(e instanceof RemoteFileNotFoundAPIError)) throw e;
+    }
+    const currentStateDigest = currentState
+      ? await this._digestEncodedPayload(currentState.dataStr)
+      : undefined;
+    const isAlreadyPublished =
+      currentStateDigest !== undefined &&
+      currentStateDigest === (await this._digestEncodedPayload(encodedState));
+    const isKnownAbandoned =
+      currentStateDigest !== undefined &&
+      this._getRejectedBackupDigests(
+        snapshotTransaction.pending ??
+          snapshotTransaction.complete ??
+          snapshotTransaction.aborted,
+        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+      ).includes(currentStateDigest);
+
+    if (baseOpsRev === null) {
+      if (currentState && !isAlreadyPublished) {
+        throw new UploadRevToMatchMismatchAPIError(
+          'Split snapshot state appeared after an absent ops baseline',
+        );
+      }
+      return {
+        revToMatch: null,
+        ...(isAlreadyPublished ? { publishedRev: currentState?.rev } : {}),
+      };
+    }
+
+    const committed = await this._downloadOpsFile(provider, cfg, encryptKey);
+    if (committed.rev !== baseOpsRev) {
+      throw new UploadRevToMatchMismatchAPIError();
+    }
+    const preserved = await this._backupStateFile(
+      provider,
+      cfg,
+      encryptKey,
+      committed.data,
+      snapshotTransaction,
+    );
+    if (
+      !isAlreadyPublished &&
+      preserved?.data &&
+      !this._validateSnapshotRef(committed.data, preserved.data) &&
+      !isKnownAbandoned
+    ) {
+      // Another writer has published a candidate state but has not committed
+      // its ops file yet. Do not destroy that candidate; its CAS may still win.
+      throw new UploadRevToMatchMismatchAPIError(
+        'Split snapshot state is owned by an in-flight ops commit',
+      );
+    }
+    const currentOpsRev = (
+      await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, baseOpsRev)
+    ).rev;
+    if (currentOpsRev !== baseOpsRev) {
+      throw new UploadRevToMatchMismatchAPIError();
+    }
+    return {
+      revToMatch: preserved?.rev ?? null,
+      ...(isAlreadyPublished ? { publishedRev: currentState?.rev } : {}),
+    };
   }
 
   /** Completes a crash-interrupted authoritative snapshot before normal sync. */
@@ -3541,15 +3791,24 @@ export class FileBasedSyncAdapterService {
     if (!transaction) {
       return { didRecover: false, rev: null };
     }
-    if (!transaction.data || transaction.data.status === 'aborted') {
+    if (!transaction.data) {
       // Unusable (torn write) or explicitly abandoned marker: there is nothing
       // to recover; a later snapshot upload overwrites it conditionally by rev.
       return { didRecover: false, rev: transaction.rev };
+    }
+    if (transaction.data.status === 'aborted') {
+      return {
+        didRecover: false,
+        rev: transaction.rev,
+        aborted: transaction.data,
+      };
     }
     if (transaction.data.status === 'complete') {
       return { didRecover: false, rev: transaction.rev, complete: transaction.data };
     }
     const pending = { data: transaction.data, rev: transaction.rev };
+    const encodedSnapshot = pending.data.encodedSnapshot;
+    const encodedState = pending.data.encodedState;
 
     // Freshness guard BEFORE any decode or write: recovery may only promote the
     // pending payload while the primary still has the rev observed at begin
@@ -3565,6 +3824,56 @@ export class FileBasedSyncAdapterService {
       if (!(e instanceof RemoteFileNotFoundAPIError)) throw e;
     }
     if (currentPrimaryRev !== pending.data.basePrimaryRev) {
+      if (currentPrimaryRev === null) {
+        return this._abandonSnapshotTransaction(
+          provider,
+          transactionPath,
+          pending,
+          'primary was deleted after the transaction began',
+        );
+      }
+      const currentPrimary = await provider.downloadFile(primaryPath);
+      if (
+        currentPrimary.rev === currentPrimaryRev &&
+        (await this._digestEncodedPayload(currentPrimary.dataStr)) ===
+          (await this._digestEncodedPayload(encodedSnapshot))
+      ) {
+        let committedState: { encodedState: string; primaryRev: string } | undefined;
+        if (splitState && encodedState) {
+          const currentState = await provider.downloadFile(splitState.primaryPath);
+          if (
+            (await this._digestEncodedPayload(currentState.dataStr)) !==
+            (await this._digestEncodedPayload(encodedState))
+          ) {
+            throw new UploadRevToMatchMismatchAPIError(
+              'Pending split snapshot ops committed without their bound state',
+            );
+          }
+          committedState = { encodedState, primaryRev: currentState.rev };
+        }
+        const completed = await this._completeSnapshotTransaction(
+          provider,
+          transactionPath,
+          pending.data.transactionId,
+          pending.rev,
+          encodedSnapshot,
+          currentPrimary.rev,
+          committedState,
+          pending.data,
+        );
+        try {
+          await provider.uploadFile(bakPath, encodedSnapshot, null, true);
+          if (splitState && encodedState) {
+            await provider.uploadFile(splitState.bakPath, encodedState, null, true);
+          }
+        } catch (e) {
+          OpLog.warn(
+            'FileBasedSyncAdapter: committed snapshot backup refresh failed (non-fatal)',
+            e,
+          );
+        }
+        return completed;
+      }
       return this._abandonSnapshotTransaction(
         provider,
         transactionPath,
@@ -3573,15 +3882,23 @@ export class FileBasedSyncAdapterService {
       );
     }
 
-    const encodedSnapshot = pending.data.encodedSnapshot;
-    const encodedState = pending.data.encodedState;
+    if (cfg.isEncrypt && !extractSyncFileStateFromPrefix(encodedSnapshot).isEncrypted) {
+      throw new SyncDataCorruptedError(
+        'Pending snapshot is plaintext but encryption is expected',
+        transactionPath,
+      );
+    }
+    if (
+      cfg.isEncrypt &&
+      typeof encodedState === 'string' &&
+      !extractSyncFileStateFromPrefix(encodedState).isEncrypted
+    ) {
+      throw new SyncDataCorruptedError(
+        'Pending split state snapshot is plaintext but encryption is expected',
+        transactionPath,
+      );
+    }
     try {
-      if (cfg.isEncrypt && !extractSyncFileStateFromPrefix(encodedSnapshot).isEncrypted) {
-        throw new SyncDataCorruptedError(
-          'Pending snapshot is plaintext but encryption is expected',
-          transactionPath,
-        );
-      }
       const decoded =
         await this._encryptAndCompressHandler.decompressAndDecryptData<unknown>(
           cfg,
@@ -3600,12 +3917,6 @@ export class FileBasedSyncAdapterService {
         if (typeof encodedState !== 'string') {
           throw new SyncDataCorruptedError(
             'Pending split snapshot transaction has no bound state payload',
-            transactionPath,
-          );
-        }
-        if (cfg.isEncrypt && !extractSyncFileStateFromPrefix(encodedState).isEncrypted) {
-          throw new SyncDataCorruptedError(
-            'Pending split state snapshot is plaintext but encryption is expected',
             transactionPath,
           );
         }
@@ -3635,10 +3946,11 @@ export class FileBasedSyncAdapterService {
         );
       }
     } catch (e) {
+      if (e instanceof DecryptError) throw e;
       if (!this._isRecoverableCorruption(e)) throw e;
-      // An unpromotable payload can never be recovered — a wrong/rotated key,
-      // a plaintext downgrade, or torn payload data. Keeping the marker would
-      // wedge every sync path (including "Use Local") on it forever.
+      // Structurally invalid payloads cannot be promoted. Authentication and
+      // encryption-mode failures return above without mutating the marker: the
+      // same payload may still be valid once the user supplies the right key.
       OpLog.warn('FileBasedSyncAdapter: pending snapshot payload is unusable', e);
       return this._abandonSnapshotTransaction(
         provider,
@@ -3650,11 +3962,32 @@ export class FileBasedSyncAdapterService {
 
     let statePrimaryRev: string | undefined;
     if (splitState && encodedState) {
-      // The ops file remains the commit point. Publish state first; old ops can
-      // still use the retained state backup until the bound ops payload lands.
-      statePrimaryRev = (
-        await provider.uploadFile(splitState.primaryPath, encodedState, null, true)
-      ).rev;
+      const statePublication = await this._prepareSplitStatePublication(
+        provider,
+        cfg,
+        encryptKey,
+        pending.data.basePrimaryRev,
+        encodedState,
+        {
+          path: transactionPath,
+          rev: pending.rev,
+          pending: pending.data,
+        },
+      );
+      statePrimaryRev = statePublication.publishedRev;
+      // The ops file remains the commit point. Publish state conditionally;
+      // the required backup above keeps the still-committed ops/state pair
+      // readable until the bound ops payload lands.
+      if (statePrimaryRev === undefined) {
+        statePrimaryRev = (
+          await provider.uploadFile(
+            splitState.primaryPath,
+            encodedState,
+            statePublication.revToMatch,
+            false,
+          )
+        ).rev;
+      }
     }
 
     // The pending marker owns this exact payload. Re-establish the recovery
@@ -3680,6 +4013,7 @@ export class FileBasedSyncAdapterService {
       encodedState && statePrimaryRev
         ? { encodedState, primaryRev: statePrimaryRev }
         : undefined,
+      pending.data,
     );
   }
 
@@ -3689,7 +4023,8 @@ export class FileBasedSyncAdapterService {
     primaryPath: string,
     encodedSnapshot: string,
     encodedState?: string,
-  ): Promise<{ transactionId: string; rev: string }> {
+    expectedBasePrimaryRev?: string | null,
+  ): Promise<{ data: PendingSnapshotTransaction; rev: string }> {
     const priorTransaction = await this._readSnapshotTransaction(
       provider,
       transactionPath,
@@ -3704,29 +4039,41 @@ export class FileBasedSyncAdapterService {
     // only promote the payload while this rev is still current (see
     // _recoverPendingSnapshotTransaction); the live flow force-writes and is
     // unaffected by a slightly stale probe.
-    let basePrimaryRev: string | null = null;
-    try {
-      basePrimaryRev = (await provider.getFileRev(primaryPath, null)).rev;
-    } catch (e) {
-      if (!(e instanceof RemoteFileNotFoundAPIError)) throw e;
+    let basePrimaryRev = expectedBasePrimaryRev ?? null;
+    if (expectedBasePrimaryRev === undefined) {
+      try {
+        basePrimaryRev = (await provider.getFileRev(primaryPath, null)).rev;
+      } catch (e) {
+        if (!(e instanceof RemoteFileNotFoundAPIError)) throw e;
+      }
     }
 
     const transactionId = uuidv7();
-    const pending = JSON.stringify({
+    const rejectedSnapshotDigests = this._getRejectedBackupDigests(
+      priorTransaction?.data ?? undefined,
+      primaryPath,
+    );
+    const rejectedStateDigests = this._getRejectedBackupDigests(
+      priorTransaction?.data ?? undefined,
+      FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+    );
+    const pendingData: PendingSnapshotTransaction = {
       version: 1,
       status: 'pending',
       transactionId,
       basePrimaryRev,
       encodedSnapshot,
       ...(encodedState === undefined ? {} : { encodedState }),
-    } satisfies PendingSnapshotTransaction);
+      ...(rejectedSnapshotDigests.length ? { rejectedSnapshotDigests } : {}),
+      ...(rejectedStateDigests.length ? { rejectedStateDigests } : {}),
+    };
     const result = await provider.uploadFile(
       transactionPath,
-      pending,
+      JSON.stringify(pendingData),
       priorTransaction?.rev ?? null,
       false,
     );
-    return { transactionId, rev: result.rev };
+    return { data: pendingData, rev: result.rev };
   }
 
   private async _completeSnapshotTransaction(
@@ -3737,6 +4084,7 @@ export class FileBasedSyncAdapterService {
     encodedSnapshot: string,
     primaryRev: string,
     state?: { encodedState: string; primaryRev: string },
+    rejectionHistory?: SnapshotRejectionHistory,
   ): Promise<SnapshotTransactionObservation> {
     const complete: CompleteSnapshotTransaction = {
       version: 1,
@@ -3744,6 +4092,14 @@ export class FileBasedSyncAdapterService {
       transactionId,
       primaryRev,
       snapshotDigest: await this._digestEncodedPayload(encodedSnapshot),
+      ...(rejectionHistory?.rejectedSnapshotDigests?.length
+        ? {
+            rejectedSnapshotDigests: rejectionHistory.rejectedSnapshotDigests,
+          }
+        : {}),
+      ...(rejectionHistory?.rejectedStateDigests?.length
+        ? { rejectedStateDigests: rejectionHistory.rejectedStateDigests }
+        : {}),
       ...(state
         ? {
             statePrimaryRev: state.primaryRev,
@@ -3783,19 +4139,24 @@ export class FileBasedSyncAdapterService {
     await this._completeSnapshotTransaction(
       provider,
       transactionPath,
-      transaction.transactionId,
+      transaction.data.transactionId,
       transaction.rev,
       encoded,
       primaryRes.rev,
+      undefined,
+      transaction.data,
     );
     return primaryRes;
   }
 
-  /** Atomically publishes the state/ops pair used by split authoritative snapshots. */
+  /** Publishes a transaction-bound split state/ops pair. */
   private async _forceUploadSplitSnapshot(
     provider: FileSyncProvider<SyncProviderId>,
+    cfg: EncryptAndCompressCfg,
+    encryptKey: string | undefined,
     encodedState: string,
     encodedOps: string,
+    expectedOpsRev?: string | null,
   ): Promise<{ rev: string }> {
     const transaction = await this._beginSnapshotTransaction(
       provider,
@@ -3803,13 +4164,28 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
       encodedOps,
       encodedState,
+      expectedOpsRev,
     );
-    const stateResult = await provider.uploadFile(
-      FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+    const statePublication = await this._prepareSplitStatePublication(
+      provider,
+      cfg,
+      encryptKey,
+      transaction.data.basePrimaryRev,
       encodedState,
-      null,
-      true,
+      {
+        path: FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
+        rev: transaction.rev,
+        pending: transaction.data,
+      },
     );
+    const stateResult = statePublication.publishedRev
+      ? { rev: statePublication.publishedRev }
+      : await provider.uploadFile(
+          FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+          encodedState,
+          statePublication.revToMatch,
+          false,
+        );
     await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
       encodedOps,
@@ -3819,8 +4195,8 @@ export class FileBasedSyncAdapterService {
     const opsResult = await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
       encodedOps,
-      null,
-      true,
+      expectedOpsRev ?? null,
+      expectedOpsRev === undefined,
     );
     await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.STATE_BACKUP_FILE,
@@ -3831,11 +4207,12 @@ export class FileBasedSyncAdapterService {
     await this._completeSnapshotTransaction(
       provider,
       FILE_BASED_SYNC_CONSTANTS.OPS_SNAPSHOT_TRANSACTION_FILE,
-      transaction.transactionId,
+      transaction.data.transactionId,
       transaction.rev,
       encodedOps,
       opsResult.rev,
       { encodedState, primaryRev: stateResult.rev },
+      transaction.data,
     );
     return opsResult;
   }

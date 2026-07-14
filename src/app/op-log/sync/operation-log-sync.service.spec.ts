@@ -10,6 +10,7 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import {
+  acknowledgeDeferredAction,
   bufferDeferredAction,
   clearDeferredActions,
   getDeferredActions,
@@ -125,6 +126,7 @@ describe('OperationLogSyncService', () => {
       'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
+      'appendSnapshotIncludedOps',
       'hasSyncedOps',
       'runRemoteStateReplacement',
       'isRawRebuildIncomplete',
@@ -144,6 +146,11 @@ describe('OperationLogSyncService', () => {
     opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
     opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
+      seqs: [],
+      writtenOps: [],
+      skippedCount: 0,
+    });
+    opLogStoreSpy.appendSnapshotIncludedOps.and.resolveTo({
       seqs: [],
       writtenOps: [],
       skippedCount: 0,
@@ -259,7 +266,11 @@ describe('OperationLogSyncService', () => {
     operationLogEffectsSpy = jasmine.createSpyObj('OperationLogEffects', [
       'processDeferredActions',
     ]);
-    operationLogEffectsSpy.processDeferredActions.and.resolveTo();
+    operationLogEffectsSpy.processDeferredActions.and.callFake(async () => {
+      for (const action of getDeferredActions()) {
+        acknowledgeDeferredAction(action);
+      }
+    });
     hydratorServiceSpy = jasmine.createSpyObj('OperationLogHydratorService', [
       'retryFailedRemoteOps',
     ]);
@@ -1866,6 +1877,7 @@ describe('OperationLogSyncService', () => {
             Promise.resolve([]),
             Promise.resolve([]),
             Promise.resolve([persistedEntry, persistedAfterLoadEntry]),
+            Promise.resolve([persistedEntry, persistedAfterLoadEntry]),
           );
           downloadServiceSpy.downloadRemoteOps.and.resolveTo({
             newOps: [],
@@ -1883,12 +1895,14 @@ describe('OperationLogSyncService', () => {
           syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
             async (_state, _clock, _createImport, _reason, hooks) => {
               bufferDeferredAction(localAction);
+              hooks?.afterArchiveReplacement?.();
               hooks?.beforeStateLoad?.();
               bufferDeferredAction(actionAfterStateLoad);
+              hooks?.afterStateLoad?.();
             },
           );
           operationApplierSpy.applyOperations.and.resolveTo({
-            appliedOps: [persistedEntry.op],
+            appliedOps: [persistedEntry.op, persistedAfterLoadEntry.op],
           });
           const mockStore = TestBed.inject(MockStore);
           const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
@@ -1917,6 +1931,9 @@ describe('OperationLogSyncService', () => {
               durabilityOrder.push(
                 wasAlreadyReplayed ? 'replay-before-persist' : 'persist',
               );
+            }
+            for (const action of getDeferredActions()) {
+              acknowledgeDeferredAction(action);
             }
           });
           const mockProvider = {
@@ -1959,15 +1976,15 @@ describe('OperationLogSyncService', () => {
               [
                 [{ callerHoldsOperationLogLock: false }],
                 [{ callerHoldsOperationLogLock: true }],
-                [{ callerHoldsOperationLogLock: true }],
               ],
             );
             expect(operationApplierSpy.applyOperations).toHaveBeenCalledOnceWith(
-              [persistedEntry.op],
+              [persistedEntry.op, persistedAfterLoadEntry.op],
               {
                 isLocalHydration: false,
                 skipDeferredLocalActions: true,
                 skipReducerDispatch: true,
+                remoteApplyWindowAlreadyOpen: true,
               },
             );
             expect(mockProvider.setLastServerSeq).toHaveBeenCalledOnceWith(1);
@@ -1976,7 +1993,117 @@ describe('OperationLogSyncService', () => {
           }
         });
 
-        it('should append snapshot-included remote ops BEFORE persisting deferred local intents', async () => {
+        it('should persist and restore an action that arrives during the final deferred drain', async () => {
+          clearDeferredActions();
+          const lateAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-late', changes: { title: 'Keep me too' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-late',
+              opType: OpType.Update,
+            },
+          };
+          const lateEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'late-during-final-drain',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-late',
+              payload: { task: lateAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          let hydrationFinished = false;
+          let lateActionPersisted = false;
+          opLogStoreSpy.getUnsynced.and.callFake(async () =>
+            hydrationFinished && lateActionPersisted ? [lateEntry] : [],
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              hooks?.afterArchiveReplacement?.();
+              hooks?.beforeStateLoad?.();
+              hooks?.afterStateLoad?.();
+              hydrationFinished = true;
+            },
+          );
+          const callOrder: string[] = [];
+          let heldLockDrainCount = 0;
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async (options) => {
+            if (!options?.callerHoldsOperationLogLock) return;
+
+            heldLockDrainCount++;
+            if (heldLockDrainCount === 1) {
+              // processDeferredActions snapshots the queue before awaiting its
+              // writes. This action therefore belongs to the next drain.
+              bufferDeferredAction(lateAction);
+              callOrder.push('late-action-buffered');
+              return;
+            }
+
+            lateActionPersisted = true;
+            acknowledgeDeferredAction(lateAction);
+            callOrder.push('late-action-persisted');
+          });
+          operationApplierSpy.applyOperations.and.callFake(async (ops) => {
+            callOrder.push('late-archive-restored');
+            return { appliedOps: ops };
+          });
+          hydrationStateServiceSpy.endApplyingRemoteOps.and.callFake(() => {
+            callOrder.push('remote-window-closed');
+          });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await service.downloadRemoteOps(mockProvider);
+
+            expect(heldLockDrainCount).toBe(2);
+            expect(getDeferredActions()).not.toContain(lateAction);
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledOnceWith(
+              [lateEntry.op],
+              {
+                isLocalHydration: false,
+                skipDeferredLocalActions: true,
+                skipReducerDispatch: true,
+                remoteApplyWindowAlreadyOpen: true,
+              },
+            );
+            expect(callOrder).toEqual([
+              'late-action-buffered',
+              'late-action-persisted',
+              'late-archive-restored',
+              'remote-window-closed',
+            ]);
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
+        it('should commit snapshot-included remote ops BEFORE persisting deferred local intents', async () => {
           clearDeferredActions();
           const snapshotIncludedOp: Operation = {
             id: 'snap-op-1',
@@ -2007,10 +2134,15 @@ describe('OperationLogSyncService', () => {
             latestServerSeq: 1,
           });
           const callOrder: string[] = [];
-          opLogStoreSpy.appendBatchSkipDuplicates.and.callFake(async () => {
-            callOrder.push('append-snapshot-ops');
-            return { seqs: [10], writtenOps: [snapshotIncludedOp], skippedCount: 0 };
-          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              expect(hooks?.snapshotIncludedOps).toEqual([snapshotIncludedOp]);
+              callOrder.push('commit-snapshot-baseline');
+            },
+          );
           operationLogEffectsSpy.processDeferredActions.and.callFake(
             async (options?: { callerHoldsOperationLogLock?: boolean }) => {
               if (options?.callerHoldsOperationLogLock) {
@@ -2030,11 +2162,287 @@ describe('OperationLogSyncService', () => {
           // lower seqs than any local intents persisted during hydration —
           // otherwise the frontier regresses and a later concurrent remote op
           // is misclassified as non-conflicting.
-          expect(callOrder[0]).toBe('append-snapshot-ops');
+          expect(callOrder[0]).toBe('commit-snapshot-baseline');
           expect(callOrder).toContain('persist-deferred');
-          expect(callOrder.indexOf('append-snapshot-ops')).toBeLessThan(
+          expect(callOrder.indexOf('commit-snapshot-baseline')).toBeLessThan(
             callOrder.indexOf('persist-deferred'),
           );
+        });
+
+        it('should persist deferred local intents against the old baseline when the atomic snapshot commit fails', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const snapshotIncludedOp: Operation = {
+            id: 'snap-op-append-failure',
+            clientId: 'client-B',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-x',
+            payload: { task: { id: 'task-x', changes: {} } },
+            vectorClock: { clientB: 4 },
+            timestamp: 1,
+            schemaVersion: 1,
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotIncludedOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            snapshotAppliedOpIds: [snapshotIncludedOp.id],
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              expect(hooks?.snapshotIncludedOps).toEqual([snapshotIncludedOp]);
+              bufferDeferredAction(localAction);
+              throw new Error('snapshot baseline write failed');
+            },
+          );
+          const callOrder: string[] = [];
+          hydrationStateServiceSpy.endApplyingRemoteOps.and.callFake(() => {
+            callOrder.push('end-remote-window');
+          });
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async (options) => {
+            if (options?.callerHoldsOperationLogLock) {
+              callOrder.push('persist-deferred');
+              acknowledgeDeferredAction(localAction);
+            }
+          });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await expectAsync(
+              service.downloadRemoteOps(mockProvider),
+            ).toBeRejectedWithError('snapshot baseline write failed');
+
+            expect(operationLogEffectsSpy.processDeferredActions.calls.allArgs()).toEqual(
+              [
+                [{ callerHoldsOperationLogLock: false }],
+                [{ callerHoldsOperationLogLock: true }],
+              ],
+            );
+            expect(callOrder).toEqual(['persist-deferred', 'end-remote-window']);
+            expect(getDeferredActions()).not.toContain(localAction);
+            expect(operationApplierSpy.applyOperations).not.toHaveBeenCalled();
+            expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
+        it('should append snapshot ops before recovery when persistence completes before state dispatch', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const snapshotIncludedOp: Operation = {
+            id: 'snap-op-persisted-before-dispatch-failure',
+            clientId: 'client-B',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-x',
+            payload: { task: { id: 'task-x', changes: {} } },
+            vectorClock: { clientB: 4 },
+            timestamp: 1,
+            schemaVersion: 1,
+          };
+          const persistedEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'local-op-persisted-before-dispatch-failure',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              payload: { task: localAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([persistedEntry]),
+            Promise.resolve([persistedEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotIncludedOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            snapshotAppliedOpIds: [snapshotIncludedOp.id],
+            latestServerSeq: 1,
+          });
+          const callOrder: string[] = [];
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              bufferDeferredAction(localAction);
+              callOrder.push('commit-snapshot-baseline');
+              hooks?.afterArchiveReplacement?.();
+              hooks?.afterSnapshotCachePersisted?.();
+              hooks?.afterSnapshotPersisted?.();
+              hooks?.beforeStateLoad?.();
+              throw new Error('failed before state dispatch');
+            },
+          );
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async (options) => {
+            if (options?.callerHoldsOperationLogLock) {
+              callOrder.push('persist-deferred');
+              acknowledgeDeferredAction(localAction);
+            }
+          });
+          operationApplierSpy.applyOperations.and.resolveTo({
+            appliedOps: [persistedEntry.op],
+          });
+          const dispatchSpy = spyOn(
+            TestBed.inject(MockStore),
+            'dispatch',
+          ).and.callThrough();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await expectAsync(
+              service.downloadRemoteOps(mockProvider),
+            ).toBeRejectedWithError('failed before state dispatch');
+
+            expect(callOrder[0]).toBe('commit-snapshot-baseline');
+            expect(callOrder).toContain('persist-deferred');
+            expect(dispatchSpy).not.toHaveBeenCalledWith(
+              jasmine.objectContaining({
+                type: localAction.type,
+                meta: jasmine.objectContaining({ isRemote: true }),
+              }),
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+              [persistedEntry.op],
+              jasmine.objectContaining({ skipReducerDispatch: true }),
+            );
+            expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
+        it('should persist deferred intents when a vector write aborts the atomic snapshot transaction', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const snapshotIncludedOp: Operation = {
+            id: 'snap-op-partial-persistence',
+            clientId: 'client-B',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-x',
+            payload: { task: { id: 'task-x', changes: {} } },
+            vectorClock: { clientB: 4 },
+            timestamp: 1,
+            schemaVersion: 1,
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotIncludedOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            snapshotAppliedOpIds: [snapshotIncludedOp.id],
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              expect(hooks?.snapshotIncludedOps).toEqual([snapshotIncludedOp]);
+              bufferDeferredAction(localAction);
+              throw new Error('atomic vector clock write failed');
+            },
+          );
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async (options) => {
+            if (options?.callerHoldsOperationLogLock) {
+              acknowledgeDeferredAction(localAction);
+            }
+          });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await expectAsync(
+              service.downloadRemoteOps(mockProvider),
+            ).toBeRejectedWithError('atomic vector clock write failed');
+
+            expect(operationLogEffectsSpy.processDeferredActions.calls.allArgs()).toEqual(
+              [
+                [{ callerHoldsOperationLogLock: false }],
+                [{ callerHoldsOperationLogLock: true }],
+              ],
+            );
+            expect(operationApplierSpy.applyOperations).not.toHaveBeenCalled();
+            expect(getDeferredActions()).not.toContain(localAction);
+            expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+          } finally {
+            clearDeferredActions();
+          }
         });
 
         it('should persist buffered local actions when snapshot hydration fails', async () => {
@@ -2076,6 +2484,297 @@ describe('OperationLogSyncService', () => {
             callerHoldsOperationLogLock: true,
           });
           expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+        });
+
+        it('should restore overwritten reducers and archives when hydration fails after state load', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const persistedEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'buffered-local-op-after-failure',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              payload: { task: localAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([persistedEntry]),
+            Promise.resolve([persistedEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              bufferDeferredAction(localAction);
+              hooks?.afterArchiveReplacement?.();
+              hooks?.beforeStateLoad?.();
+              hooks?.afterStateLoad?.();
+              throw new Error('state load failed');
+            },
+          );
+          operationApplierSpy.applyOperations.and.resolveTo({
+            appliedOps: [persistedEntry.op],
+          });
+          const dispatchSpy = spyOn(
+            TestBed.inject(MockStore),
+            'dispatch',
+          ).and.callThrough();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await expectAsync(
+              service.downloadRemoteOps(mockProvider),
+            ).toBeRejectedWithError('state load failed');
+
+            expect(dispatchSpy).toHaveBeenCalledWith(
+              jasmine.objectContaining({
+                type: localAction.type,
+                meta: jasmine.objectContaining({ isRemote: true }),
+              }),
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+              [persistedEntry.op],
+              jasmine.objectContaining({
+                skipReducerDispatch: true,
+                skipDeferredLocalActions: true,
+                remoteApplyWindowAlreadyOpen: true,
+              }),
+            );
+            expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
+        it('should restore archives without replaying reducers when state load does not commit', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const persistedEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'buffered-local-op-after-archive-replacement',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              payload: { task: localAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([persistedEntry]),
+            Promise.resolve([persistedEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              bufferDeferredAction(localAction);
+              hooks?.afterArchiveReplacement?.();
+              hooks?.beforeStateLoad?.();
+              throw new Error('state load failed before commit');
+            },
+          );
+          operationApplierSpy.applyOperations.and.resolveTo({
+            appliedOps: [persistedEntry.op],
+          });
+          const dispatchSpy = spyOn(
+            TestBed.inject(MockStore),
+            'dispatch',
+          ).and.callThrough();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await expectAsync(
+              service.downloadRemoteOps(mockProvider),
+            ).toBeRejectedWithError('state load failed before commit');
+
+            expect(dispatchSpy).not.toHaveBeenCalledWith(
+              jasmine.objectContaining({
+                type: localAction.type,
+                meta: jasmine.objectContaining({ isRemote: true }),
+              }),
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+              [persistedEntry.op],
+              jasmine.objectContaining({
+                skipReducerDispatch: true,
+                skipDeferredLocalActions: true,
+                remoteApplyWindowAlreadyOpen: true,
+              }),
+            );
+            expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+          } finally {
+            clearDeferredActions();
+          }
+        });
+
+        it('should continue reducer and archive restoration after a transient deferred drain failure', async () => {
+          clearDeferredActions();
+          const localAction: PersistentAction = {
+            type: ActionType.TASK_SHARED_UPDATE,
+            task: { id: 'task-local', changes: { title: 'Keep me' } },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              opType: OpType.Update,
+            },
+          };
+          const persistedEntry: OperationLogEntry = {
+            seq: 2,
+            op: {
+              id: 'buffered-local-op-after-drain-retry',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-local',
+              payload: { task: localAction.task },
+              vectorClock: { clientA: 2, clientB: 5 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          };
+          opLogStoreSpy.getUnsynced.and.returnValues(
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([persistedEntry]),
+            Promise.resolve([persistedEntry]),
+          );
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['remote-task'] } },
+            snapshotVectorClock: { clientB: 5 },
+            latestServerSeq: 1,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.callFake(
+            async (_state, _clock, _createImport, _reason, hooks) => {
+              bufferDeferredAction(localAction);
+              hooks?.afterArchiveReplacement?.();
+              hooks?.beforeStateLoad?.();
+              hooks?.afterStateLoad?.();
+            },
+          );
+          let heldLockDrainCount = 0;
+          operationLogEffectsSpy.processDeferredActions.and.callFake(async (options) => {
+            if (options?.callerHoldsOperationLogLock) {
+              heldLockDrainCount++;
+              if (heldLockDrainCount === 1) {
+                throw new Error('transient deferred drain failure');
+              }
+              for (const action of getDeferredActions()) {
+                acknowledgeDeferredAction(action);
+              }
+            }
+          });
+          operationApplierSpy.applyOperations.and.resolveTo({
+            appliedOps: [persistedEntry.op],
+          });
+          const dispatchSpy = spyOn(
+            TestBed.inject(MockStore),
+            'dispatch',
+          ).and.callThrough();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          try {
+            await service.downloadRemoteOps(mockProvider);
+
+            expect(heldLockDrainCount).toBe(2);
+            expect(dispatchSpy).toHaveBeenCalledWith(
+              jasmine.objectContaining({
+                type: localAction.type,
+                meta: jasmine.objectContaining({ isRemote: true }),
+              }),
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+              [persistedEntry.op],
+              jasmine.objectContaining({
+                skipReducerDispatch: true,
+                skipDeferredLocalActions: true,
+                remoteApplyWindowAlreadyOpen: true,
+              }),
+            );
+            expect(mockProvider.setLastServerSeq).toHaveBeenCalledOnceWith(1);
+          } finally {
+            clearDeferredActions();
+          }
         });
 
         it('should NOT throw LocalDataConflictError on normal incremental sync (no snapshotState)', async () => {
@@ -2426,10 +3125,10 @@ describe('OperationLogSyncService', () => {
 
           await service.downloadRemoteOps(mockProvider);
 
-          expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
-            [snapshotIncludedOp],
-            'remote',
-          );
+          expect(
+            syncHydrationServiceSpy.hydrateFromRemoteSync.calls.mostRecent().args[4]
+              ?.snapshotIncludedOps,
+          ).toEqual([snapshotIncludedOp]);
           expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
             [postSnapshotOp],
             {},
@@ -4612,10 +5311,9 @@ describe('OperationLogSyncService', () => {
 
       await service.forceDownloadRemoteState(mockProvider);
 
-      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledOnceWith(
-        [snapshotOp],
-        'remote',
-      );
+      expect(opLogStoreSpy.appendSnapshotIncludedOps).toHaveBeenCalledOnceWith([
+        snapshotOp,
+      ]);
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
         [suffixOp],
         {

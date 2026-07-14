@@ -781,6 +781,151 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     source: 'local' | 'remote' = 'local',
     options?: { pendingApply?: boolean },
   ): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
+    return this._appendBatchSkipDuplicates(ops, source, options, false);
+  }
+
+  /**
+   * Records remote operations already materialized by the current state cache.
+   *
+   * The cache must be exactly at the pre-append operation-log tail. This keeps
+   * its contiguous replay frontier from skipping unrelated operations while
+   * still allowing the supplied snapshot operations to be appended and
+   * checkpointed atomically.
+   */
+  async appendSnapshotIncludedOps(
+    ops: Operation[],
+  ): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
+    return this._appendBatchSkipDuplicates(ops, 'remote', undefined, true);
+  }
+
+  /**
+   * Atomically commits every durable part of a file-snapshot baseline.
+   *
+   * The downloaded state, its archives/vector clock, and the remote operations
+   * already represented by that state are one commit point. Keeping them in a
+   * single transaction means a failed write leaves the previous baseline fully
+   * intact, so local actions deferred during the download can safely be written
+   * against it instead of being stranded behind a partial snapshot.
+   */
+  async commitFileSnapshotBaseline(opts: {
+    state: unknown;
+    lastAppliedOpSeq: number;
+    vectorClock: VectorClock;
+    compactedAt: number;
+    snapshotIncludedOps: readonly Operation[];
+    archiveYoung?: ArchiveStoreEntry['data'];
+    archiveOld?: ArchiveStoreEntry['data'];
+  }): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
+    await this._ensureInit();
+
+    const storeNames: OpLogStoreName[] = [
+      STORE_NAMES.OPS,
+      STORE_NAMES.STATE_CACHE,
+      STORE_NAMES.VECTOR_CLOCK,
+    ];
+    if (opts.snapshotIncludedOps.some((op) => isFullStateOpType(op.opType))) {
+      storeNames.push(STORE_NAMES.META);
+    }
+    if (opts.archiveYoung !== undefined) {
+      storeNames.push(STORE_NAMES.ARCHIVE_YOUNG);
+    }
+    if (opts.archiveOld !== undefined) {
+      storeNames.push(STORE_NAMES.ARCHIVE_OLD);
+    }
+
+    try {
+      const result = await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+        this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+          let preAppendLastSeq = 0;
+          await tx.iterate<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            { direction: 'prev' },
+            (_value, key) => {
+              if (typeof key !== 'number') {
+                throw new Error('Operation sequence key is not numeric');
+              }
+              preAppendLastSeq = key;
+              return 'stop';
+            },
+          );
+          if (preAppendLastSeq !== opts.lastAppliedOpSeq) {
+            throw new Error(
+              'Cannot commit a file snapshot after the operation-log tail changed',
+            );
+          }
+
+          const seqs: number[] = [];
+          const writtenOps: Operation[] = [];
+          let skippedCount = 0;
+          let snapshotFrontier = preAppendLastSeq;
+          for (const op of opts.snapshotIncludedOps) {
+            const existingKey = await tx.getKeyFromIndex(
+              STORE_NAMES.OPS,
+              OPS_INDEXES.BY_ID,
+              op.id,
+            );
+            if (existingKey !== undefined) {
+              if (typeof existingKey !== 'number') {
+                throw new Error('Operation sequence key is not numeric');
+              }
+              snapshotFrontier = Math.max(snapshotFrontier, existingKey);
+              skippedCount++;
+              continue;
+            }
+
+            const entry = this._buildStoredEntry(op, 'remote');
+            const seq = await tx.add(STORE_NAMES.OPS, entry);
+            await this._recordFullStateOpInTx(tx, entry.op, seq);
+            snapshotFrontier = Math.max(snapshotFrontier, seq);
+            seqs.push(seq);
+            writtenOps.push(op);
+          }
+
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            id: SINGLETON_KEY,
+            state: opts.state,
+            lastAppliedOpSeq: snapshotFrontier,
+            vectorClock: opts.vectorClock,
+            compactedAt: opts.compactedAt,
+          } satisfies StateCacheEntry);
+          await tx.put(
+            STORE_NAMES.VECTOR_CLOCK,
+            { clock: opts.vectorClock, lastUpdate: opts.compactedAt },
+            SINGLETON_KEY,
+          );
+          if (opts.archiveYoung !== undefined) {
+            await tx.put(STORE_NAMES.ARCHIVE_YOUNG, {
+              id: SINGLETON_KEY,
+              data: opts.archiveYoung,
+              lastModified: opts.compactedAt,
+            } satisfies ArchiveStoreEntry);
+          }
+          if (opts.archiveOld !== undefined) {
+            await tx.put(STORE_NAMES.ARCHIVE_OLD, {
+              id: SINGLETON_KEY,
+              data: opts.archiveOld,
+              lastModified: opts.compactedAt,
+            } satisfies ArchiveStoreEntry);
+          }
+
+          return { seqs, writtenOps, skippedCount };
+        }),
+      );
+
+      this._vectorClockCache = { ...opts.vectorClock };
+      this._invalidateAppliedAndUnsyncedCaches();
+      return result;
+    } catch (e) {
+      this._handleAppendError(e);
+    }
+  }
+
+  private async _appendBatchSkipDuplicates(
+    ops: Operation[],
+    source: 'local' | 'remote',
+    options: { pendingApply?: boolean } | undefined,
+    advanceSnapshotFrontier: boolean,
+  ): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
     if (ops.length === 0) {
       return { seqs: [], writtenOps: [], skippedCount: 0 };
     }
@@ -792,11 +937,46 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       let skippedCount = 0;
 
       const storeNames: OpLogStoreName[] = [STORE_NAMES.OPS];
+      if (advanceSnapshotFrontier) {
+        storeNames.push(STORE_NAMES.STATE_CACHE);
+      }
       if (ops.some((op) => isFullStateOpType(op.opType))) {
         storeNames.push(STORE_NAMES.META);
       }
 
       await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        let stateCache: StateCacheEntry | undefined;
+        if (advanceSnapshotFrontier) {
+          stateCache = await tx.get<StateCacheEntry>(
+            STORE_NAMES.STATE_CACHE,
+            SINGLETON_KEY,
+          );
+          if (!stateCache) {
+            throw new Error(
+              'Cannot append snapshot-included operations without an existing state cache',
+            );
+          }
+
+          let preAppendLastSeq = 0;
+          await tx.iterate<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            { direction: 'prev' },
+            (_value, key) => {
+              if (typeof key !== 'number') {
+                throw new Error('Operation sequence key is not numeric');
+              }
+              preAppendLastSeq = key;
+              return 'stop';
+            },
+          );
+          if (stateCache.lastAppliedOpSeq !== preAppendLastSeq) {
+            throw new Error(
+              'Cannot append snapshot-included operations when the state-cache frontier does not match the operation-log tail',
+            );
+          }
+        }
+
+        let lastIncludedSeq = 0;
         for (const op of ops) {
           // Check if op already exists in the same transaction (atomic)
           const existingKey = await tx.getKeyFromIndex(
@@ -805,6 +985,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             op.id,
           );
           if (existingKey !== undefined) {
+            if (typeof existingKey !== 'number') {
+              throw new Error('Operation sequence key is not numeric');
+            }
+            lastIncludedSeq = Math.max(lastIncludedSeq, existingKey);
             skippedCount++;
             continue;
           }
@@ -812,8 +996,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           const entry = this._buildStoredEntry(op, source, options);
           const seq = await tx.add(STORE_NAMES.OPS, entry);
           await this._recordFullStateOpInTx(tx, entry.op, seq);
+          lastIncludedSeq = Math.max(lastIncludedSeq, seq);
           seqs.push(seq);
           writtenOps.push(op);
+        }
+
+        if (stateCache) {
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            ...stateCache,
+            lastAppliedOpSeq: Math.max(stateCache.lastAppliedOpSeq, lastIncludedSeq),
+          });
         }
       });
 

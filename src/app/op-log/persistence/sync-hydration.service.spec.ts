@@ -47,6 +47,7 @@ describe('SyncHydrationService', () => {
       'getLastSeq',
       'saveStateCache',
       'setVectorClock',
+      'commitFileSnapshotBaseline',
       'loadStateCache',
       'getUnsynced',
       'markRejected',
@@ -105,6 +106,11 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
+    mockOpLogStore.commitFileSnapshotBaseline.and.resolveTo({
+      seqs: [],
+      writtenOps: [],
+      skippedCount: 0,
+    });
     mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
@@ -543,24 +549,30 @@ describe('SyncHydrationService', () => {
         ]);
       });
 
-      it('should still save state cache when createSyncImportOp is false', async () => {
+      it('should commit the file snapshot baseline when createSyncImportOp is false', async () => {
         mockOpLogStore.getLastSeq.and.resolveTo(42);
 
         await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
 
-        expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
+        expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
+          jasmine.objectContaining({ lastAppliedOpSeq: 42 }),
+        );
+        expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
       });
 
-      it('should still update vector clock when createSyncImportOp is false', async () => {
+      it('should include the vector clock in the atomic file baseline', async () => {
         mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
 
         await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
 
-        expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
+        expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
           jasmine.objectContaining({
-            localClient: 6, // Should still increment
+            vectorClock: jasmine.objectContaining({
+              localClient: 6,
+            }),
           }),
         );
+        expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
       });
 
       it('should still dispatch loadAllData when createSyncImportOp is false', async () => {
@@ -590,16 +602,165 @@ describe('SyncHydrationService', () => {
         expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
       });
 
+      it('should invoke afterStateLoad only after loadAllData dispatch commits', async () => {
+        let dispatchCountBeforeStateLoad = -1;
+        let dispatchCountAfterStateLoad = -1;
+
+        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+          beforeStateLoad: () => {
+            dispatchCountBeforeStateLoad = mockStore.dispatch.calls.count();
+          },
+          afterStateLoad: () => {
+            dispatchCountAfterStateLoad = mockStore.dispatch.calls.count();
+          },
+        });
+
+        expect(dispatchCountBeforeStateLoad).toBe(0);
+        expect(dispatchCountAfterStateLoad).toBe(1);
+      });
+
+      it('should not invoke afterStateLoad when loadAllData dispatch throws', async () => {
+        let didRunBeforeStateLoad = false;
+        let didRunAfterStateLoad = false;
+        mockStore.dispatch.and.throwError('state dispatch failed');
+
+        await expectAsync(
+          service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+            beforeStateLoad: () => {
+              didRunBeforeStateLoad = true;
+            },
+            afterStateLoad: () => {
+              didRunAfterStateLoad = true;
+            },
+          }),
+        ).toBeRejectedWithError('state dispatch failed');
+
+        expect(didRunBeforeStateLoad).toBeTrue();
+        expect(didRunAfterStateLoad).toBeFalse();
+      });
+
+      it('should signal snapshot persistence only after cache and vector clock commit', async () => {
+        const callOrder: string[] = [];
+        mockOpLogStore.commitFileSnapshotBaseline.and.callFake(async () => {
+          callOrder.push('commit-snapshot-baseline');
+          return { seqs: [], writtenOps: [], skippedCount: 0 };
+        });
+
+        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+          afterSnapshotCachePersisted: () => {
+            callOrder.push('after-snapshot-cache-persisted');
+          },
+          afterSnapshotPersisted: () => {
+            callOrder.push('after-snapshot-persisted');
+          },
+          beforeStateLoad: () => {
+            callOrder.push('before-state-load');
+          },
+        });
+
+        expect(callOrder).toEqual([
+          'commit-snapshot-baseline',
+          'after-snapshot-cache-persisted',
+          'after-snapshot-persisted',
+          'before-state-load',
+        ]);
+      });
+
+      it('should not signal or dispatch when the atomic snapshot baseline fails', async () => {
+        let didPersistSnapshotCache = false;
+        let didPersistSnapshot = false;
+        let didRunBeforeStateLoad = false;
+        let didRunAfterStateLoad = false;
+        mockOpLogStore.commitFileSnapshotBaseline.and.rejectWith(
+          new Error('snapshot baseline write failed'),
+        );
+
+        await expectAsync(
+          service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+            afterSnapshotCachePersisted: () => {
+              didPersistSnapshotCache = true;
+            },
+            afterSnapshotPersisted: () => {
+              didPersistSnapshot = true;
+            },
+            beforeStateLoad: () => {
+              didRunBeforeStateLoad = true;
+            },
+            afterStateLoad: () => {
+              didRunAfterStateLoad = true;
+            },
+          }),
+        ).toBeRejectedWithError('snapshot baseline write failed');
+
+        expect(didPersistSnapshotCache).toBeFalse();
+        expect(didPersistSnapshot).toBeFalse();
+        expect(didRunBeforeStateLoad).toBeFalse();
+        expect(didRunAfterStateLoad).toBeFalse();
+        expect(mockStore.dispatch).not.toHaveBeenCalled();
+      });
+
+      it('should signal archive replacement after the atomic baseline commits', async () => {
+        const callOrder: string[] = [];
+        mockOpLogStore.commitFileSnapshotBaseline.and.callFake(async () => {
+          callOrder.push('commit-snapshot-baseline');
+          return { seqs: [], writtenOps: [], skippedCount: 0 };
+        });
+
+        await service.hydrateFromRemoteSync(
+          {
+            task: {},
+            archiveYoung: { task: { ids: [], entities: {} } },
+          },
+          undefined,
+          false,
+          undefined,
+          {
+            afterArchiveReplacement: () => callOrder.push('after-archive-replace'),
+          },
+        );
+
+        expect(callOrder).toEqual(['commit-snapshot-baseline', 'after-archive-replace']);
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+      });
+
+      it('should not signal archive replacement when the atomic baseline fails', async () => {
+        let didReplaceArchive = false;
+        mockOpLogStore.commitFileSnapshotBaseline.and.rejectWith(
+          new Error('snapshot baseline write failed'),
+        );
+
+        await expectAsync(
+          service.hydrateFromRemoteSync(
+            {
+              task: {},
+              archiveYoung: { task: { ids: [], entities: {} } },
+            },
+            undefined,
+            false,
+            undefined,
+            {
+              afterArchiveReplacement: () => {
+                didReplaceArchive = true;
+              },
+            },
+          ),
+        ).toBeRejectedWithError('snapshot baseline write failed');
+
+        expect(didReplaceArchive).toBeFalse();
+      });
+
       it('should still merge remote vector clock when createSyncImportOp is false', async () => {
         const remoteVectorClock = { remoteClient: 100 };
         mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
 
         await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock, false);
 
-        expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
+        expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
           jasmine.objectContaining({
-            localClient: 6,
-            remoteClient: 100,
+            vectorClock: jasmine.objectContaining({
+              localClient: 6,
+              remoteClient: 100,
+            }),
           }),
         );
       });
