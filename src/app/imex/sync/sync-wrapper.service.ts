@@ -53,6 +53,7 @@ import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { T } from '../../t.const';
 import { getSyncErrorStr } from './get-sync-error-str';
 import { getErrorTxt } from '../../util/get-error-text';
+import { escapeHtml } from '../../util/escape-html';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
 import { DialogConflictResolutionResult } from './sync.model';
 import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
@@ -1151,7 +1152,16 @@ export class SyncWrapperService {
     } catch (error) {
       SyncLog.err(`Failed to configure auth for provider ${providerId}:`, error);
       const httpErr = error instanceof HttpNotOkAPIError ? error : null;
-      const isTokenExchangeError = httpErr?.response?.status === 400;
+      const httpStatus = httpErr?.response.status;
+      const isTokenExchangeError = httpStatus === 400;
+      const isAuthServiceUnavailable =
+        httpStatus !== undefined && httpStatus >= 500 && httpStatus < 600;
+      // Dropbox recommends retaining this response ID for support investigations.
+      // https://developers.dropbox.com/error-handling-guide#logging
+      const providerRequestId =
+        providerId === SyncProviderId.Dropbox
+          ? httpErr?.response.headers.get('X-Dropbox-Request-Id')
+          : null;
       // A OneDrive token-exchange 400 is almost always a misconfigured
       // Microsoft Entra app registration (typically "Allow public client
       // flows" disabled), not a mistyped/expired code — the authorize step
@@ -1165,6 +1175,14 @@ export class SyncWrapperService {
         translateParams = { error: httpErr?.detail || getErrorTxt(error) };
       } else if (isTokenExchangeError) {
         msg = T.F.SYNC.S.INVALID_AUTH_CODE;
+      } else if (isAuthServiceUnavailable) {
+        translateParams = { status: String(httpStatus) };
+        if (providerRequestId) {
+          msg = T.F.SYNC.S.AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE;
+          translateParams.reference = escapeHtml(providerRequestId);
+        } else {
+          msg = T.F.SYNC.S.AUTH_SERVICE_UNAVAILABLE;
+        }
       } else {
         msg = T.F.SYNC.S.AUTH_SETUP_FAILED;
       }

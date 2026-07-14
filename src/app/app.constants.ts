@@ -111,6 +111,7 @@ export enum BodyClass {
   isFullScreen = 'isFullScreen',
   isAddTaskBarOpen = 'isAddTaskBarOpen',
   isMaterialSymbolsLoaded = 'isMaterialSymbolsLoaded',
+  hasAndroidWebViewTextZoom = 'hasAndroidWebViewTextZoom',
 
   // iOS-specific classes
   isIOS = 'isIOS',

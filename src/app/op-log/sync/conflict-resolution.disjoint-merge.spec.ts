@@ -10,7 +10,13 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
-import { ActionType, EntityConflict, OpType, Operation } from '../core/operation.types';
+import {
+  ActionType,
+  EntityConflict,
+  extractActionPayload,
+  OpType,
+  Operation,
+} from '../core/operation.types';
 import {
   compareVectorClocks,
   incrementVectorClock,
@@ -285,9 +291,10 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     // A single synthesized merged op carries BOTH changes.
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
+    expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
 
     // BOTH original ops are superseded (rejected).
     const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
@@ -454,8 +461,20 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       .flatMap((batch) => batch.ops)
       .find((batchOp) => batchOp.entityId === 'task-2');
     expect(siblingReconciliation).toBeDefined();
-    expect(siblingReconciliation?.payload).toEqual({ id: 'task-1', timeSpent: 333 });
-    expect(targetReconciliation?.payload).toEqual({ id: 'task-2', timeSpent: 222 });
+    expect(extractActionPayload(siblingReconciliation!.payload)).toEqual({
+      id: 'task-1',
+      timeSpent: 333,
+    });
+    expect(extractActionPayload(targetReconciliation!.payload)).toEqual({
+      id: 'task-2',
+      timeSpent: 222,
+    });
+    expect(
+      (siblingReconciliation!.payload as { lwwUpdateMode?: string }).lwwUpdateMode,
+    ).toBe('patch');
+    expect(
+      (targetReconciliation!.payload as { lwwUpdateMode?: string }).lwwUpdateMode,
+    ).toBe('patch');
     expect(compareVectorClocks(siblingReconciliation!.vectorClock, { A: 1 })).toBe(
       VectorClockComparison.GREATER_THAN,
     );
@@ -520,7 +539,13 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       .filter((batch) => batch.source === 'local')
       .flatMap((batch) => batch.ops);
     expect(localOps.map((batchOp) => batchOp.entityId)).toEqual(['task-1']);
-    expect(localOps[0].payload).toEqual({ id: 'task-1', timeSpent: 333 });
+    expect(extractActionPayload(localOps[0].payload)).toEqual({
+      id: 'task-1',
+      timeSpent: 333,
+    });
+    expect((localOps[0].payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+      'patch',
+    );
   });
 
   it('fails closed when a remote winner partially overlaps coupled bulk fields', async () => {
@@ -669,7 +694,13 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       .filter((batch) => batch.source === 'local')
       .flatMap((batch) => batch.ops);
     expect(localOps.map((batchOp) => batchOp.entityId)).toEqual(['task-2']);
-    expect(localOps[0].payload).toEqual({ id: 'task-2', timeSpent: 222 });
+    expect(extractActionPayload(localOps[0].payload)).toEqual({
+      id: 'task-2',
+      timeSpent: 222,
+    });
+    expect((localOps[0].payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+      'patch',
+    );
   });
 
   it('fails closed for a local bulk action without an explicit decomposition rule', async () => {
@@ -767,12 +798,18 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     const siblingReconciliation = localOps.find(
       (batchOp) => batchOp.entityId === 'task-1',
     );
-    expect(targetWinner?.payload).toEqual({
+    expect(extractActionPayload(targetWinner!.payload)).toEqual({
       id: 'task-2',
       title: 'Base title',
       timeSpent: 222,
     });
-    expect(siblingReconciliation?.payload).toEqual({ id: 'task-1', timeSpent: 333 });
+    expect(extractActionPayload(siblingReconciliation!.payload)).toEqual({
+      id: 'task-1',
+      timeSpent: 333,
+    });
+    expect(
+      (siblingReconciliation!.payload as { lwwUpdateMode?: string }).lwwUpdateMode,
+    ).toBe('patch');
   });
 
   it('does not duplicate targets when one local bulk op wins multiple conflicts', async () => {
@@ -910,7 +947,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
     // The un-conflicted field must NOT ride along in the synthesized op.
@@ -957,6 +994,34 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
     expect((await journal.list('unreviewed')).length).toBeGreaterThan(0);
+  });
+
+  it('(a5) refuses disjoint-merge for a multi-entity remote operation (#8956)', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Local title', notes: 'base notes' }),
+    );
+    const localOp = op({
+      id: 'local-multi-guard',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    const remoteOp = op({
+      id: 'remote-multi-guard',
+      clientId: 'B',
+      entityIds: ['task-1', 'task-2'],
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { notes: 'Remote notes' } } },
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]),
+    ).toBeRejectedWithError(/Cannot safely auto-resolve remote multi-entity operation/);
+    expect(mergedOpArgs()).toBeUndefined();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+    expect(await journal.list('history')).toEqual([]);
   });
 
   // ── (a5) SPAP-14 fix: refuse merge for fallback-less entity types ───────────
@@ -1094,7 +1159,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
-    const payload = merged!.payload as Record<string, unknown>;
+    const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
     expect(payload['notes']).toBe('Remote notes');
     // The noise field resolves to the greater-(timestamp) side, NOT simply the
@@ -1370,7 +1435,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     };
 
     const entityOf = (o: Operation): Record<string, unknown> => {
-      const p = o.payload as Record<string, unknown>;
+      const p = extractActionPayload(o.payload);
       return { title: p['title'], notes: p['notes'] };
     };
 

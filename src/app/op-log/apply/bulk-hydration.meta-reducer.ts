@@ -2,8 +2,9 @@ import { Action, ActionReducer } from '@ngrx/store';
 import { bulkApplyOperations } from './bulk-hydration.action';
 import { convertOpToAction } from './operation-converter.util';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
+import { isLwwUpdatePayload } from '../core/operation.types';
 import {
-  collectArchivingOrDeletingEntityIdsFromBatch,
+  collectTaskRemovalEntityIdsFromBatch,
   isTaskArchiveOrDeleteOp,
   stripBatchArchivedTaskIdsFromLwwPayload,
 } from './bulk-archive-filter.util';
@@ -100,11 +101,14 @@ export const bulkOperationsMetaReducer = <T>(
         while (true) {
           const candidateOps = operations.filter((op) => !failedOpIds.has(op.id));
           let archivingOrDeletingEntityIds: Set<string>;
+          let archivingEntityIds: Set<string>;
           try {
-            archivingOrDeletingEntityIds = collectArchivingOrDeletingEntityIdsFromBatch(
+            const taskRemovalIds = collectTaskRemovalEntityIdsFromBatch(
               candidateOps,
               state,
             );
+            archivingOrDeletingEntityIds = taskRemovalIds.all;
+            archivingEntityIds = taskRemovalIds.archiving;
           } catch (error) {
             const unsafeArchiveOps = candidateOps.filter(isTaskArchiveOrDeleteOp);
             for (const op of unsafeArchiveOps) {
@@ -120,9 +124,19 @@ export const bulkOperationsMetaReducer = <T>(
           for (const op of candidateOps) {
             try {
               const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
+              const recreatesEntityAfterDelete =
+                isLww &&
+                isLwwUpdatePayload(op.payload) &&
+                op.payload.recreatesEntityAfterDelete === true &&
+                (!op.entityId || !archivingEntityIds.has(op.entityId));
               // Skip LWW Updates whose entityId itself is archived/deleted in this batch
               // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
-              if (isLww && op.entityId && archivingOrDeletingEntityIds.has(op.entityId)) {
+              if (
+                isLww &&
+                !recreatesEntityAfterDelete &&
+                op.entityId &&
+                archivingOrDeletingEntityIds.has(op.entityId)
+              ) {
                 OpLog.normal(
                   `bulkOperationsMetaReducer: Skipping LWW Update for ` +
                     `${op.entityType}:${op.entityId} — entity archived/deleted in same batch`,

@@ -777,8 +777,8 @@ export class RemoteOpsProcessingService {
         hasNoSnapshotClock,
       });
 
-      if (result.conflict) {
-        conflicts.push(result.conflict);
+      if (result.conflicts.length > 0) {
+        conflicts.push(...result.conflicts);
       } else if (!result.isSupersededOrDuplicate) {
         nonConflicting.push(remoteOp);
       }

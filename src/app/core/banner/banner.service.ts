@@ -135,6 +135,11 @@ export class BannerService {
     });
   }
 
+  /** Whether a banner with this id is currently shown (open and not dismissed). */
+  isShown(bannerId: BannerId): boolean {
+    return this._banners().some((banner) => banner.id === bannerId);
+  }
+
   dismiss(bannerId: BannerId): void {
     // Log.log('BannerService -> dismissing Banner', bannerId);
     this._banners.update((banners) => {

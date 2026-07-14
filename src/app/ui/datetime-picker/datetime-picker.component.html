@@ -66,6 +66,7 @@
       (ngModelChange)="onTimeChange($event)"
       step="60"
       matInput
+      (click)="onTimeInputClick($event)"
       (keydown)="onTimeKeyDown($event)"
     />
     @if (selectedTime()) {

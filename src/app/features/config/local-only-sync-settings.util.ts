@@ -13,7 +13,7 @@ import { SyncConfig } from './global-config.model';
  *
  * The key arrays below are the single source of truth — both the
  * `LocalOnlySyncSettings` type and the reducer-side preservation helper
- * (`withLocalOnlySyncSettings` in `global-config.reducer.ts`) derive from them.
+ * (`withLocalOnlySyncSettings`) derive from them.
  * Add a new local-only key here and the type + reducer + strip helpers pick it
  * up automatically.
  */
@@ -38,6 +38,21 @@ export type LocalOnlySyncSettings = Pick<
   (typeof LOCAL_ONLY_SYNC_KEYS)[number]
 >;
 
+// Overwrite every local-only key on a remote incoming config with this device's
+// value. Own-client replay intentionally bypasses this helper so a post-snapshot
+// local operation is restored faithfully. Keys are sourced from LOCAL_ONLY_SYNC_KEYS
+// so adding a new local-only key above preserves it here too.
+export const withLocalOnlySyncSettings = (
+  incomingSyncConfig: SyncConfig,
+  localSyncConfig: SyncConfig,
+): SyncConfig => {
+  const merged = { ...incomingSyncConfig } as Record<string, unknown>;
+  for (const key of LOCAL_ONLY_SYNC_KEYS) {
+    merged[key] = localSyncConfig[key];
+  }
+  return merged as SyncConfig;
+};
+
 export const stripLocalOnlySyncScheduleSettings = <T extends Record<string, unknown>>(
   syncConfig: T,
 ): Omit<T, (typeof LOCAL_ONLY_SYNC_SCHEDULE_KEYS)[number]> => {
@@ -47,6 +62,13 @@ export const stripLocalOnlySyncScheduleSettings = <T extends Record<string, unkn
   }
   return stripped;
 };
+
+const _stripLocalOnlySyncSettings = (
+  syncConfig: Record<string, unknown>,
+): Record<string, unknown> => ({
+  ...stripLocalOnlySyncScheduleSettings(syncConfig),
+  syncProvider: null,
+});
 
 const _updateSyncConfigInAppData = <T>(
   data: T,
@@ -75,6 +97,19 @@ const _updateSyncConfigInAppData = <T>(
   } as T;
 };
 
+export const stripLocalOnlySyncSettingsFromGlobalConfig = (
+  globalConfig: Record<string, unknown>,
+): Record<string, unknown> => {
+  const syncConfig = globalConfig['sync'];
+  if (!syncConfig || typeof syncConfig !== 'object') {
+    return globalConfig;
+  }
+  return {
+    ...globalConfig,
+    sync: _stripLocalOnlySyncSettings(syncConfig as Record<string, unknown>),
+  };
+};
+
 export const applyLocalOnlySyncSettingsToAppData = <T>(
   data: T,
   localOnlySettings: LocalOnlySyncSettings,
@@ -86,8 +121,5 @@ export const applyLocalOnlySyncSettingsToAppData = <T>(
 };
 
 export const stripLocalOnlySyncSettingsFromAppData = (data: unknown): unknown => {
-  return _updateSyncConfigInAppData(data, (syncConfig) => ({
-    ...stripLocalOnlySyncScheduleSettings(syncConfig),
-    syncProvider: null,
-  }));
+  return _updateSyncConfigInAppData(data, _stripLocalOnlySyncSettings);
 };

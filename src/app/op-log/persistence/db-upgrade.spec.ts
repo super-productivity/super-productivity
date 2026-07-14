@@ -303,9 +303,9 @@ describe('runDbUpgrade', () => {
     });
   });
 
-  describe('version 9 downgrade barrier', () => {
-    it('should reject a v8 reader after the v9 database has been opened', async () => {
-      const dbName = `SUP_OPS_v9_barrier_${Date.now()}_${Math.random()}`;
+  describe('version 10 downgrade barrier', () => {
+    it('should reject a v9 reader after the v10 database has been opened', async () => {
+      const dbName = `SUP_OPS_v10_barrier_${Date.now()}_${Math.random()}`;
 
       try {
         const currentDb = await openDB(dbName, DB_VERSION, {
@@ -313,7 +313,7 @@ describe('runDbUpgrade', () => {
         });
         currentDb.close();
 
-        await expectAsync(openDB(dbName, 8)).toBeRejectedWith(
+        await expectAsync(openDB(dbName, 9)).toBeRejectedWith(
           jasmine.objectContaining({ name: 'VersionError' }),
         );
       } finally {

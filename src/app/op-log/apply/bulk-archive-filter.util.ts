@@ -1,4 +1,10 @@
-import { ActionType, Operation, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  isLwwUpdatePayload,
+  isMultiEntityPayload,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 
@@ -156,26 +162,72 @@ const harvestTaskEntityMapSubTaskIdsForParents = (
   }
 };
 
+const syncProjectedParentMembership = (
+  projection: TaskEntityMap,
+  taskId: string,
+  previousParentId: unknown,
+  nextParentId: unknown,
+): void => {
+  if (previousParentId === nextParentId) return;
+
+  if (typeof previousParentId === 'string') {
+    const previousParent = projection[previousParentId];
+    if (previousParent && typeof previousParent === 'object') {
+      const parent = previousParent as Record<string, unknown>;
+      const subTaskIds = Array.isArray(parent['subTaskIds'])
+        ? parent['subTaskIds'].filter((subTaskId) => subTaskId !== taskId)
+        : [];
+      projection[previousParentId] = { ...parent, subTaskIds };
+    }
+  }
+
+  if (typeof nextParentId === 'string') {
+    const nextParent = projection[nextParentId];
+    if (nextParent && typeof nextParent === 'object') {
+      const parent = nextParent as Record<string, unknown>;
+      const subTaskIds = Array.isArray(parent['subTaskIds'])
+        ? parent['subTaskIds'].filter(
+            (subTaskId): subTaskId is string => typeof subTaskId === 'string',
+          )
+        : [];
+      projection[nextParentId] = {
+        ...parent,
+        subTaskIds: subTaskIds.includes(taskId) ? subTaskIds : [...subTaskIds, taskId],
+      };
+    }
+  }
+};
+
 const upsertTaskProjectionFromTaskLike = (
   projection: TaskEntityMap,
   taskLike: unknown,
   fallbackId?: string,
+  replaceExisting = false,
 ): void => {
   if (!taskLike || typeof taskLike !== 'object') return;
   const task = taskLike as Record<string, unknown>;
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   if (!id) return;
   const prev = projection[id];
-  projection[id] = {
-    ...(prev && typeof prev === 'object' ? (prev as Record<string, unknown>) : {}),
+  const previousTask =
+    prev && typeof prev === 'object' ? (prev as Record<string, unknown>) : undefined;
+  const nextTask = {
+    ...(replaceExisting ? {} : previousTask),
     ...task,
     id,
   };
+  projection[id] = nextTask;
+  syncProjectedParentMembership(
+    projection,
+    id,
+    previousTask?.['parentId'],
+    nextTask['parentId'],
+  );
 
   const subTasks = task.subTasks;
   if (Array.isArray(subTasks)) {
     for (const subTask of subTasks) {
-      upsertTaskProjectionFromTaskLike(projection, subTask);
+      upsertTaskProjectionFromTaskLike(projection, subTask, undefined, replaceExisting);
     }
   }
 };
@@ -184,16 +236,22 @@ const upsertTaskProjectionFromTaskOrUpdate = (
   projection: TaskEntityMap,
   taskLike: unknown,
   fallbackId?: string,
+  replaceExisting = false,
 ): void => {
   if (!taskLike || typeof taskLike !== 'object') return;
   const task = taskLike as Record<string, unknown>;
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   const changes = task.changes;
   if (id && changes && typeof changes === 'object') {
-    upsertTaskProjectionFromTaskLike(projection, { ...(changes as object), id }, id);
+    upsertTaskProjectionFromTaskLike(
+      projection,
+      { ...(changes as object), id },
+      id,
+      replaceExisting,
+    );
     return;
   }
-  upsertTaskProjectionFromTaskLike(projection, taskLike, fallbackId);
+  upsertTaskProjectionFromTaskLike(projection, taskLike, fallbackId, replaceExisting);
 };
 
 const isTaskLwwUpdateOp = (op: Operation): boolean =>
@@ -237,14 +295,24 @@ const applyTaskProjectionFromOp = (op: Operation, projection: TaskEntityMap): vo
   // TASK LWW Update stores the task partial directly in payload. Other
   // direct-looking task actions like unscheduleTask are commands, not entities.
   if (isTaskLwwUpdateOp(op)) {
-    upsertTaskProjectionFromTaskOrUpdate(projection, payload, op.entityId);
+    upsertTaskProjectionFromTaskOrUpdate(
+      projection,
+      payload,
+      op.entityId,
+      isLwwUpdatePayload(op.payload) && op.payload.lwwUpdateMode === 'replace',
+    );
   }
 };
 
-export const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
-  op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+const isTaskArchiveOp = (op: Operation): boolean =>
+  op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE;
+
+const isTaskDeleteOp = (op: Operation): boolean =>
   op.actionType === ActionType.TASK_SHARED_DELETE ||
   op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE;
+
+export const isTaskArchiveOrDeleteOp = (op: Operation): boolean =>
+  isTaskArchiveOp(op) || isTaskDeleteOp(op);
 
 const addOperationEntityIds = (op: Operation, sink: Set<string>): void => {
   if (Array.isArray(op.entityIds)) {
@@ -320,14 +388,23 @@ export const collectCascadedSubTaskIds = (
  * `parentId`, a later stale `moveToArchive` / `deleteTask` sees that child just
  * like `deleteTaskHelper` would when the archive/delete action actually runs.
  */
-export const collectArchivingOrDeletingEntityIdsFromBatch = (
+export const collectTaskRemovalEntityIdsFromBatch = (
   operations: Operation[],
   state: unknown,
-): Set<string> => {
+): {
+  all: Set<string>;
+  archiving: Set<string>;
+} => {
   // Archive-free hydration/sync batches are common; skip projection work for them.
-  if (!operations.some(isTaskArchiveOrDeleteOp)) return new Set<string>();
+  if (!operations.some(isTaskArchiveOrDeleteOp)) {
+    return {
+      all: new Set<string>(),
+      archiving: new Set<string>(),
+    };
+  }
 
   const archivingOrDeletingEntityIds = new Set<string>();
+  const archivingEntityIds = new Set<string>();
   const projectedTaskEntities = cloneTaskEntityMap(state);
 
   for (const op of operations) {
@@ -335,8 +412,10 @@ export const collectArchivingOrDeletingEntityIdsFromBatch = (
       const removedByThisOp = new Set<string>();
       addOperationEntityIds(op, removedByThisOp);
       collectCascadedSubTaskIds(op, removedByThisOp, projectedTaskEntities);
+      const isArchive = isTaskArchiveOp(op);
       for (const id of removedByThisOp) {
         archivingOrDeletingEntityIds.add(id);
+        if (isArchive) archivingEntityIds.add(id);
         delete projectedTaskEntities[id];
       }
       continue;
@@ -345,7 +424,10 @@ export const collectArchivingOrDeletingEntityIdsFromBatch = (
     applyTaskProjectionFromOp(op, projectedTaskEntities);
   }
 
-  return archivingOrDeletingEntityIds;
+  return {
+    all: archivingOrDeletingEntityIds,
+    archiving: archivingEntityIds,
+  };
 };
 
 /**
@@ -367,8 +449,11 @@ export const stripBatchArchivedTaskIdsFromLwwPayload = (
   if (!isLww) return op;
   const payload = op.payload;
   if (!payload || typeof payload !== 'object') return op;
+  const entityPayload = isMultiEntityPayload(payload)
+    ? payload.actionPayload
+    : (payload as Record<string, unknown>);
   const newPayload = filterTaskIdArraysFromTagOrProjectPayload(
-    payload as Record<string, unknown>,
+    entityPayload,
     op.entityType,
     (id) => archivingOrDeletingEntityIds.has(id),
     {
@@ -378,5 +463,11 @@ export const stripBatchArchivedTaskIdsFromLwwPayload = (
       entityId: op.entityId,
     },
   );
-  return newPayload ? { ...op, payload: newPayload } : op;
+  if (!newPayload) return op;
+  return {
+    ...op,
+    payload: isMultiEntityPayload(payload)
+      ? { ...payload, actionPayload: newPayload }
+      : newPayload,
+  };
 };

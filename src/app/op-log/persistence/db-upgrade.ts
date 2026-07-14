@@ -153,4 +153,7 @@ export const runDbUpgrade = (
 
   // Version 9: no shape change. This downgrade barrier prevents v8 readers from
   // replaying rows quarantined with `reducerRejectedAt`.
+
+  // Version 10: no shape change. This downgrade barrier prevents v9 readers
+  // from treating schema-v3 replacement LWW operations as patches.
 };

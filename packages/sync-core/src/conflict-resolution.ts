@@ -2,6 +2,7 @@ import {
   extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
+  isLwwUpdatePayload,
   OpType,
 } from './operation.types';
 import type { EntityConflict, Operation } from './operation.types';
@@ -127,24 +128,50 @@ export const convertLocalDeleteRemoteUpdatesToLww = <
   }
 
   const payloadKey = resolvePayloadKey(conflict.entityType, options.payloadKey);
-  const baseEntity = extractEntityFromPayload(localDeleteOp.payload, payloadKey);
+  const baseEntity = extractEntityFromPayload(
+    localDeleteOp.payload,
+    payloadKey,
+    conflict.entityId,
+  );
 
   return conflict.remoteOps.map((remoteOp) => {
     if (remoteOp.opType !== OpType.Update) {
       return remoteOp;
     }
 
+    const lwwActionType = options.toLwwUpdateActionType(remoteOp.entityType);
+    const existingLwwPayload =
+      remoteOp.actionType === lwwActionType && isLwwUpdatePayload(remoteOp.payload)
+        ? remoteOp.payload
+        : undefined;
+    if (existingLwwPayload?.lwwUpdateMode === 'replace') {
+      return {
+        ...remoteOp,
+        payload: {
+          ...existingLwwPayload,
+          recreatesEntityAfterDelete: true,
+        },
+      } as TOperation;
+    }
+
     if (baseEntity) {
       const remotePayloadKey = resolvePayloadKey(remoteOp.entityType, options.payloadKey);
-      const updateChanges = extractUpdateChanges(remoteOp.payload, remotePayloadKey);
+      const updateChanges = existingLwwPayload
+        ? extractActionPayload(existingLwwPayload)
+        : extractUpdateChanges(remoteOp.payload, remotePayloadKey, conflict.entityId);
       const mergedEntity = options.isSingletonEntityId?.(conflict.entityId)
         ? { ...baseEntity, ...updateChanges }
         : { ...baseEntity, ...updateChanges, id: conflict.entityId };
 
       return {
         ...remoteOp,
-        actionType: options.toLwwUpdateActionType(remoteOp.entityType),
-        payload: mergedEntity,
+        actionType: lwwActionType,
+        payload: {
+          actionPayload: mergedEntity,
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
       } as TOperation;
     }
 

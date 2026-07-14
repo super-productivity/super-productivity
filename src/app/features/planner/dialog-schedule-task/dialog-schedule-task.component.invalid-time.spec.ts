@@ -118,8 +118,6 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
   });
 
   afterEach(() => {
-    // provideMockStore({ selectors: [...] }) pins module-level selector results.
-    // Clear them so later specs can exercise the real selector projectors.
     TestBed.inject(MockStore).resetSelectors();
   });
 

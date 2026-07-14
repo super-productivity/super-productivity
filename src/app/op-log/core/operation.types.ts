@@ -11,18 +11,21 @@ import type {
   EntityConflict as LibEntityConflict,
   ConflictResult as LibConflictResult,
   MultiEntityPayload as LibMultiEntityPayload,
+  LwwUpdatePayload as LibLwwUpdatePayload,
+  LwwUpdateMode,
 } from '@sp/sync-core';
 import type { EntityType as SharedEntityType } from '@sp/shared-schema';
 import { ENTITY_TYPES } from '@sp/shared-schema';
 import {
   createFullStateOpTypeHelpers,
   isMultiEntityPayload as libIsMultiEntityPayload,
+  isLwwUpdatePayload as libIsLwwUpdatePayload,
   OpType,
 } from '@sp/sync-core';
 import { ActionType } from './action-types.enum';
 
 export { OpType, extractActionPayload } from '@sp/sync-core';
-export type { VectorClock };
+export type { VectorClock, LwwUpdateMode };
 export { ENTITY_TYPES, ActionType };
 
 const fullStateOpTypeHelpers = createFullStateOpTypeHelpers<OpType>([
@@ -99,6 +102,10 @@ export interface MultiEntityPayload extends Omit<LibMultiEntityPayload, 'entityC
   entityChanges: EntityChange[];
 }
 
+export interface LwwUpdatePayload extends Omit<LibLwwUpdatePayload, 'entityChanges'> {
+  entityChanges: EntityChange[];
+}
+
 /**
  * SP-narrowed type guard that mirrors `@sp/sync-core`'s `isMultiEntityPayload`
  * but narrows to the app's `MultiEntityPayload` (with the SP entity-type union).
@@ -106,6 +113,9 @@ export interface MultiEntityPayload extends Omit<LibMultiEntityPayload, 'entityC
  */
 export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPayload =>
   libIsMultiEntityPayload(payload);
+
+export const isLwwUpdatePayload = (payload: unknown): payload is LwwUpdatePayload =>
+  libIsLwwUpdatePayload(payload);
 
 /**
  * Minimal summary of repairs performed, used in REPAIR operation payload.

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Action, ActionReducer, Store } from '@ngrx/store';
+import { Action, ActionReducer, createSelector, Store } from '@ngrx/store';
 import { of } from 'rxjs';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { ConflictJournalService } from '../../sync/conflict-journal.service';
@@ -150,6 +150,19 @@ describe('round-time conflict convergence integration (#8944)', () => {
     ]);
     effectsSpy.processDeferredActions.and.resolveTo();
 
+    // Use a test-local selector. MockStore.overrideSelector mutates shared selector
+    // instances, so an unrelated spec can otherwise leak a zero-time task into
+    // this integration test when Jasmine randomizes file order.
+    const entityRegistry = buildEntityRegistry();
+    const taskConfig = entityRegistry.TASK;
+    if (!taskConfig) {
+      throw new Error('TASK entity config is required for this integration test.');
+    }
+    taskConfig.selectById = createSelector(
+      (state: RootState) => state[TASK_FEATURE_NAME],
+      (state, props: { id: string }) => state.entities[props.id] as Task,
+    ) as unknown as NonNullable<typeof taskConfig.selectById>;
+
     TestBed.configureTestingModule({
       providers: [
         ConflictResolutionService,
@@ -171,7 +184,7 @@ describe('round-time conflict convergence integration (#8944)', () => {
             clearCache: () => {},
           },
         },
-        { provide: ENTITY_REGISTRY, useValue: buildEntityRegistry() },
+        { provide: ENTITY_REGISTRY, useValue: entityRegistry },
       ],
     });
 
@@ -225,9 +238,9 @@ describe('round-time conflict convergence integration (#8944)', () => {
       snapshotEntityKeys: undefined,
       hasNoSnapshotClock: true,
     });
-    expect(detection.conflict?.entityId).toBe(TASK_Y);
+    expect(detection.conflicts[0]?.entityId).toBe(TASK_Y);
 
-    const resolution = await resolver.autoResolveConflictsLWW([detection.conflict!]);
+    const resolution = await resolver.autoResolveConflictsLWW(detection.conflicts);
     expect(resolution.localWinOpsCreated).toBe(2);
 
     const rejectedBulk = await opLogStore.getOpById(localBulkOp.id);

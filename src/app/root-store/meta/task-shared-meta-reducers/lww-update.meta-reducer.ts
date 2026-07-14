@@ -28,6 +28,9 @@ import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
+import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
+import { SyncConfig } from '../../../features/config/global-config.model';
+import { LwwUpdateMode } from '../../../op-log/core/operation.types';
 
 /**
  * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
@@ -446,6 +449,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
     // If a singleton or adapter state gains such a key, it would be silently dropped.
     const actionAny = action as unknown as Record<string, unknown>;
+    const actionMeta = actionAny['meta'] as
+      | {
+          lwwUpdateMode?: LwwUpdateMode;
+          isApplyingFromOtherClient?: boolean;
+        }
+      | undefined;
     let entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
       if (key !== 'type' && key !== 'meta') {
@@ -462,6 +471,41 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         OpLog.warn(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
+      }
+      // 'patch' payloads carry a partial delta (disjoint merges); replacing the
+      // whole feature state with one would wipe every untouched section. Apply
+      // as a shallow merge instead — the singleton analogue of updateOne. No
+      // current producer emits patch-mode singleton ops; this is a guard.
+      if (actionMeta?.lwwUpdateMode === 'patch') {
+        entityData = {
+          ...(featureState as Record<string, unknown>),
+          ...entityData,
+        };
+      }
+      if (
+        entityType === 'GLOBAL_CONFIG' &&
+        actionMeta?.isApplyingFromOtherClient === true
+      ) {
+        const localSync = (featureState as Record<string, unknown>)['sync'];
+        if (
+          typeof localSync === 'object' &&
+          localSync !== null &&
+          !Array.isArray(localSync)
+        ) {
+          const incomingSync = entityData['sync'];
+          entityData = {
+            ...entityData,
+            sync:
+              typeof incomingSync === 'object' &&
+              incomingSync !== null &&
+              !Array.isArray(incomingSync)
+                ? withLocalOnlySyncSettings(
+                    incomingSync as SyncConfig,
+                    localSync as SyncConfig,
+                  )
+                : localSync,
+          };
+        }
       }
       const updatedState: RootState = {
         ...rootState,
@@ -505,6 +549,17 @@ export const lwwUpdateMetaReducer: MetaReducer = (
             `lwwUpdateMetaReducer: Invalid ${field} "${val}" on task ${entityId}, clearing`,
           );
         }
+      }
+      // TODAY_TAG membership is virtual (derived from dueDay/dueWithTime) and
+      // must never be stored in task.tagIds. A replace-mode snapshot from a
+      // legacy or corrupt producer would otherwise persist a stray 'TODAY' and
+      // updateTagTaskIds would sync the task into TODAY_TAG.taskIds.
+      const tagIds = entityData['tagIds'];
+      if (Array.isArray(tagIds) && tagIds.includes(TODAY_TAG.id)) {
+        entityData['tagIds'] = tagIds.filter((id) => id !== TODAY_TAG.id);
+        devError(
+          `lwwUpdateMetaReducer: Stripped virtual TODAY tag from task ${entityId}`,
+        );
       }
     }
 
@@ -584,21 +639,26 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         featureState as any,
       );
     } else {
-      // Entity exists - replace it entirely with the LWW winning state
-      // Use updateOne with all fields as changes to preserve adapter behavior
-      updatedFeatureState = (adapter as EntityAdapter<any>).updateOne(
-        {
-          id: entityId,
-          changes: {
-            ...entityData,
-            // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
-            // See comment above for rationale - vector clocks drive conflict resolution,
-            // `modified` is for UI display of "when this client last saw this change"
-            modified: Date.now(),
-          },
-        },
-        featureState as any,
-      );
+      const entityWithLocalModified = {
+        ...entityData,
+        // INTENTIONAL: We set modified to Date.now() (local time), not the original timestamp.
+        // See comment above for rationale - vector clocks drive conflict resolution,
+        // `modified` is for UI display of "when this client last saw this change"
+        modified: Date.now(),
+      };
+      updatedFeatureState =
+        actionMeta?.lwwUpdateMode === 'replace'
+          ? (adapter as EntityAdapter<any>).setOne(
+              entityWithLocalModified as any,
+              featureState as any,
+            )
+          : (adapter as EntityAdapter<any>).updateOne(
+              {
+                id: entityId,
+                changes: entityWithLocalModified,
+              },
+              featureState as any,
+            );
     }
 
     let updatedState: RootState = {

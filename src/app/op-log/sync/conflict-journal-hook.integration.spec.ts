@@ -168,9 +168,9 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
       }),
     );
 
-    expect(detection.conflict).toBeTruthy();
+    expect(detection.conflicts.length).toBe(1);
 
-    await service.autoResolveConflictsLWW([detection.conflict as EntityConflict]);
+    await service.autoResolveConflictsLWW(detection.conflicts);
 
     const entries = await journal.list('history');
     expect(entries.length).toBe(1);
@@ -234,8 +234,8 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
 
     nonConflictCases.forEach(({ name, run }) => {
       it(`${name} → no conflict, zero entries`, async () => {
-        const result = (await run()) as { conflict: EntityConflict | null };
-        expect(result.conflict).toBeNull();
+        const result = (await run()) as { conflicts: EntityConflict[] };
+        expect(result.conflicts).toEqual([]);
         expect((await journal.list('history')).length).toBe(0);
       });
     });

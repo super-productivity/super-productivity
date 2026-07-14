@@ -2,6 +2,7 @@ import {
   ActionType,
   extractActionPayload,
   FULL_STATE_OP_TYPES,
+  isLwwUpdatePayload,
   Operation,
   OpType,
 } from '../core/operation.types';
@@ -318,6 +319,9 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       entityIds: op.entityIds,
       opType: op.opType,
       isRemote: true, // Important to prevent re-logging during replay/sync
+      ...(isLwwUpdatePayload(op.payload)
+        ? { lwwUpdateMode: op.payload.lwwUpdateMode }
+        : {}),
     },
   };
 };

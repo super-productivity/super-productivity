@@ -96,7 +96,7 @@ const extractOpChanges = (
     return {};
   }
 
-  const entityPayload = extractEntityFromPayload(op.payload, payloadKey);
+  const entityPayload = extractEntityFromPayload(op.payload, payloadKey, entityId);
   const embeddedId = entityPayload?.['id'];
   // Adapter entities must positively identify the conflict target. Singleton
   // feature state is the sole exception: it uses the '*' sentinel and has no
@@ -104,7 +104,7 @@ const extractOpChanges = (
   if (entityId !== '*' && embeddedId !== entityId) {
     return capturedChanges;
   }
-  const adapterChanges = extractUpdateChanges(op.payload, payloadKey);
+  const adapterChanges = extractUpdateChanges(op.payload, payloadKey, entityId);
   const safeAdapterChanges = asSafeUpdateChanges(adapterChanges);
   if (safeAdapterChanges && Object.keys(safeAdapterChanges).length > 0) {
     return safeAdapterChanges;

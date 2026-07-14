@@ -2,6 +2,7 @@
 export {
   OpType,
   isMultiEntityPayload,
+  isLwwUpdatePayload,
   extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
@@ -14,6 +15,8 @@ export type {
   ConflictResult,
   EntityChange,
   MultiEntityPayload,
+  LwwUpdateMode,
+  LwwUpdatePayload,
 } from './operation.types';
 
 // Vector-clock algorithms — single source of truth for client/server parity.

@@ -133,17 +133,23 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   // Precompute the day-number ('d') and weekday ('EEE') header labels for each
-  // visible day, keyed on the day list + current locale. Replaces two per-column
-  // `| localeDate` pipes so no date formatting runs during change detection;
-  // recomputes only when the days or the locale change.
+  // visible day, keyed on the day list + numeric/text locales. Replaces two
+  // per-column `| localeDate` pipes so no date formatting runs during change
+  // detection; recomputes only when the days or either locale change.
   readonly dayHeaderLabels = computed<Record<string, { num: string; day: string }>>(
     () => {
       const locale = this._dateTimeFormatService.currentLocale();
+      const isoTextLocale = this._dateTimeFormatService.isoTextLocale();
+      const weekdayFormatter = isoTextLocale
+        ? new Intl.DateTimeFormat(isoTextLocale, { weekday: 'short' })
+        : null;
       const map: Record<string, { num: string; day: string }> = {};
       for (const day of this.daysToShow()) {
         map[day] = {
           num: safeFormatDate(day, 'd', locale),
-          day: safeFormatDate(day, 'EEE', locale),
+          day: weekdayFormatter
+            ? weekdayFormatter.format(parseDbDateStr(day))
+            : safeFormatDate(day, 'EEE', locale),
         };
       }
       return map;

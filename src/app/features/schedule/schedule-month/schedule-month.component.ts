@@ -34,6 +34,11 @@ export class ScheduleMonthComponent {
   readonly weekdayHeaders = computed(() => {
     const firstDay = this.firstDayOfWeek();
     const headers: string[] = [];
+    const isoTextLocale = this._dateTimeFormatService.isoTextLocale();
+    const formatter = isoTextLocale
+      ? new Intl.DateTimeFormat(isoTextLocale, { weekday: 'short' })
+      : null;
+    const locale = this._dateTimeFormatService.currentLocale();
 
     // Create a date for each day of week (using a week starting on Sunday)
     // January 2, 2000 was a Sunday
@@ -43,9 +48,8 @@ export class ScheduleMonthComponent {
       const dayIndex = (firstDay + i) % 7;
       const date = new Date(sundayDate);
       date.setDate(sundayDate.getDate() + dayIndex);
-      // 'EEE' format gives abbreviated day name (e.g., 'Mon', 'Tue')
       headers.push(
-        safeFormatDate(date, 'EEE', this._dateTimeFormatService.currentLocale()),
+        formatter ? formatter.format(date) : safeFormatDate(date, 'EEE', locale),
       );
     }
 

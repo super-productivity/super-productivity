@@ -35,6 +35,7 @@ import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.comp
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { safeFormatDate } from '../../../util/safe-format-date';
 
 @Component({
@@ -88,9 +89,18 @@ export class PlannerDayComponent {
   // Replaces a per-CD `| localeDate: 'EEE'` pipe. The parent tracks planner-day
   // by `day.dayDate`, so the instance (and thus `this.day.dayDate`) is stable
   // for its lifetime; only a locale change needs to recompute the label.
-  protected readonly dayLabel = computed(() =>
-    safeFormatDate(this.day.dayDate, 'EEE', this._dateTimeFormatService.currentLocale()),
-  );
+  protected readonly dayLabel = computed(() => {
+    const isoTextLocale = this._dateTimeFormatService.isoTextLocale();
+    return isoTextLocale
+      ? parseDbDateStr(this.day.dayDate).toLocaleDateString(isoTextLocale, {
+          weekday: 'short',
+        })
+      : safeFormatDate(
+          this.day.dayDate,
+          'EEE',
+          this._dateTimeFormatService.currentLocale(),
+        );
+  });
 
   getProgressBarClass(percentage: number | undefined): string {
     if (!percentage) return 'bg-success';

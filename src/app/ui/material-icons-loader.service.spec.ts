@@ -8,17 +8,31 @@ const MATERIAL_ICONS_FONT_READY_TIMEOUT_MS = 3000;
 describe('MaterialIconsLoaderService', () => {
   let service: MaterialIconsLoaderService;
   let originalFonts: FontFaceSet | undefined;
+  let originalAndroidInterfaceDescriptor: PropertyDescriptor | undefined;
+  let testHost: HTMLDivElement;
 
   beforeEach(() => {
     originalFonts = document.fonts;
+    originalAndroidInterfaceDescriptor = Object.getOwnPropertyDescriptor(
+      window,
+      'SUPAndroid',
+    );
     document.body.classList.remove(BodyClass.isMaterialSymbolsLoaded);
+    document.body.classList.remove(BodyClass.hasAndroidWebViewTextZoom);
+    document.documentElement.style.removeProperty('--android-webview-icon-scale');
+    testHost = document.createElement('div');
+    document.body.append(testHost);
     TestBed.configureTestingModule({});
     service = TestBed.inject(MaterialIconsLoaderService);
   });
 
   afterEach(() => {
     setDocumentFonts(originalFonts);
+    restoreAndroidInterface(originalAndroidInterfaceDescriptor);
     document.body.classList.remove(BodyClass.isMaterialSymbolsLoaded);
+    document.body.classList.remove(BodyClass.hasAndroidWebViewTextZoom);
+    document.documentElement.style.removeProperty('--android-webview-icon-scale');
+    testHost.remove();
   });
 
   it('should load icons on first call', async () => {
@@ -94,6 +108,76 @@ describe('MaterialIconsLoaderService', () => {
       document.body.classList.contains(BodyClass.isMaterialSymbolsLoaded),
     ).toBeTrue();
   });
+
+  it('counter-scales only Android font icons when system text zoom is increased', async () => {
+    setDocumentFonts(undefined);
+    setAndroidTextZoom(130);
+    const fontIcon = document.createElement('mat-icon');
+    fontIcon.setAttribute('data-mat-icon-type', 'font');
+    fontIcon.style.transform = 'rotate(45deg)';
+    const rawFontIcon = document.createElement('span');
+    rawFontIcon.classList.add('material-icons');
+    const pseudoFontIcon = document.createElement('div');
+    pseudoFontIcon.classList.add('sync-warning');
+    const inlineFontIcon = document.createElement('mat-icon');
+    inlineFontIcon.setAttribute('data-mat-icon-type', 'font');
+    inlineFontIcon.classList.add('material-icons', 'mat-icon-inline');
+    const svgIcon = document.createElement('mat-icon');
+    svgIcon.setAttribute('data-mat-icon-type', 'svg');
+    const ordinaryText = document.createElement('span');
+    testHost.append(
+      fontIcon,
+      rawFontIcon,
+      pseudoFontIcon,
+      inlineFontIcon,
+      svgIcon,
+      ordinaryText,
+    );
+
+    await service.ensureFontReady();
+
+    expect(
+      document.body.classList.contains(BodyClass.hasAndroidWebViewTextZoom),
+    ).toBeTrue();
+    expect(parseFloat(getComputedStyle(fontIcon).scale)).toBeCloseTo(100 / 130, 5);
+    expect(getComputedStyle(fontIcon).transform).not.toBe('none');
+    expect(parseFloat(getComputedStyle(rawFontIcon).scale)).toBeCloseTo(100 / 130, 5);
+    expect(parseFloat(getComputedStyle(pseudoFontIcon, '::before').scale)).toBeCloseTo(
+      100 / 130,
+      5,
+    );
+    expect(getComputedStyle(inlineFontIcon).scale).toBe('none');
+    expect(getComputedStyle(svgIcon).scale).toBe('none');
+    expect(getComputedStyle(ordinaryText).scale).toBe('none');
+  });
+
+  it('does not compensate the default Android text zoom', async () => {
+    setDocumentFonts(undefined);
+    setAndroidTextZoom(100);
+
+    await service.ensureFontReady();
+
+    expect(
+      document.body.classList.contains(BodyClass.hasAndroidWebViewTextZoom),
+    ).toBeFalse();
+    expect(
+      document.documentElement.style.getPropertyValue('--android-webview-icon-scale'),
+    ).toBe('');
+  });
+
+  it('keeps icons usable if the Android text zoom bridge throws', async () => {
+    setDocumentFonts(undefined);
+    setThrowingAndroidTextZoom();
+
+    await expectAsync(service.ensureFontReady()).toBeResolved();
+
+    expect(
+      document.body.classList.contains(BodyClass.hasAndroidWebViewTextZoom),
+    ).toBeFalse();
+    expect(
+      document.body.classList.contains(BodyClass.isMaterialSymbolsLoaded),
+    ).toBeTrue();
+  });
 });
 
 const setDocumentFonts = (fonts: FontFaceSet | undefined): void => {
@@ -101,4 +185,30 @@ const setDocumentFonts = (fonts: FontFaceSet | undefined): void => {
     value: fonts,
     configurable: true,
   });
+};
+
+const setAndroidTextZoom = (textZoom: number): void => {
+  Object.defineProperty(window, 'SUPAndroid', {
+    value: { getTextZoom: (): number => textZoom },
+    configurable: true,
+  });
+};
+
+const setThrowingAndroidTextZoom = (): void => {
+  Object.defineProperty(window, 'SUPAndroid', {
+    value: {
+      getTextZoom: (): never => {
+        throw new Error('bridge unavailable');
+      },
+    },
+    configurable: true,
+  });
+};
+
+const restoreAndroidInterface = (descriptor: PropertyDescriptor | undefined): void => {
+  if (descriptor) {
+    Object.defineProperty(window, 'SUPAndroid', descriptor);
+  } else {
+    delete (window as Window & { SUPAndroid?: unknown }).SUPAndroid;
+  }
 };

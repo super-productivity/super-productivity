@@ -74,7 +74,7 @@ const extractEntityTitle = (
     return fromChanges;
   }
   for (const op of ops) {
-    const entity = extractEntityFromPayload(op.payload, payloadKey) as
+    const entity = extractEntityFromPayload(op.payload, payloadKey, entityId) as
       | Record<string, unknown>
       | undefined;
     const isMultiEntityOp = isMultiEntityOperation(op);
