@@ -449,6 +449,43 @@ describe('OperationLogUploadService', () => {
         });
       });
 
+      it('should keep delete snapshots local instead of uploading them', async () => {
+        const entry = createMockEntry(1, 'op-1', 'client-1');
+        entry.op.actionType = ActionType.TASK_SHARED_DELETE_MULTIPLE;
+        entry.op.opType = OpType.Delete;
+        entry.op.entityType = 'TASK';
+        entry.op.entityId = 'task-1';
+        entry.op.entityIds = ['task-1'];
+        entry.op.payload = {
+          actionPayload: {
+            taskIds: ['task-1'],
+            tasks: [{ id: 'task-1', title: 'local recovery snapshot' }],
+          },
+          entityChanges: [],
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([entry]);
+        mockApiProvider.uploadOps.and.resolveTo({
+          results: [{ opId: 'op-1', accepted: true }],
+          latestSeq: 1,
+          newOps: [],
+        });
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        const uploadedOps = mockApiProvider.uploadOps.calls.mostRecent().args[0];
+        expect(uploadedOps[0].payload).toEqual({
+          actionPayload: { taskIds: ['task-1'] },
+          entityChanges: [],
+        });
+        expect(entry.op.payload).toEqual({
+          actionPayload: {
+            taskIds: ['task-1'],
+            tasks: [{ id: 'task-1', title: 'local recovery snapshot' }],
+          },
+          entityChanges: [],
+        });
+      });
+
       it('should not upload regular config ops that only contain local sync schedule settings', async () => {
         const entry = createMockEntry(1, 'op-1', 'client-1');
         entry.op.actionType = ActionType.GLOBAL_CONFIG_UPDATE_SECTION;

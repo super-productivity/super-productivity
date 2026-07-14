@@ -1266,7 +1266,7 @@ describe('lwwUpdateMetaReducer', () => {
       );
     });
 
-    it('should preserve local-only sync settings when replaying an own-client replacement', () => {
+    it('should replay local-only sync settings from an own-client replacement', () => {
       const state = createMockStateWithSingletons();
       state[CONFIG_FEATURE_NAME] = {
         ...(state[CONFIG_FEATURE_NAME] as object),
@@ -1283,9 +1283,11 @@ describe('lwwUpdateMetaReducer', () => {
         type: '[GLOBAL_CONFIG] LWW Update',
         misc: { isDisableAnimations: true },
         sync: {
-          syncProvider: null,
+          syncProvider: 'webdav',
           isEnabled: false,
           isEncryptionEnabled: false,
+          syncInterval: 900000,
+          isManualSyncOnly: false,
           isCompressionEnabled: true,
         },
         meta: {
@@ -1306,17 +1308,17 @@ describe('lwwUpdateMetaReducer', () => {
       };
       expect(globalConfig.sync).toEqual(
         jasmine.objectContaining({
-          syncProvider: 'localFile',
-          isEnabled: true,
-          isEncryptionEnabled: true,
-          syncInterval: 600000,
-          isManualSyncOnly: true,
+          syncProvider: 'webdav',
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          syncInterval: 900000,
+          isManualSyncOnly: false,
           isCompressionEnabled: true,
         }),
       );
     });
 
-    it('should retain the local sync section when a replacement omits it', () => {
+    it('should retain the local sync section when a remote replacement omits it', () => {
       const state = createMockStateWithSingletons();
       const localSync = {
         syncProvider: 'localFile',
@@ -1337,6 +1339,8 @@ describe('lwwUpdateMetaReducer', () => {
         meta: {
           isPersistent: true,
           entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          isApplyingFromOtherClient: true,
           lwwUpdateMode: 'replace',
         },
       };

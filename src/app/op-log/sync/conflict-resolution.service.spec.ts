@@ -1152,6 +1152,11 @@ describe('ConflictResolutionService', () => {
           (op) => op.id === remoteMultiOp.id,
         );
         expect(remoteMixedOps.length).toBe(1);
+        const remoteMixedBatch = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+          .allArgs()
+          .flatMap(([batches]) => batches)
+          .find((batch) => batch.ops.some((op) => op.id === remoteMultiOp.id));
+        expect(remoteMixedBatch?.options).toEqual({ pendingApply: true });
         expect(
           mockOpLogStore.appendBatchSkipDuplicates.calls
             .allArgs()
@@ -1175,7 +1180,11 @@ describe('ConflictResolutionService', () => {
         expect(rejectedIds).toContain('pending-task-1');
         expect(rejectedIds).toContain('local-task-2');
         expect(rejectedIds).not.toContain('pending-task-2');
-        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
+        expect(rejectedIds).not.toContain(remoteMultiOp.id);
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [jasmine.any(Number)],
+          [remoteMultiOp],
+        );
         expect(journal.record).toHaveBeenCalledTimes(2);
       });
 
@@ -1223,6 +1232,55 @@ describe('ConflictResolutionService', () => {
           remoteMultiOp.id,
           compensationOp.id,
         ]);
+      });
+
+      it('quarantines a failed local compensation without rejecting originals', async () => {
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 2_000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: { taskIds: ['task-1', 'task-2'] },
+        };
+        const localTask1 = createOpWithTimestamp('local-task-1', 'client-a', 1_000);
+        const localTask2 = createOpWithTimestamp(
+          'local-task-2',
+          'client-a',
+          3_000,
+          OpType.Update,
+          'task-2',
+        );
+        mockStore.select.and.returnValue(
+          of({ id: 'task-2', title: 'Local winning task' }),
+        );
+        const reducerError = new Error('compensation reducer failed');
+        let failedCompensation: Operation | undefined;
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          const compensation = ops[1];
+          if (!compensation) {
+            throw new Error('Expected a local compensation operation.');
+          }
+          failedCompensation = compensation;
+          const reducerFailures = [{ op: compensation, error: reducerError }];
+          await options?.onReducersCommitted?.([remoteMultiOp], reducerFailures);
+          return { appliedOps: [remoteMultiOp], reducerFailures };
+        });
+
+        await expectAsync(
+          service.autoResolveConflictsLWW([
+            createConflict('task-1', [localTask1], [remoteMultiOp]),
+            createConflict('task-2', [localTask2], [remoteMultiOp]),
+          ]),
+        ).toBeRejectedWithError(IncompleteRemoteOperationsError);
+
+        expect(failedCompensation).toBeDefined();
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [jasmine.any(Number)],
+          [remoteMultiOp],
+          [failedCompensation!.id],
+        );
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
       });
 
       it('recreates a winning parent’s subtasks lost to the remote bulk-delete cascade (#8956)', async () => {
@@ -1301,6 +1359,130 @@ describe('ConflictResolutionService', () => {
         expect(appliedOps.indexOf(parentOp!)).toBeLessThan(
           appliedOps.indexOf(subtaskOp!),
         );
+      });
+
+      it('recreates subtree snapshots when a remote parent update beats a local bulk delete', async () => {
+        const parentSnapshot = {
+          id: 'task-1',
+          title: 'Deleted parent',
+          subTaskIds: ['sub-1'],
+        };
+        const subtaskSnapshot = {
+          id: 'sub-1',
+          title: 'Deleted subtask',
+          parentId: 'task-1',
+          subTaskIds: [],
+        };
+        const localBulkDelete: Operation = {
+          ...createOpWithTimestamp(
+            'local-bulk-delete',
+            'client-a',
+            1000,
+            OpType.Delete,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          entityIds: ['task-1'],
+          payload: {
+            actionPayload: {
+              taskIds: ['task-1'],
+              tasks: [parentSnapshot, subtaskSnapshot],
+            },
+            entityChanges: [],
+          },
+        };
+        const remoteParentUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'remote-parent-update',
+            'client-b',
+            2000,
+            OpType.Update,
+            'task-1',
+          ),
+          payload: {
+            task: { id: 'task-1', changes: { title: 'Remote parent' } },
+          },
+        };
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localBulkDelete], [remoteParentUpdate]),
+        ]);
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        const parentOp = appliedOps.find((op) => op.entityId === 'task-1');
+        const subtaskOp = appliedOps.find((op) => op.entityId === 'sub-1');
+        expect(parentOp?.actionType).toBe(toLwwUpdateActionType('TASK'));
+        expect(subtaskOp).withContext('subtask recreate op').toBeDefined();
+        expect(extractActionPayload(subtaskOp!.payload)).toEqual(subtaskSnapshot);
+        expect(
+          (subtaskOp!.payload as { recreatesEntityAfterDelete?: boolean })
+            .recreatesEntityAfterDelete,
+        ).toBeTrue();
+        expect(appliedOps.indexOf(parentOp!)).toBeLessThan(
+          appliedOps.indexOf(subtaskOp!),
+        );
+      });
+
+      it('does not recreate a child removed by the winning remote parent state', async () => {
+        const localBulkDelete: Operation = {
+          ...createOpWithTimestamp(
+            'local-bulk-delete',
+            'client-a',
+            1_000,
+            OpType.Delete,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          entityIds: ['task-1'],
+          payload: {
+            actionPayload: {
+              taskIds: ['task-1'],
+              tasks: [
+                {
+                  id: 'task-1',
+                  title: 'Deleted parent',
+                  subTaskIds: ['sub-1'],
+                },
+                {
+                  id: 'sub-1',
+                  title: 'Removed child',
+                  parentId: 'task-1',
+                  subTaskIds: [],
+                },
+              ],
+            },
+            entityChanges: [],
+          },
+        };
+        const remoteParentUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'remote-parent-update',
+            'client-b',
+            2_000,
+            OpType.Update,
+            'task-1',
+          ),
+          payload: {
+            task: { id: 'task-1', changes: { subTaskIds: [] } },
+          },
+        };
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict('task-1', [localBulkDelete], [remoteParentUpdate]),
+        ]);
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps.some((op) => op.entityId === 'sub-1')).toBeFalse();
       });
 
       it('does not recreate a subtask the local device deleted itself (#8956)', async () => {
@@ -1422,7 +1604,16 @@ describe('ConflictResolutionService', () => {
               taskIds: ['task-1', 'task-2'],
               tasks: [
                 { id: 'task-1', title: 'Task one' },
-                { id: 'task-2', title: 'Task two' },
+                {
+                  id: 'task-2',
+                  title: 'Task two',
+                  subTaskIds: ['task-2-child'],
+                },
+                {
+                  id: 'task-2-child',
+                  title: 'Task two child',
+                  parentId: 'task-2',
+                },
               ],
             },
             entityChanges: [
@@ -1479,7 +1670,7 @@ describe('ConflictResolutionService', () => {
               id: string;
             }>
           ).map(({ id }) => id),
-        ).toEqual(['task-2']);
+        ).toEqual(['task-2', 'task-2-child']);
         expect(
           (
             replacementDelete.payload as { entityChanges?: Array<{ entityId: string }> }
@@ -2469,10 +2660,122 @@ describe('ConflictResolutionService', () => {
         expect(persistedBatches[1].ops[0].entityId).toBe('task-1');
         expect(persistedBatches[2].ops.map((op) => op.id)).toEqual(['remote-winner']);
         expect(persistedBatches[2].options).toEqual({ pendingApply: true });
-        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
-          [remoteWinner],
-          'remote',
-          { pendingApply: true },
+        expect(
+          mockOpLogStore.appendBatchSkipDuplicates.calls
+            .allArgs()
+            .flatMap(([ops]) => ops)
+            .some((op) => op.id === remoteWinner.id),
+        ).toBeFalse();
+      });
+
+      it('replays skipped mixed rows in durable sequence order', async () => {
+        const remoteMultiOp: Operation = {
+          ...createOpWithTimestamp('remote-multi', 'client-b', 2_000),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          opType: OpType.Delete,
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: { taskIds: ['task-1', 'task-2'] },
+        };
+        const finalRemoteWinner = createOpWithTimestamp(
+          'remote-final',
+          'client-b',
+          4_000,
+          OpType.Update,
+          'task-3',
+        );
+        const durableRemoteMulti = {
+          ...remoteMultiOp,
+          payload: { persisted: 'multi' },
+        };
+        const durableFinalRemoteWinner = {
+          ...finalRemoteWinner,
+          payload: { persisted: 'winner' },
+        };
+        const conflicts = [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-task-1', 'client-a', 1_000)],
+            [remoteMultiOp],
+          ),
+          createConflict(
+            'task-2',
+            [
+              createOpWithTimestamp(
+                'local-task-2',
+                'client-a',
+                3_000,
+                OpType.Update,
+                'task-2',
+              ),
+            ],
+            [remoteMultiOp],
+          ),
+          createConflict(
+            'task-3',
+            [
+              createOpWithTimestamp(
+                'local-task-3',
+                'client-a',
+                1_000,
+                OpType.Update,
+                'task-3',
+              ),
+            ],
+            [finalRemoteWinner],
+          ),
+        ];
+        mockStore.select.and.returnValue(
+          of({ id: 'task-2', title: 'Local winning task' }),
+        );
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+          async (batches) => ({
+            written: batches
+              .filter((batch) => batch.source === 'local')
+              .flatMap((batch) =>
+                batch.ops.map((op) => ({ seq: 50, op, source: 'local' as const })),
+              ),
+            skippedCount: batches
+              .filter((batch) => batch.source === 'remote')
+              .reduce((count, batch) => count + batch.ops.length, 0),
+          }),
+        );
+        mockOpLogStore.getOpById.and.callFake(async (id) => {
+          if (id === remoteMultiOp.id) {
+            return {
+              seq: 41,
+              op: durableRemoteMulti,
+              appliedAt: 1,
+              source: 'remote',
+              applicationStatus: 'pending',
+            };
+          }
+          if (id === finalRemoteWinner.id) {
+            return {
+              seq: 42,
+              op: durableFinalRemoteWinner,
+              appliedAt: 1,
+              source: 'remote',
+              applicationStatus: 'pending',
+            };
+          }
+          return undefined;
+        });
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps[0]).toBe(durableRemoteMulti);
+        expect(appliedOps[1]).toBe(durableFinalRemoteWinner);
+        expect(appliedOps[2].actionType).toBe('[TASK] LWW Update');
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [41, 42],
+          [durableRemoteMulti, durableFinalRemoteWinner],
         );
       });
 
@@ -4142,6 +4445,72 @@ describe('ConflictResolutionService', () => {
       expect(result.conflicts).toEqual([]);
     });
 
+    it('should skip an atomic multi-entity operation when any entity is superseded', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-multi-delete', 'clientB'),
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+        payload: {
+          actionPayload: { taskIds: ['task-1', 'task-2'] },
+          entityChanges: [],
+        },
+        vectorClock: { clientB: 1 },
+      };
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TASK:task-1', { clientA: 1 }],
+        ['TASK:task-2', { clientA: 1 }],
+      ]);
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        [
+          'TASK:task-2',
+          [
+            {
+              ...createMockOp('local-task-2', 'clientA'),
+              entityId: 'task-2',
+              vectorClock: { clientA: 1 },
+            },
+          ],
+        ],
+      ]);
+      mockStore.select.and.returnValue(of(undefined));
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity, appliedFrontierByEntity }),
+      );
+
+      expect(result).toEqual({ isSupersededOrDuplicate: true, conflicts: [] });
+    });
+
+    it('should skip a multi-entity operation when every entity is superseded', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-tag-order', 'clientB'),
+        actionType: ActionType.TAG_UPDATE_ORDER,
+        entityType: 'TAG',
+        entityId: 'tag-1',
+        entityIds: ['tag-1', 'tag-2'],
+        payload: {
+          actionPayload: { ids: ['tag-1', 'tag-2'] },
+          entityChanges: [],
+        },
+        vectorClock: { clientA: 1, clientB: 1 },
+      };
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TAG:tag-1', { clientA: 2, clientB: 1 }],
+        ['TAG:tag-2', { clientA: 2, clientB: 1 }],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(true);
+      expect(result.conflicts).toEqual([]);
+    });
+
     it('should NOT mark CONCURRENT remote op as superseded when entity still in state', async () => {
       // Same CONCURRENT scenario, but entity still exists (no archive/delete)
       const remoteOp: Operation = {
@@ -4567,6 +4936,38 @@ describe('ConflictResolutionService', () => {
       expect(result.length).toBe(1);
       expect(result[0].opType).toBe(OpType.Create);
       expect(result[0].actionType).toBe('test');
+    });
+
+    it('should not convert a winning remote archive when local DELETE exists', () => {
+      const archivePayload = {
+        actionPayload: {
+          tasks: [{ id: 'task-1', title: 'Archived task' }],
+        },
+        entityChanges: [],
+      };
+      const conflict = createConflict(
+        'task-1',
+        [
+          {
+            ...createOpWithTimestamp('local-del', 'client-a', Date.now() - 1000),
+            opType: OpType.Delete,
+            payload: { task: { id: 'task-1', title: 'Deleted task' } },
+          },
+        ],
+        [
+          {
+            ...createOpWithTimestamp('remote-archive', 'client-b', Date.now()),
+            actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+            opType: OpType.Update,
+            payload: archivePayload,
+          },
+        ],
+      );
+
+      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+
+      expect(result[0].actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+      expect(result[0].payload).toBe(archivePayload);
     });
 
     it('should return remote op unchanged when base entity cannot be extracted', () => {

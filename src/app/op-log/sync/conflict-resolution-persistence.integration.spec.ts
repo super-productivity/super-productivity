@@ -1,21 +1,30 @@
 import { TestBed } from '@angular/core/testing';
-import { ActionReducer, Store } from '@ngrx/store';
+import { Action, ActionReducer, Store } from '@ngrx/store';
 import { of } from 'rxjs';
 import { BannerService } from '../../core/banner/banner.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { DEFAULT_TASK, Task } from '../../features/tasks/task.model';
+import { TASK_FEATURE_NAME, taskReducer } from '../../features/tasks/store/task.reducer';
+import { PROJECT_FEATURE_NAME } from '../../features/project/store/project.reducer';
 import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/time-tracking.reducer';
+import { RootState } from '../../root-store/root-state';
+import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import { createBaseState } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
 import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { bulkOperationsMetaReducer } from '../apply/bulk-hydration.meta-reducer';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
-import { EntityConflict, Operation, OpType } from '../core/operation.types';
+import { ActionType, EntityConflict, Operation, OpType } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OpLogDbAdapter } from '../persistence/op-log-db-adapter';
 import { STORE_NAMES } from '../persistence/db-keys.const';
+import { OperationLogRecoveryService } from '../persistence/operation-log-recovery.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
+import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
+import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from './vector-clock.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -34,7 +43,9 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
   const localEntityState = { marker: 'local-winner' };
 
   let service: ConflictResolutionService;
+  let recoveryService: OperationLogRecoveryService;
   let opLogStore: OperationLogStoreService;
+  let store: jasmine.SpyObj<Store>;
   let operationApplier: jasmine.SpyObj<OperationApplierService>;
   let liveResolutionOps: Operation[];
 
@@ -123,8 +134,65 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
   ): typeof initialState =>
     reducer(state, bulkApplyOperations({ operations, localClientId: LOCAL_CLIENT_ID }));
 
+  const taskRootReducer: ActionReducer<RootState, Action> = (
+    state = createBaseState(),
+    action,
+  ) => ({
+    ...state,
+    [TASK_FEATURE_NAME]: taskReducer(state[TASK_FEATURE_NAME], action),
+  });
+  const taskReplayReducer = bulkOperationsMetaReducer(
+    createCombinedTaskSharedMetaReducer(lwwUpdateMetaReducer(taskRootReducer)),
+  ) as ActionReducer<RootState, Action>;
+  const createTaskReplayState = (tasks: Task[], projectTaskIds: string[]): RootState => {
+    const state = createBaseState();
+    const project = state[PROJECT_FEATURE_NAME].entities.project1;
+    if (!project) {
+      throw new Error('Test fixture project1 is missing.');
+    }
+    return {
+      ...state,
+      [TASK_FEATURE_NAME]: {
+        ...state[TASK_FEATURE_NAME],
+        ids: tasks.map(({ id }) => id),
+        entities: Object.fromEntries(tasks.map((task) => [task.id, task])),
+      },
+      [PROJECT_FEATURE_NAME]: {
+        ...state[PROJECT_FEATURE_NAME],
+        entities: {
+          ...state[PROJECT_FEATURE_NAME].entities,
+          project1: {
+            ...project,
+            taskIds: projectTaskIds,
+            backlogTaskIds: [],
+          },
+        },
+      },
+    };
+  };
+  const applyTaskOperations = (
+    state: RootState,
+    operations: Operation[],
+    localClientId: string,
+  ): RootState =>
+    taskReplayReducer(state, bulkApplyOperations({ operations, localClientId }));
+  const taskShape = (state: RootState): unknown => ({
+    ids: [...(state[TASK_FEATURE_NAME].ids as string[])].sort(),
+    tasks: Object.fromEntries(
+      Object.entries(state[TASK_FEATURE_NAME].entities).map(([id, task]) => [
+        id,
+        task && {
+          title: task.title,
+          parentId: task.parentId,
+          subTaskIds: task.subTaskIds,
+        },
+      ]),
+    ),
+    projectTaskIds: state[PROJECT_FEATURE_NAME].entities.project1?.taskIds.slice() ?? [],
+  });
+
   beforeEach(async () => {
-    const store = jasmine.createSpyObj<Store>('Store', ['select']);
+    store = jasmine.createSpyObj<Store>('Store', ['select']);
     store.select.and.returnValue(of(localEntityState));
     operationApplier = jasmine.createSpyObj<OperationApplierService>(
       'OperationApplierService',
@@ -165,6 +233,7 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     TestBed.configureTestingModule({
       providers: [
         ConflictResolutionService,
+        OperationLogRecoveryService,
         OperationLogStoreService,
         VectorClockService,
         { provide: Store, useValue: store },
@@ -175,6 +244,19 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
           useValue: jasmine.createSpyObj('BannerService', ['open']),
         },
         { provide: ValidateStateService, useValue: validateStateService },
+        {
+          provide: LegacyPfDbService,
+          useValue: jasmine.createSpyObj<LegacyPfDbService>('LegacyPfDbService', [
+            'hasUsableEntityData',
+            'loadAllEntityData',
+          ]),
+        },
+        {
+          provide: ClientIdService,
+          useValue: jasmine.createSpyObj<ClientIdService>('ClientIdService', [
+            'loadClientId',
+          ]),
+        },
         {
           provide: SyncSessionValidationService,
           useValue: jasmine.createSpyObj('SyncSessionValidationService', ['setFailed']),
@@ -188,6 +270,7 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     });
 
     service = TestBed.inject(ConflictResolutionService);
+    recoveryService = TestBed.inject(OperationLogRecoveryService);
     opLogStore = TestBed.inject(OperationLogStoreService);
     await opLogStore.init();
     await opLogStore._clearAllDataForTesting();
@@ -265,5 +348,274 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     opLogStore.clearVectorClockCache();
     expect(await opLogStore.getVectorClock()).toEqual({ [LOCAL_CLIENT_ID]: 1 });
     expect(operationApplier.applyOperations).not.toHaveBeenCalled();
+  });
+
+  it('recovers a crash after the reducer checkpoint without replaying reducers', async () => {
+    const { localOp, remoteWinner, conflicts } = createConflicts();
+    await opLogStore.append(localOp, 'local');
+    operationApplier.applyOperations.and.callFake(async (operations, options) => {
+      liveResolutionOps = operations;
+      await options?.onReducersCommitted?.(operations);
+      throw new Error('simulated crash after reducer checkpoint');
+    });
+
+    await expectAsync(service.autoResolveConflictsLWW(conflicts)).toBeRejectedWithError(
+      'simulated crash after reducer checkpoint',
+    );
+
+    const storedWinner = await opLogStore.getOpById(remoteWinner.id);
+    expect(storedWinner?.applicationStatus).toBe('archive_pending');
+    expect(await opLogStore.getPendingRemoteOps()).toEqual([]);
+    expect((await opLogStore.getFailedRemoteOps()).map(({ op }) => op.id)).toEqual([
+      remoteWinner.id,
+    ]);
+
+    await recoveryService.recoverPendingRemoteOps();
+    expect((await opLogStore.getOpById(remoteWinner.id))?.applicationStatus).toBe(
+      'archive_pending',
+    );
+
+    await opLogStore.markApplied([storedWinner!.seq]);
+    expect(await opLogStore.getFailedRemoteOps()).toEqual([]);
+    expect((await opLogStore.getOpById(remoteWinner.id))?.applicationStatus).toBe(
+      'applied',
+    );
+  });
+
+  it('recovers a crash-interrupted mixed bulk delete and converges independent clients', async () => {
+    const parentId = 'parent';
+    const subtaskId = 'subtask';
+    const remoteWinnerId = 'remote-winner';
+    const createTask = (id: string, overrides: Partial<Task> = {}): Task =>
+      ({
+        ...DEFAULT_TASK,
+        id,
+        title: id,
+        projectId: 'project1',
+        subTaskIds: [],
+        ...overrides,
+      }) as Task;
+    const parent = createTask(parentId, {
+      title: 'Local winning parent',
+      subTaskIds: [subtaskId],
+    });
+    const subtask = createTask(subtaskId, {
+      title: 'Surviving subtask',
+      parentId,
+    });
+    const remoteWinner = createTask(remoteWinnerId);
+    const initialTaskState = createTaskReplayState(
+      [parent, subtask, remoteWinner],
+      [parentId, remoteWinnerId],
+    );
+
+    const localParentEdit: Operation = {
+      id: 'local-parent-edit',
+      actionType: toLwwUpdateActionType('TASK'),
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: parentId,
+      payload: {
+        actionPayload: parent,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteBulkDelete: Operation = {
+      id: 'remote-bulk-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: parentId,
+      entityIds: [parentId, remoteWinnerId],
+      payload: {
+        actionPayload: { taskIds: [parentId, remoteWinnerId] },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(props?.id === parentId ? parent : props?.id === subtaskId ? subtask : undefined),
+    );
+    await opLogStore.append(localParentEdit, 'local');
+    operationApplier.applyOperations.and.callFake(async (operations) => {
+      liveResolutionOps = operations;
+      throw new Error('simulated crash before reducer checkpoint');
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW([
+        {
+          entityType: 'TASK',
+          entityId: parentId,
+          localOps: [localParentEdit],
+          remoteOps: [remoteBulkDelete],
+          suggestedResolution: 'manual',
+        },
+      ]),
+    ).toBeRejectedWithError('simulated crash before reducer checkpoint');
+
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const remoteEntry = storedEntries.find(({ op }) => op.id === remoteBulkDelete.id);
+    const compensationOps = storedEntries
+      .filter(({ op, source }) => source === 'local' && op.id !== localParentEdit.id)
+      .map(({ op }) => op);
+    expect(remoteEntry?.applicationStatus).toBe('pending');
+    expect(remoteEntry?.rejectedAt).toBeUndefined();
+    expect(compensationOps.map(({ entityId }) => entityId)).toEqual([
+      parentId,
+      subtaskId,
+    ]);
+    expect((await opLogStore.getPendingRemoteOps()).map(({ op }) => op.id)).toEqual([
+      remoteBulkDelete.id,
+    ]);
+
+    const liveClientState = applyTaskOperations(
+      initialTaskState,
+      liveResolutionOps,
+      LOCAL_CLIENT_ID,
+    );
+    const restartedClientState = applyTaskOperations(
+      initialTaskState,
+      storedEntries.map(({ op }) => op),
+      LOCAL_CLIENT_ID,
+    );
+    const remoteClientState = applyTaskOperations(
+      initialTaskState,
+      [remoteBulkDelete, ...compensationOps],
+      REMOTE_CLIENT_ID,
+    );
+    expect(taskShape(restartedClientState)).toEqual(taskShape(liveClientState));
+    expect(taskShape(remoteClientState)).toEqual(taskShape(liveClientState));
+    expect(taskShape(liveClientState)).toEqual({
+      ids: [parentId, subtaskId].sort(),
+      tasks: {
+        [parentId]: {
+          title: 'Local winning parent',
+          parentId: undefined,
+          subTaskIds: [subtaskId],
+        },
+        [subtaskId]: {
+          title: 'Surviving subtask',
+          parentId,
+          subTaskIds: [],
+        },
+      },
+      projectTaskIds: [parentId],
+    });
+
+    const recoveredPendingOps = await recoveryService.recoverPendingRemoteOps();
+    expect(recoveredPendingOps.map(({ op }) => op.id)).toEqual([remoteBulkDelete.id]);
+    expect((await opLogStore.getOpById(remoteBulkDelete.id))?.applicationStatus).toBe(
+      'pending',
+    );
+
+    await opLogStore.markReducersCommittedAndMergeClocks(
+      [remoteEntry!.seq],
+      [remoteEntry!.op],
+    );
+    expect(await opLogStore.getPendingRemoteOps()).toEqual([]);
+    expect((await opLogStore.getOpById(remoteBulkDelete.id))?.applicationStatus).toBe(
+      'archive_pending',
+    );
+
+    const frontier = await TestBed.inject(VectorClockService).getEntityFrontier();
+    expect(frontier.get(`TASK:${remoteWinnerId}`)).toEqual(remoteBulkDelete.vectorClock);
+    expect(frontier.get(`TASK:${parentId}`)?.[REMOTE_CLIENT_ID]).toBe(1);
+    expect(frontier.get(`TASK:${subtaskId}`)?.[REMOTE_CLIENT_ID]).toBe(1);
+
+    await opLogStore.markApplied([remoteEntry!.seq]);
+    expect(await opLogStore.getFailedRemoteOps()).toEqual([]);
+    expect((await opLogStore.getOpById(remoteBulkDelete.id))?.applicationStatus).toBe(
+      'applied',
+    );
+  });
+
+  it('keeps a winning remote archive as an archive on every client', async () => {
+    const taskId = 'task-to-archive';
+    const task = {
+      ...DEFAULT_TASK,
+      id: taskId,
+      title: 'Task to archive',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const initialArchiveState = createTaskReplayState([task], [taskId]);
+    const localDelete: Operation = {
+      id: 'local-delete',
+      actionType: ActionType.TASK_SHARED_DELETE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: taskId,
+      payload: {
+        actionPayload: { task },
+        entityChanges: [],
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteArchive: Operation = {
+      id: 'remote-archive',
+      actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: taskId,
+      entityIds: [taskId],
+      payload: {
+        actionPayload: { tasks: [{ ...task, subTasks: [] }] },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.returnValue(of(undefined));
+    await opLogStore.append(localDelete, 'local');
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'TASK',
+        entityId: taskId,
+        localOps: [localDelete],
+        remoteOps: [remoteArchive],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    expect(liveResolutionOps).toEqual([remoteArchive]);
+    const storedArchive = await opLogStore.getOpById(remoteArchive.id);
+    expect(storedArchive?.op.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    expect(storedArchive?.applicationStatus).toBe('applied');
+    expect(storedArchive?.rejectedAt).toBeUndefined();
+
+    const locallyDeletedState = applyTaskOperations(
+      initialArchiveState,
+      [localDelete],
+      LOCAL_CLIENT_ID,
+    );
+    const localClientResult = applyTaskOperations(
+      locallyDeletedState,
+      liveResolutionOps,
+      LOCAL_CLIENT_ID,
+    );
+    const remoteClientResult = applyTaskOperations(
+      initialArchiveState,
+      [remoteArchive],
+      REMOTE_CLIENT_ID,
+    );
+    expect(localClientResult[TASK_FEATURE_NAME]).toEqual(
+      remoteClientResult[TASK_FEATURE_NAME],
+    );
+    expect(localClientResult[TASK_FEATURE_NAME].ids).toEqual([]);
   });
 });

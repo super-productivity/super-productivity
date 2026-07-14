@@ -452,6 +452,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     const actionMeta = actionAny['meta'] as
       | {
           lwwUpdateMode?: LwwUpdateMode;
+          isApplyingFromOtherClient?: boolean;
         }
       | undefined;
     let entityData: Record<string, unknown> = {};
@@ -471,7 +472,10 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
       }
-      if (entityType === 'GLOBAL_CONFIG') {
+      if (
+        entityType === 'GLOBAL_CONFIG' &&
+        actionMeta?.isApplyingFromOtherClient === true
+      ) {
         const localSync = (featureState as Record<string, unknown>)['sync'];
         if (
           typeof localSync === 'object' &&

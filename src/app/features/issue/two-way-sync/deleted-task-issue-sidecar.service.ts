@@ -2,8 +2,9 @@ import { Injectable } from '@angular/core';
 
 /**
  * Minimal issue metadata needed to delete remote issues when tasks are bulk-deleted.
- * Kept separate from the NgRx action payload so that full Task objects are never
- * serialized into the operation log.
+ * Kept separate from the NgRx action payload because issue deletion is a local-only
+ * side effect. Bulk-delete actions may carry task recovery snapshots locally; the
+ * upload boundary strips those snapshots before sync.
  */
 export interface DeletedTaskIssueInfo {
   issueId: string;

@@ -628,6 +628,18 @@ export class OperationLogUploadService {
 
   private _sanitizeRegularOpPayloadForUpload(op: Operation): unknown | null {
     if (
+      op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE &&
+      isMultiEntityPayload(op.payload)
+    ) {
+      const actionPayload = { ...op.payload.actionPayload };
+      delete actionPayload['tasks'];
+      return {
+        ...op.payload,
+        actionPayload,
+      };
+    }
+
+    if (
       op.entityType === 'GLOBAL_CONFIG' &&
       isLwwUpdateActionType(op.actionType) &&
       typeof op.payload === 'object' &&
