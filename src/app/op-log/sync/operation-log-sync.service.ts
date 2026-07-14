@@ -597,12 +597,26 @@ export class OperationLogSyncService {
     // operations dominated by the snapshot clock are already reflected in that state.
     if (result.providerMode === 'fileSnapshotOps' && result.snapshotState) {
       const snapshotClock = result.snapshotVectorClock;
-      const snapshotDeltaOps = snapshotClock
+      // Fail safe: an op is only recorded as "applied" without replay when the
+      // snapshot clock provably dominates it. When that can't be proven — no
+      // usable snapshot clock, or an op missing its own clock — replay it
+      // instead (idempotent via getAppliedOpIds/LWW). Recording an op as applied
+      // whose effect never reached state is the silent data-loss bug this whole
+      // path exists to prevent, so always degrade toward replay, never toward
+      // drop. These branches are unreachable today (the file adapter always
+      // reports a non-empty snapshot clock alongside snapshotState) but keep a
+      // future provider/refactor from reintroducing the loss silently.
+      const hasUsableSnapshotClock =
+        !!snapshotClock && Object.keys(snapshotClock).length > 0;
+      const snapshotDeltaOps = hasUsableSnapshotClock
         ? result.newOps.filter((op) => {
+            if (!op.vectorClock || Object.keys(op.vectorClock).length === 0) {
+              return true;
+            }
             const comparison = compareVectorClocks(op.vectorClock, snapshotClock);
             return comparison === 'GREATER_THAN' || comparison === 'CONCURRENT';
           })
-        : [];
+        : result.newOps;
       const snapshotDeltaIds = new Set(snapshotDeltaOps.map((op) => op.id));
       const snapshotCoveredOps = result.newOps.filter(
         (op) => !snapshotDeltaIds.has(op.id),

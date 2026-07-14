@@ -2361,6 +2361,65 @@ describe('OperationLogSyncService', () => {
           );
         });
 
+        it('should replay a CONCURRENT op not covered by the file snapshot', async () => {
+          // A delta op from a different client is neither dominated by nor equal
+          // to the snapshot clock (CONCURRENT), so the hydrated snapshot state
+          // cannot reflect it — it must be replayed, not recorded applied without
+          // its effect. Guards against a regression dropping CONCURRENT from the
+          // delta filter, which would reintroduce the silent data-loss class.
+          const snapshotOp: Operation = {
+            id: 'snapshot-op',
+            clientId: 'client-B',
+            actionType: '[Global Config] Update' as ActionType,
+            opType: OpType.Update,
+            entityType: 'GLOBAL_CONFIG',
+            entityId: 'sync',
+            payload: {},
+            vectorClock: { clientB: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+          // { clientC: 1 } vs snapshot { clientB: 1 }: greater on clientC, less on
+          // clientB → CONCURRENT (not GREATER_THAN), so it exercises that branch.
+          const concurrentOp: Operation = {
+            ...snapshotOp,
+            id: 'task-concurrent-with-snapshot',
+            clientId: 'client-C',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            vectorClock: { clientC: 1 },
+          };
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotOp, concurrentOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: [] } },
+            snapshotVectorClock: { clientB: 1 },
+            latestServerSeq: 2,
+          });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          await service.downloadRemoteOps(mockProvider);
+
+          // Only the snapshot-covered op is recorded applied without replay...
+          expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+            [snapshotOp],
+            'remote',
+          );
+          // ...the CONCURRENT op is replayed, never silently marked applied.
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [concurrentOp],
+            jasmine.objectContaining({ beforeFullStateApply: jasmine.any(Function) }),
+          );
+        });
+
         it('should skip hydration AND conflict when local clock dominates remote snapshot (issue #7339)', async () => {
           // Reproduces the iOS WebDAV loop: a foreign-written snapshot with the
           // same syncVersion fires gap detection on every sync from a client that
