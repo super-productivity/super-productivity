@@ -528,10 +528,7 @@ export class DropboxApi {
 
         if (!response.ok) {
           const bodyStr = await response.text();
-          throw new HttpNotOkAPIError(
-            new Response(bodyStr, { status: response.status }),
-            bodyStr,
-          );
+          throw new HttpNotOkAPIError(response, bodyStr);
         }
 
         data = (await response.json()) as TokenResponse;

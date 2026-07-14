@@ -1589,7 +1589,9 @@
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
         "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
-        "AUTH_SETUP_FAILED": "Failed to set up authentication. Please try again. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please report this as a bug if it keeps happening.",
+        "AUTH_SERVICE_UNAVAILABLE": "The authentication service is temporarily unavailable (HTTP {{status}}). Please try again.",
+        "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "The authentication service is temporarily unavailable (HTTP {{status}}). Please try again. Reference: {{reference}}.",
+        "AUTH_SETUP_FAILED": "Failed to set up authentication. Please try again. If it keeps happening, check your connection and report the error details.",
         "AUTH_TOKEN_REJECTED": "Sync token was rejected by the server: {{reason}}. Please get a new token.",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
