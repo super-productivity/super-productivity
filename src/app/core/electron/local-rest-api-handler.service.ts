@@ -512,7 +512,28 @@ export class LocalRestApiHandlerService {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
-        this._taskService.update(taskId, changes);
+        // A projectId change is a multi-entity move (both projects' taskIds
+        // arrays, plus subtasks), not a plain field write. Route it through the
+        // same sync-safe action the UI uses so the destination/source indexes
+        // stay consistent; a bare update() leaves them stale (#8983).
+        if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
+          const moveError = await this._applyProjectMove(
+            requestId,
+            task,
+            changes.projectId,
+          );
+          if (moveError) {
+            return moveError;
+          }
+        }
+
+        // projectId is owned by the move above; applying it again via update()
+        // would re-set it without reindexing the projects and re-introduce #8983.
+        const fieldChanges = { ...changes } as Record<string, unknown>;
+        delete fieldChanges.projectId;
+        if (Object.keys(fieldChanges).length > 0) {
+          this._taskService.update(taskId, fieldChanges as Partial<Task>);
+        }
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
 
@@ -546,6 +567,60 @@ export class LocalRestApiHandlerService {
     }
 
     return createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
+  }
+
+  /**
+   * Moves a root task (with its subtasks) to another project via the shared
+   * `moveToOtherProject` action, which reindexes both projects' `taskIds`
+   * atomically and is already sync/replay-safe. Returns an error response to
+   * short-circuit the caller, or `undefined` when the move succeeded or was a
+   * no-op (unchanged projectId, so GET→PATCH round-trips don't fail).
+   */
+  private async _applyProjectMove(
+    requestId: string,
+    task: Task,
+    targetProjectId: unknown,
+  ): Promise<LocalRestApiResponsePayload | undefined> {
+    if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'projectId must be a non-empty string',
+      );
+    }
+    if (targetProjectId === task.projectId) {
+      return undefined;
+    }
+    if (task.parentId) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'UNSUPPORTED_FIELD',
+        'projectId cannot be changed on a subtask — move its parent task instead',
+      );
+    }
+    // Match against the unarchived project list by iteration (not an entity-map
+    // lookup) so a crafted id like 'constructor' can't resolve to a truthy
+    // non-project. list() already excludes archived projects.
+    const targetProject = this._projectService
+      .list()
+      .find((project) => project.id === targetProjectId);
+    if (!targetProject) {
+      return createErrorResponse(
+        requestId,
+        404,
+        'PROJECT_NOT_FOUND',
+        'Destination project not found or archived',
+      );
+    }
+
+    const taskWithSubTasks = await this._getTaskWithSubTasksById(task.id);
+    if (!taskWithSubTasks) {
+      return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
+    }
+    this._taskService.moveToProject(taskWithSubTasks, targetProjectId);
+    return undefined;
   }
 
   private async _handleArchiveTask(

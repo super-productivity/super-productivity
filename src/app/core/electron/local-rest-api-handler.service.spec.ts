@@ -112,6 +112,7 @@ describe('LocalRestApiHandlerService', () => {
         'remove',
         'setCurrentId',
         'moveToArchive',
+        'moveToProject',
         'restoreTask',
         'getAllTasksEverywhere',
       ],
@@ -140,6 +141,9 @@ describe('LocalRestApiHandlerService', () => {
       ['add', 'update', 'remove', 'archive'],
       {
         list$: of([]),
+        // `list` is a signal (a function returning the unarchived projects);
+        // tests that move a task override it via Object.defineProperty.
+        list: () => [],
       },
     );
 
@@ -829,6 +833,124 @@ describe('LocalRestApiHandlerService', () => {
           tagIds: ['tag-1'],
           timeEstimate: 1000,
           isDone: true,
+        });
+      });
+
+      describe('projectId change (move between projects) — #8983', () => {
+        const setUpMove = (task: Task, targetProjects: { id: string }[]): void => {
+          const withSubTasks = createMockTaskWithSubTasks(task);
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(task),
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
+            get: () => (_id: string) => of(withSubTasks),
+          });
+          Object.defineProperty(projectServiceMock, 'list', {
+            get: () => () => targetProjects,
+          });
+        };
+
+        it('should route a projectId change through moveToProject (reindexing both projects) instead of a plain update', async () => {
+          const task = createMockTask('task-1', { projectId: 'project-a' });
+          setUpMove(task, [{ id: 'project-b' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { projectId: 'project-b' } }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(taskServiceMock.moveToProject).toHaveBeenCalledWith(
+            jasmine.objectContaining({ id: 'task-1', subTasks: [] }),
+            'project-b',
+          );
+          // projectId must NOT go through update() — that is the original bug:
+          // it sets task.projectId without reindexing the project taskIds.
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+        });
+
+        it('should apply other fields via update() while moving, without passing projectId to update()', async () => {
+          const task = createMockTask('task-1', { projectId: 'project-a' });
+          setUpMove(task, [{ id: 'project-b' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { projectId: 'project-b', title: 'Renamed' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(taskServiceMock.moveToProject).toHaveBeenCalledWith(
+            jasmine.any(Object),
+            'project-b',
+          );
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed',
+          });
+        });
+
+        it('should treat an unchanged projectId as a no-op (GET→PATCH round-trip) and not move', async () => {
+          const task = createMockTask('task-1', { projectId: 'project-a' });
+          setUpMove(task, [{ id: 'project-a' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { projectId: 'project-a', title: 'Renamed' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed',
+          });
+        });
+
+        it('should reject a projectId change on a subtask with 400', async () => {
+          const subtask = createMockTask('sub-1', {
+            projectId: 'project-a',
+            parentId: 'parent-1',
+          });
+          setUpMove(subtask, [{ id: 'project-b' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/sub-1', { body: { projectId: 'project-b' } }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+        });
+
+        it('should return 404 when the destination project does not exist or is archived', async () => {
+          const task = createMockTask('task-1', { projectId: 'project-a' });
+          // list() only contains unarchived projects; target absent → 404.
+          setUpMove(task, [{ id: 'project-a' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { projectId: 'ghost' } }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(404);
+          expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
+        });
+
+        it('should not resolve a prototype-property name like "constructor" to a project', async () => {
+          const task = createMockTask('task-1', { projectId: 'project-a' });
+          setUpMove(task, [{ id: 'project-a' }]);
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { projectId: 'constructor' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(404);
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
         });
       });
     });
