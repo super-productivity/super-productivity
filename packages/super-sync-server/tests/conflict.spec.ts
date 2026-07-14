@@ -91,6 +91,20 @@ describe('conflict helpers', () => {
     },
   );
 
+  it.each([2, 3, 4])(
+    'does NOT alias a post-split (v%i) misc write to tasks',
+    (schemaVersion) => {
+      // The misc→tasks split was the v1→v2 migration; v2+ misc writes touch only
+      // misc. The legacy boundary must stay fixed at v2 so schema bumps do not
+      // fabricate conflicts between disjoint settings (regression: v3→v4 bump).
+      expect(
+        getConflictEntityIds(
+          op({ entityType: 'GLOBAL_CONFIG', entityId: 'misc', schemaVersion }),
+        ),
+      ).toEqual(['misc']);
+    },
+  );
+
   it('accepts matching duplicate operations regardless of JSON key order', () => {
     const incoming = op({
       payload: { title: 'A', nested: { b: 2, a: 1 } },

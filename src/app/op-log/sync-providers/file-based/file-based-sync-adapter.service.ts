@@ -2240,6 +2240,14 @@ export class FileBasedSyncAdapterService {
         op,
         receivedAt: compactOp.t,
       });
+      // An op belongs to the snapshot (record-as-applied, do not replay) iff it
+      // is at or below the snapshot's syncVersion. `sv === undefined` marks a
+      // legacy op carried over by the split migration: those predate per-op
+      // versioning and are always fully contained in the migration snapshot, so
+      // they are snapshot-included too. This is safe because _validateSnapshotRef
+      // requires the loaded snapshot's clock to be EQUAL to snapshotRef, so the
+      // boundary always matches what was hydrated; any op newer than the snapshot
+      // carries an sv > snapshotRef.syncVersion and is reprocessed.
       if (compactOp.sv === undefined || compactOp.sv <= opsFile.snapshotRef.syncVersion) {
         snapshotAppliedOpIds.push(op.id);
       }

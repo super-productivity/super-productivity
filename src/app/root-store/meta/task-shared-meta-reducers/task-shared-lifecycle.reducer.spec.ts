@@ -99,6 +99,76 @@ describe('taskSharedLifecycleMetaReducer', () => {
       );
     });
 
+    it('should remove stale task references from every project when archiving', () => {
+      const testState = createStateWithExistingTasks(['task1']);
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Project 2',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project2',
+      });
+      const action = createArchiveAction([
+        createTaskWithSubTasks({ id: 'task1', projectId: 'project2' }),
+      ]);
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          [PROJECT_FEATURE_NAME]: jasmine.objectContaining({
+            entities: jasmine.objectContaining({
+              project1: jasmine.objectContaining({ taskIds: [] }),
+              project2: jasmine.objectContaining({ taskIds: [] }),
+            }),
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should clean reverse-linked subtasks omitted from the archive payload', () => {
+      const testState = createStateWithExistingTasks(
+        ['task1', 'orphan-subtask'],
+        ['orphan-subtask'],
+      );
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        subTaskIds: [],
+      });
+      testState[TASK_FEATURE_NAME].entities['orphan-subtask'] = createMockTask({
+        id: 'orphan-subtask',
+        projectId: 'project1',
+        parentId: 'task1',
+      });
+      const action = createArchiveAction([
+        createTaskWithSubTasks({
+          id: 'task1',
+          projectId: 'project1',
+          subTaskIds: [],
+        }),
+      ]);
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        expectProjectUpdate('project1', {
+          taskIds: [],
+          backlogTaskIds: [],
+        }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should handle empty tasks array', () => {
       const action = createArchiveAction([]);
 
@@ -656,6 +726,16 @@ describe('taskSharedLifecycleMetaReducer', () => {
         subTasks,
       });
 
+    for (const unsafeTaskId of ['constructor', '__proto__']) {
+      it(`should reject prototype-like restored task id ${unsafeTaskId}`, () => {
+        const action = createRestoreAction({ id: unsafeTaskId });
+
+        expect(() => metaReducer(baseState, action)).not.toThrow();
+        expect(mockReducer).toHaveBeenCalledWith(baseState, action);
+        expect(baseState[PROJECT_FEATURE_NAME].entities.project1?.taskIds).toEqual([]);
+      });
+    }
+
     it('should add task to project taskIds', () => {
       const action = createRestoreAction();
 
@@ -680,11 +760,158 @@ describe('taskSharedLifecycleMetaReducer', () => {
         {
           ...expectProjectUpdate('project1', { taskIds: ['task1'] }),
           ...expectTagUpdate('tag1', { taskIds: ['task1', 'subtask1'] }),
+          ...expectTaskUpdate('subtask1', { parentId: 'task1' }),
         },
         action,
         mockReducer,
         baseState,
       );
+    });
+
+    it('should restore subtasks into the parent project', () => {
+      const subTasks = [
+        createMockTask({
+          id: 'subtask1',
+          parentId: 'task1',
+          projectId: 'project1',
+        }),
+      ];
+      const testState = createBaseState();
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Project 2',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createRestoreAction(
+        {
+          id: 'task1',
+          projectId: 'project2',
+          subTaskIds: ['subtask1'],
+        },
+        subTasks,
+      );
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', { projectId: 'project2' }),
+          ...expectTaskUpdate('subtask1', { projectId: 'project2' }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should repair an existing reverse-linked subtask omitted from restore payload', () => {
+      const testState = createStateWithExistingTasks(['subtask1']);
+      testState[TASK_FEATURE_NAME].entities.subtask1 = createMockTask({
+        id: 'subtask1',
+        parentId: 'task1',
+        projectId: 'project1',
+      });
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Destination Project',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createRestoreAction({
+        id: 'task1',
+        projectId: 'project2',
+        subTaskIds: [],
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1?.subTaskIds).toEqual([
+        'subtask1',
+      ]);
+      expect(updatedState[TASK_FEATURE_NAME].entities.subtask1?.projectId).toBe(
+        'project2',
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1?.taskIds).toEqual([]);
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project2?.taskIds).toEqual([
+        'task1',
+      ]);
+    });
+
+    it('should not adopt payload child ids owned by another active parent', () => {
+      const testState = createStateWithExistingTasks(['other-parent', 'colliding-child']);
+      testState[TASK_FEATURE_NAME].entities['other-parent'] = createMockTask({
+        id: 'other-parent',
+        projectId: 'project1',
+        subTaskIds: ['colliding-child'],
+      });
+      testState[TASK_FEATURE_NAME].entities['colliding-child'] = createMockTask({
+        id: 'colliding-child',
+        parentId: 'other-parent',
+        projectId: 'project1',
+      });
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Restore Project',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createRestoreAction(
+        {
+          id: 'task1',
+          projectId: 'project2',
+          subTaskIds: ['colliding-child', 'missing-child'],
+        },
+        [
+          createMockTask({
+            id: 'colliding-child',
+            parentId: 'task1',
+            projectId: 'project2',
+          }),
+        ],
+      );
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1?.subTaskIds).toEqual([]);
+      expect(updatedState[TASK_FEATURE_NAME].entities['colliding-child']).toEqual(
+        jasmine.objectContaining({
+          parentId: 'other-parent',
+          projectId: 'project1',
+        }),
+      );
+      expect(updatedState[TASK_FEATURE_NAME].entities['missing-child']).toBeUndefined();
+      expect(updatedState[TAG_FEATURE_NAME].entities.tag1?.taskIds).toEqual(['task1']);
+    });
+
+    it('should keep canonical relationships when replaying restore for an active task', () => {
+      const testState = createStateWithExistingTasks(['task1']);
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Payload Project',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createRestoreAction({
+        id: 'task1',
+        projectId: 'project2',
+        tagIds: [],
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1?.projectId).toBe('project1');
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1?.taskIds).toEqual([
+        'task1',
+      ]);
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project2?.taskIds).toEqual([]);
     });
 
     it('should add tasks to existing taskIds', () => {
@@ -707,7 +934,82 @@ describe('taskSharedLifecycleMetaReducer', () => {
       );
     });
 
+    it('should remove stale project references before restoring a task', () => {
+      const testState = createStateWithExistingTasks(
+        ['archived-task'],
+        ['archived-task'],
+      );
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: [],
+        entities: {},
+      };
+      testState[PROJECT_FEATURE_NAME].entities.project2 = createMockProject({
+        id: 'project2',
+        title: 'Project 2',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createRestoreAction({
+        id: 'archived-task',
+        projectId: 'project2',
+        tagIds: [],
+      });
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        {
+          [PROJECT_FEATURE_NAME]: jasmine.objectContaining({
+            entities: jasmine.objectContaining({
+              project1: jasmine.objectContaining({
+                taskIds: [],
+                backlogTaskIds: [],
+              }),
+              project2: jasmine.objectContaining({ taskIds: ['archived-task'] }),
+            }),
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     describe('stale reference normalization (issue #6270)', () => {
+      it('should preserve an archived-but-existing project on restore', () => {
+        const testState = createBaseState();
+        testState[PROJECT_FEATURE_NAME].entities['archived-project'] = createMockProject({
+          id: 'archived-project',
+          isArchived: true,
+          taskIds: [],
+          backlogTaskIds: [],
+        });
+        (testState[PROJECT_FEATURE_NAME].ids as string[]).push('archived-project');
+        const action = createRestoreAction({
+          id: 'archived-task',
+          projectId: 'archived-project',
+          tagIds: [],
+        });
+
+        metaReducer(testState, action);
+
+        expectStateUpdate(
+          {
+            ...expectTaskUpdate('archived-task', {
+              projectId: 'archived-project',
+            }),
+            ...expectProjectUpdate('archived-project', {
+              taskIds: ['archived-task'],
+            }),
+          },
+          action,
+          mockReducer,
+          testState,
+        );
+      });
+
       it('should reassign stale projectId to INBOX on restore', () => {
         const testState = createBaseState();
         // Add INBOX_PROJECT to state
@@ -740,7 +1042,7 @@ describe('taskSharedLifecycleMetaReducer', () => {
         const action = createRestoreAction({
           id: 'archived-task',
           projectId: 'project1',
-          tagIds: ['tag1', 'DELETED_TAG'],
+          tagIds: ['tag1', 'DELETED_TAG', 'constructor', '__proto__'],
         });
 
         metaReducer(baseState, action);

@@ -511,9 +511,28 @@ export class TaskService {
     if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
       this._taskTimeSync.flushOne(id);
     }
+
+    const entities = this._taskEntities();
+    const task = entities[id];
+    const projectMoveSubTaskIds =
+      Object.prototype.hasOwnProperty.call(changedFields, 'projectId') &&
+      task &&
+      !task.parentId
+        ? unique([
+            ...task.subTaskIds,
+            ...Object.values(entities)
+              .filter(
+                (candidate): candidate is Task =>
+                  !!candidate && candidate.parentId === id,
+              )
+              .map((subTask) => subTask.id),
+          ])
+        : undefined;
+
     this._store.dispatch(
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
+        ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
       }),
     );
   }

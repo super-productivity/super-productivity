@@ -33,12 +33,15 @@ import {
   ActionHandlerMap,
   addTaskToList,
   addTaskToPlannerDay,
+  collectTaskAndSubTaskIds,
   getProject,
   getTag,
   hasInvalidTodayTag,
+  isValidTaskProjectIdUpdate,
   ProjectTaskList,
   filterOutTodayTag,
   removeTaskFromPlannerDays,
+  removeTasksFromAllProjects,
   removeTasksFromAllTags,
   removeTasksFromList,
   TaskWithTags,
@@ -633,7 +636,11 @@ const removeInProgressTagOnCompletion = (
   };
 };
 
-const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
+const handleUpdateTask = (
+  state: RootState,
+  taskUpdate: Update<Task>,
+  projectMoveSubTaskIds?: string[],
+): RootState => {
   const taskId = taskUpdate.id as string;
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
 
@@ -648,10 +655,28 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     currentTask,
     todayStr,
   );
-  const cleanedTaskUpdate = removeInProgressTagOnCompletion(
+  let cleanedTaskUpdate = removeInProgressTagOnCompletion(
     sanitizedTaskUpdate,
     currentTask,
   );
+
+  // Subtasks inherit their project from the parent, and only an existing
+  // project (or '' for no project) is a usable destination for a top-level
+  // task. Archived projects remain valid during replay because their archive
+  // op can race with this update. Strip null/undefined/unknown destinations
+  // as well as at API boundaries so malformed or legacy ops can neither split
+  // parent from child nor orphan a task from every project list.
+  if (Object.prototype.hasOwnProperty.call(cleanedTaskUpdate.changes, 'projectId')) {
+    const requestedProjectId = cleanedTaskUpdate.changes.projectId;
+    if (
+      typeof requestedProjectId !== 'string' ||
+      !isValidTaskProjectIdUpdate(state, currentTask, requestedProjectId)
+    ) {
+      const changes = { ...cleanedTaskUpdate.changes };
+      delete changes.projectId;
+      cleanedTaskUpdate = { ...cleanedTaskUpdate, changes };
+    }
+  }
 
   // Handle tag changes if tagIds are being updated
   if (cleanedTaskUpdate.changes.tagIds) {
@@ -659,6 +684,74 @@ const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState
     const newTagIds = cleanedTaskUpdate.changes.tagIds;
 
     updatedState = handleTagUpdates(updatedState, taskId, oldTagIds, newTagIds);
+  }
+
+  const hasProjectIdUpdate = Object.prototype.hasOwnProperty.call(
+    cleanedTaskUpdate.changes,
+    'projectId',
+  );
+  const targetProjectId = cleanedTaskUpdate.changes.projectId;
+  if (
+    hasProjectIdUpdate &&
+    typeof targetProjectId === 'string' &&
+    !currentTask.parentId
+  ) {
+    const subTaskIds =
+      projectMoveSubTaskIds !== undefined
+        ? unique(
+            projectMoveSubTaskIds.filter(
+              (id) =>
+                id !== taskId &&
+                !Object.prototype.hasOwnProperty.call(Object.prototype, id),
+            ),
+          )
+        : collectTaskAndSubTaskIds(state, [taskId]).filter((id) => id !== taskId);
+    const allTaskIds = [taskId, ...subTaskIds];
+    const targetProjectBefore =
+      updatedState[PROJECT_FEATURE_NAME].entities[targetProjectId];
+    const isSameProject = currentTask.projectId === targetProjectId;
+    updatedState = removeTasksFromAllProjects(updatedState, allTaskIds);
+
+    const targetProject = updatedState[PROJECT_FEATURE_NAME].entities[targetProjectId];
+    if (targetProject && targetProjectBefore) {
+      if (isSameProject) {
+        const subTaskIdSet = new Set(subTaskIds);
+        let taskIds = unique(
+          targetProjectBefore.taskIds.filter((id) => !subTaskIdSet.has(id)),
+        );
+        let backlogTaskIds = unique(
+          targetProjectBefore.backlogTaskIds.filter((id) => !subTaskIdSet.has(id)),
+        );
+
+        if (taskIds.includes(taskId)) {
+          backlogTaskIds = backlogTaskIds.filter((id) => id !== taskId);
+        } else if (!backlogTaskIds.includes(taskId)) {
+          taskIds = [...taskIds, taskId];
+        }
+
+        updatedState = updateProject(updatedState, targetProjectId, {
+          taskIds,
+          backlogTaskIds,
+        });
+      } else {
+        updatedState = updateProject(updatedState, targetProjectId, {
+          taskIds: unique([...targetProject.taskIds, taskId]),
+        });
+      }
+    }
+
+    if (subTaskIds.length > 0) {
+      updatedState = {
+        ...updatedState,
+        [TASK_FEATURE_NAME]: taskAdapter.updateMany(
+          subTaskIds.map((id) => ({
+            id,
+            changes: { projectId: targetProjectId },
+          })),
+          updatedState[TASK_FEATURE_NAME],
+        ),
+      };
+    }
   }
 
   // Handle task state updates using existing task reducer logic
@@ -860,8 +953,10 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const { task } = action as ReturnType<typeof TaskSharedActions.updateTask>;
-    return handleUpdateTask(state, task);
+    const { task, projectMoveSubTaskIds } = action as ReturnType<
+      typeof TaskSharedActions.updateTask
+    >;
+    return handleUpdateTask(state, task, projectMoveSubTaskIds);
   },
 });
 

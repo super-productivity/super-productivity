@@ -91,12 +91,15 @@ describe('SupersededOperationResolverService', () => {
         clientId: string,
         vectorClock: VectorClock,
         timestamp: number,
+        _lwwUpdateMode?: 'replace' | 'patch',
+        entityIds?: string[],
       ) => ({
         id: 'generated-id-' + Math.random().toString(36).substring(7),
         actionType: `[${entityType}] LWW Update` as ActionType,
         opType: OpType.Update,
         entityType,
         entityId,
+        entityIds,
         payload: entityState,
         clientId,
         vectorClock,
@@ -220,6 +223,15 @@ describe('SupersededOperationResolverService', () => {
         { clientA: 5 },
         1000,
       );
+      supersededOp.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp.entityIds = ['task-1', 'subtask-1'];
+      supersededOp.payload = {
+        actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'project-2' } },
+          projectMoveSubTaskIds: ['subtask-1'],
+        },
+        entityChanges: [],
+      };
       const entityState = { id: 'task-1', title: 'Test Task' };
 
       mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -243,9 +255,53 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.opType).toBe(OpType.Update);
       expect(appendedOp.entityType).toBe('TASK');
       expect(appendedOp.entityId).toBe('task-1');
+      expect(appendedOp.entityIds).toEqual(['task-1', 'subtask-1']);
       expect(appendedOp.payload).toEqual(entityState);
       expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
       expect(appendedOp.timestamp).toBe(1000); // Preserved from original
+    });
+
+    it('should not reuse a generic multi-task footprint for an LWW update', async () => {
+      const supersededOp = createMockOperation(
+        'op-1',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      supersededOp.entityIds = ['task-1', 'unrelated-task'];
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Test Task',
+      });
+
+      await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.entityIds).toBeUndefined();
+    });
+
+    it('should preserve a project-move footprint through another LWW replacement', async () => {
+      const supersededOp = createMockOperation(
+        'op-1',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      supersededOp.actionType = '[TASK] LWW Update' as ActionType;
+      supersededOp.entityIds = ['task-1', 'subtask-1'];
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Test Task',
+      });
+
+      await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.entityIds).toEqual(['task-1', 'subtask-1']);
     });
 
     it('should create single merged op for multiple superseded ops on same entity', async () => {
@@ -270,6 +326,20 @@ describe('SupersededOperationResolverService', () => {
         { clientA: 5 },
         1500,
       );
+      supersededOp1.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp1.payload = {
+        actionPayload: {
+          projectMoveSubTaskIds: ['former-subtask'],
+        },
+        entityChanges: [],
+      };
+      supersededOp2.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp2.payload = {
+        actionPayload: {
+          projectMoveSubTaskIds: ['current-subtask'],
+        },
+        entityChanges: [],
+      };
       const entityState = { id: 'task-1', title: 'Latest State' };
 
       mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -293,6 +363,7 @@ describe('SupersededOperationResolverService', () => {
         .args[0] as Operation;
       // Timestamp should be max of all superseded ops (2000)
       expect(appendedOp.timestamp).toBe(2000);
+      expect(appendedOp.entityIds).toEqual(['task-1', 'current-subtask']);
     });
 
     it('should create separate ops for different entities', async () => {

@@ -19,6 +19,7 @@ import {
   type LwwConflictResolutionPlan,
   type LwwResolvedConflict,
 } from '@sp/sync-core';
+import { PROJECT_DELETE_WINS_SCHEMA_VERSION } from '@sp/shared-schema';
 import {
   findLwwContentConflicts,
   type LwwContentConflict,
@@ -39,6 +40,7 @@ import {
   VectorClock,
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import {
@@ -113,6 +115,132 @@ interface AutoResolveConflictsLwwOptions {
   disableDisjointMerge?: boolean;
   remoteApplyLifecycleOwnedByCaller?: boolean;
 }
+
+const isProjectDeleteWinsOperation = (operation: Operation): boolean => {
+  // `!(x >= n)` (not `x < n`) so a malformed op with an undefined schemaVersion
+  // is treated as pre-v4 rather than slipping through. The `!operation.payload`
+  // guard prevents a null/undefined-payload DEL op (the server permits one) from
+  // throwing inside `extractActionPayload` and wedging the whole conflict pass.
+  if (
+    !(operation.schemaVersion >= PROJECT_DELETE_WINS_SCHEMA_VERSION) ||
+    operation.actionType !== ActionType.TASK_SHARED_DELETE_PROJECT ||
+    operation.opType !== OpType.Delete ||
+    !operation.payload
+  ) {
+    return false;
+  }
+  const actionPayload = extractActionPayload(operation.payload);
+  // Gate on the AUTHENTICATED `projectId` (inside the E2EE GCM auth tag), and
+  // require it to match the plaintext `entityId` used to group the conflict.
+  // A tampered/replayed marked delete retargeted onto a live entity therefore
+  // fails to win delete-wins, so it cannot silently drop the victim's concurrent
+  // edit — it falls back to timestamp LWW. (GHSA-8pxh metadata-tampering class.)
+  return (
+    actionPayload[PROJECT_DELETE_WINS_MARKER] === true &&
+    operation.entityId === actionPayload['projectId']
+  );
+};
+
+/**
+ * Concurrent tabs can capture more than one marked `deleteProject` for the same
+ * project before syncing, and the local store has applied EVERY one's cascade
+ * (the task reducer removes entities by explicit `allTaskIds`, not by
+ * `projectId`). The single winning replacement must therefore carry the UNION of
+ * all their cascaded `allTaskIds`/`noteIds`, or a client that only receives that
+ * replacement keeps entities a later local delete already removed. Only the id
+ * arrays are widened — `projectId` and every other field are identical across
+ * same-project deletes, so the first op is a safe base.
+ */
+const mergeMarkedProjectDeleteOps = (localOps: Operation[]): Operation | undefined => {
+  const deletes = localOps.filter(isProjectDeleteWinsOperation);
+  if (deletes.length <= 1) {
+    return deletes[0];
+  }
+  const unionIds = (key: string): string[] => {
+    const merged = new Set<string>();
+    for (const op of deletes) {
+      const value = extractActionPayload(op.payload)[key];
+      if (Array.isArray(value)) {
+        value.forEach((id) => merged.add(id as string));
+      }
+    }
+    return [...merged];
+  };
+  const base = deletes[0];
+  const mergedActionPayload: Record<string, unknown> = {
+    ...extractActionPayload(base.payload),
+    allTaskIds: unionIds('allTaskIds'),
+    noteIds: unionIds('noteIds'),
+  };
+  const mergedPayload = isMultiEntityPayload(base.payload)
+    ? { ...base.payload, actionPayload: mergedActionPayload }
+    : mergedActionPayload;
+  return { ...base, payload: mergedPayload };
+};
+
+const getTaskProjectMoveEntityIds = (operation: Operation): string[] | undefined => {
+  if (
+    operation.actionType === toLwwUpdateActionType('TASK') &&
+    operation.entityId &&
+    Array.isArray(operation.entityIds)
+  ) {
+    return Array.from(new Set([operation.entityId, ...operation.entityIds]));
+  }
+
+  if (
+    operation.actionType !== ActionType.TASK_SHARED_UPDATE ||
+    !operation.entityId ||
+    !operation.payload ||
+    typeof operation.payload !== 'object'
+  ) {
+    return undefined;
+  }
+
+  const payload = operation.payload as Record<string, unknown>;
+  const actionPayload =
+    payload['actionPayload'] && typeof payload['actionPayload'] === 'object'
+      ? (payload['actionPayload'] as Record<string, unknown>)
+      : payload;
+  const subTaskIds = actionPayload['projectMoveSubTaskIds'];
+  if (!Array.isArray(subTaskIds)) return undefined;
+
+  return Array.from(
+    new Set([
+      operation.entityId,
+      ...subTaskIds.filter((id): id is string => typeof id === 'string'),
+    ]),
+  );
+};
+
+export const getLatestTaskProjectMoveEntityIds = (
+  operations: Operation[],
+): string[] | undefined => {
+  let latest: { operation: Operation; entityIds: string[] } | undefined;
+  for (const operation of operations) {
+    const entityIds = getTaskProjectMoveEntityIds(operation);
+    if (!entityIds) continue;
+    if (
+      !latest ||
+      operation.timestamp > latest.operation.timestamp ||
+      (operation.timestamp === latest.operation.timestamp &&
+        operation.id > latest.operation.id)
+    ) {
+      latest = { operation, entityIds };
+    }
+  }
+
+  return latest?.entityIds;
+};
+
+const latestProjectMoveEntityIds = (
+  entityId: string,
+  operations: Operation[],
+): string[] | undefined => {
+  const projectMoveEntityIds = getLatestTaskProjectMoveEntityIds(operations);
+  if (!projectMoveEntityIds) return undefined;
+
+  return Array.from(new Set([entityId, ...projectMoveEntityIds]));
+};
 
 const markLwwDeleteRecreation = (op: Operation): Operation =>
   isLwwUpdatePayload(op.payload)
@@ -262,6 +390,7 @@ export class ConflictResolutionService {
    * @param clientId - Client creating this operation
    * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
    * @param timestamp - Preserved timestamp for correct LWW semantics
+   * @param entityIds - Captured task-project-move footprint, when applicable
    * @returns New UPDATE operation ready for upload
    */
   createLWWUpdateOp(
@@ -272,6 +401,7 @@ export class ConflictResolutionService {
     vectorClock: VectorClock,
     timestamp: number,
     lwwUpdateMode: LwwUpdateMode = 'replace',
+    entityIds?: string[],
   ): Operation {
     // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
     // NOT in the ActionType enum. They are dynamically constructed here and matched
@@ -303,6 +433,9 @@ export class ConflictResolutionService {
       opType: OpType.Update,
       entityType,
       entityId,
+      ...(entityIds !== undefined && {
+        entityIds: Array.from(new Set([entityId, ...entityIds])),
+      }),
       payload,
       clientId,
       vectorClock,
@@ -1375,6 +1508,7 @@ export class ConflictResolutionService {
 
     const plans = planLwwConflictResolutions(conflicts, {
       isArchiveAction: (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      isDeleteWinsAction: isProjectDeleteWinsOperation,
       toEntityKey: (entityType, entityId) =>
         toEntityKey(entityType as EntityType, entityId),
     });
@@ -1437,6 +1571,15 @@ export class ConflictResolutionService {
 
       if (plan.localWinOperationKind === 'archive-win') {
         localWinOp = await this._createArchiveWinOp(plan.conflict);
+      } else if (plan.localWinOperationKind === 'delete-win') {
+        const deleteOp = mergeMarkedProjectDeleteOps(plan.conflict.localOps);
+        if (!deleteOp) {
+          throw new Error(
+            `ConflictResolutionService: Missing delete-wins operation for ` +
+              `${plan.conflict.entityType}:${plan.conflict.entityId}`,
+          );
+        }
+        localWinOp = await this._createReplacementDeleteOp(plan.conflict, deleteOp);
       } else if (plan.localWinOperationKind === 'update') {
         localWinOp = await this._createLocalWinUpdateOp(plan.conflict);
       }
@@ -1456,6 +1599,15 @@ export class ConflictResolutionService {
         OpLog.normal(
           `ConflictResolutionService: Archive wins over concurrent operation ` +
             `(${plan.reason === 'remote-archive' ? 'remote' : 'local'} archive) for ` +
+            `${plan.conflict.entityType}:${plan.conflict.entityId}`,
+        );
+      } else if (
+        plan.reason === 'remote-delete-wins' ||
+        plan.reason === 'local-delete-wins'
+      ) {
+        OpLog.normal(
+          `ConflictResolutionService: Project deletion wins over concurrent update ` +
+            `(${plan.winner} delete) for ` +
             `${plan.conflict.entityType}:${plan.conflict.entityId}`,
         );
       } else if (plan.winner === 'local') {
@@ -1776,15 +1928,20 @@ export class ConflictResolutionService {
   }
 
   /**
-   * SPAP-14: whether this plan is an archive plan. Archive/delete-wins semantics
-   * are left 100% untouched by disjoint-merge — the archive must win the whole
-   * entity, never be partially merged with a concurrent edit.
+   * SPAP-14: whether this plan must win the WHOLE entity and so is excluded from
+   * disjoint-field merge. Both archive and project-delete-wins have this
+   * property — the winner replaces the entity outright, never partially merged
+   * with a concurrent edit.
    */
-  private _isArchivePlan(plan: LwwConflictResolutionPlan<EntityConflict>): boolean {
+  private _isWholeEntityWinPlan(
+    plan: LwwConflictResolutionPlan<EntityConflict>,
+  ): boolean {
     return (
       plan.reason === 'remote-archive' ||
       plan.reason === 'local-archive' ||
       plan.reason === 'local-archive-sibling' ||
+      plan.reason === 'remote-delete-wins' ||
+      plan.reason === 'local-delete-wins' ||
       plan.localWinOperationKind === 'archive-win'
     );
   }
@@ -1812,7 +1969,7 @@ export class ConflictResolutionService {
   private async _tryCreateDisjointMergeOp(
     plan: LwwConflictResolutionPlan<EntityConflict>,
   ): Promise<Operation | undefined> {
-    if (this._isArchivePlan(plan)) {
+    if (this._isWholeEntityWinPlan(plan)) {
       return undefined;
     }
 
@@ -1914,6 +2071,10 @@ export class ConflictResolutionService {
       newClock,
       mergedTimestamp,
       'patch',
+      latestProjectMoveEntityIds(conflict.entityId, [
+        ...conflict.localOps,
+        ...conflict.remoteOps,
+      ]),
     );
   }
 
@@ -2026,6 +2187,8 @@ export class ConflictResolutionService {
       clientId,
       newClock,
       preservedTimestamp,
+      'replace',
+      latestProjectMoveEntityIds(conflict.entityId, conflict.localOps),
     );
     return conflict.remoteOps.some((op) => op.opType === OpType.Delete)
       ? markLwwDeleteRecreation(localWinOp)

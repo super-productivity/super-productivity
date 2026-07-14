@@ -8,6 +8,15 @@ import { PersistentActionMeta } from '../../op-log/core/persistent-action.interf
 import { OpType } from '../../op-log/core/operation.types';
 
 /**
+ * Payload marker stamped on every new `deleteProject` operation so the LWW
+ * conflict planner can give it delete-wins precedence. Shared with the sync
+ * classifier (`conflict-resolution.service.ts`) so a rename is compiler-checked
+ * on both ends — dropping/renaming it silently would regress to resurrecting an
+ * empty project (see ARCHITECTURE-DECISIONS.md #7).
+ */
+export const PROJECT_DELETE_WINS_MARKER = 'projectDeleteWins';
+
+/**
  * Shared actions that affect multiple reducers (tasks, projects, tags)
  * These actions are handled by the task-shared meta-reducer
  */
@@ -254,15 +263,28 @@ export const TaskSharedActions = createActionGroup({
     }),
 
     // Task Updates
-    updateTask: (taskProps: { task: Update<Task>; isIgnoreShortSyntax?: boolean }) => ({
-      ...taskProps,
-      meta: {
-        isPersistent: true,
-        entityType: 'TASK',
-        entityId: taskProps.task.id as string,
-        opType: OpType.Update,
-      } satisfies PersistentActionMeta,
-    }),
+    updateTask: (taskProps: {
+      task: Update<Task>;
+      isIgnoreShortSyntax?: boolean;
+      projectMoveSubTaskIds?: string[];
+    }) => {
+      const entityId = taskProps.task.id as string;
+
+      return {
+        ...taskProps,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId,
+          ...(taskProps.projectMoveSubTaskIds !== undefined && {
+            entityIds: Array.from(
+              new Set([entityId, ...taskProps.projectMoveSubTaskIds]),
+            ),
+          }),
+          opType: OpType.Update,
+        } satisfies PersistentActionMeta,
+      };
+    },
 
     // Bulk task update - creates single operation instead of N operations
     // Critical for repeating task config updates that affect many archived instances
@@ -297,6 +319,7 @@ export const TaskSharedActions = createActionGroup({
       allTaskIds: string[];
     }) => ({
       ...taskProps,
+      [PROJECT_DELETE_WINS_MARKER]: true as const,
       meta: {
         isPersistent: true,
         entityType: 'PROJECT',

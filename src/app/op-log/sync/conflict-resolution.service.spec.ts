@@ -449,6 +449,27 @@ describe('ConflictResolutionService', () => {
       schemaVersion: 1,
     });
 
+    const createProjectDelete = (
+      id: string,
+      clientId: string,
+      timestamp: number,
+      marked: boolean = true,
+    ): Operation => ({
+      ...createOpWithTimestamp(id, clientId, timestamp, OpType.Delete, 'project-1'),
+      actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+      entityType: 'PROJECT',
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      payload: {
+        actionPayload: {
+          projectId: 'project-1',
+          noteIds: ['note-1'],
+          allTaskIds: ['task-1'],
+          ...(marked ? { projectDeleteWins: true } : {}),
+        },
+        entityChanges: [],
+      },
+    });
+
     // Helper to create conflict with suggestedResolution
     const createConflict = (
       entityId: string,
@@ -1091,6 +1112,226 @@ describe('ConflictResolutionService', () => {
           jasmine.any(Object),
         );
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-del']);
+      });
+
+      it('keeps a marked local project deletion when a concurrent update is newer', async () => {
+        const localDelete = createProjectDelete(
+          'local-project-delete',
+          'client-a',
+          1_000,
+        );
+        const remoteUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-update',
+            'client-b',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const conflict: EntityConflict = {
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          localOps: [localDelete],
+          remoteOps: [remoteUpdate],
+          suggestedResolution: 'manual',
+        };
+
+        const result = await service.autoResolveConflictsLWW([conflict]);
+
+        const replacementDelete = getFirstMixedLocalOp();
+        expect(replacementDelete.opType).toBe(OpType.Delete);
+        expect(replacementDelete.actionType).toBe(ActionType.TASK_SHARED_DELETE_PROJECT);
+        expect(replacementDelete.payload).toEqual(localDelete.payload);
+        expect(replacementDelete.timestamp).toBe(localDelete.timestamp);
+        expect(replacementDelete.vectorClock['client-a']).toBeGreaterThanOrEqual(1);
+        expect(replacementDelete.vectorClock['client-b']).toBeGreaterThanOrEqual(1);
+        expect(replacementDelete.vectorClock[TEST_CLIENT_ID]).toBeGreaterThanOrEqual(1);
+        expect(result.localWinOpsCreated).toBe(1);
+      });
+
+      it('applies a marked remote project deletion even when the local update is newer', async () => {
+        const localUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'local-project-update',
+            'client-a',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const remoteDelete = createProjectDelete(
+          'remote-project-delete',
+          'client-b',
+          1_000,
+        );
+        const conflict: EntityConflict = {
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          localOps: [localUpdate],
+          remoteOps: [remoteDelete],
+          suggestedResolution: 'manual',
+        };
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: [remoteDelete],
+        });
+
+        const result = await service.autoResolveConflictsLWW([conflict]);
+
+        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+          [remoteDelete],
+          'remote',
+          { pendingApply: true },
+        );
+        expect(getMixedLocalOps()).toEqual([]);
+        const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+          .args[0] as Operation[];
+        expect(appliedOps).toContain(remoteDelete);
+        expect(result.localWinOpsCreated).toBe(0);
+      });
+
+      it('keeps timestamp LWW for a migrated project deletion without the marker', async () => {
+        const localDelete = createProjectDelete(
+          'legacy-project-delete',
+          'client-a',
+          1_000,
+          false,
+        );
+        const remoteUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-update',
+            'client-b',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const conflict: EntityConflict = {
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          localOps: [localDelete],
+          remoteOps: [remoteUpdate],
+          suggestedResolution: 'manual',
+        };
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: [remoteUpdate],
+        });
+
+        await service.autoResolveConflictsLWW([conflict]);
+
+        expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+          [remoteUpdate],
+          'remote',
+          { pendingApply: true },
+        );
+      });
+
+      it('unions allTaskIds/noteIds across multiple concurrent marked deletes (#8997)', async () => {
+        // Concurrent tabs each captured a deleteProject with a different cascade
+        // set; the local store applied BOTH. The single replacement must carry
+        // the union or another client keeps entities only the other delete removed.
+        const makeDelete = (
+          id: string,
+          taskIds: string[],
+          noteIds: string[],
+        ): Operation => ({
+          ...createOpWithTimestamp(id, 'client-a', 1_000, OpType.Delete, 'project-1'),
+          actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+          entityType: 'PROJECT',
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          payload: {
+            actionPayload: {
+              projectId: 'project-1',
+              noteIds,
+              allTaskIds: taskIds,
+              projectDeleteWins: true,
+            },
+            entityChanges: [],
+          },
+        });
+        const deleteA = makeDelete('local-delete-a', ['task-1'], ['note-1']);
+        const deleteB = makeDelete('local-delete-b', ['task-2'], ['note-2']);
+        const remoteUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-update',
+            'client-b',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const conflict: EntityConflict = {
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          localOps: [deleteA, deleteB],
+          remoteOps: [remoteUpdate],
+          suggestedResolution: 'manual',
+        };
+
+        await service.autoResolveConflictsLWW([conflict]);
+
+        const replacementPayload = getFirstMixedLocalOp().payload as {
+          actionPayload: { allTaskIds: string[]; noteIds: string[] };
+        };
+        expect(new Set(replacementPayload.actionPayload.allTaskIds)).toEqual(
+          new Set(['task-1', 'task-2']),
+        );
+        expect(new Set(replacementPayload.actionPayload.noteIds)).toEqual(
+          new Set(['note-1', 'note-2']),
+        );
+      });
+
+      it('ignores the marker when entityId does not match the authenticated projectId', async () => {
+        // Tampered/replayed delete retargeted onto a live entity: marker present
+        // but op.entityId ('project-1') != payload.projectId ('project-original').
+        // Must NOT win delete-wins; falls back to timestamp LWW, so the newer
+        // local update wins and the retargeted delete is not applied.
+        const retargetedDelete: Operation = {
+          ...createProjectDelete('remote-retargeted-delete', 'client-b', 1_000),
+          payload: {
+            actionPayload: {
+              projectId: 'project-original',
+              noteIds: [],
+              allTaskIds: [],
+              projectDeleteWins: true,
+            },
+            entityChanges: [],
+          },
+        };
+        const localUpdate: Operation = {
+          ...createOpWithTimestamp(
+            'local-project-update',
+            'client-a',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const conflict: EntityConflict = {
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          localOps: [localUpdate],
+          remoteOps: [retargetedDelete],
+          suggestedResolution: 'manual',
+        };
+        mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+        await service.autoResolveConflictsLWW([conflict]);
+
+        // Delete-wins did NOT fire (would apply the delete as a remote winner).
+        expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+          [retargetedDelete],
+          'remote',
+          { pendingApply: true },
+        );
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([
+          'remote-retargeted-delete',
+        ]);
       });
 
       it('restamps a converted remote update to the current schema version (#8990)', async () => {
@@ -4182,6 +4423,33 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-upd']);
     });
 
+    it('should preserve the local winner operation footprint in its LWW op', async () => {
+      const now = Date.now();
+      const localOp = createOpWithTimestamp('local-upd', 'client-a', now);
+      localOp.actionType = ActionType.TASK_SHARED_UPDATE;
+      localOp.entityIds = ['task-1', 'subtask-1'];
+      localOp.payload = {
+        actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'project-2' } },
+          projectMoveSubTaskIds: ['subtask-1'],
+        },
+        entityChanges: [],
+      };
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'Local winner', projectId: 'project-2' }),
+      );
+
+      const lwwOp = await (service as any)._createLocalWinUpdateOp(
+        createConflict(
+          'task-1',
+          [localOp],
+          [createOpWithTimestamp('remote-upd', 'client-b', now - 1000)],
+        ),
+      );
+
+      expect(lwwOp.entityIds).toEqual(['task-1', 'subtask-1']);
+    });
+
     it('should not create local-win op when clientId is unavailable', async () => {
       const now = Date.now();
       mockClientIdProvider.loadClientId.and.returnValue(Promise.resolve(null));
@@ -6035,6 +6303,21 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(extractActionPayload(op.payload)['id']).toBe('task-canonical');
+    });
+
+    it('should preserve and normalize an explicit operation footprint', () => {
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        { title: 'Local winner' },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+        'replace',
+        ['subtask-1', 'task-canonical', 'subtask-1'],
+      );
+
+      expect(op.entityIds).toEqual(['task-canonical', 'subtask-1']);
     });
 
     it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {

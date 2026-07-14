@@ -3,7 +3,10 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { ActionType, Operation, OpType, VectorClock } from '../core/operation.types';
 import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
-import { ConflictResolutionService } from './conflict-resolution.service';
+import {
+  ConflictResolutionService,
+  getLatestTaskProjectMoveEntityIds,
+} from './conflict-resolution.service';
 import { VectorClockService } from './vector-clock.service';
 import { LockService } from './lock.service';
 import { toEntityKey } from '../util/entity-key.util';
@@ -245,6 +248,12 @@ export class SupersededOperationResolverService {
         // would have a later timestamp than the original user action, causing it to
         // incorrectly win against concurrent ops that were actually made earlier.
         const preservedTimestamp = Math.max(...entityOps.map((e) => e.op.timestamp));
+        const projectMoveEntityIds = getLatestTaskProjectMoveEntityIds(
+          entityOps.map(({ op }) => op),
+        );
+        const declaredEntityIds = projectMoveEntityIds
+          ? Array.from(new Set([entityId, ...projectMoveEntityIds]))
+          : undefined;
 
         // Create new UPDATE op with current state and merged clock
         const newOp = this.conflictResolutionService.createLWWUpdateOp(
@@ -254,6 +263,8 @@ export class SupersededOperationResolverService {
           clientId,
           mergedClock,
           preservedTimestamp,
+          'replace',
+          declaredEntityIds,
         );
 
         newOpsCreated.push(newOp);
