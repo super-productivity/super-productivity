@@ -304,7 +304,7 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       const estimateItem = clientB.page.locator(
         'task-detail-panel task-detail-item:has(mat-icon:text("hourglass_empty"))',
       );
-      await expect(estimateItem).toContainText('8h');
+      await expect(estimateItem).toContainText(/(?:^|[^0-9])8h(?:[^0-9]|$)/);
       console.log('[Large Time Test] Client B received the exact 8h estimate');
     } finally {
       if (clientA) await closeClient(clientA);

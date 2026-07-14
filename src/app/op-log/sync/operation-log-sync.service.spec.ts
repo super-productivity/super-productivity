@@ -2355,9 +2355,10 @@ describe('OperationLogSyncService', () => {
             [snapshotOp],
             'remote',
           );
-          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-            deltaOp,
-          ]);
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [deltaOp],
+            jasmine.objectContaining({ beforeFullStateApply: jasmine.any(Function) }),
+          );
         });
 
         it('should skip hydration AND conflict when local clock dominates remote snapshot (issue #7339)', async () => {
@@ -2476,12 +2477,182 @@ describe('OperationLogSyncService', () => {
           const result = await service.downloadRemoteOps(mockProvider);
 
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
-          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-            deltaOp,
-          ]);
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [deltaOp],
+            jasmine.objectContaining({ beforeFullStateApply: jasmine.any(Function) }),
+          );
           expect(opLogStoreSpy.appendBatchSkipDuplicates).not.toHaveBeenCalled();
           expect(setLastServerSeqSpy).toHaveBeenCalledWith(2);
           expect(result.kind).toBe('ops_processed');
+        });
+
+        it('should gate a post-snapshot SYNC_IMPORT before replacing pending local work', async () => {
+          const incomingSyncImport: Operation = {
+            id: 'sync-import-after-snapshot',
+            clientId: 'client-A',
+            actionType: ActionType.LOAD_ALL_DATA,
+            opType: OpType.SyncImport,
+            entityType: 'ALL',
+            payload: { task: { ids: ['remote-task'] } },
+            vectorClock: { clientA: 2 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+            syncImportReason: 'SERVER_MIGRATION',
+          };
+          const pendingLocalEntry: OperationLogEntry = {
+            seq: 1,
+            op: {
+              id: 'pending-local-task-update',
+              clientId: 'client-B',
+              actionType: '[Task] Update' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'local-task',
+              payload: { title: 'Pending local title' },
+              vectorClock: { clientA: 1, clientB: 2 },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+            appliedAt: Date.now(),
+            source: 'local',
+          };
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 1, clientB: 2 });
+          opLogStoreSpy.getUnsynced.and.resolveTo([pendingLocalEntry]);
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [incomingSyncImport],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['snapshot-task'] } },
+            snapshotVectorClock: { clientA: 1 },
+            latestServerSeq: 2,
+          });
+          syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as unknown as OperationSyncCapable;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          expect(
+            syncImportConflictDialogServiceSpy.showConflictDialog,
+          ).toHaveBeenCalled();
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
+          expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+          expect(result.kind).toBe('cancelled');
+        });
+
+        it('should not advance past a file delta filtered by a local unsynced import', async () => {
+          const deltaOp: Operation = {
+            id: 'remote-delta-before-local-import',
+            clientId: 'client-A',
+            actionType: '[Task] Update' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'remote-task',
+            payload: { title: 'Remote title' },
+            vectorClock: { clientA: 2 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+          const filteringImport: Operation = {
+            id: 'local-unsynced-import',
+            clientId: 'client-B',
+            actionType: ActionType.LOAD_ALL_DATA,
+            opType: OpType.BackupImport,
+            entityType: 'ALL',
+            payload: {},
+            vectorClock: { clientA: 1, clientB: 2 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 1, clientB: 2 });
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [deltaOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['snapshot-task'] } },
+            snapshotVectorClock: { clientA: 1 },
+            latestServerSeq: 2,
+          });
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: true,
+            filteredOpCount: 1,
+            filteringImport,
+            isLocalUnsyncedImport: true,
+            blockedByIncompatibleOp: false,
+          });
+          syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as unknown as OperationSyncCapable;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          expect(
+            syncImportConflictDialogServiceSpy.showConflictDialog,
+          ).toHaveBeenCalledWith(
+            jasmine.objectContaining({ scenario: 'LOCAL_IMPORT_FILTERS_REMOTE' }),
+          );
+          expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+          expect(result.kind).toBe('cancelled');
+        });
+
+        it('should not advance past an incompatible post-snapshot file delta', async () => {
+          const deltaOp: Operation = {
+            id: 'incompatible-file-delta',
+            clientId: 'client-A',
+            actionType: '[Task] Update' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'remote-task',
+            payload: {},
+            vectorClock: { clientA: 2 },
+            timestamp: Date.now(),
+            schemaVersion: 2,
+          };
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 1, clientB: 2 });
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [deltaOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['snapshot-task'] } },
+            snapshotVectorClock: { clientA: 1 },
+            latestServerSeq: 2,
+          });
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: true,
+          });
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as unknown as OperationSyncCapable;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+          expect(result.kind).toBe('blocked_incompatible');
         });
 
         it('should NOT persist accompanying newOps on the dominate path — would corrupt per-entity frontiers (codex re-review)', async () => {

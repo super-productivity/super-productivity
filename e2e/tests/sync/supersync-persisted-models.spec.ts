@@ -203,12 +203,34 @@ test.describe('@supersync Persisted Models', () => {
         };
       }, markers);
 
-      expect(received.section).toBeTruthy();
+      expect(received.section).toMatchObject({
+        id: markers.sectionId,
+        contextId: 'TODAY',
+        contextType: 'TAG',
+        title: `Synced section ${markers.sectionId}`,
+        taskIds: [],
+      });
       expect(received.metric).toMatchObject({ notes: `metric-${markers.pluginId}` });
-      expect(received.board).toBeTruthy();
-      expect(received.issueProvider).toBeTruthy();
+      expect(received.board).toMatchObject({
+        id: markers.boardId,
+        title: `Synced board ${markers.boardId}`,
+        cols: 1,
+        panels: [],
+      });
+      expect(received.issueProvider).toMatchObject({
+        id: markers.issueProviderId,
+        isEnabled: false,
+        issueProviderKey: `plugin:${markers.pluginId}`,
+        pluginId: markers.pluginId,
+        pluginConfig: { source: 'sync-e2e' },
+      });
       expect(received.plannerTaskIds).toEqual([]);
-      expect(received.folder).toBeTruthy();
+      expect(received.folder).toEqual({
+        id: markers.folderId,
+        k: 'f',
+        name: `Synced folder ${markers.folderId}`,
+        children: [],
+      });
       expect(received.pluginData).toEqual({
         id: markers.pluginId,
         data: '{"synced":true}',

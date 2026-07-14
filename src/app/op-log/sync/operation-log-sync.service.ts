@@ -88,6 +88,16 @@ type GuardedRemoteOpsProcessingResult = RemoteOpsProcessingResult & {
   preApplyFullStateConflict?: IncomingFullStateConflictGateResult;
 };
 
+type DownloadedOpsGuardResult =
+  | {
+      kind: 'processed';
+      processResult: GuardedRemoteOpsProcessingResult;
+    }
+  | {
+      kind: 'handled';
+      outcome: DownloadOutcome;
+    };
+
 /**
  * Orchestrates synchronization of the Operation Log with remote storage.
  *
@@ -624,13 +634,19 @@ export class OperationLogSyncService {
             'skipping snapshot hydration (local already has all remote data).',
         );
         if (snapshotDeltaOps.length > 0) {
-          const processResult = await this.repairSyncContext.runWithBaseServerSeq(
-            result.latestServerSeq,
-            () => this.remoteOpsProcessingService.processRemoteOps(snapshotDeltaOps),
+          const guardedResult = await this._processDownloadedOpsWithFullStateGuards(
+            syncProvider,
+            snapshotDeltaOps,
+            {
+              latestServerSeq: result.latestServerSeq,
+              isNeverSynced: options?.isNeverSynced,
+              ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+            },
           );
-          if (processResult.blockedByIncompatibleOp) {
-            return { kind: 'blocked_incompatible' };
+          if (guardedResult.kind === 'handled') {
+            return guardedResult.outcome;
           }
+          const { processResult } = guardedResult;
           if (result.latestServerSeq !== undefined) {
             await syncProvider.setLastServerSeq(result.latestServerSeq);
           }
@@ -903,12 +919,17 @@ export class OperationLogSyncService {
         OpLog.normal(
           `OperationLogSyncService: Replaying ${snapshotDeltaOps.length} operation(s) newer than the file snapshot.`,
         );
-        const processResult = await this.repairSyncContext.runWithBaseServerSeq(
-          result.latestServerSeq,
-          () => this.remoteOpsProcessingService.processRemoteOps(snapshotDeltaOps),
+        const guardedResult = await this._processDownloadedOpsWithFullStateGuards(
+          syncProvider,
+          snapshotDeltaOps,
+          {
+            latestServerSeq: result.latestServerSeq,
+            isNeverSynced: options?.isNeverSynced,
+            ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+          },
         );
-        if (processResult.blockedByIncompatibleOp) {
-          return { kind: 'blocked_incompatible' };
+        if (guardedResult.kind === 'handled') {
+          return guardedResult.outcome;
         }
       }
 
@@ -1003,152 +1024,19 @@ export class OperationLogSyncService {
       );
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Check for incoming SYNC_IMPORT with conflicting local ops.
-    // This prevents a deadlock where:
-    // 1. Client A enables encryption → uploads SYNC_IMPORT
-    // 2. Client B downloads SYNC_IMPORT, applies it (replacing state)
-    // 3. Client B uploads its pending local ops (now invalid)
-    // 4. Client A silently filters them → both show "in sync" but no data exchanges
-    //
-    // By checking BEFORE processing, we give the user a choice:
-    // - USE_REMOTE: discard local ops, apply the remote SYNC_IMPORT
-    // - USE_LOCAL: force upload local state (overriding remote)
-    // ─────────────────────────────────────────────────────────────────────────
-    // Flush in-flight captured ops before reading pending state. Without this,
-    // an op enqueued in OperationCaptureService but not yet drained to
-    // IndexedDB would be invisible to getUnsynced(), the gate would silently
-    // accept the import, and SyncImportFilterService would then discard the
-    // just-landed op as CONCURRENT.
-    const incomingConflict =
-      await this.syncImportConflictGateService.checkIncomingFullStateConflict(
-        result.newOps,
-        {
-          flushPendingWrites: true,
-          // Pre-download snapshot from the orchestrator (falls back to a live read here,
-          // which is correct on this path: no ops are persisted until processRemoteOps).
-          isNeverSynced: options?.isNeverSynced,
-        },
-      );
-    let startupOpIdsToDiscard: string[] = [];
-    let startupCleanupFullStateOpId: string | undefined;
-    if (incomingConflict.fullStateOp) {
-      const { fullStateOp, pendingOps, dialogData } = incomingConflict;
-      // Existing synced store data is not a conflict here. Prompt only when
-      // local pending user changes would be discarded; otherwise an old client
-      // can accidentally force-upload stale state over the remote import.
-      // (PASSWORD_CHANGED SYNC_IMPORTs without pending ops also fall through
-      // to silent acceptance via this gate — the data is identical, only the
-      // encryption changed.)
-      if (dialogData) {
-        OpLog.warn(
-          `OperationLogSyncService: Incoming ${fullStateOp.opType} from client ${fullStateOp.clientId} ` +
-            `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
-        );
-
-        const conflictResult = await this._handleSyncImportConflict(
-          syncProvider,
-          dialogData,
-          'OperationLogSyncService (incoming full-state op)',
-        );
-        if (conflictResult === 'CANCEL') {
-          return { kind: 'cancelled' };
-        }
-        // Validation failure (if any during USE_REMOTE force-download) is on
-        // the session-validation latch — wrapper reads it. (#7330)
-        return { kind: 'no_new_ops' };
-      } else {
-        startupOpIdsToDiscard = incomingConflict.discardablePendingOpIds;
-        startupCleanupFullStateOpId = fullStateOp.id;
-        OpLog.normal(
-          `OperationLogSyncService: Accepting incoming ${fullStateOp.opType} from client ` +
-            `${fullStateOp.clientId} without conflict dialog; ` +
-            `${pendingOps.length} pending op(s), no meaningful pending user changes.`,
-        );
-      }
-    }
-
-    const processResult = await this._processRemoteOpsWithStartupCleanup(
+    const guardedResult = await this._processDownloadedOpsWithFullStateGuards(
+      syncProvider,
       result.newOps,
-      startupCleanupFullStateOpId,
-      startupOpIdsToDiscard,
       {
-        repairBaseServerSeq: result.latestServerSeq,
+        latestServerSeq: result.latestServerSeq,
+        isNeverSynced: options?.isNeverSynced,
         ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
-        conflictRecheck: { isNeverSynced: options?.isNeverSynced },
       },
     );
-
-    if (processResult.preApplyFullStateConflict?.dialogData) {
-      const { fullStateOp, pendingOps, dialogData } =
-        processResult.preApplyFullStateConflict;
-      OpLog.warn(
-        `OperationLogSyncService: ${fullStateOp?.opType ?? 'Full-state op'} gained ` +
-          `${pendingOps.length} pending local op(s) before download apply. Showing conflict dialog.`,
-      );
-      const conflictResult = await this._handleSyncImportConflict(
-        syncProvider,
-        dialogData,
-        'OperationLogSyncService (incoming full-state pre-apply recheck)',
-      );
-      if (conflictResult === 'CANCEL') {
-        return { kind: 'cancelled' };
-      }
-      return { kind: 'no_new_ops' };
+    if (guardedResult.kind === 'handled') {
+      return guardedResult.outcome;
     }
-
-    if (processResult.blockedByIncompatibleOp) {
-      return { kind: 'blocked_incompatible' };
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Handle SYNC_IMPORT conflict: all remote ops filtered by STORED local import.
-    // This happens when user imports/restores data locally, and other devices
-    // have been creating changes without knowledge of that import.
-    //
-    // We show the dialog when the filtering import was created locally (source='local').
-    // If the import is from another client (source='remote'), we silently
-    // discard the old ops - the import was already accepted from the remote source.
-    // ─────────────────────────────────────────────────────────────────────────
-    if (
-      processResult.allOpsFilteredBySyncImport &&
-      processResult.filteredOpCount > 0 &&
-      processResult.isLocalUnsyncedImport
-    ) {
-      OpLog.warn(
-        `OperationLogSyncService: All ${processResult.filteredOpCount} remote ops filtered by local SYNC_IMPORT. ` +
-          `Showing conflict resolution dialog (local import detected).`,
-      );
-
-      const conflictResult = await this._handleSyncImportConflict(
-        syncProvider,
-        {
-          filteredOpCount: processResult.filteredOpCount,
-          localImportTimestamp: processResult.filteringImport?.timestamp ?? Date.now(),
-          syncImportReason: processResult.filteringImport?.syncImportReason,
-          scenario: 'LOCAL_IMPORT_FILTERS_REMOTE',
-        },
-        'OperationLogSyncService (local SYNC_IMPORT filters remote)',
-      );
-      if (conflictResult === 'CANCEL') {
-        return { kind: 'cancelled' };
-      }
-      // Validation failure (if any during USE_REMOTE force-download) is on
-      // the session-validation latch — wrapper reads it. (#7330)
-      return { kind: 'no_new_ops' };
-    } else if (
-      processResult.allOpsFilteredBySyncImport &&
-      processResult.filteredOpCount > 0
-    ) {
-      // Ops were filtered by a remote import (from another client).
-      // This is expected behavior - old ops from before a previously-accepted
-      // remote import are silently discarded. No dialog needed because the
-      // import was already accepted when it was downloaded.
-      OpLog.normal(
-        `OperationLogSyncService: ${processResult.filteredOpCount} remote ops silently filtered by ` +
-          `remote SYNC_IMPORT (not showing dialog - import came from another client).`,
-      );
-    }
+    const { processResult } = guardedResult;
 
     // IMPORTANT: Persist lastServerSeq AFTER ops are stored in IndexedDB.
     // This ensures localStorage and IndexedDB stay in sync. If we crash before this point,
@@ -1177,6 +1065,131 @@ export class OperationLogSyncService {
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
     };
+  }
+
+  /**
+   * Applies downloaded operations only after running the destructive full-state
+   * conflict gates. File-snapshot suffixes and ordinary incremental downloads
+   * must share this path: either can contain a retained SYNC_IMPORT/BACKUP_IMPORT.
+   */
+  private async _processDownloadedOpsWithFullStateGuards(
+    syncProvider: OperationSyncCapable,
+    remoteOps: Operation[],
+    options: {
+      latestServerSeq?: number;
+      isNeverSynced?: boolean;
+      ignoredLocalFullStateOpIds?: readonly string[];
+    },
+  ): Promise<DownloadedOpsGuardResult> {
+    // Flush in-flight captured ops before reading pending state. Otherwise the
+    // gate could accept an import while a just-dispatched local op is still
+    // waiting to reach IndexedDB.
+    const incomingConflict =
+      await this.syncImportConflictGateService.checkIncomingFullStateConflict(remoteOps, {
+        flushPendingWrites: true,
+        isNeverSynced: options.isNeverSynced,
+      });
+    let startupOpIdsToDiscard: string[] = [];
+    let startupCleanupFullStateOpId: string | undefined;
+    if (incomingConflict.fullStateOp) {
+      const { fullStateOp, pendingOps, dialogData } = incomingConflict;
+      if (dialogData) {
+        OpLog.warn(
+          `OperationLogSyncService: Incoming ${fullStateOp.opType} from client ${fullStateOp.clientId} ` +
+            `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
+        );
+        const conflictResult = await this._handleSyncImportConflict(
+          syncProvider,
+          dialogData,
+          'OperationLogSyncService (incoming full-state op)',
+        );
+        return {
+          kind: 'handled',
+          outcome: {
+            kind: conflictResult === 'CANCEL' ? 'cancelled' : 'no_new_ops',
+          },
+        };
+      }
+
+      startupOpIdsToDiscard = incomingConflict.discardablePendingOpIds;
+      startupCleanupFullStateOpId = fullStateOp.id;
+      OpLog.normal(
+        `OperationLogSyncService: Accepting incoming ${fullStateOp.opType} from client ` +
+          `${fullStateOp.clientId} without conflict dialog; ` +
+          `${pendingOps.length} pending op(s), no meaningful pending user changes.`,
+      );
+    }
+
+    const processResult = await this._processRemoteOpsWithStartupCleanup(
+      remoteOps,
+      startupCleanupFullStateOpId,
+      startupOpIdsToDiscard,
+      {
+        repairBaseServerSeq: options.latestServerSeq,
+        ignoredLocalFullStateOpIds: options.ignoredLocalFullStateOpIds,
+        conflictRecheck: { isNeverSynced: options.isNeverSynced },
+      },
+    );
+
+    if (processResult.preApplyFullStateConflict?.dialogData) {
+      const { fullStateOp, pendingOps, dialogData } =
+        processResult.preApplyFullStateConflict;
+      OpLog.warn(
+        `OperationLogSyncService: ${fullStateOp?.opType ?? 'Full-state op'} gained ` +
+          `${pendingOps.length} pending local op(s) before download apply. Showing conflict dialog.`,
+      );
+      const conflictResult = await this._handleSyncImportConflict(
+        syncProvider,
+        dialogData,
+        'OperationLogSyncService (incoming full-state pre-apply recheck)',
+      );
+      return {
+        kind: 'handled',
+        outcome: {
+          kind: conflictResult === 'CANCEL' ? 'cancelled' : 'no_new_ops',
+        },
+      };
+    }
+
+    if (processResult.blockedByIncompatibleOp) {
+      return { kind: 'handled', outcome: { kind: 'blocked_incompatible' } };
+    }
+
+    if (
+      processResult.allOpsFilteredBySyncImport &&
+      processResult.filteredOpCount > 0 &&
+      processResult.isLocalUnsyncedImport
+    ) {
+      OpLog.warn(
+        `OperationLogSyncService: All ${processResult.filteredOpCount} remote ops filtered by local SYNC_IMPORT. ` +
+          'Showing conflict resolution dialog (local import detected).',
+      );
+      const conflictResult = await this._handleSyncImportConflict(
+        syncProvider,
+        {
+          filteredOpCount: processResult.filteredOpCount,
+          localImportTimestamp: processResult.filteringImport?.timestamp ?? Date.now(),
+          syncImportReason: processResult.filteringImport?.syncImportReason,
+          scenario: 'LOCAL_IMPORT_FILTERS_REMOTE',
+        },
+        'OperationLogSyncService (local SYNC_IMPORT filters remote)',
+      );
+      return {
+        kind: 'handled',
+        outcome: {
+          kind: conflictResult === 'CANCEL' ? 'cancelled' : 'no_new_ops',
+        },
+      };
+    }
+
+    if (processResult.allOpsFilteredBySyncImport && processResult.filteredOpCount > 0) {
+      OpLog.normal(
+        `OperationLogSyncService: ${processResult.filteredOpCount} remote ops silently filtered by ` +
+          'remote SYNC_IMPORT (not showing dialog - import came from another client).',
+      );
+    }
+
+    return { kind: 'processed', processResult };
   }
 
   private async _processRemoteOpsWithStartupCleanup(

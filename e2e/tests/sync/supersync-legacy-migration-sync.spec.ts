@@ -561,9 +561,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // Trigger sync and wait for it to complete
-      await syncPageB.triggerSync();
-      // Wait for sync to finish - fresh client should download A's data
-      await pageB.waitForTimeout(3000);
+      await syncPageB.syncAndWait();
       console.log('[Test] Client B: Synced (downloaded A data)');
 
       // Navigate to A's project (which should now exist on B after sync)

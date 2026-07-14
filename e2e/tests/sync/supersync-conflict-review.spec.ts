@@ -65,7 +65,6 @@ test.describe('@supersync Conflict Review', () => {
       await waitForTask(clientB.page, reviewBase);
 
       await renameTask(clientA, reviewBase, discardedTitle);
-      await clientB.page.waitForTimeout(500);
       await renameTask(clientB, reviewBase, autoWinnerTitle);
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();

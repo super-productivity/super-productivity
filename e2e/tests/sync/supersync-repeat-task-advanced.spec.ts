@@ -140,7 +140,7 @@ test.describe('@supersync Repeat Task Advanced Sync', () => {
       const estimateItem = clientB.page.locator(
         'task-detail-panel task-detail-item:has(mat-icon:text("hourglass_empty"))',
       );
-      await expect(estimateItem).toContainText('1h');
+      await expect(estimateItem).toContainText(/(?:^|[^0-9])1h(?:[^0-9]|$)/);
       console.log('[Estimate Test] Client B received the exact 1h estimate');
     } finally {
       if (clientA) await closeClient(clientA);

@@ -39,6 +39,11 @@ test.describe('@webdav WebDAV Split-file Sync', () => {
       await workViewA.waitForTaskList();
       await syncA.setupWebdavSync(config);
 
+      // Complete an empty first sync so the snapshot clock is deliberately
+      // behind the task operation uploaded in the next sync.
+      await syncA.triggerSync();
+      await waitForSync(pageA, syncA);
+
       const taskTitle = `Split-file task ${Date.now()}`;
       await workViewA.addTask(taskTitle);
       await syncA.triggerSync();

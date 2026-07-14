@@ -346,7 +346,10 @@ test.describe('@supersync Error Scenarios', () => {
     test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    let interceptedDownloads = 0;
+    let blockedOpId: string | null = null;
+    let blockedServerSeq: number | null = null;
+    let validSuffixOpId: string | null = null;
+    let repeatedBlockedDownloads = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -366,13 +369,30 @@ test.describe('@supersync Error Scenarios', () => {
       await clientB.page.route('**/api/sync/ops?*', async (route) => {
         if (route.request().method() === 'GET') {
           const response = await route.fetch();
-          const json = await response.json();
+          const json = (await response.json()) as {
+            ops?: Array<{
+              serverSeq: number;
+              op: { id: string; entityType: string; schemaVersion: number };
+            }>;
+          };
 
-          // Server responses wrap each SyncOperation in { serverSeq, op }.
-          // Corrupt only the first op so every following real op is a valid suffix.
           if (json.ops?.length > 0) {
-            json.ops[0].op.schemaVersion = CURRENT_SCHEMA_VERSION + 1;
-            interceptedDownloads++;
+            if (blockedOpId === null) {
+              const taskSuffixIndex = json.ops.findIndex(
+                (entry) => entry.op.entityType === 'TASK',
+              );
+              expect(taskSuffixIndex).toBeGreaterThan(0);
+              blockedOpId = json.ops[0].op.id;
+              blockedServerSeq = json.ops[0].serverSeq;
+              validSuffixOpId = json.ops[taskSuffixIndex].op.id;
+            }
+
+            const blockedEntry = json.ops.find((entry) => entry.op.id === blockedOpId);
+            if (blockedEntry) {
+              expect(blockedEntry.serverSeq).toBe(blockedServerSeq);
+              blockedEntry.op.schemaVersion = CURRENT_SCHEMA_VERSION + 1;
+              repeatedBlockedDownloads++;
+            }
           }
 
           await route.fulfill({
@@ -394,9 +414,11 @@ test.describe('@supersync Error Scenarios', () => {
       expect(await hasTask(clientB.page, taskName)).toBe(false);
 
       // Retry while the incompatible op remains. If the cursor advanced past it,
-      // the server would no longer return the same first operation.
+      // the server would no longer return the same operation ID/sequence.
       await clientB.sync.syncAndWait().catch(() => {});
-      expect(interceptedDownloads).toBeGreaterThanOrEqual(2);
+      expect(validSuffixOpId).toBeTruthy();
+      expect(validSuffixOpId).not.toBe(blockedOpId);
+      expect(repeatedBlockedDownloads).toBeGreaterThanOrEqual(2);
       expect(await hasTask(clientB.page, taskName)).toBe(false);
 
       // Simulate upgrading to a version that understands the operation.
