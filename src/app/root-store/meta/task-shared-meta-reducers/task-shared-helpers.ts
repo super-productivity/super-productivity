@@ -1,8 +1,13 @@
 import { Update } from '@ngrx/entity';
+import { Action } from '@ngrx/store';
 import { RootState } from '../../root-state';
 import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
 import { Task } from '../../../features/tasks/task.model';
+import {
+  TASK_FEATURE_NAME,
+  taskAdapter,
+} from '../../../features/tasks/store/task.reducer';
 import {
   PROJECT_FEATURE_NAME,
   projectAdapter,
@@ -14,13 +19,19 @@ import {
 } from '../../../features/planner/store/planner.reducer';
 import { unique } from '../../../util/unique';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { TaskSharedActions } from '../task-shared.actions';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
 export type ProjectTaskList = 'backlogTaskIds' | 'taskIds';
-export type TaskEntity = { id: string; projectId?: string | null; tagIds?: string[] };
+export type TaskEntity = {
+  id: string;
+  projectId?: string | null;
+  tagIds?: string[];
+  subTaskIds?: string[];
+};
 export type TaskWithTags = Task & { tagIds: string[] };
 export type ActionHandler = (state: RootState) => RootState;
 export type ActionHandlerMap = Record<string, ActionHandler>;
@@ -47,6 +58,46 @@ export const updateTags = (state: RootState, updates: Update<Tag>[]): RootState 
 });
 
 /**
+ * Collects parent task IDs plus children found through either side of the
+ * parent/subtask relationship. The reverse lookup mirrors deleteTaskHelper's
+ * protection against sync races where parent.subTaskIds is incomplete.
+ * `payloadSubTaskIds` covers replay on clients where neither side of the
+ * relationship has arrived yet (children only known from the action payload).
+ */
+export const collectTaskAndSubTaskIds = (
+  state: RootState,
+  parentTaskIds: string[],
+  payloadSubTaskIds: string[] | undefined = [],
+): string[] => {
+  const parentIdSet = new Set(parentTaskIds);
+  const taskIds = new Set([...parentTaskIds, ...(payloadSubTaskIds ?? [])]);
+  const taskState = state[TASK_FEATURE_NAME];
+
+  for (const parentTaskId of parentTaskIds) {
+    const parentTask = taskState.entities[parentTaskId];
+    for (const subTaskId of parentTask?.subTaskIds ?? []) {
+      taskIds.add(subTaskId);
+    }
+  }
+
+  for (const taskId of taskState.ids as string[]) {
+    const task = taskState.entities[taskId];
+    if (task?.parentId && parentIdSet.has(task.parentId)) {
+      taskIds.add(taskId);
+    }
+  }
+
+  return Array.from(taskIds);
+};
+
+export const isValidTaskProjectIdUpdate = (
+  state: RootState,
+  task: Task,
+  projectId: string,
+): boolean =>
+  !task.parentId && (projectId === '' || !!getProjectOrUndefined(state, projectId));
+
+/**
  * Removes the given task IDs from every tag's `taskIds`. Scans ALL tags from
  * the CURRENT state (not a payload-provided list or the task's own `tagIds`)
  * so sync replays with divergent tag associations are fully cleaned up: a
@@ -59,6 +110,8 @@ export const removeTasksFromAllTags = (
   state: RootState,
   taskIds: string[],
 ): RootState => {
+  if (taskIds.length === 0) return state;
+
   const taskIdSet = new Set(taskIds);
   const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
     .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
@@ -67,11 +120,120 @@ export const removeTasksFromAllTags = (
       (tag): Update<Tag> => ({
         id: tag.id,
         changes: {
-          taskIds: removeTasksFromList(tag.taskIds, taskIds),
+          taskIds: tag.taskIds.filter((id) => !taskIdSet.has(id)),
         },
       }),
     );
   return updateTags(state, tagUpdates);
+};
+
+/**
+ * Removes the given task IDs from every project's regular and backlog lists.
+ * Scanning all projects also repairs one-sided references left by older clients
+ * or partial updates where task.projectId no longer matches the containing list.
+ */
+export const removeTasksFromAllProjects = (
+  state: RootState,
+  taskIds: string[],
+): RootState => {
+  if (taskIds.length === 0) return state;
+
+  const taskIdSet = new Set(taskIds);
+  const projectUpdates = (state[PROJECT_FEATURE_NAME].ids as string[])
+    .map((projectId) => state[PROJECT_FEATURE_NAME].entities[projectId])
+    .filter(
+      (project): project is Project =>
+        !!project &&
+        ((project.taskIds ?? []).some((id) => taskIdSet.has(id)) ||
+          (project.backlogTaskIds ?? []).some((id) => taskIdSet.has(id))),
+    )
+    .map(
+      (project): Update<Project> => ({
+        id: project.id,
+        changes: {
+          taskIds: (project.taskIds ?? []).filter((id) => !taskIdSet.has(id)),
+          backlogTaskIds: (project.backlogTaskIds ?? []).filter(
+            (id) => !taskIdSet.has(id),
+          ),
+        },
+      }),
+    );
+
+  if (projectUpdates.length === 0) {
+    return state;
+  }
+
+  return {
+    ...state,
+    [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
+      projectUpdates,
+      state[PROJECT_FEATURE_NAME],
+    ),
+  };
+};
+
+/**
+ * Repairs a root task's project relationship after an LWW update. New LWW
+ * operations derived from project moves carry the source operation's entityIds,
+ * which are the deterministic move footprint. Legacy LWW operations have no
+ * such footprint and fall back to deriving children from receiving state.
+ *
+ * Every project is scanned so stale one-sided references are removed. The
+ * destination project's existing root placement (regular vs backlog) and
+ * ordering are preserved when possible; subtasks never belong in either list.
+ */
+export const repairTaskProjectForLww = (
+  state: RootState,
+  task: Pick<Task, 'id' | 'projectId' | 'subTaskIds'>,
+  targetProjectId: string | undefined,
+  operationTaskIds?: string[],
+): RootState => {
+  const targetProject = targetProjectId
+    ? getProjectOrUndefined(state, targetProjectId)
+    : undefined;
+
+  // Project creation can arrive after a task recreation LWW. Preserve that
+  // out-of-order task snapshot until the referenced project is replayed.
+  if (targetProjectId && !targetProject) return state;
+
+  const allTaskIds = unique(
+    operationTaskIds !== undefined
+      ? [task.id, ...operationTaskIds]
+      : collectTaskAndSubTaskIds(state, [task.id], task.subTaskIds),
+  ).filter((id) => !Object.prototype.hasOwnProperty.call(Object.prototype, id));
+  let updatedState = removeTasksFromAllProjects(state, allTaskIds);
+
+  if (targetProjectId && targetProject) {
+    const childIds = new Set(allTaskIds.filter((id) => id !== task.id));
+    let taskIds = unique((targetProject.taskIds ?? []).filter((id) => !childIds.has(id)));
+    let backlogTaskIds = unique(
+      (targetProject.backlogTaskIds ?? []).filter((id) => !childIds.has(id)),
+    );
+
+    if (taskIds.includes(task.id)) {
+      backlogTaskIds = backlogTaskIds.filter((id) => id !== task.id);
+    } else if (!backlogTaskIds.includes(task.id)) {
+      taskIds = [...taskIds, task.id];
+    }
+
+    updatedState = updateProject(updatedState, targetProjectId, {
+      taskIds,
+      backlogTaskIds,
+    });
+  }
+
+  const taskUpdates: Update<Task>[] = allTaskIds.map((id) => ({
+    id,
+    changes: { projectId: targetProjectId },
+  }));
+
+  return {
+    ...updatedState,
+    [TASK_FEATURE_NAME]: taskAdapter.updateMany(
+      taskUpdates,
+      updatedState[TASK_FEATURE_NAME],
+    ),
+  };
 };
 
 // =============================================================================
@@ -83,7 +245,7 @@ export const removeTasksFromAllTags = (
  * Callers should check existence before calling if tag may not exist.
  */
 export const getTag = (state: RootState, tagId: string): Tag => {
-  const tag = state[TAG_FEATURE_NAME].entities[tagId];
+  const tag = getTagOrUndefined(state, tagId);
   if (!tag) {
     throw new Error(
       `Tag ${tagId} not found in state. This may indicate an out-of-order remote operation.`,
@@ -92,13 +254,21 @@ export const getTag = (state: RootState, tagId: string): Tag => {
   return tag as Tag;
 };
 
+export const getTagOrUndefined = (state: RootState, tagId: string): Tag | undefined => {
+  const tag = state[TAG_FEATURE_NAME].entities[tagId] as Tag | undefined;
+  return tag?.id === tagId ? tag : undefined;
+};
+
 /**
  * Gets a project entity from state. Throws if project doesn't exist.
  * Callers should check existence before calling if project may not exist.
  */
 export const getProject = (state: RootState, projectId: string): Project => {
   const project = state[PROJECT_FEATURE_NAME].entities[projectId];
-  if (!project) {
+  // The id equality check rejects inherited Object.prototype members
+  // ('constructor', 'toString', …) that a bare entities[id] lookup returns
+  // truthy for when the id comes from external input (REST API, remote ops).
+  if (!project || project.id !== projectId) {
     throw new Error(
       `Project ${projectId} not found in state. This may indicate an out-of-order remote operation.`,
     );
@@ -113,8 +283,10 @@ export const getProject = (state: RootState, projectId: string): Project => {
 export const getProjectOrUndefined = (
   state: RootState,
   projectId: string,
-): Project | undefined =>
-  state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined;
+): Project | undefined => {
+  const project = state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined;
+  return project?.id === projectId ? project : undefined;
+};
 
 // =============================================================================
 // LIST MANIPULATION HELPERS
@@ -134,6 +306,40 @@ export const removeTasksFromList = (taskIds: string[], toRemove: string[]): stri
   // This changes overall complexity from O(n*m) to O(n+m)
   const removeSet = new Set(toRemove);
   return taskIds.filter((id) => !removeSet.has(id));
+};
+
+/**
+ * A deleteProject captured from a stale client can omit task recreations that
+ * have already reached this replay prefix. Expand only through the deleted
+ * project's current root lists and those roots' canonical direct children.
+ * Tasks merely carrying the projectId are deliberately excluded: scanning the
+ * whole TASK store would turn a bounded relationship cascade into a global one.
+ */
+export const enrichDeleteProjectAction = (state: RootState, action: Action): Action => {
+  if (action.type !== TaskSharedActions.deleteProject.type) return action;
+
+  const deleteProjectAction = action as ReturnType<
+    typeof TaskSharedActions.deleteProject
+  >;
+  const project = state[PROJECT_FEATURE_NAME].entities[deleteProjectAction.projectId];
+  if (!project) return action;
+
+  const rootTaskIds = unique([...project.taskIds, ...project.backlogTaskIds]);
+  const childTaskIds = rootTaskIds.flatMap(
+    (taskId) => state[TASK_FEATURE_NAME].entities[taskId]?.subTaskIds ?? [],
+  );
+  const allTaskIds = unique([
+    ...deleteProjectAction.allTaskIds,
+    ...rootTaskIds,
+    ...childTaskIds,
+  ]);
+  const isUnchanged =
+    allTaskIds.length === deleteProjectAction.allTaskIds.length &&
+    allTaskIds.every((taskId, index) => taskId === deleteProjectAction.allTaskIds[index]);
+
+  if (isUnchanged) return action;
+  const enrichedAction = { ...deleteProjectAction, allTaskIds };
+  return enrichedAction;
 };
 
 // =============================================================================

@@ -90,6 +90,14 @@ export interface FileSnapshotDownloadResult extends DownloadResultBase {
    * Contains the complete application state for bootstrapping a new client.
    */
   snapshotState?: unknown;
+  /** Last modification time recorded by the remote snapshot/ops file. */
+  remoteLastModified?: number;
+  /**
+   * Operation ids already represented by `snapshotState`. When omitted, all
+   * returned operations are treated as snapshot-included for compatibility
+   * with file providers that expose a fully current snapshot.
+   */
+  snapshotAppliedOpIds?: string[];
 }
 
 export type DownloadResult =

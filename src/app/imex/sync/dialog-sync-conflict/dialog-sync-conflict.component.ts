@@ -59,14 +59,22 @@ export class DialogSyncConflictComponent {
   remote = this.data.remote;
   local = this.data.local;
 
-  isHighlightRemote = this.remote.lastUpdate >= this.local.lastUpdate;
-  isHighlightLocal = !this.isHighlightRemote;
+  isHighlightRemote =
+    this.remote.lastUpdate !== null && this.remote.lastUpdate > this.local.lastUpdate;
+  isHighlightLocal =
+    this.remote.lastUpdate !== null && this.local.lastUpdate > this.remote.lastUpdate;
 
   remoteChangeCount = this.getChangeCount('remote');
   localChangeCount = this.getLocalChangeCount();
 
-  isHighlightRemoteChanges = (this.remoteChangeCount ?? 0) > (this.localChangeCount ?? 0);
-  isHighlightLocalChanges = !this.isHighlightRemoteChanges;
+  isHighlightRemoteChanges =
+    this.remoteChangeCount !== null &&
+    this.localChangeCount !== null &&
+    this.remoteChangeCount > this.localChangeCount;
+  isHighlightLocalChanges =
+    this.remoteChangeCount !== null &&
+    this.localChangeCount !== null &&
+    this.localChangeCount > this.remoteChangeCount;
 
   constructor() {
     this._matDialogRef.disableClose = true;

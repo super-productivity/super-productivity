@@ -1,9 +1,18 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { ActionType, Operation, OpType, VectorClock } from '../core/operation.types';
+import {
+  ActionType,
+  isLwwUpdatePayload,
+  Operation,
+  OpType,
+  VectorClock,
+} from '../core/operation.types';
 import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
-import { ConflictResolutionService } from './conflict-resolution.service';
+import {
+  ConflictResolutionService,
+  getLatestTaskProjectMoveEntityIds,
+} from './conflict-resolution.service';
 import { VectorClockService } from './vector-clock.service';
 import { LockService } from './lock.service';
 import { toEntityKey } from '../util/entity-key.util';
@@ -121,6 +130,7 @@ export class SupersededOperationResolverService {
 
       const opsToReject: string[] = [];
       const newOpsCreated: Operation[] = [];
+      const auxiliaryOpIds = new Set<string>();
 
       // Handle bulk semantic operations BEFORE entity-by-entity grouping.
       // moveToArchive uses OpType.Update but its reducer removes entities from the NgRx store
@@ -245,18 +255,49 @@ export class SupersededOperationResolverService {
         // would have a later timestamp than the original user action, causing it to
         // incorrectly win against concurrent ops that were actually made earlier.
         const preservedTimestamp = Math.max(...entityOps.map((e) => e.op.timestamp));
+        const projectMoveEntityIds = getLatestTaskProjectMoveEntityIds(
+          entityOps.map(({ op }) => op),
+        );
+        const declaredEntityIds = projectMoveEntityIds
+          ? Array.from(new Set([entityId, ...projectMoveEntityIds]))
+          : undefined;
 
         // Create new UPDATE op with current state and merged clock
-        const newOp = this.conflictResolutionService.createLWWUpdateOp(
+        let newOp = this.conflictResolutionService.createLWWUpdateOp(
           entityType,
           entityId,
           entityState,
           clientId,
           mergedClock,
           preservedTimestamp,
+          'replace',
+          declaredEntityIds,
         );
 
+        if (
+          entityOps.some(
+            ({ op }) =>
+              isLwwUpdatePayload(op.payload) &&
+              op.payload.recreatesEntityAfterDelete === true,
+          ) &&
+          isLwwUpdatePayload(newOp.payload)
+        ) {
+          newOp = {
+            ...newOp,
+            payload: {
+              ...newOp.payload,
+              recreatesEntityAfterDelete: true,
+            },
+          };
+        }
+
         newOpsCreated.push(newOp);
+        const followUpOps =
+          await this.conflictResolutionService.createTaskRecreationFollowUpOps(newOp);
+        for (const followUpOp of followUpOps) {
+          newOpsCreated.push(followUpOp);
+          auxiliaryOpIds.add(followUpOp.id);
+        }
         opsToReject.push(...entityOps.map((e) => e.opId));
 
         OpLog.normal(
@@ -265,20 +306,25 @@ export class SupersededOperationResolverService {
         );
       }
 
-      // Mark old ops as rejected
+      // Persist every replacement group atomically and rebase its clocks in
+      // durable sequence order. Retire the stale rows only afterwards: if the
+      // batch fails, the originals remain retryable; if rejection fails, the
+      // complete replacement group is already durable.
+      if (newOpsCreated.length > 0) {
+        const { written } = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
+          { ops: newOpsCreated, source: 'local' },
+        ]);
+        for (const { op } of written) {
+          OpLog.normal(
+            `SupersededOperationResolverService: Appended LWW update op ${op.id} for ${op.entityType}:${op.entityId}`,
+          );
+        }
+      }
+
       if (opsToReject.length > 0) {
         await this.opLogStore.markRejected(opsToReject);
         OpLog.normal(
           `SupersededOperationResolverService: Marked ${opsToReject.length} superseded ops as rejected`,
-        );
-      }
-
-      // Append new ops to the log (will be uploaded on next sync)
-      // Uses appendWithVectorClockUpdate to ensure vector clock store stays in sync
-      for (const op of newOpsCreated) {
-        await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
-        OpLog.normal(
-          `SupersededOperationResolverService: Appended LWW update op ${op.id} for ${op.entityType}:${op.entityId}`,
         );
       }
 
@@ -298,7 +344,7 @@ export class SupersededOperationResolverService {
         });
       }
 
-      result = newOpsCreated.length;
+      result = newOpsCreated.length - auxiliaryOpIds.size;
     });
     return result;
   }

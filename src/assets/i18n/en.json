@@ -1293,8 +1293,8 @@
         "LOCAL": "Local",
         "LOCAL_REMOTE": "Local -> Remote",
         "NEVER": "Never",
-        "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version? This action cannot be undone.",
-        "OVERWRITE_WARNING_UNKNOWN": "WARNING: This device cannot determine how many unsynced changes the {{targetName}} data has (it has no record of a previous sync). Overwriting the {{targetName}} data with the {{sourceName}} version may discard changes. Are you sure? This action cannot be undone.",
+        "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
+        "OVERWRITE_WARNING_UNKNOWN": "WARNING: This device cannot determine how many unsynced changes the {{targetName}} data has (it has no record of a previous sync). Overwriting the {{targetName}} data with the {{sourceName}} version may discard changes. Are you sure?",
         "REMOTE": "Remote",
         "RESULT": "Result",
         "TEXT": "<p>Update from remote. Both local and remote data seem to be modified.</p>",
@@ -2463,6 +2463,7 @@
       "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Enable idle time handling",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Only trigger idle time dialog when the current task is selected",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suppress idle dialog during focus mode sessions",
       "MIN_IDLE_TIME": "Trigger idle after X",
       "TITLE": "Idle Handling"
     },

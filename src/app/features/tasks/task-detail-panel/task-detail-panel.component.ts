@@ -88,6 +88,7 @@ import { clipboardHasText } from '../../../util/clipboard-has-text';
 import { checkKeyCombo } from '../../../util/check-key-combo';
 import { IS_MAC } from '../../../util/is-mac';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import { JiraElectronBridgeService } from '../../issue/providers/jira/jira-electron-bridge.service';
 import { DropPasteIcons } from '../../../core/drop-paste-input/drop-paste.model';
 import {
   AddSubtaskInputComponent,
@@ -140,6 +141,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _clipboardImageService = inject(ClipboardImageService);
   private _globalConfigService = inject(GlobalConfigService);
   private _issueService = inject(IssueService);
+  private _jiraElectronBridge = inject(JiraElectronBridgeService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
@@ -441,8 +443,8 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
                   )
                   .pipe(
                     // Orphan issueProviderId — see #7135.
-                    catchError((err: unknown) => {
-                      IssueLog.warn('Jira header setup skipped', err);
+                    catchError(() => {
+                      IssueLog.warn('Jira header setup skipped');
                       return of(null);
                     }),
                   )
@@ -452,7 +454,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         )
         .subscribe((jiraCfg) => {
           if (jiraCfg?.isEnabled) {
-            window.ea.jiraSetupImgHeaders({ jiraCfg });
+            void this._jiraElectronBridge
+              .setupImgHeaders({
+                host: jiraCfg.host,
+                userName: jiraCfg.userName,
+                password: jiraCfg.password,
+                usePAT: jiraCfg.usePAT === true,
+              })
+              .catch(() => IssueLog.err('Jira image authentication setup failed'));
+          } else {
+            void this._jiraElectronBridge
+              .clearImgHeaders()
+              .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
           }
         })
     : null;
@@ -583,6 +596,11 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   ngOnDestroy(): void {
+    if (IS_ELECTRON) {
+      void this._jiraElectronBridge
+        .clearImgHeaders()
+        .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
+    }
     if (window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL]) {
       window.history.back();
     }

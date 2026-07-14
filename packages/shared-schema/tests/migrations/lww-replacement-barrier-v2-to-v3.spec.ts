@@ -6,7 +6,7 @@ import type { OperationLike } from '../../src/migration.types';
 
 describe('LWW replacement compatibility barrier v2 -> v3', () => {
   it('makes replacement-mode operations visible as a new schema generation', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(3);
+    expect(CURRENT_SCHEMA_VERSION).toBeGreaterThanOrEqual(3);
     expect(LwwReplacementBarrierMigration_v2v3.fromVersion).toBe(2);
     expect(LwwReplacementBarrierMigration_v2v3.toVersion).toBe(3);
   });

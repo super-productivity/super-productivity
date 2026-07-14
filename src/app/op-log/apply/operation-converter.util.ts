@@ -322,6 +322,9 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       ...(isLwwUpdatePayload(op.payload)
         ? { lwwUpdateMode: op.payload.lwwUpdateMode }
         : {}),
+      ...(isLwwUpdatePayload(op.payload) && op.payload.recreatesEntityAfterDelete === true
+        ? { recreatesEntityAfterDelete: true }
+        : {}),
     },
   };
 };

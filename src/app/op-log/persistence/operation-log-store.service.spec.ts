@@ -27,6 +27,7 @@ import {
   IDB_OPEN_RETRIES,
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
+  LOCK_NAMES,
   MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
@@ -37,10 +38,12 @@ import {
   STORE_NAMES,
 } from './db-keys.const';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { LockService } from '../sync/lock.service';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
   let vectorClockService: VectorClockService;
+  let lockService: LockService;
   const mockClientIdProvider: ClientIdProvider = {
     loadClientId: () => Promise.resolve('testClient'),
     getOrGenerateClientId: () => Promise.resolve('testClient'),
@@ -72,6 +75,7 @@ describe('OperationLogStoreService', () => {
     });
     service = TestBed.inject(OperationLogStoreService);
     vectorClockService = TestBed.inject(VectorClockService);
+    lockService = TestBed.inject(LockService);
     await service.init();
     // Clear all data from previous tests to ensure test isolation
     await service._clearAllDataForTesting();
@@ -1556,6 +1560,167 @@ describe('OperationLogStoreService', () => {
       const storedOps = await service.getOpsAfterSeq(0);
       expect(storedOps.length).toBe(1);
     });
+
+    it('should append snapshot-included ops and atomically advance the state-cache frontier', async () => {
+      const existingOp = createTestOperation({ id: 'snapshot-op-existing' });
+      const newOp = createTestOperation({ id: 'snapshot-op-new' });
+      await service.append(existingOp, 'remote');
+      await service.saveStateCache({
+        state: { task: { ids: ['task1'] } },
+        lastAppliedOpSeq: 1,
+        vectorClock: { testClient: 1 },
+        compactedAt: 1,
+      });
+
+      const result = await service.appendSnapshotIncludedOps([existingOp, newOp]);
+
+      expect(result.writtenOps).toEqual([newOp]);
+      expect(result.skippedCount).toBe(1);
+      expect((await service.loadStateCache())?.lastAppliedOpSeq).toBe(2);
+    });
+
+    it('should not append snapshot-included ops without an existing state cache', async () => {
+      const snapshotOp = createTestOperation({ id: 'snapshot-op-without-cache' });
+
+      await expectAsync(
+        service.appendSnapshotIncludedOps([snapshotOp]),
+      ).toBeRejectedWithError(
+        'Cannot append snapshot-included operations without an existing state cache',
+      );
+
+      expect(await service.getOpsAfterSeq(0)).toEqual([]);
+      expect(await service.loadStateCache()).toBeNull();
+    });
+
+    it('should reject a snapshot append when the state-cache frontier is behind the log tail', async () => {
+      const existingOp = createTestOperation({ id: 'existing-unmaterialized-op' });
+      const snapshotOp = createTestOperation({ id: 'snapshot-op-after-gap' });
+      await service.append(existingOp, 'remote');
+      await service.saveStateCache({
+        state: { task: { ids: [] } },
+        lastAppliedOpSeq: 0,
+        vectorClock: {},
+        compactedAt: 1,
+      });
+
+      await expectAsync(
+        service.appendSnapshotIncludedOps([snapshotOp]),
+      ).toBeRejectedWithError(
+        'Cannot append snapshot-included operations when the state-cache frontier does not match the operation-log tail',
+      );
+
+      expect((await service.getOpsAfterSeq(0)).map((entry) => entry.op.id)).toEqual([
+        existingOp.id,
+      ]);
+      expect((await service.loadStateCache())?.lastAppliedOpSeq).toBe(0);
+    });
+
+    it('should atomically commit file snapshot ops, cache, clock, and archives', async () => {
+      const existingOp = createTestOperation({ id: 'file-snapshot-existing' });
+      const includedOp = createTestOperation({ id: 'file-snapshot-new' });
+      const archiveYoung = {
+        task: { ids: [], entities: {} },
+        timeTracking: { project: {}, tag: {} },
+      } as unknown as ArchiveModel;
+      const archiveOld = {
+        task: { ids: [], entities: {} },
+        timeTracking: { project: {}, tag: {} },
+      } as unknown as ArchiveModel;
+      await service.append(existingOp, 'remote');
+
+      const result = await service.commitFileSnapshotBaseline({
+        state: { task: { ids: ['remote-task'] } },
+        lastAppliedOpSeq: 1,
+        vectorClock: { remote: 7 },
+        compactedAt: 123,
+        snapshotIncludedOps: [existingOp, includedOp],
+        archiveYoung,
+        archiveOld,
+      });
+
+      expect(result).toEqual({
+        seqs: [2],
+        writtenOps: [includedOp],
+        skippedCount: 1,
+      });
+      expect((await service.loadStateCache())?.lastAppliedOpSeq).toBe(2);
+      expect(await service.getVectorClock()).toEqual({ remote: 7 });
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      expect((await db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY)).data).toEqual(
+        archiveYoung,
+      );
+      expect((await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).data).toEqual(
+        archiveOld,
+      );
+    });
+
+    it('should roll back the whole file baseline when its vector-clock write fails', async () => {
+      const priorOp = createTestOperation({ id: 'file-snapshot-prior-op' });
+      const priorState = { sentinel: 'prior-state' };
+      await service.append(priorOp, 'remote');
+      await service.saveStateCache({
+        state: priorState,
+        lastAppliedOpSeq: 1,
+        vectorClock: { testClient: 1 },
+        compactedAt: 1,
+      });
+      await service.setVectorClock({ testClient: 1 });
+
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      const originalTransaction = adapter.transaction.bind(adapter);
+      spyOn(adapter, 'transaction').and.callFake(async (stores, mode, callback) =>
+        originalTransaction(stores, mode, async (tx) => {
+          const failingTx = new Proxy(tx, {
+            get: (target, property): unknown => {
+              if (property === 'put') {
+                return async (
+                  storeName: Parameters<typeof tx.put>[0],
+                  ...args: unknown[]
+                ): Promise<unknown> => {
+                  if (storeName === STORE_NAMES.VECTOR_CLOCK) {
+                    throw new Error('injected vector-clock write failure');
+                  }
+                  return (target.put as (...putArgs: unknown[]) => Promise<unknown>).call(
+                    target,
+                    storeName,
+                    ...args,
+                  );
+                };
+              }
+              const value = Reflect.get(target, property);
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+          return callback(failingTx);
+        }),
+      );
+
+      await expectAsync(
+        service.commitFileSnapshotBaseline({
+          state: { sentinel: 'new-state' },
+          lastAppliedOpSeq: 1,
+          vectorClock: { remote: 2 },
+          compactedAt: 2,
+          snapshotIncludedOps: [
+            createTestOperation({ id: 'file-snapshot-rolled-back-op' }),
+          ],
+        }),
+      ).toBeRejectedWithError('injected vector-clock write failure');
+
+      expect((await service.getOpsAfterSeq(0)).map(({ op }) => op.id)).toEqual([
+        priorOp.id,
+      ]);
+      expect((await service.loadStateCache())?.state).toEqual(priorState);
+      expect(await service.getVectorClock()).toEqual({ testClient: 1 });
+    });
   });
 
   describe('appendMixedSourceBatchSkipDuplicates', () => {
@@ -2671,6 +2836,7 @@ describe('OperationLogStoreService', () => {
     it('should write archives in the same destructive replacement', async () => {
       const archiveYoung = createArchive('young-task');
       const archiveOld = createArchive('old-task');
+      const lockRequestSpy = spyOn(lockService, 'request').and.callThrough();
 
       await service.runDestructiveStateReplacement({
         syncImportOp: createTestOperation({
@@ -2689,6 +2855,10 @@ describe('OperationLogStoreService', () => {
       const oldEntry = await db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
       expect(youngEntry.data).toEqual(archiveYoung);
       expect(oldEntry.data).toEqual(archiveOld);
+      expect(lockRequestSpy).toHaveBeenCalledOnceWith(
+        LOCK_NAMES.TASK_ARCHIVE,
+        jasmine.any(Function),
+      );
     });
 
     it('should roll back ops, state_cache, vector_clock, and archives when an archive write fails', async () => {

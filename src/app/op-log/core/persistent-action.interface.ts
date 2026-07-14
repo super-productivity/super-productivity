@@ -17,6 +17,7 @@ export interface PersistentActionMeta {
   isApplyingFromOtherClient?: boolean;
   isBulk?: boolean; // TRUE for batch operations
   lwwUpdateMode?: LwwUpdateMode;
+  recreatesEntityAfterDelete?: boolean;
 }
 
 export interface PersistentAction extends Action {

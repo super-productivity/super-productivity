@@ -144,7 +144,9 @@ describe('ArchiveOperationHandler', () => {
       'cleanupArchiveDataForTag',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
-    mockLockService.request.and.callFake(async (_lockName, callback) => callback());
+    mockLockService.request.and.callFake(
+      <T>(_lockName: string, callback: () => Promise<T>): Promise<T> => callback(),
+    );
     mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
       'loadArchiveYoung',
       'loadArchiveOld',
@@ -883,6 +885,10 @@ describe('ArchiveOperationHandler', () => {
           mockArchiveDbAdapter.saveArchivesAtomic.calls.mostRecent().args;
         expect(savedYoung).toBe(archiveYoungData);
         expect(savedOld.task.ids).toEqual([]);
+        expect(mockLockService.request).toHaveBeenCalledOnceWith(
+          LOCK_NAMES.TASK_ARCHIVE,
+          jasmine.any(Function),
+        );
       });
 
       it('should write archiveOld to IndexedDB for remote operations', async () => {
@@ -956,6 +962,7 @@ describe('ArchiveOperationHandler', () => {
 
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+        expect(mockLockService.request).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchivesAtomic).not.toHaveBeenCalled();
       });
 
@@ -1236,6 +1243,10 @@ describe('ArchiveOperationHandler', () => {
             expect(mockArchiveDbAdapter.saveArchivesAtomic).toHaveBeenCalledOnceWith(
               emptyArchive,
               emptyArchive,
+            );
+            expect(mockLockService.request).toHaveBeenCalledOnceWith(
+              LOCK_NAMES.TASK_ARCHIVE,
+              jasmine.any(Function),
             );
           });
 

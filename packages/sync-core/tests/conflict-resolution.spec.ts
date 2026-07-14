@@ -192,6 +192,92 @@ describe('suggestConflictResolution', () => {
 });
 
 describe('planLwwConflictResolutions', () => {
+  const isDeleteWinsAction = (op: Operation): boolean =>
+    op.actionType === '[Test] Delete Wins';
+
+  it('lets a remote delete-wins action beat a newer local update', () => {
+    const conflict = createConflict(
+      [createOp({ id: 'local-update', timestamp: 2_000 })],
+      [
+        createOp({
+          id: 'remote-delete',
+          actionType: '[Test] Delete Wins',
+          opType: OpType.Delete,
+          timestamp: 1_000,
+        }),
+      ],
+    );
+
+    expect(
+      planLwwConflictResolutions([conflict], {
+        isArchiveAction,
+        isDeleteWinsAction,
+      }),
+    ).toEqual([
+      {
+        conflict,
+        winner: 'remote',
+        reason: 'remote-delete-wins',
+      },
+    ]);
+  });
+
+  it('plans a replacement delete when a local delete-wins action is older', () => {
+    const conflict = createConflict(
+      [
+        createOp({
+          id: 'local-delete',
+          actionType: '[Test] Delete Wins',
+          opType: OpType.Delete,
+          timestamp: 1_000,
+        }),
+      ],
+      [createOp({ id: 'remote-update', timestamp: 2_000 })],
+    );
+
+    expect(
+      planLwwConflictResolutions([conflict], {
+        isArchiveAction,
+        isDeleteWinsAction,
+      }),
+    ).toEqual([
+      {
+        conflict,
+        winner: 'local',
+        reason: 'local-delete-wins',
+        localWinOperationKind: 'delete-win',
+      },
+    ]);
+  });
+
+  it('keeps timestamp semantics for an unmarked delete', () => {
+    const conflict = createConflict(
+      [
+        createOp({
+          id: 'local-delete',
+          opType: OpType.Delete,
+          timestamp: 1_000,
+        }),
+      ],
+      [createOp({ id: 'remote-update', timestamp: 2_000 })],
+    );
+
+    expect(
+      planLwwConflictResolutions([conflict], {
+        isArchiveAction,
+        isDeleteWinsAction,
+      }),
+    ).toEqual([
+      {
+        conflict,
+        winner: 'remote',
+        reason: 'remote-timestamp-or-tie',
+        localMaxTimestamp: 1_000,
+        remoteMaxTimestamp: 2_000,
+      },
+    ]);
+  });
+
   it('lets a remote archive win over local non-archive operations', () => {
     const conflict = createConflict(
       [createOp({ id: 'local', timestamp: 2_000 })],

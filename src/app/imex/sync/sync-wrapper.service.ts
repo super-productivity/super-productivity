@@ -1324,7 +1324,7 @@ export class SyncWrapperService {
       const conflictData: ConflictData = {
         reason: ConflictReason.NoLastSync,
         remote: {
-          lastUpdate: Date.now(), // Remote snapshot doesn't have a timestamp, use now
+          lastUpdate: error.remoteLastModified ?? null,
           lastUpdateAction: 'Remote data',
           revMap: {},
           crossModelVersion: 1,

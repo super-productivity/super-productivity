@@ -1,10 +1,4 @@
-import {
-  ipcRenderer,
-  IpcRendererEvent,
-  webFrame,
-  contextBridge,
-  webUtils,
-} from 'electron';
+import { ipcRenderer, webFrame, contextBridge, webUtils } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
 import { IS_GNOME_DESKTOP, IS_GNOME_WAYLAND } from './common.const';
 import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
@@ -21,6 +15,10 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import {
+  createJiraPreloadApiConsumer,
+  toPayloadOnlyIpcListener,
+} from './shared-with-frontend/preload-api';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -31,13 +29,12 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
 
+const consumeJiraApi = createJiraPreloadApiConsumer(_invoke);
+
 const ea: ElectronAPI = {
-  on: (
-    channel: string,
-    listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-  ) => {
+  on: (channel: string, listener: (...args: unknown[]) => void) => {
     // NOTE: there is no proper way to unsubscribe apart from unsubscribing all
-    ipcRenderer.on(channel, listener);
+    ipcRenderer.on(channel, toPayloadOnlyIpcListener(listener));
   },
   // SYNC
   // ----
@@ -205,9 +202,6 @@ const ea: ElectronAPI = {
     _send('REGISTER_GLOBAL_SHORTCUTS', keyboardCfg),
   showFullScreenBlocker: (args) => _send('FULL_SCREEN_BLOCKER', args),
 
-  makeJiraRequest: (args) => _send('JIRA_MAKE_REQUEST_EVENT', args),
-  jiraSetupImgHeaders: (args) => _send('JIRA_SETUP_IMG_HEADERS', args),
-
   backupAppData: (appData) => _send('BACKUP', appData),
 
   updateCurrentTask: (
@@ -235,6 +229,8 @@ const ea: ElectronAPI = {
     // Because the standard 'on' method doesn't strip out the event arg like we need
     ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
   },
+
+  consumeJiraApi: () => consumeJiraApi(),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {

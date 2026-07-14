@@ -754,6 +754,22 @@ describe('operation-converter utility', () => {
         ).toBe('replace');
       });
 
+      it('should expose recreate-after-delete metadata (#8997)', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            actionPayload: { id: 'task-1', projectId: 'project-1' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            recreatesEntityAfterDelete: true,
+          },
+        });
+
+        const action = convertOpToAction(op);
+
+        expect(action.meta.recreatesEntityAfterDelete).toBeTrue();
+      });
+
       it('should fall back to legacy payload format when not MultiEntityPayload', () => {
         const op = createMockOperation({
           payload: { directProperty: 'value', nested: { prop: 123 } },

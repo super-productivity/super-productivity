@@ -188,10 +188,16 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         'setVectorClock',
         'append',
         'loadStateCache',
+        'commitFileSnapshotBaseline',
       ]);
       opLogStoreHydrationSpy.getLastSeq.and.resolveTo(0);
       opLogStoreHydrationSpy.getUnsynced.and.resolveTo([]);
       opLogStoreHydrationSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreHydrationSpy.commitFileSnapshotBaseline.and.resolveTo({
+        seqs: [],
+        writtenOps: [],
+        skippedCount: 0,
+      });
       const stateSnapshotSpy = jasmine.createSpyObj('StateSnapshotService', [
         'getStateSnapshot',
         'getAllSyncModelDataFromStoreAsync',

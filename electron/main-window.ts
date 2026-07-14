@@ -32,6 +32,7 @@ import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
+import { applyJiraImageAuth } from './jira-image-auth';
 
 let mainWin: BrowserWindow;
 
@@ -254,6 +255,7 @@ export const createWindow = async ({
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
     }
+    applyJiraImageAuth(details.url, requestHeaders, details.resourceType);
     callback({ requestHeaders });
   });
 

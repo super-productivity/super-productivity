@@ -1,11 +1,17 @@
-import { IpcRendererEvent } from 'electron';
+// This file is pulled into the frontend TS program (via src/app/core/window-ea.d.ts).
+// That program sets `types: []`, so it has no ambient Node globals of its own and
+// relied on the now-removed `import { IpcRendererEvent } from 'electron'` here to
+// transitively supply them. Several frontend/shared modules still probe Node globals
+// guarded at runtime (get-dist-channel's `process`/`NodeJS`, generate-client-id's
+// `process`, create-task-placeholder's `NodeJS.Timeout`, user-profile's `require`),
+// so re-expose them explicitly instead of by accident.
+/// <reference types="node" />
 import {
   GlobalConfigState,
   TakeABreakConfig,
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
-import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
@@ -16,12 +22,10 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import { JiraElectronApi } from './shared-with-frontend/jira-request.model';
 
 export interface ElectronAPI {
-  on(
-    channel: string,
-    listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-  ): void;
+  on(channel: string, listener: (...args: unknown[]) => void): void;
 
   // SYNC
   // ----
@@ -220,16 +224,6 @@ export interface ElectronAPI {
 
   showFullScreenBlocker(args: { msg?: string; takeABreakCfg: TakeABreakConfig }): void;
 
-  // TODO use invoke instead
-  makeJiraRequest(args: {
-    requestId: string;
-    url: string;
-    requestInit: RequestInit;
-    jiraCfg: JiraCfg;
-  }): void;
-
-  jiraSetupImgHeaders(args: { jiraCfg: JiraCfg }): void;
-
   backupAppData(args: {
     data: AppDataCompleteLegacy | AppDataComplete;
     maxBackupFiles?: number | null;
@@ -249,6 +243,8 @@ export interface ElectronAPI {
   ): void;
 
   onSwitchTask(listener: (taskId: string) => void): void;
+
+  consumeJiraApi(): JiraElectronApi | null;
 
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 

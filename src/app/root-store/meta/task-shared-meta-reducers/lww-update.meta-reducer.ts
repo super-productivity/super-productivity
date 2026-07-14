@@ -28,6 +28,7 @@ import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
+import { getProjectOrUndefined, repairTaskProjectForLww } from './task-shared-helpers';
 import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
 import { SyncConfig } from '../../../features/config/global-config.model';
 import { LwwUpdateMode } from '../../../op-log/core/operation.types';
@@ -58,9 +59,16 @@ const syncProjectTaskIds = (
   const shouldAddToNewProject =
     !!newProjectId && !newIsSubTask && (oldProjectId !== newProjectId || oldIsSubTask);
 
-  // Remove from old project's taskIds
-  if (shouldRemoveFromOldProject && oldProjectId && projectState.entities[oldProjectId]) {
-    const oldProject = projectState.entities[oldProjectId] as Project;
+  // Remove from old project's taskIds. The id equality check rejects
+  // inherited Object.prototype members that a bare entities[id] lookup
+  // returns truthy for when the id originates from a remote op.
+  const oldProjectCandidate = oldProjectId
+    ? (projectState.entities[oldProjectId] as Project | undefined)
+    : undefined;
+  const oldProject =
+    oldProjectCandidate?.id === oldProjectId ? oldProjectCandidate : undefined;
+
+  if (shouldRemoveFromOldProject && oldProjectId && oldProject) {
     const filteredTaskIds = oldProject.taskIds.filter((id) => id !== taskId);
     const filteredBacklogTaskIds = oldProject.backlogTaskIds.filter(
       (id) => id !== taskId,
@@ -89,9 +97,17 @@ const syncProjectTaskIds = (
     );
   }
 
-  // Add to new project's taskIds
-  if (shouldAddToNewProject && newProjectId && projectState.entities[newProjectId]) {
-    const newProject = projectState.entities[newProjectId] as Project;
+  // Add to the new project's taskIds. Archived projects remain valid owners:
+  // the archive operation can race with this task update during replay.
+  const newProjectCandidate = newProjectId
+    ? (projectState.entities[newProjectId] as Project | undefined)
+    : undefined;
+  const newProject =
+    newProjectCandidate && newProjectCandidate.id === newProjectId
+      ? newProjectCandidate
+      : undefined;
+
+  if (shouldAddToNewProject && newProjectId && newProject) {
     // Only add if not already present
     if (!newProject.taskIds.includes(taskId)) {
       projectState = projectAdapter.updateOne(
@@ -153,8 +169,9 @@ const syncTagTaskIds = (
 
   // Remove task from removed tags' taskIds
   for (const tagId of removedTags) {
-    if (tagState.entities[tagId]) {
-      const tag = tagState.entities[tagId] as Tag;
+    const tagCandidate = tagState.entities[tagId] as Tag | undefined;
+    const tag = tagCandidate?.id === tagId ? tagCandidate : undefined;
+    if (tag) {
       if (tag.taskIds.includes(taskId)) {
         tagState = tagAdapter.updateOne(
           {
@@ -176,8 +193,9 @@ const syncTagTaskIds = (
 
   // Add task to added tags' taskIds
   for (const tagId of addedTags) {
-    if (tagState.entities[tagId]) {
-      const tag = tagState.entities[tagId] as Tag;
+    const tagCandidate = tagState.entities[tagId] as Tag | undefined;
+    const tag = tagCandidate?.id === tagId ? tagCandidate : undefined;
+    if (tag) {
       if (!tag.taskIds.includes(taskId)) {
         tagState = tagAdapter.updateOne(
           {
@@ -307,8 +325,12 @@ const syncParentSubTaskIds = (
   let taskState = state[TASK_FEATURE_NAME];
 
   // Remove from old parent's subTaskIds
-  if (oldParentId && taskState.entities[oldParentId]) {
-    const oldParent = taskState.entities[oldParentId] as Task;
+  const oldParentCandidate = oldParentId
+    ? (taskState.entities[oldParentId] as Task | undefined)
+    : undefined;
+  const oldParent =
+    oldParentCandidate?.id === oldParentId ? oldParentCandidate : undefined;
+  if (oldParentId && oldParent) {
     if (oldParent.subTaskIds.includes(taskId)) {
       taskState = taskAdapter.updateOne(
         {
@@ -328,8 +350,12 @@ const syncParentSubTaskIds = (
   }
 
   // Add to new parent's subTaskIds
-  if (newParentId && taskState.entities[newParentId]) {
-    const newParent = taskState.entities[newParentId] as Task;
+  const newParentCandidate = newParentId
+    ? (taskState.entities[newParentId] as Task | undefined)
+    : undefined;
+  const newParent =
+    newParentCandidate?.id === newParentId ? newParentCandidate : undefined;
+  if (newParentId && newParent) {
     // Only add if not already present
     if (!newParent.subTaskIds.includes(taskId)) {
       taskState = taskAdapter.updateOne(
@@ -372,14 +398,23 @@ const filterOrphanedTaskIdsFromEntityData = (
   entityData: Record<string, unknown>,
   entityType: string,
   rootState: RootState,
+  requiresMatchingProjectMembership: boolean,
 ): Record<string, unknown> => {
   const taskState = rootState[TASK_FEATURE_NAME];
   if (!taskState) return entityData;
-  const existingTaskIds = new Set(taskState.ids as string[]);
+  const projectId = entityData['id'];
   const cleaned = filterTaskIdArraysFromTagOrProjectPayload(
     entityData,
     entityType,
-    (id) => !existingTaskIds.has(id),
+    (id) => {
+      const task = taskState.entities[id] as Task | undefined;
+      if (!task) return true;
+      return (
+        entityType === 'PROJECT' &&
+        requiresMatchingProjectMembership &&
+        (task.projectId !== projectId || !!task.parentId)
+      );
+    },
     {
       warnMessage: `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
       entityId:
@@ -453,6 +488,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       | {
           lwwUpdateMode?: LwwUpdateMode;
           isApplyingFromOtherClient?: boolean;
+          recreatesEntityAfterDelete?: boolean;
         }
       | undefined;
     let entityData: Record<string, unknown> = {};
@@ -463,7 +499,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     // Filter orphaned taskIds/backlogTaskIds for TAG and PROJECT entities
-    entityData = filterOrphanedTaskIdsFromEntityData(entityData, entityType, rootState);
+    entityData = filterOrphanedTaskIdsFromEntityData(
+      entityData,
+      entityType,
+      rootState,
+      actionMeta?.recreatesEntityAfterDelete === true,
+    );
 
     // Singleton entities: replace entire feature state with the winning data
     if (isSingletonEntity(config)) {
@@ -532,12 +573,16 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // set from op.entityId before reaching this reducer. Producers also
     // force the canonical id on-disk. The check below remains as a hard
     // guard for actions arriving with no usable id at all.
-    if (!entityData['id']) {
+    if (typeof entityData['id'] !== 'string' || !entityData['id']) {
       OpLog.warn('lwwUpdateMetaReducer: Entity data has no id');
       return reducer(state, action);
     }
 
     const entityId = entityData['id'] as string;
+    if (Object.prototype.hasOwnProperty.call(Object.prototype, entityId)) {
+      OpLog.warn(`lwwUpdateMetaReducer: Unsafe entity id: ${entityId}`);
+      return reducer(state, action);
+    }
 
     // Sanitize date string fields to prevent corrupted data from sync (#6908)
     if (entityType === 'TASK') {
@@ -561,13 +606,105 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           `lwwUpdateMetaReducer: Stripped virtual TODAY tag from task ${entityId}`,
         );
       }
+      if (
+        actionMeta?.recreatesEntityAfterDelete === true &&
+        actionMeta.lwwUpdateMode === 'patch' &&
+        Array.isArray(entityData['subTaskIds'])
+      ) {
+        const parentId = entityData['id'];
+        const parentProjectId = entityData['projectId'];
+        entityData['subTaskIds'] = entityData['subTaskIds'].filter((id) => {
+          if (typeof id !== 'string') return false;
+          const child = rootState[TASK_FEATURE_NAME].entities[id] as Task | undefined;
+          return child?.parentId === parentId && child.projectId === parentProjectId;
+        });
+      }
     }
 
-    const existingEntity = (
+    const existingEntityCandidate = (
       featureState as unknown as {
         entities?: Record<string, Record<string, unknown>>;
       }
     ).entities?.[entityId];
+    const existingEntity =
+      existingEntityCandidate?.['id'] === entityId ? existingEntityCandidate : undefined;
+
+    if (
+      entityType === 'TASK' &&
+      Object.prototype.hasOwnProperty.call(entityData, 'parentId') &&
+      typeof entityData['parentId'] === 'string' &&
+      Object.prototype.hasOwnProperty.call(Object.prototype, entityData['parentId'])
+    ) {
+      entityData['parentId'] = existingEntity?.parentId;
+    }
+
+    // A remote projectId pointing at a project this client deleted would
+    // orphan an existing task from every project list. Archived projects are
+    // still valid owners: their archive op can race with the task update.
+    // Recreated tasks deliberately keep out-of-order project references so a
+    // later project op can complete the relationship.
+    if (
+      entityType === 'TASK' &&
+      existingEntity &&
+      actionMeta?.recreatesEntityAfterDelete !== true &&
+      Object.prototype.hasOwnProperty.call(entityData, 'projectId')
+    ) {
+      const requestedProjectId = entityData['projectId'];
+      const currentProjectId = existingEntity?.projectId;
+      const fallbackProjectId =
+        typeof currentProjectId === 'string' &&
+        (currentProjectId === '' || getProjectOrUndefined(rootState, currentProjectId))
+          ? currentProjectId
+          : undefined;
+
+      if (requestedProjectId == null) {
+        entityData['projectId'] = undefined;
+      } else if (
+        typeof requestedProjectId !== 'string' ||
+        (requestedProjectId !== '' &&
+          !getProjectOrUndefined(rootState, requestedProjectId))
+      ) {
+        entityData['projectId'] = fallbackProjectId;
+      }
+    }
+
+    // Marked patch rows reconcile relationships after a full replacement. If
+    // pagination/conflict resolution delivers one without that replacement,
+    // it must not synthesize a partial TASK/PROJECT from relationship fields.
+    if (
+      !existingEntity &&
+      actionMeta?.recreatesEntityAfterDelete === true &&
+      actionMeta.lwwUpdateMode === 'patch'
+    ) {
+      OpLog.log(
+        `lwwUpdateMetaReducer: Ignoring delayed ${entityType} relationship patch ${entityId} because the entity is absent`,
+      );
+      return reducer(state, action);
+    }
+
+    // Recreate-after-delete rows can be uploaded independently from the parent
+    // recovery that made them valid. If that project (or subtask parent) is no
+    // longer present, a delayed row must not create an orphan or move an
+    // existing task back underneath the deleted parent.
+    const recreationProjectId = entityData['projectId'];
+    const recreationParentId = entityData['parentId'];
+    const recreationParent =
+      typeof recreationParentId === 'string'
+        ? (rootState[TASK_FEATURE_NAME].entities[recreationParentId] as Task | undefined)
+        : undefined;
+    const hasInvalidRecreationParent =
+      entityType === 'TASK' &&
+      actionMeta?.recreatesEntityAfterDelete === true &&
+      ((typeof recreationProjectId === 'string' &&
+        !rootState[PROJECT_FEATURE_NAME].entities[recreationProjectId]) ||
+        (typeof recreationParentId === 'string' &&
+          (!recreationParent || recreationParent.projectId !== recreationProjectId)));
+    if (hasInvalidRecreationParent) {
+      OpLog.log(
+        `lwwUpdateMetaReducer: Ignoring delayed TASK recreation ${entityId} because its parent relationship is no longer valid`,
+      );
+      return reducer(state, action);
+    }
 
     let updatedFeatureState: unknown;
 
@@ -675,19 +812,61 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     if (entityType === 'TASK' && updatedEntity) {
       // Sync project.taskIds when projectId changes
       const oldProjectId = existingEntity?.projectId as string | undefined;
-      const newProjectId = updatedEntity.projectId as string | undefined;
+      let newProjectId = updatedEntity.projectId as string | undefined;
       const oldIsSubTask = !!existingEntity?.parentId;
       const newParentId = updatedEntity.parentId as string | undefined;
       const newIsSubTask = !!newParentId;
 
-      updatedState = syncProjectTaskIds(
-        updatedState,
-        entityId,
-        oldProjectId,
-        newProjectId,
-        oldIsSubTask,
-        newIsSubTask,
-      );
+      // Subtasks inherit their project from the parent — a snapshot carrying
+      // a diverging projectId (split state from an older client) is corrected
+      // rather than applied.
+      if (newParentId) {
+        const parentCandidate = updatedState[TASK_FEATURE_NAME].entities[newParentId] as
+          | Task
+          | undefined;
+        const parent = parentCandidate?.id === newParentId ? parentCandidate : undefined;
+        if (parent && parent.projectId !== newProjectId) {
+          newProjectId = parent.projectId;
+          updatedState = {
+            ...updatedState,
+            [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+              { id: entityId, changes: { projectId: newProjectId } },
+              updatedState[TASK_FEATURE_NAME],
+            ),
+          };
+        }
+      }
+
+      const meta = actionAny['meta'];
+      const explicitEntityIds =
+        meta &&
+        typeof meta === 'object' &&
+        Array.isArray((meta as { entityIds?: unknown }).entityIds)
+          ? (meta as { entityIds: unknown[] }).entityIds.filter(
+              (id): id is string => typeof id === 'string',
+            )
+          : undefined;
+
+      if (!newIsSubTask) {
+        // Root snapshots repair every project list, even when projectId is
+        // unchanged. New synthetic LWW ops replay their source footprint;
+        // old ops without entityIds retain receiving-state repair behavior.
+        updatedState = repairTaskProjectForLww(
+          updatedState,
+          updatedEntity as unknown as Task,
+          newProjectId,
+          explicitEntityIds,
+        );
+      } else {
+        updatedState = syncProjectTaskIds(
+          updatedState,
+          entityId,
+          oldProjectId,
+          newProjectId,
+          oldIsSubTask,
+          newIsSubTask,
+        );
+      }
 
       // Sync tag.taskIds when tagIds changes
       const oldTagIds = (existingEntity?.tagIds as string[]) || [];

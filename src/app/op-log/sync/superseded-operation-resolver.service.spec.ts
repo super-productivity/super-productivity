@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
-import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import {
+  MixedSourceWrittenOperation,
+  OperationLogStoreService,
+} from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { LockService } from './lock.service';
@@ -44,6 +47,7 @@ describe('SupersededOperationResolverService', () => {
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'markRejected',
+      'appendMixedSourceBatchSkipDuplicates',
       'appendWithVectorClockUpdate',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
@@ -53,6 +57,7 @@ describe('SupersededOperationResolverService', () => {
       'getCurrentEntityState',
       'mergeAndIncrementClocks',
       'createLWWUpdateOp',
+      'createTaskRecreationFollowUpOps',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -66,6 +71,17 @@ describe('SupersededOperationResolverService', () => {
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockOpLogStore.markRejected.and.returnValue(Promise.resolve());
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => {
+      const written: MixedSourceWrittenOperation[] = [];
+      let seq = 1;
+      for (const batch of batches) {
+        for (const op of batch.ops) {
+          await mockOpLogStore.appendWithVectorClockUpdate(op, batch.source);
+          written.push({ seq: seq++, op, source: batch.source });
+        }
+      }
+      return { written, skippedCount: 0 };
+    });
     // Mock lock service to execute the callback immediately
     mockLockService.request.and.callFake(
       (_lockName: string, callback: () => Promise<any>) => callback(),
@@ -91,12 +107,15 @@ describe('SupersededOperationResolverService', () => {
         clientId: string,
         vectorClock: VectorClock,
         timestamp: number,
+        _lwwUpdateMode?: 'replace' | 'patch',
+        entityIds?: string[],
       ) => ({
         id: 'generated-id-' + Math.random().toString(36).substring(7),
         actionType: `[${entityType}] LWW Update` as ActionType,
         opType: OpType.Update,
         entityType,
         entityId,
+        entityIds,
         payload: entityState,
         clientId,
         vectorClock,
@@ -104,6 +123,7 @@ describe('SupersededOperationResolverService', () => {
         schemaVersion: 1,
       }),
     );
+    mockConflictResolutionService.createTaskRecreationFollowUpOps.and.resolveTo([]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -171,10 +191,29 @@ describe('SupersededOperationResolverService', () => {
       // Verify write operations happen inside the lock
       expect(callOrder).toEqual([
         'lock-start',
-        'markRejected',
         'appendWithVectorClockUpdate',
+        'markRejected',
         'lock-end',
       ]);
+    });
+
+    it('keeps superseded rows retryable when the replacement batch fails', async () => {
+      const supersededOp = createMockOperation('op-1', 'TASK', 'task-1', {
+        clientA: 1,
+      });
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Current task',
+      });
+      mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.rejectWith(
+        new Error('batch failed'),
+      );
+
+      await expectAsync(
+        service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]),
+      ).toBeRejectedWithError('batch failed');
+
+      expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
     });
 
     it('should return 0 when supersededOps array is empty', async () => {
@@ -220,6 +259,15 @@ describe('SupersededOperationResolverService', () => {
         { clientA: 5 },
         1000,
       );
+      supersededOp.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp.entityIds = ['task-1', 'subtask-1'];
+      supersededOp.payload = {
+        actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'project-2' } },
+          projectMoveSubTaskIds: ['subtask-1'],
+        },
+        entityChanges: [],
+      };
       const entityState = { id: 'task-1', title: 'Test Task' };
 
       mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -243,9 +291,138 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.opType).toBe(OpType.Update);
       expect(appendedOp.entityType).toBe('TASK');
       expect(appendedOp.entityId).toBe('task-1');
+      expect(appendedOp.entityIds).toEqual(['task-1', 'subtask-1']);
       expect(appendedOp.payload).toEqual(entityState);
       expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
       expect(appendedOp.timestamp).toBe(1000); // Preserved from original
+    });
+
+    it('preserves recreate guards and appends their relationship follow-ups (#8997)', async () => {
+      const supersededOp: Operation = {
+        ...createMockOperation('op-1', 'TASK', 'task-1', { clientA: 5 }, 1_000),
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: {
+            id: 'task-1',
+            projectId: 'project-1',
+            subTaskIds: [],
+          },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+      const replacementOp: Operation = {
+        ...supersededOp,
+        id: 'replacement-task',
+        payload: {
+          actionPayload: {
+            id: 'task-1',
+            projectId: 'project-1',
+            subTaskIds: [],
+          },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      };
+      const projectFollowUp: Operation = {
+        ...replacementOp,
+        id: 'project-follow-up',
+        entityType: 'PROJECT',
+        entityId: 'project-1',
+        actionType: '[PROJECT] LWW Update' as ActionType,
+      };
+      const ordinarySupersededOp = createMockOperation(
+        'op-2',
+        'TAG',
+        'tag-1',
+        { clientA: 6 },
+        2_000,
+      );
+      const ordinaryReplacementOp: Operation = {
+        ...ordinarySupersededOp,
+        id: 'replacement-tag',
+        clientId: TEST_CLIENT_ID,
+      };
+      mockConflictResolutionService.getCurrentEntityState.and.callFake(
+        (entityType: EntityType) =>
+          Promise.resolve(
+            entityType === 'TASK'
+              ? (replacementOp.payload as { actionPayload: unknown }).actionPayload
+              : { id: 'tag-1', title: 'Tag' },
+          ),
+      );
+      mockConflictResolutionService.createLWWUpdateOp.and.callFake((entityType) =>
+        entityType === 'TASK' ? replacementOp : ordinaryReplacementOp,
+      );
+      mockConflictResolutionService.createTaskRecreationFollowUpOps.and.callFake((op) =>
+        Promise.resolve(op.entityType === 'TASK' ? [projectFollowUp] : []),
+      );
+
+      const result = await service.resolveSupersededLocalOps([
+        { opId: supersededOp.id, op: supersededOp },
+        { opId: ordinarySupersededOp.id, op: ordinarySupersededOp },
+      ]);
+
+      expect(result).toBe(2);
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+        1,
+      );
+      const appendedOps = mockOpLogStore.appendWithVectorClockUpdate.calls
+        .allArgs()
+        .map(([op]) => op);
+      expect(
+        (appendedOps[0].payload as { recreatesEntityAfterDelete?: boolean })
+          .recreatesEntityAfterDelete,
+      ).toBeTrue();
+      expect(appendedOps[1]).toBe(projectFollowUp);
+      expect(appendedOps[2]).toBe(ordinaryReplacementOp);
+      expect(
+        mockConflictResolutionService.createTaskRecreationFollowUpOps,
+      ).toHaveBeenCalledWith(appendedOps[0]);
+    });
+
+    it('should not reuse a generic multi-task footprint for an LWW update', async () => {
+      const supersededOp = createMockOperation(
+        'op-1',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      supersededOp.entityIds = ['task-1', 'unrelated-task'];
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Test Task',
+      });
+
+      await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.entityIds).toBeUndefined();
+    });
+
+    it('should preserve a project-move footprint through another LWW replacement', async () => {
+      const supersededOp = createMockOperation(
+        'op-1',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      supersededOp.actionType = '[TASK] LWW Update' as ActionType;
+      supersededOp.entityIds = ['task-1', 'subtask-1'];
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Test Task',
+      });
+
+      await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.entityIds).toEqual(['task-1', 'subtask-1']);
     });
 
     it('should create single merged op for multiple superseded ops on same entity', async () => {
@@ -270,6 +447,20 @@ describe('SupersededOperationResolverService', () => {
         { clientA: 5 },
         1500,
       );
+      supersededOp1.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp1.payload = {
+        actionPayload: {
+          projectMoveSubTaskIds: ['former-subtask'],
+        },
+        entityChanges: [],
+      };
+      supersededOp2.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp2.payload = {
+        actionPayload: {
+          projectMoveSubTaskIds: ['current-subtask'],
+        },
+        entityChanges: [],
+      };
       const entityState = { id: 'task-1', title: 'Latest State' };
 
       mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -293,6 +484,7 @@ describe('SupersededOperationResolverService', () => {
         .args[0] as Operation;
       // Timestamp should be max of all superseded ops (2000)
       expect(appendedOp.timestamp).toBe(2000);
+      expect(appendedOp.entityIds).toEqual(['task-1', 'current-subtask']);
     });
 
     it('should create separate ops for different entities', async () => {
