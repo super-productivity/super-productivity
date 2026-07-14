@@ -14,6 +14,7 @@ import {
   ActionType,
   EntityConflict,
   extractActionPayload,
+  isLwwUpdatePayload,
   OpType,
   Operation,
 } from '../core/operation.types';
@@ -1803,6 +1804,128 @@ describe('ConflictResolutionService', () => {
           .withContext('recovery must skip every trailing id of a concurrent bulk delete')
           .not.toContain('backlog-task-2');
         // The genuinely-present task is still recovered.
+        expect(recreatedIds).toContain('regular-task');
+      });
+
+      it('does not recreate a task whose own conflict a remote delete won (#8997 review)', async () => {
+        // The concurrent task delete arrives as its OWN conflict (this client
+        // had a competing edit that lost LWW), not as a non-conflicting op, so
+        // it is invisible to the nonConflictingOps scan. Project recovery must
+        // still skip it: the delete just won and is applied this batch, so a
+        // recreation would fight a resolution that already stood.
+        const remoteProjectDelete: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-delete',
+            'client-b',
+            1_000,
+            OpType.Delete,
+            'project-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+          entityType: 'PROJECT',
+          payload: {
+            actionPayload: {
+              projectId: 'project-1',
+              allTaskIds: ['regular-task', 'contested-task'],
+              noteIds: [],
+            },
+            entityChanges: [],
+          },
+        };
+        const localProjectEdit: Operation = {
+          ...createOpWithTimestamp(
+            'local-project-edit',
+            'client-a',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        // Task conflict: this client's edit (older) loses to client-c's delete.
+        const localTaskEdit: Operation = {
+          ...createOpWithTimestamp(
+            'local-task-edit',
+            'client-a',
+            500,
+            OpType.Update,
+            'contested-task',
+          ),
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          payload: {
+            actionPayload: { task: { id: 'contested-task', changes: { title: 'Mine' } } },
+            entityChanges: [],
+          },
+        };
+        const remoteTaskDelete: Operation = {
+          ...createOpWithTimestamp(
+            'remote-task-delete',
+            'client-c',
+            3_000,
+            OpType.Delete,
+            'contested-task',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE,
+        };
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'project-1') {
+            return of({
+              id: 'project-1',
+              title: 'Winning project',
+              taskIds: ['regular-task', 'contested-task'],
+              backlogTaskIds: [],
+            });
+          }
+          if (props?.id === 'regular-task') {
+            return of({
+              id: 'regular-task',
+              title: 'Regular task',
+              projectId: 'project-1',
+              subTaskIds: [],
+            });
+          }
+          // Still present in the pre-batch store: client-c's delete is only
+          // applied as this batch resolves.
+          if (props?.id === 'contested-task') {
+            return of({
+              id: 'contested-task',
+              title: 'Contested task',
+              projectId: 'project-1',
+              subTaskIds: [],
+            });
+          }
+          return of(undefined);
+        });
+
+        await service.autoResolveConflictsLWW([
+          {
+            entityType: 'PROJECT',
+            entityId: 'project-1',
+            localOps: [localProjectEdit],
+            remoteOps: [remoteProjectDelete],
+            suggestedResolution: 'manual',
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'contested-task',
+            localOps: [localTaskEdit],
+            remoteOps: [remoteTaskDelete],
+            suggestedResolution: 'manual',
+          },
+        ]);
+
+        const recreatedIds = getMixedLocalOps()
+          .filter(
+            (op) =>
+              op.entityType === 'TASK' &&
+              isLwwUpdatePayload(op.payload) &&
+              op.payload.recreatesEntityAfterDelete === true,
+          )
+          .map(({ entityId }) => entityId);
+        expect(recreatedIds)
+          .withContext('recovery must not recreate a task whose delete just won LWW')
+          .not.toContain('contested-task');
+        // The uncontested task is still recovered.
         expect(recreatedIds).toContain('regular-task');
       });
 

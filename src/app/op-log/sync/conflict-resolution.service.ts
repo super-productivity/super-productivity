@@ -1088,10 +1088,21 @@ export class ConflictResolutionService {
     // archive precedence is untouched.
     //
     // Recovery reads task presence from the pre-batch store, so it is blind to
-    // deletes piggybacked as non-conflicting ops in this same batch. Exclude
-    // those task ids so recovery does not resurrect a task another device is
-    // concurrently deleting (#8997 review).
-    const concurrentlyDeletedTaskIds = this._collectDeletedTaskIds(nonConflictingOps);
+    // deletes applied elsewhere in this same batch. Exclude those task ids so
+    // recovery does not resurrect a task another device is concurrently
+    // deleting (#8997 review). Two sources apply here in the same batch:
+    //   1. deletes piggybacked as non-conflicting ops, and
+    //   2. deletes that won their own LWW conflict (a competing local edit
+    //      lost) — invisible to the nonConflictingOps scan, but just as
+    //      applied, so recovery must not fight a deletion that already won.
+    const remoteDeleteWinnerOps = resolutions
+      .filter((resolution) => resolution.winner === 'remote')
+      .flatMap((resolution) => resolution.conflict.remoteOps)
+      .filter((op) => op.opType === OpType.Delete);
+    const concurrentlyDeletedTaskIds = this._collectDeletedTaskIds([
+      ...nonConflictingOps,
+      ...remoteDeleteWinnerOps,
+    ]);
     for (const resolution of resolutions) {
       if (resolution.winner !== 'local' || !resolution.localWinOp) {
         continue;
