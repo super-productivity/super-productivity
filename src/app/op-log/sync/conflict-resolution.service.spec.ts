@@ -1463,6 +1463,89 @@ describe('ConflictResolutionService', () => {
         expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
       });
 
+      it('recreates cascaded project tasks when a remote deleteProject loses outright (#8997)', async () => {
+        // deleteProject cascade-deletes every task in its payload's allTaskIds.
+        // When it loses to a winning project edit, the PROJECT compensation
+        // alone would resurrect an EMPTY project on every client that applied
+        // the delete — the cascaded tasks need recreate ops too.
+        const remoteProjectDelete: Operation = {
+          ...createOpWithTimestamp('remote-project-delete', 'client-b', 1_000),
+          actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+          opType: OpType.Delete,
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+          payload: {
+            actionPayload: {
+              projectId: 'project-1',
+              allTaskIds: ['task-1', 'sub-1', 'locally-gone'],
+              noteIds: [],
+            },
+            entityChanges: [],
+          },
+        };
+        const localProjectEdit: Operation = {
+          ...createOpWithTimestamp('local-project-edit', 'client-a', 2_000),
+          entityType: 'PROJECT',
+          entityId: 'project-1',
+        };
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'project-1') {
+            return of({
+              id: 'project-1',
+              title: 'Winning project',
+              taskIds: ['task-1'],
+            });
+          }
+          if (props?.id === 'task-1') {
+            return of({ id: 'task-1', title: 'Project task', subTaskIds: ['sub-1'] });
+          }
+          if (props?.id === 'sub-1') {
+            return of({ id: 'sub-1', title: 'Project subtask', parentId: 'task-1' });
+          }
+          // 'locally-gone' was deleted on this device too — must stay deleted.
+          return of(undefined);
+        });
+
+        await service.autoResolveConflictsLWW([
+          {
+            entityType: 'PROJECT',
+            entityId: 'project-1',
+            localOps: [localProjectEdit],
+            remoteOps: [remoteProjectDelete],
+            suggestedResolution: 'manual',
+          },
+        ]);
+
+        const localOps = getMixedLocalOps();
+        expect(localOps.map(({ entityId }) => entityId)).toEqual([
+          'project-1',
+          'task-1',
+          'sub-1',
+        ]);
+        const taskRecreations = localOps.filter((op) => op.entityType === 'TASK');
+        for (const recreationOp of taskRecreations) {
+          expect(
+            (recreationOp.payload as { recreatesEntityAfterDelete?: boolean })
+              .recreatesEntityAfterDelete,
+          )
+            .withContext(`recreate flag on ${recreationOp.entityId}`)
+            .toBeTrue();
+          expect(
+            compareVectorClocks(
+              recreationOp.vectorClock,
+              remoteProjectDelete.vectorClock,
+            ),
+          )
+            .withContext(`clock domination for ${recreationOp.entityId}`)
+            .toBe(VectorClockComparison.GREATER_THAN);
+        }
+        expect(extractActionPayload(taskRecreations[0].payload)['title']).toBe(
+          'Project task',
+        );
+        // Pure loser: nothing applies live.
+        expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
+      });
+
       it('recreates subtasks when every entity of a remote bulk delete loses (#8956)', async () => {
         const remoteMultiOp: Operation = {
           ...createOpWithTimestamp('remote-multi', 'client-b', 1_000),

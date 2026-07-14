@@ -715,12 +715,13 @@ export class ConflictResolutionService {
     // A remote DELETE that loses outright — single-entity, or a bulk delete
     // whose conflicting entities all win locally with no uncontested sibling —
     // never enters the mixed-winner block above, yet its reducer cascade still
-    // removes the winning parent's subtasks wherever the delete IS applied:
+    // removes the winning entity's dependents wherever the delete IS applied:
     // on every client that already synced it, and on this client's own
-    // status-blind hydration replay of the durable loser row. Only the parent
+    // status-blind hydration replay of the durable loser row. Only the winner
     // carries a compensation op, so emit recreate-after-delete snapshots for
-    // its still-present subtasks too (#8956). Archive ops are OpType.Update,
-    // so archive precedence is untouched.
+    // its still-present cascade victims too: a TASK parent's subtasks (#8956)
+    // and a PROJECT's `allTaskIds` (#8997). Archive ops are OpType.Update, so
+    // archive precedence is untouched.
     for (const resolution of resolutions) {
       if (resolution.winner !== 'local' || !resolution.localWinOp) {
         continue;
@@ -737,17 +738,22 @@ export class ConflictResolutionService {
         if (remoteOp.opType !== OpType.Delete || compensatedRemoteOps.has(remoteOp.id)) {
           continue;
         }
-        const subtaskRecreationOps =
-          await this._createSubtaskRecreationOpsForWinningParent(
+        const cascadeRecreationOps = [
+          ...(await this._createSubtaskRecreationOpsForWinningParent(
             parentCompensationOp,
             remoteOp,
-          );
+          )),
+          ...(await this._createTaskRecreationOpsForWinningProject(
+            parentCompensationOp,
+            remoteOp,
+          )),
+        ];
         // Not queued for live apply: the pure loser is never applied live, so
-        // this client's state already holds the subtasks. The rows exist for
-        // upload and for seq-ordered replay after the durable loser.
-        for (const subtaskOp of subtaskRecreationOps) {
-          newLocalWinOps.push(subtaskOp);
-          newLocalWinOpsById.set(subtaskOp.id, subtaskOp);
+        // this client's state already holds the cascade victims. The rows
+        // exist for upload and for seq-ordered replay after the durable loser.
+        for (const recreationOp of cascadeRecreationOps) {
+          newLocalWinOps.push(recreationOp);
+          newLocalWinOpsById.set(recreationOp.id, recreationOp);
         }
       }
     }
@@ -2481,6 +2487,69 @@ export class ConflictResolutionService {
         clientId,
         newClock,
         parentCompensationOp.timestamp,
+      );
+      if (!isLwwUpdatePayload(recreationOp.payload)) {
+        continue;
+      }
+      recreationOps.push(markLwwDeleteRecreation(recreationOp));
+    }
+    return recreationOps;
+  }
+
+  /**
+   * PROJECT analogue of `_createSubtaskRecreationOpsForWinningParent` (#8997):
+   * a `deleteProject` op cascade-deletes every task in its payload's
+   * `allTaskIds`, so when it loses outright to a winning project edit, the
+   * PROJECT compensation alone resurrects an EMPTY project on every client
+   * that applied the delete (and on this client's own status-blind hydration
+   * replay). Emit recreate-after-delete snapshots for each cascaded task
+   * still present locally, with the same proxy-clock tradeoff documented on
+   * the TASK path. Tasks this device deleted itself stay deleted. Notes
+   * (`noteIds`, no NOTE RECREATE_FALLBACK) and archived tasks are outside
+   * LWW compensation — recorded as limitations on #8997.
+   */
+  private async _createTaskRecreationOpsForWinningProject(
+    projectCompensationOp: Operation,
+    remoteDeleteOp: Operation,
+  ): Promise<Operation[]> {
+    if (
+      projectCompensationOp.entityType !== 'PROJECT' ||
+      remoteDeleteOp.entityType !== 'PROJECT' ||
+      !projectCompensationOp.entityId
+    ) {
+      return [];
+    }
+    const allTaskIds = extractActionPayload(remoteDeleteOp.payload)['allTaskIds'];
+    if (!Array.isArray(allTaskIds) || allTaskIds.length === 0) {
+      return [];
+    }
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        'ConflictResolutionService: Cannot recreate winning project tasks - no client ID',
+      );
+      return [];
+    }
+    const recreationOps: Operation[] = [];
+    for (const taskId of allTaskIds) {
+      if (typeof taskId !== 'string') {
+        continue;
+      }
+      const taskState = await this.getCurrentEntityState('TASK' as EntityType, taskId);
+      if (taskState === undefined) {
+        continue;
+      }
+      const newClock = this.mergeAndIncrementClocks(
+        [remoteDeleteOp.vectorClock, projectCompensationOp.vectorClock],
+        clientId,
+      );
+      const recreationOp = this.createLWWUpdateOp(
+        'TASK' as EntityType,
+        taskId,
+        taskState,
+        clientId,
+        newClock,
+        projectCompensationOp.timestamp,
       );
       if (!isLwwUpdatePayload(recreationOp.payload)) {
         continue;
