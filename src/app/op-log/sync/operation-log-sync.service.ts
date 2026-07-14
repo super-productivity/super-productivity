@@ -79,6 +79,8 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { processDeferredActions } from './process-deferred-actions-flush.util';
+import { HydrationStateService } from '../apply/hydration-state.service';
+import { getDeferredActions } from '../capture/operation-capture.meta-reducer';
 
 type RemoteOpsProcessingResult = Awaited<
   ReturnType<RemoteOpsProcessingService['processRemoteOps']>
@@ -179,6 +181,7 @@ export class OperationLogSyncService {
   private syncImportConflictCoordinator = inject(SyncImportConflictCoordinatorService);
   private providerManager = inject(SyncProviderManager);
   private operationApplier = inject(OperationApplierService);
+  private hydrationState = inject(HydrationStateService);
   private injector = inject(Injector);
 
   /**
@@ -610,7 +613,10 @@ export class OperationLogSyncService {
           `OperationLogSyncService: Local vector clock ${hydrationPlan.comparison} remote snapshot — ` +
             'skipping snapshot hydration (local already has all remote data).',
         );
-        // Deliberately do NOT call appendBatchSkipDuplicates(result.newOps).
+        // Deliberately do NOT append operations already represented by the
+        // snapshot. Split files can also return a newer suffix, however, and
+        // snapshot-clock dominance says nothing about that suffix. Apply it
+        // normally before advancing the cursor.
         // VectorClockService.getEntityFrontier() builds per-entity frontiers
         // by iterating the op log in seq order with last-write-wins semantics.
         // Appending historical remote ops at the current tail would regress
@@ -618,21 +624,44 @@ export class OperationLogSyncService {
         // which then lets future remote ops be classified as non-conflicting
         // and silently overwrite local changes.
         //
-        // The trade-off: those ops keep coming back in result.newOps on each
+        // The trade-off: snapshot-included ops keep coming back in result.newOps on each
         // sync until the file's snapshot advances or the user uploads their
         // own snapshot. They are never re-applied to state, because (a) the
         // dominate-check skips state mutation, and (b) the regular hydration
         // path replaces state wholesale from snapshotState, not by replaying
         // individual ops. So the cost is bounded re-download bandwidth, not
         // data corruption.
+        const { postSnapshotOps } = this._partitionSnapshotOps(
+          result.newOps,
+          result.snapshotAppliedOpIds,
+        );
+        let suffixProcessResult: RemoteOpsProcessingResult | undefined;
+        if (postSnapshotOps.length > 0) {
+          suffixProcessResult = await this._processRemoteOpsWithStartupCleanup(
+            postSnapshotOps,
+            undefined,
+            [],
+          );
+          if (suffixProcessResult.blockedByIncompatibleOp) {
+            return { kind: 'blocked_incompatible' };
+          }
+        }
         if (result.latestServerSeq !== undefined) {
           await syncProvider.setLastServerSeq(result.latestServerSeq);
         }
-        return {
-          kind: 'no_new_ops',
-          allOpClocks: result.allOpClocks,
-          snapshotVectorClock: result.snapshotVectorClock,
-        };
+        return suffixProcessResult
+          ? {
+              kind: 'ops_processed',
+              newOpsCount: postSnapshotOps.length,
+              localWinOpsCreated: suffixProcessResult.localWinOpsCreated,
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            }
+          : {
+              kind: 'no_new_ops',
+              allOpClocks: result.allOpClocks,
+              snapshotVectorClock: result.snapshotVectorClock,
+            };
       }
 
       OpLog.normal(
@@ -835,14 +864,20 @@ export class OperationLogSyncService {
         }
       }
 
-      // Hydrate state from snapshot - DON'T create SYNC_IMPORT for file-based bootstrap.
-      // Creating SYNC_IMPORT would trigger "clean slate" semantics that filter concurrent
-      // ops from other clients (via SyncImportFilterService). For normal file-based sync,
-      // we want to merge concurrent work, not discard it.
-      await this.syncHydrationService.hydrateFromRemoteSync(
-        result.snapshotState as Record<string, unknown>,
-        result.snapshotVectorClock,
-        false, // Don't create SYNC_IMPORT for file-based bootstrap
+      const initialUnsyncedOpIds = new Set(unsyncedOps.map((entry) => entry.op.id));
+
+      // Single-file snapshots are current through every returned recent op. Split
+      // snapshots can lag behind sync-ops.json, so only the explicitly-listed
+      // snapshot ops may be recorded as already applied; the remaining suffix
+      // must run through normal remote-op processing before the cursor advances.
+      // An absent list keeps the legacy single-file contract (all ops included).
+      const { snapshotIncludedOps, postSnapshotOps } = this._partitionSnapshotOps(
+        result.newOps,
+        result.snapshotAppliedOpIds,
+      );
+
+      await this.writeFlushService.flushThenRunExclusive(() =>
+        this._hydrateSnapshotExclusive(result, initialUnsyncedOpIds, snapshotIncludedOps),
       );
 
       // Now that the remote snapshot is applied, it's safe to drop the
@@ -851,44 +886,14 @@ export class OperationLogSyncService {
       // so the next attempt can retry.
       await this._discardStartupOps(startupOpIdsToDiscard);
 
-      // Single-file snapshots are current through every returned recent op. Split
-      // snapshots can lag behind sync-ops.json, so only the explicitly-listed
-      // snapshot ops may be recorded as already applied; the remaining suffix
-      // must run through normal remote-op processing before the cursor advances.
-      // An absent list keeps the legacy single-file contract (all ops included).
-      const snapshotAppliedOpIds = result.snapshotAppliedOpIds
-        ? new Set(result.snapshotAppliedOpIds)
-        : null;
-      const snapshotIncludedOps = snapshotAppliedOpIds
-        ? result.newOps.filter((op) => snapshotAppliedOpIds.has(op.id))
-        : result.newOps;
-      const postSnapshotOps = snapshotAppliedOpIds
-        ? result.newOps.filter((op) => !snapshotAppliedOpIds.has(op.id))
-        : [];
-
-      // Record operations already represented by the snapshot so future whole-
-      // file downloads deduplicate them without replaying their effects twice.
-      if (snapshotIncludedOps.length > 0) {
-        const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-          snapshotIncludedOps,
-          'remote',
-        );
-        OpLog.normal(
-          `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +
-            '(prevents duplication on next sync cycle).' +
-            (appendResult.skippedCount > 0
-              ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
-              : ''),
-        );
-      }
-
+      let suffixProcessResult: RemoteOpsProcessingResult | undefined;
       if (postSnapshotOps.length > 0) {
-        const processResult = await this._processRemoteOpsWithStartupCleanup(
+        suffixProcessResult = await this._processRemoteOpsWithStartupCleanup(
           postSnapshotOps,
           undefined,
           [],
         );
-        if (processResult.blockedByIncompatibleOp) {
+        if (suffixProcessResult.blockedByIncompatibleOp) {
           return { kind: 'blocked_incompatible' };
         }
       }
@@ -900,11 +905,19 @@ export class OperationLogSyncService {
 
       OpLog.normal('OperationLogSyncService: Snapshot hydration complete.');
 
-      return {
-        kind: 'snapshot_hydrated',
-        allOpClocks: result.allOpClocks,
-        snapshotVectorClock: result.snapshotVectorClock,
-      };
+      return suffixProcessResult
+        ? {
+            kind: 'ops_processed',
+            newOpsCount: postSnapshotOps.length,
+            localWinOpsCreated: suffixProcessResult.localWinOpsCreated,
+            allOpClocks: result.allOpClocks,
+            snapshotVectorClock: result.snapshotVectorClock,
+          }
+        : {
+            kind: 'snapshot_hydrated',
+            allOpClocks: result.allOpClocks,
+            snapshotVectorClock: result.snapshotVectorClock,
+          };
     }
 
     if (result.newOps.length === 0) {
@@ -1249,6 +1262,188 @@ export class OperationLogSyncService {
     }
   }
 
+  private _partitionSnapshotOps(
+    ops: Operation[],
+    snapshotAppliedOpIds: string[] | undefined,
+  ): { snapshotIncludedOps: Operation[]; postSnapshotOps: Operation[] } {
+    if (snapshotAppliedOpIds === undefined) {
+      return { snapshotIncludedOps: ops, postSnapshotOps: [] };
+    }
+    const includedIds = new Set(snapshotAppliedOpIds);
+    return {
+      snapshotIncludedOps: ops.filter((op) => includedIds.has(op.id)),
+      postSnapshotOps: ops.filter((op) => !includedIds.has(op.id)),
+    };
+  }
+
+  /**
+   * Body of the exclusive file-snapshot hydration section: hydrates the remote
+   * snapshot while user actions are deferred, persists the buffered intents on
+   * top of it, and replays their archive side effects. Runs inside
+   * `writeFlushService.flushThenRunExclusive` — no other op-log writer can
+   * interleave.
+   */
+  private async _hydrateSnapshotExclusive(
+    result: {
+      snapshotState?: unknown;
+      snapshotVectorClock?: Record<string, number>;
+      remoteLastModified?: number;
+    },
+    initialUnsyncedOpIds: Set<string>,
+    snapshotIncludedOps: Operation[],
+  ): Promise<void> {
+    let deferredActionsOverwrittenBySnapshot: ReturnType<typeof getDeferredActions> = [];
+    let didReplaceArchive = false;
+    let didCommitStateLoad = false;
+    let hydrationFailed = false;
+    let hydrationError: unknown;
+    let isRemoteApplyWindowOpen = true;
+    // Keep capture in deferred mode from the last pre-hydration durability
+    // check through the snapshot dispatch. Otherwise an action can be
+    // persisted against the old state and then silently overwritten by
+    // loadAllData while this async hydration is in progress.
+    this.hydrationState.startApplyingRemoteOps();
+    try {
+      try {
+        const pendingAtHydrationCutoff = await this.opLogStore.getUnsynced();
+        const lateDurableOps = pendingAtHydrationCutoff.filter(
+          (entry) => !initialUnsyncedOpIds.has(entry.op.id),
+        );
+        if (lateDurableOps.length > 0) {
+          const lastSyncedVectorClock =
+            (await this.vectorClockService.getSnapshotVectorClock()) ?? null;
+          throw new LocalDataConflictError(
+            pendingAtHydrationCutoff.length,
+            result.snapshotState as Record<string, unknown>,
+            result.snapshotVectorClock,
+            lastSyncedVectorClock,
+            result.remoteLastModified,
+          );
+        }
+
+        // Hydrate state from snapshot - DON'T create SYNC_IMPORT for file-based
+        // bootstrap. Creating it would trigger clean-slate filtering of concurrent
+        // ops from other clients.
+        await this.syncHydrationService.hydrateFromRemoteSync(
+          result.snapshotState as Record<string, unknown>,
+          result.snapshotVectorClock,
+          false,
+          undefined,
+          {
+            snapshotIncludedOps,
+            // Capture only actions that ran on the old state. Actions emitted
+            // by loadAllData effects run after the snapshot reducer and are
+            // already valid on top of the new state, so replaying those would
+            // double-apply additive reducers.
+            beforeStateLoad: () => {
+              deferredActionsOverwrittenBySnapshot = getDeferredActions();
+            },
+            afterStateLoad: () => {
+              didCommitStateLoad = true;
+            },
+            afterArchiveReplacement: () => {
+              didReplaceArchive = true;
+            },
+          },
+        );
+      } catch (error) {
+        hydrationFailed = true;
+        hydrationError = error;
+      }
+
+      // The file snapshot baseline transaction either committed state, clock,
+      // archives, and included remote ops together or left the old baseline
+      // intact. Deferred intents therefore always drain against a complete
+      // frontier, including when hydration failed before live-state dispatch.
+      await this._processSnapshotDeferredActionsWithRetry();
+
+      if (didCommitStateLoad) {
+        // Persistent actions dispatched before loadAllData already ran once on
+        // the old NgRx state. Re-dispatch remote-marked clones synchronously on
+        // top of the snapshot without capturing a second operation.
+        for (const action of deferredActionsOverwrittenBySnapshot) {
+          this.store.dispatch({
+            ...action,
+            meta: {
+              ...action.meta,
+              isRemote: true,
+            },
+          });
+        }
+      }
+
+      if (didReplaceArchive) {
+        // Hydration also replaces archive stores. Re-run archive side effects
+        // for every local intent created since the cutoff, in durable seq order.
+        // Keep looping until both the deferred queue and durable archive work
+        // are empty. The final queue check and remote-window close are
+        // synchronous, so an action cannot land in the handoff gap.
+        const restoredLocalOpIds = new Set(initialUnsyncedOpIds);
+        while (true) {
+          while (getDeferredActions().length > 0) {
+            await this._processSnapshotDeferredActionsWithRetry();
+          }
+
+          const localOpsNeedingArchiveRestore = (await this.opLogStore.getUnsynced())
+            .filter((entry) => !restoredLocalOpIds.has(entry.op.id))
+            .sort((a, b) => a.seq - b.seq)
+            .map((entry) => entry.op);
+          if (localOpsNeedingArchiveRestore.length === 0) {
+            if (getDeferredActions().length > 0) continue;
+            this.hydrationState.endApplyingRemoteOps();
+            isRemoteApplyWindowOpen = false;
+            break;
+          }
+
+          const applyResult = await this.operationApplier.applyOperations(
+            localOpsNeedingArchiveRestore,
+            {
+              isLocalHydration: false,
+              skipDeferredLocalActions: true,
+              skipReducerDispatch: true,
+              remoteApplyWindowAlreadyOpen: true,
+            },
+          );
+          if (
+            applyResult.failedOp ||
+            applyResult.appliedOps.length !== localOpsNeedingArchiveRestore.length
+          ) {
+            throw new Error(
+              'Snapshot hydration incomplete: local archive changes could not be restored.',
+            );
+          }
+          for (const op of localOpsNeedingArchiveRestore) {
+            restoredLocalOpIds.add(op.id);
+          }
+        }
+      } else {
+        while (getDeferredActions().length > 0) {
+          await this._processSnapshotDeferredActionsWithRetry();
+        }
+        this.hydrationState.endApplyingRemoteOps();
+        isRemoteApplyWindowOpen = false;
+      }
+
+      if (hydrationFailed) throw hydrationError;
+    } finally {
+      if (isRemoteApplyWindowOpen) {
+        this.hydrationState.endApplyingRemoteOps();
+      }
+    }
+  }
+
+  private async _processSnapshotDeferredActionsWithRetry(): Promise<void> {
+    try {
+      await processDeferredActions(this.injector, true);
+    } catch (error) {
+      OpLog.warn(
+        'OperationLogSyncService: deferred snapshot action drain failed; retrying once',
+        { name: (error as Error | undefined)?.name },
+      );
+      await processDeferredActions(this.injector, true);
+    }
+  }
+
   private async _discardStartupOpsIfFullStateCommitted(
     fullStateOpId: string | undefined,
     startupOpIds: string[],
@@ -1521,7 +1716,24 @@ export class OperationLogSyncService {
       throw new Error('USE_REMOTE aborted: remote returned no data to rebuild from.');
     }
 
-    const migratedRemoteOps = this._preflightRemoteOperations(result.newOps);
+    let migratedRemoteOps: Operation[];
+    let migratedSnapshotIncludedOps: Operation[] = [];
+    let migratedPostSnapshotOps: Operation[] = [];
+    if (hasSnapshotState && result.providerMode === 'fileSnapshotOps') {
+      const snapshotOps = this._partitionSnapshotOps(
+        result.newOps,
+        result.snapshotAppliedOpIds,
+      );
+      migratedSnapshotIncludedOps = this._preflightRemoteOperations(
+        snapshotOps.snapshotIncludedOps,
+      );
+      migratedPostSnapshotOps = this._preflightRemoteOperations(
+        snapshotOps.postSnapshotOps,
+      );
+      migratedRemoteOps = [...migratedSnapshotIncludedOps, ...migratedPostSnapshotOps];
+    } else {
+      migratedRemoteOps = this._preflightRemoteOperations(result.newOps);
+    }
 
     const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
     const localOnlySyncSettings: LocalOnlySyncSettings = {
@@ -1666,11 +1878,11 @@ export class OperationLogSyncService {
           }
 
           // The provider cursor lives outside SUP_OPS, so it cannot join the IDB
-          // transaction. Reset it first: a crash/failure before the transaction
-          // merely causes a safe re-download onto intact local state, while a
-          // commit can never become visible with a stale cursor that skips the
-          // remote history required to rebuild the baseline.
-          await syncProvider.setLastServerSeq(0);
+          // transaction. Do not reset it eagerly: for file adapters that call is
+          // also the durable-apply acknowledgement for the staged download. The
+          // transaction stores a raw-rebuild-incomplete marker atomically with
+          // the replacement, and crash recovery always re-downloads from seq 0;
+          // the cursor is therefore advanced only after replay/hydration succeeds.
           await this.opLogStore.runRemoteStateReplacement({
             baselineState,
             vectorClock: rebuiltClock,
@@ -1707,13 +1919,11 @@ export class OperationLogSyncService {
               false, // Don't create SYNC_IMPORT
             );
 
-            // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
-            // Same rationale as downloadRemoteOps: file-based providers return ALL
-            // recentOps on every download and rely on getAppliedOpIds() to filter them.
-            if (migratedRemoteOps.length > 0) {
-              const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-                migratedRemoteOps,
-                'remote',
+            // Record only operations already represented by the snapshot. A
+            // split-file suffix must still be dispatched on top of that state.
+            if (migratedSnapshotIncludedOps.length > 0) {
+              const appendResult = await this.opLogStore.appendSnapshotIncludedOps(
+                migratedSnapshotIncludedOps,
               );
               OpLog.normal(
                 `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +
@@ -1722,6 +1932,22 @@ export class OperationLogSyncService {
                     ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
                     : ''),
               );
+            }
+
+            if (migratedPostSnapshotOps.length > 0) {
+              const processResult =
+                await this.remoteOpsProcessingService.processRemoteOps(
+                  migratedPostSnapshotOps,
+                  {
+                    skipConflictDetection: true,
+                    callerHoldsOperationLogLock: true,
+                  },
+                );
+              if (processResult.blockedByIncompatibleOp) {
+                throw new Error(
+                  'USE_REMOTE incomplete: a post-snapshot op failed schema migration during replay.',
+                );
+              }
             }
 
             await this._restorePreservedLocalOps(preservedLocalOps);
