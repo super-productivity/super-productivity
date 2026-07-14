@@ -1137,9 +1137,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Finds the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, or REPAIR)
    * in the local operation log.
    *
-   * This is used to filter incoming ops - any operation with a UUIDv7 timestamp
-   * BEFORE the latest full-state op should be discarded, as it references state
-   * that no longer exists.
+   * This is used to filter incoming ops against the last durably applied
+   * full-state baseline. Rejected full-state ops are skipped because they were
+   * never established remotely and must not invalidate later downloads.
    *
    * Convenience wrapper over {@link getLatestFullStateOpEntry} returning only the op.
    *
@@ -1162,39 +1162,67 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * - Remote/synced imports → silently filter old ops (already accepted)
    *
    * Uses the persistent full-state metadata pointer. Existing databases rebuild
-   * that metadata once on first read, then future calls are O(1).
+   * that metadata once on first read. The normal case reads the metadata and
+   * its latest op; if that op was rejected, older refs are checked until an
+   * active baseline is found.
    *
    * @returns The latest full-state operation entry, or undefined if none exists
    */
   async getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
+    return this._getLatestFullStateOpEntryMatching((stored) => !stored.rejectedAt);
+  }
+
+  /**
+   * Finds the newest rejected local full-state boundary.
+   *
+   * Later incremental operations may depend on a baseline the server never
+   * accepted. Rejected remote full-state ops are conflict-resolution history,
+   * not upload barriers. A stale repair is replaced by a newer active repair,
+   * whose greater local sequence releases this barrier.
+   */
+  async getLatestRejectedFullStateOpEntry(): Promise<OperationLogEntry | undefined> {
+    return this._getLatestFullStateOpEntryMatching(
+      (stored) => stored.source === 'local' && !!stored.rejectedAt,
+    );
+  }
+
+  private async _getLatestFullStateOpEntryMatching(
+    matches: (stored: StoredOperationLogEntry) => boolean,
+  ): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
 
+    const findLatest = async (
+      meta: FullStateOpsMetaEntry,
+    ): Promise<{ entry?: OperationLogEntry; hasStaleRef: boolean }> => {
+      let hasStaleRef = false;
+      const refsNewestFirst = [...meta.refs].sort((a, b) => b.seq - a.seq);
+      for (const ref of refsNewestFirst) {
+        const stored = await this._adapter.get<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          ref.seq,
+        );
+        if (
+          !stored ||
+          getOpId(stored.op) !== ref.opId ||
+          !isFullStateOpType(getStoredOpType(stored.op))
+        ) {
+          hasStaleRef = true;
+          continue;
+        }
+        if (matches(stored)) {
+          return { entry: decodeStoredEntry(stored), hasStaleRef };
+        }
+      }
+      return { hasStaleRef };
+    };
+
     const meta = await this._getFullStateOpsMetaOrRebuild();
-    if (!meta.latest) {
-      return undefined;
+    const firstRead = await findLatest(meta);
+    if (firstRead.entry || !firstRead.hasStaleRef) {
+      return firstRead.entry;
     }
 
-    const stored = await this._adapter.get<StoredOperationLogEntry>(
-      STORE_NAMES.OPS,
-      meta.latest.seq,
-    );
-    if (
-      stored &&
-      getOpId(stored.op) === meta.latest.opId &&
-      isFullStateOpType(getStoredOpType(stored.op))
-    ) {
-      return decodeStoredEntry(stored);
-    }
-
-    const rebuiltMeta = await this._rebuildFullStateOpsMeta();
-    if (!rebuiltMeta.latest) {
-      return undefined;
-    }
-    const rebuiltStored = await this._adapter.get<StoredOperationLogEntry>(
-      STORE_NAMES.OPS,
-      rebuiltMeta.latest.seq,
-    );
-    return rebuiltStored ? decodeStoredEntry(rebuiltStored) : undefined;
+    return (await findLatest(await this._rebuildFullStateOpsMeta())).entry;
   }
 
   /**
@@ -1222,7 +1250,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
    * 2. Client B uploads new SYNC_IMPORT
    * 3. Client A downloads and stores B's SYNC_IMPORT
-   * 4. Without clearing, getLatestFullStateOpEntry might return X's old import (if newer by UUIDv7)
+   * 4. Clearing keeps only the newly committed baseline and bounds future metadata reads
    * 5. New operations would appear CONCURRENT with X's import and get filtered
    *
    * @param excludeIds - IDs of operations to NOT delete (typically the newly stored import)
@@ -2410,6 +2438,67 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     } catch (e) {
       this._handleAppendError(e);
     }
+  }
+
+  /**
+   * Atomically retires a stale local REPAIR and installs its rebased replacement.
+   * Keeping the rejection marker, replacement op, vector clock, and state cache in
+   * one transaction prevents a crash from leaving the repaired state without an
+   * uploadable full-state boundary.
+   */
+  async replaceRejectedRepair(opts: {
+    staleRepairOpId: string;
+    replacementOp: Operation;
+    repairedState: unknown;
+  }): Promise<number> {
+    await this._ensureInit();
+
+    const { staleRepairOpId, replacementOp, repairedState } = opts;
+    const seq = await this._adapter.transaction(
+      [
+        STORE_NAMES.OPS,
+        STORE_NAMES.VECTOR_CLOCK,
+        STORE_NAMES.META,
+        STORE_NAMES.STATE_CACHE,
+      ],
+      'readwrite',
+      async (tx) => {
+        const staleEntry = await tx.getFromIndex<StoredOperationLogEntry>(
+          STORE_NAMES.OPS,
+          OPS_INDEXES.BY_ID,
+          staleRepairOpId,
+        );
+        if (!staleEntry) {
+          throw new Error(`Cannot rebase missing REPAIR operation ${staleRepairOpId}`);
+        }
+
+        staleEntry.rejectedAt = Date.now();
+        await tx.put(STORE_NAMES.OPS, staleEntry);
+
+        const replacementEntry = this._buildStoredEntry(replacementOp, 'local');
+        const replacementSeq = await tx.add(STORE_NAMES.OPS, replacementEntry);
+        await this._recordFullStateOpInTx(tx, replacementEntry.op, replacementSeq);
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          { clock: replacementOp.vectorClock, lastUpdate: Date.now() },
+          SINGLETON_KEY,
+        );
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          id: SINGLETON_KEY,
+          state: repairedState,
+          lastAppliedOpSeq: replacementSeq,
+          vectorClock: replacementOp.vectorClock,
+          compactedAt: Date.now(),
+          schemaVersion: replacementOp.schemaVersion,
+        });
+
+        return replacementSeq;
+      },
+    );
+
+    this._vectorClockCache = replacementOp.vectorClock;
+    this._invalidateUnsyncedCache();
+    return seq;
   }
 
   /**

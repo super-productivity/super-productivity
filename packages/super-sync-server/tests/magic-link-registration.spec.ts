@@ -25,6 +25,15 @@ vi.mock('../src/db', () => {
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
+    passkey: {
+      create: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    pendingPasskeyRegistration: {
+      findUnique: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   };
   return { prisma: mockPrisma };
 });
@@ -75,6 +84,7 @@ import { Prisma } from '@prisma/client';
 import {
   registerWithMagicLink,
   requestLoginMagicLink,
+  verifyEmail,
   verifyLoginMagicLink,
 } from '../src/auth';
 
@@ -98,6 +108,15 @@ describe('Magic Link Registration', () => {
       delete: Mock;
       deleteMany: Mock;
     };
+    passkey: {
+      create: Mock;
+      deleteMany: Mock;
+    };
+    pendingPasskeyRegistration: {
+      findUnique: Mock;
+      deleteMany: Mock;
+    };
+    $transaction: Mock;
   };
 
   const mockSendVerificationEmail = sendVerificationEmail as Mock;
@@ -105,6 +124,12 @@ describe('Magic Link Registration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof mockPrisma) => Promise<unknown>) =>
+        callback(mockPrisma),
+    );
   });
 
   describe('New user registration', () => {
@@ -200,8 +225,6 @@ describe('Magic Link Registration', () => {
         isVerified: 0,
         verificationResendCount: 2,
       });
-      mockPrisma.user.update.mockResolvedValue({});
-
       const result = await registerWithMagicLink(testEmail, Date.now());
 
       expect(result).toEqual(registrationResponse);
@@ -211,9 +234,9 @@ describe('Magic Link Registration', () => {
         testEmail,
         expect.any(String),
       );
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 1 },
+          where: expect.objectContaining({ id: 1, isVerified: 0 }),
           data: expect.objectContaining({
             verificationToken: expect.any(String),
             verificationTokenExpiresAt: expect.any(BigInt),
@@ -235,29 +258,24 @@ describe('Magic Link Registration', () => {
 
       expect(result).toEqual(registrationResponse);
       expect(mockSendVerificationEmail).not.toHaveBeenCalled();
-      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
-  describe('Email failure cleanup', () => {
-    it('should delete newly created user when email sending fails', async () => {
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(null) // Initial lookup: no existing user
-        .mockResolvedValueOnce({ id: 1, email: testEmail, isVerified: 0 }); // Cleanup lookup
+  describe('Email failure handling', () => {
+    it('should retain a newly created user when email sending fails', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.user.create.mockResolvedValue({
         id: 1,
         email: testEmail,
         isVerified: 0,
       });
       mockSendVerificationEmail.mockResolvedValueOnce(false);
-      mockPrisma.user.deleteMany.mockResolvedValue({ count: 1 });
 
       const result = await registerWithMagicLink(testEmail, Date.now());
 
       expect(result).toEqual(registrationResponse);
-      expect(mockPrisma.user.deleteMany).toHaveBeenCalledWith({
-        where: { email: testEmail, isVerified: 0 },
-      });
+      expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should NOT delete or update pre-existing unverified user when email sending fails', async () => {
@@ -277,6 +295,54 @@ describe('Magic Link Registration', () => {
       expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
       // Should NOT have updated the token (email sent before DB update)
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Email verification', () => {
+    it('should activate only the passkey bound to the supplied token', async () => {
+      mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue({
+        userId: 1,
+        verificationToken: 'pending-token',
+        verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
+        credentialId: Buffer.from('owner-credential'),
+        publicKey: Buffer.from('owner-public-key'),
+        counter: 0n,
+        transports: '["internal"]',
+      });
+
+      await verifyEmail('pending-token');
+
+      expect(mockPrisma.passkey.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+      });
+      expect(mockPrisma.passkey.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 1,
+          credentialId: Buffer.from('owner-credential'),
+        }),
+      });
+      expect(mockPrisma.pendingPasskeyRegistration.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+      });
+    });
+
+    it('should not activate passkeys when a magic-link token verifies the email', async () => {
+      const token = 'legacy-or-current-magic-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 1,
+        verificationToken: token,
+        verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      await verifyEmail(token);
+
+      expect(mockPrisma.passkey.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+      });
+      expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
+      expect(mockPrisma.pendingPasskeyRegistration.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+      });
     });
   });
 

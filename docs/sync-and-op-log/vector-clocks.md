@@ -247,11 +247,12 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
 
 Implemented in `src/app/op-log/sync/sync-import-filter.service.ts`:
 
-1. **Find the latest full-state op** — check current batch AND local store (via `getLatestFullStateOpEntry()`), keep the one with the latest UUIDv7 ID
+1. **Find the latest full-state op** — the last full-state op in the downloaded batch wins (server apply order); otherwise use the non-rejected local full-state entry with the greatest local sequence. UUIDv7 IDs are identities, not causal clocks, because a device clock can move backwards.
 2. For each non-full-state operation in the batch:
    - Compare `op.vectorClock` vs import clock
    - `GREATER_THAN` or `EQUAL` → **keep**
    - `CONCURRENT` + same client as import + higher counter → **keep** (same-client check)
+   - `CONCURRENT` against automatic `REPAIR` → **keep and replay after the repair boundary**
    - Otherwise → **filter**
 
 ### Same-Client Check

@@ -756,10 +756,63 @@ describe('OperationLogStoreService', () => {
       )._adapter;
       spyOn(adapter, 'iterate').and.callThrough();
 
-      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(
-        latestExistingImport.id,
-      );
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(lowerNewImport.id);
       expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a rejected full-state op when choosing the active baseline', async () => {
+      const priorImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000051',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000052',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(priorImport, 'remote');
+      await service.append(rejectedRepair);
+      await service.markRejected([rejectedRepair.id]);
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+    });
+
+    it('should expose the latest rejected local full-state operation as an upload barrier', async () => {
+      const rejectedImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000053',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000054',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRemoteImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000055',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(rejectedImport);
+      await service.append(rejectedRepair);
+      await service.append(rejectedRemoteImport, 'remote');
+      await service.markRejected([
+        rejectedImport.id,
+        rejectedRepair.id,
+        rejectedRemoteImport.id,
+      ]);
+
+      expect((await service.getLatestRejectedFullStateOpEntry())?.op.id).toBe(
+        rejectedRepair.id,
+      );
     });
 
     it('should rebuild malformed metadata instead of throwing', async () => {
@@ -3279,6 +3332,58 @@ describe('OperationLogStoreService', () => {
       const clock = await service.getVectorClock();
       expect(clock!.testClient).toBeGreaterThanOrEqual(1);
       expect(clock!.testClient).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe('replaceRejectedRepair', () => {
+    it('should reject the stale repair and append its replacement atomically', async () => {
+      const staleRepair = createTestOperation({
+        id: 'stale-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      await service.append(staleRepair);
+      const repairedState = { task: { ids: [], entities: {} } };
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { appDataComplete: repairedState },
+        vectorClock: { testClient: 2 },
+      });
+
+      const seq = await service.replaceRejectedRepair({
+        staleRepairOpId: staleRepair.id,
+        replacementOp: replacement,
+        repairedState,
+      });
+
+      expect((await service.getOpById(staleRepair.id))?.rejectedAt).toBeDefined();
+      expect((await service.getOpById(replacement.id))?.seq).toBe(seq);
+      expect((await service.loadStateCache())?.state).toEqual(repairedState);
+      expect(await service.getVectorClock()).toEqual(replacement.vectorClock);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(replacement.id);
+    });
+
+    it('should abort without appending when the stale repair is missing', async () => {
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+
+      await expectAsync(
+        service.replaceRejectedRepair({
+          staleRepairOpId: 'missing-repair',
+          replacementOp: replacement,
+          repairedState: {},
+        }),
+      ).toBeRejectedWithError(/missing-repair/);
+
+      expect(await service.getOpById(replacement.id)).toBeUndefined();
     });
   });
 

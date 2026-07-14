@@ -315,7 +315,8 @@ export const isSameDuplicateOperation = (
       maxClockDriftMs,
     ) &&
     existingOp.isPayloadEncrypted === incomingEncrypted &&
-    existingOp.syncImportReason === (op.syncImportReason ?? null)
+    existingOp.syncImportReason === (op.syncImportReason ?? null) &&
+    existingOp.repairBaseServerSeq === (op.repairBaseServerSeq ?? null)
   );
 };
 
@@ -343,7 +344,8 @@ export const isSameIncomingOperation = (
     first.schemaVersion === second.schemaVersion &&
     firstOriginalTimestamp === secondOriginalTimestamp &&
     (first.isPayloadEncrypted ?? false) === (second.isPayloadEncrypted ?? false) &&
-    (first.syncImportReason ?? null) === (second.syncImportReason ?? null)
+    (first.syncImportReason ?? null) === (second.syncImportReason ?? null) &&
+    (first.repairBaseServerSeq ?? null) === (second.repairBaseServerSeq ?? null)
   );
 };
 

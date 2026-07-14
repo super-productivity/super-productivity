@@ -92,6 +92,7 @@ export interface SyncOperation {
   schemaVersion: number;
   isPayloadEncrypted?: boolean;
   syncImportReason?: string;
+  repairBaseServerSeq?: number;
 }
 
 export interface ServerSyncOperation {
@@ -123,6 +124,9 @@ export interface OpDownloadResponseBase {
   gapDetected?: boolean;
   snapshotVectorClock?: VectorClock;
   serverTime?: number;
+  capabilities?: {
+    causalRepairSnapshots?: true;
+  };
 }
 
 export interface SuperSyncOpDownloadResponse extends OpDownloadResponseBase {
@@ -146,6 +150,7 @@ export interface SnapshotUploadResponse {
   accepted: boolean;
   serverSeq?: number;
   error?: string;
+  errorCode?: string;
 }
 
 export interface OperationSyncCapable<
@@ -178,6 +183,8 @@ export interface OperationSyncCapable<
   ): Promise<OpDownloadResponseForMode<M>>;
   getLastServerSeq(): Promise<number>;
   setLastServerSeq(seq: number): Promise<void>;
+  /** True only after this provider has observed an explicit server capability. */
+  supportsCausalRepairSnapshots?(): boolean;
   uploadSnapshot(
     state: unknown,
     clientId: string,
@@ -189,6 +196,7 @@ export interface OperationSyncCapable<
     isCleanSlate?: boolean,
     snapshotOpType?: TRestorePointType,
     syncImportReason?: string,
+    repairBaseServerSeq?: number,
   ): Promise<SnapshotUploadResponse>;
   deleteAllData(): Promise<{ success: boolean }>;
   getEncryptKey?(): Promise<string | undefined>;

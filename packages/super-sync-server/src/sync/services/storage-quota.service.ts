@@ -12,6 +12,7 @@ import { prisma } from '../../db';
 import { Logger } from '../../logger';
 import { parsePositiveIntegerEnv } from '../../util/env';
 import { APPROX_BYTES_PER_OP } from '../sync.const';
+import { CAUSAL_FULL_STATE_OPERATION_WHERE } from '../sync.types';
 
 /**
  * Default storage quota per user in bytes (100MB).
@@ -569,7 +570,7 @@ export class StorageQuotaService {
     const restorePoints = await prisma.operation.findMany({
       where: {
         userId,
-        opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+        ...CAUSAL_FULL_STATE_OPERATION_WHERE,
       },
       orderBy: { serverSeq: 'asc' },
       select: { serverSeq: true, opType: true },
@@ -775,7 +776,7 @@ export class StorageQuotaService {
       const restorePoints = await prisma.operation.findMany({
         where: {
           userId,
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          ...CAUSAL_FULL_STATE_OPERATION_WHERE,
         },
         orderBy: { serverSeq: 'asc' },
         select: { serverSeq: true },

@@ -36,6 +36,7 @@ describe('ImmediateUploadService', () => {
       hasMorePiggyback: boolean;
       rejectedOps: RejectedOpInfo[];
       encryptionRequiredKeyMissing: boolean;
+      blockedByRejectedFullState: boolean;
     }> = {},
   ): {
     kind: 'completed';
@@ -46,6 +47,7 @@ describe('ImmediateUploadService', () => {
     hasMorePiggyback: boolean;
     rejectedOps: RejectedOpInfo[];
     encryptionRequiredKeyMissing?: boolean;
+    blockedByRejectedFullState?: boolean;
   } => ({
     kind: 'completed',
     uploadedCount: 0,
@@ -171,6 +173,23 @@ describe('ImmediateUploadService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     }));
 
+    it('should report ERROR when the initial upload is blocked by a rejected full-state boundary', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.resolveTo(
+        completedResult({
+          uploadedCount: 0,
+          blockedByRejectedFullState: true,
+        }),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
     it('should report incomplete remote application as a sticky translated error', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.rejectWith(
         new IncompleteRemoteOperationsError(new Error('archive failed')),
@@ -252,6 +271,26 @@ describe('ImmediateUploadService', () => {
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
         'UNKNOWN_OR_CHANGED',
       );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
+    it('should report ERROR when a local-win follow-up reaches a rejected full-state barrier', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve(completedResult({ uploadedCount: 1, localWinOpsCreated: 1 })),
+        Promise.resolve(
+          completedResult({
+            uploadedCount: 0,
+            blockedByRejectedFullState: true,
+          }),
+        ),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     }));
 

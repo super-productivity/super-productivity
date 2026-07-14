@@ -99,6 +99,7 @@ export class RemoteOpsProcessingService {
     options?: {
       skipConflictDetection?: boolean;
       callerHoldsOperationLogLock?: boolean;
+      ignoredLocalFullStateOpIds?: readonly string[];
       /**
        * Final full-state conflict check. Runs with the operation-log lock held,
        * immediately before the destructive reducer application. Returning false
@@ -236,7 +237,9 @@ export class RemoteOpsProcessingService {
     // This also checks the LOCAL STORE for imports downloaded in previous sync cycles.
     // ─────────────────────────────────────────────────────────────────────────
     const { validOps, invalidatedOps, filteringImport, isLocalUnsyncedImport } =
-      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps);
+      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps, {
+        ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+      });
 
     if (invalidatedOps.length > 0) {
       OpLog.warn(

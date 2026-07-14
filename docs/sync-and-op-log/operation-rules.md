@@ -86,6 +86,30 @@ This document establishes the core rules and principles for designing the Operat
 - **Rule:** Use specific `OpType`s (`CRT`, `UPD`, `DEL`, `MOV`) rather than a generic `CHANGE`.
 - **Reasoning:** Specific types allow for smarter conflict resolution and UI feedback (e.g., "Task was deleted remotely" vs "Task was moved").
 
+### 2.7 Causal Automatic Repair
+
+- **Rule:** A new `REPAIR` snapshot sent to SuperSync must carry a top-level
+  `repairBaseServerSeq` equal to the server cursor included in the repaired state.
+- **Server acceptance:** The server checks the base before quota cleanup and again
+  while holding the `user_sync_state.lastSeq` row lock in the upload transaction.
+  A mismatch returns `REPAIR_STALE`; it must not prune history or consume quota.
+- **Replay:** Operations at or below an accepted causal repair's base are already
+  represented by its snapshot and must not be replayed. Concurrent operations that
+  landed after the repair remain valid and apply on top.
+- **Stale rebase:** Download and apply the missing suffix while ignoring the stale
+  local repair as a filtering boundary. Then atomically mark the stale repair
+  rejected and append a new repair containing the resulting state, updated vector
+  clock, and downloaded server cursor.
+- **Capability negotiation:** A SuperSync client may upload causal repairs only
+  after `GET /api/sync/ops` advertises `capabilities.causalRepairSnapshots: true`.
+  This makes a new client fail closed against an older server.
+- **Legacy compatibility:** A markerless repair from an older client may be retained
+  non-destructively, but it is not a proven causal boundary. It must not authorize
+  download fast-forward, snapshot-cache trust, or history pruning; concurrent prefix
+  work is replayed after that legacy repair. Because the server cannot reconstruct
+  that ordering from the markerless row alone, it must also exclude the row from
+  restore points and fail closed if server-side snapshot replay crosses it.
+
 ## 3. Interaction & Safety Rules
 
 ### 3.1 Validation First
@@ -139,7 +163,9 @@ This document establishes the core rules and principles for designing the Operat
 - **Limits:**
   - **Max batch size:** 25 operations per batch for normal sync uploads.
   - **Max payload size:** 1 MB per batch to prevent timeout issues.
-- **Exception:** `SYNC_IMPORT` and `BACKUP_IMPORT` bypass these limits but must be clearly marked as bulk operations and trigger immediate snapshot creation afterward.
+- **Exception:** `SYNC_IMPORT`, `BACKUP_IMPORT`, and `REPAIR` bypass these limits but
+  must be clearly marked as bulk operations. Imports trigger immediate snapshot
+  creation; only causal (base-marked) repairs may be cached as server snapshots.
 
 ## 4. Effect Rules
 

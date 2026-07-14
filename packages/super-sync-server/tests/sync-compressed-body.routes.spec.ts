@@ -103,6 +103,7 @@ const createStoredDuplicateOp = (op: ReturnType<typeof createOp>) => ({
   receivedAt: BigInt(op.timestamp),
   isPayloadEncrypted: false,
   syncImportReason: null,
+  repairBaseServerSeq: null,
 });
 
 const MiB = 1024 * 1024;
@@ -1003,6 +1004,7 @@ describe('Sync compressed body routes', () => {
     expect(response.json()).toEqual({
       accepted: false,
       error: 'Operation ID already belongs to a different operation',
+      errorCode: SYNC_ERROR_CODES.INVALID_OP_ID,
     });
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
     expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
@@ -1132,6 +1134,125 @@ describe('Sync compressed body routes', () => {
       { accepted: true, serverSeq: 77 },
       expect.any(String),
     );
+  });
+
+  it('should return idempotent success when a committed REPAIR retry has a stale base', async () => {
+    const repairId = '018f2f0b-1c2d-7a1b-8c3d-123456789abc';
+    const state = { TASK: { repaired: true } };
+    const vectorClock = { 'repair-client': 3 };
+    // The committed first attempt may have filled the account quota. Durable
+    // op-id idempotency must still win over the cheap pre-quota gate.
+    mocks.syncService.getStorageInfo.mockResolvedValue({
+      storageUsedBytes: 100 * MiB,
+      storageQuotaBytes: 100 * MiB,
+    });
+    mocks.prisma.operation.findUnique.mockResolvedValue({
+      id: repairId,
+      userId: 1,
+      clientId: 'repair-client',
+      actionType: '[SP_ALL] Load(import) all data',
+      opType: 'REPAIR',
+      entityType: 'ALL',
+      entityId: null,
+      entityIds: [],
+      payload: state,
+      vectorClock,
+      schemaVersion: 1,
+      isPayloadEncrypted: false,
+      syncImportReason: 'REPAIR',
+      repairBaseServerSeq: 10,
+      serverSeq: 77,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        state,
+        clientId: 'repair-client',
+        reason: 'recovery',
+        vectorClock,
+        schemaVersion: 1,
+        opId: repairId,
+        snapshotOpType: 'REPAIR',
+        syncImportReason: 'REPAIR',
+        repairBaseServerSeq: 10,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
+    expect(response.json()).toEqual({ accepted: true, serverSeq: 77 });
+  });
+
+  it('should accept a legacy REPAIR request without a causal base non-destructively', async () => {
+    const repairId = '018f2f0b-1c2d-7a1b-8c3d-123456789abc';
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        state: { TASK: { repaired: true } },
+        clientId: 'legacy-repair-client',
+        reason: 'recovery',
+        vectorClock: { 'legacy-repair-client': 1 },
+        schemaVersion: 1,
+        opId: repairId,
+        snapshotOpType: 'REPAIR',
+        syncImportReason: 'REPAIR',
+        isCleanSlate: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mocks.syncService.uploadOps).toHaveBeenCalledWith(
+      1,
+      'legacy-repair-client',
+      [expect.objectContaining({ opType: 'REPAIR', repairBaseServerSeq: undefined })],
+      false,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  });
+
+  it('should reject a stale causal REPAIR before quota cleanup', async () => {
+    mocks.syncService.getLatestSeq.mockResolvedValue(11);
+    mocks.syncService.checkStorageQuota.mockResolvedValue({
+      allowed: false,
+      currentUsage: 100 * MiB,
+      quota: 100 * MiB,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: { authorization: `Bearer ${authToken}` },
+      payload: {
+        state: { TASK: { repaired: true } },
+        clientId: 'stale-repair-client',
+        reason: 'recovery',
+        vectorClock: { 'stale-repair-client': 2 },
+        schemaVersion: 1,
+        opId: '018f2f0b-1c2d-7a1b-8c3d-123456789abc',
+        snapshotOpType: 'REPAIR',
+        syncImportReason: 'REPAIR',
+        repairBaseServerSeq: 10,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      accepted: false,
+      error: 'REPAIR snapshot does not include current server state',
+      errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+    });
+    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
+    expect(mocks.syncService.freeStorageForUpload).not.toHaveBeenCalled();
+    expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 
   it('should return idempotent success for a retried SYNC_IMPORT whose opId matches the existing import', async () => {

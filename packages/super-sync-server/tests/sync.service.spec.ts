@@ -14,6 +14,30 @@ vi.mock('../src/db', async () => {
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
 
+  type OperationWhereAlternative = {
+    opType?: string | { in?: string[] };
+    repairBaseServerSeq?: null | { not: null };
+  };
+  const matchesOperationAlternative = (
+    opType: string,
+    repairBaseServerSeq: number | null | undefined,
+    alternative: OperationWhereAlternative,
+  ): boolean => {
+    if (typeof alternative.opType === 'string' && opType !== alternative.opType) {
+      return false;
+    }
+    if (alternative.opType?.in && !alternative.opType.in.includes(opType)) {
+      return false;
+    }
+    if (alternative.repairBaseServerSeq === null && repairBaseServerSeq != null) {
+      return false;
+    }
+    if (alternative.repairBaseServerSeq?.not === null && repairBaseServerSeq == null) {
+      return false;
+    }
+    return true;
+  };
+
   const createTxMock = () => ({
     operation: {
       create: vi.fn().mockImplementation(async (args: any) => {
@@ -79,6 +103,29 @@ vi.mock('../src/db', async () => {
             }
           }
         }
+        if (
+          Array.isArray(args.where?.OR) &&
+          args.where.OR.some(
+            (alternative: OperationWhereAlternative) => alternative.opType !== undefined,
+          )
+        ) {
+          const ops = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                args.where.userId === op.userId &&
+                (args.where.serverSeq?.lte === undefined ||
+                  op.serverSeq <= args.where.serverSeq.lte) &&
+                args.where.OR.some((alternative: OperationWhereAlternative) =>
+                  matchesOperationAlternative(
+                    op.opType,
+                    op.repairBaseServerSeq,
+                    alternative,
+                  ),
+                ),
+            )
+            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+          return applyOperationSelect(ops[0], args.select) || null;
+        }
         if (args.where?.entityType && Array.isArray(args.where?.OR)) {
           const targetEntityId =
             args.where.OR.find((condition: any) => condition.entityId !== undefined)
@@ -137,6 +184,17 @@ vi.mock('../src/db', async () => {
               return false;
             if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
               return false;
+            if (
+              Array.isArray(args.where?.OR) &&
+              !args.where.OR.some((alternative: OperationWhereAlternative) =>
+                matchesOperationAlternative(
+                  op.opType,
+                  op.repairBaseServerSeq,
+                  alternative,
+                ),
+              )
+            )
+              return false;
             return true;
           })
           .sort((a: any, b: any) => {
@@ -194,6 +252,15 @@ vi.mock('../src/db', async () => {
           )
             matches = false;
           if (args.where?.isPayloadEncrypted && !op.isPayloadEncrypted) matches = false;
+          if (typeof args.where?.opType === 'string' && op.opType !== args.where.opType)
+            matches = false;
+          if (args.where?.repairBaseServerSeq === null && op.repairBaseServerSeq != null)
+            matches = false;
+          if (
+            args.where?.repairBaseServerSeq?.not === null &&
+            op.repairBaseServerSeq == null
+          )
+            matches = false;
           if (matches) count++;
         }
         return count;
@@ -337,6 +404,14 @@ vi.mock('../src/db', async () => {
     // returning their existing default shape.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      if (sql.includes('FROM user_sync_state') && sql.includes('FOR UPDATE')) {
+        const [txUserId] = params as [number];
+        return [
+          {
+            lastSeq: state.userSyncStates.get(txUserId)?.lastSeq ?? 0,
+          },
+        ];
+      }
       if (sql.includes('INSERT INTO user_sync_state')) {
         const [txUserId, delta] = params as [number, number];
         const existing = state.userSyncStates.get(txUserId);
@@ -454,6 +529,30 @@ vi.mock('../src/db', async () => {
               }
             }
           }
+          if (
+            Array.isArray(args.where?.OR) &&
+            args.where.OR.some(
+              (alternative: OperationWhereAlternative) =>
+                alternative.opType !== undefined,
+            )
+          ) {
+            const ops = Array.from(state.operations.values())
+              .filter(
+                (op: any) =>
+                  args.where.userId === op.userId &&
+                  (args.where.serverSeq?.lte === undefined ||
+                    op.serverSeq <= args.where.serverSeq.lte) &&
+                  args.where.OR.some((alternative: OperationWhereAlternative) =>
+                    matchesOperationAlternative(
+                      op.opType,
+                      op.repairBaseServerSeq,
+                      alternative,
+                    ),
+                  ),
+              )
+              .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
+            return applyOperationSelect(ops[0], args.select) || null;
+          }
           return null;
         }),
         findMany: vi.fn().mockImplementation(async (args: any) => {
@@ -486,6 +585,17 @@ vi.mock('../src/db', async () => {
               if (args.where?.clientId?.not && op.clientId === args.where.clientId.not)
                 return false;
               if (args.where?.opType?.in && !args.where.opType.in.includes(op.opType))
+                return false;
+              if (
+                Array.isArray(args.where?.OR) &&
+                !args.where.OR.some((alternative: OperationWhereAlternative) =>
+                  matchesOperationAlternative(
+                    op.opType,
+                    op.repairBaseServerSeq,
+                    alternative,
+                  ),
+                )
+              )
                 return false;
               return true;
             })
@@ -525,6 +635,18 @@ vi.mock('../src/db', async () => {
             )
               matches = false;
             if (args.where?.isPayloadEncrypted && !op.isPayloadEncrypted) matches = false;
+            if (typeof args.where?.opType === 'string' && op.opType !== args.where.opType)
+              matches = false;
+            if (
+              args.where?.repairBaseServerSeq === null &&
+              op.repairBaseServerSeq != null
+            )
+              matches = false;
+            if (
+              args.where?.repairBaseServerSeq?.not === null &&
+              op.repairBaseServerSeq == null
+            )
+              matches = false;
             if (matches) count++;
           }
           return count;
@@ -1861,6 +1983,85 @@ describe('SyncService', () => {
       expect(results[0].serverSeq).toBeDefined();
     });
 
+    it('should reject a stale REPAIR without deleting concurrent operations', async () => {
+      const service = getSyncService();
+      const concurrentOp = makeOp({ id: 'concurrent-op' });
+      const repair = makeOp({
+        id: 'stale-repair',
+        actionType: '[Repair] Auto Repair',
+        opType: 'REPAIR',
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { repaired: true },
+      });
+
+      expect(
+        (await service.uploadOps(userId, clientId, [concurrentOp]))[0].accepted,
+      ).toBe(true);
+
+      const staleResult = await service.uploadOps(
+        userId,
+        clientId,
+        [repair],
+        true,
+        undefined,
+        0,
+      );
+
+      expect(staleResult).toEqual([
+        expect.objectContaining({
+          opId: repair.id,
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+        }),
+      ]);
+      expect(testState.operations.has(concurrentOp.id)).toBe(true);
+      expect(testState.operations.has(repair.id)).toBe(false);
+
+      const freshRepair = { ...repair, id: 'fresh-repair' };
+      const freshResult = await service.uploadOps(
+        userId,
+        clientId,
+        [freshRepair],
+        true,
+        undefined,
+        1,
+      );
+
+      expect(freshResult[0].accepted).toBe(true);
+      expect(testState.operations.has(concurrentOp.id)).toBe(true);
+      expect(testState.operations.has(freshRepair.id)).toBe(true);
+    });
+
+    it('should accept a legacy REPAIR without deleting retained history', async () => {
+      const service = getSyncService();
+      const concurrentOp = makeOp({ id: 'concurrent-op' });
+      const legacyRepair = makeOp({
+        id: 'legacy-repair',
+        actionType: '[Repair] Auto Repair',
+        opType: 'REPAIR',
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { repaired: true },
+      });
+      await service.uploadOps(userId, clientId, [concurrentOp]);
+
+      const result = await service.uploadOps(
+        userId,
+        clientId,
+        [legacyRepair],
+        true,
+        undefined,
+        undefined,
+        true,
+      );
+
+      expect(result[0].accepted).toBe(true);
+      expect(testState.operations.has(concurrentOp.id)).toBe(true);
+      expect(testState.operations.has(legacyRepair.id)).toBe(true);
+      expect(testState.userSyncStates.get(userId)?.latestFullStateSeq).toBeUndefined();
+    });
+
     it('should accept complex payloads for BACKUP_IMPORT operations', async () => {
       const service = getSyncService();
 
@@ -1909,7 +2110,14 @@ describe('SyncService', () => {
         schemaVersion: 1,
       };
 
-      const results = await service.uploadOps(userId, clientId, [op]);
+      const results = await service.uploadOps(
+        userId,
+        clientId,
+        [op],
+        false,
+        undefined,
+        0,
+      );
 
       expect(results[0].accepted).toBe(true);
       expect(results[0].serverSeq).toBeDefined();
@@ -3200,19 +3408,27 @@ describe('SyncService', () => {
     it('should return REPAIR operations as restore points', async () => {
       const service = getSyncService();
 
-      await service.uploadOps(userId, clientId, [
-        {
-          id: uuidv7(),
-          clientId,
-          actionType: '[SP_ALL] Load(import) all data',
-          opType: 'REPAIR',
-          entityType: 'ALL',
-          payload: { globalConfig: {}, tasks: {} },
-          vectorClock: {},
-          timestamp: Date.now(),
-          schemaVersion: 1,
-        },
-      ]);
+      await service.uploadOps(
+        userId,
+        clientId,
+        [
+          {
+            id: uuidv7(),
+            clientId,
+            actionType: '[SP_ALL] Load(import) all data',
+            opType: 'REPAIR',
+            entityType: 'ALL',
+            payload: { globalConfig: {}, tasks: {} },
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+            repairBaseServerSeq: 0,
+          },
+        ],
+        false,
+        undefined,
+        0,
+      );
 
       const restorePoints = await service.getRestorePoints(userId);
 

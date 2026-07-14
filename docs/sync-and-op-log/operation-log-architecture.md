@@ -1645,6 +1645,7 @@ enum OpType {
 interface RepairPayload {
   appDataComplete: AppDataCompleteNew; // Full repaired state
   repairSummary: RepairSummary; // What was fixed
+  repairBaseServerSeq?: number; // Server cursor included in this repaired state
 }
 
 interface RepairSummary {
@@ -1660,6 +1661,8 @@ interface RepairSummary {
 ### REPAIR Operation Behavior
 
 - **During replay**: REPAIR operations load state directly (like SyncImport), skipping prior operations
+- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded.
+- **Upload ordering**: If a full-state upload fails, later regular operations stay pending. Permanent snapshot failures are classified by the central rejection handler after any remote work has been applied. A rejected local explicit import/restore remains a durable upload barrier across later sync cycles; incremental operations resume only after a newer full-state snapshot succeeds. Rejected remote imports are conflict-resolution history, and stale automatic REPAIR is excluded so its concurrent suffix can download and trigger a fresh repair if still necessary.
 - **User notification**: Shows snackbar with count of issues fixed
 - **Audit trail**: REPAIR operations are visible in the operation log for debugging
 

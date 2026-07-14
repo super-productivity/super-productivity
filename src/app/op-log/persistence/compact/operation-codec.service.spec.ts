@@ -83,6 +83,17 @@ describe('operation-codec.service', () => {
       const decoded = decodeOperation(encoded);
       expect(decoded.syncImportReason).toBe('REPAIR');
     });
+
+    it('should preserve causal repair metadata through encode/decode', () => {
+      const op: Operation = {
+        ...mockOperation,
+        opType: OpType.Repair,
+        repairBaseServerSeq: 17,
+      };
+      const encoded = encodeOperation(op);
+      expect(encoded.b).toBe(17);
+      expect(decodeOperation(encoded).repairBaseServerSeq).toBe(17);
+    });
   });
 
   describe('encodeOperationLogEntry', () => {

@@ -82,5 +82,8 @@ export const syncOpToOperation = (syncOp: SyncOperation): Operation => {
     ...(syncOp.syncImportReason
       ? { syncImportReason: syncOp.syncImportReason as SyncImportReason }
       : {}),
+    ...(syncOp.repairBaseServerSeq !== undefined
+      ? { repairBaseServerSeq: syncOp.repairBaseServerSeq }
+      : {}),
   };
 };

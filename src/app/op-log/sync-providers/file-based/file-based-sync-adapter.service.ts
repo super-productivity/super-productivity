@@ -2527,6 +2527,9 @@ export class FileBasedSyncAdapterService {
       ...(op.syncImportReason
         ? { syncImportReason: op.syncImportReason as SyncImportReason }
         : {}),
+      ...(op.repairBaseServerSeq !== undefined
+        ? { repairBaseServerSeq: op.repairBaseServerSeq }
+        : {}),
     };
     return encodeOperation(fullOp);
   }
@@ -2549,6 +2552,9 @@ export class FileBasedSyncAdapterService {
       timestamp: fullOp.timestamp,
       schemaVersion: fullOp.schemaVersion,
       ...(fullOp.syncImportReason ? { syncImportReason: fullOp.syncImportReason } : {}),
+      ...(fullOp.repairBaseServerSeq !== undefined
+        ? { repairBaseServerSeq: fullOp.repairBaseServerSeq }
+        : {}),
     };
   }
 }

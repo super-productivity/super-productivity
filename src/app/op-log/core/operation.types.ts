@@ -69,6 +69,8 @@ export interface Operation extends Omit<LibOperation, 'actionType' | 'entityType
    * Old operations without this field gracefully show a generic message.
    */
   syncImportReason?: SyncImportReason;
+  /** Server cursor included in a causally accepted automatic repair snapshot. */
+  repairBaseServerSeq?: number;
 }
 
 export interface OperationLogEntry extends Omit<LibOperationLogEntry, 'op'> {
@@ -135,6 +137,8 @@ export interface RepairSummary {
 export interface RepairPayload {
   appDataComplete: unknown; // AppDataComplete - using unknown to avoid circular deps
   repairSummary: RepairSummary;
+  /** Server cursor at which this repaired snapshot was built. */
+  repairBaseServerSeq?: number;
 }
 
 /**

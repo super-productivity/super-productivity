@@ -17,8 +17,22 @@ import {
 const FULL_STATE_OP_TYPES: ReadonlySet<string> = new Set(SUPER_SYNC_SNAPSHOT_OP_TYPES);
 
 /**
+ * Database predicate for full-state operations that are proven to supersede
+ * their prefix. Legacy REPAIR rows have no causal base cursor, so they remain
+ * downloadable compatibility records but must never authorize fast-forward or
+ * history pruning.
+ */
+export const CAUSAL_FULL_STATE_OPERATION_WHERE = {
+  OR: [
+    { opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
+    { opType: 'REPAIR', repairBaseServerSeq: { not: null } },
+  ],
+} as const satisfies Prisma.OperationWhereInput;
+
+/**
  * True when `opType` carries the user's full state (SYNC_IMPORT, BACKUP_IMPORT,
- * REPAIR) and therefore supersedes prior ops up to its serverSeq.
+ * REPAIR). Whether it is a proven causal boundary additionally depends on the
+ * REPAIR base cursor; use {@link isCausalFullStateOperation} for that decision.
  */
 export const isFullStateOpType = (opType: string): boolean =>
   FULL_STATE_OP_TYPES.has(opType);
@@ -51,6 +65,7 @@ export const SYNC_ERROR_CODES = {
   // Conflict errors (409)
   CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
   CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
+  REPAIR_STALE: 'REPAIR_STALE',
   DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
 
   // Rate limiting (429)
@@ -174,7 +189,15 @@ export interface Operation {
   schemaVersion: number;
   isPayloadEncrypted?: boolean; // True if payload is E2E encrypted
   syncImportReason?: string;
+  repairBaseServerSeq?: number;
 }
+
+export const isCausalFullStateOperation = (
+  op: Pick<Operation, 'opType' | 'repairBaseServerSeq'>,
+): boolean =>
+  op.opType === 'SYNC_IMPORT' ||
+  op.opType === 'BACKUP_IMPORT' ||
+  (op.opType === 'REPAIR' && op.repairBaseServerSeq !== undefined);
 
 export interface DuplicateOperationCandidate {
   id: string;
@@ -192,6 +215,7 @@ export interface DuplicateOperationCandidate {
   receivedAt: bigint | number | string;
   isPayloadEncrypted: boolean;
   syncImportReason: string | null;
+  repairBaseServerSeq: number | null;
 }
 
 /**
@@ -216,6 +240,7 @@ export const DUPLICATE_OP_SELECT = {
   receivedAt: true,
   isPayloadEncrypted: true,
   syncImportReason: true,
+  repairBaseServerSeq: true,
 } satisfies Prisma.OperationSelect;
 
 export interface LatestEntityOperationRow {
@@ -332,6 +357,9 @@ export interface DownloadOpsResponse {
    * Server timestamp for client clock drift detection.
    */
   serverTime?: number;
+  capabilities?: {
+    causalRepairSnapshots: true;
+  };
 }
 
 // Status types

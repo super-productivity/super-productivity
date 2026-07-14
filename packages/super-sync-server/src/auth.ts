@@ -41,6 +41,51 @@ export const getJwtSecret = (): string => {
 const JWT_SECRET = getJwtSecret();
 
 export const verifyEmail = async (token: string): Promise<boolean> => {
+  const pendingPasskey = await prisma.pendingPasskeyRegistration.findUnique({
+    where: { verificationToken: token },
+  });
+
+  if (pendingPasskey) {
+    if (pendingPasskey.verificationTokenExpiresAt < BigInt(Date.now())) {
+      throw new Error('Verification token has expired');
+    }
+
+    const activated = await prisma.$transaction(async (tx) => {
+      const claim = await tx.user.updateMany({
+        where: { id: pendingPasskey.userId, isVerified: 0 },
+        data: {
+          isVerified: 1,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+          verificationResendCount: 0,
+        },
+      });
+      if (claim.count !== 1) return false;
+
+      // Only the credential carried by this exact email link is trusted. Other
+      // attempts for the same address may have been initiated by someone else.
+      await tx.passkey.deleteMany({ where: { userId: pendingPasskey.userId } });
+      await tx.passkey.create({
+        data: {
+          userId: pendingPasskey.userId,
+          credentialId: pendingPasskey.credentialId,
+          publicKey: pendingPasskey.publicKey,
+          counter: pendingPasskey.counter,
+          transports: pendingPasskey.transports,
+        },
+      });
+      await tx.pendingPasskeyRegistration.deleteMany({
+        where: { userId: pendingPasskey.userId },
+      });
+      return true;
+    });
+
+    if (!activated) throw new Error('Invalid verification token');
+    authCache.invalidate(pendingPasskey.userId);
+    Logger.info(`User verified with passkey (ID: ${pendingPasskey.userId})`);
+    return true;
+  }
+
   const user = await prisma.user.findFirst({
     where: { verificationToken: token },
   });
@@ -56,15 +101,26 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
     throw new Error('Verification token has expired');
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      isVerified: 1,
-      verificationToken: null,
-      verificationTokenExpiresAt: null,
-      verificationResendCount: 0,
-    },
+  const verified = await prisma.$transaction(async (tx) => {
+    const claim = await tx.user.updateMany({
+      where: { id: user.id, isVerified: 0, verificationToken: token },
+      data: {
+        isVerified: 1,
+        verificationToken: null,
+        verificationTokenExpiresAt: null,
+        verificationResendCount: 0,
+      },
+    });
+    if (claim.count !== 1) return false;
+
+    // Reaching the user-token path means this is a magic-link registration:
+    // passkey registration tokens live only in pendingPasskeyRegistration.
+    // Email ownership does not prove ownership of a separately submitted key.
+    await tx.passkey.deleteMany({ where: { userId: user.id } });
+    await tx.pendingPasskeyRegistration.deleteMany({ where: { userId: user.id } });
+    return true;
   });
+  if (!verified) throw new Error('Invalid verification token');
 
   // AUTH_CACHE_INVALIDATION: drop any negative (isVerified:false) entry so the
   // now-verified user isn't denied for up to the cache TTL, and so the cache
@@ -374,9 +430,15 @@ export const registerWithMagicLink = async (
         }
       }
 
-      // Update existing unverified user with new verification token
-      await prisma.user.update({
-        where: { id: existingUser.id },
+      // Update the same still-unverified row that was checked above. If another
+      // request verified or removed it while the email was in flight, the link
+      // is simply left inactive and the response remains neutral.
+      const updated = await prisma.user.updateMany({
+        where: {
+          id: existingUser.id,
+          isVerified: 0,
+          verificationResendCount: { lt: MAX_VERIFICATION_RESEND_COUNT },
+        },
         data: {
           verificationToken,
           verificationTokenExpiresAt: tokenExpiresAt,
@@ -384,6 +446,7 @@ export const registerWithMagicLink = async (
           ...(acceptedAt !== undefined && { termsAcceptedAt: acceptedAt }),
         },
       });
+      if (updated.count !== 1) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
       Logger.info(
         `Updated verification token for unverified user (ID: ${existingUser.id})`,
@@ -403,18 +466,10 @@ export const registerWithMagicLink = async (
       Logger.info(`Created new magic-link user`);
 
       if (!config.testMode?.autoVerifyUsers) {
-        // Send verification email; clean up new user on failure
+        // Keep the unverified row on delivery failure. Deleting it can race a
+        // concurrent registration that has already started using the same row.
         const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
         if (!emailSent) {
-          // AUTH_CACHE_INVALIDATION: no invalidate needed here. This only
-          // deletes the user just created above (isVerified: 0). No JWT is
-          // issued for an unverified user, so verifyToken was never called for
-          // it and no authCache entry can exist. Documented to keep the
-          // bracket-every-delete convention auditable.
-          await prisma.user.deleteMany({
-            where: { email: normalizedEmail, isVerified: 0 },
-          });
-          Logger.info(`Cleaned up failed magic-link registration for new user`);
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
       }

@@ -11,12 +11,14 @@ import { SupersededOperationResolverService } from './superseded-operation-resol
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { T } from '../../t.const';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
+import { RepairOperationService } from '../validation/repair-operation.service';
 
 describe('RejectedOpsHandlerService', () => {
   let service: RejectedOpsHandlerService;
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let supersededOperationResolverSpy: jasmine.SpyObj<SupersededOperationResolverService>;
+  let repairOperationServiceSpy: jasmine.SpyObj<RepairOperationService>;
 
   const createOp = (partial: Partial<Operation>): Operation => ({
     id: 'op-1',
@@ -51,6 +53,10 @@ describe('RejectedOpsHandlerService', () => {
       ['resolveSupersededLocalOps'],
     );
     supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(0);
+    repairOperationServiceSpy = jasmine.createSpyObj('RepairOperationService', [
+      'rebaseStaleRepair',
+    ]);
+    repairOperationServiceSpy.rebaseStaleRepair.and.resolveTo(2);
 
     TestBed.configureTestingModule({
       providers: [
@@ -61,6 +67,7 @@ describe('RejectedOpsHandlerService', () => {
           provide: SupersededOperationResolverService,
           useValue: supersededOperationResolverSpy,
         },
+        { provide: RepairOperationService, useValue: repairOperationServiceSpy },
       ],
     });
 
@@ -195,6 +202,153 @@ describe('RejectedOpsHandlerService', () => {
       expect(opLogStoreSpy.getOpById).toHaveBeenCalledWith('dup-op-1');
       expect(opLogStoreSpy.markSynced).toHaveBeenCalledWith([42]);
       expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+    });
+
+    it('should replace a stale Repair after downloading the concurrent server suffix', async () => {
+      const repairSummary = {
+        entityStateFixed: 1,
+        orphanedEntitiesRestored: 0,
+        invalidReferencesRemoved: 0,
+        relationshipsFixed: 0,
+        structureRepaired: 0,
+        typeErrorsFixed: 0,
+      };
+      const repair = createOp({
+        id: 'repair-1',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: {
+          appDataComplete: { task: { ids: [], entities: {} } },
+          repairSummary,
+          repairBaseServerSeq: 8,
+        },
+      });
+      opLogStoreSpy.getOpById.and.resolveTo(mockEntry(repair));
+      const downloadCallback = jasmine
+        .createSpy<DownloadCallback>('downloadCallback')
+        .and.resolveTo({
+          kind: 'completed',
+          newOpsCount: 1,
+          latestServerSeq: 12,
+        });
+
+      const result = await service.handleRejectedOps(
+        [
+          {
+            opId: repair.id,
+            error: 'Repair base is stale',
+            errorCode: 'REPAIR_STALE',
+          },
+        ],
+        downloadCallback,
+      );
+
+      expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      expect(downloadCallback).toHaveBeenCalledOnceWith({
+        ignoredLocalFullStateOpIds: [repair.id],
+      });
+      expect(repairOperationServiceSpy.rebaseStaleRepair).toHaveBeenCalledOnceWith({
+        staleRepairOpId: repair.id,
+        repairSummary,
+        clientId: repair.clientId,
+        repairBaseServerSeq: 12,
+      });
+      expect(result).toEqual({
+        kind: 'completed',
+        mergedOpsCreated: 1,
+        permanentRejectionCount: 0,
+      });
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    });
+
+    it('should stop stale Repair rebasing when its recovery download is cancelled', async () => {
+      const repair = createOp({
+        id: 'repair-1',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: {
+          appDataComplete: {},
+          repairSummary: {
+            entityStateFixed: 1,
+            orphanedEntitiesRestored: 0,
+            invalidReferencesRemoved: 0,
+            relationshipsFixed: 0,
+            structureRepaired: 0,
+            typeErrorsFixed: 0,
+          },
+        },
+      });
+      opLogStoreSpy.getOpById.and.resolveTo(mockEntry(repair));
+      const downloadCallback = jasmine
+        .createSpy<DownloadCallback>('downloadCallback')
+        .and.resolveTo({ kind: 'cancelled' });
+
+      const result = await service.handleRejectedOps(
+        [{ opId: repair.id, error: 'stale', errorCode: 'REPAIR_STALE' }],
+        downloadCallback,
+      );
+
+      expect(result).toEqual({ kind: 'cancelled' });
+      expect(repairOperationServiceSpy.rebaseStaleRepair).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+    });
+
+    it('should count both a rebased Repair and a merged concurrent operation', async () => {
+      const repairSummary = {
+        entityStateFixed: 1,
+        orphanedEntitiesRestored: 0,
+        invalidReferencesRemoved: 0,
+        relationshipsFixed: 0,
+        structureRepaired: 0,
+        typeErrorsFixed: 0,
+      };
+      const repair = createOp({
+        id: 'repair-1',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { appDataComplete: {}, repairSummary },
+      });
+      const concurrentOp = createOp({ id: 'concurrent-1' });
+      opLogStoreSpy.getOpById.and.callFake(async (opId: string) =>
+        opId === repair.id ? mockEntry(repair) : mockEntry(concurrentOp),
+      );
+      const downloadCallback = jasmine
+        .createSpy<DownloadCallback>('downloadCallback')
+        .and.callFake(async (options) => {
+          if (options?.ignoredLocalFullStateOpIds) {
+            return { kind: 'completed', newOpsCount: 1, latestServerSeq: 12 };
+          }
+          if (options?.forceFromSeq0) {
+            return {
+              kind: 'completed',
+              newOpsCount: 0,
+              allOpClocks: [{ remote: 2 }],
+            };
+          }
+          return { kind: 'completed', newOpsCount: 0 };
+        });
+      supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+      const result = await service.handleRejectedOps(
+        [
+          { opId: repair.id, error: 'stale', errorCode: 'REPAIR_STALE' },
+          {
+            opId: concurrentOp.id,
+            error: 'concurrent',
+            errorCode: 'CONFLICT_CONCURRENT',
+          },
+        ],
+        downloadCallback,
+      );
+
+      expect(result).toEqual({
+        kind: 'completed',
+        mergedOpsCreated: 2,
+        permanentRejectionCount: 0,
+      });
     });
 
     it('should handle multiple DUPLICATE_OPERATION rejections', async () => {

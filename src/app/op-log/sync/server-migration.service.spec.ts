@@ -15,7 +15,7 @@ import {
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
-import { OpType } from '../core/operation.types';
+import { ActionType, OperationLogEntry, OpType } from '../core/operation.types';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
@@ -69,6 +69,25 @@ describe('ServerMigrationService', () => {
       setPrivateCfg: jasmine.createSpy('setPrivateCfg'),
     } as unknown as OperationSyncProvider;
   };
+
+  const createMigrationEntry = (rejectedAt?: number): OperationLogEntry => ({
+    seq: 1,
+    op: {
+      id: '01900000-0000-7000-8000-000000000001',
+      actionType: ActionType.LOAD_ALL_DATA,
+      opType: OpType.SyncImport,
+      entityType: 'ALL',
+      payload: {},
+      clientId: 'test-client',
+      vectorClock: { 'test-client': 1 },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+      syncImportReason: 'SERVER_MIGRATION',
+    },
+    source: 'local',
+    appliedAt: Date.now(),
+    rejectedAt,
+  });
 
   beforeEach(() => {
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
@@ -184,6 +203,26 @@ describe('ServerMigrationService', () => {
       (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(10));
 
       await service.checkAndHandleMigration(provider);
+
+      expect(provider.downloadOps).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('should reuse an existing pending server-migration snapshot without probing again', async () => {
+      const provider = createMockSyncProvider();
+      opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+      await service.checkAndHandleMigration(provider);
+
+      expect(provider.downloadOps).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('should block after a rejected server-migration snapshot instead of appending another', async () => {
+      const provider = createMockSyncProvider();
+      opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+
+      await expectAsync(service.checkAndHandleMigration(provider)).toBeRejected();
 
       expect(provider.downloadOps).not.toHaveBeenCalled();
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();

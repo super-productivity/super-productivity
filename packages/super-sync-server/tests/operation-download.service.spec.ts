@@ -44,6 +44,7 @@ const EXPECTED_OPERATION_DOWNLOAD_SELECT = {
   receivedAt: true,
   isPayloadEncrypted: true,
   syncImportReason: true,
+  repairBaseServerSeq: true,
 };
 
 // Helper to create a mock operation row (as returned by Prisma)
@@ -64,6 +65,7 @@ const createMockOpRow = (
     receivedAt: bigint;
     isPayloadEncrypted: boolean;
     syncImportReason: string | null;
+    repairBaseServerSeq: number | null;
   }> = {},
 ) => ({
   id: overrides.id ?? `op-${serverSeq}`,
@@ -82,6 +84,7 @@ const createMockOpRow = (
   receivedAt: overrides.receivedAt ?? BigInt(Date.now()),
   isPayloadEncrypted: overrides.isPayloadEncrypted ?? false,
   syncImportReason: overrides.syncImportReason ?? null,
+  repairBaseServerSeq: overrides.repairBaseServerSeq ?? null,
 });
 
 // The download flow calls operation.findFirst twice: first the latest
@@ -264,7 +267,10 @@ describe('OperationDownloadService', () => {
         where: {
           userId: 1,
           serverSeq: { lte: 20 },
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          OR: [
+            { opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
+            { opType: 'REPAIR', repairBaseServerSeq: { not: null } },
+          ],
         },
         orderBy: { serverSeq: 'desc' },
         select: { serverSeq: true, clientId: true },
@@ -530,7 +536,10 @@ describe('OperationDownloadService', () => {
         where: {
           userId: 1,
           serverSeq: { lte: 42 },
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          OR: [
+            { opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
+            { opType: 'REPAIR', repairBaseServerSeq: { not: null } },
+          ],
         },
         orderBy: { serverSeq: 'desc' },
         select: { serverSeq: true, clientId: true },

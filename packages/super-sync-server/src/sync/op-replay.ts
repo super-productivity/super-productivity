@@ -87,6 +87,21 @@ export class EncryptedOpsNotSupportedError extends Error {
   }
 }
 
+/**
+ * Markerless repairs came from clients that did not report which server
+ * prefix their full state already contains. They remain downloadable for
+ * client-side compatibility, but server-side replay cannot safely decide
+ * whether operations before the repair must be retained or discarded.
+ */
+export class LegacyRepairReplayUnsupportedError extends Error {
+  constructor() {
+    super(
+      'LEGACY_REPAIR_REPLAY_UNSUPPORTED: Cannot generate a server snapshot across a repair without a causal base.',
+    );
+    this.name = 'LegacyRepairReplayUnsupportedError';
+  }
+}
+
 export type ReplayOperationRow = {
   id: string;
   serverSeq: number;
@@ -100,6 +115,7 @@ export type ReplayOperationRow = {
   payload: unknown;
   schemaVersion: number;
   isPayloadEncrypted: boolean;
+  repairBaseServerSeq?: number | null;
 };
 
 export const assertContiguousReplayBatch = (
@@ -143,6 +159,9 @@ export const replayOpsToState = (
     // ranges upfront; this guard prevents accidental partial replays.
     if (row.isPayloadEncrypted) {
       throw new EncryptedOpsNotSupportedError(1);
+    }
+    if (row.opType === 'REPAIR' && row.repairBaseServerSeq == null) {
+      throw new LegacyRepairReplayUnsupportedError();
     }
 
     let opType = row.opType as Operation['opType'];
@@ -377,7 +396,7 @@ export const _resolveExpectedFirstSeq = (
   const isFullStateOp =
     firstOp.opType === 'SYNC_IMPORT' ||
     firstOp.opType === 'BACKUP_IMPORT' ||
-    firstOp.opType === 'REPAIR';
+    (firstOp.opType === 'REPAIR' && firstOp.repairBaseServerSeq != null);
   if (!isFullStateOp) {
     throw new Error(
       `SNAPSHOT_REPLAY_INCOMPLETE: Expected operation serverSeq ${currentSeq + 1} but got ${firstOp.serverSeq} while replaying to ${targetSeq}`,

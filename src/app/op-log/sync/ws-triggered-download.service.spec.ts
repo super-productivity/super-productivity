@@ -37,7 +37,10 @@ describe('WsTriggeredDownloadService', () => {
       newOpsNotification$: notification$.asObservable(),
     };
 
-    syncCapableProvider = { id: 'sync-provider' };
+    syncCapableProvider = {
+      id: 'sync-provider',
+      getLastServerSeq: jasmine.createSpy('getLastServerSeq').and.resolveTo(0),
+    };
     mockSyncService = jasmine.createSpyObj('OperationLogSyncService', [
       'downloadRemoteOps',
     ]);
@@ -121,12 +124,13 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
-  it('should skip downloads while sync is already in progress', fakeAsync(() => {
+  it('should queue a notification while sync is already in progress', fakeAsync(() => {
+    let isSyncInProgress = true;
     mockProviderManager = TestBed.inject(
       SyncProviderManager,
     ) as jasmine.SpyObj<SyncProviderManager>;
     Object.defineProperty(mockProviderManager, 'isSyncInProgress', {
-      get: () => true,
+      get: () => isSyncInProgress,
       configurable: true,
     });
 
@@ -137,12 +141,18 @@ describe('WsTriggeredDownloadService', () => {
 
     expect(mockWrappedProvider.getOperationSyncCapable).not.toHaveBeenCalled();
     expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+
+    isSyncInProgress = false;
+    tick(250);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
   // A WS download must not decrypt/apply remote ops while an encryption
   // operation (password change, enable/disable, force upload) owns the key
   // state — mirrors ImmediateUploadService gating on the same flag.
-  it('should skip downloads while an encryption operation is in progress', fakeAsync(() => {
+  it('should queue a notification while an encryption operation is in progress', fakeAsync(() => {
     mockSyncWrapper.isEncryptionOperationInProgress = true;
 
     service.start();
@@ -152,13 +162,19 @@ describe('WsTriggeredDownloadService', () => {
 
     expect(mockWrappedProvider.getOperationSyncCapable).not.toHaveBeenCalled();
     expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+
+    mockSyncWrapper.isEncryptionOperationInProgress = false;
+    tick(250);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
   // #8309: the WS-download side channel claims the in-tab SyncCycleGuard and
   // skips when another cycle (main sync, force flow, or immediate upload) is
   // active, so its gate decision / setLastServerSeq can't race a concurrent
   // flow and overlapping withSession() calls can't misattribute the latch.
-  it('should skip the download when another sync cycle is active (#8309)', fakeAsync(() => {
+  it('should queue the download when another sync cycle is active (#8309)', fakeAsync(() => {
     const guard = TestBed.inject(SyncCycleGuardService);
     expect(guard.tryBegin()).toBe(true);
 
@@ -171,6 +187,49 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
 
     guard.end();
+    tick(250);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+  }));
+
+  it('should drain a notification that arrives during an in-flight download', fakeAsync(() => {
+    let resolveFirstDownload!: (result: { kind: 'no_new_ops' }) => void;
+    mockSyncService.downloadRemoteOps.and.callFake(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstDownload = resolve;
+        }),
+    );
+
+    service.start();
+    notification$.next({ latestSeq: 10 });
+    tick(500);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    notification$.next({ latestSeq: 11 });
+    tick(500);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    resolveFirstDownload({ kind: 'no_new_ops' });
+    flushMicrotasks();
+    tick(0);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should skip a queued catch-up already covered by the local server cursor', fakeAsync(() => {
+    syncCapableProvider.getLastServerSeq.and.resolveTo(12);
+
+    service.start();
+    notification$.next({ latestSeq: 12 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
   }));
 
   it('releases the guard after the download so a later cycle can run (#8309)', fakeAsync(() => {
@@ -219,7 +278,7 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
-  it('should survive non-auth errors and continue the pipeline', fakeAsync(() => {
+  it('should preserve the latest notification across a transient error', fakeAsync(() => {
     let callCount = 0;
     mockSyncService.downloadRemoteOps.and.callFake(async () => {
       callCount++;
@@ -235,10 +294,59 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     notification$.next({ latestSeq: 2 });
-    tick(500);
+    tick(1_000);
     flushMicrotasks();
 
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should retry a transient failure without requiring another WS notification', fakeAsync(() => {
+    let callCount = 0;
+    mockSyncService.downloadRemoteOps.and.callFake(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error('network timeout');
+      }
+      return { kind: 'no_new_ops' as const };
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 6 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    tick(999);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    tick(1);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should stop retrying and report an error after repeated download failures', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.rejectWith(new Error('network timeout'));
+
+    service.start();
+    notification$.next({ latestSeq: 6 });
+    tick(500);
+    flushMicrotasks();
+
+    tick(1_000);
+    flushMicrotasks();
+    tick(2_000);
+    flushMicrotasks();
+    tick(4_000);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(4);
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+
+    tick(60_000);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(4);
   }));
 
   it('should report incomplete remote application as a sticky translated error', fakeAsync(() => {

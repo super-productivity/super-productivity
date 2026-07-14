@@ -54,6 +54,7 @@ import { selectSyncConfig } from '../../features/config/store/global-config.redu
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 
 describe('OperationLogSyncService', () => {
   let service: OperationLogSyncService;
@@ -756,6 +757,7 @@ describe('OperationLogSyncService', () => {
           mockProvider = {
             isReady: () => Promise.resolve(true),
             supportsOperationSync: true,
+            getLastServerSeq: () => Promise.resolve(12),
           };
         });
 
@@ -837,6 +839,15 @@ describe('OperationLogSyncService', () => {
             forceFromSeq0: true,
             isNeverSynced: true,
           });
+
+          const recoveryResult = await capturedCallback({
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+          });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+            isNeverSynced: true,
+          });
+          expect(recoveryResult.latestServerSeq).toBe(12);
         });
 
         it('should propagate nested download cancellation as a cancelled upload', async () => {
@@ -1021,6 +1032,23 @@ describe('OperationLogSyncService', () => {
             [],
             jasmine.any(Function),
           );
+        });
+
+        it('should surface a rejected full-state upload barrier to sync orchestrators', async () => {
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [],
+            rejectedCount: 0,
+            rejectedOps: [],
+            blockedByRejectedFullState: true,
+          });
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('completed');
+          if (result.kind === 'completed') {
+            expect(result.blockedByRejectedFullState).toBe(true);
+          }
         });
 
         // Issue #7330 follow-up: a download triggered from inside the
@@ -1443,6 +1471,59 @@ describe('OperationLogSyncService', () => {
           expect(result.localWinOpsCreated).toBe(1);
           expect(result.newOpsCount).toBe(1);
         }
+      });
+
+      it('should preserve repair context and the final conflict guard together', async () => {
+        const remoteOp = {
+          id: 'remote-for-repair',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK' as const,
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+        downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+          newOps: [remoteOp],
+          latestServerSeq: 17,
+          needsFullStateUpload: false,
+          success: true,
+          providerMode: 'superSyncOps',
+          failedFileCount: 0,
+        });
+        const repairContext = TestBed.inject(RepairSyncContextService);
+        let observedBaseServerSeq: number | undefined;
+        remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(async () => {
+          observedBaseServerSeq = repairContext.baseServerSeq;
+          return {
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+          };
+        });
+
+        await service.downloadRemoteOps(
+          {
+            isReady: async () => true,
+            setLastServerSeq: async () => undefined,
+          } as any,
+          { ignoredLocalFullStateOpIds: ['stale-repair'] },
+        );
+
+        expect(observedBaseServerSeq).toBe(17);
+        expect(repairContext.baseServerSeq).toBeUndefined();
+        expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+          [remoteOp],
+          jasmine.objectContaining({
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+            beforeFullStateApply: jasmine.any(Function),
+          }),
+        );
       });
 
       it('should NOT advance lastServerSeq when processing blocked at an incompatible op', async () => {

@@ -21,13 +21,18 @@ vi.mock('../src/db', () => {
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
-      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     passkey: {
       create: vi.fn(),
       update: vi.fn(),
       deleteMany: vi.fn(),
       findUnique: vi.fn(),
+    },
+    pendingPasskeyRegistration: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      deleteMany: vi.fn(),
     },
     $transaction: vi.fn(),
   };
@@ -99,13 +104,18 @@ describe('Passkey Authentication', () => {
       create: Mock;
       update: Mock;
       updateMany: Mock;
-      delete: Mock;
+      deleteMany: Mock;
     };
     passkey: {
       create: Mock;
       update: Mock;
       deleteMany: Mock;
       findUnique: Mock;
+    };
+    pendingPasskeyRegistration: {
+      findUnique: Mock;
+      create: Mock;
+      deleteMany: Mock;
     };
     $transaction: Mock;
   };
@@ -134,6 +144,13 @@ describe('Passkey Authentication', () => {
       allowCredentials: [],
       userVerification: 'preferred',
     } as PublicKeyCredentialRequestOptionsJSON);
+    mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue(null);
+    mockPrisma.pendingPasskeyRegistration.create.mockResolvedValue({});
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof mockPrisma) => Promise<unknown>) =>
+        callback(mockPrisma),
+    );
   });
 
   afterEach(() => {
@@ -238,15 +255,22 @@ describe('Passkey Authentication', () => {
           result.message.includes('automatically verified'),
       ).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalled();
+      expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 1,
+          verificationToken: expect.any(String),
+          credentialId: expect.any(Buffer),
+          publicKey: expect.any(Buffer),
+        }),
+      });
     });
 
     it('should return the neutral response without changing an existing verified user', async () => {
-      const mockCredentialId = new Uint8Array([1, 2, 3, 4]);
       mockVerifyRegistration.mockResolvedValue({
         verified: true,
         registrationInfo: {
           credential: {
-            id: mockCredentialId,
+            id: new Uint8Array([1, 2, 3, 4]),
             publicKey: new Uint8Array([5, 6, 7, 8]),
             counter: 0,
           },
@@ -314,7 +338,96 @@ describe('Passkey Authentication', () => {
       expect(sendVerificationEmail).not.toHaveBeenCalled();
     });
 
-    it('should return the neutral response when verification email delivery fails', async () => {
+    it('should bind a re-registration passkey to its own pending email link', async () => {
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([9, 10, 11, 12]),
+            publicKey: new Uint8Array([13, 14, 15, 16]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+        verificationResendCount: 1,
+      });
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'attacker-credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(result).toEqual(registrationResponse);
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 1,
+          isVerified: 0,
+          verificationResendCount: { lt: 20 },
+        },
+        data: {
+          verificationResendCount: { increment: 1 },
+        },
+      });
+      expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 1,
+          verificationToken: expect.any(String),
+          credentialId: expect.any(Buffer),
+        }),
+      });
+      expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
+      expect(sendVerificationEmail).toHaveBeenCalledOnce();
+    });
+
+    it('should keep a failed-delivery credential pending and inactive', async () => {
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([9, 10, 11, 12]),
+            publicKey: new Uint8Array([13, 14, 15, 16]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+        verificationResendCount: 1,
+      });
+      (sendVerificationEmail as Mock).mockResolvedValueOnce(false);
+      await generateRegistrationOptions(testEmail);
+
+      const result = await verifyRegistration(testEmail, {
+        id: 'attacker-credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      expect(result).toEqual(registrationResponse);
+      expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledOnce();
+      expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
+      expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('should retain a new pending registration when email delivery fails', async () => {
       mockVerifyRegistration.mockResolvedValue({
         verified: true,
         registrationInfo: {
@@ -325,9 +438,7 @@ describe('Passkey Authentication', () => {
           },
         },
       });
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 1, email: testEmail, isVerified: 0 });
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.user.create.mockResolvedValue({ id: 1 });
       (sendVerificationEmail as Mock).mockResolvedValueOnce(false);
       await generateRegistrationOptions(testEmail);
@@ -344,7 +455,8 @@ describe('Passkey Authentication', () => {
       } as RegistrationResponseJSON);
 
       expect(result).toEqual(registrationResponse);
-      expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledOnce();
+      expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should reject verification with expired challenge', async () => {

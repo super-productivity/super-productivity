@@ -133,6 +133,8 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   they read the same pre-insert snapshot
 - Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
   accepted writers for the same user to serialize on that row lock
+- A causal `REPAIR` snapshot must prove that its state includes the current
+  server prefix; the same row serializes that base-cursor check with later writes
 - If two batches race, the later writer blocks on the row and the transaction
   retry path handles the serialization failure rather than silently accepting
   conflicting operations
@@ -145,6 +147,12 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
 - The batch insert does not use `skipDuplicates`; an unexpected unique conflict
   aborts the transaction and lets the request retry
+- `REPAIR` uploads persist `repairBaseServerSeq` on the operation row. The HTTP
+  handler rejects an obviously stale base before quota cleanup, and the upload
+  transaction repeats the check under `SELECT ... FOR UPDATE` before insertion
+- Markerless legacy repairs are compatibility records, not causal boundaries:
+  they cannot drive download fast-forward, snapshot trust, history pruning, or
+  server-generated restore points; snapshot replay across one fails closed
 - Removing or sharding the `lastSeq` write requires replacing this safety
   mechanism with an equivalent per-user serialization primitive
 
@@ -154,12 +162,14 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 
 - [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
 - [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
+- [`packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts`](packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts) - Real-PostgreSQL race coverage
 
 **When to Update This Pattern**:
 
 - Changing upload conflict detection
 - Changing server sequence assignment
 - Changing transaction isolation for upload operations
+- Changing repair base-cursor validation or full-state history pruning
 - Introducing multi-writer or multi-region upload processing
 
 ---
@@ -195,6 +205,57 @@ The atomic op's headline benefit — reversing the whole thing as one unit — w
 - Adding a true bulk meta-reducer action for general use (revisit whether completion should adopt it)
 - Reworking how completion resolves unfinished tasks
 - Any proposal to make completion a single synced op again
+
+---
+
+### 6. Passkeys Stay Pending Until Email Verification
+
+**Status**: ✅ Active (since July 2026)
+
+**Decision**: A passkey submitted during account registration is stored as a
+`PendingPasskeyRegistration` tied to its exact email-verification token. It is
+promoted to the user's active `Passkey` set only when that token is consumed.
+
+**Rationale**:
+
+- A WebAuthn registration ceremony proves possession of a credential, not
+  ownership of the email address entered alongside it.
+- Storing a submitted credential directly on an unverified user lets an attacker
+  pre-register a victim's address, then have the victim's later magic-link
+  verification activate the attacker's passkey.
+- Keeping separate pending attempts prevents concurrent registrations from
+  replacing or activating one another. The email owner chooses the credential
+  by consuming the link produced by that same registration attempt.
+- Failed email delivery leaves the bounded, expiring pending attempt in place.
+  Deleting the shared unverified user can race a concurrent registration and
+  invalidate a link that was successfully delivered.
+
+**Implementation**:
+
+- Passkey registration stores no active credential and creates one pending row
+  per verification token.
+- Email verification atomically claims the unverified user, replaces active
+  passkeys with the credential bound to that token, and deletes the user's
+  remaining pending attempts.
+- Passkey verification tokens live only on pending registrations; user-row
+  verification tokens belong to magic-link registrations. Consuming a user-row
+  token verifies the email but removes untrusted active and pending passkeys.
+- The migration moves the latest legacy credential for each unverified user to
+  the pending table and removes all active credentials from unverified users.
+- The resend cap bounds pending rows per unverified account; rows also expire
+  with their verification tokens.
+
+**Key Files**:
+
+- [`auth.ts`](packages/super-sync-server/src/auth.ts)
+- [`passkey.ts`](packages/super-sync-server/src/passkey.ts)
+- [`schema.prisma`](packages/super-sync-server/prisma/schema.prisma)
+
+**When to Update This Pattern**:
+
+- Changing passkey enrollment or email-verification flows
+- Adding another credential type to registration
+- Changing verification-token persistence or cleanup
 
 ---
 

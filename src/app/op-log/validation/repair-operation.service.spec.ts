@@ -6,6 +6,8 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { ActionType, RepairSummary, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { TranslateService } from '@ngx-translate/core';
+import { RepairSyncContextService } from './repair-sync-context.service';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
 
 describe('RepairOperationService', () => {
   let service: RepairOperationService;
@@ -13,6 +15,8 @@ describe('RepairOperationService', () => {
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockTranslateService: jasmine.SpyObj<TranslateService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
+  let repairSyncContext: RepairSyncContextService;
+  let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
   let alertSpy: jasmine.Spy;
   let confirmSpy: jasmine.Spy;
 
@@ -36,12 +40,16 @@ describe('RepairOperationService', () => {
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'appendWithVectorClockUpdate',
+      'replaceRejectedRepair',
       'saveStateCache',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
+    ]);
+    mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
+      'getStateSnapshotAsync',
     ]);
 
     // Default mock implementations
@@ -51,8 +59,12 @@ describe('RepairOperationService', () => {
     // appendWithVectorClockUpdate returns the sequence number
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(100));
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
+    mockOpLogStore.replaceRejectedRepair.and.resolveTo(101);
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ clientA: 5 }),
+    );
+    mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+      mockRepairedState as never,
     );
     mockTranslateService.instant.and.callFake((key: string) => key);
 
@@ -81,10 +93,46 @@ describe('RepairOperationService', () => {
         { provide: LockService, useValue: mockLockService },
         { provide: TranslateService, useValue: mockTranslateService },
         { provide: VectorClockService, useValue: mockVectorClockService },
+        { provide: StateSnapshotService, useValue: mockStateSnapshotService },
       ],
     });
 
     service = TestBed.inject(RepairOperationService);
+    repairSyncContext = TestBed.inject(RepairSyncContextService);
+  });
+
+  describe('rebaseStaleRepair', () => {
+    it('should atomically replace the stale repair with a snapshot at the new cursor', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 1 });
+
+      const seq = await service.rebaseStaleRepair({
+        staleRepairOpId: 'stale-repair',
+        repairSummary: summary,
+        clientId: 'test-client',
+        repairBaseServerSeq: 12,
+      });
+
+      expect(mockLockService.request).toHaveBeenCalledWith(
+        'sp_op_log',
+        jasmine.any(Function),
+      );
+      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
+      expect(mockOpLogStore.replaceRejectedRepair).toHaveBeenCalledWith({
+        staleRepairOpId: 'stale-repair',
+        replacementOp: jasmine.objectContaining({
+          opType: OpType.Repair,
+          clientId: 'test-client',
+          payload: {
+            appDataComplete: mockRepairedState,
+            repairSummary: summary,
+            repairBaseServerSeq: 12,
+          },
+        }),
+        repairedState: mockRepairedState,
+      });
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(seq).toBe(101);
+    });
   });
 
   describe('createRepairOperation', () => {
@@ -127,6 +175,20 @@ describe('RepairOperationService', () => {
         appDataComplete: mockRepairedState,
         repairSummary: summary,
       });
+    });
+
+    it('should include the server cursor used to build a sync repair', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 1 });
+
+      await repairSyncContext.runWithBaseServerSeq(17, () =>
+        service.createRepairOperation(mockRepairedState, summary, 'test-client'),
+      );
+
+      const operation =
+        mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+      expect(operation.payload).toEqual(
+        jasmine.objectContaining({ repairBaseServerSeq: 17 }),
+      );
     });
 
     it('should acquire lock before creating operation', async () => {

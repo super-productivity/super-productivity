@@ -2,7 +2,11 @@ import { Injectable } from '@angular/core';
 import { decrypt, decryptBatch, encrypt, encryptBatch } from '@sp/sync-core';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError } from '../core/errors/sync-errors';
-import { assertDecryptedOpMetadataIntegrity } from './verify-decrypted-op-integrity';
+import { isFullStateOpType } from '../core/operation.types';
+import {
+  assertDecryptedFullStateOpIntegrity,
+  assertDecryptedOpMetadataIntegrity,
+} from './verify-decrypted-op-integrity';
 
 /**
  * Handles E2E encryption/decryption of operation payloads for SuperSync.
@@ -62,6 +66,9 @@ export class OperationEncryptionService {
     // Verify the untrusted metadata against the now-authenticated payload before
     // trusting it downstream (GHSA-8pxh-mgc7-gp3g). Throws on tampering.
     assertDecryptedOpMetadataIntegrity(op, parsedPayload);
+    if (isFullStateOpType(op.opType)) {
+      await assertDecryptedFullStateOpIntegrity(op, parsedPayload);
+    }
     return {
       ...op,
       payload: parsedPayload,
@@ -142,6 +149,9 @@ export class OperationEncryptionService {
       // Verify the untrusted metadata against the now-authenticated payload
       // before trusting it downstream (GHSA-8pxh-mgc7-gp3g). Throws on tampering.
       assertDecryptedOpMetadataIntegrity(op, parsedPayload);
+      if (isFullStateOpType(op.opType)) {
+        await assertDecryptedFullStateOpIntegrity(op, parsedPayload);
+      }
       results[index] = {
         ...op,
         payload: parsedPayload,

@@ -613,6 +613,13 @@ export class SyncWrapperService {
         pendingLwwOps =
           reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
       }
+      if (completedUploadResults.some((result) => result.blockedByRejectedFullState)) {
+        SyncLog.err(
+          'SyncWrapperService: Upload blocked because pending operations depend on a rejected full-state baseline.',
+        );
+        this._providerManager.setSyncStatus('ERROR');
+        return 'HANDLED_ERROR';
+      }
       if (pendingLwwOps > 0) {
         SyncLog.warn(
           `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +

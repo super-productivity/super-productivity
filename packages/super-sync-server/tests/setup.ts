@@ -106,6 +106,13 @@ vi.mock('../src/db', () => {
       return true;
     }
 
+    if (
+      Array.isArray(where.OR) &&
+      !where.OR.some((alternative: any) => matchesWhere(op, alternative))
+    ) {
+      return false;
+    }
+
     if (where.userId !== undefined && op.userId !== where.userId) return false;
     if (where.id !== undefined && op.id !== where.id) return false;
     if (where.entityType !== undefined && op.entityType !== where.entityType) {
@@ -139,6 +146,12 @@ vi.mock('../src/db', () => {
       return false;
     }
     if (typeof where.opType === 'string' && op.opType !== where.opType) {
+      return false;
+    }
+    if (where.repairBaseServerSeq === null && op.repairBaseServerSeq != null) {
+      return false;
+    }
+    if (where.repairBaseServerSeq?.not === null && op.repairBaseServerSeq == null) {
       return false;
     }
     if (
@@ -357,6 +370,7 @@ vi.mock('../src/auth', () => ({
     .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
   VERIFICATION_TOKEN_EXPIRY_MS: 24 * 60 * 60 * 1000,
   MAX_VERIFICATION_RESEND_COUNT: 20,
+  verifyEmail: vi.fn().mockResolvedValue(true),
 }));
 
 // Reset test data before each test
