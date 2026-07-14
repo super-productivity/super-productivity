@@ -1,4 +1,4 @@
-import { parseAddTaskFromAppUriPayload } from './ipc-events';
+import { parseAddTaskFromAppUriPayload, parseBeforeCloseIdsPayload } from './ipc-events';
 
 describe('parseAddTaskFromAppUriPayload', () => {
   it('accepts a payload with a title', () => {
@@ -17,5 +17,18 @@ describe('parseAddTaskFromAppUriPayload', () => {
 
   it('rejects a non-string title', () => {
     expect(parseAddTaskFromAppUriPayload({ title: 123 })).toBeNull();
+  });
+});
+
+describe('parseBeforeCloseIdsPayload', () => {
+  it('reads ids from the payload without an Electron event argument', () => {
+    expect(parseBeforeCloseIdsPayload(['SYNC_BEFORE_CLOSE'])).toEqual([
+      'SYNC_BEFORE_CLOSE',
+    ]);
+  });
+
+  it('rejects malformed close payloads', () => {
+    expect(parseBeforeCloseIdsPayload(undefined)).toEqual([]);
+    expect(parseBeforeCloseIdsPayload(['valid', 123])).toEqual([]);
   });
 });

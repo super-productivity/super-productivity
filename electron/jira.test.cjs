@@ -378,6 +378,34 @@ test('clears Jira image authentication when it is no longer needed', () => {
   assert.deepEqual(requestHeaders, {});
 });
 
+test('clears previous image authentication when replacement config is invalid', () => {
+  setupRequestHeadersForImages({
+    host: 'https://jira-a.example.com/jira',
+    userName: 'user',
+    password: 'pass',
+    usePAT: false,
+  });
+
+  assert.throws(
+    () =>
+      setupRequestHeadersForImages({
+        host: null,
+        userName: 'other-user',
+        password: 'other-pass',
+        usePAT: false,
+      }),
+    /Invalid Jira image authentication config/,
+  );
+
+  const requestHeaders = {};
+  applyJiraImageAuth(
+    'https://jira-a.example.com/jira/image.png',
+    requestHeaders,
+    'image',
+  );
+  assert.deepEqual(requestHeaders, {});
+});
+
 test('rejects a non-HTTP Jira image authentication origin', () => {
   assert.throws(
     () =>

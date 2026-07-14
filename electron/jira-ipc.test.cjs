@@ -6,6 +6,7 @@ const Module = require('node:module');
 require('ts-node/register/transpile-only');
 
 const handlers = new Map();
+const jiraImageAuth = require(path.resolve(__dirname, 'jira-image-auth.ts'));
 const originalModuleLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === 'electron') {
@@ -16,6 +17,9 @@ Module._load = function patchedLoad(request, parent, isMain) {
       },
     };
   }
+  if (request === '../jira-image-auth') {
+    return jiraImageAuth;
+  }
   return originalModuleLoad.call(this, request, parent, isMain);
 };
 
@@ -23,6 +27,7 @@ const { initJiraIpc } = require(path.resolve(__dirname, 'ipc-handlers/jira.ts'))
 const { IPC } = require(
   path.resolve(__dirname, 'shared-with-frontend/ipc-events.const.ts'),
 );
+const { applyJiraImageAuth, setupRequestHeadersForImages } = jiraImageAuth;
 Module._load = originalModuleLoad;
 
 initJiraIpc();
@@ -73,4 +78,26 @@ test('Jira IPC unwraps an authorized request before validation', async () => {
     requestId: 'request-1',
     error: { message: 'Invalid Jira URL' },
   });
+});
+
+test('issuing a capability to a new renderer document revokes stale image auth', () => {
+  setupRequestHeadersForImages({
+    host: 'https://jira.example.com/jira',
+    userName: 'user',
+    password: 'pass',
+    usePAT: false,
+  });
+
+  const mainFrame = {};
+  const event = { senderFrame: mainFrame, sender: { mainFrame } };
+  const register = handlers.get(IPC.JIRA_REGISTER_CAPABILITY);
+  assert.equal(typeof register(event), 'string');
+
+  const requestHeaders = {};
+  applyJiraImageAuth(
+    'https://jira.example.com/jira/image.png',
+    requestHeaders,
+    'image',
+  );
+  assert.deepEqual(requestHeaders, {});
 });

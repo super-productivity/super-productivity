@@ -41,6 +41,7 @@ const parseImageAuthConfig = (config: unknown): JiraImageAuthConfig => {
 
 // TODO simplify and do encoding in frontend service
 export const setupRequestHeadersForImages = (rawConfig: unknown): void => {
+  currentAuth = null;
   const config = parseImageAuthConfig(rawConfig);
   const parsedUrl = new URL(
     /^[a-z][a-z\d+.-]*:\/\//i.test(config.host as string)

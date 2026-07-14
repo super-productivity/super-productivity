@@ -14,7 +14,11 @@ export const initJiraIpc = (): void => {
     if (event.senderFrame !== event.sender.mainFrame) {
       return null;
     }
-    return capabilityRegistry.register(event.senderFrame);
+    const token = capabilityRegistry.register(event.senderFrame);
+    if (token) {
+      clearRequestHeadersForImages();
+    }
+    return token;
   });
 
   ipcMain.handle(IPC.JIRA_SETUP_IMG_HEADERS, (event, envelope: unknown) => {

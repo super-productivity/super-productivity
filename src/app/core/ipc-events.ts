@@ -17,6 +17,9 @@ export const parseAddTaskFromAppUriPayload = (
   return data as { title: string };
 };
 
+export const parseBeforeCloseIdsPayload = (data: unknown): string[] =>
+  Array.isArray(data) && data.every((id) => typeof id === 'string') ? data : [];
+
 export const ipcIdleTime$: Observable<number> = IS_ELECTRON
   ? ipcEvent$(IPC.IDLE_TIME).pipe(map(([idleTimeInMs]) => idleTimeInMs as number))
   : EMPTY;
@@ -25,8 +28,8 @@ export const ipcAnyFileDownloaded$: Observable<unknown> = IS_ELECTRON
   ? ipcEvent$(IPC.ANY_FILE_DOWNLOADED).pipe()
   : EMPTY;
 
-export const ipcNotifyOnClose$: Observable<unknown> = IS_ELECTRON
-  ? ipcEvent$(IPC.NOTIFY_ON_CLOSE).pipe()
+export const ipcNotifyOnClose$: Observable<string[]> = IS_ELECTRON
+  ? ipcEvent$(IPC.NOTIFY_ON_CLOSE).pipe(map(([ids]) => parseBeforeCloseIdsPayload(ids)))
   : EMPTY;
 
 export const ipcResume$: Observable<unknown> = IS_ELECTRON
