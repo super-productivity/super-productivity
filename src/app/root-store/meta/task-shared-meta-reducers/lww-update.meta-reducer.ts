@@ -472,6 +472,16 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
         return reducer(state, action);
       }
+      // 'patch' payloads carry a partial delta (disjoint merges); replacing the
+      // whole feature state with one would wipe every untouched section. Apply
+      // as a shallow merge instead — the singleton analogue of updateOne. No
+      // current producer emits patch-mode singleton ops; this is a guard.
+      if (actionMeta?.lwwUpdateMode === 'patch') {
+        entityData = {
+          ...(featureState as Record<string, unknown>),
+          ...entityData,
+        };
+      }
       if (
         entityType === 'GLOBAL_CONFIG' &&
         actionMeta?.isApplyingFromOtherClient === true
@@ -539,6 +549,17 @@ export const lwwUpdateMetaReducer: MetaReducer = (
             `lwwUpdateMetaReducer: Invalid ${field} "${val}" on task ${entityId}, clearing`,
           );
         }
+      }
+      // TODAY_TAG membership is virtual (derived from dueDay/dueWithTime) and
+      // must never be stored in task.tagIds. A replace-mode snapshot from a
+      // legacy or corrupt producer would otherwise persist a stray 'TODAY' and
+      // updateTagTaskIds would sync the task into TODAY_TAG.taskIds.
+      const tagIds = entityData['tagIds'];
+      if (Array.isArray(tagIds) && tagIds.includes(TODAY_TAG.id)) {
+        entityData['tagIds'] = tagIds.filter((id) => id !== TODAY_TAG.id);
+        devError(
+          `lwwUpdateMetaReducer: Stripped virtual TODAY tag from task ${entityId}`,
+        );
       }
     }
 

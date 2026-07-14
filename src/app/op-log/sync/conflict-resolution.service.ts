@@ -437,6 +437,11 @@ export class ConflictResolutionService {
 
     const allOpsToApply: Operation[] = [];
     const allStoredOps: Array<{ id: string; seq: number }> = [];
+    // Durable seq of every op queued for live apply. Live apply order must
+    // equal seq order — status-blind hydration replays by seq, and later steps
+    // can reuse pending rows from a prior failed attempt whose seqs predate
+    // rows appended fresh in this call.
+    const applySeqByOpId = new Map<string, number>();
     // Synthetic local ops (disjoint merges) ride in the apply batch but are NOT
     // pending remote rows. Successful ones are excluded from the remote reducer
     // checkpoint; failed ones are quarantined before falling back to plain LWW.
@@ -707,6 +712,46 @@ export class ConflictResolutionService {
       }
     }
 
+    // A remote DELETE that loses outright — single-entity, or a bulk delete
+    // whose conflicting entities all win locally with no uncontested sibling —
+    // never enters the mixed-winner block above, yet its reducer cascade still
+    // removes the winning parent's subtasks wherever the delete IS applied:
+    // on every client that already synced it, and on this client's own
+    // status-blind hydration replay of the durable loser row. Only the parent
+    // carries a compensation op, so emit recreate-after-delete snapshots for
+    // its still-present subtasks too (#8956). Archive ops are OpType.Update,
+    // so archive precedence is untouched.
+    for (const resolution of resolutions) {
+      if (resolution.winner !== 'local' || !resolution.localWinOp) {
+        continue;
+      }
+      const parentCompensationOp = newLocalWinOpsById.get(resolution.localWinOp.id);
+      if (
+        !parentCompensationOp ||
+        !isLwwUpdatePayload(parentCompensationOp.payload) ||
+        parentCompensationOp.payload.recreatesEntityAfterDelete !== true
+      ) {
+        continue;
+      }
+      for (const remoteOp of resolution.conflict.remoteOps) {
+        if (remoteOp.opType !== OpType.Delete || compensatedRemoteOps.has(remoteOp.id)) {
+          continue;
+        }
+        const subtaskRecreationOps =
+          await this._createSubtaskRecreationOpsForWinningParent(
+            parentCompensationOp,
+            remoteOp,
+          );
+        // Not queued for live apply: the pure loser is never applied live, so
+        // this client's state already holds the subtasks. The rows exist for
+        // upload and for seq-ordered replay after the durable loser.
+        for (const subtaskOp of subtaskRecreationOps) {
+          newLocalWinOps.push(subtaskOp);
+          newLocalWinOpsById.set(subtaskOp.id, subtaskOp);
+        }
+      }
+    }
+
     for (const resolution of resolutions) {
       // Note: localWinOp is undefined for archive-wins sibling conflicts
       // (non-archive conflicts for an entity being archived). These resolve
@@ -804,6 +849,7 @@ export class ConflictResolutionService {
       ].sort((a, b) => a.seq - b.seq);
       for (const entry of resolutionApplyEntries) {
         allOpsToApply.push(entry.op);
+        applySeqByOpId.set(entry.op.id, entry.seq);
         if (entry.source === 'remote') {
           allStoredOps.push({
             id: entry.op.id,
@@ -824,6 +870,7 @@ export class ConflictResolutionService {
       for (let i = 0; i < result.ops.length; i++) {
         allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
         allOpsToApply.push(result.ops[i]);
+        applySeqByOpId.set(result.ops[i].id, result.seqs[i]);
       }
     }
 
@@ -862,6 +909,7 @@ export class ConflictResolutionService {
       for (let i = 0; i < result.ops.length; i++) {
         allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
         allOpsToApply.push(result.ops[i]);
+        applySeqByOpId.set(result.ops[i].id, result.seqs[i]);
       }
     }
 
@@ -916,6 +964,7 @@ export class ConflictResolutionService {
         // Apply/upload the WRITTEN op — it carries the rebased vector clock.
         allStoredOps.push({ id: entry.op.id, seq: entry.seq });
         allOpsToApply.push(entry.op);
+        applySeqByOpId.set(entry.op.id, entry.seq);
         checkpointExemptOpIds.add(entry.op.id);
         writtenMergedOpIds.add(entry.op.id);
         OpLog.normal(
@@ -924,6 +973,20 @@ export class ConflictResolutionService {
         );
       }
     }
+
+    // Re-sort the combined batch by durable seq: with fresh appends this is a
+    // no-op (append order = seq order), but a pending row reused from a prior
+    // failed attempt carries an older seq than rows appended fresh above, and
+    // status-blind hydration will replay it FIRST. Live apply must match that
+    // order or a crash replays a different history (e.g. a reused CREATE
+    // applied live after a fresh full snapshot of its container, but before it
+    // on replay). Ops without a recorded seq cannot exist here; sort them last
+    // deterministically rather than throwing mid-resolution.
+    allOpsToApply.sort(
+      (a, b) =>
+        (applySeqByOpId.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (applySeqByOpId.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 4: Apply remote ops in a single batch.
@@ -2489,7 +2552,19 @@ export class ConflictResolutionService {
         },
       },
     );
-    const convertedById = new Map(convertedOps.map((op) => [op.id, op]));
+    // Conversion may wrap an older-schema op in the v3-only replacement
+    // envelope; restamp it so the stored row's version matches its semantics.
+    // Ops returned unchanged keep their original (honest) stamp.
+    const convertedById = new Map(
+      convertedOps.map((op) => [
+        op.id,
+        isLwwUpdatePayload(op.payload) &&
+        op.payload.lwwUpdateMode === 'replace' &&
+        (op.schemaVersion ?? 1) < CURRENT_SCHEMA_VERSION
+          ? { ...op, schemaVersion: CURRENT_SCHEMA_VERSION }
+          : op,
+      ]),
+    );
     return conflict.remoteOps.map((op) => convertedById.get(op.id) ?? op);
   }
 

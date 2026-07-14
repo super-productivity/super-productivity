@@ -238,6 +238,41 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedTask.notes).toBe('Keep this field');
     });
 
+    it('should strip the virtual TODAY tag from a replacement snapshot (#8990)', () => {
+      // TODAY membership is derived from dueDay/dueWithTime and must never be
+      // stored in tagIds (ARCHITECTURE-DECISIONS #2) — a legacy or corrupt
+      // producer's snapshot must not smuggle it in via replace semantics.
+      const state = createMockState([{ tagIds: ['keep-tag'] }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Replacement title',
+        tagIds: ['TODAY', 'keep-tag'],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      // Prevent devError from throwing (it calls alert + confirm → throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.tagIds).toEqual(['keep-tag']);
+    });
+
     it('should update modified timestamp', () => {
       const state = createMockState([{ modified: 1000 }]);
       const action = {
@@ -1354,6 +1389,44 @@ describe('lwwUpdateMetaReducer', () => {
       const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
         sync: Record<string, unknown>;
       };
+      expect(globalConfig.sync).toEqual(localSync);
+    });
+
+    it('should shallow-merge a patch-mode singleton payload instead of replacing (#8990)', () => {
+      // 'patch' payloads are partial deltas; replacing the whole feature state
+      // with one would wipe every untouched section. No current producer emits
+      // patch-mode singleton ops — this pins the guard.
+      const state = createMockStateWithSingletons();
+      const localSync = {
+        syncProvider: 'localFile',
+        isEnabled: true,
+      };
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: localSync,
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        misc: Record<string, unknown>;
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.misc).toEqual({ isDisableAnimations: true });
       expect(globalConfig.sync).toEqual(localSync);
     });
 
