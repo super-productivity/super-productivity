@@ -32,6 +32,7 @@ import {
   ConflictJournalStatus,
   ConflictJournalView,
   JOURNAL_MAX_ENTRIES,
+  JOURNAL_PRUNE_SLACK,
   JOURNAL_RETENTION_DAYS,
 } from './conflict-journal.model';
 
@@ -58,6 +59,15 @@ export class ConflictJournalService {
   private readonly _unreviewedCount = signal(0);
   /** Number of entries still awaiting review (status === 'unreviewed'). */
   readonly unreviewedCount = this._unreviewedCount.asReadonly();
+
+  private readonly _revision = signal(0);
+  /**
+   * Monotonic counter bumped on EVERY journal mutation (record / status change /
+   * prune / clearAll), regardless of whether `unreviewedCount` changed. Consumers
+   * that must react to composition changes at an equal total (e.g. one remote-win
+   * reviewed while one local-win is recorded) key off this instead of the count.
+   */
+  readonly revision = this._revision.asReadonly();
 
   private _openDb(): Promise<IDBPDatabase<ConflictJournalDB>> {
     return openDB<ConflictJournalDB>(
@@ -117,6 +127,14 @@ export class ConflictJournalService {
     try {
       const db = await this._ensureDb();
       await db.put(CONFLICT_JOURNAL_STORE, entry);
+      // SPAP-36: retention was only enforced at app start, so a long-lived
+      // session could grow the store unboundedly. count() is cheap; the O(n)
+      // prune runs only when the store exceeds the soft cap, i.e. amortized
+      // once every JOURNAL_PRUNE_SLACK records.
+      const count = await db.count(CONFLICT_JOURNAL_STORE);
+      if (count > JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK) {
+        await this._prune(db, Date.now());
+      }
       await this._refreshUnreviewedCount(db);
     } catch (err) {
       OpLog.err('ConflictJournalService: failed to record entry (ignored)', err);
@@ -203,42 +221,61 @@ export class ConflictJournalService {
     // return 0, not reject — and _ensureDb already resets its poisoned promise.
     try {
       const db = await this._ensureDb();
-      // Ascending by resolvedAt (oldest first).
-      const ascending = await db.getAllFromIndex(
-        CONFLICT_JOURNAL_STORE,
-        CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
-      );
-
-      const retentionWindowMs = JOURNAL_RETENTION_DAYS * DAY_MS;
-      const cutoff = now - retentionWindowMs;
-      const idsToDelete = new Set<string>();
-
-      for (const entry of ascending) {
-        if (entry.resolvedAt < cutoff) {
-          idsToDelete.add(entry.id);
-        }
-      }
-
-      // Count bound applies to the survivors of the age prune; drop the oldest
-      // overflow so only the newest JOURNAL_MAX_ENTRIES remain.
-      const survivors = ascending.filter((entry) => !idsToDelete.has(entry.id));
-      const overflow = survivors.length - JOURNAL_MAX_ENTRIES;
-      for (let i = 0; i < overflow; i++) {
-        idsToDelete.add(survivors[i].id);
-      }
-
-      if (idsToDelete.size > 0) {
-        const tx = db.transaction(CONFLICT_JOURNAL_STORE, 'readwrite');
-        await Promise.all(Array.from(idsToDelete, (id) => tx.store.delete(id)));
-        await tx.done;
-      }
-
+      const deleted = await this._prune(db, now);
       await this._refreshUnreviewedCount(db);
-      return idsToDelete.size;
+      return deleted;
     } catch (err) {
       OpLog.err('ConflictJournalService: pruneOnStart failed (ignored)', err);
       return 0;
     }
+  }
+
+  /**
+   * Prune core shared by `pruneOnStart` and `record()`'s opportunistic prune:
+   * age bound first, then the count bound on the survivors. Returns the number
+   * of entries deleted. Callers own error handling and the count refresh.
+   */
+  private async _prune(
+    db: IDBPDatabase<ConflictJournalDB>,
+    now: number,
+  ): Promise<number> {
+    // Ascending by resolvedAt (oldest first).
+    const ascending = await db.getAllFromIndex(
+      CONFLICT_JOURNAL_STORE,
+      CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
+    );
+
+    const retentionWindowMs = JOURNAL_RETENTION_DAYS * DAY_MS;
+    const cutoff = now - retentionWindowMs;
+    const idsToDelete = new Set<string>();
+
+    for (const entry of ascending) {
+      if (entry.resolvedAt < cutoff) {
+        idsToDelete.add(entry.id);
+      }
+    }
+
+    // Count bound applies to the survivors of the age prune; drop the oldest
+    // overflow so only the newest JOURNAL_MAX_ENTRIES remain.
+    const survivors = ascending.filter((entry) => !idsToDelete.has(entry.id));
+    const overflow = survivors.length - JOURNAL_MAX_ENTRIES;
+    for (let i = 0; i < overflow; i++) {
+      idsToDelete.add(survivors[i].id);
+    }
+
+    if (idsToDelete.size > 0) {
+      const tx = db.transaction(CONFLICT_JOURNAL_STORE, 'readwrite');
+      // Await the delete requests AND tx.done together. If the transaction aborts
+      // while requests are still pending, both the delete aggregate and tx.done
+      // reject; awaiting them separately (delete first, then tx.done) leaves
+      // tx.done's rejection without a handler once the delete aggregate rejects,
+      // so it escapes as a global unhandled rejection. Putting tx.done inside the
+      // same Promise.all attaches a handler to it, so no rejection escapes.
+      const deletes = Array.from(idsToDelete, (id) => tx.store.delete(id));
+      await Promise.all([...deletes, tx.done]);
+    }
+
+    return idsToDelete.size;
   }
 
   /**
@@ -264,6 +301,12 @@ export class ConflictJournalService {
   private async _refreshUnreviewedCount(
     db: IDBPDatabase<ConflictJournalDB>,
   ): Promise<void> {
+    // Advance `revision` FIRST, so a committed mutation always notifies consumers
+    // even if the count query below throws (callers swallow that error). The
+    // banner keys off `revision` and re-reads the journal itself, so it still
+    // reflects the committed change; `unreviewedCount` catches up once the query
+    // succeeds. Fires on every mutation even when the count is unchanged.
+    this._revision.update((r) => r + 1);
     const count = await db.countFromIndex(
       CONFLICT_JOURNAL_STORE,
       CONFLICT_JOURNAL_INDEX_STATUS,

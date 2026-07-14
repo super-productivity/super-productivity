@@ -115,14 +115,35 @@ export interface ConflictJournalEntry {
 export type ConflictJournalView = 'unreviewed' | 'history';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Retention (pruned on app-start; whichever bound binds first)
+// Retention. Pruned on app start (age + count bound), and opportunistically
+// mid-session when record() crosses the JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK
+// soft cap. Each prune applies the age bound first, then the count bound on the
+// survivors. Mid-session pruning is COUNT-triggered: a long-running low-volume
+// session (few entries, never crossing the soft cap) still relies on the next
+// app start to enforce the age bound.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Entries older than this many days are pruned on start. */
+/**
+ * Entries older than this many days are pruned — on app start, and mid-session
+ * whenever a count-triggered prune fires (not on a mid-session timer).
+ */
 export const JOURNAL_RETENTION_DAYS = 14;
 
-/** At most this many entries are kept (newest wins) — pruned on start. */
+/**
+ * The store is pruned back to this many entries (newest wins), on start and
+ * mid-session. NOTE: this is the post-prune retained size, not a hard live cap —
+ * mid-session the store may grow to JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK
+ * before the crossing record() prunes it back down to JOURNAL_MAX_ENTRIES.
+ */
 export const JOURNAL_MAX_ENTRIES = 200;
+
+/**
+ * How far past JOURNAL_MAX_ENTRIES the store may grow before `record()` prunes
+ * mid-session (SPAP-36). Pruning reads the whole store, so it is amortized:
+ * the crossing record() prunes back down to JOURNAL_MAX_ENTRIES and the next
+ * prune is another JOURNAL_PRUNE_SLACK records away.
+ */
+export const JOURNAL_PRUNE_SLACK = 20;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOISE_FIELDS
