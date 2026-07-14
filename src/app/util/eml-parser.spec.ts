@@ -335,6 +335,31 @@ describe('parseEml', () => {
     expect(data.text).toBe('inline body\n');
   });
 
+  it('should skip an attachment identified only by a continued RFC 2231 name*0/name*1 parameter', async () => {
+    const continuedNameAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Continued name attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain; name*0="notes"; name*1=".txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(continuedNameAttachmentEml, 'continued-name-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
   it('should return undefined for a multipart body with no closing boundary (malformed)', async () => {
     const unterminatedEml = [
       'From: Alice <alice@example.com>',

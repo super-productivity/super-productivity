@@ -14,6 +14,12 @@ export interface ParsedEml {
 // real-world structure (mixed > related > alternative is 3 deep at most).
 const MAX_MIME_DEPTH = 10;
 
+// Matches the RFC 2231 spellings of the `name` parameter: the plain form,
+// the encoded form (`name*`), and continuation segments (`name*0`,
+// `name*0*`, `name*1`, ...). Presence-only match — the value is never
+// decoded/reassembled since we only need to know a filename hint exists.
+const _NAME_PARAM_KEY_RE = /^name(\*\d*\*?)?$/;
+
 /**
  * Minimal, dependency-free RFC 822 / MIME reader for the drop-an-`.eml` feature.
  *
@@ -25,9 +31,10 @@ const MAX_MIME_DEPTH = 10;
  * so an attached file can never shadow or be mistaken for the actual message
  * body: a `Content-Disposition` other than `inline` (recognized or not, per
  * RFC 2183 §2.8), or — since `Content-Disposition` is optional — the legacy
- * pre-`Content-Disposition` `Content-Type; name=` filename hint. HTML bodies
- * and non-UTF-8/ASCII
- * charsets are still omitted by design (`text: undefined`), never decoded.
+ * pre-`Content-Disposition` `Content-Type; name=` filename hint (including its
+ * RFC 2231 encoded/continued spellings, `name*`/`name*0`/`name*0*`/...). HTML
+ * bodies and non-UTF-8/ASCII charsets are still omitted by design
+ * (`text: undefined`), never decoded.
  * The caller stores the body as an untrusted, inert note, so we favour safety
  * and simplicity over completeness; do not add HTML decoding or charset
  * transcoding here without revisiting that threat model (untrusted-HTML XSS,
@@ -309,10 +316,11 @@ const _parseContentType = (
       // Boundary values are case-sensitive and must match the body's delimiter
       // lines verbatim, unlike charset.
       boundary = rawValue;
-    } else if (key === 'name') {
-      // Legacy pre-Content-Disposition filename hint (RFC 2045); presence
-      // alone is enough to flag the part as attachment-like, so the value
-      // itself is never used.
+    } else if (_NAME_PARAM_KEY_RE.test(key)) {
+      // Legacy pre-Content-Disposition filename hint (RFC 2045), including
+      // RFC 2231 encoded/continued forms (`name*`, `name*0`, `name*0*`, ...).
+      // Presence alone is enough to flag the part as attachment-like, so the
+      // value is never decoded or reconstructed.
       name = rawValue;
     }
   }
