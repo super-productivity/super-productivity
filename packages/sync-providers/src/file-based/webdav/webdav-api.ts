@@ -15,6 +15,15 @@ import type { WebDavHttpAdapter, WebDavHttpResponse } from './webdav-http-adapte
 import { FileMeta, WebdavXmlParser } from './webdav-xml-parser';
 import type { WebdavPrivateCfg } from './webdav.model';
 
+/**
+ * RFC 7232 strong entity-tag: a quoted string of `etagc` chars only. The class
+ * excludes CR/LF, all control chars, the inner quote, and DEL, so a value from
+ * this pattern is safe to place verbatim in an `If-Match` header (no header
+ * splitting). Weak tags (`W/"..."`) intentionally do not match — they cannot
+ * drive a conditional write, so callers fall back to the content-hash check.
+ */
+const STRONG_ETAG_RE = /^"[\x21\x23-\x7e\x80-\xff]*"$/;
+
 export interface WebdavApiDeps {
   logger: SyncLogger;
   /**
@@ -47,11 +56,11 @@ export class WebdavApi {
   private _readStrongEtag(headers: Record<string, string>): string | undefined {
     const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === 'etag');
     const etag = entry?.[1]?.trim();
-    return etag && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(etag) ? etag : undefined;
+    return etag && STRONG_ETAG_RE.test(etag) ? etag : undefined;
   }
 
   private _isStrongEtag(value: string): boolean {
-    return /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
+    return STRONG_ETAG_RE.test(value);
   }
 
   private _isHttpStatus(error: unknown, status: number): boolean {
