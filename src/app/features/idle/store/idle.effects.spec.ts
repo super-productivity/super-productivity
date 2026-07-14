@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { provideMockActions } from '@ngrx/effects/testing';
+import { BehaviorSubject, ReplaySubject, Subject } from 'rxjs';
+import { Action } from '@ngrx/store';
 import { IdleEffects } from './idle.effects';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
@@ -10,16 +12,16 @@ import { MatDialog } from '@angular/material/dialog';
 import { UiHelperService } from '../../ui-helper/ui-helper.service';
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { DateService } from '../../../core/date/date.service';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
-import {
-  selectIdleConfig,
-} from '../../config/store/global-config.reducer';
+import { selectIdleConfig } from '../../config/store/global-config.reducer';
 import { selectIsSessionRunning } from '../../focus-mode/store/focus-mode.selectors';
 import { selectIsIdle } from './idle.selectors';
 import { triggerIdle } from './idle.actions';
 
 describe('IdleEffects', () => {
   let effects: IdleEffects;
+  let actions$: Subject<Action>;
   let store: MockStore;
   let chromeInterfaceMock: {
     onReady$: Subject<void>;
@@ -35,9 +37,10 @@ describe('IdleEffects', () => {
     const isSuppress = overrides?.isSuppressIdleDuringFocusMode ?? false;
     const isSessionRunning = overrides?.isFocusSessionRunning ?? false;
 
-    const onReady$ = new Subject<void>();
+    actions$ = new Subject<Action>();
+    const onReady$ = new ReplaySubject<void>(1);
     chromeInterfaceMock = {
-      onReady$: onReady$ as unknown as Observable<void>,
+      onReady$,
       addEventListener: jasmine
         .createSpy('addEventListener')
         .and.callFake((event: string, cb: (ev: Event, data?: unknown) => void) => {
@@ -58,6 +61,8 @@ describe('IdleEffects', () => {
     TestBed.configureTestingModule({
       providers: [
         IdleEffects,
+        provideMockActions(() => actions$),
+        { provide: LOCAL_ACTIONS, useValue: actions$ },
         provideMockStore({
           selectors: [
             {
@@ -74,10 +79,7 @@ describe('IdleEffects', () => {
           ],
         }),
         { provide: DataInitStateService, useValue: dataInitStateMock },
-        {
-          provide: ChromeExtensionInterfaceService,
-          useValue: chromeInterfaceMock,
-        },
+        { provide: ChromeExtensionInterfaceService, useValue: chromeInterfaceMock },
         { provide: WorkContextService, useValue: {} as any },
         { provide: TaskService, useValue: taskServiceMock },
         { provide: MatDialog, useValue: {} as any },
@@ -96,7 +98,8 @@ describe('IdleEffects', () => {
     effects = TestBed.inject(IdleEffects);
     store = TestBed.inject(MockStore);
 
-    // Kick off the Chrome extension interface so _triggerIdleApis$ activates
+    // Emit ready signal so _triggerIdleApis$ subscribes to the inner listener.
+    // ReplaySubject replays the value even though the effect hasn't subscribed yet.
     onReady$.next();
     onReady$.complete();
   };
@@ -125,7 +128,6 @@ describe('IdleEffects', () => {
 
       setTimeout(() => {
         sub.unsubscribe();
-        // Guard returns EMPTY so no triggerIdle action should be emitted
         expect(emitted.length).toBe(0);
         done();
       }, 200);
@@ -150,9 +152,7 @@ describe('IdleEffects', () => {
       setTimeout(() => {
         sub.unsubscribe();
         expect(emitted.length).toBe(1);
-        expect(emitted[0]).toEqual(
-          triggerIdle({ idleTime: 120000 }),
-        );
+        expect(emitted[0]).toEqual(triggerIdle({ idleTime: 120000 }));
         done();
       }, 200);
     });
@@ -176,9 +176,7 @@ describe('IdleEffects', () => {
       setTimeout(() => {
         sub.unsubscribe();
         expect(emitted.length).toBe(1);
-        expect(emitted[0]).toEqual(
-          triggerIdle({ idleTime: 120000 }),
-        );
+        expect(emitted[0]).toEqual(triggerIdle({ idleTime: 120000 }));
         done();
       }, 200);
     });
