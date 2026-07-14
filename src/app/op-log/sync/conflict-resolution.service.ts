@@ -2909,16 +2909,20 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Collects the TASK ids removed by DELETE ops in the same resolution batch
-   * (single and multi-entity). Used to keep project/parent recovery from
-   * recreating a task another device is concurrently deleting. Archive ops are
-   * `OpType.Update` and are intentionally excluded.
+   * Collects the TASK ids removed by DELETE ops in the same resolution batch.
+   * A bulk `deleteTasks` op carries every id in `entityIds` and mirrors only
+   * the first to `entityId`, with an empty `entityChanges`, so union both via
+   * `getOpEntityIds` — reading `entityId` alone would miss every trailing id
+   * and let recovery resurrect it. A mixed-entity payload can additionally
+   * carry task deletes in `entityChanges`. Used to keep project/parent recovery
+   * from recreating a task another device is concurrently deleting. Archive ops
+   * are `OpType.Update` and are intentionally excluded.
    */
   private _collectDeletedTaskIds(ops: readonly Operation[]): Set<string> {
     const deletedTaskIds = new Set<string>();
     for (const op of ops) {
-      if (op.entityType === 'TASK' && op.opType === OpType.Delete && op.entityId) {
-        deletedTaskIds.add(op.entityId);
+      if (op.entityType === 'TASK' && op.opType === OpType.Delete) {
+        for (const id of getOpEntityIds(op)) deletedTaskIds.add(id);
       }
       if (isMultiEntityPayload(op.payload)) {
         for (const change of op.payload.entityChanges) {

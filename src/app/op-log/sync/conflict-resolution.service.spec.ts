@@ -1697,6 +1697,115 @@ describe('ConflictResolutionService', () => {
         expect(taskRecreations.map(({ entityId }) => entityId)).toContain('regular-task');
       });
 
+      it('does not resurrect tasks removed by a concurrent bulk deleteTasks (#8997 review)', async () => {
+        // Same split-brain as the single-delete case above, but Device C removes
+        // the tasks with a bulk deleteTasks (TASK_SHARED_DELETE_MULTIPLE). Such
+        // an op carries every id in `entityIds` and only the FIRST in
+        // `entityId`, with an empty `entityChanges`. Recovery must skip ALL of
+        // them; otherwise every id after the first is recreated (with a borrowed
+        // newer timestamp) and resurrected on every client that applied C's
+        // delete, while this client's own bulk delete wins locally.
+        const remoteProjectDelete: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-delete',
+            'client-b',
+            1_000,
+            OpType.Delete,
+            'project-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+          entityType: 'PROJECT',
+          payload: {
+            actionPayload: {
+              projectId: 'project-1',
+              allTaskIds: ['regular-task', 'backlog-task-1', 'backlog-task-2'],
+              noteIds: [],
+            },
+            entityChanges: [],
+          },
+        };
+        const localProjectEdit: Operation = {
+          ...createOpWithTimestamp(
+            'local-project-edit',
+            'client-a',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        const concurrentBulkDelete: Operation = {
+          ...createOpWithTimestamp(
+            'remote-bulk-delete',
+            'client-c',
+            1_500,
+            OpType.Delete,
+            // A bulk delete op's primary entityId is the first of entityIds.
+            'backlog-task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+          entityIds: ['backlog-task-1', 'backlog-task-2'],
+          payload: {
+            actionPayload: { taskIds: ['backlog-task-1', 'backlog-task-2'] },
+            entityChanges: [],
+          },
+        };
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'project-1') {
+            return of({
+              id: 'project-1',
+              title: 'Winning project',
+              taskIds: ['regular-task'],
+              backlogTaskIds: ['backlog-task-1', 'backlog-task-2'],
+            });
+          }
+          if (props?.id === 'regular-task') {
+            return of({
+              id: 'regular-task',
+              title: 'Regular task',
+              projectId: 'project-1',
+              subTaskIds: [],
+            });
+          }
+          // Both bulk-deleted tasks are still present in the pre-batch store:
+          // C's delete has not applied yet.
+          if (props?.id === 'backlog-task-1' || props?.id === 'backlog-task-2') {
+            return of({
+              id: props.id,
+              title: props.id,
+              projectId: 'project-1',
+              subTaskIds: [],
+            });
+          }
+          return of(undefined);
+        });
+
+        await service.autoResolveConflictsLWW(
+          [
+            {
+              entityType: 'PROJECT',
+              entityId: 'project-1',
+              localOps: [localProjectEdit],
+              remoteOps: [remoteProjectDelete],
+              suggestedResolution: 'manual',
+            },
+          ],
+          [concurrentBulkDelete],
+        );
+
+        const recreatedIds = getMixedLocalOps()
+          .filter((op) => op.entityType === 'TASK')
+          .map(({ entityId }) => entityId);
+        expect(recreatedIds)
+          .withContext('recovery must skip the first id of a concurrent bulk delete')
+          .not.toContain('backlog-task-1');
+        expect(recreatedIds)
+          .withContext('recovery must skip every trailing id of a concurrent bulk delete')
+          .not.toContain('backlog-task-2');
+        // The genuinely-present task is still recovered.
+        expect(recreatedIds).toContain('regular-task');
+      });
+
       it('recreates project tasks with each task’s own modified timestamp, not the project’s (#8997 review)', async () => {
         // The project edit is much newer (9000) than the task's last change
         // (4321). Borrowing the project timestamp would let the recreation win
