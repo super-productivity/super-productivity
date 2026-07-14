@@ -47,7 +47,8 @@
 }
 
 // iOS keeps 100vh tied to the layout viewport while the soft keyboard is open.
-// Use visualViewport height from JS so the app shell shrinks above the keyboard.
+// Use VisualViewport's bottom edge from JS so the top-anchored shell fills the
+// visible area even when iOS pans the viewport to keep an input in view.
 :host-context(body.isIOS.isKeyboardVisible) .app-container {
   height: calc(var(--visual-viewport-height) - var(--safe-area-top));
   min-height: calc(var(--visual-viewport-height) - var(--safe-area-top));

@@ -39,6 +39,13 @@
   transition: bottom var(--transition-duration-m) ease-out;
 }
 
+// iOS runs the Capacitor keyboard in non-resizing mode. Its viewport service
+// offsets fixed content by the area below VisualViewport, with the sanitized
+// plugin height used only until the viewport exposes that geometry.
+:host-context(body.isIOS.isTouchOnly).global {
+  bottom: calc(var(--keyboard-overlay-offset) + var(--s2));
+}
+
 .add-task-container {
   width: 100%;
   position: relative;

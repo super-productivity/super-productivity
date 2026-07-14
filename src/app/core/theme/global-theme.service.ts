@@ -61,6 +61,10 @@ import { LS } from '../persistence/storage-keys.const';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { sanitizeIosKeyboardHeight } from './sanitize-ios-keyboard-height.util';
+import {
+  IosKeyboardViewport,
+  resolveIosKeyboardViewport,
+} from './ios-keyboard-viewport.util';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -78,7 +82,6 @@ const CSS_VAR_SAFE_AREA_TOP = '--safe-area-inset-top';
 const CSS_VAR_SAFE_AREA_BOTTOM = '--safe-area-inset-bottom';
 const CSS_VAR_SAFE_AREA_LEFT = '--safe-area-inset-left';
 const CSS_VAR_SAFE_AREA_RIGHT = '--safe-area-inset-right';
-const VIEWPORT_RESIZE_EPSILON_PX = 1;
 
 /** The four wallpaper fields of the app-level (global) background config. */
 export type GlobalWallpaperCfg = Pick<
@@ -164,14 +167,9 @@ export class GlobalThemeService {
   private _hasInitialized = false;
   private _keyboardListenerHandles: PluginListenerHandle[] = [];
   private _focusinListener: ((event: FocusEvent) => void) | null = null;
-  private _visualViewportResizeListener: (() => void) | null = null;
+  private _visualViewportChangeListener: (() => void) | null = null;
   private _iosKeyboardHeight = 0;
-  private _iosViewportHeightBeforeKeyboard = 0;
   private _iosViewportChangeRaf: number | null = null;
-  // True only when the plugin reported an implausible keyboard frame (the clamp
-  // had to correct it). Gates the measured-viewport override so well-behaved
-  // keyboards keep their exact pre-existing behaviour (#8778).
-  private _iosKeyboardFrameUnreliable = false;
 
   private _isCustomWindowTitleBarEnabled(): boolean {
     // The main process (main-window.ts) force-disables the custom title bar on
@@ -616,41 +614,44 @@ export class GlobalThemeService {
     this._updateIOSKeyboardViewportVars();
 
     if (window.visualViewport) {
-      this._visualViewportResizeListener = (): void => {
-        this._updateIOSKeyboardViewportVars();
+      this._visualViewportChangeListener = (): void => {
+        if (this.document.body.classList.contains(BodyClass.isKeyboardVisible)) {
+          this._updateIOSKeyboardViewportVars();
+        }
       };
       window.visualViewport.addEventListener(
         'resize',
-        this._visualViewportResizeListener,
+        this._visualViewportChangeListener,
+        { passive: true },
+      );
+      window.visualViewport.addEventListener(
+        'scroll',
+        this._visualViewportChangeListener,
         { passive: true },
       );
     }
 
     Keyboard.addListener('keyboardWillShow', (info: KeyboardInfo) => {
-      Log.log('iOS keyboard will show', info);
-      if (!this.document.body.classList.contains(BodyClass.isKeyboardVisible)) {
-        this._iosViewportHeightBeforeKeyboard = window.innerHeight;
-      }
       // Some third-party keyboards (e.g. Sogou) report a bogus near-full-screen
-      // keyboard frame here; clamp it so it can't fling the fixed add-task bar
-      // to the top of the screen (#8778).
-      const referenceHeight = this._iosViewportHeightBeforeKeyboard || window.innerHeight;
+      // frame here. It is only a bounded fallback until VisualViewport exposes
+      // the real visible area; it can never resize the native WebView (#8778).
+      const referenceHeight = window.innerHeight;
       const keyboardHeight = sanitizeIosKeyboardHeight(
         info.keyboardHeight,
         referenceHeight,
       );
-      // Only a frame the clamp had to correct opts into the measured-viewport
-      // override in _updateIOSKeyboardViewportVars; well-behaved keyboards keep
-      // the exact pre-existing behaviour, so this cannot regress them.
-      this._iosKeyboardFrameUnreliable = keyboardHeight !== info.keyboardHeight;
       this._iosKeyboardHeight = keyboardHeight;
       this.document.body.classList.add(BodyClass.isKeyboardVisible);
-      // Set CSS variable for keyboard height to adjust layout
-      this.document.documentElement.style.setProperty(
-        CSS_VAR_KEYBOARD_HEIGHT,
-        `${keyboardHeight}px`,
-      );
-      this._updateIOSKeyboardViewportVars();
+      const viewport = this._updateIOSKeyboardViewportVars();
+      Log.log('iOS keyboard will show', {
+        reportedKeyboardHeight: info.keyboardHeight,
+        sanitizedKeyboardHeight: keyboardHeight,
+        baseHeight: referenceHeight,
+        visualViewportHeight: window.visualViewport?.height,
+        visualViewportOffsetTop: window.visualViewport?.offsetTop,
+        viewportHeight: viewport.viewportHeight,
+        keyboardOffset: viewport.keyboardOffset,
+      });
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
     // Use keyboardDidShow for scroll (after animation completes)
@@ -662,14 +663,7 @@ export class GlobalThemeService {
     Keyboard.addListener('keyboardWillHide', () => {
       Log.log('iOS keyboard will hide');
       this._iosKeyboardHeight = 0;
-      this._iosViewportHeightBeforeKeyboard = 0;
-      this._iosKeyboardFrameUnreliable = false;
       this.document.body.classList.remove(BodyClass.isKeyboardVisible);
-      this.document.documentElement.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, '0px');
-      this.document.documentElement.style.setProperty(
-        CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
-        '0px',
-      );
       this._updateIOSKeyboardViewportVars();
     }).then((handle) => this._keyboardListenerHandles.push(handle));
 
@@ -693,10 +687,14 @@ export class GlobalThemeService {
     // Cleanup listeners on destroy
     this._destroyRef.onDestroy(() => {
       this._keyboardListenerHandles.forEach((handle) => handle.remove());
-      if (this._visualViewportResizeListener && window.visualViewport) {
+      if (this._visualViewportChangeListener && window.visualViewport) {
         window.visualViewport.removeEventListener(
           'resize',
-          this._visualViewportResizeListener,
+          this._visualViewportChangeListener,
+        );
+        window.visualViewport.removeEventListener(
+          'scroll',
+          this._visualViewportChangeListener,
         );
       }
       if (this._iosViewportChangeRaf !== null) {
@@ -708,74 +706,31 @@ export class GlobalThemeService {
     });
   }
 
-  private _updateIOSKeyboardViewportVars(): void {
+  private _updateIOSKeyboardViewportVars(): IosKeyboardViewport {
     const root = this.document.documentElement;
     const visualViewportHeight = window.visualViewport?.height;
-    const baseHeight = this._iosViewportHeightBeforeKeyboard || window.innerHeight;
-    const isKeyboardVisible = this._iosKeyboardHeight > 0;
-    const isVisualViewportAlreadyResized = this._isVisualViewportResizedForKeyboard(
-      isKeyboardVisible,
+    const baseHeight = window.innerHeight;
+    const viewport = resolveIosKeyboardViewport({
       baseHeight,
+      keyboardHeight: this._iosKeyboardHeight,
+      isKeyboardVisible: this.document.body.classList.contains(
+        BodyClass.isKeyboardVisible,
+      ),
       visualViewportHeight,
-    );
-    const height = isKeyboardVisible
-      ? this._getKeyboardAdjustedViewportHeight(baseHeight, visualViewportHeight)
-      : (visualViewportHeight ?? window.innerHeight);
+      visualViewportOffsetTop: window.visualViewport?.offsetTop,
+    });
 
-    root.style.setProperty(CSS_VAR_VISUAL_VIEWPORT_HEIGHT, `${Math.max(0, height)}px`);
+    root.style.setProperty(
+      CSS_VAR_VISUAL_VIEWPORT_HEIGHT,
+      `${viewport.viewportHeight}px`,
+    );
     root.style.setProperty(
       CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
-      `${isKeyboardVisible && !isVisualViewportAlreadyResized ? this._iosKeyboardHeight : 0}px`,
+      `${viewport.keyboardOffset}px`,
     );
-
-    // For a keyboard whose reported frame was implausible, once the viewport has
-    // actually shrunk its measured obscured area (`baseHeight -
-    // visualViewportHeight`) is a far more reliable keyboard height than the
-    // bogus plugin frame (#8778), and is correct under both `resize: 'native'`
-    // and non-resizing modes. Correct `--keyboard-height` to the measurement
-    // (still clamped as a safety net). Well-behaved keyboards skip this entirely
-    // and keep the plugin value set in keyboardWillShow — no behaviour change.
-    if (
-      this._iosKeyboardFrameUnreliable &&
-      this._isVisualViewportResizedForKeyboard(
-        isKeyboardVisible,
-        baseHeight,
-        visualViewportHeight,
-      )
-    ) {
-      root.style.setProperty(
-        CSS_VAR_KEYBOARD_HEIGHT,
-        `${sanitizeIosKeyboardHeight(baseHeight - visualViewportHeight, baseHeight)}px`,
-      );
-    }
+    root.style.setProperty(CSS_VAR_KEYBOARD_HEIGHT, `${viewport.keyboardOffset}px`);
     this._notifyIOSViewportChange();
-  }
-
-  private _getKeyboardAdjustedViewportHeight(
-    baseHeight: number,
-    visualViewportHeight?: number,
-  ): number {
-    const keyboardAdjustedHeight = baseHeight - this._iosKeyboardHeight;
-
-    if (
-      this._isVisualViewportResizedForKeyboard(true, baseHeight, visualViewportHeight)
-    ) {
-      return visualViewportHeight;
-    }
-
-    return keyboardAdjustedHeight;
-  }
-
-  private _isVisualViewportResizedForKeyboard(
-    isKeyboardVisible: boolean,
-    baseHeight: number,
-    visualViewportHeight?: number,
-  ): visualViewportHeight is number {
-    return (
-      isKeyboardVisible &&
-      visualViewportHeight !== undefined &&
-      visualViewportHeight < baseHeight - VIEWPORT_RESIZE_EPSILON_PX
-    );
+    return viewport;
   }
 
   private _notifyIOSViewportChange(): void {

@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli';
+import { KeyboardResize } from '@capacitor/keyboard';
 
 const config: CapacitorConfig = {
   appId: 'com.super-productivity.app',
@@ -15,11 +16,11 @@ const config: CapacitorConfig = {
     Keyboard: {
       // iOS-only: Android excludes @capacitor/keyboard via includePlugins below
       // and uses JavaScriptInterface for keyboard visibility instead.
-      // 'native' resizes the WKWebView so 100vh fits above the keyboard.
-      resize: 'native',
-      // iOS-only; ignored on Android (plugin excluded). Kept false so the
-      // WKWebView is not force-resized in fullscreen.
-      resizeOnFullScreen: false,
+      // Keep the native plugin from resizing WKWebView with an unsanitized
+      // third-party keyboard frame (#8778). The app derives its iOS viewport
+      // and overlay offsets from KeyboardInfo + VisualViewport instead.
+      // https://capacitorjs.com/docs/apis/keyboard#keyboardresize
+      resize: KeyboardResize.None,
     },
     StatusBar: {
       // iOS: overlay the status bar so content can sit beneath it.
