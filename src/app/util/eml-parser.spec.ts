@@ -190,6 +190,84 @@ describe('parseEml', () => {
     expect(data.text).toBeUndefined();
   });
 
+  it('should not import a text/plain attachment as the note when the real body is HTML', async () => {
+    const htmlWithTextAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: HTML with attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: attachment; filename="notes.txt"',
+      '',
+      'ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(htmlWithTextAttachmentEml, 'html-with-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should skip a text/plain attachment that precedes the real plain-text body', async () => {
+    const attachmentFirstEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Attachment first',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: attachment; filename="notes.txt"',
+      '',
+      'ATTACHMENT',
+      '--mixed',
+      'Content-Type: text/plain',
+      '',
+      'REAL BODY',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(attachmentFirstEml, 'attachment-first.eml'));
+
+    expect(data.text).toBe('REAL BODY');
+  });
+
+  it('should skip an entire multipart subtree marked as an attachment, not just leaf parts', async () => {
+    const attachedMultipartEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Attached multipart',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: multipart/alternative; boundary="alt"',
+      'Content-Disposition: attachment; filename="attached-message.eml"',
+      '',
+      '--alt',
+      'Content-Type: text/plain',
+      '',
+      'ATTACHED SUBTREE BODY',
+      '--alt--',
+      '--mixed',
+      'Content-Type: text/plain',
+      '',
+      'REAL BODY',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(attachedMultipartEml, 'attached-multipart.eml'));
+
+    expect(data.text).toBe('REAL BODY');
+  });
+
   it('should return undefined for a multipart body with no closing boundary (malformed)', async () => {
     const unterminatedEml = [
       'From: Alice <alice@example.com>',

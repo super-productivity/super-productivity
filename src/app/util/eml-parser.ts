@@ -21,11 +21,14 @@ const MAX_MIME_DEPTH = 10;
  * UTF-8/US-ASCII `text/plain` part, found by walking `multipart/*` structures
  * (bounded depth) for the first such leaf; `7bit`/`8bit`/unencoded,
  * `quoted-printable`, and `base64` transfer encodings on that leaf are decoded.
- * HTML bodies and non-UTF-8/ASCII charsets are still omitted by design
- * (`text: undefined`), never decoded. The caller stores the body as an
- * untrusted, inert note, so we favour safety and simplicity over completeness;
- * do not add HTML decoding or charset transcoding here without revisiting that
- * threat model (untrusted-HTML XSS, main-thread cost, op-log/sync size).
+ * Any part (leaf or multipart container) marked `Content-Disposition:
+ * attachment` is skipped entirely, so an attached file can never shadow or be
+ * mistaken for the actual message body. HTML bodies and non-UTF-8/ASCII
+ * charsets are still omitted by design (`text: undefined`), never decoded.
+ * The caller stores the body as an untrusted, inert note, so we favour safety
+ * and simplicity over completeness; do not add HTML decoding or charset
+ * transcoding here without revisiting that threat model (untrusted-HTML XSS,
+ * main-thread cost, op-log/sync size).
  *
  * Headers ARE decoded (RFC 2047 encoded-words), because the sender/subject become
  * the always-visible task title where raw `=?UTF-8?...?=` would be unreadable.
@@ -72,6 +75,13 @@ const _extractPlainText = (
   depth: number,
 ): string | undefined => {
   if (depth > MAX_MIME_DEPTH) {
+    return undefined;
+  }
+
+  // Skip the whole subtree for anything marked as an attachment — leaf or
+  // multipart container alike — so an attached file never shadows or is
+  // mistaken for the actual message body.
+  if (_parseDispositionType(headers.get('content-disposition')) === 'attachment') {
     return undefined;
   }
 
@@ -196,6 +206,14 @@ const _parseAddress = (fromHeader?: string): ParsedEmlAddress | undefined => {
   const address = fromHeader.split(',', 1)[0].trim();
   return address ? { address } : undefined;
 };
+
+// Take only the leading disposition-type token (RFC 2183), so a value like
+// `attachment; filename="notes.txt"` still matches on `attachment`.
+const _parseDispositionType = (value?: string): string | undefined =>
+  value
+    ?.trim()
+    .split(/[\s(;]/)[0]
+    .toLowerCase() || undefined;
 
 const _parseContentType = (
   value?: string,
