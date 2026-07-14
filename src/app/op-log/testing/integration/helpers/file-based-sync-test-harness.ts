@@ -2,6 +2,7 @@ import { runInInjectionContext, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MockFileProvider } from './mock-file-provider.helper';
 import { FileBasedSyncAdapterService } from '../../../sync-providers/file-based/file-based-sync-adapter.service';
+import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/file-based-sync.types';
 import {
   OperationSyncCapable,
   SyncOperation,
@@ -226,6 +227,8 @@ export class FileBasedSyncTestHarness {
    * ```
    */
   static create(config: HarnessConfig = {}): FileBasedSyncTestHarness {
+    FileBasedSyncTestHarness._clearLocalStorage();
+
     // Create mock instances that will be shared
     const mockArchiveDb = new MockArchiveDbAdapter();
     const mockStateSnapshot = new MockStateSnapshotService();
@@ -414,7 +417,7 @@ export class FileBasedSyncTestHarness {
     this._mockArchiveDb.reset();
     this._mockStateSnapshot.reset();
     // Clear localStorage keys used by FileBasedSyncAdapterService
-    this._clearLocalStorage();
+    FileBasedSyncTestHarness._clearLocalStorage();
   }
 
   /**
@@ -435,11 +438,11 @@ export class FileBasedSyncTestHarness {
   /**
    * Clears localStorage keys used by FileBasedSyncAdapterService.
    */
-  private _clearLocalStorage(): void {
+  private static _clearLocalStorage(): void {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('FILE_SYNC_VERSION_')) {
+      if (key?.startsWith(FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX)) {
         keysToRemove.push(key);
       }
     }

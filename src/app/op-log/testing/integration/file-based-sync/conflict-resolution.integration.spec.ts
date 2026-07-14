@@ -3,6 +3,23 @@ import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/fi
 import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
 import { SyncOperation } from '../../../sync-providers/provider.interface';
 
+describe('FileBasedSyncTestHarness', () => {
+  const stateKey = FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 'state';
+  let harness: FileBasedSyncTestHarness | undefined;
+
+  afterEach(() => {
+    harness?.reset();
+  });
+
+  it('clears persisted adapter state before creating a harness', () => {
+    localStorage.setItem(stateKey, JSON.stringify({ syncVersions: { stale: 42 } }));
+
+    harness = FileBasedSyncTestHarness.create({});
+
+    expect(localStorage.getItem(stateKey)).toBeNull();
+  });
+});
+
 describe('File-Based Sync Integration - Conflict Resolution', () => {
   let harness: FileBasedSyncTestHarness;
 
