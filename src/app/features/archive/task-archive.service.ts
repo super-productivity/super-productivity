@@ -119,7 +119,8 @@ export class TaskArchiveService {
    * and silently drop one side's archive write.
    *
    * ArchiveCompressionService, TimeTrackingService, snapshot hydration/import,
-   * and authoritative op-log state replacements use the same mutex.
+   * remote full-state replay, and authoritative op-log state replacements use
+   * the same mutex.
    */
   private _runTaskArchiveMutation(mutation: () => Promise<void>): Promise<void> {
     return this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, mutation);

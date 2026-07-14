@@ -36,6 +36,8 @@ import { OpLog } from '../../core/log';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import { HydrationStateService } from '../apply/hydration-state.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
@@ -784,6 +786,15 @@ describe('RemoteOpsProcessingService', () => {
         schemaVersion: 1,
       };
       const callOrder: string[] = [];
+      lockServiceSpy.request.and.callFake(
+        async <T>(name: string, callback: () => Promise<T>) => {
+          expect(name).toBe(LOCK_NAMES.UPLOAD);
+          callOrder.push('upload:start');
+          const value = await callback();
+          callOrder.push('upload:end');
+          return value;
+        },
+      );
       writeFlushServiceSpy.flushPendingWrites.and.callFake(async () => {
         callOrder.push('flush');
       });
@@ -823,6 +834,7 @@ describe('RemoteOpsProcessingService', () => {
       });
       expect(validationSpy).toHaveBeenCalledWith(true);
       expect(callOrder).toEqual([
+        'upload:start',
         'flush',
         'exclusive:start',
         'premerge',
@@ -830,7 +842,56 @@ describe('RemoteOpsProcessingService', () => {
         'deferred',
         'validation',
         'exclusive:end',
+        'upload:end',
       ]);
+    });
+
+    it('should keep the final full-state guard atomic with apply and drain buffered actions on abort', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-final-guard',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      const hydrationState = TestBed.inject(HydrationStateService);
+      const acquireHoldSpy = spyOn(
+        hydrationState,
+        'acquireApplyingRemoteOpsHold',
+      ).and.callThrough();
+      let wasApplyingDuringGuard = false;
+      let wasApplyingDuringDrain = true;
+      operationLogEffectsSpy.processDeferredActions.and.callFake(async () => {
+        wasApplyingDuringDrain = hydrationState.isApplyingRemoteOps();
+      });
+
+      const result = await service.processRemoteOps([syncImportOp], {
+        beforeFullStateApply: async () => {
+          wasApplyingDuringGuard = hydrationState.isApplyingRemoteOps();
+          return false;
+        },
+      });
+
+      expect(lockServiceSpy.request).toHaveBeenCalledWith(
+        LOCK_NAMES.UPLOAD,
+        jasmine.any(Function),
+      );
+      expect(writeFlushServiceSpy.flushThenRunExclusive).toHaveBeenCalledTimes(1);
+      expect(acquireHoldSpy).toHaveBeenCalledTimes(1);
+      expect(wasApplyingDuringGuard).toBeTrue();
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+      expect(
+        validateStateServiceSpy.validateAndRepairCurrentState,
+      ).not.toHaveBeenCalled();
+      expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledOnceWith({
+        callerHoldsOperationLogLock: true,
+      });
+      expect(wasApplyingDuringDrain).toBeFalse();
+      expect(result.fullStateApplyBlockedByLocalConflict).toBeTrue();
     });
 
     it('should propagate an already-held operation-log lock through full-state apply and validation', async () => {
@@ -852,13 +913,16 @@ describe('RemoteOpsProcessingService', () => {
         callerHoldsOperationLogLock: true,
       });
 
-      expect(applySpy).toHaveBeenCalledWith([syncImportOp], true);
+      expect(applySpy).toHaveBeenCalledWith([syncImportOp], true, {
+        skipDeferredActionDrain: true,
+      });
       expect(validationSpy).toHaveBeenCalledWith(true);
       expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledWith({
         callerHoldsOperationLogLock: true,
       });
       expect(writeFlushServiceSpy.flushThenRunExclusive).not.toHaveBeenCalled();
       expect(writeFlushServiceSpy.flushPendingWrites).not.toHaveBeenCalled();
+      expect(lockServiceSpy.request).not.toHaveBeenCalled();
     });
 
     it('should log incoming full-state op shape and prior receiver state for diagnostics', async () => {

@@ -133,6 +133,7 @@ export class SuperSyncProvider
   >;
 
   private _cachedServerSeqKey: string | null = null;
+  private _causalRepairSnapshotsSupported = false;
 
   constructor(private readonly _deps: SuperSyncDeps) {
     this.privateCfg = _deps.credentialStore;
@@ -188,6 +189,7 @@ export class SuperSyncProvider
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
     this._cachedServerSeqKey = null;
+    this._causalRepairSnapshotsSupported = false;
     await this.privateCfg.setComplete(cfg);
   }
 
@@ -277,7 +279,14 @@ export class SuperSyncProvider
       { method: 'GET' },
     );
 
-    return this._deps.responseValidators.validateOpDownload(response);
+    const validated = this._deps.responseValidators.validateOpDownload(response);
+    this._causalRepairSnapshotsSupported =
+      validated.capabilities?.causalRepairSnapshots === true;
+    return validated;
+  }
+
+  supportsCausalRepairSnapshots(): boolean {
+    return this._causalRepairSnapshotsSupported;
   }
 
   async getLastServerSeq(): Promise<number> {
@@ -302,6 +311,7 @@ export class SuperSyncProvider
     isCleanSlate?: boolean,
     snapshotOpType?: string,
     syncImportReason?: string,
+    repairBaseServerSeq?: number,
   ): Promise<SnapshotUploadResponse> {
     this._deps.logger.normal(`${this._logLabel}: uploadSnapshot: Starting...`, {
       clientId,
@@ -311,6 +321,7 @@ export class SuperSyncProvider
       opId,
       isCleanSlate,
       snapshotOpType,
+      repairBaseServerSeq,
     });
     const cfg = await this._cfgOrError();
 
@@ -326,6 +337,7 @@ export class SuperSyncProvider
       isCleanSlate,
       snapshotOpType,
       ...(syncImportReason ? { syncImportReason } : {}),
+      ...(repairBaseServerSeq !== undefined ? { repairBaseServerSeq } : {}),
       requestId,
     });
 

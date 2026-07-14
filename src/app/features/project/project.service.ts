@@ -57,6 +57,7 @@ import { DateService } from '../../core/date/date.service';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { MenuTreeService } from '../menu-tree/menu-tree.service';
 import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
+import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
 
 export interface ProjectCompletionInfo {
   topLevelTasks: Task[];
@@ -114,6 +115,7 @@ export class ProjectService {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _timeTrackingService = inject(TimeTrackingService);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskTimeSync = inject(TaskTimeSyncService);
   private readonly _translate = inject(TranslateService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _dateService = inject(DateService);
@@ -398,6 +400,7 @@ export class ProjectService {
       }
     });
     const allTaskIds = [...allParentTaskIds, ...subTaskIdsForProject];
+    allTaskIds.forEach((taskId) => this._taskTimeSync.clearOne(taskId));
     this._store$.dispatch(
       TaskSharedActions.deleteProject({
         projectId: project.id,

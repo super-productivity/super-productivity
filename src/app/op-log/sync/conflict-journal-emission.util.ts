@@ -27,6 +27,7 @@ import {
   isOpaqueChangeOp,
   mergeChangedFields,
 } from './conflict-disjoint-merge.util';
+import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 
 /** Everything the classifier needs about one resolved conflict. */
 export interface ConflictJournalClassificationInput {
@@ -66,6 +67,7 @@ const extractEntityTitle = (
   ops: Operation[],
   changes: Record<string, unknown>,
   payloadKey: string,
+  entityId: string,
 ): string => {
   const fromChanges = firstString(changes['title'], changes['name']);
   if (fromChanges) {
@@ -75,10 +77,16 @@ const extractEntityTitle = (
     const entity = extractEntityFromPayload(op.payload, payloadKey) as
       | Record<string, unknown>
       | undefined;
-    const title = firstString(entity?.['title'], entity?.['name']);
-    if (title) {
-      return title;
+    const isMultiEntityOp = isMultiEntityOperation(op);
+    if (!isMultiEntityOp || entity?.['id'] === entityId) {
+      const title = firstString(entity?.['title'], entity?.['name']);
+      if (title) {
+        return title;
+      }
     }
+    // A multi-entity action's generic payload is not attributable to one target
+    // entity. Only use its target-scoped `changes`/entity payload above.
+    if (isMultiEntityOp) continue;
     // Fallback: some payloads nest the fields directly under the action payload.
     const action = extractActionPayload(op.payload);
     const nested = firstString(action?.['title'], action?.['name']);
@@ -104,11 +112,12 @@ const buildOpaqueActionDiffs = (
   localOps: Operation[],
   remoteOps: Operation[],
   payloadKey: string,
+  entityId: string,
   pickedSide: 'local' | 'remote',
 ): ConflictJournalFieldDiff[] => {
   const byActionType = new Map<string, ConflictJournalFieldDiff>();
   const add = (op: Operation, side: 'local' | 'remote'): void => {
-    if (!isOpaqueChangeOp(op, payloadKey)) {
+    if (!isOpaqueChangeOp(op, payloadKey, entityId)) {
       return;
     }
     const diff = byActionType.get(op.actionType) ?? {
@@ -162,8 +171,8 @@ export const buildConflictJournalEntry = (
   } = input;
 
   const payloadKey = resolvePayloadKey(entityType);
-  const localChanges = mergeChangedFields(localOps, payloadKey);
-  const remoteChanges = mergeChangedFields(remoteOps, payloadKey);
+  const localChanges = mergeChangedFields(localOps, payloadKey, entityId);
+  const remoteChanges = mergeChangedFields(remoteOps, payloadKey, entityId);
 
   const localTs = maxTimestamp(localOps);
   const remoteTs = maxTimestamp(remoteOps);
@@ -177,8 +186,8 @@ export const buildConflictJournalEntry = (
     const localClientId = localOps[0]?.clientId ?? '';
     const remoteClientId = remoteOps[0]?.clientId ?? '';
     const mergedTitle =
-      extractEntityTitle(localOps, localChanges, payloadKey) ||
-      extractEntityTitle(remoteOps, remoteChanges, payloadKey);
+      extractEntityTitle(localOps, localChanges, payloadKey, entityId) ||
+      extractEntityTitle(remoteOps, remoteChanges, payloadKey, entityId);
     return {
       id: uuidv7(),
       entityType,
@@ -216,7 +225,9 @@ export const buildConflictJournalEntry = (
     remoteChanged: field in remoteChanges,
     pickedSide: winner,
   }));
-  fieldDiffs.push(...buildOpaqueActionDiffs(localOps, remoteOps, payloadKey, winner));
+  fieldDiffs.push(
+    ...buildOpaqueActionDiffs(localOps, remoteOps, payloadKey, entityId, winner),
+  );
 
   const winnerOps = winner === 'local' ? localOps : remoteOps;
   const loserOps = winner === 'local' ? remoteOps : localOps;
@@ -227,7 +238,7 @@ export const buildConflictJournalEntry = (
   // Opaque loser ops (mutation not readable as fields — e.g. convertToSubTask)
   // are REAL losses: without this, `loserChanges` is empty and the discarded
   // structural change would be misclassified as `noise`/`info` and hidden.
-  const loserHasOpaqueChanges = hasOpaqueChanges(loserOps, payloadKey);
+  const loserHasOpaqueChanges = hasOpaqueChanges(loserOps, payloadKey, entityId);
 
   const isDeleteWin =
     ARCHIVE_PLAN_REASONS.has(planReason) ||
@@ -265,11 +276,13 @@ export const buildConflictJournalEntry = (
       winnerOps,
       winner === 'local' ? localChanges : remoteChanges,
       payloadKey,
+      entityId,
     ) ||
     extractEntityTitle(
       winner === 'local' ? remoteOps : localOps,
       loserChanges,
       payloadKey,
+      entityId,
     );
 
   return {

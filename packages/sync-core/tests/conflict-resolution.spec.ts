@@ -536,7 +536,7 @@ describe('partitionLwwResolutions', () => {
     });
 
     expect(result.remoteWinnerAffectedEntityKeys).toEqual(
-      new Set(['task#task-1', 'task#task-2', 'task#task-3']),
+      new Set(['task#fallback-task', 'task#task-1', 'task#task-2', 'task#task-3']),
     );
   });
 

@@ -20,7 +20,12 @@ import { selectPluginMetadataFeatureState } from '../../plugins/store/plugin-met
 import { selectReminderFeatureState } from '../../features/reminder/store/reminder.reducer';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
-import { TaskState } from '../../features/tasks/task.model';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { DEFAULT_TASK, Task, TaskState } from '../../features/tasks/task.model';
+import { initialTaskState } from '../../features/tasks/store/task.reducer';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { OpType } from '../core/operation.types';
+import { PersistentAction } from '../core/persistent-action.interface';
 
 describe('StateSnapshotService', () => {
   let service: StateSnapshotService;
@@ -172,6 +177,72 @@ describe('StateSnapshotService', () => {
       expect((snapshot.task as any).ids).toEqual(['task1']);
       expect((snapshot.task as any).entities).toBeDefined();
     });
+
+    it('should exclude pending task time from an operation-log snapshot', () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 'task1',
+        title: 'Test Task',
+        created: 1,
+        projectId: 'project-1',
+        timeSpentOnDay: { ['2024-01-15']: 5000 },
+        timeSpent: 5000,
+      } as Task;
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        ids: ['task1'],
+        entities: { task1: task },
+      });
+      store.refreshState();
+      TestBed.inject(TaskTimeSyncService).accumulate('task1', 5000, '2024-01-15');
+
+      const liveSnapshot = service.getStateSnapshot();
+      const opLogSnapshot = service.getStateSnapshotForOperationLog();
+
+      expect((liveSnapshot.task as TaskState).entities['task1']!.timeSpent).toBe(5000);
+      expect((opLogSnapshot.task as TaskState).entities['task1']!.timeSpent).toBe(0);
+    });
+
+    it('should exclude a task-time delta whose operation write is still pending', () => {
+      const task = {
+        ...DEFAULT_TASK,
+        id: 'task1',
+        title: 'Test Task',
+        created: 1,
+        projectId: 'project-1',
+        timeSpentOnDay: { ['2024-01-15']: 5000 },
+        timeSpent: 5000,
+      } as Task;
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        ids: ['task1'],
+        entities: { task1: task },
+      });
+      store.refreshState();
+      const captureService = TestBed.inject(OperationCaptureService);
+      const action = {
+        type: '[TimeTracking] Sync time spent',
+        taskId: 'task1',
+        date: '2024-01-15',
+        duration: 5000,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'task1',
+          opType: OpType.Update,
+        },
+      } as PersistentAction;
+      captureService.incrementPending(action);
+
+      const opLogSnapshot = service.getStateSnapshotForOperationLog();
+
+      expect((opLogSnapshot.task as TaskState).entities['task1']!.timeSpent).toBe(0);
+      captureService.decrementPending(action);
+      expect(
+        (service.getStateSnapshotForOperationLog().task as TaskState).entities['task1']!
+          .timeSpent,
+      ).toBe(5000);
+    });
   });
 
   describe('getStateSnapshotAsync', () => {
@@ -250,6 +321,30 @@ describe('StateSnapshotService', () => {
       releaseArchives();
 
       const snapshot = await snapshotPromise;
+      expect((snapshot.task as TaskState).ids).toEqual(['task1']);
+    });
+  });
+
+  describe('getStateSnapshotForOperationLogAsync', () => {
+    it('should capture NgRx state before awaiting archive reads', async () => {
+      let resolveArchiveYoung!: (archive: ArchiveModel) => void;
+      archiveDbAdapterSpy.loadArchiveYoung.and.returnValue(
+        new Promise<ArchiveModel>((resolve) => {
+          resolveArchiveYoung = resolve;
+        }),
+      );
+
+      const snapshotPromise = service.getStateSnapshotForOperationLogAsync();
+      store.overrideSelector(selectTaskFeatureState, {
+        ...mockTaskState,
+        ids: ['task2'],
+        entities: { task2: { id: 'task2', title: 'Later Task' } },
+      } as any);
+      store.refreshState();
+      resolveArchiveYoung(mockArchiveYoung);
+
+      const snapshot = await snapshotPromise;
+
       expect((snapshot.task as TaskState).ids).toEqual(['task1']);
     });
   });

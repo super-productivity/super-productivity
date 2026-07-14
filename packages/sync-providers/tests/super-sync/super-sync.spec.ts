@@ -377,6 +377,26 @@ describe('SuperSyncProvider', () => {
       const lastCallUrl = fetchMock.mock.calls.at(-1)?.[0];
       expect(String(lastCallUrl)).toContain('server2.com');
     });
+
+    it('clears learned server capabilities when the config changes', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        okResponse({
+          ops: [],
+          hasMore: false,
+          latestSeq: 0,
+          capabilities: { causalRepairSnapshots: true },
+        }),
+      );
+
+      await provider.downloadOps(0);
+      expect(provider.supportsCausalRepairSnapshots()).toBe(true);
+
+      await provider.setPrivateCfg(testConfig);
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(false);
+    });
   });
 
   describe('config loading', () => {
@@ -596,6 +616,24 @@ describe('SuperSyncProvider', () => {
   });
 
   describe('downloadOps', () => {
+    it('learns causal repair support from the download response', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        okResponse({
+          ops: [],
+          hasMore: false,
+          latestSeq: 0,
+          capabilities: { causalRepairSnapshots: true },
+        }),
+      );
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(false);
+      await provider.downloadOps(0);
+
+      expect(provider.supportsCausalRepairSnapshots()).toBe(true);
+    });
+
     it('downloads operations successfully', async () => {
       const { provider, cfgStore, fetchMock } = buildProvider();
       cfgStore.load.mockResolvedValue(testConfig);
@@ -1285,6 +1323,10 @@ describe('SuperSyncProvider', () => {
         2,
         undefined,
         'test-op-id-fields',
+        false,
+        'REPAIR',
+        'REPAIR',
+        17,
       );
 
       expect(capturedBody).not.toBeNull();
@@ -1296,6 +1338,8 @@ describe('SuperSyncProvider', () => {
       expect(payload.requestId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
       expect(payload.vectorClock).toEqual({ clientA: 5 });
       expect(payload.schemaVersion).toBe(2);
+      expect(payload.snapshotOpType).toBe('REPAIR');
+      expect(payload.repairBaseServerSeq).toBe(17);
     });
 
     it('produces a stable snapshot requestId for the same clientId+opId, regardless of state', async () => {

@@ -8,8 +8,8 @@ import { SyncLog } from '../../core/log';
  * The `isPayloadEncrypted` flag is itself unauthenticated plaintext metadata
  * (GHSA-8pxh-mgc7-gp3g). A compromised SuperSync server or a MITM can set it to
  * `false` and supply a fully attacker-authored plaintext op. Such an op skips
- * decryption AND the payload/metadata integrity check
- * (`assertDecryptedOpMetadataIntegrity`) entirely and is applied verbatim —
+ * decryption AND the post-decrypt payload/metadata integrity checks entirely
+ * and is applied verbatim —
  * arbitrary op forgery on an encryption-mandatory client, strictly more powerful
  * than retagging a genuine ciphertext op.
  *

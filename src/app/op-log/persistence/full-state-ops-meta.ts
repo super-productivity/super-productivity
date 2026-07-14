@@ -3,7 +3,7 @@
  * stored at `SUP_OPS.meta` under `FULL_STATE_OPS_META_KEY`.
  *
  * Kept in one place so the `{ refs, latest }` shape and the "latest = max
- * UUIDv7" rule cannot drift between the upgrade-time seed (`db-upgrade.ts`,
+ * local sequence" rule cannot drift between the upgrade-time seed (`db-upgrade.ts`,
  * which scans raw cursor values) and the runtime maintenance
  * (`operation-log-store.service.ts`, which works with decoded ops).
  */
@@ -16,8 +16,9 @@ export interface FullStateOpRef {
 
 /**
  * The derived full-state metadata: every tracked full-state op ref plus the
- * latest by UUIDv7. `latest` is always derived from `refs` (never trusted from
- * storage), so a stale/corrupt stored `latest` self-corrects on the next build.
+ * latest by append/apply sequence. `latest` is always derived from `refs` (never
+ * trusted from storage), so a stale/corrupt stored `latest` self-corrects on the
+ * next build.
  */
 export interface FullStateOpsMetaEntry {
   refs: FullStateOpRef[];
@@ -25,14 +26,15 @@ export interface FullStateOpsMetaEntry {
 }
 
 /**
- * The latest full-state op by UUIDv7. Lexicographic comparison is correct for
- * UUIDv7 (time-ordered, lowercase hex), matching the pre-pointer full scan.
+ * The latest full-state op by durable append/apply sequence. Operation IDs are
+ * generated from client wall clocks and therefore cannot order operations after
+ * clock rollback or across clients.
  */
 export const getLatestFullStateRef = (
   refs: ReadonlyArray<FullStateOpRef>,
 ): FullStateOpRef | undefined =>
   refs.reduce<FullStateOpRef | undefined>(
-    (latest, ref) => (!latest || ref.opId > latest.opId ? ref : latest),
+    (latest, ref) => (!latest || ref.seq > latest.seq ? ref : latest),
     undefined,
   );
 

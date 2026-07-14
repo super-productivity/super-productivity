@@ -311,6 +311,100 @@ describe('OperationLogStoreService', () => {
       expect(ops[0].source).toBe('remote');
       expect(ops[0].syncedAt).toBeDefined();
     });
+
+    it('should atomically append a legacy recovery with its snapshot and clock', async () => {
+      const op = createTestOperation({
+        id: 'legacy-recovery-op',
+        vectorClock: { testClient: 7 },
+      });
+      const state = { task: { ids: ['task-1'] } };
+
+      const seq = await service.appendRecoveryOperationAndSnapshot(op, state);
+
+      expect((await service.getOpById(op.id))?.seq).toBe(seq);
+      expect(await service.loadStateCache()).toEqual(
+        jasmine.objectContaining({
+          state,
+          lastAppliedOpSeq: seq,
+          vectorClock: op.vectorClock,
+          schemaVersion: op.schemaVersion,
+        }),
+      );
+      expect(await service.getVectorClock()).toEqual(op.vectorClock);
+    });
+
+    it('should roll back the recovery operation when its snapshot write fails', async () => {
+      const op = createTestOperation({ id: 'failed-legacy-recovery-op' });
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      const originalTransaction = adapter.transaction.bind(adapter);
+      spyOn(adapter, 'transaction').and.callFake(async (stores, mode, callback) =>
+        originalTransaction(stores, mode, async (tx) => {
+          const failingTx = new Proxy(tx, {
+            get: (target, property): unknown => {
+              if (property === 'put') {
+                return async (store: string, value: unknown, key?: string | number) => {
+                  if (store === STORE_NAMES.STATE_CACHE) {
+                    throw new Error('injected recovery snapshot failure');
+                  }
+                  return target.put(store, value, key);
+                };
+              }
+              const value = Reflect.get(target, property);
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+          return callback(failingTx);
+        }),
+      );
+
+      await expectAsync(
+        service.appendRecoveryOperationAndSnapshot(op, { task: {} }),
+      ).toBeRejectedWithError('injected recovery snapshot failure');
+
+      expect(await service.getOpsAfterSeq(0)).toEqual([]);
+      expect(await service.loadStateCache()).toBeNull();
+    });
+
+    it('should roll back the recovery operation and snapshot when its clock write fails', async () => {
+      const op = createTestOperation({ id: 'failed-recovery-clock-op' });
+      const adapter = (
+        service as unknown as {
+          _adapter: OpLogDbAdapter;
+        }
+      )._adapter;
+      const originalTransaction = adapter.transaction.bind(adapter);
+      spyOn(adapter, 'transaction').and.callFake(async (stores, mode, callback) =>
+        originalTransaction(stores, mode, async (tx) => {
+          const failingTx = new Proxy(tx, {
+            get: (target, property): unknown => {
+              if (property === 'put') {
+                return async (store: string, value: unknown, key?: string | number) => {
+                  if (store === STORE_NAMES.VECTOR_CLOCK) {
+                    throw new Error('injected recovery clock failure');
+                  }
+                  return target.put(store, value, key);
+                };
+              }
+              const value = Reflect.get(target, property);
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+          return callback(failingTx);
+        }),
+      );
+
+      await expectAsync(
+        service.appendRecoveryOperationAndSnapshot(op, { task: {} }),
+      ).toBeRejectedWithError('injected recovery clock failure');
+
+      expect(await service.getOpsAfterSeq(0)).toEqual([]);
+      expect(await service.loadStateCache()).toBeNull();
+      expect(await service.getVectorClock()).toBeNull();
+    });
   });
 
   describe('hasOp', () => {
@@ -666,10 +760,63 @@ describe('OperationLogStoreService', () => {
       )._adapter;
       spyOn(adapter, 'iterate').and.callThrough();
 
-      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(
-        latestExistingImport.id,
-      );
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(lowerNewImport.id);
       expect(adapter.iterate).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a rejected full-state op when choosing the active baseline', async () => {
+      const priorImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000051',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000052',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(priorImport, 'remote');
+      await service.append(rejectedRepair);
+      await service.markRejected([rejectedRepair.id]);
+
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(priorImport.id);
+    });
+
+    it('should expose the latest rejected local full-state operation as an upload barrier', async () => {
+      const rejectedImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000053',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRepair = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000054',
+        opType: OpType.Repair,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const rejectedRemoteImport = createTestOperation({
+        id: '01900000-0000-7000-8000-000000000055',
+        opType: OpType.BackupImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.append(rejectedImport);
+      await service.append(rejectedRepair);
+      await service.append(rejectedRemoteImport, 'remote');
+      await service.markRejected([
+        rejectedImport.id,
+        rejectedRepair.id,
+        rejectedRemoteImport.id,
+      ]);
+
+      expect((await service.getLatestRejectedFullStateOpEntry())?.op.id).toBe(
+        rejectedRepair.id,
+      );
     });
 
     it('should rebuild malformed metadata instead of throwing', async () => {
@@ -1605,9 +1752,72 @@ describe('OperationLogStoreService', () => {
       });
     });
 
+    it('should atomically reject reducer failures while checkpointing successful ops', async () => {
+      const successfulOp = createTestOperation({ id: 'successful-op' });
+      const failedOp = createTestOperation({
+        id: 'reducer-failed-op',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      const successfulSeq = await service.append(successfulOp, 'remote', {
+        pendingApply: true,
+      });
+      await service.append(failedOp, 'remote', { pendingApply: true });
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(failedOp.id);
+
+      await service.markReducersCommittedAndMergeClocks(
+        [successfulSeq],
+        [successfulOp],
+        [failedOp.id],
+      );
+
+      const successfulEntry = await service.getOpById(successfulOp.id);
+      const failedEntry = await service.getOpById(failedOp.id);
+      expect(successfulEntry?.applicationStatus).toBe('archive_pending');
+      expect(failedEntry?.applicationStatus).toBe('pending');
+      expect(failedEntry?.rejectedAt).toBeDefined();
+      expect(failedEntry?.reducerRejectedAt).toBeDefined();
+      expect(await service.getPendingRemoteOps()).toEqual([]);
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+    });
+
+    it('should durably reject a local synthetic operation whose reducer fails', async () => {
+      const syntheticOp = createTestOperation({ id: 'synthetic-local-op' });
+      await service.append(syntheticOp, 'local');
+
+      await service.markReducersCommittedAndMergeClocks([], [], [syntheticOp.id]);
+
+      const storedEntry = await service.getOpById(syntheticOp.id);
+      expect(storedEntry?.rejectedAt).toBeDefined();
+      expect(storedEntry?.reducerRejectedAt).toBeDefined();
+      expect(await service.getUnsynced()).toEqual([]);
+    });
+
+    it('should not resurrect a reducer-rejected full-state op when metadata rebuilds', async () => {
+      const failedOp = createTestOperation({
+        id: 'reducer-failed-full-state-op',
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+      await service.append(failedOp, 'remote', { pendingApply: true });
+      await service.markReducersCommittedAndMergeClocks([], [], [failedOp.id]);
+      const db = (
+        service as unknown as {
+          db: IDBPDatabase<unknown>;
+        }
+      ).db;
+      await db.delete(STORE_NAMES.META, FULL_STATE_OPS_META_KEY);
+
+      expect(await service.getLatestFullStateOpEntry()).toBeUndefined();
+    });
+
     it('should roll back reducer checkpoint and clock when the atomic clock write fails', async () => {
       const op = createTestOperation();
+      const reducerFailedOp = createTestOperation({ id: 'reducer-failed-op' });
       const seq = await service.append(op, 'remote', { pendingApply: true });
+      await service.append(reducerFailedOp, 'remote', { pendingApply: true });
       await service.setVectorClock({ testClient: 2 });
 
       const adapter = (
@@ -1640,11 +1850,15 @@ describe('OperationLogStoreService', () => {
         service.markReducersCommittedAndMergeClocks(
           [seq],
           [{ ...op, vectorClock: { remoteClient: 4 } }],
+          [reducerFailedOp.id],
         ),
       ).toBeRejectedWithError('injected vector-clock write failure');
 
       const [stored] = await service.getOpsAfterSeq(0);
       expect(stored.applicationStatus).toBe('pending');
+      const failedEntry = await service.getOpById(reducerFailedOp.id);
+      expect(failedEntry?.applicationStatus).toBe('pending');
+      expect(failedEntry?.rejectedAt).toBeUndefined();
       service.clearVectorClockCache();
       expect(await service.getVectorClock()).toEqual({ testClient: 2 });
     });
@@ -3127,6 +3341,58 @@ describe('OperationLogStoreService', () => {
       const clock = await service.getVectorClock();
       expect(clock!.testClient).toBeGreaterThanOrEqual(1);
       expect(clock!.testClient).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe('replaceRejectedRepair', () => {
+    it('should reject the stale repair and append its replacement atomically', async () => {
+      const staleRepair = createTestOperation({
+        id: 'stale-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      await service.append(staleRepair);
+      const repairedState = { task: { ids: [], entities: {} } };
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { appDataComplete: repairedState },
+        vectorClock: { testClient: 2 },
+      });
+
+      const seq = await service.replaceRejectedRepair({
+        staleRepairOpId: staleRepair.id,
+        replacementOp: replacement,
+        repairedState,
+      });
+
+      expect((await service.getOpById(staleRepair.id))?.rejectedAt).toBeDefined();
+      expect((await service.getOpById(replacement.id))?.seq).toBe(seq);
+      expect((await service.loadStateCache())?.state).toEqual(repairedState);
+      expect(await service.getVectorClock()).toEqual(replacement.vectorClock);
+      expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(replacement.id);
+    });
+
+    it('should abort without appending when the stale repair is missing', async () => {
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+
+      await expectAsync(
+        service.replaceRejectedRepair({
+          staleRepairOpId: 'missing-repair',
+          replacementOp: replacement,
+          repairedState: {},
+        }),
+      ).toBeRejectedWithError(/missing-repair/);
+
+      expect(await service.getOpById(replacement.id)).toBeUndefined();
     });
   });
 

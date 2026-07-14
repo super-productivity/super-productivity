@@ -10,7 +10,11 @@ import { SyncCycleGuardService } from './sync-cycle-guard.service';
 import { BehaviorSubject } from 'rxjs';
 import { RejectedOpInfo } from '../core/types/sync-results.types';
 import { SnackService } from '../../core/snack/snack.service';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+} from '../core/errors/sync-errors';
 import { T } from '../../t.const';
 
 describe('ImmediateUploadService', () => {
@@ -32,6 +36,7 @@ describe('ImmediateUploadService', () => {
       hasMorePiggyback: boolean;
       rejectedOps: RejectedOpInfo[];
       encryptionRequiredKeyMissing: boolean;
+      blockedByRejectedFullState: boolean;
     }> = {},
   ): {
     kind: 'completed';
@@ -42,6 +47,7 @@ describe('ImmediateUploadService', () => {
     hasMorePiggyback: boolean;
     rejectedOps: RejectedOpInfo[];
     encryptionRequiredKeyMissing?: boolean;
+    blockedByRejectedFullState?: boolean;
   } => ({
     kind: 'completed',
     uploadedCount: 0,
@@ -167,6 +173,23 @@ describe('ImmediateUploadService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     }));
 
+    it('should report ERROR when the initial upload is blocked by a rejected full-state boundary', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.resolveTo(
+        completedResult({
+          uploadedCount: 0,
+          blockedByRejectedFullState: true,
+        }),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
     it('should report incomplete remote application as a sticky translated error', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.rejectWith(
         new IncompleteRemoteOperationsError(new Error('archive failed')),
@@ -200,6 +223,35 @@ describe('ImmediateUploadService', () => {
       expect(mockSnackService.open).not.toHaveBeenCalled();
     }));
 
+    it('should surface a force-upload failure raised by conflict resolution', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.rejectWith(new ForceUploadFailedError());
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+        type: 'ERROR',
+      });
+    }));
+
+    it('should keep sync pending when force upload leaves unresolved ops', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.rejectWith(new ForceUploadPendingOpsError());
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    }));
+
     it('should report UNKNOWN_OR_CHANGED when a local-win follow-up lacks a mandatory encryption key', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValues(
         Promise.resolve(completedResult({ uploadedCount: 1, localWinOpsCreated: 1 })),
@@ -219,6 +271,26 @@ describe('ImmediateUploadService', () => {
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
         'UNKNOWN_OR_CHANGED',
       );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    }));
+
+    it('should report ERROR when a local-win follow-up reaches a rejected full-state barrier', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve(completedResult({ uploadedCount: 1, localWinOpsCreated: 1 })),
+        Promise.resolve(
+          completedResult({
+            uploadedCount: 0,
+            blockedByRejectedFullState: true,
+          }),
+        ),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     }));
 

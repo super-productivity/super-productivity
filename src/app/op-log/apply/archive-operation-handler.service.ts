@@ -105,7 +105,11 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Important Notes
  *
- * - Remote archive mutations serialize behind the TASK_ARCHIVE mutex (separate from the OPERATION_LOG lock sync holds)
+ * - Task/archive model writes, full-state archive replacement, flush, and
+ *   compression serialize behind the TASK_ARCHIVE mutex (separate from the
+ *   OPERATION_LOG lock sync holds)
+ * - TimeTrackingService's project/tag cleanup paths are not yet covered by that
+ *   mutex (tracked in #8941)
  * - All operations are idempotent - safe to run multiple times
  * - Use `isArchiveAffectingAction()` helper to check if an action needs archive handling
  */
@@ -142,9 +146,11 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Process an action and handle any archive-related side effects.
    *
    * This method handles both local and remote operations. Remote operations
-   * run while sync holds the OPERATION_LOG lock; archive mutations additionally
+   * run while sync holds the OPERATION_LOG lock. Archive mutations performed by
+   * the task archive, direct adapter, and compression paths additionally
    * serialize behind the separate TASK_ARCHIVE mutex (the legacy
-   * isIgnoreDBLock option no longer bypasses it).
+   * isIgnoreDBLock option no longer bypasses it). Time-tracking cleanup remains
+   * a documented exception (#8941).
    *
    * @param action The action that was dispatched
    * @returns Promise that resolves when archive operations are complete
@@ -372,7 +378,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Removes all archived tasks for a deleted project.
    *
    * @localBehavior Executes (cleans up archive for deleted project)
-   * @remoteBehavior Executes under the TASK_ARCHIVE mutex
+   * @remoteBehavior Task archive cleanup uses the mutex; time-tracking cleanup is separate (#8941)
    */
   private async _handleDeleteProject(action: PersistentAction): Promise<void> {
     const projectId = (action as ReturnType<typeof TaskSharedActions.deleteProject>)
@@ -389,7 +395,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Removes tag references from archived tasks and deletes orphaned tasks.
    *
    * @localBehavior Executes (cleans up archive for deleted tags)
-   * @remoteBehavior Executes under the TASK_ARCHIVE mutex
+   * @remoteBehavior Task archive cleanup uses the mutex; time-tracking cleanup is separate (#8941)
    */
   private async _handleDeleteTags(action: PersistentAction): Promise<void> {
     const tagIdsToRemove =
@@ -464,8 +470,8 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Fixes bug where SYNC_IMPORT updated NgRx state but never persisted archive
    * data to IndexedDB on remote client, causing data loss on restart.
    *
-   * Uses rollback for atomicity - if archiveOld write fails after archiveYoung
-   * succeeds, we restore archiveYoung to its original state.
+   * Both archive halves are preflighted before writing and, whenever both are
+   * available, committed in one IndexedDB transaction.
    *
    * @localBehavior SKIP - Archive written by BackupService.importCompleteBackup()
    * @remoteBehavior Executes - Uses ArchiveDbAdapter for direct IndexedDB access
@@ -482,71 +488,68 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
       .archiveYoung;
     const archiveOld = (appDataComplete as { archiveOld?: ArchiveModel }).archiveOld;
 
-    await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
-      // Load original state for potential rollback and safety checks.
-      const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-      const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    const didWrite = await this._lockService.request(
+      LOCK_NAMES.TASK_ARCHIVE,
+      async () => {
+        // Load both originals before evaluating either guard. A refused/missing half
+        // is preserved in the same transaction as an accepted incoming half.
+        const originalArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+        const originalArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
-      // A backup restore is already an explicit destructive user action on its
-      // originating client. Remote clients must replay that decision without a
-      // blocking dialog while OPERATION_LOG is held.
-      if (
-        archiveYoung !== undefined &&
-        (await this._guardArchiveOverwrite({
-          label: 'archiveYoung',
-          existing: originalArchiveYoung,
-          incoming: archiveYoung,
-          opType: action.meta.opType,
-        }))
-      ) {
-        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
-      }
+        const shouldWriteYoung =
+          archiveYoung !== undefined &&
+          (await this._guardArchiveOverwrite({
+            label: 'archiveYoung',
+            existing: originalArchiveYoung,
+            incoming: archiveYoung,
+            opType: action.meta.opType,
+          }));
+        const shouldWriteOld =
+          archiveOld !== undefined &&
+          (await this._guardArchiveOverwrite({
+            label: 'archiveOld',
+            existing: originalArchiveOld,
+            incoming: archiveOld,
+            opType: action.meta.opType,
+          }));
 
-      if (
-        archiveOld !== undefined &&
-        (await this._guardArchiveOverwrite({
-          label: 'archiveOld',
-          existing: originalArchiveOld,
-          incoming: archiveOld,
-          opType: action.meta.opType,
-        }))
-      ) {
-        try {
-          await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-        } catch (e) {
-          OpLog.err(
-            '[ArchiveOperationHandler] archiveOld write failed, attempting rollback...',
-            e,
-          );
-          try {
-            if (originalArchiveYoung !== undefined) {
-              await this._archiveDbAdapter.saveArchiveYoung(originalArchiveYoung);
-              OpLog.log('[ArchiveOperationHandler] Rollback successful');
-            }
-          } catch (rollbackErr) {
-            OpLog.err(
-              '[ArchiveOperationHandler] Rollback FAILED - archive may be inconsistent',
-              rollbackErr,
-            );
-          }
-          throw e;
+        if (!shouldWriteYoung && !shouldWriteOld) {
+          return false;
         }
-      }
 
+        const nextArchiveYoung = shouldWriteYoung ? archiveYoung : originalArchiveYoung;
+        const nextArchiveOld = shouldWriteOld ? archiveOld : originalArchiveOld;
+
+        if (nextArchiveYoung !== undefined && nextArchiveOld !== undefined) {
+          await this._archiveDbAdapter.saveArchivesAtomic(
+            nextArchiveYoung,
+            nextArchiveOld,
+          );
+        } else if (shouldWriteYoung && nextArchiveYoung !== undefined) {
+          await this._archiveDbAdapter.saveArchiveYoung(nextArchiveYoung);
+        } else if (shouldWriteOld && nextArchiveOld !== undefined) {
+          await this._archiveDbAdapter.saveArchiveOld(nextArchiveOld);
+        }
+        return true;
+      },
+    );
+
+    if (didWrite) {
       OpLog.log(
         '[ArchiveOperationHandler] Wrote archive data from SYNC_IMPORT/BACKUP_IMPORT',
       );
-    });
+    }
   }
 
   /**
    * Safety guard: prevents overwriting a non-empty local archive with an empty
    * incoming one. Returns true if the caller should proceed with the write.
    *
-   * Handles three opType paths:
+   * Handles two opType paths:
    * - SYNC_IMPORT / REPAIR: silently preserves local (empty incoming is likely a bug)
-   * - BACKUP_IMPORT: applies the explicit restore authoritatively
-   * - default: allows the write
+   * - BACKUP_IMPORT / default: allows the write. BACKUP_IMPORT is already an
+   *   explicit user decision on the originating client, so remote replay must
+   *   be deterministic and cannot prompt independently on every other client.
    */
   private async _guardArchiveOverwrite(opts: {
     label: 'archiveYoung' | 'archiveOld';

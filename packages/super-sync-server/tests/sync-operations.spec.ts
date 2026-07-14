@@ -105,28 +105,6 @@ vi.mock('../src/db', async () => {
         }
         return null;
       }),
-      count: vi.fn().mockImplementation(async (args: any) => {
-        return Array.from(state.operations.values()).filter((op: any) => {
-          if (args.where?.userId !== undefined && args.where.userId !== op.userId)
-            return false;
-          if (
-            args.where?.serverSeq?.gt !== undefined &&
-            op.serverSeq <= args.where.serverSeq.gt
-          )
-            return false;
-          if (
-            args.where?.serverSeq?.lte !== undefined &&
-            op.serverSeq > args.where.serverSeq.lte
-          )
-            return false;
-          if (
-            args.where?.isPayloadEncrypted !== undefined &&
-            op.isPayloadEncrypted !== args.where.isPayloadEncrypted
-          )
-            return false;
-          return true;
-        }).length;
-      }),
       findMany: vi.fn().mockImplementation(async (args: any) => {
         const ops = Array.from(state.operations.values());
         return ops
@@ -164,6 +142,10 @@ vi.mock('../src/db', async () => {
             args.where?.isPayloadEncrypted !== undefined &&
             op.isPayloadEncrypted !== args.where.isPayloadEncrypted
           )
+            return false;
+          if (args.where?.opType !== undefined && op.opType !== args.where.opType)
+            return false;
+          if (args.where?.repairBaseServerSeq === null && op.repairBaseServerSeq != null)
             return false;
           return true;
         }).length;
@@ -370,6 +352,11 @@ vi.mock('../src/db', async () => {
               )
                 return false;
               if (
+                args.where?.serverSeq?.lt !== undefined &&
+                op.serverSeq >= args.where.serverSeq.lt
+              )
+                return false;
+              if (
                 args.where?.receivedAt?.lt !== undefined &&
                 op.receivedAt >= args.where.receivedAt.lt
               )
@@ -381,29 +368,6 @@ vi.mock('../src/db', async () => {
             .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
             .slice(0, args.take || 500)
             .map((op: any) => applyOperationSelect(op, args.select));
-        }),
-        count: vi.fn().mockImplementation(async (args: any) => {
-          const ops = Array.from(state.operations.values());
-          return ops.filter((op: any) => {
-            if (args.where?.userId !== undefined && args.where.userId !== op.userId)
-              return false;
-            if (
-              args.where?.serverSeq?.gt !== undefined &&
-              op.serverSeq <= args.where.serverSeq.gt
-            )
-              return false;
-            if (
-              args.where?.serverSeq?.lte !== undefined &&
-              op.serverSeq > args.where.serverSeq.lte
-            )
-              return false;
-            if (
-              args.where?.isPayloadEncrypted !== undefined &&
-              op.isPayloadEncrypted !== args.where.isPayloadEncrypted
-            )
-              return false;
-            return true;
-          }).length;
         }),
         aggregate: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(state.operations.values()).filter(
@@ -485,6 +449,13 @@ vi.mock('../src/db', async () => {
             if (
               args.where?.isPayloadEncrypted !== undefined &&
               op.isPayloadEncrypted !== args.where.isPayloadEncrypted
+            )
+              return false;
+            if (args.where?.opType !== undefined && op.opType !== args.where.opType)
+              return false;
+            if (
+              args.where?.repairBaseServerSeq === null &&
+              op.repairBaseServerSeq != null
             )
               return false;
             return true;
@@ -942,15 +913,28 @@ describe('Sync Operations', () => {
         createOp('task-1', 'CRT'),
         createOp('task-2', 'CRT'),
       ]);
+      await service.uploadOps(userId, clientId, [
+        {
+          id: uuidv7(),
+          clientId,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          payload: {},
+          vectorClock: { [clientId]: 2 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+      ]);
 
       // Set up userSyncState with snapshot info (required for cleanup logic)
       const now = Date.now();
       testState.userSyncStates.set(userId, {
         userId,
-        lastSeq: 2,
-        lastSnapshotSeq: 2,
+        lastSeq: 3,
+        lastSnapshotSeq: 3,
         snapshotAt: BigInt(now),
-        opCount: 2,
+        opCount: 3,
       });
 
       // Manually set one operation to be "old" (received 100 days ago)
@@ -970,9 +954,11 @@ describe('Sync Operations', () => {
       expect(result.affectedUserIds).toContain(userId);
 
       // Verify correct operation was deleted
-      const ops = (await operationDownloadService.getOpsSinceWithSeq(userId, 0)).ops;
-      expect(ops.length).toBe(1);
-      expect(ops[0].serverSeq).toBe(2);
+      const remainingSeqs = Array.from(testState.operations.values())
+        .filter((op) => op.userId === userId)
+        .map((op) => op.serverSeq)
+        .sort((a, b) => a - b);
+      expect(remainingSeqs).toEqual([2, 3]);
     });
 
     it('should delete stale devices', async () => {

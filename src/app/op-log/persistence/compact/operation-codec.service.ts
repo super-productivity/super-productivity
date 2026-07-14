@@ -35,6 +35,9 @@ export const encodeOperation = (op: Operation): CompactOperation => {
   if (op.syncImportReason !== undefined) {
     compact.r = op.syncImportReason;
   }
+  if (op.repairBaseServerSeq !== undefined) {
+    compact.b = op.repairBaseServerSeq;
+  }
 
   return compact;
 };
@@ -65,6 +68,9 @@ export const decodeOperation = (compact: CompactOperation): Operation => {
   }
   if (compact.r !== undefined) {
     op.syncImportReason = compact.r as SyncImportReason;
+  }
+  if (compact.b !== undefined) {
+    op.repairBaseServerSeq = compact.b;
   }
 
   return op;

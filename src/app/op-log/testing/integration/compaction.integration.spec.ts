@@ -39,6 +39,7 @@ describe('Compaction Integration', () => {
     // Create mock for StateSnapshotService
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotForOperationLog',
     ]);
 
     // Default mock return value - cast to any since we only need partial data for tests
@@ -49,6 +50,9 @@ describe('Compaction Integration', () => {
       note: { ids: [], entities: {} },
       globalConfig: {},
     } as any);
+    mockStateSnapshot.getStateSnapshotForOperationLog.and.callFake(() =>
+      mockStateSnapshot.getStateSnapshot(),
+    );
 
     TestBed.configureTestingModule({
       providers: [

@@ -2031,15 +2031,6 @@ export class SuperSyncPage extends BasePage {
    * @param newPassword - The new encryption password
    */
   async changeEncryptionPassword(newPassword: string): Promise<void> {
-    // Capture the sync check icon state BEFORE we start. If a previous
-    // syncAndWait() left the check icon visible, the final wait at the end of
-    // this method would see a stale icon and return before the server wipe +
-    // re-upload completes — causing a race where the next client starts
-    // syncing against partially-uploaded server state.
-    const checkVisibleBeforeOperation = await this.syncCheckIcon
-      .isVisible()
-      .catch(() => false);
-
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.syncBtn.click({ button: 'right', noWaitAfter: true });
@@ -2134,10 +2125,27 @@ export class SuperSyncPage extends BasePage {
       await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
     }).toPass({ timeout: 10000 });
 
+    // The password-change service performs a clean-slate snapshot upload rather
+    // than a regular sync cycle, so the toolbar sync icon is not a reliable
+    // completion signal. Observe the authoritative server response instead.
+    const snapshotUploadResponse = this.page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes('/api/sync/snapshot'),
+      { timeout: 60000 },
+    );
     await confirmBtn.click();
 
-    // Wait for the dialog to close (password change complete)
-    await changePasswordDialog.waitFor({ state: 'detached', timeout: 60000 });
+    const [snapshotResponse] = await Promise.all([
+      snapshotUploadResponse,
+      changePasswordDialog.waitFor({ state: 'detached', timeout: 60000 }),
+    ]);
+    if (!snapshotResponse.ok()) {
+      throw new Error(
+        `Password-change snapshot upload failed with ${snapshotResponse.status()}`,
+      );
+    }
+    this._encryptionPassword = newPassword;
 
     // Wait for the config dialog to close as well
     await this.page.waitForTimeout(500);
@@ -2153,33 +2161,6 @@ export class SuperSyncPage extends BasePage {
         await configDialog.waitFor({ state: 'hidden', timeout: 5000 });
       }
     }
-
-    // Wait for password change operation to complete (server wipe + re-upload).
-    //
-    // If the check icon was visible BEFORE we opened the settings dialog, it's
-    // stale from a previous sync — we must first wait for it to disappear (new
-    // sync cycle started) or the spinner to appear, before waiting for the
-    // check icon to reappear (new sync completed). Without this, we'd return
-    // immediately against a stale icon and race the server re-upload.
-    if (checkVisibleBeforeOperation) {
-      await Promise.race([
-        this.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
-        this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
-      ]).catch(() => {
-        // Neither happened within 5s — the password change may not have
-        // triggered a re-sync (rare). Fall through and rely on the final
-        // check-icon wait below.
-      });
-    }
-
-    const spinnerVisible = await this.syncSpinner
-      .waitFor({ state: 'visible', timeout: 5000 })
-      .then(() => true)
-      .catch(() => false);
-    if (spinnerVisible) {
-      await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
-    }
-    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 
   /**

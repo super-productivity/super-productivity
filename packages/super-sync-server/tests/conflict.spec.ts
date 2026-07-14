@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getConflictEntityIds,
   isSameDuplicateOperation,
+  isSameIncomingOperation,
   isSameDuplicateTimestamp,
   pruneVectorClockForStorage,
   resolveConflictForExistingOp,
@@ -45,10 +46,29 @@ const duplicateCandidate = (
   receivedAt: 1_000,
   isPayloadEncrypted: false,
   syncImportReason: null,
+  repairBaseServerSeq: null,
   ...overrides,
 });
 
 describe('conflict helpers', () => {
+  it('matches causal REPAIR retries with the same base cursor', () => {
+    const repair = op({
+      opType: 'REPAIR',
+      entityType: 'ALL',
+      entityId: undefined,
+      repairBaseServerSeq: 10,
+    });
+
+    expect(
+      isSameIncomingOperation(
+        { ...repair, entityIds: [] },
+        { ...repair, entityIds: undefined },
+        0,
+        0,
+      ),
+    ).toBe(true);
+  });
+
   it('includes a divergent scalar entityId in the incoming conflict set', () => {
     expect(
       getConflictEntityIds(op({ entityId: 'task-scalar', entityIds: ['task-array'] })),
@@ -216,6 +236,41 @@ describe('conflict helpers', () => {
       conflictType: 'concurrent',
       existingClock: { 'client-b': 1 },
     });
+  });
+
+  it('accepts concurrent additive task-time deltas for the same task', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-b',
+        vectorClock: { 'client-b': 1 },
+      },
+    );
+
+    expect(result).toEqual({ hasConflict: false });
+  });
+
+  it('still rejects a causally stale additive task-time delta', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-a',
+        vectorClock: { 'client-a': 2 },
+      },
+    );
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('superseded');
   });
 
   it('classifies less-than vector clocks as superseded', () => {

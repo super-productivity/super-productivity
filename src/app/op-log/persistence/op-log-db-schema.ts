@@ -40,7 +40,7 @@ export interface OpLogDbSchema {
 }
 
 /**
- * Current `SUP_OPS` schema, mirroring db-upgrade.ts (currently v8).
+ * Current `SUP_OPS` schema, mirroring db-upgrade.ts.
  *
  * `name`/`version` are reused from `db-keys.const.ts` (not re-literaled) so the
  * adapter opens at exactly the version `runDbUpgrade` migrates to — a future

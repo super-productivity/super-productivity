@@ -13,15 +13,22 @@ import type {
 import { prisma } from './db';
 import { Logger } from './logger';
 import { randomBytes } from 'crypto';
-import { sendPasskeyRecoveryEmail } from './email';
+import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
-import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
+import {
+  VERIFICATION_TOKEN_EXPIRY_MS,
+  MAX_VERIFICATION_RESEND_COUNT,
+  verifyEmail,
+} from './auth';
 import { authCache } from './auth-cache';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const RECOVERY_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const REGISTRATION_SUCCESS_MESSAGE =
+  'Registration successful. Please check your email to verify your account.';
+type ChallengeCeremony = 'registration' | 'authentication' | 'recovery';
 
 // WebAuthn configuration from environment
 const getWebAuthnConfig = (): { rpName: string; rpID: string; origin: string } => {
@@ -33,7 +40,7 @@ const getWebAuthnConfig = (): { rpName: string; rpID: string; origin: string } =
   return { rpName, rpID, origin };
 };
 
-// In-memory challenge storage (short-lived, per-email)
+// In-memory challenge storage (short-lived, per ceremony and subject)
 // In production with multiple instances, use Redis or similar
 const challenges = new Map<string, { challenge: string; expiresAt: number }>();
 
@@ -56,15 +63,25 @@ setInterval(() => {
   }
 }, 60 * 1000); // Every minute
 
-const storeChallenge = (email: string, challenge: string): void => {
-  challenges.set(email.toLowerCase(), {
+const getChallengeKey = (ceremony: ChallengeCeremony, subject: string): string =>
+  `${ceremony}:${subject.toLowerCase()}`;
+
+const storeChallenge = (
+  ceremony: ChallengeCeremony,
+  subject: string,
+  challenge: string,
+): void => {
+  challenges.set(getChallengeKey(ceremony, subject), {
     challenge,
     expiresAt: Date.now() + CHALLENGE_EXPIRY_MS,
   });
 };
 
-const getAndClearChallenge = (email: string): string | null => {
-  const key = email.toLowerCase();
+const getAndClearChallenge = (
+  ceremony: ChallengeCeremony,
+  subject: string,
+): string | null => {
+  const key = getChallengeKey(ceremony, subject);
   const data = challenges.get(key);
   if (!data) return null;
 
@@ -85,28 +102,15 @@ export const generateRegistrationOptions = async (
 ): Promise<PublicKeyCredentialCreationOptionsJSON> => {
   const { rpName, rpID } = getWebAuthnConfig();
 
-  // Check if email already exists and is verified
-  const existingUser = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    include: { passkeys: true },
-  });
-
-  if (existingUser?.isVerified === 1) {
-    throw new Error('An account with this email already exists');
-  }
-
   // Generate options
   const options = await webAuthnGenerateRegistration({
     rpName,
     rpID,
     userName: email,
     userDisplayName: email,
-    // Prevent re-registering existing passkeys
-    excludeCredentials:
-      existingUser?.passkeys.map((pk) => ({
-        id: Buffer.from(pk.credentialId).toString('base64url'),
-        transports: pk.transports ? JSON.parse(pk.transports) : undefined,
-      })) || [],
+    // Registration options must not reveal whether this email or any of its
+    // credentials already exist.
+    excludeCredentials: [],
     authenticatorSelection: {
       residentKey: 'required', // Required for synced passkeys (Google Password Manager)
       userVerification: 'preferred',
@@ -114,7 +118,7 @@ export const generateRegistrationOptions = async (
     attestationType: 'none', // We don't need attestation
   });
 
-  storeChallenge(email, options.challenge);
+  storeChallenge('registration', email, options.challenge);
 
   Logger.info(
     `Registration options generated: ${JSON.stringify({
@@ -137,7 +141,7 @@ export const verifyRegistration = async (
 ): Promise<{ message: string }> => {
   const { rpID, origin } = getWebAuthnConfig();
 
-  const expectedChallenge = getAndClearChallenge(email);
+  const expectedChallenge = getAndClearChallenge('registration', email);
   if (!expectedChallenge) {
     throw new Error('Challenge expired or not found. Please try again.');
   }
@@ -176,6 +180,8 @@ export const verifyRegistration = async (
   const acceptedAt = termsAcceptedAt ? BigInt(termsAcceptedAt) : BigInt(Date.now());
 
   try {
+    const config = loadConfigFromEnv();
+
     // Check if unverified user exists (re-registration attempt)
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -183,81 +189,61 @@ export const verifyRegistration = async (
 
     if (existingUser) {
       if (existingUser.isVerified === 1) {
-        throw new Error('An account with this email already exists');
+        return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
 
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
-        throw new Error(
-          'Too many verification attempts. Please try again later or contact support.',
-        );
+        Logger.warn(`Verification resend cap reached (ID: ${existingUser.id})`);
+        return { message: REGISTRATION_SUCCESS_MESSAGE };
       }
+    }
 
-      // Update existing unverified user with new passkey
-      await prisma.$transaction(async (tx) => {
-        // Delete old passkeys
-        await tx.passkey.deleteMany({ where: { userId: existingUser.id } });
-
-        // Create new passkey
-        await tx.passkey.create({
-          data: {
-            credentialId: credentialIdRawBytes,
-            publicKey: Buffer.from(credentialInfo.publicKey),
-            counter: BigInt(credentialInfo.counter),
-            transports: credential.response.transports
-              ? JSON.stringify(credential.response.transports)
-              : null,
-            userId: existingUser.id,
+    const pendingCreated = await prisma.$transaction(async (tx) => {
+      let userId: number;
+      if (existingUser) {
+        const claim = await tx.user.updateMany({
+          where: {
+            id: existingUser.id,
+            isVerified: 0,
+            verificationResendCount: { lt: MAX_VERIFICATION_RESEND_COUNT },
           },
-        });
-
-        // Update user with new verification token
-        await tx.user.update({
-          where: { id: existingUser.id },
           data: {
-            verificationToken,
-            verificationTokenExpiresAt: tokenExpiresAt,
             verificationResendCount: { increment: 1 },
           },
         });
-      });
+        if (claim.count !== 1) return false;
+        userId = existingUser.id;
+      } else {
+        const createdUser = await tx.user.create({
+          data: {
+            email: email.toLowerCase(),
+            passwordHash: null,
+            termsAcceptedAt: acceptedAt,
+          },
+        });
+        userId = createdUser.id;
+      }
 
-      Logger.info(`Updated passkey for unverified user (ID: ${existingUser.id})`);
-    } else {
-      // Create new user with passkey
-      await prisma.user.create({
+      await tx.pendingPasskeyRegistration.create({
         data: {
-          email: email.toLowerCase(),
-          passwordHash: null, // Passkey-only user
+          userId,
           verificationToken,
           verificationTokenExpiresAt: tokenExpiresAt,
-          termsAcceptedAt: acceptedAt,
-          passkeys: {
-            create: {
-              credentialId: credentialIdRawBytes,
-              publicKey: Buffer.from(credentialInfo.publicKey),
-              counter: BigInt(credentialInfo.counter),
-              transports: credential.response.transports
-                ? JSON.stringify(credential.response.transports)
-                : null,
-            },
-          },
+          credentialId: credentialIdRawBytes,
+          publicKey: Buffer.from(credentialInfo.publicKey),
+          counter: BigInt(credentialInfo.counter),
+          transports: credential.response.transports
+            ? JSON.stringify(credential.response.transports)
+            : null,
         },
       });
-
-      Logger.info(`Created new passkey user`);
-    }
+      return true;
+    });
+    if (!pendingCreated) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
-    const config = loadConfigFromEnv();
     if (config.testMode?.autoVerifyUsers) {
-      await prisma.user.update({
-        where: { email: email.toLowerCase() },
-        data: {
-          isVerified: 1,
-          verificationToken: null,
-          verificationTokenExpiresAt: null,
-        },
-      });
+      await verifyEmail(verificationToken);
       Logger.info(`[TEST_MODE] Auto-verified passkey user`);
       return {
         message: 'Registration successful. Your account has been automatically verified.',
@@ -265,32 +251,14 @@ export const verifyRegistration = async (
     }
 
     // Normal flow: send verification email
-    const { sendVerificationEmail } = await import('./email');
     const emailSent = await sendVerificationEmail(email, verificationToken);
-
-    if (!emailSent) {
-      // Clean up on email failure for new users
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-      });
-      if (user && user.isVerified === 0) {
-        // AUTH_CACHE_INVALIDATION: bracket the delete pre + post, matching every
-        // other user-delete site, so the convention stays uniformly auditable.
-        authCache.invalidate(user.id);
-        await prisma.user.delete({ where: { id: user.id } });
-        authCache.invalidate(user.id);
-        Logger.info(`Cleaned up failed passkey registration (ID: ${user.id})`);
-      }
-      throw new Error('Failed to send verification email. Please try again later.');
-    }
+    if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     Logger.info(`Passkey registration initiated`);
-    return {
-      message: 'Registration successful. Please check your email to verify your account.',
-    };
+    return { message: REGISTRATION_SUCCESS_MESSAGE };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      throw new Error('An account with this email already exists');
+      return { message: REGISTRATION_SUCCESS_MESSAGE };
     }
     throw err;
   }
@@ -315,7 +283,7 @@ export const generateAuthenticationOptions = async (
       rpID,
       userVerification: 'preferred',
     });
-    storeChallenge(email, options.challenge);
+    storeChallenge('authentication', email, options.challenge);
     return options;
   }
 
@@ -331,7 +299,7 @@ export const generateAuthenticationOptions = async (
     userVerification: 'preferred',
   });
 
-  storeChallenge(email, options.challenge);
+  storeChallenge('authentication', email, options.challenge);
 
   Logger.info(
     `Generated passkey authentication options (userId: ${user.id}): rpId=${options.rpId}, discoverable=true`,
@@ -348,7 +316,7 @@ export const verifyAuthentication = async (
 ): Promise<{ userId: number; email: string }> => {
   const { rpID, origin } = getWebAuthnConfig();
 
-  const expectedChallenge = getAndClearChallenge(email);
+  const expectedChallenge = getAndClearChallenge('authentication', email);
   if (!expectedChallenge) {
     throw new Error('Challenge expired or not found. Please try again.');
   }
@@ -459,27 +427,44 @@ export const requestPasskeyRecovery = async (
     return successMessage;
   }
 
-  const recoveryToken = randomBytes(32).toString('hex');
-  const expiresAt = BigInt(Date.now() + RECOVERY_TOKEN_EXPIRY_MS);
+  const now = Date.now();
+  if (
+    user.passkeyRecoveryToken &&
+    user.passkeyRecoveryTokenExpiresAt !== null &&
+    user.passkeyRecoveryTokenExpiresAt > BigInt(now)
+  ) {
+    return successMessage;
+  }
 
-  await prisma.user.update({
-    where: { id: user.id },
+  const recoveryToken = randomBytes(32).toString('hex');
+  const expiresAt = BigInt(now + RECOVERY_TOKEN_EXPIRY_MS);
+
+  const claim = await prisma.user.updateMany({
+    where: {
+      id: user.id,
+      OR: [
+        { passkeyRecoveryToken: null },
+        { passkeyRecoveryTokenExpiresAt: null },
+        { passkeyRecoveryTokenExpiresAt: { lte: BigInt(now) } },
+      ],
+    },
     data: {
       passkeyRecoveryToken: recoveryToken,
       passkeyRecoveryTokenExpiresAt: expiresAt,
     },
   });
+  if (claim.count === 0) return successMessage;
 
   const emailSent = await sendPasskeyRecoveryEmail(email, recoveryToken);
   if (!emailSent) {
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.user.updateMany({
+      where: { id: user.id, passkeyRecoveryToken: recoveryToken },
       data: {
         passkeyRecoveryToken: null,
         passkeyRecoveryTokenExpiresAt: null,
       },
     });
-    throw new Error('Failed to send recovery email. Please try again later.');
+    return successMessage;
   }
 
   Logger.info(`Passkey recovery requested (ID: ${user.id})`);
@@ -505,8 +490,8 @@ export const getRecoveryRegistrationOptions = async (
     user.passkeyRecoveryTokenExpiresAt &&
     user.passkeyRecoveryTokenExpiresAt < BigInt(Date.now())
   ) {
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.user.updateMany({
+      where: { id: user.id, passkeyRecoveryToken: token },
       data: {
         passkeyRecoveryToken: null,
         passkeyRecoveryTokenExpiresAt: null,
@@ -532,7 +517,7 @@ export const getRecoveryRegistrationOptions = async (
   });
 
   // Store challenge with recovery token as key (since we don't want to leak email)
-  storeChallenge(`recovery:${token}`, options.challenge);
+  storeChallenge('recovery', token, options.challenge);
 
   Logger.debug(`Generated recovery registration options for user ${user.id}`);
   return { email: user.email, options };
@@ -559,10 +544,17 @@ export const completePasskeyRecovery = async (
     user.passkeyRecoveryTokenExpiresAt &&
     user.passkeyRecoveryTokenExpiresAt < BigInt(Date.now())
   ) {
+    await prisma.user.updateMany({
+      where: { id: user.id, passkeyRecoveryToken: token },
+      data: {
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
+      },
+    });
     throw new Error('Invalid or expired recovery token');
   }
 
-  const expectedChallenge = getAndClearChallenge(`recovery:${token}`);
+  const expectedChallenge = getAndClearChallenge('recovery', token);
   if (!expectedChallenge) {
     throw new Error('Challenge expired or not found. Please try again.');
   }
@@ -597,6 +589,25 @@ export const completePasskeyRecovery = async (
 
   // Delete old passkeys and create new one, clear recovery token, invalidate sessions
   await prisma.$transaction(async (tx) => {
+    const consume = await tx.user.updateMany({
+      where: {
+        id: user.id,
+        passkeyRecoveryToken: token,
+        OR: [
+          { passkeyRecoveryTokenExpiresAt: null },
+          { passkeyRecoveryTokenExpiresAt: { gte: BigInt(Date.now()) } },
+        ],
+      },
+      data: {
+        passkeyRecoveryToken: null,
+        passkeyRecoveryTokenExpiresAt: null,
+        tokenVersion: { increment: 1 },
+      },
+    });
+    if (consume.count !== 1) {
+      throw new Error('Invalid or expired recovery token');
+    }
+
     await tx.passkey.deleteMany({ where: { userId: user.id } });
 
     await tx.passkey.create({
@@ -608,15 +619,6 @@ export const completePasskeyRecovery = async (
           ? JSON.stringify(credential.response.transports)
           : null,
         userId: user.id,
-      },
-    });
-
-    await tx.user.update({
-      where: { id: user.id },
-      data: {
-        passkeyRecoveryToken: null,
-        passkeyRecoveryTokenExpiresAt: null,
-        tokenVersion: { increment: 1 }, // Invalidate all existing JWT tokens
       },
     });
   });

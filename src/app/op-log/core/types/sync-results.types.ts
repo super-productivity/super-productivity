@@ -174,6 +174,12 @@ export interface UploadResult {
    * pending ops to upload (the guard fires after the empty-ops check).
    */
   encryptionRequiredKeyMissing?: boolean;
+  /**
+   * True when pending incremental operations were kept local because the newest
+   * explicit import/restore boundary was permanently rejected by the server.
+   * A newer successful full-state operation clears the barrier.
+   */
+  blockedByRejectedFullState?: boolean;
 }
 
 /**
@@ -181,8 +187,9 @@ export interface UploadResult {
  */
 export interface UploadOptions {
   /**
-   * Optional callback executed INSIDE the upload lock, BEFORE checking for pending ops.
-   * Use this for operations that must be atomic with the upload, such as server migration checks.
+   * Optional preparation callback executed inside upload serialization and
+   * before capturing pending operations. The callback owns any narrower
+   * operation-log transaction needed for its local mutation.
    */
   preUploadCallback?: () => Promise<void>;
 
@@ -222,17 +229,27 @@ export interface UploadOptions {
  * SyncSessionValidationService latch — the wrapper reads it once before
  * deciding IN_SYNC vs ERROR. (#7330)
  */
-export interface DownloadResultForRejection {
-  newOpsCount: number;
-  allOpClocks?: VectorClock[];
-  snapshotVectorClock?: VectorClock;
-}
+export type DownloadResultForRejection =
+  | {
+      kind: 'completed';
+      newOpsCount: number;
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+      /** Server cursor after the downloaded operations were durably applied. */
+      latestServerSeq?: number;
+    }
+  | {
+      /** User declined the nested SYNC_IMPORT conflict resolution. */
+      kind: 'cancelled';
+    };
 
 /**
  * Callback type for triggering downloads during concurrent modification resolution.
  */
 export type DownloadCallback = (options?: {
   forceFromSeq0?: boolean;
+  /** Local full-state boundaries to ignore while processing this recovery download. */
+  ignoredLocalFullStateOpIds?: string[];
 }) => Promise<DownloadResultForRejection>;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -306,6 +323,8 @@ export type UploadOutcome =
        * key is configured, leaving pending ops unsynced. The wrapper must not claim IN_SYNC.
        */
       encryptionRequiredKeyMissing?: boolean;
+      /** Pending ops depend on an explicit full-state baseline the server rejected. */
+      blockedByRejectedFullState?: boolean;
     }
   | {
       /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */

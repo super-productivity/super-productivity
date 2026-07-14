@@ -241,7 +241,7 @@ privateCfg: {
 > `schemaVersion`, `syncImportReason`, **and the `isPayloadEncrypted` flag
 > itself** — travels as **plaintext** and is **not** bound as Additional
 > Authenticated Data (AAD), so a malicious/compromised sync server or a TLS MITM
-> can tamper with it. As **defense-in-depth**, the client fails closed on two
+> can tamper with it. As **defense-in-depth**, the client fails closed on three
 > tamper vectors:
 >
 > - **Plaintext-injection downgrade:** a forged op with `isPayloadEncrypted=false`
@@ -258,10 +258,18 @@ privateCfg: {
 > - **LWW `entityId` retarget:** the client rejects an _encrypted_ LWW-update op
 >   whose authenticated `payload.id` does not equal `op.entityId`
 >   (`verify-decrypted-op-integrity.ts`).
+> - **Full-state `opType` promotion:** after decrypting an operation tagged as
+>   `SYNC_IMPORT`, `BACKUP_IMPORT`, or `REPAIR`, the client structurally validates
+>   the authenticated payload as complete application data before the metadata can
+>   promote it to `loadAllData`. Both direct and `appDataComplete`-wrapped payloads
+>   are supported. Supported legacy payloads are migrated on a validation copy;
+>   known compatible omissions (pre-section backups and the device-local sync
+>   interval stripped from wire snapshots) are restored only on that copy. The
+>   original remains unchanged for the existing operation-processing pipeline
+>   (`assertDecryptedFullStateOpIntegrity`).
 >
 > This is **not** full integrity. Still open pending the durable fix:
 >
-> - `opType` promotion to a full-state (`loadAllData`) op.
 > - Within-LWW `entityType`/`actionType` swap (ids left equal, so it passes).
 > - `vectorClock`/`timestamp` reorder/replay.
 > - The restore-to-point path (`getStateAtSeq` → `importCompleteBackup`) applies

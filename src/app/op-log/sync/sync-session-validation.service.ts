@@ -7,7 +7,7 @@ import { SyncLog } from '../../core/log';
  *
  * A "sync session" is a single top-level sync operation:
  * - `SyncWrapperService._sync()`
- * - `WsTriggeredDownloadService._downloadOps()`
+ * - `WsTriggeredDownloadService._drainPending()`
  * - `ImmediateUploadService._performUpload()`
  *
  * The USE_REMOTE branch in `SyncWrapperService._handleLocalDataConflict`

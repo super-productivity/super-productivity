@@ -68,15 +68,39 @@ describe('ArchiveCompressionService', () => {
       expect(archiveDbAdapterMock.saveArchiveOld).not.toHaveBeenCalled();
     });
 
-    it('holds the archive mutex across the read-modify-write', async () => {
+    it('serializes the complete read-modify-write behind TASK_ARCHIVE', async () => {
+      const callOrder: string[] = [];
+      lockServiceMock.request.and.callFake(
+        async <T>(_name: string, callback: () => Promise<T>): Promise<T> => {
+          callOrder.push('lock-start');
+          const result = await callback();
+          callOrder.push('lock-end');
+          return result;
+        },
+      );
+      archiveDbAdapterMock.loadArchiveYoung.and.callFake(async () => {
+        callOrder.push('load-young');
+        return emptyArchive();
+      });
+      archiveDbAdapterMock.loadArchiveOld.and.callFake(async () => {
+        callOrder.push('load-old');
+        return emptyArchive();
+      });
+      archiveDbAdapterMock.saveArchivesAtomic.and.callFake(async () => {
+        callOrder.push('save');
+      });
+
       await service.compressArchive(Date.now());
 
       expect(lockServiceMock.request).toHaveBeenCalledOnceWith(
         LOCK_NAMES.TASK_ARCHIVE,
         jasmine.any(Function),
       );
-      expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalled();
-      expect(archiveDbAdapterMock.saveArchivesAtomic).toHaveBeenCalled();
+      expect(callOrder[0]).toBe('lock-start');
+      expect(callOrder.at(-1)).toBe('lock-end');
+      expect(callOrder.indexOf('load-young')).toBeGreaterThan(0);
+      expect(callOrder.indexOf('load-old')).toBeGreaterThan(0);
+      expect(callOrder.indexOf('save')).toBeLessThan(callOrder.indexOf('lock-end'));
     });
   });
 });

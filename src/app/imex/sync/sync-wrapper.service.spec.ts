@@ -39,6 +39,8 @@ import {
   UploadRevToMatchMismatchAPIError,
   WebDavNativeRequestError,
   EncryptNoPasswordError,
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
@@ -348,6 +350,26 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
         'UNKNOWN_OR_CHANGED',
       );
+    });
+
+    it('should report ERROR when pending ops depend on a rejected full-state upload', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.resolveTo({
+        kind: 'completed' as const,
+        uploadedCount: 0,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [],
+        blockedByRejectedFullState: true,
+      });
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
     it('should return UpdateRemote when remote ops were downloaded', async () => {
@@ -1601,7 +1623,7 @@ describe('SyncWrapperService', () => {
 
         mockSyncService.forceUploadLocalState = jasmine
           .createSpy('forceUploadLocalState')
-          .and.resolveTo();
+          .and.resolveTo({ hasUnresolvedOps: false });
 
         await service.sync();
 
@@ -1645,7 +1667,7 @@ describe('SyncWrapperService', () => {
 
         mockSyncService.forceUploadLocalState = jasmine
           .createSpy('forceUploadLocalState')
-          .and.resolveTo();
+          .and.resolveTo({ hasUnresolvedOps: false });
 
         const result = await service.sync();
 
@@ -1653,6 +1675,29 @@ describe('SyncWrapperService', () => {
           mockSyncCapableProvider,
         );
         expect(result).toBe(SyncStatus.InSync);
+      });
+
+      it('should leave sync pending when the overwrite succeeds with unresolved later ops', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo({ hasUnresolvedOps: true });
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+          'UNKNOWN_OR_CHANGED',
+        );
+        expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
       });
 
       it('should call forceDownloadRemoteState when user chooses USE_REMOTE', async () => {
@@ -1724,11 +1769,37 @@ describe('SyncWrapperService', () => {
         const result = await service.sync();
 
         expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
         expect(mockSnackService.open).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            type: 'ERROR',
-          }),
+          jasmine.objectContaining({ type: 'ERROR' }),
         );
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED }),
+        );
+      });
+
+      it('should translate a typed force-upload failure during conflict resolution', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.rejectWith(new ForceUploadFailedError());
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+        expect(mockSnackService.open).toHaveBeenCalledWith({
+          msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+          type: 'ERROR',
+        });
       });
 
       // GHSA-9544-hjjr-fg8h: USE_LOCAL force-uploads, which refuses to send
@@ -1813,6 +1884,9 @@ describe('SyncWrapperService', () => {
             type: 'ERROR',
           }),
         );
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED }),
+        );
       });
 
       it('should return HANDLED_ERROR when provider becomes unavailable during resolution', async () => {
@@ -1859,7 +1933,7 @@ describe('SyncWrapperService', () => {
 
         mockSyncService.forceUploadLocalState = jasmine
           .createSpy('forceUploadLocalState')
-          .and.resolveTo();
+          .and.resolveTo({ hasUnresolvedOps: false });
 
         await service.sync();
 
@@ -1922,6 +1996,33 @@ describe('SyncWrapperService', () => {
         jasmine.objectContaining({
           type: 'ERROR',
         }),
+      );
+    });
+
+    it('should translate FORCE_UPLOAD failures raised during op-log sync', async () => {
+      mockSyncService.uploadPendingOps.and.rejectWith(new ForceUploadFailedError());
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+        type: 'ERROR',
+      });
+    });
+
+    it('should keep sync pending when nested force upload has unresolved ops', async () => {
+      mockSyncService.uploadPendingOps.and.rejectWith(new ForceUploadPendingOpsError());
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
       );
     });
 
@@ -2639,6 +2740,37 @@ describe('SyncWrapperService', () => {
       const result = await service.sync();
 
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should stop sync when an LWW re-upload reaches a rejected full-state barrier', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 1,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+          blockedByRejectedFullState: true,
+        }),
+      );
+
+      const result = await service.sync();
+
       expect(result).toBe('HANDLED_ERROR');
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');

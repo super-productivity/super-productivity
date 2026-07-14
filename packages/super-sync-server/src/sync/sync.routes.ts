@@ -168,6 +168,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           gapDetected: gapDetected || undefined, // Only include if true
           snapshotVectorClock, // Aggregated clock from skipped ops for conflict resolution
           serverTime: Date.now(), // For client clock drift detection
+          capabilities: { causalRepairSnapshots: true },
         };
 
         return reply.send(response);

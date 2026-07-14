@@ -148,6 +148,8 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
 
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
       'getUnsynced',
+      'getLatestFullStateOpEntry',
+      'getLatestRejectedFullStateOpEntry',
       'getPendingRemoteOps',
       'getFailedRemoteOps',
       'markSynced',
@@ -164,6 +166,8 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       'isRawRebuildIncomplete',
     ]);
     opLogStoreSpy.getUnsynced.and.resolveTo([localPendingEntry]);
+    opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
+    opLogStoreSpy.getLatestRejectedFullStateOpEntry.and.resolveTo(undefined);
     opLogStoreSpy.getPendingRemoteOps.and.resolveTo([]);
     opLogStoreSpy.getFailedRemoteOps.and.resolveTo([]);
     opLogStoreSpy.isRawRebuildIncomplete.and.resolveTo(false);
@@ -234,6 +238,7 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       ['handleRejectedOps'],
     );
     rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+      kind: 'completed',
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     });

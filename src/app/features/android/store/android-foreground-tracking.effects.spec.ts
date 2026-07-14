@@ -1396,7 +1396,11 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
   const syncElapsedTimeForTaskWithOpLog = async (
     taskId: string,
     elapsedJson: string | null,
-    getTask: (id: string) => Promise<{ id: string; timeSpent: number } | null>,
+    getTask: (id: string) => Promise<{
+      id: string;
+      timeSpent: number;
+      timeSpentOnDay?: Record<string, number>;
+    } | null>,
     addTimeSpent: (task: unknown, duration: number, date: string) => void,
     dispatch: (action: { taskId: string; date: string; duration: number }) => void,
     resetTrackingStart: () => void,
@@ -1439,7 +1443,11 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       if (duration > 0) {
         addTimeSpent(task, duration, todayStr);
         // Also dispatch syncTimeSpent to capture in operation log
-        dispatch({ taskId: task.id, date: todayStr, duration });
+        dispatch({
+          taskId: task.id,
+          date: todayStr,
+          duration,
+        });
         resetTrackingStart();
       }
     } catch (e) {
@@ -1463,9 +1471,14 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
     const expectedDuration = nativeElapsed - appTimeSpent; // 14 minutes
 
     const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: nativeElapsed });
-    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+    const getTask = async (): Promise<{
+      id: string;
+      timeSpent: number;
+      timeSpentOnDay: Record<string, number>;
+    }> => ({
       id: 'task-1',
       timeSpent: appTimeSpent,
+      timeSpentOnDay: { ['2024-01-01']: appTimeSpent },
     });
 
     await syncElapsedTimeForTaskWithOpLog(
@@ -1480,7 +1493,11 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
     );
 
     expect(addTimeSpentSpy).toHaveBeenCalledWith(
-      { id: 'task-1', timeSpent: appTimeSpent },
+      {
+        id: 'task-1',
+        timeSpent: appTimeSpent,
+        timeSpentOnDay: { ['2024-01-01']: appTimeSpent },
+      },
       expectedDuration,
       '2024-01-01',
     );
@@ -1579,9 +1596,14 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
       elapsedMs: existingTimeMs + backgroundTimeMs, // Total native elapsed
     });
 
-    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+    const getTask = async (): Promise<{
+      id: string;
+      timeSpent: number;
+      timeSpentOnDay: Record<string, number>;
+    }> => ({
       id: 'task-1',
       timeSpent: existingTimeMs, // App only knows about pre-background time
+      timeSpentOnDay: { ['2024-01-01']: existingTimeMs },
     });
 
     await syncElapsedTimeForTaskWithOpLog(
@@ -1597,7 +1619,11 @@ describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207
 
     // addTimeSpent updates local NgRx state immediately
     expect(addTimeSpentSpy).toHaveBeenCalledWith(
-      { id: 'task-1', timeSpent: existingTimeMs },
+      {
+        id: 'task-1',
+        timeSpent: existingTimeMs,
+        timeSpentOnDay: { ['2024-01-01']: existingTimeMs },
+      },
       syncDuration,
       '2024-01-01',
     );

@@ -20,9 +20,25 @@ permissions:
 
 jobs:
   supersync-server-tests:
-    name: SuperSync Server Unit Tests
+    name: SuperSync Server Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: supersync
+          POSTGRES_PASSWORD: superpassword
+          POSTGRES_DB: supersync_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U supersync -d supersync_db"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out Git repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
@@ -41,3 +57,9 @@ jobs:
         run: npm i
       - name: Run SuperSync Server Tests
         run: cd packages/super-sync-server && npm test
+      - name: Apply PostgreSQL Test Schema
+        working-directory: packages/super-sync-server
+        run: npx prisma db push --skip-generate
+      - name: Run SuperSync PostgreSQL Integration Tests
+        working-directory: packages/super-sync-server
+        run: npm run test:integration:postgres

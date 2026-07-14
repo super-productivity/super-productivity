@@ -99,21 +99,16 @@ const SAFE_ERROR_MESSAGES = new Set([
   'Invalid verification token',
   'Verification token has expired',
   'Registration successful. Please check your email to verify your account.',
-  'Failed to send verification email. Please try again later.',
   // Passkey-specific messages
-  'An account with this email already exists',
   'Challenge expired or not found. Please try again.',
   'Passkey verification failed. Please try again.',
   'Passkey verification failed',
   'If an account with that email exists, a recovery link has been sent.',
-  'Failed to send recovery email. Please try again later.',
   'Invalid or expired recovery token',
   'Passkey has been reset successfully. You can now log in with your new passkey.',
   // Magic link messages
   'If an account with that email exists, a login link has been sent.',
-  'Failed to send login email. Please try again later.',
   'Invalid or expired login link',
-  'Too many verification attempts. Please try again later or contact support.',
 ]);
 
 // Returns a safe error message for clients (hides internal details)

@@ -43,6 +43,9 @@ import {
 } from '../core/operation.types';
 import { TranslateService } from '@ngx-translate/core';
 import {
+  EncryptNoPasswordError,
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
@@ -58,6 +61,7 @@ import { selectSyncConfig } from '../../features/config/store/global-config.redu
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 
 describe('OperationLogSyncService', () => {
   let service: OperationLogSyncService;
@@ -215,6 +219,7 @@ describe('OperationLogSyncService', () => {
       'handleRejectedOps',
     ]);
     rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+      kind: 'completed',
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     });
@@ -765,6 +770,7 @@ describe('OperationLogSyncService', () => {
           mockProvider = {
             isReady: () => Promise.resolve(true),
             supportsOperationSync: true,
+            getLastServerSeq: () => Promise.resolve(12),
           };
         });
 
@@ -815,7 +821,11 @@ describe('OperationLogSyncService', () => {
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
             async (_ops, callback) => {
               capturedCallback = callback;
-              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
             },
           );
 
@@ -842,6 +852,48 @@ describe('OperationLogSyncService', () => {
             forceFromSeq0: true,
             isNeverSynced: true,
           });
+
+          const recoveryResult = await capturedCallback({
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+          });
+          expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+            isNeverSynced: true,
+          });
+          expect(recoveryResult.latestServerSeq).toBe(12);
+        });
+
+        it('should propagate nested download cancellation as a cancelled upload', async () => {
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [],
+            rejectedCount: 1,
+            rejectedOps: [
+              {
+                opId: 'local-op-1',
+                error: 'Concurrent',
+                errorCode: 'CONFLICT_CONCURRENT',
+              },
+            ],
+          });
+          spyOn(service, 'downloadRemoteOps').and.resolveTo({ kind: 'cancelled' });
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
+            async (_ops, callback) => {
+              const nestedResult = await callback?.();
+              if (nestedResult?.kind === 'cancelled') {
+                return { kind: 'cancelled' };
+              }
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
+            },
+          );
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('cancelled');
         });
 
         it('should add mergedOpsFromRejection to localWinOpsCreated in result', async () => {
@@ -884,6 +936,7 @@ describe('OperationLogSyncService', () => {
 
           // handleRejectedOps returns 3 merged ops created
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+            kind: 'completed',
             mergedOpsCreated: 3,
             permanentRejectionCount: 0,
           });
@@ -994,6 +1047,23 @@ describe('OperationLogSyncService', () => {
           );
         });
 
+        it('should surface a rejected full-state upload barrier to sync orchestrators', async () => {
+          uploadServiceSpy.uploadPendingOps.and.resolveTo({
+            uploadedCount: 0,
+            piggybackedOps: [],
+            rejectedCount: 0,
+            rejectedOps: [],
+            blockedByRejectedFullState: true,
+          });
+
+          const result = await service.uploadPendingOps(mockProvider);
+
+          expect(result.kind).toBe('completed');
+          if (result.kind === 'completed') {
+            expect(result.blockedByRejectedFullState).toBe(true);
+          }
+        });
+
         // Issue #7330 follow-up: a download triggered from inside the
         // rejected-op handler can run post-sync validation. If validation
         // fails on that path, the boolean must surface through the eventual
@@ -1020,7 +1090,11 @@ describe('OperationLogSyncService', () => {
               // resolution. The latch is flipped inside the nested download's
               // validateAfterSync — here we just exercise the call.
               await callback?.();
-              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+              return {
+                kind: 'completed',
+                mergedOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
             },
           );
 
@@ -1410,6 +1484,59 @@ describe('OperationLogSyncService', () => {
           expect(result.localWinOpsCreated).toBe(1);
           expect(result.newOpsCount).toBe(1);
         }
+      });
+
+      it('should preserve repair context and the final conflict guard together', async () => {
+        const remoteOp = {
+          id: 'remote-for-repair',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK' as const,
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+        downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+          newOps: [remoteOp],
+          latestServerSeq: 17,
+          needsFullStateUpload: false,
+          success: true,
+          providerMode: 'superSyncOps',
+          failedFileCount: 0,
+        });
+        const repairContext = TestBed.inject(RepairSyncContextService);
+        let observedBaseServerSeq: number | undefined;
+        remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(async () => {
+          observedBaseServerSeq = repairContext.baseServerSeq;
+          return {
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+          };
+        });
+
+        await service.downloadRemoteOps(
+          {
+            isReady: async () => true,
+            setLastServerSeq: async () => undefined,
+          } as any,
+          { ignoredLocalFullStateOpIds: ['stale-repair'] },
+        );
+
+        expect(observedBaseServerSeq).toBe(17);
+        expect(repairContext.baseServerSeq).toBeUndefined();
+        expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+          [remoteOp],
+          jasmine.objectContaining({
+            ignoredLocalFullStateOpIds: ['stale-repair'],
+            beforeFullStateApply: jasmine.any(Function),
+          }),
+        );
       });
 
       it('should NOT advance lastServerSeq when processing blocked at an incompatible op', async () => {
@@ -1909,9 +2036,12 @@ describe('OperationLogSyncService', () => {
 
           // Should NOT throw - incremental sync should process ops normally
           await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
-          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-            remoteOp,
-          ]);
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [remoteOp],
+            jasmine.objectContaining({
+              beforeFullStateApply: jasmine.any(Function),
+            }),
+          );
         });
 
         it('should protect unsynced user config from file-snapshot replacement', async () => {
@@ -3244,6 +3374,10 @@ describe('OperationLogSyncService', () => {
         rejectedOps: [],
         localWinOpsCreated: 0,
       });
+      serverMigrationServiceSpy.handleServerMigration.and.resolveTo('force-import');
+      opLogStoreSpy.getOpById.and.resolveTo({
+        syncedAt: Date.now(),
+      } as OperationLogEntry);
     });
 
     it('should call handleServerMigration to create SYNC_IMPORT', async () => {
@@ -3252,18 +3386,21 @@ describe('OperationLogSyncService', () => {
         setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
       } as unknown as OperationSyncCapable;
 
-      await service.forceUploadLocalState(mockProvider);
+      const result = await service.forceUploadLocalState(mockProvider);
 
       expect(serverMigrationServiceSpy.handleServerMigration).toHaveBeenCalledWith(
         mockProvider,
         { skipServerEmptyCheck: true, syncImportReason: 'FORCE_UPLOAD' },
       );
+      expect(opLogStoreSpy.getOpById).toHaveBeenCalledOnceWith('force-import');
+      expect(result).toEqual({ hasUnresolvedOps: false });
     });
 
     it('should upload pending ops after creating SYNC_IMPORT', async () => {
       const callOrder: string[] = [];
       serverMigrationServiceSpy.handleServerMigration.and.callFake(async () => {
         callOrder.push('handleServerMigration');
+        return 'force-import';
       });
       uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
         callOrder.push('uploadPendingOps');
@@ -3299,6 +3436,19 @@ describe('OperationLogSyncService', () => {
       );
     });
 
+    it('should reject when no FORCE_UPLOAD operation was created', async () => {
+      serverMigrationServiceSpy.handleServerMigration.and.resolveTo();
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError(ForceUploadFailedError);
+      expect(uploadServiceSpy.uploadPendingOps).not.toHaveBeenCalled();
+    });
+
     it('should propagate errors from uploadPendingOps', async () => {
       const error = new Error('Upload failed');
       uploadServiceSpy.uploadPendingOps.and.rejectWith(error);
@@ -3311,6 +3461,75 @@ describe('OperationLogSyncService', () => {
       await expectAsync(service.forceUploadLocalState(mockProvider)).toBeRejectedWith(
         error,
       );
+    });
+
+    it('should reject when mandatory encryption blocks the force upload', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 0,
+        piggybackedOps: [],
+        rejectedCount: 0,
+        rejectedOps: [],
+        encryptionRequiredKeyMissing: true,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError(EncryptNoPasswordError);
+    });
+
+    it('should reject with a typed error when the FORCE_UPLOAD op is not acknowledged', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 0,
+        piggybackedOps: [],
+        rejectedCount: 1,
+        rejectedOps: [
+          {
+            opId: 'force-import',
+            error: 'snapshot rejected',
+            errorCode: 'VALIDATION_ERROR',
+          },
+        ],
+      });
+      opLogStoreSpy.getOpById.and.resolveTo({} as OperationLogEntry);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      await expectAsync(
+        service.forceUploadLocalState(mockProvider),
+      ).toBeRejectedWithError(ForceUploadFailedError);
+    });
+
+    it('should succeed when the FORCE_UPLOAD op is accepted despite an unrelated rejection', async () => {
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 1,
+        piggybackedOps: [],
+        rejectedCount: 1,
+        rejectedOps: [
+          {
+            opId: 'older-op',
+            error: 'superseded',
+            errorCode: 'VALIDATION_ERROR',
+          },
+        ],
+        localWinOpsCreated: 0,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as unknown as OperationSyncCapable;
+
+      const result = await service.forceUploadLocalState(mockProvider);
+
+      expect(result).toEqual({ hasUnresolvedOps: true });
+      expect(opLogStoreSpy.getOpById).toHaveBeenCalledOnceWith('force-import');
     });
 
     it('should upload with isCleanSlate=true to delete server data before accepting new data', async () => {
@@ -4841,9 +5060,12 @@ describe('OperationLogSyncService', () => {
       expect(
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        incomingSyncImport,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [incomingSyncImport],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(mockProvider.setLastServerSeq).toHaveBeenCalledWith(42);
       expect(result.kind).toBe('ops_processed');
     });
@@ -5055,10 +5277,74 @@ describe('OperationLogSyncService', () => {
       const result = await service.downloadRemoteOps(mockProvider);
 
       expect(events.slice(0, 4)).toEqual(['flush', 'flush', 'flush', 'getUnsynced']);
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        incomingSyncImport,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [incomingSyncImport],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(result.kind).toBe('ops_processed');
+    });
+
+    it('should abort downloaded SYNC_IMPORT apply when meaningful work appears after the initial gate', async () => {
+      const incomingSyncImport = createIncomingSyncImport();
+      const latePendingEntry: OperationLogEntry = {
+        seq: 2,
+        op: {
+          id: 'late-download-local-op',
+          clientId: 'client-A',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Late local title' },
+          vectorClock: { clientA: 2 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        appliedAt: Date.now(),
+        source: 'local',
+      };
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [incomingSyncImport],
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 42,
+      });
+      opLogStoreSpy.getUnsynced.and.returnValues(
+        Promise.resolve([]),
+        Promise.resolve([latePendingEntry]),
+      );
+      remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(
+        async (ops, options) => {
+          const shouldApply = options?.beforeFullStateApply
+            ? await options.beforeFullStateApply(ops)
+            : true;
+          return {
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+            fullStateApplyBlockedByLocalConflict: !shouldApply,
+          };
+        },
+      );
+      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as unknown as OperationSyncCapable;
+
+      const result = await service.downloadRemoteOps(mockProvider);
+
+      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalledWith(
+        jasmine.objectContaining({ scenario: 'INCOMING_IMPORT' }),
+      );
+      expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
+      expect(result.kind).toBe('cancelled');
     });
 
     it('should prompt before replacing pending user config with an incoming SYNC_IMPORT', async () => {
@@ -5217,6 +5503,7 @@ describe('OperationLogSyncService', () => {
         rejectedCount: 0,
         rejectedOps: [],
         pendingAcknowledgementSeqs: [1],
+        lastServerSeqToPersist: 42,
       });
 
       // Client has pending ops
@@ -5243,6 +5530,7 @@ describe('OperationLogSyncService', () => {
 
       const mockProvider = {
         isReady: () => Promise.resolve(true),
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
       } as unknown as OperationSyncCapable;
 
       const result = await service.uploadPendingOps(mockProvider);
@@ -5254,6 +5542,7 @@ describe('OperationLogSyncService', () => {
         }),
       );
       expect(opLogStoreSpy.markSynced).not.toHaveBeenCalled();
+      expect(mockProvider.setLastServerSeq).not.toHaveBeenCalled();
       expect(result.kind).toBe('cancelled');
     });
 
@@ -5355,9 +5644,12 @@ describe('OperationLogSyncService', () => {
       expect(
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        piggybackedSyncImport,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [piggybackedSyncImport],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(result.kind).toBe('completed');
     });
 
@@ -5406,9 +5698,12 @@ describe('OperationLogSyncService', () => {
       expect(opLogStoreSpy.markRejected).toHaveBeenCalledOnceWith([
         'sync-provider-setup',
       ]);
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        piggybackedSyncImport,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [piggybackedSyncImport],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(result.kind).toBe('completed');
     });
 
@@ -5500,6 +5795,84 @@ describe('OperationLogSyncService', () => {
       expect(result.kind).toBe('completed');
     });
 
+    it('should abort piggybacked SYNC_IMPORT apply when meaningful work appears after the initial gate', async () => {
+      const piggybackedSyncImport: Operation = {
+        id: 'import-1',
+        clientId: 'client-B',
+        actionType: ActionType.LOAD_ALL_DATA,
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        payload: {},
+        vectorClock: { clientB: 5 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      const latePendingEntry: OperationLogEntry = {
+        seq: 2,
+        op: {
+          id: 'late-local-op',
+          clientId: 'client-A',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Late local title' },
+          vectorClock: { clientA: 2 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        },
+        appliedAt: Date.now(),
+        source: 'local',
+      };
+
+      uploadServiceSpy.uploadPendingOps.and.resolveTo({
+        uploadedCount: 1,
+        piggybackedOps: [piggybackedSyncImport],
+        rejectedCount: 0,
+        rejectedOps: [],
+        pendingAcknowledgementSeqs: [1],
+      });
+      // The first read is the initial post-upload gate. The second read is the
+      // final in-lock recheck immediately before full-state application.
+      opLogStoreSpy.getUnsynced.and.returnValues(
+        Promise.resolve([]),
+        Promise.resolve([latePendingEntry]),
+      );
+      remoteOpsProcessingServiceSpy.processRemoteOps.and.callFake(
+        async (ops, options) => {
+          const finalGuard = (
+            options as
+              | {
+                  beforeFullStateApply?: (fullStateOps: Operation[]) => Promise<boolean>;
+                }
+              | undefined
+          )?.beforeFullStateApply;
+          const shouldApply = finalGuard ? await finalGuard(ops) : true;
+          return {
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+            fullStateApplyBlockedByLocalConflict: !shouldApply,
+          };
+        },
+      );
+      syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('CANCEL');
+
+      const mockProvider = {
+        isReady: () => Promise.resolve(true),
+      } as unknown as OperationSyncCapable;
+
+      const result = await service.uploadPendingOps(mockProvider);
+
+      expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalledWith(
+        jasmine.objectContaining({ scenario: 'INCOMING_IMPORT' }),
+      );
+      expect(opLogStoreSpy.markSynced).not.toHaveBeenCalled();
+      expect(result.kind).toBe('cancelled');
+    });
+
     it('should process piggybacked SYNC_IMPORT silently when no meaningful local data', async () => {
       const piggybackedSyncImport: Operation = {
         id: 'import-1',
@@ -5540,9 +5913,12 @@ describe('OperationLogSyncService', () => {
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
       // Should process normally via processRemoteOps
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        piggybackedSyncImport,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [piggybackedSyncImport],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(result.kind).not.toBe('cancelled');
     });
 
@@ -5595,9 +5971,12 @@ describe('OperationLogSyncService', () => {
         syncImportConflictDialogServiceSpy.showConflictDialog,
       ).not.toHaveBeenCalled();
       // Should process normally
-      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
-        piggybackedOp,
-      ]);
+      expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+        [piggybackedOp],
+        jasmine.objectContaining({
+          beforeFullStateApply: jasmine.any(Function),
+        }),
+      );
       expect(opLogStoreSpy.markSynced).toHaveBeenCalledOnceWith([1]);
       expect(events).toEqual(['processRemoteOps', 'markSynced']);
       expect(result.kind).not.toBe('cancelled');
@@ -5651,7 +6030,9 @@ describe('OperationLogSyncService', () => {
 
       syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo('USE_LOCAL');
 
-      const forceUploadSpy = spyOn(service, 'forceUploadLocalState').and.resolveTo();
+      const forceUploadSpy = spyOn(service, 'forceUploadLocalState').and.resolveTo({
+        hasUnresolvedOps: false,
+      });
 
       const mockProvider = {
         isReady: () => Promise.resolve(true),
@@ -5660,6 +6041,11 @@ describe('OperationLogSyncService', () => {
       await service.uploadPendingOps(mockProvider);
 
       expect(forceUploadSpy).toHaveBeenCalledWith(mockProvider);
+
+      forceUploadSpy.and.resolveTo({ hasUnresolvedOps: true });
+      await expectAsync(service.uploadPendingOps(mockProvider)).toBeRejectedWithError(
+        ForceUploadPendingOpsError,
+      );
     });
 
     it('should call forceDownloadRemoteState when user chooses USE_REMOTE', async () => {

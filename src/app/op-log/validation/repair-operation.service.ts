@@ -18,6 +18,15 @@ import { devError } from '../../util/dev-error';
 import { TranslateService } from '@ngx-translate/core';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { alertDialog } from '../../util/native-dialogs';
+import { RepairSyncContextService } from './repair-sync-context.service';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
+
+export interface RebaseStaleRepairOptions {
+  staleRepairOpId: string;
+  repairSummary: RepairSummary;
+  clientId: string;
+  repairBaseServerSeq: number;
+}
 
 /**
  * Service responsible for creating REPAIR operations.
@@ -33,6 +42,8 @@ export class RepairOperationService {
   private lockService = inject(LockService);
   private translateService = inject(TranslateService);
   private vectorClockService = inject(VectorClockService);
+  private repairSyncContext = inject(RepairSyncContextService);
+  private stateSnapshotService = inject(StateSnapshotService);
 
   /**
    * Creates a REPAIR operation with the repaired state and saves it to the operation log.
@@ -54,32 +65,15 @@ export class RepairOperationService {
       throw new Error('clientId is required - cannot create repair operation');
     }
 
-    const payload: RepairPayload = {
-      appDataComplete: repairedState,
-      repairSummary,
-    };
-
     let seq: number = 0;
 
     const doCreateOperation = async (): Promise<void> => {
-      const currentClock = await this.vectorClockService.getCurrentVectorClock();
-      const newClock = limitVectorClockSize(
-        incrementVectorClock(currentClock, clientId),
+      const op = await this._buildRepairOperation(
+        repairedState,
+        repairSummary,
         clientId,
+        this.repairSyncContext.baseServerSeq,
       );
-
-      const op: Operation = {
-        id: uuidv7(),
-        actionType: ActionType.REPAIR_AUTO,
-        opType: OpType.Repair,
-        entityType: 'ALL',
-        payload,
-        clientId,
-        vectorClock: newClock,
-        timestamp: Date.now(),
-        schemaVersion: CURRENT_SCHEMA_VERSION,
-        syncImportReason: 'REPAIR',
-      };
 
       // 1. Append REPAIR operation to log and update vector clock atomically
       seq = await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
@@ -89,7 +83,7 @@ export class RepairOperationService {
       await this.opLogStore.saveStateCache({
         state: repairedState,
         lastAppliedOpSeq: seq,
-        vectorClock: newClock,
+        vectorClock: op.vectorClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
@@ -111,6 +105,71 @@ export class RepairOperationService {
     this._notifyUser(repairSummary);
 
     return seq;
+  }
+
+  /**
+   * Rebuilds a stale automatic repair after its missing server suffix was applied.
+   * The old rejection marker and the new repair are persisted atomically so a
+   * crash cannot strand the repaired state without an uploadable boundary.
+   */
+  async rebaseStaleRepair(options: RebaseStaleRepairOptions): Promise<number> {
+    const { staleRepairOpId, repairSummary, clientId, repairBaseServerSeq } = options;
+    if (!clientId) {
+      throw new Error('clientId is required - cannot rebase repair operation');
+    }
+
+    return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+      const repairedState = await this.stateSnapshotService.getStateSnapshotAsync();
+      const replacementOp = await this._buildRepairOperation(
+        repairedState,
+        repairSummary,
+        clientId,
+        repairBaseServerSeq,
+      );
+      const seq = await this.opLogStore.replaceRejectedRepair({
+        staleRepairOpId,
+        replacementOp,
+        repairedState,
+      });
+      OpLog.log('[RepairOperationService] Rebased stale REPAIR operation', {
+        seq,
+        staleRepairOpId,
+        repairBaseServerSeq,
+      });
+      return seq;
+    });
+  }
+
+  private async _buildRepairOperation(
+    repairedState: unknown,
+    repairSummary: RepairSummary,
+    clientId: string,
+    repairBaseServerSeq?: number,
+  ): Promise<Operation> {
+    const payload: RepairPayload = {
+      appDataComplete: repairedState,
+      repairSummary,
+      ...(repairBaseServerSeq !== undefined ? { repairBaseServerSeq } : {}),
+    };
+    const currentClock = await this.vectorClockService.getCurrentVectorClock();
+    const newClock = limitVectorClockSize(
+      incrementVectorClock(currentClock, clientId),
+      clientId,
+    );
+
+    return {
+      id: uuidv7(),
+      actionType: ActionType.REPAIR_AUTO,
+      opType: OpType.Repair,
+      entityType: 'ALL',
+      payload,
+      clientId,
+      vectorClock: newClock,
+      timestamp: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: 'REPAIR',
+      ...(repairBaseServerSeq !== undefined ? { repairBaseServerSeq } : {}),
+    };
   }
 
   /**

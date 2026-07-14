@@ -1,5 +1,10 @@
 import { runDbUpgrade } from './db-upgrade';
-import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.const';
+import {
+  DB_VERSION,
+  FULL_STATE_OPS_META_KEY,
+  STORE_NAMES,
+  OPS_INDEXES,
+} from './db-keys.const';
 import { deleteDB, openDB } from 'idb';
 import { OpType } from '../core/operation.types';
 
@@ -298,7 +303,26 @@ describe('runDbUpgrade', () => {
     });
   });
 
-  describe('full upgrade path (version 0 to 7)', () => {
+  describe('version 9 downgrade barrier', () => {
+    it('should reject a v8 reader after the v9 database has been opened', async () => {
+      const dbName = `SUP_OPS_v9_barrier_${Date.now()}_${Math.random()}`;
+
+      try {
+        const currentDb = await openDB(dbName, DB_VERSION, {
+          upgrade: (db, oldVersion, _newVersion, tx) => runDbUpgrade(db, oldVersion, tx),
+        });
+        currentDb.close();
+
+        await expectAsync(openDB(dbName, 8)).toBeRejectedWith(
+          jasmine.objectContaining({ name: 'VersionError' }),
+        );
+      } finally {
+        await deleteDB(dbName);
+      }
+    });
+  });
+
+  describe('full upgrade path (from version 0)', () => {
     it('should create all stores and indexes when upgrading from version 0', () => {
       const { db, tx } = createMocks();
 

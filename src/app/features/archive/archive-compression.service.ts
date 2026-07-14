@@ -89,10 +89,10 @@ export class ArchiveCompressionService {
       );
       const newArchiveOld = this._compressArchiveData(archiveOld, oneYearAgoTimestamp);
 
-      // Atomic write: both archives written in a single IndexedDB transaction.
-      // Two independent writes could tear on a crash between them, and since
-      // compression is op-replayed on other clients a half-compressed local
-      // result would diverge from replicas (#8843).
+      // Keep the complete read-modify-write cycle under the same cross-tab lock
+      // used by archive replacement and ordinary archive mutations. The atomic
+      // database write prevents a torn pair; the lock prevents overwriting a
+      // concurrent replacement with data read before that replacement.
       await this._archiveDbAdapter.saveArchivesAtomic(newArchiveYoung, newArchiveOld);
     });
   }

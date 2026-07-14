@@ -32,6 +32,7 @@ import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogEffects } from '../capture/operation-log.effects';
+import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-collector';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -113,6 +114,7 @@ describe('OperationLogHydratorService', () => {
       'getVectorClock',
       'setVectorClock',
       'mergeRemoteOpClocks',
+      'markReducersCommittedAndMergeClocks',
       'getLatestFullStateOp',
     ]);
     mockMigrationService = jasmine.createSpyObj('OperationLogMigrationService', [
@@ -122,6 +124,7 @@ describe('OperationLogHydratorService', () => {
       'needsMigration',
       'migrateStateIfNeeded',
       'operationNeedsMigration',
+      'migrateOperation',
       'migrateOperations',
     ]);
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
@@ -181,6 +184,7 @@ describe('OperationLogHydratorService', () => {
     mockOpLogStore.markApplied.and.returnValue(Promise.resolve());
     mockOpLogStore.markFailed.and.returnValue(Promise.resolve());
     mockOpLogStore.mergeRemoteOpClocks.and.returnValue(Promise.resolve());
+    mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
     mockOperationApplierService.applyOperations.and.returnValue(
       Promise.resolve({ appliedOps: [] }),
@@ -188,6 +192,7 @@ describe('OperationLogHydratorService', () => {
     mockMigrationService.checkAndMigrate.and.returnValue(Promise.resolve());
     mockSchemaMigrationService.needsMigration.and.returnValue(false);
     mockSchemaMigrationService.operationNeedsMigration.and.returnValue(false);
+    mockSchemaMigrationService.migrateOperation.and.callFake((op) => op);
     mockSchemaMigrationService.migrateOperations.and.callFake((ops) => ops);
     mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
@@ -204,7 +209,7 @@ describe('OperationLogHydratorService', () => {
     mockSnapshotService.isValidSnapshot.and.returnValue(true);
     mockSnapshotService.migrateSnapshotWithBackup.and.callFake(async (s) => s);
     mockSnapshotService.saveCurrentStateAsSnapshot.and.returnValue(Promise.resolve());
-    mockRecoveryService.recoverPendingRemoteOps.and.returnValue(Promise.resolve());
+    mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([]);
     mockRecoveryService.cleanupCorruptOps.and.returnValue(Promise.resolve());
     mockRecoveryService.attemptRecovery.and.returnValue(Promise.resolve());
     mockSyncHydrationService.hydrateFromRemoteSync.and.returnValue(Promise.resolve());
@@ -389,6 +394,122 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('tail operation replay', () => {
+      it('should not replay an operation whose reducer was durably rejected', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const rejectedEntry: OperationLogEntry = {
+          ...createMockEntry(6, createMockOperation('op-reducer-rejected')),
+          rejectedAt: Date.now(),
+          reducerRejectedAt: Date.now(),
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([rejectedEntry]);
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledOnceWith(
+          loadAllData({ appDataComplete: mockState }),
+        );
+        expect(mockOpLogStore.mergeRemoteOpClocks).not.toHaveBeenCalled();
+      });
+
+      it('should durably partition pending reducer failures before archive retry', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const failedOp = createMockOperation('op-failed');
+        const successfulOp = createMockOperation('op-success');
+        const pendingEntries: OperationLogEntry[] = [
+          {
+            seq: 6,
+            op: failedOp,
+            appliedAt: Date.now(),
+            source: 'remote',
+            applicationStatus: 'pending',
+          },
+          {
+            seq: 7,
+            op: successfulOp,
+            appliedAt: Date.now(),
+            source: 'remote',
+            applicationStatus: 'pending',
+          },
+        ];
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(pendingEntries);
+        mockRecoveryService.recoverPendingRemoteOps.and.returnValue(
+          Promise.resolve(pendingEntries) as never,
+        );
+        const durabilityOrder: string[] = [];
+        mockOpLogStore.mergeRemoteOpClocks.and.callFake(async () => {
+          durabilityOrder.push('clock');
+        });
+        mockOpLogStore.markReducersCommittedAndMergeClocks.and.callFake(async () => {
+          durabilityOrder.push('checkpoint');
+        });
+        mockStore.dispatch.and.callFake(((action: { type: string }) => {
+          if (action.type === bulkApplyHydrationOperations.type) {
+            reportBulkReplayReducerFailure(failedOp, new Error('reducer failed'));
+          }
+        }) as never);
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [7],
+          [successfulOp],
+          ['op-failed'],
+        );
+        expect(durabilityOrder).toEqual(['clock', 'checkpoint']);
+      });
+
+      it('should leave a reducer-failed pending full-state operation recoverable', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const fullStateOp = createMockOperation('pending-import', OpType.SyncImport, {
+          entityType: 'ALL',
+          payload: { appDataComplete: { task: {}, project: {} } },
+        });
+        const pendingEntry: OperationLogEntry = {
+          ...createMockEntry(6, fullStateOp),
+          source: 'remote',
+          applicationStatus: 'pending',
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([pendingEntry]);
+        mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([pendingEntry]);
+        mockStore.dispatch.and.callFake(((action: { type: string }) => {
+          if (action.type === bulkApplyHydrationOperations.type) {
+            reportBulkReplayReducerFailure(
+              fullStateOp,
+              new Error('full-state reducer failed'),
+            );
+          }
+        }) as never);
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      });
+
+      it('should fail closed without rejecting a local replay failure', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const localOp = createMockOperation('local-replay-failure');
+        const localEntry: OperationLogEntry = {
+          ...createMockEntry(6, localOp),
+          source: 'local',
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([localEntry]);
+        mockStore.dispatch.and.callFake(((action: { type: string }) => {
+          if (action.type === bulkApplyHydrationOperations.type) {
+            reportBulkReplayReducerFailure(localOp, new Error('local replay failed'));
+          }
+        }) as never);
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).not.toHaveBeenCalled();
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      });
+
       it('should replay tail operations after snapshot', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const tailOps = [
@@ -607,6 +728,72 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('full state operations optimization', () => {
+      it('should not direct-load a full-state op while an earlier replay row is pending', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const pendingOp = createMockOperation('pending-op');
+        const pendingEntry: OperationLogEntry = {
+          ...createMockEntry(6, pendingOp),
+          source: 'remote',
+          applicationStatus: 'pending',
+        };
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+          payload: { appDataComplete: { task: {}, project: {} } },
+          entityType: 'ALL',
+        });
+        const syncImportEntry = createMockEntry(7, syncImportOp);
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([pendingEntry, syncImportEntry]);
+        mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([pendingEntry]);
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: [pendingOp, syncImportOp],
+            localClientId: 'test-client',
+          }),
+        );
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [6],
+          [pendingOp],
+          [],
+        );
+      });
+
+      it('should replay a pending SyncImport through reducers before checkpointing it', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const syncImportPayload = { task: {}, project: {} };
+        const syncImportOp = createMockOperation('pending-sync-op', OpType.SyncImport, {
+          payload: { appDataComplete: syncImportPayload },
+          entityType: 'ALL',
+        });
+        const pendingEntry: OperationLogEntry = {
+          ...createMockEntry(6, syncImportOp),
+          source: 'remote',
+          applicationStatus: 'pending',
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([pendingEntry]);
+        mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([pendingEntry]);
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: [syncImportOp],
+            localClientId: 'test-client',
+          }),
+        );
+        expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+          loadAllData({ appDataComplete: syncImportPayload as never }),
+        );
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [6],
+          [syncImportOp],
+          [],
+        );
+      });
+
       it('should load SyncImport operation directly without replay', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const syncImportPayload = { task: {}, project: {} };
@@ -954,7 +1141,68 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        expect(mockSchemaMigrationService.migrateOperations).toHaveBeenCalled();
+        expect(mockSchemaMigrationService.migrateOperation).toHaveBeenCalled();
+      });
+
+      it('should durably reject a pending row that migration drops', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const pendingOp = createMockOperation('dropped-pending-op', OpType.Update, {
+          schemaVersion: 0,
+        });
+        const pendingEntry: OperationLogEntry = {
+          ...createMockEntry(6, pendingOp),
+          source: 'remote',
+          applicationStatus: 'pending',
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([pendingEntry]);
+        mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([pendingEntry]);
+        mockSchemaMigrationService.operationNeedsMigration.and.returnValue(true);
+        mockSchemaMigrationService.migrateOperation.and.returnValue(null);
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [],
+          [],
+          [pendingOp.id],
+        );
+      });
+
+      it('should checkpoint the original pending row when migration splits it', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const pendingOp = createMockOperation('split-pending-op', OpType.Update, {
+          schemaVersion: 0,
+        });
+        const pendingEntry: OperationLogEntry = {
+          ...createMockEntry(6, pendingOp),
+          source: 'remote',
+          applicationStatus: 'pending',
+        };
+        const migratedOps = [
+          createMockOperation('split-pending-op-1'),
+          createMockOperation('split-pending-op-2'),
+        ];
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([pendingEntry]);
+        mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([pendingEntry]);
+        mockSchemaMigrationService.operationNeedsMigration.and.returnValue(true);
+        mockSchemaMigrationService.migrateOperation.and.returnValue(migratedOps);
+
+        await service.hydrateStore();
+
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: migratedOps,
+            localClientId: 'test-client',
+            atomicReplayGroups: [migratedOps.map((op) => op.id)],
+          }),
+        );
+        expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
+          [pendingEntry.seq],
+          [pendingOp],
+          [],
+        );
       });
 
       // Additional version mismatch tests
@@ -1008,13 +1256,16 @@ describe('OperationLogHydratorService', () => {
           ...e.op,
           schemaVersion: CURRENT_SCHEMA_VERSION,
         }));
-        mockSchemaMigrationService.migrateOperations.and.returnValue(migratedOps);
+        mockSchemaMigrationService.migrateOperation.and.callFake((op) => ({
+          ...op,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+        }));
 
         await service.hydrateStore();
 
         // Both snapshot and operations should be migrated
         expect(mockSnapshotService.migrateSnapshotWithBackup).toHaveBeenCalled();
-        expect(mockSchemaMigrationService.migrateOperations).toHaveBeenCalled();
+        expect(mockSchemaMigrationService.migrateOperation).toHaveBeenCalled();
         // Operations should be applied via bulk dispatch
         expect(mockStore.dispatch).toHaveBeenCalledWith(
           bulkApplyHydrationOperations({
@@ -1060,8 +1311,8 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        // migrateOperations should be called since some ops need migration
-        expect(mockSchemaMigrationService.migrateOperations).toHaveBeenCalled();
+        // migrateOperation should be called since some ops need migration
+        expect(mockSchemaMigrationService.migrateOperation).toHaveBeenCalled();
       });
 
       it('should not migrate operations if none need migration', async () => {
@@ -1086,8 +1337,8 @@ describe('OperationLogHydratorService', () => {
 
         await service.hydrateStore();
 
-        // migrateOperations should NOT be called
-        expect(mockSchemaMigrationService.migrateOperations).not.toHaveBeenCalled();
+        // migrateOperation should NOT be called
+        expect(mockSchemaMigrationService.migrateOperation).not.toHaveBeenCalled();
       });
 
       it('should handle undefined schemaVersion in snapshot (legacy data)', async () => {

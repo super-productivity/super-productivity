@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { Operation, VectorClock } from '../core/operation.types';
+import { Operation, OpType, RepairSummary, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -9,6 +9,38 @@ import { DownloadCallback, RejectedOpInfo } from '../core/types/sync-results.typ
 import { handleStorageQuotaError } from './sync-error-utils';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
+import { RepairOperationService } from '../validation/repair-operation.service';
+
+const REPAIR_SUMMARY_KEYS: readonly (keyof RepairSummary)[] = [
+  'entityStateFixed',
+  'orphanedEntitiesRestored',
+  'invalidReferencesRemoved',
+  'relationshipsFixed',
+  'structureRepaired',
+  'typeErrorsFixed',
+];
+
+const getRepairSummary = (payload: unknown): RepairSummary | undefined => {
+  if (typeof payload !== 'object' || payload === null) {
+    return undefined;
+  }
+  const summary = (payload as Record<string, unknown>)['repairSummary'];
+  if (typeof summary !== 'object' || summary === null) {
+    return undefined;
+  }
+  const summaryRecord = summary as Record<string, unknown>;
+  if (
+    !REPAIR_SUMMARY_KEYS.every(
+      (key) =>
+        typeof summaryRecord[key] === 'number' &&
+        Number.isFinite(summaryRecord[key]) &&
+        (summaryRecord[key] as number) >= 0,
+    )
+  ) {
+    return undefined;
+  }
+  return summaryRecord as unknown as RepairSummary;
+};
 
 // Re-export for consumers that import from this service
 export type {
@@ -22,12 +54,28 @@ export type {
  * a nested download) is surfaced via the SyncSessionValidationService latch
  * — the wrapper reads it once before deciding IN_SYNC vs ERROR. (#7330)
  */
-export interface RejectionHandlingResult {
-  /** Number of merged ops created from conflict resolution (these need to be uploaded) */
-  mergedOpsCreated: number;
-  /** Number of operations that were permanently rejected (validation errors, etc.) */
-  permanentRejectionCount: number;
-}
+export type RejectionHandlingResult =
+  | {
+      kind: 'completed';
+      /** Number of merged ops created from conflict resolution (these need to be uploaded) */
+      mergedOpsCreated: number;
+      /** Number of operations that were permanently rejected (validation errors, etc.) */
+      permanentRejectionCount: number;
+    }
+  | {
+      /** User cancelled a nested SYNC_IMPORT conflict dialog. */
+      kind: 'cancelled';
+    };
+
+type ConcurrentResolutionResult =
+  | {
+      kind: 'completed';
+      mergedOpsCreated: number;
+      retryExceededCount: number;
+    }
+  | {
+      kind: 'cancelled';
+    };
 
 /**
  * Handles operations that were rejected by the server during upload.
@@ -48,6 +96,7 @@ export class RejectedOpsHandlerService {
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
   private supersededOperationResolver = inject(SupersededOperationResolverService);
+  private repairOperationService = inject(RepairOperationService);
 
   /**
    * Tracks resolution attempts per entity key (entityType:entityId) to prevent infinite loops.
@@ -86,7 +135,11 @@ export class RejectedOpsHandlerService {
     if (rejectedOps.length === 0) {
       // No rejections = sync is healthy, reset resolution attempt counters
       this._resolutionAttemptsByEntity.clear();
-      return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
+      return {
+        kind: 'completed',
+        mergedOpsCreated: 0,
+        permanentRejectionCount: 0,
+      };
     }
 
     let mergedOpsCreated = 0;
@@ -99,6 +152,11 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }> = [];
     const permanentlyRejectedOps: string[] = [];
+    const staleRepairOps: Array<{
+      opId: string;
+      repairSummary: RepairSummary;
+      clientId: string;
+    }> = [];
 
     for (const rejected of rejectedOps) {
       // Check for storage quota exceeded - show strong alert and skip marking as rejected
@@ -119,6 +177,12 @@ export class RejectedOpsHandlerService {
           `RejectedOpsHandlerService: Transient error for op ${rejected.opId}, will retry: ${rejected.error || 'unknown'}`,
         );
         continue;
+      }
+
+      if (rejected.errorCode === 'REPAIR_CAUSALITY_UNSUPPORTED') {
+        throw new Error(
+          'The configured sync server must be upgraded before automatic repairs can be uploaded safely.',
+        );
       }
 
       // DUPLICATE_OPERATION = the operation already exists on the server.
@@ -142,6 +206,30 @@ export class RejectedOpsHandlerService {
       // - Op is already synced (was accepted after all)
       // - Op is already rejected (conflict resolution already handled it)
       if (!entry || entry.syncedAt || entry.rejectedAt) {
+        continue;
+      }
+
+      if (rejected.errorCode === 'REPAIR_STALE' && entry.op.opType === OpType.Repair) {
+        const repairSummary = getRepairSummary(entry.op.payload);
+        if (!repairSummary) {
+          throw new Error(
+            `Cannot safely rebase REPAIR ${rejected.opId}: repair summary is missing or invalid.`,
+          );
+        }
+        if (!downloadCallback) {
+          throw new Error(
+            `Cannot safely rebase REPAIR ${rejected.opId}: download callback is unavailable.`,
+          );
+        }
+        staleRepairOps.push({
+          opId: rejected.opId,
+          repairSummary,
+          clientId: entry.op.clientId,
+        });
+        OpLog.normal(
+          `RejectedOpsHandlerService: Repair ${rejected.opId} was based on a stale server cursor; ` +
+            'downloading the concurrent suffix before replacing it.',
+        );
         continue;
       }
 
@@ -187,6 +275,35 @@ export class RejectedOpsHandlerService {
       });
     }
 
+    if (staleRepairOps.length > 0) {
+      if (!downloadCallback) {
+        throw new Error(
+          'Cannot safely rebase stale REPAIR: download callback is unavailable.',
+        );
+      }
+      const staleRepairOpIds = staleRepairOps.map(({ opId }) => opId);
+      const downloadResult = await downloadCallback({
+        ignoredLocalFullStateOpIds: staleRepairOpIds,
+      });
+      if (downloadResult.kind === 'cancelled') {
+        return downloadResult;
+      }
+      if (downloadResult.latestServerSeq === undefined) {
+        throw new Error(
+          'Cannot safely rebase stale REPAIR: downloaded server cursor is unavailable.',
+        );
+      }
+      for (const staleRepair of staleRepairOps) {
+        await this.repairOperationService.rebaseStaleRepair({
+          staleRepairOpId: staleRepair.opId,
+          repairSummary: staleRepair.repairSummary,
+          clientId: staleRepair.clientId,
+          repairBaseServerSeq: downloadResult.latestServerSeq,
+        });
+      }
+      mergedOpsCreated += staleRepairOps.length;
+    }
+
     // For concurrent modifications: try download first, then resolve locally if needed
     let retryExceededCount = 0;
     if (concurrentModificationOps.length > 0 && downloadCallback) {
@@ -194,11 +311,15 @@ export class RejectedOpsHandlerService {
         concurrentModificationOps,
         downloadCallback,
       );
-      mergedOpsCreated = result.mergedOpsCreated;
+      if (result.kind === 'cancelled') {
+        return result;
+      }
+      mergedOpsCreated += result.mergedOpsCreated;
       retryExceededCount = result.retryExceededCount;
     }
 
     return {
+      kind: 'completed',
       mergedOpsCreated,
       permanentRejectionCount: permanentlyRejectedOps.length + retryExceededCount,
     };
@@ -214,10 +335,7 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }>,
     downloadCallback: DownloadCallback,
-  ): Promise<{
-    mergedOpsCreated: number;
-    retryExceededCount: number;
-  }> {
+  ): Promise<ConcurrentResolutionResult> {
     let mergedOpsCreated = 0;
 
     // Check resolution attempt counts per entity to prevent infinite loops.
@@ -258,7 +376,9 @@ export class RejectedOpsHandlerService {
       }
     }
 
-    // Mark exceeded-limit ops as permanently rejected to break the infinite loop
+    // Mark exceeded-limit ops as permanently rejected before downloading. Keeping
+    // them pending would let conflict resolution replace them with fresh ops and
+    // silently reset the per-entity retry budget.
     if (opsExceededRetries.length > 0) {
       OpLog.err(
         `RejectedOpsHandlerService: ${opsExceededRetries.length} ops exceeded max concurrent resolution attempts ` +
@@ -270,7 +390,6 @@ export class RejectedOpsHandlerService {
         type: 'ERROR',
         msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
       });
-      // Clean up tracking for rejected entities
       for (const item of opsExceededRetries) {
         this._resolutionAttemptsByEntity.delete(this._getEntityKey(item.op));
       }
@@ -278,6 +397,7 @@ export class RejectedOpsHandlerService {
 
     if (opsToResolve.length === 0) {
       return {
+        kind: 'completed',
         mergedOpsCreated: 0,
         retryExceededCount: opsExceededRetries.length,
       };
@@ -293,6 +413,10 @@ export class RejectedOpsHandlerService {
       // Validation failure (if any during the nested download) is on the
       // session-validation latch — wrapper reads it. (#7330)
       const downloadResult = await downloadCallback();
+      if (downloadResult.kind === 'cancelled') {
+        this._rollbackResolutionAttempts(opsToResolve);
+        return { kind: 'cancelled' };
+      }
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
@@ -336,6 +460,10 @@ export class RejectedOpsHandlerService {
           );
 
           const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
+          if (forceDownloadResult.kind === 'cancelled') {
+            this._rollbackResolutionAttempts(opsToResolve);
+            return { kind: 'cancelled' };
+          }
 
           // Use the clocks from force download to resolve superseded ops
           // Also merge in entity clocks from server rejection responses
@@ -435,25 +563,30 @@ export class RejectedOpsHandlerService {
       // keeps re-downloading. Upgrade path if that becomes a problem: a separate
       // transient-failure budget via markFailed() (retryable, NOT terminal) with
       // backoff — never markRejected().
-      const rolledBack = new Set<string>();
-      for (const { op } of opsToResolve) {
-        const entityKey = this._getEntityKey(op);
-        if (rolledBack.has(entityKey)) {
-          continue;
-        }
-        rolledBack.add(entityKey);
-        const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
-        if (attempts > 0) {
-          this._resolutionAttemptsByEntity.set(entityKey, attempts - 1);
-        }
-      }
+      this._rollbackResolutionAttempts(opsToResolve);
       throw e;
     }
 
     return {
+      kind: 'completed',
       mergedOpsCreated,
       retryExceededCount: opsExceededRetries.length,
     };
+  }
+
+  private _rollbackResolutionAttempts(ops: ReadonlyArray<{ op: Operation }>): void {
+    const rolledBack = new Set<string>();
+    for (const { op } of ops) {
+      const entityKey = this._getEntityKey(op);
+      if (rolledBack.has(entityKey)) {
+        continue;
+      }
+      rolledBack.add(entityKey);
+      const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
+      if (attempts > 0) {
+        this._resolutionAttemptsByEntity.set(entityKey, attempts - 1);
+      }
+    }
   }
 
   private _getEntityKey(op: Operation): string {

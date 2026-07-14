@@ -11,7 +11,11 @@ import { handleStorageQuotaError } from './sync-error-utils';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+} from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -257,6 +261,7 @@ export class ImmediateUploadService implements OnDestroy {
         let totalUploadedCount = result.uploadedCount;
         let hasPermanentRejection = result.permanentRejectionCount > 0;
         let encryptionRequiredKeyMissing = result.encryptionRequiredKeyMissing === true;
+        let blockedByRejectedFullState = result.blockedByRejectedFullState === true;
         if (result.localWinOpsCreated > 0) {
           OpLog.verbose(
             `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
@@ -281,6 +286,8 @@ export class ImmediateUploadService implements OnDestroy {
           hasPermanentRejection ||= followUpResult.permanentRejectionCount > 0;
           encryptionRequiredKeyMissing ||=
             followUpResult.encryptionRequiredKeyMissing === true;
+          blockedByRejectedFullState ||=
+            followUpResult.blockedByRejectedFullState === true;
         }
 
         // Read the validation latch BEFORE any IN_SYNC / deferred-checkmark
@@ -298,6 +305,11 @@ export class ImmediateUploadService implements OnDestroy {
         // Don't show checkmark when piggybacked ops exist - there may be more
         // remote ops pending. Let normal sync cycle confirm full sync state.
         if (hasPermanentRejection) {
+          this._providerManager.setSyncStatus('ERROR');
+          return;
+        }
+
+        if (blockedByRejectedFullState) {
           this._providerManager.setSyncStatus('ERROR');
           return;
         }
@@ -328,6 +340,20 @@ export class ImmediateUploadService implements OnDestroy {
           );
         }
       } catch (e) {
+        if (e instanceof ForceUploadPendingOpsError) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return;
+        }
+
+        if (e instanceof ForceUploadFailedError) {
+          this._providerManager.setSyncStatus('ERROR');
+          this._snackService.open({
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+            type: 'ERROR',
+          });
+          return;
+        }
+
         if (e instanceof IncompleteRemoteOperationsError) {
           this._providerManager.setSyncStatus('ERROR');
           if (!this._snackService.hasPendingPersistentAction()) {
