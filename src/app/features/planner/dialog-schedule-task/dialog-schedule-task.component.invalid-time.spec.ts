@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { DateAdapter } from '@angular/material/core';
@@ -115,6 +115,12 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
     })
       .overrideComponent(DialogScheduleTaskComponent, { set: { template: '' } })
       .compileComponents();
+  });
+
+  afterEach(() => {
+    // provideMockStore({ selectors: [...] }) pins module-level selector results.
+    // Clear them so later specs can exercise the real selector projectors.
+    TestBed.inject(MockStore).resetSelectors();
   });
 
   // --- pinning tests (must keep passing through the fix) ---
