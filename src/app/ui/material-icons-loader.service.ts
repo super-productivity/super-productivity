@@ -1,8 +1,11 @@
 import { Injectable } from '@angular/core';
 import { BodyClass } from '../app.constants';
+import type { AndroidInterface } from '../features/android/android-interface';
 
 const MATERIAL_ICONS_FONT = '24px "Material Symbols Outlined"';
 const MATERIAL_ICONS_FONT_READY_TIMEOUT_MS = 3000;
+const DEFAULT_ANDROID_TEXT_ZOOM = 100;
+const ANDROID_WEBVIEW_ICON_SCALE_PROP = '--android-webview-icon-scale';
 
 @Injectable({
   providedIn: 'root',
@@ -38,6 +41,8 @@ export class MaterialIconsLoaderService {
       return Promise.resolve();
     }
 
+    this._applyAndroidTextZoomCompensation(body);
+
     if (body.classList.contains(BodyClass.isMaterialSymbolsLoaded)) {
       return Promise.resolve();
     }
@@ -60,6 +65,36 @@ export class MaterialIconsLoaderService {
     const { MATERIAL_ICONS } = await import('./material-icons.const');
     this.icons = MATERIAL_ICONS;
     return MATERIAL_ICONS;
+  }
+
+  private _applyAndroidTextZoomCompensation(body: HTMLElement): void {
+    const rootStyle = document.documentElement.style;
+    body.classList.remove(BodyClass.hasAndroidWebViewTextZoom);
+    rootStyle.removeProperty(ANDROID_WEBVIEW_ICON_SCALE_PROP);
+
+    try {
+      const androidInterface = (
+        window as Window & { SUPAndroid?: Pick<AndroidInterface, 'getTextZoom'> }
+      ).SUPAndroid;
+      const textZoom = androidInterface?.getTextZoom?.();
+
+      if (
+        typeof textZoom !== 'number' ||
+        !Number.isFinite(textZoom) ||
+        textZoom <= 0 ||
+        textZoom === DEFAULT_ANDROID_TEXT_ZOOM
+      ) {
+        return;
+      }
+
+      rootStyle.setProperty(
+        ANDROID_WEBVIEW_ICON_SCALE_PROP,
+        `${DEFAULT_ANDROID_TEXT_ZOOM / textZoom}`,
+      );
+      body.classList.add(BodyClass.hasAndroidWebViewTextZoom);
+    } catch {
+      // Older native shells may not expose the text zoom bridge yet.
+    }
   }
 
   private async _loadFont(body: HTMLElement, fonts: FontFaceSet): Promise<void> {

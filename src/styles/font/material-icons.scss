@@ -26,3 +26,10 @@
     'GRAD' 0,
     'opsz' 24;
 }
+
+// Android WebView applies the system font scale to fixed-size icon-font glyphs.
+// Keep inline icons matched to the surrounding text's accessible scale (#5694).
+.material-icons:not(.mat-icon-inline),
+mat-icon[data-mat-icon-type='font']:not(.mat-icon-inline) {
+  @include material-icon.androidWebViewTextZoomCompensation();
+}
