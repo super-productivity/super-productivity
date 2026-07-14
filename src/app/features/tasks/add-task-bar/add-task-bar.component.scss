@@ -42,7 +42,7 @@
 // Capacitor's native iOS mode shrinks the WebView around the keyboard. Only
 // apply an additional offset when the keyboard still overlays that viewport;
 // using its full height here would move the fixed bar twice (#8778).
-:host-context(.isIOS).global {
+:host-context(.isTouchOnly.isIOS).global {
   bottom: calc(var(--keyboard-overlay-offset) + var(--s2));
 }
 
