@@ -2108,6 +2108,7 @@ describe('OperationLogSyncService', () => {
           );
           expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
             [postSnapshotOp],
+            {},
           );
           expect(callOrder).toEqual(['processRemoteOps', 'setLastServerSeq']);
         });
