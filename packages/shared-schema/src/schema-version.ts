@@ -2,7 +2,8 @@
  * Current schema version for all operations and state snapshots.
  * Increment this BEFORE adding a new migration.
  */
-export const CURRENT_SCHEMA_VERSION = 3;
+export const PROJECT_DELETE_WINS_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = PROJECT_DELETE_WINS_SCHEMA_VERSION;
 
 /**
  * Minimum schema version that this codebase can still handle.

@@ -47,10 +47,6 @@ describe('SchemaMigrationService', () => {
     it('should return the current schema version', () => {
       expect(service.getCurrentVersion()).toBe(CURRENT_SCHEMA_VERSION);
     });
-
-    it('should return 3 for the LWW replacement compatibility barrier', () => {
-      expect(service.getCurrentVersion()).toBe(3);
-    });
   });
 
   describe('getMigrations', () => {

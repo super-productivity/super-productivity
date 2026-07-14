@@ -1859,6 +1859,16 @@ describe('taskSharedMetaReducer', () => {
   });
 
   describe('deleteProject action', () => {
+    it('marks new project deletions with delete-wins conflict semantics', () => {
+      const action = TaskSharedActions.deleteProject({
+        projectId: 'project-1',
+        noteIds: [],
+        allTaskIds: [],
+      });
+
+      expect(action.projectDeleteWins).toBeTrue();
+    });
+
     it('should remove all project tasks from all tags', () => {
       const testState = createStateWithExistingTasks(
         [],

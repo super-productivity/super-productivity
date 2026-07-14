@@ -11,11 +11,22 @@ import {
 import {
   CURRENT_SCHEMA_VERSION,
   MIN_SUPPORTED_SCHEMA_VERSION,
+  PROJECT_DELETE_WINS_SCHEMA_VERSION,
 } from '../src/schema-version';
 import type { OperationLike, SchemaMigration } from '../src/migration.types';
 import { MIGRATIONS } from '../src/migrations';
 
 describe('shared-schema migration functions', () => {
+  it('includes the schema-v4 project-delete conflict-policy barrier', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(4);
+    expect(PROJECT_DELETE_WINS_SCHEMA_VERSION).toBe(CURRENT_SCHEMA_VERSION);
+    expect(MIGRATIONS.at(-1)).toMatchObject({
+      fromVersion: 3,
+      toVersion: 4,
+      requiresOperationMigration: false,
+    });
+  });
+
   describe('getCurrentSchemaVersion', () => {
     it('returns the current schema version', () => {
       expect(getCurrentSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION);
@@ -117,6 +128,36 @@ describe('shared-schema migration functions', () => {
   });
 
   describe('migrateOperation', () => {
+    it('keeps a historical project delete unmarked while crossing the v4 barrier', () => {
+      const op: OperationLike = {
+        id: 'legacy-project-delete',
+        opType: 'DEL',
+        entityType: 'PROJECT',
+        entityId: 'project-1',
+        payload: {
+          actionPayload: {
+            projectId: 'project-1',
+            noteIds: [],
+            allTaskIds: [],
+          },
+          entityChanges: [],
+        },
+        schemaVersion: 3,
+      };
+
+      const result = migrateOperation(op);
+
+      expect(result).toMatchObject({ success: true, migratedToVersion: 4 });
+      expect(result.data).toEqual({ ...op, schemaVersion: 4 });
+      expect(
+        (
+          (result.data as OperationLike).payload as {
+            actionPayload: { projectDeleteWins?: boolean };
+          }
+        ).actionPayload.projectDeleteWins,
+      ).toBeUndefined();
+    });
+
     it('returns unchanged operation when already at target version', () => {
       const op: OperationLike = {
         id: 'op1',

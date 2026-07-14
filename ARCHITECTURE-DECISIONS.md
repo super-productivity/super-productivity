@@ -259,6 +259,70 @@ promoted to the user's active `Passkey` set only when that token is consumed.
 
 ---
 
+### 7. Versioned Delete-Wins Semantics for Project Deletion
+
+**Status**: ✅ Active (since July 2026)
+
+**Decision**: Project deletions created with schema v4 or newer carry an explicit
+`projectDeleteWins` marker and beat concurrent project updates. Historical,
+unmarked deletions keep timestamp-based LWW semantics.
+
+This is a deliberate semantic trade-off: a concurrent project rename or field
+edit that is vector-clock CONCURRENT with a marked delete **loses**, regardless
+of which has the newer wall-clock timestamp. Deleting an entity another device is
+editing wins over the edit — the alternative (timestamp LWW) resurrects an empty
+project shell and silently loses its task subtree. The lost edit is only
+recoverable via local undo, not via sync.
+
+**Rationale**:
+
+- `deleteProject` is one user intent whose reducer cascade removes the project,
+  active tasks, notes, sections, repeat configuration, and related archive data.
+  Reversing only the project entity after that operation loses data and violates
+  replay determinism.
+- Capturing every cascaded entity in the delete payload or emitting restoration
+  sidecars makes payload size scale with project size and still cannot restore
+  every side effect safely.
+- Deletion is the only complete, deterministic result already represented by the
+  operation. A concurrent rename or project-field edit must not partially undo it.
+- The schema-v4 barrier makes clients that do not understand this conflict policy
+  stop before applying the operation (they block on the newer-schema gate rather
+  than mis-resolving). The **absence** of the payload marker on historical
+  deletions — never added by the no-op v3→v4 migration — is what preserves their
+  timestamp-LWW semantics; the marker, not the version number, is the real
+  discriminator. The classifier additionally requires the marked delete's
+  plaintext `entityId` to match its authenticated payload `projectId`, so a
+  tampered/replayed delete retargeted onto a live entity cannot win.
+
+**Implementation**:
+
+- New `deleteProject` actions include `projectDeleteWins: true`; replacement
+  delete operations preserve that payload.
+- The shared LWW planner accepts a host-supplied delete-wins classifier. A remote
+  marked delete is applied regardless of timestamps. A local marked delete is
+  replaced with one operation whose vector clock dominates both conflict sides.
+- SuperSync keeps its generic conflict protocol: if the first delete upload is
+  rejected, the existing retry path uploads the causally dominant replacement.
+  File-based providers use the same client planner and marker.
+- Do not add per-task/note restoration operations or project-sized snapshots to
+  compensate a losing marked project delete.
+
+**Key Files**:
+
+- [`task-shared.actions.ts`](src/app/root-store/meta/task-shared.actions.ts) — the `PROJECT_DELETE_WINS_MARKER` producer
+- [`conflict-resolution.ts`](packages/sync-core/src/conflict-resolution.ts)
+- [`conflict-resolution.service.ts`](src/app/op-log/sync/conflict-resolution.service.ts) — the delete-wins classifier
+- [`schema-version.ts`](packages/shared-schema/src/schema-version.ts)
+- [`project-delete-wins-barrier-v3-to-v4.ts`](packages/shared-schema/src/migrations/project-delete-wins-barrier-v3-to-v4.ts) (registered in [`migrations/index.ts`](packages/shared-schema/src/migrations/index.ts))
+
+**When to Update This Pattern**:
+
+- Changing the cascade performed by `deleteProject`
+- Adding another operation with delete-wins conflict semantics
+- Changing schema compatibility or LWW replacement behavior
+
+---
+
 ## How to Use This Document
 
 ### When Making Architectural Changes

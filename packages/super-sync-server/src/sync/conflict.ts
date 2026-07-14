@@ -416,8 +416,18 @@ export const getConflictEntityIds = (op: Operation): string[] => {
   return Array.from(new Set(rawEntityIds));
 };
 
+/**
+ * The misc→tasks settings split happened in the v1→v2 migration
+ * (`MiscToTasksSettingsMigration_v1v2`), so ONLY pre-v2 `GLOBAL_CONFIG:misc`
+ * writes also touched what is now `GLOBAL_CONFIG:tasks`. Gate on that fixed
+ * boundary, not the moving `CURRENT_SCHEMA_VERSION`: otherwise every schema bump
+ * (e.g. v3→v4) newly aliases already-split misc writes to tasks and fabricates
+ * conflicts between disjoint settings during rollout.
+ */
+const MISC_TASKS_SPLIT_SCHEMA_VERSION = 2;
+
 const isLegacyMiscConfigOperation = (op: Operation): boolean =>
-  op.schemaVersion < CURRENT_SCHEMA_VERSION &&
+  op.schemaVersion < MISC_TASKS_SPLIT_SCHEMA_VERSION &&
   op.entityType === 'GLOBAL_CONFIG' &&
   op.entityId === 'misc';
 
