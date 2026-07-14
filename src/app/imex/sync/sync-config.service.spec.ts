@@ -109,6 +109,24 @@ describe('SyncConfigService', () => {
       });
     });
 
+    it('should persist the split-file sync setting in global config', async () => {
+      const globalConfigService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+
+      await service.updateSettingsFromForm({
+        isEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+        syncInterval: 300000,
+        isUseSplitSyncFiles: true,
+      });
+
+      expect(globalConfigService.updateSection).toHaveBeenCalledWith(
+        'sync',
+        jasmine.objectContaining({ isUseSplitSyncFiles: true }),
+      );
+    });
+
     it('should apply default values for WebDAV provider fields and preserve existing config', async () => {
       // Mock existing provider with old config
       const mockProvider = {

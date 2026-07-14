@@ -3065,6 +3065,7 @@ describe('FileBasedSyncAdapterService', () => {
 
       expect(result.gapDetected).toBe(true);
       expect(result.snapshotState).toBeDefined();
+      expect(result.snapshotVectorClock).toEqual({ client1: 1 });
     });
 
     // (a4) Same review follow-up as the single-file path: a strictly-dominating

@@ -22,6 +22,9 @@ on:
     paths:
       - 'src/app/imex/sync/**'
       - 'src/app/op-log/**'
+      - 'src/app/core/date/date.service.ts'
+      - 'src/app/core/util/vector-clock.ts'
+      - 'src/app/util/local-actions.token.ts'
       - 'e2e/tests/**'
       - 'docker-compose.yaml'
       - 'docker-compose.supersync.yaml'

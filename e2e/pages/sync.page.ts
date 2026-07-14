@@ -44,6 +44,7 @@ export class SyncPage extends BasePage {
     username: string;
     password: string;
     syncFolderPath: string;
+    isUseSplitSyncFiles?: boolean;
     isEncryptionEnabled?: boolean;
     encryptionPassword?: string;
     /**
@@ -199,6 +200,16 @@ export class SyncPage extends BasePage {
         await this.userNameInput.fill(config.username);
         await this.passwordInput.fill(config.password);
         await this.syncFolderInput.fill(config.syncFolderPath);
+
+        if (config.isUseSplitSyncFiles) {
+          const advanced = dialog.getByText(/^Advanced (configuration|Config)$/);
+          await advanced.click();
+          const splitSyncCheckbox = dialog
+            .locator('mat-checkbox')
+            .filter({ hasText: 'Surgical sync' })
+            .locator('input[type="checkbox"]');
+          await splitSyncCheckbox.check();
+        }
 
         // Save the configuration
         await this.saveBtn.click();

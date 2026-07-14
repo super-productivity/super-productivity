@@ -583,8 +583,21 @@ export class OperationLogSyncService {
     // FILE-BASED SYNC: Handle full state snapshot from fresh download
     // When downloading from seq 0 on file-based providers (Dropbox, WebDAV, LocalFile),
     // we receive the complete application state in snapshotState. This must be hydrated
-    // directly instead of processing incremental ops (which are already reflected in the state).
+    // directly. Split-file snapshots can lag behind their retained operation suffix, so only
+    // operations dominated by the snapshot clock are already reflected in that state.
     if (result.providerMode === 'fileSnapshotOps' && result.snapshotState) {
+      const snapshotClock = result.snapshotVectorClock;
+      const snapshotDeltaOps = snapshotClock
+        ? result.newOps.filter((op) => {
+            const comparison = compareVectorClocks(op.vectorClock, snapshotClock);
+            return comparison === 'GREATER_THAN' || comparison === 'CONCURRENT';
+          })
+        : [];
+      const snapshotDeltaIds = new Set(snapshotDeltaOps.map((op) => op.id));
+      const snapshotCoveredOps = result.newOps.filter(
+        (op) => !snapshotDeltaIds.has(op.id),
+      );
+
       // Issue #7339: a file-based snapshot whose vector clock is dominated by the
       // local clock contains nothing the local client doesn't already have. Hydrating
       // would discard local-only ops and a conflict dialog has nothing to resolve.
@@ -610,6 +623,25 @@ export class OperationLogSyncService {
           `OperationLogSyncService: Local vector clock ${hydrationPlan.comparison} remote snapshot — ` +
             'skipping snapshot hydration (local already has all remote data).',
         );
+        if (snapshotDeltaOps.length > 0) {
+          const processResult = await this.repairSyncContext.runWithBaseServerSeq(
+            result.latestServerSeq,
+            () => this.remoteOpsProcessingService.processRemoteOps(snapshotDeltaOps),
+          );
+          if (processResult.blockedByIncompatibleOp) {
+            return { kind: 'blocked_incompatible' };
+          }
+          if (result.latestServerSeq !== undefined) {
+            await syncProvider.setLastServerSeq(result.latestServerSeq);
+          }
+          return {
+            kind: 'ops_processed',
+            newOpsCount: snapshotDeltaOps.length,
+            localWinOpsCreated: processResult.localWinOpsCreated,
+            allOpClocks: result.allOpClocks,
+            snapshotVectorClock: result.snapshotVectorClock,
+          };
+        }
         // Deliberately do NOT call appendBatchSkipDuplicates(result.newOps).
         // VectorClockService.getEntityFrontier() builds per-entity frontiers
         // by iterating the op log in seq order with last-write-wins semantics.
@@ -853,9 +885,9 @@ export class OperationLogSyncService {
       // getAppliedOpIds() (from IndexedDB) to filter already-applied ops.
       // Without writing these ops, they bypass the filter on the next sync cycle
       // and get applied again, duplicating entities.
-      if (result.newOps.length > 0) {
+      if (snapshotCoveredOps.length > 0) {
         const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
-          result.newOps,
+          snapshotCoveredOps,
           'remote',
         );
         OpLog.normal(
@@ -865,6 +897,19 @@ export class OperationLogSyncService {
               ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
               : ''),
         );
+      }
+
+      if (snapshotDeltaOps.length > 0) {
+        OpLog.normal(
+          `OperationLogSyncService: Replaying ${snapshotDeltaOps.length} operation(s) newer than the file snapshot.`,
+        );
+        const processResult = await this.repairSyncContext.runWithBaseServerSeq(
+          result.latestServerSeq,
+          () => this.remoteOpsProcessingService.processRemoteOps(snapshotDeltaOps),
+        );
+        if (processResult.blockedByIncompatibleOp) {
+          return { kind: 'blocked_incompatible' };
+        }
       }
 
       // Persist lastServerSeq after hydration

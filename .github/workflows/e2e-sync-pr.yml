@@ -77,7 +77,7 @@ jobs:
 
           # Shared: client sync code + E2E harness that both providers exercise.
           # Keep in rough sync with the nightly workflow's push `paths:` list.
-          COMMON='src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$'
+          COMMON='src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|src/app/core/date/date\.service\.ts$|src/app/core/util/vector-clock\.ts$|src/app/util/local-actions\.token\.ts$|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$'
           # SuperSync also depends on the server package and its compose override.
           SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
           WEBDAV_PATTERN="^(${COMMON})"

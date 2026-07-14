@@ -2022,9 +2022,11 @@ export class FileBasedSyncAdapterService {
     const latestSeq = opsFile.syncVersion;
 
     let snapshotStateWithArchives: Record<string, unknown> | undefined;
+    let snapshotVectorClock = opsFile.vectorClock;
     if (isForceFromZero || needsGapDetection) {
       const snap = await this._loadValidatedSnapshot(provider, cfg, encryptKey, opsFile);
       if (snap) {
+        snapshotVectorClock = snap.vectorClock;
         snapshotStateWithArchives = {
           ...(snap.state as Record<string, unknown>),
           ...(snap.archiveYoung ? { archiveYoung: snap.archiveYoung } : {}),
@@ -2040,7 +2042,7 @@ export class FileBasedSyncAdapterService {
       ops: limitedOps,
       hasMore,
       latestSeq,
-      snapshotVectorClock: opsFile.vectorClock,
+      snapshotVectorClock,
       gapDetected: needsGapDetection,
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
     };

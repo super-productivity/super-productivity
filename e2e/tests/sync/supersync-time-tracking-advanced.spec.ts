@@ -277,8 +277,8 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await clientA.sync.setupSuperSync(syncConfig);
 
       const taskName = `LargeTime-${uniqueId}`;
-      // Use t:8h for 8 hour estimate
-      await clientA.workView.addTask(`${taskName} t:8h`);
+      // Use t8h for an 8 hour estimate
+      await clientA.workView.addTask(`${taskName} t8h`);
       console.log('[Large Time Test] Client A created task with 8h estimate');
 
       await waitForTask(clientA.page, taskName);
@@ -298,11 +298,14 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await waitForTask(clientB.page, taskName);
 
       await expectTaskVisible(clientB, taskName);
-      console.log('[Large Time Test] Task visible on Client B');
-
-      // Note: Time estimate is stored as task data, UI display varies
-      // The key test is that the task synced successfully
-      console.log('[Large Time Test] Task with time estimate synced successfully');
+      const taskB = clientB.page.locator(`task:has-text("${taskName}")`).first();
+      await taskB.hover();
+      await taskB.locator('.show-additional-info-btn').click();
+      const estimateItem = clientB.page.locator(
+        'task-detail-panel task-detail-item:has(mat-icon:text("hourglass_empty"))',
+      );
+      await expect(estimateItem).toContainText('8h');
+      console.log('[Large Time Test] Client B received the exact 8h estimate');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

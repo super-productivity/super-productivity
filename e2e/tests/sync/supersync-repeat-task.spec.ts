@@ -20,8 +20,9 @@ import { expectTaskVisible } from '../../utils/supersync-assertions';
  * full repeat configs. Testing actual TaskRepeatCfg creation via UI would
  * require navigating the task detail panel and filling the repeat dialog.
  *
- * For repeat config sync logic testing, see the integration tests:
- * src/app/core/persistence/operation-log/integration/repeat-task-sync.integration.spec.ts
+ * Actual TaskRepeatCfg create/update coverage lives in
+ * supersync-repeat-config.spec.ts; this file remains focused on scheduled task
+ * instances and deletion behavior.
  */
 
 // Helper to create a scheduled task using a SimulatedE2EClient

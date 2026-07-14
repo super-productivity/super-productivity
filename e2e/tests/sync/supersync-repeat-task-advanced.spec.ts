@@ -86,7 +86,7 @@ test.describe('@supersync Repeat Task Advanced Sync', () => {
    * Test: Task with time estimate syncs correctly
    *
    * Actions:
-   * 1. Client A creates task with time estimate (via t:1h shorthand)
+   * 1. Client A creates task with time estimate (via t1h shorthand)
    * 2. Client A syncs
    * 3. Client B syncs
    * 4. Verify time estimate appears on Client B
@@ -108,9 +108,9 @@ test.describe('@supersync Repeat Task Advanced Sync', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      // Use t:1h shorthand to set 1 hour estimate
+      // Use t1h shorthand to set 1 hour estimate
       const taskName = `EstimateTask-${uniqueId}`;
-      await clientA.workView.addTask(`${taskName} t:1h`);
+      await clientA.workView.addTask(`${taskName} t1h`);
       console.log('[Estimate Test] Client A created task with 1h estimate');
 
       await waitForTask(clientA.page, taskName);
@@ -135,11 +135,13 @@ test.describe('@supersync Repeat Task Advanced Sync', () => {
 
       const taskLocatorB = clientB.page.locator(`task:has-text("${taskName}")`);
       await expect(taskLocatorB).toBeVisible({ timeout: 5000 });
-      console.log('[Estimate Test] Task visible on Client B');
-
-      // Note: Time estimate is synced as task data, but UI display varies
-      // The key test is that the task synced successfully
-      console.log('[Estimate Test] Task with time estimate synced successfully');
+      await taskLocatorB.hover();
+      await taskLocatorB.locator('.show-additional-info-btn').click();
+      const estimateItem = clientB.page.locator(
+        'task-detail-panel task-detail-item:has(mat-icon:text("hourglass_empty"))',
+      );
+      await expect(estimateItem).toContainText('1h');
+      console.log('[Estimate Test] Client B received the exact 1h estimate');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

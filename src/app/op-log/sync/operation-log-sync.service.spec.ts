@@ -2312,6 +2312,54 @@ describe('OperationLogSyncService', () => {
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
         });
 
+        it('should replay operations newer than a file snapshot after hydration', async () => {
+          const snapshotOp: Operation = {
+            id: 'snapshot-op',
+            clientId: 'client-B',
+            actionType: '[Global Config] Update' as ActionType,
+            opType: OpType.Update,
+            entityType: 'GLOBAL_CONFIG',
+            entityId: 'sync',
+            payload: {},
+            vectorClock: { clientB: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+          const deltaOp: Operation = {
+            ...snapshotOp,
+            id: 'task-after-snapshot',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            vectorClock: { clientB: 2 },
+          };
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [snapshotOp, deltaOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: [] } },
+            snapshotVectorClock: { clientB: 1 },
+            latestServerSeq: 2,
+          });
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+          } as unknown as OperationSyncCapable;
+
+          await service.downloadRemoteOps(mockProvider);
+
+          expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+            [snapshotOp],
+            'remote',
+          );
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+            deltaOp,
+          ]);
+        });
+
         it('should skip hydration AND conflict when local clock dominates remote snapshot (issue #7339)', async () => {
           // Reproduces the iOS WebDAV loop: a foreign-written snapshot with the
           // same syncVersion fires gap detection on every sync from a client that
@@ -2385,6 +2433,55 @@ describe('OperationLogSyncService', () => {
           expect(result.kind).toBe('no_new_ops');
           // lastServerSeq still advanced so future syncs use the right cursor.
           expect(setLastServerSeqSpy).toHaveBeenCalledWith(1);
+        });
+
+        it('should replay a missing delta when local clock dominates only the file snapshot', async () => {
+          opLogStoreSpy.getVectorClock.and.resolveTo({
+            windowsClient: 1,
+            iosClient: 5,
+          });
+          const deltaOp: Operation = {
+            id: 'windows-delta-after-snapshot',
+            clientId: 'windowsClient',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'task-after-snapshot',
+            payload: {},
+            vectorClock: { windowsClient: 2 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          };
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [deltaOp],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { task: { ids: ['snapshot-task'] } },
+            snapshotVectorClock: { windowsClient: 1 },
+            latestServerSeq: 2,
+          });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          const setLastServerSeqSpy = jasmine
+            .createSpy('setLastServerSeq')
+            .and.resolveTo();
+          const mockProvider = {
+            supportsOperationSync: true,
+            setLastServerSeq: setLastServerSeqSpy,
+          } as unknown as OperationSyncCapable;
+
+          const result = await service.downloadRemoteOps(mockProvider);
+
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
+            deltaOp,
+          ]);
+          expect(opLogStoreSpy.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+          expect(setLastServerSeqSpy).toHaveBeenCalledWith(2);
+          expect(result.kind).toBe('ops_processed');
         });
 
         it('should NOT persist accompanying newOps on the dominate path — would corrupt per-entity frontiers (codex re-review)', async () => {

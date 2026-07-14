@@ -1,9 +1,11 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import {
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  hasTask,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -18,8 +20,7 @@ import {
  * - B.3: Validation error permanently rejects op
  * - B.4: Payload too large shows alert dialog
  * - G.5: Duplicate operation silently marked as synced
- * - G.7: Schema version mismatch returns handled error
- * - G.8: Failed operation migration skips op
+ * - G.7/G.8: Incompatible operation blocks the download cursor until recovery
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-error-scenarios.spec.ts
  */
@@ -331,12 +332,13 @@ test.describe('@supersync Error Scenarios', () => {
   });
 
   /**
-   * Scenario G.7: Schema version mismatch returns handled error
+   * Scenarios G.7/G.8: an incompatible operation blocks the download cursor.
    *
-   * When downloaded ops have a modelVersion higher than the client's,
-   * the client should log a warning and return HANDLED_ERROR without crashing.
+   * The blocked operation and the valid suffix must be retried rather than skipped.
+   * Once the incompatibility is removed (simulating an app update/migration fix),
+   * the same server response can be processed and sync recovers.
    */
-  test('Schema version mismatch returns handled error without crash', async ({
+  test('Incompatible operation blocks valid suffix and cursor until recovery', async ({
     browser,
     baseURL,
     testRunId,
@@ -344,7 +346,7 @@ test.describe('@supersync Error Scenarios', () => {
     test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const state = { injectFutureSchemaOps: true };
+    let interceptedDownloads = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -354,29 +356,23 @@ test.describe('@supersync Error Scenarios', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `Schema-${testRunId}`;
+      const taskName = `IncompatibleSuffix-${testRunId}`;
       await clientA.workView.addTask(taskName);
       await clientA.sync.syncAndWait();
 
-      // Client B will receive ops with future schema version
+      // Install interception before configuring Client B. setupSuperSync starts an
+      // automatic initial sync, so installing this afterwards would miss the path.
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Intercept download to inject ops with a very high schema version
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (route.request().method() === 'GET' && state.injectFutureSchemaOps) {
-          state.injectFutureSchemaOps = false;
-          console.log('[Test] Injecting ops with future schema version');
-
-          // Get real response and modify it
+      await clientB.page.route('**/api/sync/ops?*', async (route) => {
+        if (route.request().method() === 'GET') {
           const response = await route.fetch();
           const json = await response.json();
 
-          // Modify all ops to have a very high schema version
-          if (json.ops) {
-            for (const op of json.ops) {
-              op.schemaVersion = 99999;
-            }
+          // Server responses wrap each SyncOperation in { serverSeq, op }.
+          // Corrupt only the first op so every following real op is a valid suffix.
+          if (json.ops?.length > 0) {
+            json.ops[0].op.schemaVersion = CURRENT_SCHEMA_VERSION + 1;
+            interceptedDownloads++;
           }
 
           await route.fulfill({
@@ -389,124 +385,30 @@ test.describe('@supersync Error Scenarios', () => {
         }
       });
 
-      // Client B syncs — should handle the schema mismatch gracefully
-      try {
-        await clientB.sync.triggerSync();
-        await clientB.page.waitForTimeout(3000);
-      } catch {
-        // May or may not throw depending on error handling
-      }
-
-      // Remove interception and retry with real data
-      await clientB.page.unroute('**/api/sync/ops/**');
-      await clientB.sync.syncAndWait();
-
-      // Verify Client B didn't crash and can still sync
-      await waitForTask(clientB.page, taskName);
-      const hasError = await clientB.sync.hasSyncError();
-      expect(hasError).toBe(false);
-
-      console.log(
-        '[SchemaVersionMismatch] Client handled future schema version without crash',
-      );
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
-        await closeClient(clientB);
-      }
-    }
-  });
-
-  /**
-   * Scenario G.8: Failed operation migration skips op and other ops still apply
-   *
-   * When a downloaded op has a corrupted/unmigrateable structure,
-   * it should be skipped and other valid ops should still be applied.
-   */
-  test('Failed operation migration skips corrupted op, applies others', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(90000);
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-    const state = { injectCorruptedOp: true };
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Client A creates real data
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `MigrationFail-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.sync.syncAndWait();
-
-      // Client B will receive ops including one corrupted one
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Intercept download to inject a corrupted op alongside valid ones
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (route.request().method() === 'GET' && state.injectCorruptedOp) {
-          state.injectCorruptedOp = false;
-          console.log('[Test] Injecting corrupted op into download response');
-
-          const response = await route.fetch();
-          const json = await response.json();
-
-          // Insert a corrupted op before the valid ones
-          if (json.ops && json.ops.length > 0) {
-            const corruptedOp = {
-              id: 'corrupted-migration-op',
-              opType: 'UPD',
-              entityType: 'TASK',
-              entityId: 'nonexistent-entity',
-              actionType: '[Task] CORRUPTED_ACTION',
-              payload: { title: undefined, __broken: true },
-              vectorClock: { broken_client: 1 },
-              timestamp: Date.now(),
-              schemaVersion: 0, // Very old schema, likely to fail migration
-              clientId: 'broken-client',
-            };
-            json.ops.unshift(corruptedOp);
-          }
-
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(json),
-          });
-        } else {
-          await route.continue();
-        }
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
       });
 
-      // Client B syncs — corrupted op should be skipped, valid ops applied
+      await expect.poll(() => clientB!.sync.hasSyncError()).toBe(true);
+      expect(await hasTask(clientB.page, taskName)).toBe(false);
+
+      // Retry while the incompatible op remains. If the cursor advanced past it,
+      // the server would no longer return the same first operation.
+      await clientB.sync.syncAndWait().catch(() => {});
+      expect(interceptedDownloads).toBeGreaterThanOrEqual(2);
+      expect(await hasTask(clientB.page, taskName)).toBe(false);
+
+      // Simulate upgrading to a version that understands the operation.
+      await clientB.page.unroute('**/api/sync/ops?*');
       await clientB.sync.syncAndWait();
 
-      // Remove interception
-      await clientB.page.unroute('**/api/sync/ops/**');
-
-      // Verify the valid task was still received despite the corrupted op
       await waitForTask(clientB.page, taskName);
-
-      // Verify Client B is healthy and can sync again
-      await clientB.sync.syncAndWait();
-      const hasError = await clientB.sync.hasSyncError();
-      expect(hasError).toBe(false);
-
-      console.log(
-        '[MigrationFailure] Corrupted op skipped, valid ops applied successfully',
-      );
+      expect(await clientB.sync.hasSyncError()).toBe(false);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await clientB.page.unroute('**/api/sync/ops?*').catch(() => {});
         await closeClient(clientB);
       }
     }

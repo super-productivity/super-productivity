@@ -339,6 +339,9 @@ export class SyncConfigService {
       ...(newSettings.isCompressionEnabled !== undefined
         ? { isCompressionEnabled: newSettings.isCompressionEnabled }
         : {}),
+      ...(newSettings.isUseSplitSyncFiles !== undefined
+        ? { isUseSplitSyncFiles: newSettings.isUseSplitSyncFiles }
+        : {}),
       ...(newSettings.isManualSyncOnly !== undefined
         ? { isManualSyncOnly: newSettings.isManualSyncOnly }
         : {}),

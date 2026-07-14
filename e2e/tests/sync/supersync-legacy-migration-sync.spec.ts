@@ -1,7 +1,7 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -480,12 +480,10 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
    * Verifies that archived tasks from legacy data survive the migration
    * process and can be synced to other clients.
    *
-   * Note: This test is skipped because the fresh client sync flow has
-   * timing issues with the setupSuperSync method. Archive sync is already
-   * covered by other SuperSync tests. The core legacy migration scenarios
-   * (tests 1-3) demonstrate the main functionality.
+   * Uses a fresh client so this covers both the legacy migration snapshot and
+   * the archive stores restored by a remote full-state operation.
    */
-  test.skip('verify archive data is preserved after migration + sync', async ({
+  test('verify archive data is preserved after migration + sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -552,8 +550,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       });
 
       await pageB.goto('/');
-      // Wait for app to be ready
-      await pageB.waitForSelector('magic-side-nav', { state: 'visible', timeout: 30000 });
+      await waitForAppReady(pageB);
 
       clientB = { context: contextB, page: pageB };
       const syncPageB = new SuperSyncPage(pageB);
