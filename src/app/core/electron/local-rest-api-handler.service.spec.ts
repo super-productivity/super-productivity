@@ -868,7 +868,7 @@ describe('LocalRestApiHandlerService', () => {
           expect(taskServiceMock.update).not.toHaveBeenCalled();
         });
 
-        it('should apply other fields via update() while moving, without passing projectId to update()', async () => {
+        it('should reject combining a project move with other field changes (400)', async () => {
           const task = createMockTask('task-1', { projectId: 'project-a' });
           setUpMove(task, [{ id: 'project-b' }]);
 
@@ -878,14 +878,13 @@ describe('LocalRestApiHandlerService', () => {
             }),
           );
 
-          expect(response.body.ok).toBe(true);
-          expect(taskServiceMock.moveToProject).toHaveBeenCalledWith(
-            jasmine.any(Object),
-            'project-b',
-          );
-          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
-            title: 'Renamed',
-          });
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+          // Neither the move nor the field edit is applied — the client must
+          // send the move as its own request.
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
         });
 
         it('should treat an unchanged projectId as a no-op (GET→PATCH round-trip) and not move', async () => {
@@ -945,6 +944,29 @@ describe('LocalRestApiHandlerService', () => {
           const response = await sendRequestAndWait(
             createRequest('PATCH', '/tasks/task-1', {
               body: { projectId: 'constructor' },
+            }),
+          );
+
+          expect(response.body.ok).toBe(false);
+          expect(response.status).toBe(404);
+          expect(taskServiceMock.moveToProject).not.toHaveBeenCalled();
+        });
+
+        it('should not move when the taskId is a prototype key that the entity map resolves to a mismatched-id object', async () => {
+          // `entities['constructor']` resolves to a truthy Object.prototype
+          // member whose id does not match; without the `id === taskId` guard
+          // this would push an undefined id into the destination project.taskIds.
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) =>
+              of(createMockTask('real-task', { projectId: 'project-a' })),
+          });
+          Object.defineProperty(projectServiceMock, 'list', {
+            get: () => () => [{ id: 'project-b' }],
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/constructor', {
+              body: { projectId: 'project-b' },
             }),
           );
 

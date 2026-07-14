@@ -512,6 +512,24 @@ export class LocalRestApiHandlerService {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
+        const otherFieldKeys = Object.keys(changes).filter((k) => k !== 'projectId');
+        const isProjectMove =
+          Object.prototype.hasOwnProperty.call(changes, 'projectId') &&
+          changes.projectId !== task.projectId;
+
+        // A project move is its own intent = its own op. Combining it with other
+        // field edits would split into two ops and, worse, turn the residual into
+        // a title-only update that the short-syntax effect parses (a `+project`
+        // in the title would fight the explicit move). Require a separate request.
+        if (isProjectMove && otherFieldKeys.length > 0) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'UNSUPPORTED_FIELD',
+            'A project move cannot be combined with other field changes — change projectId in its own PATCH',
+          );
+        }
+
         // A projectId change is a multi-entity move (both projects' taskIds
         // arrays, plus subtasks), not a plain field write. Route it through the
         // same sync-safe action the UI uses so the destination/source indexes
@@ -527,8 +545,10 @@ export class LocalRestApiHandlerService {
           }
         }
 
-        // projectId is owned by the move above; applying it again via update()
-        // would re-set it without reindexing the projects and re-introduce #8983.
+        // A real move consumed projectId and left no other fields (guarded
+        // above). Any remaining fields here are an unchanged-projectId no-op plus
+        // real edits, so applying them via update() is safe and does not re-run
+        // the move. projectId is stripped so it can't re-introduce #8983.
         const fieldChanges = { ...changes } as Record<string, unknown>;
         delete fieldChanges.projectId;
         if (Object.keys(fieldChanges).length > 0) {
@@ -579,9 +599,11 @@ export class LocalRestApiHandlerService {
   private async _applyProjectMove(
     requestId: string,
     task: Task,
-    targetProjectId: unknown,
+    // Already guaranteed a string (when present) by validateWritableFields;
+    // typed loosely here only because the caller reads it off Partial<Task>.
+    targetProjectId: string | undefined,
   ): Promise<LocalRestApiResponsePayload | undefined> {
-    if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
+    if (!targetProjectId || !targetProjectId.trim()) {
       return createErrorResponse(
         requestId,
         400,
@@ -699,16 +721,21 @@ export class LocalRestApiHandlerService {
     return createSuccessResponse(requestId, 200, tags);
   }
 
+  // The `id === taskId` check rejects two truthy-but-wrong lookups: a
+  // prototype-key id ('constructor', '__proto__', 'toString') that the entity
+  // map resolves to an Object.prototype member, and the `{ subTasks: [] }`
+  // fallback selectTaskByIdWithSubTaskData returns for a missing entity.
+  // Without it, `/tasks/constructor` with a projectId change would push an
+  // `undefined` id into a project's synced taskIds (state corruption).
   private async _getTaskById(taskId: string): Promise<Task | undefined> {
-    return (await firstValueFrom(this._taskService.getByIdOnce$(taskId))) || undefined;
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    return task?.id === taskId ? task : undefined;
   }
 
   private async _getTaskWithSubTasksById(
     taskId: string,
   ): Promise<TaskWithSubTasks | undefined> {
-    return (
-      (await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId))) ||
-      undefined
-    );
+    const task = await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId));
+    return task?.id === taskId ? task : undefined;
   }
 }
