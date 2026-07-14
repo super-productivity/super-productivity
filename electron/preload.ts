@@ -21,6 +21,11 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
+import {
+  JiraElectronApi,
+  JiraElectronResponse,
+} from './shared-with-frontend/jira-request.model';
+import { createOneShotApiConsumer } from './shared-with-frontend/one-shot-api-consumer';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -30,6 +35,13 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
   channel,
   ...args
 ) => ipcRenderer.invoke(channel, ...args);
+
+const consumeJiraApi = createOneShotApiConsumer<JiraElectronApi>(() => ({
+  makeRequest: (request) =>
+    _invoke(IPC.JIRA_MAKE_REQUEST_EVENT, request) as Promise<JiraElectronResponse>,
+  setupImgHeaders: (config) =>
+    _invoke(IPC.JIRA_SETUP_IMG_HEADERS, config) as Promise<void>,
+}));
 
 const ea: ElectronAPI = {
   on: (
@@ -205,9 +217,6 @@ const ea: ElectronAPI = {
     _send('REGISTER_GLOBAL_SHORTCUTS', keyboardCfg),
   showFullScreenBlocker: (args) => _send('FULL_SCREEN_BLOCKER', args),
 
-  makeJiraRequest: (args) => _send('JIRA_MAKE_REQUEST_EVENT', args),
-  jiraSetupImgHeaders: (args) => _send('JIRA_SETUP_IMG_HEADERS', args),
-
   backupAppData: (appData) => _send('BACKUP', appData),
 
   updateCurrentTask: (
@@ -235,6 +244,8 @@ const ea: ElectronAPI = {
     // Because the standard 'on' method doesn't strip out the event arg like we need
     ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
   },
+
+  consumeJiraApi: () => consumeJiraApi(),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {

@@ -37,6 +37,7 @@ import { OnboardingHintService } from '../../features/onboarding/onboarding-hint
 import { LocalRestApiHandlerService } from '../electron/local-rest-api-handler.service';
 import { CustomThemeService } from '../theme/custom-theme.service';
 import { UpdateCheckService } from '../update-check/update-check.service';
+import { JiraElectronBridgeService } from '../../features/issue/providers/jira/jira-electron-bridge.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -76,8 +77,12 @@ export class StartupService {
   private _dataInitStateService = inject(DataInitStateService);
   private _injector = inject(Injector);
   private _customThemeService = inject(CustomThemeService);
+  private _jiraElectronBridge = inject(JiraElectronBridgeService);
 
   constructor() {
+    // Claim privileged Jira IPC before deferred plugin initialization begins.
+    this._jiraElectronBridge.initialize();
+
     // Initialize electron error handler in an effect
     if (IS_ELECTRON) {
       effect(() => {

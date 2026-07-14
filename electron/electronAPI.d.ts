@@ -5,7 +5,6 @@ import {
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
-import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
@@ -16,6 +15,7 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import { JiraElectronApi } from './shared-with-frontend/jira-request.model';
 
 export interface ElectronAPI {
   on(
@@ -220,16 +220,6 @@ export interface ElectronAPI {
 
   showFullScreenBlocker(args: { msg?: string; takeABreakCfg: TakeABreakConfig }): void;
 
-  // TODO use invoke instead
-  makeJiraRequest(args: {
-    requestId: string;
-    url: string;
-    requestInit: RequestInit;
-    jiraCfg: JiraCfg;
-  }): void;
-
-  jiraSetupImgHeaders(args: { jiraCfg: JiraCfg }): void;
-
   backupAppData(args: {
     data: AppDataCompleteLegacy | AppDataComplete;
     maxBackupFiles?: number | null;
@@ -249,6 +239,8 @@ export interface ElectronAPI {
   ): void;
 
   onSwitchTask(listener: (taskId: string) => void): void;
+
+  consumeJiraApi(): JiraElectronApi | null;
 
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
