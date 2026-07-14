@@ -13,6 +13,10 @@ import { DB_NAME, DB_VERSION } from './db-keys.const';
  * (or the `db-keys.const` version) diverge.
  */
 describe('OP_LOG_DB_SCHEMA', () => {
+  it('blocks v2-era readers from opening replacement-LWW history', () => {
+    expect(DB_VERSION).toBeGreaterThan(9);
+  });
+
   it('reuses DB_NAME/DB_VERSION (no third source of truth)', () => {
     expect(OP_LOG_DB_SCHEMA.name).toBe(DB_NAME);
     expect(OP_LOG_DB_SCHEMA.version).toBe(DB_VERSION);

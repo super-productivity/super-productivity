@@ -79,10 +79,10 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
-    // Issue metadata for remote issue deletion is passed via
-    // DeletedTaskIssueSidecarService to avoid serializing full Task
-    // objects into the op-log. Only taskIds are persisted.
-    deleteTasks: (taskProps: { taskIds: string[] }) => ({
+    // Issue metadata for remote issue deletion still travels through
+    // DeletedTaskIssueSidecarService. Task snapshots are persisted separately
+    // so a concurrent winning update can recreate an entity after this delete.
+    deleteTasks: (taskProps: { taskIds: string[]; tasks?: Task[] }) => ({
       ...taskProps,
       meta: {
         isPersistent: true,

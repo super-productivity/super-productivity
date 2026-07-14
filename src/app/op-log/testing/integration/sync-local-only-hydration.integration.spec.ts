@@ -24,6 +24,7 @@ import { bulkOperationsMetaReducer } from '../../apply/bulk-hydration.meta-reduc
 import { bulkApplyOperations } from '../../apply/bulk-hydration.action';
 import { ActionType, EntityType, Operation, OpType } from '../../core/operation.types';
 import {
+  CONFIG_FEATURE_NAME,
   globalConfigReducer,
   initialGlobalConfigState,
 } from '../../../features/config/store/global-config.reducer';
@@ -32,6 +33,8 @@ import {
   SyncConfig,
 } from '../../../features/config/global-config.model';
 import { SyncProviderId } from '../../sync-providers/provider.const';
+import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
+import { toLwwUpdateActionType } from '../../core/lww-update-action-types';
 
 describe('Sync local-only settings — hydration replay integration (#8077)', () => {
   const composedReducer = bulkOperationsMetaReducer(globalConfigReducer) as ActionReducer<
@@ -135,5 +138,124 @@ describe('Sync local-only settings — hydration replay integration (#8077)', ()
     expect(result.sync.isManualSyncOnly).toBe(true);
     // ...while genuinely shared settings still sync.
     expect(result.sync.isCompressionEnabled).toBe(true);
+  });
+
+  it('converges shared LWW config while keeping each client local-only settings', () => {
+    const DEVICE_A_ID = 'device-A';
+    const DEVICE_B_ID = 'device-B';
+    interface ConfigRootState {
+      [CONFIG_FEATURE_NAME]: GlobalConfigState;
+    }
+    const initialRootState: ConfigRootState = {
+      [CONFIG_FEATURE_NAME]: initialGlobalConfigState,
+    };
+    const rootReducer: ActionReducer<ConfigRootState, Action> = (
+      state = initialRootState,
+      action,
+    ) => ({
+      ...state,
+      [CONFIG_FEATURE_NAME]: globalConfigReducer(state[CONFIG_FEATURE_NAME], action),
+    });
+    const lwwReducer = bulkOperationsMetaReducer(
+      lwwUpdateMetaReducer(rootReducer),
+    ) as ActionReducer<ConfigRootState, Action>;
+    const createLwwConfigOp = (actionPayload: Record<string, unknown>): Operation => ({
+      id: 'config-lww-device-A',
+      actionType: toLwwUpdateActionType('GLOBAL_CONFIG'),
+      opType: OpType.Update,
+      entityType: 'GLOBAL_CONFIG',
+      entityId: '*',
+      payload: {
+        actionPayload,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: DEVICE_A_ID,
+      vectorClock: { [DEVICE_A_ID]: 2, [DEVICE_B_ID]: 1 },
+      timestamp: 1_700_000_000_000,
+      schemaVersion: 1,
+    });
+
+    const winningConfig: GlobalConfigState = {
+      ...initialGlobalConfigState,
+      misc: {
+        ...initialGlobalConfigState.misc,
+        isDisableAnimations: true,
+      },
+      sync: {
+        ...initialGlobalConfigState.sync,
+        syncProvider: SyncProviderId.WebDAV,
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncInterval: 900000,
+        isManualSyncOnly: true,
+        isCompressionEnabled: true,
+      },
+    };
+    const clientASnapshot: GlobalConfigState = {
+      ...initialGlobalConfigState,
+      sync: {
+        ...initialGlobalConfigState.sync,
+        syncProvider: null,
+        isEnabled: false,
+        isEncryptionEnabled: false,
+        syncInterval: 300000,
+        isManualSyncOnly: false,
+        isCompressionEnabled: false,
+      },
+    };
+    const clientBSnapshot: GlobalConfigState = {
+      ...initialGlobalConfigState,
+      sync: {
+        ...initialGlobalConfigState.sync,
+        syncProvider: SyncProviderId.Dropbox,
+        isEnabled: false,
+        isEncryptionEnabled: false,
+        syncInterval: 60000,
+        isManualSyncOnly: false,
+        isCompressionEnabled: false,
+      },
+    };
+    const wireSync: Record<string, unknown> = {
+      ...winningConfig.sync,
+      syncProvider: null,
+    };
+    delete wireSync['syncInterval'];
+    delete wireSync['isManualSyncOnly'];
+    const wireConfig = {
+      ...winningConfig,
+      sync: wireSync,
+    };
+
+    const clientAResult = lwwReducer(
+      { [CONFIG_FEATURE_NAME]: clientASnapshot },
+      bulkApplyOperations({
+        operations: [
+          createLwwConfigOp(winningConfig as unknown as Record<string, unknown>),
+        ],
+        localClientId: DEVICE_A_ID,
+      }),
+    )[CONFIG_FEATURE_NAME];
+    const clientBResult = lwwReducer(
+      { [CONFIG_FEATURE_NAME]: clientBSnapshot },
+      bulkApplyOperations({
+        operations: [createLwwConfigOp(wireConfig)],
+        localClientId: DEVICE_B_ID,
+      }),
+    )[CONFIG_FEATURE_NAME];
+
+    expect(clientAResult.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+    expect(clientAResult.sync.syncInterval).toBe(900000);
+    expect(clientAResult.sync.isManualSyncOnly).toBe(true);
+    expect(clientBResult.sync.syncProvider).toBe(SyncProviderId.Dropbox);
+    expect(clientBResult.sync.syncInterval).toBe(60000);
+    expect(clientBResult.sync.isManualSyncOnly).toBe(false);
+    expect({
+      misc: clientBResult.misc,
+      isCompressionEnabled: clientBResult.sync.isCompressionEnabled,
+    }).toEqual({
+      misc: clientAResult.misc,
+      isCompressionEnabled: clientAResult.sync.isCompressionEnabled,
+    });
   });
 });

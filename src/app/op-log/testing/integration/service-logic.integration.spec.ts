@@ -251,7 +251,7 @@ describe('Service Logic Integration', () => {
         },
       ): Promise<{
         isSupersededOrDuplicate: boolean;
-        conflict: EntityConflict | null;
+        conflicts: EntityConflict[];
       }> => {
         const entityIdsToCheck = remoteOp.entityIds?.length
           ? remoteOp.entityIds
@@ -259,6 +259,7 @@ describe('Service Logic Integration', () => {
             ? [remoteOp.entityId]
             : [];
 
+        const conflicts: EntityConflict[] = [];
         for (const entityId of entityIdsToCheck) {
           const entityKey = toEntityKey(remoteOp.entityType, entityId);
           const localOpsForEntity = ctx.localPendingOpsByEntity.get(entityKey) || [];
@@ -288,12 +289,12 @@ describe('Service Logic Integration', () => {
 
           // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // No pending ops = no conflict possible
@@ -303,20 +304,17 @@ describe('Service Logic Integration', () => {
 
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
-            return {
-              isSupersededOrDuplicate: false,
-              conflict: {
-                entityType: remoteOp.entityType,
-                entityId,
-                localOps: localOpsForEntity,
-                remoteOps: [remoteOp],
-                suggestedResolution: 'manual',
-              },
-            };
+            conflicts.push({
+              entityType: remoteOp.entityType,
+              entityId,
+              localOps: localOpsForEntity,
+              remoteOps: [remoteOp],
+              suggestedResolution: 'manual',
+            });
           }
         }
 
-        return { isSupersededOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflicts };
       },
     );
     applierSpy = jasmine.createSpyObj('OperationApplierService', ['applyOperations']);

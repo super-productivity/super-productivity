@@ -40,10 +40,14 @@ import {
   EncryptNoPasswordError,
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
+  HttpNotOkAPIError,
   IncompleteRemoteOperationsError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
+import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
+import type { MatDialogRef } from '@angular/material/dialog';
+import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
 
 describe('SyncWrapperService', () => {
   let service: SyncWrapperService;
@@ -423,6 +427,79 @@ describe('SyncWrapperService', () => {
       );
 
       expect(await firstValueFrom(service.syncInterval$)).toBe(120000);
+    });
+  });
+
+  describe('configuredAuthForSyncProviderIfNecessary()', () => {
+    it('shows a temporary service error with the Dropbox request ID for HTTP 504', async () => {
+      const headers = new Headers();
+      headers.set('X-Dropbox-Request-Id', '<b>dbx-request-123</b>&"');
+      const response = new Response('gateway timeout', {
+        status: 504,
+        statusText: 'Gateway Timeout',
+        headers,
+      });
+      const provider = {
+        id: SyncProviderId.Dropbox,
+        isReady: jasmine.createSpy('isReady').and.resolveTo(false),
+        getAuthHelper: jasmine.createSpy('getAuthHelper').and.resolveTo({
+          authUrl: 'https://www.dropbox.com/oauth2/authorize',
+          codeVerifier: 'code-verifier',
+          verifyCodeChallenge: jasmine
+            .createSpy('verifyCodeChallenge')
+            .and.rejectWith(new HttpNotOkAPIError(response, 'gateway timeout')),
+        }),
+      } as unknown as SyncProviderBase<SyncProviderId.Dropbox>;
+      mockProviderManager.getProviderById.and.resolveTo(provider);
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of('auth-code'),
+      } as unknown as MatDialogRef<DialogGetAndEnterAuthCodeComponent>);
+
+      const result = await service.configuredAuthForSyncProviderIfNecessary(
+        SyncProviderId.Dropbox,
+      );
+
+      expect(result).toEqual({ wasConfigured: false });
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE,
+        translateParams: {
+          status: '504',
+          reference: '&lt;b&gt;dbx-request-123&lt;/b&gt;&amp;&quot;',
+        },
+        type: 'ERROR',
+        config: { duration: 0 },
+      });
+    });
+
+    it('shows a temporary service error without a reference when none is returned', async () => {
+      const response = new Response('internal server error', {
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+      const provider = {
+        id: SyncProviderId.Dropbox,
+        isReady: jasmine.createSpy('isReady').and.resolveTo(false),
+        getAuthHelper: jasmine.createSpy('getAuthHelper').and.resolveTo({
+          authUrl: 'https://www.dropbox.com/oauth2/authorize',
+          codeVerifier: 'code-verifier',
+          verifyCodeChallenge: jasmine
+            .createSpy('verifyCodeChallenge')
+            .and.rejectWith(new HttpNotOkAPIError(response, 'internal server error')),
+        }),
+      } as unknown as SyncProviderBase<SyncProviderId.Dropbox>;
+      mockProviderManager.getProviderById.and.resolveTo(provider);
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of('auth-code'),
+      } as unknown as MatDialogRef<DialogGetAndEnterAuthCodeComponent>);
+
+      await service.configuredAuthForSyncProviderIfNecessary(SyncProviderId.Dropbox);
+
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        msg: T.F.SYNC.S.AUTH_SERVICE_UNAVAILABLE,
+        translateParams: { status: '500' },
+        type: 'ERROR',
+        config: { duration: 0 },
+      });
     });
   });
 

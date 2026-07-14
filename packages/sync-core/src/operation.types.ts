@@ -214,6 +214,36 @@ export interface MultiEntityPayload<TOpType extends string = OpType> {
 }
 
 /**
+ * Controls how a synthetic LWW update is applied to an existing entity.
+ *
+ * `replace` carries a complete winning snapshot. `patch` is reserved for
+ * deterministic field-level merges whose omitted fields must stay untouched.
+ */
+export type LwwUpdateMode = 'replace' | 'patch';
+
+/**
+ * Backward-compatible LWW payload envelope.
+ *
+ * Extending MultiEntityPayload means clients that predate `lwwUpdateMode`
+ * still extract and replay `actionPayload` instead of treating the envelope as
+ * entity data. New clients can distinguish snapshots from partial merges.
+ */
+export interface LwwUpdatePayload<
+  TOpType extends string = OpType,
+> extends MultiEntityPayload<TOpType> {
+  lwwUpdateMode: LwwUpdateMode;
+  /**
+   * Allows this synthetic update to recreate an entity removed by an earlier
+   * DELETE in the same replay batch. Conflict resolution sets this only when
+   * an earlier delete loses to this update during conflict resolution.
+   *
+   * Archive operations never set this flag: archive precedence remains
+   * absolute and archived entities must not be resurrected by LWW updates.
+   */
+  recreatesEntityAfterDelete?: true;
+}
+
+/**
  * Type guard to check if a payload is a multi-entity payload.
  */
 export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPayload => {
@@ -224,6 +254,11 @@ export const isMultiEntityPayload = (payload: unknown): payload is MultiEntityPa
     Array.isArray((payload as MultiEntityPayload).entityChanges)
   );
 };
+
+export const isLwwUpdatePayload = (payload: unknown): payload is LwwUpdatePayload =>
+  isMultiEntityPayload(payload) &&
+  'lwwUpdateMode' in payload &&
+  (payload.lwwUpdateMode === 'replace' || payload.lwwUpdateMode === 'patch');
 
 /**
  * Extracts the action payload from an operation payload.
@@ -236,6 +271,23 @@ export const extractActionPayload = (payload: unknown): Record<string, unknown> 
   return payload as Record<string, unknown>;
 };
 
+const findEntityByIdInPayloadArrays = (
+  actionPayload: Record<string, unknown>,
+  entityId: string,
+): Record<string, unknown> | undefined => {
+  for (const value of Object.values(actionPayload)) {
+    if (!Array.isArray(value)) continue;
+    const matchingPayload = value.find(
+      (candidate): candidate is Record<string, unknown> =>
+        typeof candidate === 'object' &&
+        candidate !== null &&
+        (candidate as Record<string, unknown>)['id'] === entityId,
+    );
+    if (matchingPayload) return matchingPayload;
+  }
+  return undefined;
+};
+
 /**
  * Extracts a full entity from an operation payload.
  *
@@ -246,11 +298,16 @@ export const extractActionPayload = (payload: unknown): Record<string, unknown> 
 export const extractEntityFromPayload = (
   payload: unknown,
   payloadKey: string,
+  entityId?: string,
 ): Record<string, unknown> | undefined => {
   const actionPayload = extractActionPayload(payload);
   const entity = actionPayload[payloadKey];
   if (entity && typeof entity === 'object') {
     return entity as Record<string, unknown>;
+  }
+  if (entityId) {
+    const matchingEntity = findEntityByIdInPayloadArrays(actionPayload, entityId);
+    if (matchingEntity) return matchingEntity;
   }
   if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
     return actionPayload as Record<string, unknown>;
@@ -267,9 +324,36 @@ export const extractEntityFromPayload = (
 export const extractUpdateChanges = (
   payload: unknown,
   payloadKey: string,
+  entityId?: string,
 ): Record<string, unknown> => {
   const actionPayload = extractActionPayload(payload);
-  const entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
+  let entityPayload = actionPayload[payloadKey] as Record<string, unknown> | undefined;
+  // Prefer the authoritative capture-time entityChanges over the heuristic
+  // array scan below: entityChanges is keyed by the exact entityId, so it can
+  // never mis-attribute another entity's fields, whereas the scan matches by a
+  // shared `id` shape and could pick the wrong array if a payload ever carried
+  // two `{ id, … }` arrays.
+  if (!entityPayload && entityId && isMultiEntityPayload(payload)) {
+    const matchingChange = payload.entityChanges.find(
+      (change) =>
+        change.entityId === entityId &&
+        change.opType === OpType.Update &&
+        typeof change.changes === 'object' &&
+        change.changes !== null,
+    );
+    if (matchingChange) {
+      return matchingChange.changes as Record<string, unknown>;
+    }
+  }
+  if (!entityPayload && entityId) {
+    // Bulk action payloads carry per-entity updates in an array whose key varies
+    // by action (`tasks`, `taskUpdates`, …). Scan every array-valued property for
+    // an element matching this entity id instead of guessing the key by
+    // pluralizing payloadKey — `${payloadKey}s` missed `taskUpdates` (and any
+    // irregular plural), silently returning {} and dropping the remote winner's
+    // changes. The direct payloadKey lookup above still takes precedence.
+    entityPayload = findEntityByIdInPayloadArrays(actionPayload, entityId);
+  }
   if (!entityPayload) return {};
   if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
     return entityPayload['changes'] as Record<string, unknown>;

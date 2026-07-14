@@ -1,5 +1,5 @@
 import { Action } from '@ngrx/store';
-import { EntityType, OpType } from './operation.types';
+import { EntityType, LwwUpdateMode, OpType } from './operation.types';
 
 export interface PersistentActionMeta {
   isPersistent?: boolean; // When false, the action is blacklisted and not persisted
@@ -16,6 +16,7 @@ export interface PersistentActionMeta {
   // don't clobber the device's own settings while replaying its own ops.
   isApplyingFromOtherClient?: boolean;
   isBulk?: boolean; // TRUE for batch operations
+  lwwUpdateMode?: LwwUpdateMode;
 }
 
 export interface PersistentAction extends Action {

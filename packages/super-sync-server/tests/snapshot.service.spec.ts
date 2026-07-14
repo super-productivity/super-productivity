@@ -590,8 +590,8 @@ describe('SnapshotService', () => {
       // state without rewriting snapshotData — no counter update is needed.
       // The fast path now runs _assertCachedSnapshotBaseReplayable first, so
       // the operation mocks must answer the findFirst/count probes. Set
-      // snapshotSchemaVersion to CURRENT_SCHEMA_VERSION (2) so the fast
-      // path triggers; v1 would force a migration and bypass it.
+      // snapshotSchemaVersion to CURRENT_SCHEMA_VERSION so the fast
+      // path triggers; an older version would force a migration and bypass it.
       const cachedState = { TASK: { t1: { id: 't1' } } };
       const compressed = zlib.gzipSync(JSON.stringify(cachedState));
       const updateManySpy = vi.fn().mockResolvedValue({ count: 0 });
@@ -606,7 +606,7 @@ describe('SnapshotService', () => {
                 snapshotData: compressed,
                 lastSnapshotSeq: 7,
                 snapshotAt: BigInt(1),
-                snapshotSchemaVersion: 2,
+                snapshotSchemaVersion: CURRENT_SCHEMA_VERSION,
               }),
             updateMany: updateManySpy,
             create: createSpy,
@@ -650,7 +650,7 @@ describe('SnapshotService', () => {
                 snapshotData: compressed,
                 lastSnapshotSeq: 7,
                 snapshotAt: BigInt(1),
-                snapshotSchemaVersion: 2,
+                snapshotSchemaVersion: CURRENT_SCHEMA_VERSION,
               }),
             updateMany: vi.fn(),
             create: vi.fn(),

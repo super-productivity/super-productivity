@@ -263,6 +263,7 @@ export class SupersededOperationResolverService {
           clientId,
           mergedClock,
           preservedTimestamp,
+          'replace',
           declaredEntityIds,
         );
 

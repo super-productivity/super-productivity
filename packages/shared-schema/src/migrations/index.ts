@@ -1,5 +1,6 @@
 import type { SchemaMigration } from '../migration.types';
 import { MiscToTasksSettingsMigration_v1v2 } from './misc-to-tasks-settings-migration-v1-to-v2';
+import { LwwReplacementBarrierMigration_v2v3 } from './lww-replacement-barrier-v2-to-v3';
 
 /**
  * Registry of all schema migrations.
@@ -26,4 +27,7 @@ import { MiscToTasksSettingsMigration_v1v2 } from './misc-to-tasks-settings-migr
  * }
  * ```
  */
-export const MIGRATIONS: SchemaMigration[] = [MiscToTasksSettingsMigration_v1v2];
+export const MIGRATIONS: SchemaMigration[] = [
+  MiscToTasksSettingsMigration_v1v2,
+  LwwReplacementBarrierMigration_v2v3,
+];

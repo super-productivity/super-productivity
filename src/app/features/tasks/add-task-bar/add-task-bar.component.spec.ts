@@ -27,6 +27,7 @@ import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
+import { BodyClass } from '../../../app.constants';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -268,6 +269,58 @@ describe('AddTaskBarComponent', () => {
 
     fixture = TestBed.createComponent(AddTaskBarComponent);
     component = fixture.componentInstance;
+  });
+
+  describe('mobile keyboard positioning', () => {
+    let hadTouchOnlyClass: boolean;
+    let hadIOSClass: boolean;
+
+    beforeEach(() => {
+      hadTouchOnlyClass = document.body.classList.contains(BodyClass.isTouchOnly);
+      hadIOSClass = document.body.classList.contains(BodyClass.isIOS);
+      document.body.classList.add(BodyClass.isTouchOnly);
+      document.body.classList.remove(BodyClass.isIOS);
+      fixture.nativeElement.classList.add('global');
+      fixture.nativeElement.style.setProperty('--keyboard-height', '336px');
+      fixture.nativeElement.style.setProperty('--keyboard-overlay-offset', '0px');
+      fixture.nativeElement.style.setProperty('--s', '8px');
+      fixture.nativeElement.style.setProperty('--s2', '16px');
+      fixture.nativeElement.style.setProperty('--transition-duration-m', '0ms');
+      fixture.detectChanges();
+    });
+
+    afterEach(() => {
+      document.body.classList.toggle(BodyClass.isTouchOnly, hadTouchOnlyClass);
+      document.body.classList.toggle(BodyClass.isIOS, hadIOSClass);
+    });
+
+    it('uses the overlay-only keyboard offset for the iOS global bar', () => {
+      document.body.classList.add(BodyClass.isIOS);
+
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('16px');
+    });
+
+    it('keeps the global bar above an iOS keyboard that still overlays the viewport', () => {
+      document.body.classList.add(BodyClass.isIOS);
+      fixture.nativeElement.style.setProperty('--keyboard-overlay-offset', '40px');
+
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('56px');
+    });
+
+    it('keeps the measured keyboard offset for non-iOS touch builds', () => {
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('352px');
+    });
+
+    it('keeps the top-positioned layout for hybrid iOS devices', () => {
+      document.body.classList.remove(BodyClass.isTouchOnly);
+      const layoutBeforeIOSClass = fixture.nativeElement.getBoundingClientRect();
+
+      document.body.classList.add(BodyClass.isIOS);
+      const layoutAfterIOSClass = fixture.nativeElement.getBoundingClientRect();
+
+      expect(layoutAfterIOSClass.top).toBe(layoutBeforeIOSClass.top);
+      expect(layoutAfterIOSClass.height).toBe(layoutBeforeIOSClass.height);
+    });
   });
 
   describe('onTaskSuggestionSelected', () => {

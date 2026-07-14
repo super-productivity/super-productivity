@@ -40,6 +40,7 @@ import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 const DEFAULT_TIME = '09:00';
 
@@ -73,6 +74,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
+  private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -213,6 +215,26 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   onTimeChange(newTime: string | null): void {
     this.timeChanged.emit(newTime);
+  }
+
+  onTimeInputClick(ev: PointerEvent): void {
+    if (!this._isElectron || ev.pointerType !== 'touch') {
+      return;
+    }
+
+    const timeInput = ev.currentTarget;
+    if (
+      !(timeInput instanceof HTMLInputElement) ||
+      typeof timeInput.showPicker !== 'function'
+    ) {
+      return;
+    }
+
+    try {
+      timeInput.showPicker();
+    } catch {
+      // Keep the focused native input as the fallback when no picker is available.
+    }
   }
 
   onReminderChange(newReminder: TaskReminderOptionId): void {

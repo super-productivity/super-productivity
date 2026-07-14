@@ -3,6 +3,7 @@ import { ConflictJournalService } from './conflict-journal.service';
 import {
   ConflictJournalEntry,
   JOURNAL_MAX_ENTRIES,
+  JOURNAL_PRUNE_SLACK,
   JOURNAL_RETENTION_DAYS,
 } from './conflict-journal.model';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
@@ -152,6 +153,39 @@ describe('ConflictJournalService (store)', () => {
     });
   });
 
+  describe('opportunistic retention on record() (SPAP-36)', () => {
+    it('does NOT prune while the count is within the soft cap', async () => {
+      const now = Date.now();
+      const softCap = JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK;
+      for (let i = 0; i < softCap; i++) {
+        await service.record(
+          makeEntry({ id: `entry-${i}`, resolvedAt: now - (softCap - i) }),
+        );
+      }
+
+      // Exactly at the soft cap: nothing pruned mid-session yet.
+      expect((await service.list('history')).length).toBe(softCap);
+      expect(await service.getEntry('entry-0')).toBeTruthy();
+    });
+
+    it('prunes back to JOURNAL_MAX_ENTRIES when record() crosses the soft cap', async () => {
+      const now = Date.now();
+      const softCap = JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK;
+      // One entry past the soft cap → the crossing record() triggers the prune.
+      for (let i = 0; i <= softCap; i++) {
+        await service.record(
+          makeEntry({ id: `entry-${i}`, resolvedAt: now - (softCap - i) }),
+        );
+      }
+
+      const history = await service.list('history');
+      expect(history.length).toBe(JOURNAL_MAX_ENTRIES);
+      // Oldest overflow dropped, newest kept.
+      expect(await service.getEntry('entry-0')).toBeUndefined();
+      expect(await service.getEntry(`entry-${softCap}`)).toBeTruthy();
+    });
+  });
+
   describe('failure hardening (never-throw contract)', () => {
     it('list/getEntry/markKept/markFlipped degrade to safe defaults when the DB cannot open', async () => {
       // list() is awaited inside conflict resolution's notification step — a
@@ -192,6 +226,58 @@ describe('ConflictJournalService (store)', () => {
       const ids = (await service.list('history')).map((e) => e.id);
       expect(ids).toContain('before-term');
       expect(ids).toContain('after-term');
+    });
+
+    it('awaits tx.done alongside the deletes so an aborted prune transaction cannot leak (SPAP-36)', async () => {
+      // MAX_ENTRIES + 1 entries: below the soft cap, so record()'s own
+      // opportunistic prune does NOT fire during setup (which would run under the
+      // real transaction and leave nothing to delete). pruneOnStart then has
+      // exactly one overflow entry to delete under the aborted transaction below.
+      const now = Date.now();
+      for (let i = 0; i <= JOURNAL_MAX_ENTRIES; i++) {
+        await service.record(
+          makeEntry({ id: `e-${i}`, resolvedAt: now - (JOURNAL_MAX_ENTRIES - i) }),
+        );
+      }
+
+      // Simulate an aborted delete transaction: both the delete requests and
+      // tx.done reject, exactly as idb reports an abort. Zone.js swallows the
+      // native `unhandledrejection` event under Karma, so rather than listening
+      // for the global leak we assert the fix's mechanism directly: the prune
+      // must AWAIT tx.done even when the delete aggregate rejects. With the old
+      // `Promise.all(deletes); await tx.done` sequencing, `await tx.done` is
+      // never reached once the deletes reject, so tx.done's rejection escapes;
+      // the fix puts tx.done inside the same Promise.all, which attaches a
+      // handler to it (its `.then` runs) regardless of the delete failure.
+      const db = await service['_ensureDb']();
+      const realTransaction = db.transaction.bind(db);
+      const abortErr = new DOMException('simulated abort', 'AbortError');
+      const doneThen = jasmine
+        .createSpy('tx.done.then')
+        .and.callFake((onFulfilled?: unknown, onRejected?: unknown) =>
+          Promise.reject(abortErr).then(onFulfilled as never, onRejected as never),
+        );
+      const fakeTx = {
+        store: { delete: (): Promise<void> => Promise.reject(abortErr) },
+        // A thenable, so Promise.all([...deletes, tx.done]) invokes its `.then`.
+        done: { then: doneThen },
+      } as unknown as ReturnType<typeof db.transaction>;
+      spyOn(db, 'transaction').and.callFake(((
+        storeName: unknown,
+        mode?: unknown,
+        ...rest: unknown[]
+      ) =>
+        mode === 'readwrite'
+          ? fakeTx
+          : (
+              realTransaction as (...args: unknown[]) => ReturnType<typeof db.transaction>
+            )(storeName, mode, ...rest)) as typeof db.transaction);
+
+      // Observe-only contract: the prune resolves, never rejects into the caller.
+      await expectAsync(service.pruneOnStart(now)).toBeResolved();
+      // The abort was observed: tx.done was awaited despite the delete failure.
+      // Old sequencing would leave it unhandled — doneThen never called.
+      expect(doneThen).toHaveBeenCalled();
     });
   });
 });

@@ -224,6 +224,61 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('includes subtasks when deleting a duplicate parent instance', fakeAsync(() => {
+      const staleSubtask: Task = {
+        ...DEFAULT_TASK,
+        id: 'stale-subtask',
+        parentId: 'today-stale-parent',
+        projectId: 'p1',
+        title: 'Subtask',
+        created: todayMs - 60_000,
+        dueDay: getDbDateStr(todayMs),
+      };
+      const staleParent: TaskWithSubTasks = {
+        ...DEFAULT_TASK,
+        id: 'today-stale-parent',
+        projectId: 'p1',
+        title: 'Duplicate',
+        repeatCfgId: 'cfg-with-subtask',
+        created: todayMs - 60_000,
+        dueDay: getDbDateStr(todayMs),
+        subTaskIds: [staleSubtask.id],
+        subTasks: [staleSubtask],
+      };
+      const newestParent = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        id: 'today-newest-parent',
+        projectId: 'p1',
+        title: 'Duplicate',
+        repeatCfgId: 'cfg-with-subtask',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+      });
+      repeatableTasks$.next([staleParent, newestParent]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      const deleteAction = store.dispatch.calls
+        .allArgs()
+        .map(
+          ([action]) =>
+            action as unknown as ReturnType<typeof TaskSharedActions.deleteTasks>,
+        )
+        .find((action) => action.type === TaskSharedActions.deleteTasks.type);
+      expect(deleteAction?.taskIds).toEqual(['today-stale-parent']);
+      expect(deleteAction?.tasks?.map(({ id }) => id)).toEqual([
+        'today-stale-parent',
+        'stale-subtask',
+      ]);
+      expect(taskTimeSync.clearOne.calls.allArgs()).toEqual([
+        ['today-stale-parent'],
+        ['stale-subtask'],
+      ]);
+
+      sub.unsubscribe();
+    }));
+
     it('does nothing when only a single instance exists per repeatCfgId', fakeAsync(() => {
       const onlyInstance: Task = {
         ...DEFAULT_TASK,

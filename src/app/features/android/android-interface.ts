@@ -13,6 +13,7 @@ export interface AndroidShareData {
 
 export interface AndroidInterface {
   getVersion?(): string;
+  getTextZoom?(): number;
 
   // Launches the native Play In-App Review card (play flavor). No-op on fdroid.
   // The outcome is intentionally opaque (Play policy) — nothing is returned.

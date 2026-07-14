@@ -85,6 +85,14 @@ class JavaScriptInterface(
         return "${versionName}_L$launchMode"
     }
 
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getTextZoom(): Int {
+        // Chromium initializes WebView text zoom from this system font scale.
+        // Reading WebSettings directly here would cross WebView's UI-thread boundary.
+        return (100 * activity.resources.configuration.fontScale).toInt()
+    }
+
     // Launch the Play In-App Review flow (play flavor). Delegates to a
     // flavor-specific InAppReview: the real Play Core implementation in src/play,
     // and a no-op stub in src/fdroid so the proprietary library stays out of the

@@ -197,7 +197,6 @@ export class TaskRepeatCleanupEffects {
                 }
               }
 
-              const deleteIds: string[] = [];
               const deleteTasks: TaskWithSubTasks[] = [];
               for (const [, tasks] of tasksByKey) {
                 // Only act when the key has more than one instance — a single
@@ -261,18 +260,26 @@ export class TaskRepeatCleanupEffects {
                     }
                   }
 
-                  deleteIds.push(task.id);
                   deleteTasks.push(task);
                 }
               }
 
-              if (deleteIds.length > 0) {
+              if (deleteTasks.length > 0) {
+                const deleteTaskIds = deleteTasks.map(({ id }) => id);
+                const taskSnapshots = [
+                  ...new Map(
+                    deleteTasks
+                      .flatMap(({ subTasks, ...task }) => [task, ...subTasks])
+                      .map((task) => [task.id, task]),
+                  ).values(),
+                ];
+                const affectedTaskIds = taskSnapshots.map(({ id }) => id);
                 Log.log(
                   '[TaskRepeatCleanupEffects] Removing stale duplicate repeat instances:',
-                  deleteIds,
+                  affectedTaskIds,
                 );
                 this._deletedTaskIssueSidecar.set(
-                  deleteTasks
+                  taskSnapshots
                     .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
                     .map((t) => ({
                       issueId: t.issueId!,
@@ -280,15 +287,11 @@ export class TaskRepeatCleanupEffects {
                       issueProviderId: t.issueProviderId!,
                     })),
                 );
-                for (const task of deleteTasks) {
-                  this._taskTimeSync.clearOne(task.id);
-                  task.subTasks.forEach((subTask) =>
-                    this._taskTimeSync.clearOne(subTask.id),
-                  );
-                }
+                taskSnapshots.forEach((task) => this._taskTimeSync.clearOne(task.id));
                 this._store.dispatch(
                   TaskSharedActions.deleteTasks({
-                    taskIds: deleteIds,
+                    taskIds: deleteTaskIds,
+                    tasks: taskSnapshots,
                   }),
                 );
               }

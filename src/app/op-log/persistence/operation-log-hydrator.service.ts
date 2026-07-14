@@ -780,7 +780,7 @@ export class OperationLogHydratorService {
 
     // Retry as ONE seq-ordered batch, not one op at a time. A per-op retry turns
     // every applyOperations() call into a single-op batch, and the same-batch
-    // archive pre-scan (collectArchivingOrDeletingEntityIdsFromBatch) returns an
+    // archive pre-scan (collectTaskRemovalEntityIdsFromBatch) returns an
     // empty set for single-op batches — silently weakening the #7330
     // orphan-resurrection guard. Batching restores that protection and matches
     // how the primary remote-apply path (applyRemoteOperations) applies ops.

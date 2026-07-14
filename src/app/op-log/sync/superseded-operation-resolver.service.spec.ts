@@ -91,6 +91,7 @@ describe('SupersededOperationResolverService', () => {
         clientId: string,
         vectorClock: VectorClock,
         timestamp: number,
+        _lwwUpdateMode?: 'replace' | 'patch',
         entityIds?: string[],
       ) => ({
         id: 'generated-id-' + Math.random().toString(36).substring(7),

@@ -483,16 +483,15 @@ export class TaskService {
 
   removeMultipleTasks(taskIds: string[]): void {
     // Store issue metadata in the sidecar *before* dispatching, so the
-    // deleteIssueOnBulkTaskDelete$ effect can pick it up. This keeps
-    // full Task objects out of the action payload and the op-log.
+    // deleteIssueOnBulkTaskDelete$ effect can pick it up.
     const entities = this._taskEntities();
-    const tasks = taskIds
+    const affectedTaskIds = Array.from(
+      new Set(taskIds.flatMap((id) => [id, ...(entities[id]?.subTaskIds ?? [])])),
+    );
+    const tasks = affectedTaskIds
       .map((id) => entities[id])
       .filter((task): task is Task => !!task);
-    for (const task of tasks) {
-      this._taskTimeSync.clearOne(task.id);
-      task.subTaskIds.forEach((subTaskId) => this._taskTimeSync.clearOne(subTaskId));
-    }
+    affectedTaskIds.forEach((id) => this._taskTimeSync.clearOne(id));
     this._deletedTaskIssueSidecar.set(
       tasks
         .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
@@ -505,7 +504,7 @@ export class TaskService {
     this._timeBlockDeleteSidecar.set(
       tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
     );
-    this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
+    this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
   update(id: string, changedFields: Partial<Task>): void {

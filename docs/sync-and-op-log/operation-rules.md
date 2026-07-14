@@ -77,6 +77,9 @@ This document establishes the core rules and principles for designing the Operat
 - **Rule:** Every operation **MUST** carry a `schemaVersion`.
 - **Purpose:** To allow future versions of the app to migrate or interpret old operations correctly.
 - **Default:** Use `CURRENT_SCHEMA_VERSION` from `SchemaMigrationService` at the time of creation.
+- **Compatibility barrier:** Bump the schema version when an old reducer would
+  silently misinterpret a new payload semantic. The existing newer-schema gate
+  must stop the old client instead of allowing divergent replay.
 
 ### 2.6 Explicit Intent (OpType)
 

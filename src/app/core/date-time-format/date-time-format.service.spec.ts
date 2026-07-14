@@ -292,6 +292,19 @@ describe('DateTimeFormatService', () => {
       expect(parsed?.getMonth()).toBe(1);
       expect(parsed?.getDate()).toBe(12);
     });
+
+    it('updates text labels when the UI language changes without changing ISO formats', () => {
+      expect(service.currentLocale()).toBe(DateTimeLocales.sv);
+      expect(service.isoTextLocale()).toBe('en');
+
+      service.setUiLanguage('de');
+      TestBed.flushEffects();
+
+      expect(service.isoTextLocale()).toBe('de');
+      expect(service.currentLocale()).toBe(DateTimeLocales.sv);
+      expect(service.dateFormat().raw).toBe('yyyy-MM-dd');
+      expect(service.is24HourFormat()).toBe(true);
+    });
   });
 
   describe('dateTimeLocale config fallback', () => {
@@ -397,6 +410,7 @@ describe('DateTimeFormatService', () => {
       TestBed.flushEffects();
 
       expect(service.currentLocale()).toBe(DateTimeLocales.ja_jp);
+      expect(service.isoTextLocale()).toBeNull();
       expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
     });
 

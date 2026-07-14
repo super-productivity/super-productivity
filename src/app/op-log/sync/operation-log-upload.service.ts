@@ -13,6 +13,7 @@ import {
   extractFullStateFromPayload,
   assertValidFullStatePayload,
   ActionType,
+  isMultiEntityPayload,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { LOCK_NAMES, MAX_OPS_PER_UPLOAD_REQUEST } from '../core/operation-log.const';
@@ -39,7 +40,9 @@ import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected
 import {
   stripLocalOnlySyncScheduleSettings,
   stripLocalOnlySyncSettingsFromAppData,
+  stripLocalOnlySyncSettingsFromGlobalConfig,
 } from '../../features/config/local-only-sync-settings.util';
+import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 
 // Re-export for consumers that import from this service
@@ -624,6 +627,37 @@ export class OperationLogUploadService {
   }
 
   private _sanitizeRegularOpPayloadForUpload(op: Operation): unknown | null {
+    if (
+      op.actionType === ActionType.TASK_SHARED_DELETE_MULTIPLE &&
+      isMultiEntityPayload(op.payload)
+    ) {
+      const actionPayload = { ...op.payload.actionPayload };
+      delete actionPayload['tasks'];
+      return {
+        ...op.payload,
+        actionPayload,
+      };
+    }
+
+    if (
+      op.entityType === 'GLOBAL_CONFIG' &&
+      isLwwUpdateActionType(op.actionType) &&
+      typeof op.payload === 'object' &&
+      op.payload !== null
+    ) {
+      if (isMultiEntityPayload(op.payload)) {
+        return {
+          ...op.payload,
+          actionPayload: stripLocalOnlySyncSettingsFromGlobalConfig(
+            op.payload.actionPayload,
+          ),
+        };
+      }
+      return stripLocalOnlySyncSettingsFromGlobalConfig(
+        op.payload as Record<string, unknown>,
+      );
+    }
+
     if (
       op.actionType !== ActionType.GLOBAL_CONFIG_UPDATE_SECTION ||
       typeof op.payload !== 'object' ||
