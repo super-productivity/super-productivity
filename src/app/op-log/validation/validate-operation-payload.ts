@@ -35,6 +35,9 @@ const getPayloadType = (payload: unknown): string => {
 const SAFE_UNKNOWN_OPERATION_VALUE = 'UNKNOWN';
 const ENTITY_TYPE_VALUES = new Set<string>(ENTITY_TYPES);
 const OP_TYPE_VALUES = new Set<string>(Object.values(OpType));
+const isSafeEntityId = (value: unknown): value is string =>
+  isValidEntityId(value) &&
+  !Object.prototype.hasOwnProperty.call(Object.prototype, value);
 
 const sanitizeEntityTypeForLog = (entityType: string | undefined): string | undefined =>
   entityType === undefined
@@ -209,6 +212,52 @@ const validateUpdatePayload = (
   const entityType = op.entityType;
   const p = payload as Record<string, unknown>;
   const warnings: string[] = [];
+
+  if (op.actionType === ActionType.TASK_SHARED_UPDATE) {
+    const task = p['task'];
+    const taskUpdate =
+      task && typeof task === 'object' && !Array.isArray(task)
+        ? (task as Record<string, unknown>)
+        : undefined;
+    if (
+      taskUpdate &&
+      (!isSafeEntityId(taskUpdate['id']) || taskUpdate['id'] !== op.entityId)
+    ) {
+      return {
+        success: false,
+        error: 'TASK_SHARED_UPDATE task id must match the operation entityId',
+      };
+    }
+
+    if (Object.prototype.hasOwnProperty.call(p, 'projectMoveSubTaskIds')) {
+      if (!taskUpdate) {
+        return {
+          success: false,
+          error: 'projectMoveSubTaskIds requires a task update',
+        };
+      }
+      const subTaskIds = p['projectMoveSubTaskIds'];
+      if (!Array.isArray(subTaskIds) || subTaskIds.some((id) => !isSafeEntityId(id))) {
+        return {
+          success: false,
+          error: 'projectMoveSubTaskIds must be an array of safe task ids',
+        };
+      }
+      const changes = taskUpdate['changes'];
+      if (
+        !changes ||
+        typeof changes !== 'object' ||
+        Array.isArray(changes) ||
+        !Object.prototype.hasOwnProperty.call(changes, 'projectId') ||
+        typeof (changes as Record<string, unknown>)['projectId'] !== 'string'
+      ) {
+        return {
+          success: false,
+          error: 'projectMoveSubTaskIds requires a string projectId change',
+        };
+      }
+    }
+  }
 
   if (op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) {
     const taskId = p['taskId'];

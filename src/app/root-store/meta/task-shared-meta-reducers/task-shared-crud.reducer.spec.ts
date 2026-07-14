@@ -1427,7 +1427,7 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    it('should replay only the captured project-move footprint on divergent state', () => {
+    it('should repair current children that are absent from the captured footprint', () => {
       const testState = createStateWithExistingTasks(['task1'], ['orphan-subtask']);
       testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
         id: 'task1',
@@ -1457,7 +1457,7 @@ describe('taskSharedCrudMetaReducer', () => {
         'orphan-subtask',
       ]);
 
-      expect(action.meta.entityIds).toEqual(['task1', 'orphan-subtask']);
+      expect((action.meta as { entityIds?: string[] }).entityIds).toBeUndefined();
 
       metaReducer(testState, action);
 
@@ -1477,7 +1477,7 @@ describe('taskSharedCrudMetaReducer', () => {
               task1: jasmine.objectContaining({ projectId: 'project2' }),
               'orphan-subtask': jasmine.objectContaining({ projectId: 'project2' }),
               'receiver-only-subtask': jasmine.objectContaining({
-                projectId: 'project1',
+                projectId: 'project2',
               }),
             }),
           }),
@@ -1486,6 +1486,138 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    it('should ignore a malformed project-move footprint during replay', () => {
+      const testState = createStateWithExistingTasks(['task1'], ['receiver-subtask']);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        subTaskIds: [],
+      });
+      testState[TASK_FEATURE_NAME].entities['receiver-subtask'] = createMockTask({
+        id: 'receiver-subtask',
+        projectId: 'project1',
+        parentId: 'task1',
+      });
+      testState[PROJECT_FEATURE_NAME].entities.project2 = {
+        ...testState[PROJECT_FEATURE_NAME].entities.project1,
+        id: 'project2',
+        taskIds: [],
+        backlogTaskIds: [],
+      } as Project;
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task1', changes: { projectId: 'project2' } },
+        projectMoveSubTaskIds: 'not-an-array' as never,
+      });
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[TASK_FEATURE_NAME].entities.task1?.projectId).toBe('project2');
+      expect(
+        updatedState[TASK_FEATURE_NAME].entities['receiver-subtask']?.projectId,
+      ).toBe('project2');
+    });
+
+    it('should not move a captured child that was concurrently reparented', () => {
+      const testState = createStateWithExistingTasks([
+        'task1',
+        'new-parent',
+        'captured-child',
+      ]);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        projectId: 'project1',
+        subTaskIds: ['captured-child'],
+      });
+      testState[TASK_FEATURE_NAME].entities['new-parent'] = createMockTask({
+        id: 'new-parent',
+        projectId: 'project3',
+        subTaskIds: ['captured-child'],
+      });
+      testState[TASK_FEATURE_NAME].entities['captured-child'] = createMockTask({
+        id: 'captured-child',
+        projectId: 'project3',
+        parentId: 'new-parent',
+      });
+      testState[PROJECT_FEATURE_NAME].entities.project2 = {
+        ...testState[PROJECT_FEATURE_NAME].entities.project1,
+        id: 'project2',
+        taskIds: [],
+        backlogTaskIds: [],
+      } as Project;
+      testState[PROJECT_FEATURE_NAME].entities.project3 = {
+        ...testState[PROJECT_FEATURE_NAME].entities.project1,
+        id: 'project3',
+        taskIds: ['new-parent'],
+        backlogTaskIds: [],
+      } as Project;
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2', 'project3');
+
+      metaReducer(
+        testState,
+        createUpdateTaskAction('task1', { projectId: 'project2' }, ['captured-child']),
+      );
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[TASK_FEATURE_NAME].entities['captured-child']).toEqual(
+        jasmine.objectContaining({ parentId: 'new-parent', projectId: 'project3' }),
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project3?.taskIds).toEqual([
+        'new-parent',
+      ]);
+    });
+
+    it('should ignore an update whose task id does not match its operation entity id', () => {
+      const testState = createStateWithExistingTasks(['task1', 'task2']);
+      const baseAction = createUpdateTaskAction('task1', { title: 'Spoofed update' });
+      const action = {
+        ...baseAction,
+        meta: { ...baseAction.meta, entityId: 'task2' },
+      };
+
+      metaReducer(testState, action);
+
+      expect(mockReducer.calls.mostRecent().args[0]).toBe(testState);
+    });
+
+    for (const unsafeTaskId of ['constructor', '__proto__']) {
+      it(`should reject prototype-like update task id ${unsafeTaskId}`, () => {
+        const testState = createStateWithExistingTasks(['task1']);
+        const action = createUpdateTaskAction(unsafeTaskId, {
+          title: 'Spoofed update',
+        });
+
+        expect(() => metaReducer(testState, action)).not.toThrow();
+        expect(mockReducer.calls.mostRecent().args[0]).toBe(testState);
+        expect(
+          (testState[TASK_FEATURE_NAME].entities as Record<string, Task | undefined>)[
+            'undefined'
+          ],
+        ).toBeUndefined();
+      });
+    }
+
+    it('should move into a legacy project whose task lists are missing', () => {
+      const testState = createStateWithExistingTasks(['task1']);
+      testState[PROJECT_FEATURE_NAME].entities.project2 = {
+        ...testState[PROJECT_FEATURE_NAME].entities.project1,
+        id: 'project2',
+        taskIds: undefined as never,
+        backlogTaskIds: undefined as never,
+      } as Project;
+      (testState[PROJECT_FEATURE_NAME].ids as string[]).push('project2');
+      const action = createUpdateTaskAction('task1', { projectId: 'project2' }, []);
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project2?.taskIds).toEqual([
+        'task1',
+      ]);
+      expect(
+        updatedState[PROJECT_FEATURE_NAME].entities.project2?.backlogTaskIds,
+      ).toEqual([]);
     });
 
     it('should ignore a missing project destination while applying other fields', () => {

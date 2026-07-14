@@ -33,17 +33,18 @@ import {
   ActionHandlerMap,
   addTaskToList,
   addTaskToPlannerDay,
-  collectTaskAndSubTaskIds,
+  collectProjectMoveSubTaskIds,
   getProject,
+  getTaskOrUndefined,
   getTag,
   hasInvalidTodayTag,
   isValidTaskProjectIdUpdate,
   ProjectTaskList,
   filterOutTodayTag,
   removeTaskFromPlannerDays,
-  removeTasksFromAllProjects,
   removeTasksFromAllTags,
   removeTasksFromList,
+  repairTaskProjectMembership,
   TaskWithTags,
   updateProject,
   updateTags,
@@ -639,10 +640,11 @@ const removeInProgressTagOnCompletion = (
 const handleUpdateTask = (
   state: RootState,
   taskUpdate: Update<Task>,
-  projectMoveSubTaskIds?: string[],
+  projectMoveSubTaskIds?: unknown,
 ): RootState => {
-  const taskId = taskUpdate.id as string;
-  const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+  const taskId = taskUpdate.id;
+  if (typeof taskId !== 'string') return state;
+  const currentTask = getTaskOrUndefined(state, taskId);
 
   if (!currentTask) {
     return state;
@@ -696,62 +698,13 @@ const handleUpdateTask = (
     typeof targetProjectId === 'string' &&
     !currentTask.parentId
   ) {
-    const subTaskIds =
-      projectMoveSubTaskIds !== undefined
-        ? unique(
-            projectMoveSubTaskIds.filter(
-              (id) =>
-                id !== taskId &&
-                !Object.prototype.hasOwnProperty.call(Object.prototype, id),
-            ),
-          )
-        : collectTaskAndSubTaskIds(state, [taskId]).filter((id) => id !== taskId);
-    const allTaskIds = [taskId, ...subTaskIds];
-    const targetProjectBefore =
-      updatedState[PROJECT_FEATURE_NAME].entities[targetProjectId];
-    const isSameProject = currentTask.projectId === targetProjectId;
-    updatedState = removeTasksFromAllProjects(updatedState, allTaskIds);
-
-    const targetProject = updatedState[PROJECT_FEATURE_NAME].entities[targetProjectId];
-    if (targetProject && targetProjectBefore) {
-      if (isSameProject) {
-        const subTaskIdSet = new Set(subTaskIds);
-        let taskIds = unique(
-          targetProjectBefore.taskIds.filter((id) => !subTaskIdSet.has(id)),
-        );
-        let backlogTaskIds = unique(
-          targetProjectBefore.backlogTaskIds.filter((id) => !subTaskIdSet.has(id)),
-        );
-
-        if (taskIds.includes(taskId)) {
-          backlogTaskIds = backlogTaskIds.filter((id) => id !== taskId);
-        } else if (!backlogTaskIds.includes(taskId)) {
-          taskIds = [...taskIds, taskId];
-        }
-
-        updatedState = updateProject(updatedState, targetProjectId, {
-          taskIds,
-          backlogTaskIds,
-        });
-      } else {
-        updatedState = updateProject(updatedState, targetProjectId, {
-          taskIds: unique([...targetProject.taskIds, taskId]),
-        });
-      }
-    }
-
-    if (subTaskIds.length > 0) {
-      updatedState = {
-        ...updatedState,
-        [TASK_FEATURE_NAME]: taskAdapter.updateMany(
-          subTaskIds.map((id) => ({
-            id,
-            changes: { projectId: targetProjectId },
-          })),
-          updatedState[TASK_FEATURE_NAME],
-        ),
-      };
-    }
+    const subTaskIds = collectProjectMoveSubTaskIds(state, taskId, projectMoveSubTaskIds);
+    updatedState = repairTaskProjectMembership(
+      updatedState,
+      taskId,
+      targetProjectId,
+      subTaskIds,
+    );
   }
 
   // Handle task state updates using existing task reducer logic
@@ -953,9 +906,9 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const { task, projectMoveSubTaskIds } = action as ReturnType<
-      typeof TaskSharedActions.updateTask
-    >;
+    const updateAction = action as ReturnType<typeof TaskSharedActions.updateTask>;
+    const { task, projectMoveSubTaskIds } = updateAction;
+    if (task.id !== updateAction.meta.entityId) return state;
     return handleUpdateTask(state, task, projectMoveSubTaskIds);
   },
 });

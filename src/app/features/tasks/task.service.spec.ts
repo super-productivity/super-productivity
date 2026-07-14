@@ -414,11 +414,33 @@ describe('TaskService', () => {
         projectMoveSubTaskIds: ['listed-subtask', 'reverse-linked-subtask'],
       });
       expect(store.dispatch).toHaveBeenCalledWith(expectedAction);
-      expect(expectedAction.meta.entityIds).toEqual([
-        'parent',
-        'listed-subtask',
-        'reverse-linked-subtask',
-      ]);
+      // Moving children is a derived part of the root task operation. Exposing
+      // the footprint as generic entityIds makes conflict resolution treat it
+      // as an unsafe batch and also hits the wire protocol's 1,000-id cap.
+      expect((expectedAction.meta as { entityIds?: string[] }).entityIds).toBeUndefined();
+    });
+
+    it('should capture a project move from a legacy task without subTaskIds', () => {
+      const parent = createMockTask('parent', { subTaskIds: undefined as never });
+      store.setState({
+        tasks: {
+          ids: ['parent'],
+          entities: { parent },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+      });
+      store.refreshState();
+
+      expect(() => service.update('parent', { projectId: 'project-2' })).not.toThrow();
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'parent', changes: { projectId: 'project-2' } },
+          projectMoveSubTaskIds: [],
+        }),
+      );
     });
   });
 

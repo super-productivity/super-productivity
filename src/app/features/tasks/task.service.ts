@@ -520,7 +520,7 @@ export class TaskService {
       task &&
       !task.parentId
         ? unique([
-            ...task.subTaskIds,
+            ...(task.subTaskIds ?? []),
             ...Object.values(entities)
               .filter(
                 (candidate): candidate is Task =>

@@ -115,6 +115,78 @@ describe('validateOperationPayload', () => {
   });
 
   describe('UPDATE operation', () => {
+    it('should reject a malformed task project-move footprint', () => {
+      const op = createTestOperation({
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        payload: {
+          actionPayload: {
+            task: { id: 'task1', changes: { projectId: 'project2' } },
+            projectMoveSubTaskIds: 'not-an-array',
+          },
+          entityChanges: [],
+        },
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('projectMoveSubTaskIds');
+    });
+
+    it('should reject project-move metadata on a non-move task update', () => {
+      const op = createTestOperation({
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        payload: {
+          actionPayload: {
+            task: { id: 'task1', changes: { title: 'Only a title' } },
+            projectMoveSubTaskIds: ['unrelated-task'],
+          },
+          entityChanges: [],
+        },
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('projectId');
+    });
+
+    it('should reject a task update whose payload id differs from entityId', () => {
+      const op = createTestOperation({
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'task2',
+        payload: {
+          actionPayload: {
+            task: { id: 'task1', changes: { title: 'Spoofed' } },
+          },
+          entityChanges: [],
+        },
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('entityId');
+    });
+
+    it('should reject a task update with a prototype-like task id', () => {
+      const op = createTestOperation({
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        entityId: 'constructor',
+        payload: {
+          actionPayload: {
+            task: { id: 'constructor', changes: { title: 'Spoofed' } },
+          },
+          entityChanges: [],
+        },
+      });
+
+      const result = validateOperationPayload(op);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('entityId');
+    });
+
     it('should validate UPDATE with nested entity shape', () => {
       const op = createTestOperation({
         opType: OpType.Update,

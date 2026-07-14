@@ -948,6 +948,25 @@ describe('LocalRestApiHandlerService', () => {
         });
       });
 
+      it('should allow an unchanged empty projectId in a task round trip', async () => {
+        const mockTask = createMockTask('task-1', { projectId: '' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { projectId: '', title: 'Round-tripped task' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          projectId: '',
+          title: 'Round-tripped task',
+        });
+      });
+
       it('should reject an unknown destination project', async () => {
         const mockTask = createMockTask('task-1', { projectId: 'project-1' });
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {

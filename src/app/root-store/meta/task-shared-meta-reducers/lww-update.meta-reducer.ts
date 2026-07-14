@@ -28,7 +28,12 @@ import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
-import { getProjectOrUndefined, repairTaskProjectForLww } from './task-shared-helpers';
+import {
+  collectProjectMoveSubTaskIds,
+  getProjectOrUndefined,
+  normalizeProjectMoveSubTaskIds,
+  repairTaskProjectMembership,
+} from './task-shared-helpers';
 
 /**
  * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
@@ -472,9 +477,19 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
     // If a singleton or adapter state gains such a key, it would be silently dropped.
     const actionAny = action as unknown as Record<string, unknown>;
+    const hasProjectMoveFootprint =
+      entityType === 'TASK' &&
+      Object.prototype.hasOwnProperty.call(actionAny, 'projectMoveSubTaskIds');
+    const projectMoveSubTaskIds = hasProjectMoveFootprint
+      ? normalizeProjectMoveSubTaskIds(actionAny['projectMoveSubTaskIds'])
+      : undefined;
     let entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
-      if (key !== 'type' && key !== 'meta') {
+      if (
+        key !== 'type' &&
+        key !== 'meta' &&
+        (!hasProjectMoveFootprint || key !== 'projectMoveSubTaskIds')
+      ) {
         entityData[key] = actionAny[key];
       }
     }
@@ -548,6 +563,20 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
     if (
       entityType === 'TASK' &&
+      Object.prototype.hasOwnProperty.call(entityData, 'tagIds')
+    ) {
+      const tagIds = entityData['tagIds'];
+      entityData['tagIds'] = Array.isArray(tagIds)
+        ? tagIds.filter(
+            (id): id is string =>
+              typeof id === 'string' &&
+              !Object.prototype.hasOwnProperty.call(Object.prototype, id),
+          )
+        : existingEntity?.tagIds;
+    }
+
+    if (
+      entityType === 'TASK' &&
       Object.prototype.hasOwnProperty.call(entityData, 'parentId') &&
       typeof entityData['parentId'] === 'string' &&
       Object.prototype.hasOwnProperty.call(Object.prototype, entityData['parentId'])
@@ -560,6 +589,15 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // still valid owners: their archive op can race with the task update.
     // Recreated tasks deliberately keep out-of-order project references so a
     // later project op can complete the relationship.
+    if (
+      entityType === 'TASK' &&
+      Object.prototype.hasOwnProperty.call(entityData, 'projectId') &&
+      typeof entityData['projectId'] === 'string' &&
+      Object.prototype.hasOwnProperty.call(Object.prototype, entityData['projectId'])
+    ) {
+      entityData['projectId'] = existingEntity?.projectId;
+    }
+
     if (
       entityType === 'TASK' &&
       existingEntity &&
@@ -710,26 +748,25 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         }
       }
 
-      const meta = actionAny['meta'];
-      const explicitEntityIds =
-        meta &&
-        typeof meta === 'object' &&
-        Array.isArray((meta as { entityIds?: unknown }).entityIds)
-          ? (meta as { entityIds: unknown[] }).entityIds.filter(
-              (id): id is string => typeof id === 'string',
-            )
-          : undefined;
-
       if (!newIsSubTask) {
-        // Root snapshots repair every project list, even when projectId is
-        // unchanged. New synthetic LWW ops replay their source footprint;
-        // old ops without entityIds retain receiving-state repair behavior.
-        updatedState = repairTaskProjectForLww(
-          updatedState,
-          updatedEntity as unknown as Task,
-          newProjectId,
-          explicitEntityIds,
-        );
+        const shouldRepairProjectMembership =
+          !existingEntity ||
+          oldProjectId !== newProjectId ||
+          oldIsSubTask !== newIsSubTask ||
+          hasProjectMoveFootprint;
+        if (shouldRepairProjectMembership) {
+          const subTaskIds = collectProjectMoveSubTaskIds(
+            updatedState,
+            entityId,
+            projectMoveSubTaskIds,
+          );
+          updatedState = repairTaskProjectMembership(
+            updatedState,
+            entityId,
+            newProjectId,
+            subTaskIds,
+          );
+        }
       } else {
         updatedState = syncProjectTaskIds(
           updatedState,

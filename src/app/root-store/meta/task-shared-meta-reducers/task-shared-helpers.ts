@@ -34,6 +34,11 @@ export type TaskWithTags = Task & { tagIds: string[] };
 export type ActionHandler = (state: RootState) => RootState;
 export type ActionHandlerMap = Record<string, ActionHandler>;
 
+const isSafeEntityId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  !Object.prototype.hasOwnProperty.call(Object.prototype, value);
+
 // =============================================================================
 // STATE UPDATE HELPERS
 // =============================================================================
@@ -86,6 +91,34 @@ export const collectTaskAndSubTaskIds = (
   }
 
   return Array.from(taskIds);
+};
+
+/**
+ * Normalizes replay-only metadata without trusting data from older or remote
+ * clients. `undefined` means no footprint was captured; an invalid value is an
+ * explicit but empty footprint so malformed data never broadens the mutation.
+ */
+export const normalizeProjectMoveSubTaskIds = (value: unknown): string[] | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return [];
+  return unique(value.filter(isSafeEntityId));
+};
+
+/**
+ * Resolves the children that still belong to a root task at apply time. The
+ * captured footprint repairs one-sided relationships, while the parentId check
+ * prevents a concurrent reparent/promotion from being overwritten.
+ */
+export const collectProjectMoveSubTaskIds = (
+  state: RootState,
+  parentTaskId: string,
+  capturedSubTaskIds: unknown,
+): string[] => {
+  const captured = normalizeProjectMoveSubTaskIds(capturedSubTaskIds) ?? [];
+  return collectTaskAndSubTaskIds(state, [parentTaskId], captured).filter((id) => {
+    if (id === parentTaskId || !isSafeEntityId(id)) return false;
+    return getTaskOrUndefined(state, id)?.parentId === parentTaskId;
+  });
 };
 
 export const isValidTaskProjectIdUpdate = (
@@ -171,20 +204,15 @@ export const removeTasksFromAllProjects = (
 };
 
 /**
- * Repairs a root task's project relationship after an LWW update. New LWW
- * operations derived from project moves carry the source operation's entityIds,
- * which are the deterministic move footprint. Legacy LWW operations have no
- * such footprint and fall back to deriving children from receiving state.
- *
  * Every project is scanned so stale one-sided references are removed. The
  * destination project's existing root placement (regular vs backlog) and
  * ordering are preserved when possible; subtasks never belong in either list.
  */
-export const repairTaskProjectForLww = (
+export const repairTaskProjectMembership = (
   state: RootState,
-  task: Pick<Task, 'id' | 'projectId' | 'subTaskIds'>,
+  taskId: string,
   targetProjectId: string | undefined,
-  operationTaskIds?: string[],
+  subTaskIds: string[],
 ): RootState => {
   const targetProject = targetProjectId
     ? getProjectOrUndefined(state, targetProjectId)
@@ -194,24 +222,20 @@ export const repairTaskProjectForLww = (
   // out-of-order task snapshot until the referenced project is replayed.
   if (targetProjectId && !targetProject) return state;
 
-  const allTaskIds = unique(
-    operationTaskIds !== undefined
-      ? [task.id, ...operationTaskIds]
-      : collectTaskAndSubTaskIds(state, [task.id], task.subTaskIds),
-  ).filter((id) => !Object.prototype.hasOwnProperty.call(Object.prototype, id));
+  const allTaskIds = unique([taskId, ...subTaskIds]).filter(isSafeEntityId);
   let updatedState = removeTasksFromAllProjects(state, allTaskIds);
 
   if (targetProjectId && targetProject) {
-    const childIds = new Set(allTaskIds.filter((id) => id !== task.id));
+    const childIds = new Set(allTaskIds.filter((id) => id !== taskId));
     let taskIds = unique((targetProject.taskIds ?? []).filter((id) => !childIds.has(id)));
     let backlogTaskIds = unique(
       (targetProject.backlogTaskIds ?? []).filter((id) => !childIds.has(id)),
     );
 
-    if (taskIds.includes(task.id)) {
-      backlogTaskIds = backlogTaskIds.filter((id) => id !== task.id);
-    } else if (!backlogTaskIds.includes(task.id)) {
-      taskIds = [...taskIds, task.id];
+    if (taskIds.includes(taskId)) {
+      backlogTaskIds = backlogTaskIds.filter((id) => id !== taskId);
+    } else if (!backlogTaskIds.includes(taskId)) {
+      taskIds = [...taskIds, taskId];
     }
 
     updatedState = updateProject(updatedState, targetProjectId, {
@@ -284,6 +308,14 @@ export const getProjectOrUndefined = (
 ): Project | undefined => {
   const project = state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined;
   return project?.id === projectId ? project : undefined;
+};
+
+export const getTaskOrUndefined = (
+  state: RootState,
+  taskId: string,
+): Task | undefined => {
+  const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
+  return task?.id === taskId ? task : undefined;
 };
 
 // =============================================================================

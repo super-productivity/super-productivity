@@ -514,15 +514,23 @@ export class LocalRestApiHandlerService {
 
         if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
           const targetProjectId = changes.projectId;
-          if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
+          if (typeof targetProjectId !== 'string') {
             return createErrorResponse(
               requestId,
               400,
               'INVALID_INPUT',
-              'projectId must be a non-empty string',
+              'projectId must be a string',
             );
           }
           const isProjectChange = targetProjectId !== task.projectId;
+          if (isProjectChange && !targetProjectId.trim()) {
+            return createErrorResponse(
+              requestId,
+              400,
+              'INVALID_INPUT',
+              'projectId must be a non-empty string when changed',
+            );
+          }
           // Echoing back the unchanged projectId is allowed on subtasks so
           // GET→PATCH round-trips don't fail; only actual changes are rejected.
           if (task.parentId && isProjectChange) {

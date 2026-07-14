@@ -20,8 +20,10 @@ import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
+  collectProjectMoveSubTaskIds,
   collectTaskAndSubTaskIds,
   getProjectOrUndefined,
+  getTaskOrUndefined,
   isValidTaskProjectIdUpdate,
 } from './task-shared-helpers';
 import { toLwwUpdateActionType } from '../../../op-log/core/lww-update-action-types';
@@ -401,13 +403,15 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     );
   },
   [TaskSharedActions.updateTask.type]: (state, action) => {
-    const { task, projectMoveSubTaskIds } = action as ReturnType<
-      typeof TaskSharedActions.updateTask
-    >;
+    const updateAction = action as ReturnType<typeof TaskSharedActions.updateTask>;
+    const { task, projectMoveSubTaskIds } = updateAction;
+    if (task.id !== updateAction.meta.entityId || typeof task.id !== 'string') {
+      return state;
+    }
     const targetProjectId = task.changes.projectId;
     if (typeof targetProjectId !== 'string') return state;
 
-    const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task | undefined;
+    const currentTask = getTaskOrUndefined(state, task.id);
     if (
       !currentTask ||
       !isValidTaskProjectIdUpdate(state, currentTask, targetProjectId)
@@ -415,10 +419,10 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       return state;
     }
 
-    const affectedTaskIds =
-      projectMoveSubTaskIds !== undefined
-        ? [task.id as string, ...projectMoveSubTaskIds]
-        : collectTaskAndSubTaskIds(state, [task.id as string]);
+    const affectedTaskIds = [
+      task.id,
+      ...collectProjectMoveSubTaskIds(state, task.id, projectMoveSubTaskIds),
+    ];
     return withSectionStateUpdate(
       state,
       removeTaskIdsFromOtherProjectSections(
@@ -433,26 +437,28 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       id?: unknown;
       parentId?: unknown;
       projectId?: unknown;
-      meta?: { entityIds?: unknown };
+      projectMoveSubTaskIds?: unknown;
     };
-    if (typeof update.id !== 'string') return state;
-
-    const currentTaskCandidate = state[TASK_FEATURE_NAME].entities[update.id] as
-      | Task
-      | undefined;
-    const currentTask =
-      currentTaskCandidate?.id === update.id ? currentTaskCandidate : undefined;
-    const explicitEntityIds = Array.isArray(update.meta?.entityIds)
-      ? update.meta.entityIds.filter((id): id is string => typeof id === 'string')
-      : undefined;
-    const affectedTaskIds =
-      explicitEntityIds !== undefined
-        ? Array.from(new Set([update.id, ...explicitEntityIds]))
-        : collectTaskAndSubTaskIds(state, [update.id]);
+    if (
+      typeof update.id !== 'string' ||
+      Object.prototype.hasOwnProperty.call(Object.prototype, update.id)
+    ) {
+      return state;
+    }
 
     const hasParentId = Object.prototype.hasOwnProperty.call(update, 'parentId');
     const hasProjectId = Object.prototype.hasOwnProperty.call(update, 'projectId');
-    if (!hasParentId && !hasProjectId) return state;
+    const hasProjectMoveFootprint = Object.prototype.hasOwnProperty.call(
+      update,
+      'projectMoveSubTaskIds',
+    );
+    if (!hasParentId && !hasProjectId && !hasProjectMoveFootprint) return state;
+
+    const currentTask = getTaskOrUndefined(state, update.id);
+    const affectedTaskIds = [
+      update.id,
+      ...collectProjectMoveSubTaskIds(state, update.id, update.projectMoveSubTaskIds),
+    ];
 
     if (!currentTask) {
       return withSectionStateUpdate(
@@ -473,10 +479,15 @@ const ACTION_HANDLERS: Record<string, Handler> = {
         requestedProjectId = update.projectId;
       }
     }
-    const targetParentId =
+    const requestedParentId =
       hasParentId && typeof update.parentId === 'string' && update.parentId
         ? update.parentId
         : undefined;
+    const targetParentId =
+      requestedParentId &&
+      Object.prototype.hasOwnProperty.call(Object.prototype, requestedParentId)
+        ? currentTask.parentId
+        : requestedParentId;
 
     if (targetParentId) {
       const targetParentCandidate = state[TASK_FEATURE_NAME].entities[targetParentId] as
@@ -493,7 +504,11 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     const leavesCurrentProjectSection =
       (!currentTask.parentId && becomesSubTask) ||
       targetProjectId !== currentTask.projectId;
-    const repairsRootProjectRefs = !becomesSubTask && hasProjectId;
+    const repairsRootProjectRefs =
+      !becomesSubTask &&
+      (hasProjectMoveFootprint ||
+        targetProjectId !== currentTask.projectId ||
+        becomesSubTask !== !!currentTask.parentId);
     if (!leavesCurrentProjectSection && !repairsRootProjectRefs) return state;
 
     return withSectionStateUpdate(
