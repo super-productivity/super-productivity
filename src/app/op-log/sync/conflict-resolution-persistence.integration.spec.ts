@@ -144,7 +144,11 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
   const taskReplayReducer = bulkOperationsMetaReducer(
     createCombinedTaskSharedMetaReducer(lwwUpdateMetaReducer(taskRootReducer)),
   ) as ActionReducer<RootState, Action>;
-  const createTaskReplayState = (tasks: Task[], projectTaskIds: string[]): RootState => {
+  const createTaskReplayState = (
+    tasks: Task[],
+    projectTaskIds: string[],
+    projectBacklogTaskIds: string[] = [],
+  ): RootState => {
     const state = createBaseState();
     const project = state[PROJECT_FEATURE_NAME].entities.project1;
     if (!project) {
@@ -164,7 +168,7 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
           project1: {
             ...project,
             taskIds: projectTaskIds,
-            backlogTaskIds: [],
+            backlogTaskIds: projectBacklogTaskIds,
           },
         },
       },
@@ -676,6 +680,228 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     expect(taskShape(remoteClientState))
       .withContext('originating client')
       .toEqual(expectedShape);
+  });
+
+  it('converges an outright-losing remote deleteProject with exact task membership (#8997)', async () => {
+    const regularTaskId = 'regular-task';
+    const backlogTaskId = 'backlog-task';
+    const subtaskId = 'subtask';
+    const regularTask: Task = {
+      ...DEFAULT_TASK,
+      id: regularTaskId,
+      title: 'Regular task',
+      projectId: 'project1',
+      subTaskIds: [subtaskId],
+    } as Task;
+    const backlogTask: Task = {
+      ...DEFAULT_TASK,
+      id: backlogTaskId,
+      title: 'Backlog task',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const subtask: Task = {
+      ...DEFAULT_TASK,
+      id: subtaskId,
+      title: 'Project subtask',
+      projectId: 'project1',
+      parentId: regularTaskId,
+      subTaskIds: [],
+    } as Task;
+    const initialTaskState = createTaskReplayState(
+      [regularTask, backlogTask, subtask],
+      [regularTaskId],
+      [backlogTaskId],
+    );
+    const project = initialTaskState[PROJECT_FEATURE_NAME].entities.project1;
+    if (!project) {
+      throw new Error('Test fixture project1 is missing.');
+    }
+
+    const localProjectEdit: Operation = {
+      id: 'local-project-edit',
+      actionType: toLwwUpdateActionType('PROJECT'),
+      opType: OpType.Update,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: project as unknown as Record<string, unknown>,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteProjectDelete: Operation = {
+      id: 'remote-project-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+      opType: OpType.Delete,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: {
+          projectId: 'project1',
+          // Stale deleting client knew only this root. Replay expands through
+          // current project relationships; recovery must recreate the same set.
+          allTaskIds: [regularTaskId],
+          noteIds: [],
+        },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(
+        props?.id === 'project1'
+          ? project
+          : props?.id === regularTaskId
+            ? regularTask
+            : props?.id === backlogTaskId
+              ? backlogTask
+              : props?.id === subtaskId
+                ? subtask
+                : undefined,
+      ),
+    );
+    await opLogStore.append(localProjectEdit, 'local');
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'PROJECT',
+        entityId: 'project1',
+        localOps: [localProjectEdit],
+        remoteOps: [remoteProjectDelete],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    expect(operationApplier.applyOperations).not.toHaveBeenCalled();
+
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const compensationOps = storedEntries
+      .filter(({ op, source }) => source === 'local' && op.id !== localProjectEdit.id)
+      .map(({ op }) => op);
+    expect(compensationOps.filter(({ entityType }) => entityType === 'TASK').length).toBe(
+      4,
+    );
+    expect(storedEntries.map(({ op }) => op.id)).toEqual([
+      localProjectEdit.id,
+      remoteProjectDelete.id,
+      ...compensationOps.map(({ id }) => id),
+    ]);
+
+    const restartedClientState = applyTaskOperations(
+      initialTaskState,
+      storedEntries.map(({ op }) => op),
+      LOCAL_CLIENT_ID,
+    );
+    let remoteClientState = applyTaskOperations(
+      initialTaskState,
+      [remoteProjectDelete],
+      REMOTE_CLIENT_ID,
+    );
+    for (const compensationOp of compensationOps) {
+      remoteClientState = applyTaskOperations(
+        remoteClientState,
+        [compensationOp],
+        REMOTE_CLIENT_ID,
+      );
+    }
+
+    const assertExactWinningState = (state: RootState, context: string): void => {
+      expect(taskShape(state)).withContext(context).toEqual(taskShape(initialTaskState));
+      expect(state[PROJECT_FEATURE_NAME].entities.project1?.taskIds)
+        .withContext(`${context}: regular task order`)
+        .toEqual([regularTaskId]);
+      expect(state[PROJECT_FEATURE_NAME].entities.project1?.backlogTaskIds)
+        .withContext(`${context}: backlog task order`)
+        .toEqual([backlogTaskId]);
+    };
+    assertExactWinningState(initialTaskState, 'live state (nothing applied)');
+    assertExactWinningState(restartedClientState, 'restart');
+    assertExactWinningState(remoteClientState, 'originating client');
+
+    const projectCompensations = compensationOps.filter(
+      ({ entityType }) => entityType === 'PROJECT',
+    );
+    const taskRecreations = compensationOps.filter(
+      ({ entityType }) => entityType === 'TASK',
+    );
+    const laterProjectDelete: Operation = {
+      ...remoteProjectDelete,
+      id: 'later-project-delete',
+      clientId: 'third-client',
+      // This client saw only the first uploaded recreation before deleting the
+      // partially restored project. Later task compensations must not survive.
+      payload: {
+        actionPayload: {
+          projectId: 'project1',
+          allTaskIds: [regularTaskId],
+          noteIds: [],
+        },
+        entityChanges: [],
+      },
+      vectorClock: {
+        [LOCAL_CLIENT_ID]: 2,
+        [REMOTE_CLIENT_ID]: 1,
+        ['third-client']: 1,
+      },
+      timestamp: 3_000,
+    };
+    const partiallyAcceptedServerState = applyTaskOperations(
+      initialTaskState,
+      [
+        remoteProjectDelete,
+        projectCompensations[0],
+        taskRecreations[0],
+        laterProjectDelete,
+        ...taskRecreations.slice(1),
+        // The final PROJECT compensation conflicts with laterProjectDelete and
+        // is rejected, while later TASK rows are independently accepted.
+      ],
+      'fresh-client',
+    );
+
+    expect(partiallyAcceptedServerState[PROJECT_FEATURE_NAME].entities.project1)
+      .withContext('later delete keeps the partially restored project deleted')
+      .toBeUndefined();
+    expect(partiallyAcceptedServerState[TASK_FEATURE_NAME].ids)
+      .withContext('later task compensations cannot outlive their deleted project')
+      .toEqual([]);
+
+    const taskReplacementOps = taskRecreations.filter(
+      ({ payload }) =>
+        (payload as { lwwUpdateMode?: string }).lwwUpdateMode === 'replace',
+    );
+    const taskRelationshipOps = taskRecreations.filter(
+      ({ payload }) => (payload as { lwwUpdateMode?: string }).lwwUpdateMode === 'patch',
+    );
+    const alreadyAcceptedTaskServerState = applyTaskOperations(
+      initialTaskState,
+      [
+        remoteProjectDelete,
+        projectCompensations[0],
+        ...taskReplacementOps,
+        // This delete was authored from a stale prefix that knew only about
+        // regularTaskId. Its reducer must also follow the project's currently
+        // established root/child relationships, without scanning all tasks.
+        laterProjectDelete,
+        ...taskRelationshipOps,
+      ],
+      'fresh-client',
+    );
+
+    expect(alreadyAcceptedTaskServerState[PROJECT_FEATURE_NAME].entities.project1)
+      .withContext('stale later delete still removes the restored project')
+      .toBeUndefined();
+    expect(alreadyAcceptedTaskServerState[TASK_FEATURE_NAME].ids)
+      .withContext('stale later delete removes already accepted roots and children')
+      .toEqual([]);
   });
 
   it('keeps a winning remote archive as an archive on every client', async () => {

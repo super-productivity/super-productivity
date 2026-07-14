@@ -407,6 +407,63 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sA']?.taskIds).toEqual([]);
     });
 
+    it('uses current project relationships when deleteProject task ids are stale', () => {
+      const state = stateWith(
+        {
+          root: { projectId: 'project1', subTaskIds: ['child'] },
+          child: { projectId: 'project1', parentId: 'root' },
+          backlog: { projectId: 'project1' },
+          projectIdOnly: { projectId: 'project1' },
+          unrelated: { projectId: 'another-project' },
+        },
+        [
+          {
+            id: 'sA',
+            contextId: 'tA',
+            contextType: WorkContextType.TAG,
+            title: 'Shared tag section',
+            taskIds: ['root', 'child', 'backlog', 'projectIdOnly', 'unrelated'],
+          },
+        ],
+      );
+      const project = state[PROJECT_FEATURE_NAME].entities.project1;
+      if (!project) {
+        throw new Error('Expected project test fixture.');
+      }
+      state[PROJECT_FEATURE_NAME] = {
+        ...state[PROJECT_FEATURE_NAME],
+        entities: {
+          ...state[PROJECT_FEATURE_NAME].entities,
+          project1: {
+            ...project,
+            taskIds: ['root'],
+            backlogTaskIds: ['backlog'],
+          },
+        },
+      };
+
+      metaReducer(
+        state,
+        TaskSharedActions.deleteProject({
+          projectId: 'project1',
+          allTaskIds: ['payload-task'],
+          noteIds: [],
+        }),
+      );
+
+      const [updatedState, forwardedAction] = mockReducer.calls.mostRecent().args;
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sA']?.taskIds).toEqual([
+        'projectIdOnly',
+        'unrelated',
+      ]);
+      expect(forwardedAction.allTaskIds).toEqual([
+        'payload-task',
+        'root',
+        'backlog',
+        'child',
+      ]);
+    });
+
     it('strips a moved task (and its subtasks) from sections in the old project only', () => {
       const state = stateWith(
         {

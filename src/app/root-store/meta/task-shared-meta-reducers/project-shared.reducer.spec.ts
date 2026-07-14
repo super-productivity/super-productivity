@@ -416,6 +416,59 @@ describe('projectSharedMetaReducer', () => {
   });
 
   describe('deleteProject action', () => {
+    it('should enrich stale task ids from current project relationships only', () => {
+      const testState = createStateWithExistingTasks(
+        ['listed-root'],
+        ['backlog-root'],
+        [],
+      );
+      const listedRoot = testState[TASK_FEATURE_NAME].entities['listed-root'];
+      if (!listedRoot) {
+        throw new Error('Expected listed root test fixture.');
+      }
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: [
+          ...(testState[TASK_FEATURE_NAME].ids as string[]),
+          'listed-child',
+          'project-id-only',
+          'unrelated-task',
+        ],
+        entities: {
+          ...testState[TASK_FEATURE_NAME].entities,
+          'listed-root': { ...listedRoot, subTaskIds: ['listed-child'] },
+          'listed-child': createMockTask({
+            id: 'listed-child',
+            parentId: 'listed-root',
+          }),
+          'project-id-only': createMockTask({ id: 'project-id-only' }),
+          'unrelated-task': createMockTask({
+            id: 'unrelated-task',
+            projectId: 'another-project',
+          }),
+        },
+      };
+      const action = TaskSharedActions.deleteProject({
+        projectId: 'project1',
+        noteIds: [],
+        allTaskIds: ['payload-task'],
+      });
+
+      metaReducer(testState, action);
+
+      const forwardedAction = mockReducer.calls.mostRecent().args[1] as ReturnType<
+        typeof TaskSharedActions.deleteProject
+      >;
+      expect(forwardedAction.allTaskIds).toEqual([
+        'payload-task',
+        'listed-root',
+        'backlog-root',
+        'listed-child',
+      ]);
+      expect(forwardedAction.allTaskIds).not.toContain('project-id-only');
+      expect(forwardedAction.allTaskIds).not.toContain('unrelated-task');
+    });
+
     it('should remove all project tasks from all tags', () => {
       const testState = createStateWithExistingTasks(
         [],

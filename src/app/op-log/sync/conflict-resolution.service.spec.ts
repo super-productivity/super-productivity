@@ -103,6 +103,7 @@ describe('ConflictResolutionService', () => {
       'markFailed',
       'getUnsyncedByEntity',
       'getOpById',
+      'getVectorClock',
     ]);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
@@ -151,6 +152,7 @@ describe('ConflictResolutionService', () => {
     mockValidateStateService.validateAndRepairCurrentState.and.resolveTo(true);
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
     mockOpLogStore.getOpById.and.resolveTo(undefined);
+    mockOpLogStore.getVectorClock.and.resolveTo({});
     // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
@@ -1460,6 +1462,139 @@ describe('ConflictResolutionService', () => {
         // hydration replays the cascade first, then the recreations) — but
         // nothing applies live; this client's state already holds the subtree.
         expect(getMixedRemoteOps().map(({ id }) => id)).toEqual([remoteDelete.id]);
+        expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
+      });
+
+      it('recreates project tasks when a remote deleteProject loses outright (#8997)', async () => {
+        const remoteProjectDelete: Operation = {
+          ...createOpWithTimestamp(
+            'remote-project-delete',
+            'client-b',
+            1_000,
+            OpType.Delete,
+            'project-1',
+          ),
+          actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+          entityType: 'PROJECT',
+          payload: {
+            actionPayload: {
+              projectId: 'project-1',
+              allTaskIds: ['regular-task', 'locally-gone', 'regular-task', 42],
+              noteIds: [],
+            },
+            entityChanges: [],
+          },
+        };
+        const localProjectEdit: Operation = {
+          ...createOpWithTimestamp(
+            'local-project-edit',
+            'client-a',
+            2_000,
+            OpType.Update,
+            'project-1',
+          ),
+          entityType: 'PROJECT',
+        };
+        mockStore.select.and.callFake((_selector: unknown, props?: { id: string }) => {
+          if (props?.id === 'project-1') {
+            return of({
+              id: 'project-1',
+              title: 'Winning project',
+              taskIds: ['regular-task'],
+              backlogTaskIds: ['backlog-task'],
+            });
+          }
+          if (props?.id === 'regular-task') {
+            return of({
+              id: 'regular-task',
+              title: 'Regular task',
+              projectId: 'project-1',
+              subTaskIds: ['subtask'],
+            });
+          }
+          if (props?.id === 'backlog-task') {
+            return of({
+              id: 'backlog-task',
+              title: 'Backlog task',
+              projectId: 'project-1',
+              subTaskIds: [],
+            });
+          }
+          if (props?.id === 'subtask') {
+            return of({
+              id: 'subtask',
+              title: 'Subtask',
+              projectId: 'project-1',
+              parentId: 'regular-task',
+              subTaskIds: [],
+            });
+          }
+          return of(undefined);
+        });
+
+        await service.autoResolveConflictsLWW([
+          {
+            entityType: 'PROJECT',
+            entityId: 'project-1',
+            localOps: [localProjectEdit],
+            remoteOps: [remoteProjectDelete],
+            suggestedResolution: 'manual',
+          },
+        ]);
+
+        const localOps = getMixedLocalOps();
+        expect(localOps[0].entityType).toBe('PROJECT');
+        expect(localOps[0].entityId).toBe('project-1');
+        const projectCompensations = localOps.filter((op) => op.entityType === 'PROJECT');
+        expect(projectCompensations.length).toBe(2);
+        expect(
+          compareVectorClocks(
+            projectCompensations[1].vectorClock,
+            projectCompensations[0].vectorClock,
+          ),
+        ).toBe(VectorClockComparison.GREATER_THAN);
+        expect(
+          extractActionPayload(projectCompensations[1].payload)['backlogTaskIds'],
+        ).toEqual(['backlog-task']);
+        const taskRecreations = localOps.filter((op) => op.entityType === 'TASK');
+        // Backlog and subtask are absent from the stale remote payload, but the
+        // winning project snapshot and its current root relationships include
+        // them. Recovery must mirror the replay-time delete cascade.
+        expect(taskRecreations.map(({ entityId }) => entityId)).toEqual([
+          'regular-task',
+          'backlog-task',
+          'subtask',
+          'regular-task',
+        ]);
+        expect(
+          (taskRecreations[3].payload as { lwwUpdateMode?: string }).lwwUpdateMode,
+        ).toBe('patch');
+        expect(extractActionPayload(taskRecreations[3].payload)).toEqual({
+          id: 'regular-task',
+          projectId: 'project-1',
+          parentId: undefined,
+          subTaskIds: ['subtask'],
+        });
+        for (const recreationOp of taskRecreations) {
+          expect(
+            (recreationOp.payload as { recreatesEntityAfterDelete?: boolean })
+              .recreatesEntityAfterDelete,
+          )
+            .withContext(`recreate flag on ${recreationOp.entityId}`)
+            .toBeTrue();
+          expect(
+            compareVectorClocks(
+              recreationOp.vectorClock,
+              remoteProjectDelete.vectorClock,
+            ),
+          )
+            .withContext(`clock domination for ${recreationOp.entityId}`)
+            .toBe(VectorClockComparison.GREATER_THAN);
+        }
+        expect(extractActionPayload(taskRecreations[0].payload)['title']).toBe(
+          'Regular task',
+        );
+        expect(getMixedRemoteOps().map(({ id }) => id)).toEqual([remoteProjectDelete.id]);
         expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
       });
 

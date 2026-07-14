@@ -13,6 +13,7 @@ import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { unique } from '../../../util/unique';
 import {
   ActionHandlerMap,
+  enrichDeleteProjectAction,
   getProject,
   removeTasksFromAllTags,
   removeTasksFromList,
@@ -206,10 +207,11 @@ export const projectSharedMetaReducer: MetaReducer = (
     if (!state) return reducer(state, action);
 
     const extendedState = state as ExtendedState;
-    const actionHandlers = createActionHandlers(extendedState, action);
-    const handler = actionHandlers[action.type];
+    const effectiveAction = enrichDeleteProjectAction(extendedState, action);
+    const actionHandlers = createActionHandlers(extendedState, effectiveAction);
+    const handler = actionHandlers[effectiveAction.type];
     const updatedState = handler ? handler(extendedState) : extendedState;
 
-    return reducer(updatedState, action);
+    return reducer(updatedState, effectiveAction);
   };
 };

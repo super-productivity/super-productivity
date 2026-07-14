@@ -372,14 +372,23 @@ const filterOrphanedTaskIdsFromEntityData = (
   entityData: Record<string, unknown>,
   entityType: string,
   rootState: RootState,
+  requiresMatchingProjectMembership: boolean,
 ): Record<string, unknown> => {
   const taskState = rootState[TASK_FEATURE_NAME];
   if (!taskState) return entityData;
-  const existingTaskIds = new Set(taskState.ids as string[]);
+  const projectId = entityData['id'];
   const cleaned = filterTaskIdArraysFromTagOrProjectPayload(
     entityData,
     entityType,
-    (id) => !existingTaskIds.has(id),
+    (id) => {
+      const task = taskState.entities[id] as Task | undefined;
+      if (!task) return true;
+      return (
+        entityType === 'PROJECT' &&
+        requiresMatchingProjectMembership &&
+        (task.projectId !== projectId || !!task.parentId)
+      );
+    },
     {
       warnMessage: `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
       entityId:
@@ -453,6 +462,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       | {
           lwwUpdateMode?: LwwUpdateMode;
           isApplyingFromOtherClient?: boolean;
+          recreatesEntityAfterDelete?: boolean;
         }
       | undefined;
     let entityData: Record<string, unknown> = {};
@@ -463,7 +473,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     // Filter orphaned taskIds/backlogTaskIds for TAG and PROJECT entities
-    entityData = filterOrphanedTaskIdsFromEntityData(entityData, entityType, rootState);
+    entityData = filterOrphanedTaskIdsFromEntityData(
+      entityData,
+      entityType,
+      rootState,
+      actionMeta?.recreatesEntityAfterDelete === true,
+    );
 
     // Singleton entities: replace entire feature state with the winning data
     if (isSingletonEntity(config)) {
@@ -561,6 +576,19 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           `lwwUpdateMetaReducer: Stripped virtual TODAY tag from task ${entityId}`,
         );
       }
+      if (
+        actionMeta?.recreatesEntityAfterDelete === true &&
+        actionMeta.lwwUpdateMode === 'patch' &&
+        Array.isArray(entityData['subTaskIds'])
+      ) {
+        const parentId = entityData['id'];
+        const parentProjectId = entityData['projectId'];
+        entityData['subTaskIds'] = entityData['subTaskIds'].filter((id) => {
+          if (typeof id !== 'string') return false;
+          const child = rootState[TASK_FEATURE_NAME].entities[id] as Task | undefined;
+          return child?.parentId === parentId && child.projectId === parentProjectId;
+        });
+      }
     }
 
     const existingEntity = (
@@ -568,6 +596,44 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         entities?: Record<string, Record<string, unknown>>;
       }
     ).entities?.[entityId];
+
+    // Marked patch rows reconcile relationships after a full replacement. If
+    // pagination/conflict resolution delivers one without that replacement,
+    // it must not synthesize a partial TASK/PROJECT from relationship fields.
+    if (
+      !existingEntity &&
+      actionMeta?.recreatesEntityAfterDelete === true &&
+      actionMeta.lwwUpdateMode === 'patch'
+    ) {
+      OpLog.log(
+        `lwwUpdateMetaReducer: Ignoring delayed ${entityType} relationship patch ${entityId} because the entity is absent`,
+      );
+      return reducer(state, action);
+    }
+
+    // Recreate-after-delete rows can be uploaded independently from the parent
+    // recovery that made them valid. If that project (or subtask parent) is no
+    // longer present, a delayed row must not create an orphan or move an
+    // existing task back underneath the deleted parent.
+    const recreationProjectId = entityData['projectId'];
+    const recreationParentId = entityData['parentId'];
+    const recreationParent =
+      typeof recreationParentId === 'string'
+        ? (rootState[TASK_FEATURE_NAME].entities[recreationParentId] as Task | undefined)
+        : undefined;
+    const hasInvalidRecreationParent =
+      entityType === 'TASK' &&
+      actionMeta?.recreatesEntityAfterDelete === true &&
+      ((typeof recreationProjectId === 'string' &&
+        !rootState[PROJECT_FEATURE_NAME].entities[recreationProjectId]) ||
+        (typeof recreationParentId === 'string' &&
+          (!recreationParent || recreationParent.projectId !== recreationProjectId)));
+    if (hasInvalidRecreationParent) {
+      OpLog.log(
+        `lwwUpdateMetaReducer: Ignoring delayed TASK recreation ${entityId} because its parent relationship is no longer valid`,
+      );
+      return reducer(state, action);
+    }
 
     let updatedFeatureState: unknown;
 
@@ -688,7 +754,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         oldIsSubTask,
         newIsSubTask,
       );
-
       // Sync tag.taskIds when tagIds changes
       const oldTagIds = (existingEntity?.tagIds as string[]) || [];
       const newTagIds = (updatedEntity.tagIds as string[]) || [];

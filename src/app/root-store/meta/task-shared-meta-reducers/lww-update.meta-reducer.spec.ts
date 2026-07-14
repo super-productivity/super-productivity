@@ -348,6 +348,200 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedState[TASK_FEATURE_NAME]?.ids).toContain('new-task-from-lww');
     });
 
+    it('should ignore a project recovery after its parent project was deleted (#8997)', () => {
+      const state = createMockState();
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-project-task',
+        title: 'Delayed recovery',
+        projectId: PROJECT_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-project-task',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-project-task'],
+      ).toBeUndefined();
+    });
+
+    it('should not create a task from a delayed relationship patch (#8997)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'missing-task',
+        projectId: PROJECT_ID,
+        parentId: null,
+        subTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'missing-task',
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['missing-task']).toBeUndefined();
+    });
+
+    it('should not create a project from a delayed membership patch (#8997)', () => {
+      const state = createMockState();
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[PROJECT] LWW Update',
+        id: PROJECT_ID,
+        taskIds: [],
+        backlogTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: PROJECT_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID]).toBeUndefined();
+    });
+
+    it('should not move an existing task back into a deleted recovery project (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Stale delayed recovery',
+        projectId: PROJECT_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const task = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(task.projectId).toBe(INBOX_PROJECT.id);
+      expect(task.title).toBe('Original Title');
+    });
+
+    it('should ignore a subtask recreation while its parent task is absent (#8997)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-subtask',
+        title: 'Delayed subtask',
+        projectId: PROJECT_ID,
+        parentId: 'missing-parent',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-subtask',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-subtask'],
+      ).toBeUndefined();
+    });
+
+    it('should ignore a subtask recreation after its parent moved projects (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-subtask',
+        title: 'Delayed subtask',
+        projectId: PROJECT_ID,
+        parentId: TASK_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-subtask',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-subtask'],
+      ).toBeUndefined();
+    });
+
+    it('should exclude moved tasks from a project recovery snapshot (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      const action = {
+        type: '[PROJECT] LWW Update',
+        id: PROJECT_ID,
+        taskIds: [TASK_ID],
+        backlogTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: PROJECT_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID]?.taskIds).toEqual(
+        [],
+      );
+    });
+
+    it('should exclude rejected children from a final task relationship snapshot (#8997)', () => {
+      const state = createMockState([
+        { projectId: PROJECT_ID, subTaskIds: ['missing-child'] },
+      ]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_ID,
+        parentId: null,
+        subTaskIds: ['missing-child'],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.subTaskIds).toEqual([]);
+    });
+
     // Regression for issue #7330: a partial LWW Update payload (e.g. only the
     // changed fields from _convertToLWWUpdatesIfNeeded fallback) used to create
     // a task entity with `title`, `timeSpentOnDay`, `tagIds`, `subTaskIds`

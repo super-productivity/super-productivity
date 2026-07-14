@@ -100,6 +100,16 @@ interface MergedResolution {
   plan: LwwConflictResolutionPlan<EntityConflict>;
 }
 
+const taskRelationshipPatch = (
+  taskId: string,
+  taskState: Record<string, unknown>,
+): Record<string, unknown> => ({
+  id: taskId,
+  projectId: taskState['projectId'],
+  parentId: taskState['parentId'],
+  subTaskIds: taskState['subTaskIds'],
+});
+
 /** Result of `_resolveConflictsWithLWW`: LWW winners plus disjoint merges. */
 interface ResolvedConflicts {
   lwwResolutions: LWWResolution[];
@@ -715,12 +725,13 @@ export class ConflictResolutionService {
     // A remote DELETE that loses outright — single-entity, or a bulk delete
     // whose conflicting entities all win locally with no uncontested sibling —
     // never enters the mixed-winner block above, yet its reducer cascade still
-    // removes the winning parent's subtasks wherever the delete IS applied:
+    // removes the winning entity's dependents wherever the delete IS applied:
     // on every client that already synced it, and on this client's own
-    // status-blind hydration replay of the durable loser row. Only the parent
+    // status-blind hydration replay of the durable loser row. Only the winner
     // carries a compensation op, so emit recreate-after-delete snapshots for
-    // its still-present subtasks too (#8956). Archive ops are OpType.Update,
-    // so archive precedence is untouched.
+    // its still-present cascade victims too: a TASK parent's subtasks (#8956)
+    // and a PROJECT's active tasks (#8997). Archive ops are OpType.Update, so
+    // archive precedence is untouched.
     for (const resolution of resolutions) {
       if (resolution.winner !== 'local' || !resolution.localWinOp) {
         continue;
@@ -737,17 +748,22 @@ export class ConflictResolutionService {
         if (remoteOp.opType !== OpType.Delete || compensatedRemoteOps.has(remoteOp.id)) {
           continue;
         }
-        const subtaskRecreationOps =
-          await this._createSubtaskRecreationOpsForWinningParent(
+        const cascadeRecreationOps = [
+          ...(await this._createSubtaskRecreationOpsForWinningParent(
             parentCompensationOp,
             remoteOp,
-          );
+          )),
+          ...(await this._createTaskRecreationOpsForWinningProject(
+            parentCompensationOp,
+            remoteOp,
+          )),
+        ];
         // Not queued for live apply: the pure loser is never applied live, so
-        // this client's state already holds the subtasks. The rows exist for
-        // upload and for seq-ordered replay after the durable loser.
-        for (const subtaskOp of subtaskRecreationOps) {
-          newLocalWinOps.push(subtaskOp);
-          newLocalWinOpsById.set(subtaskOp.id, subtaskOp);
+        // this client's state already holds the cascade victims. The rows
+        // exist for upload and for seq-ordered replay after the durable loser.
+        for (const recreationOp of cascadeRecreationOps) {
+          newLocalWinOps.push(recreationOp);
+          newLocalWinOpsById.set(recreationOp.id, recreationOp);
         }
       }
     }
@@ -2488,6 +2504,156 @@ export class ConflictResolutionService {
       recreationOps.push(markLwwDeleteRecreation(recreationOp));
     }
     return recreationOps;
+  }
+
+  /**
+   * Recreates the active tasks removed by a losing remote `deleteProject`.
+   *
+   * The first PROJECT compensation makes the parent available before any TASK
+   * recreation is delivered. TASK snapshots then restore every cascade target
+   * that still exists locally; a task deleted on this device stays deleted.
+   * Finally, a second PROJECT snapshot restores the exact regular/backlog lists
+   * after the task entities exist. That last row is required because the LWW
+   * reducer filters missing task IDs from a project snapshot, and TASK entities
+   * do not encode whether they belong to the regular list or the backlog.
+   * Keeping this durable order also works when upload/download pagination puts
+   * every compensation in a separate batch.
+   *
+   * Notes, archived tasks, and other deleteProject cascades are intentionally
+   * outside this task-recovery path; they need their own snapshot design.
+   */
+  private async _createTaskRecreationOpsForWinningProject(
+    projectCompensationOp: Operation,
+    remoteDeleteOp: Operation,
+  ): Promise<Operation[]> {
+    if (
+      projectCompensationOp.entityType !== 'PROJECT' ||
+      remoteDeleteOp.entityType !== 'PROJECT' ||
+      remoteDeleteOp.actionType !== ActionType.TASK_SHARED_DELETE_PROJECT ||
+      !projectCompensationOp.entityId
+    ) {
+      return [];
+    }
+    const allTaskIds = extractActionPayload(remoteDeleteOp.payload)['allTaskIds'];
+    const winningProjectState = extractActionPayload(projectCompensationOp.payload);
+    const regularTaskIds = winningProjectState['taskIds'];
+    const backlogTaskIds = winningProjectState['backlogTaskIds'];
+    const projectRootTaskIds = [
+      ...(Array.isArray(regularTaskIds) ? regularTaskIds : []),
+      ...(Array.isArray(backlogTaskIds) ? backlogTaskIds : []),
+    ].filter((taskId): taskId is string => typeof taskId === 'string');
+    const uniqueTaskIds = new Set(
+      (Array.isArray(allTaskIds) ? allTaskIds : []).filter(
+        (taskId): taskId is string => typeof taskId === 'string',
+      ),
+    );
+    for (const taskId of projectRootTaskIds) uniqueTaskIds.add(taskId);
+
+    const taskStateCache = new Map<string, unknown>();
+    const childTaskIds: string[] = [];
+    for (const rootTaskId of new Set(projectRootTaskIds)) {
+      const rootTaskState = await this.getCurrentEntityState(
+        'TASK' as EntityType,
+        rootTaskId,
+      );
+      taskStateCache.set(rootTaskId, rootTaskState);
+      const subTaskIds =
+        typeof rootTaskState === 'object' && rootTaskState !== null
+          ? (rootTaskState as Record<string, unknown>)['subTaskIds']
+          : undefined;
+      if (!Array.isArray(subTaskIds)) continue;
+      childTaskIds.push(
+        ...subTaskIds.filter(
+          (subTaskId): subTaskId is string => typeof subTaskId === 'string',
+        ),
+      );
+    }
+    for (const taskId of childTaskIds) uniqueTaskIds.add(taskId);
+    if (uniqueTaskIds.size === 0) return [];
+
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        'ConflictResolutionService: Cannot recreate winning project tasks - no client ID',
+      );
+      return [];
+    }
+
+    const recreationClock = this.mergeAndIncrementClocks(
+      [remoteDeleteOp.vectorClock, projectCompensationOp.vectorClock],
+      clientId,
+    );
+    const recreationOps: Operation[] = [];
+    const recreationTaskStates = new Map<string, unknown>();
+    for (const taskId of uniqueTaskIds) {
+      const taskState = taskStateCache.has(taskId)
+        ? taskStateCache.get(taskId)
+        : await this.getCurrentEntityState('TASK' as EntityType, taskId);
+      if (taskState === undefined) {
+        continue;
+      }
+      recreationTaskStates.set(taskId, taskState);
+      recreationOps.push(
+        markLwwDeleteRecreation(
+          this.createLWWUpdateOp(
+            'TASK' as EntityType,
+            taskId,
+            taskState,
+            clientId,
+            recreationClock,
+            projectCompensationOp.timestamp,
+          ),
+        ),
+      );
+    }
+    if (recreationOps.length === 0) {
+      return [];
+    }
+
+    let relationshipClock = this.mergeAndIncrementClocks(
+      [projectCompensationOp.vectorClock, ...recreationOps.map((op) => op.vectorClock)],
+      clientId,
+    );
+    const relationshipOps: Operation[] = [];
+    for (const [taskId, taskState] of recreationTaskStates) {
+      const subTaskIds =
+        typeof taskState === 'object' && taskState !== null
+          ? (taskState as Record<string, unknown>)['subTaskIds']
+          : undefined;
+      if (!Array.isArray(subTaskIds) || subTaskIds.length === 0) continue;
+      const relationshipOp = markLwwDeleteRecreation(
+        this.createLWWUpdateOp(
+          'TASK' as EntityType,
+          taskId,
+          taskRelationshipPatch(taskId, taskState as Record<string, unknown>),
+          clientId,
+          relationshipClock,
+          projectCompensationOp.timestamp,
+          'patch',
+        ),
+      );
+      relationshipOps.push(relationshipOp);
+      relationshipClock = this.mergeAndIncrementClocks(
+        [relationshipClock, relationshipOp.vectorClock],
+        clientId,
+      );
+    }
+    const projectMembershipOp = markLwwDeleteRecreation(
+      this.createLWWUpdateOp(
+        'PROJECT' as EntityType,
+        projectCompensationOp.entityId,
+        {
+          id: projectCompensationOp.entityId,
+          taskIds: winningProjectState['taskIds'],
+          backlogTaskIds: winningProjectState['backlogTaskIds'],
+        },
+        clientId,
+        relationshipClock,
+        projectCompensationOp.timestamp,
+        'patch',
+      ),
+    );
+    return [...recreationOps, ...relationshipOps, projectMembershipOp];
   }
 
   /**

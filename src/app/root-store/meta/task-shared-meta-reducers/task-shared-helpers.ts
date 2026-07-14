@@ -1,4 +1,5 @@
 import { Update } from '@ngrx/entity';
+import { Action } from '@ngrx/store';
 import { RootState } from '../../root-state';
 import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
@@ -14,6 +15,8 @@ import {
 } from '../../../features/planner/store/planner.reducer';
 import { unique } from '../../../util/unique';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { TaskSharedActions } from '../task-shared.actions';
 
 // =============================================================================
 // TYPES
@@ -134,6 +137,40 @@ export const removeTasksFromList = (taskIds: string[], toRemove: string[]): stri
   // This changes overall complexity from O(n*m) to O(n+m)
   const removeSet = new Set(toRemove);
   return taskIds.filter((id) => !removeSet.has(id));
+};
+
+/**
+ * A deleteProject captured from a stale client can omit task recreations that
+ * have already reached this replay prefix. Expand only through the deleted
+ * project's current root lists and those roots' canonical direct children.
+ * Tasks merely carrying the projectId are deliberately excluded: scanning the
+ * whole TASK store would turn a bounded relationship cascade into a global one.
+ */
+export const enrichDeleteProjectAction = (state: RootState, action: Action): Action => {
+  if (action.type !== TaskSharedActions.deleteProject.type) return action;
+
+  const deleteProjectAction = action as ReturnType<
+    typeof TaskSharedActions.deleteProject
+  >;
+  const project = state[PROJECT_FEATURE_NAME].entities[deleteProjectAction.projectId];
+  if (!project) return action;
+
+  const rootTaskIds = unique([...project.taskIds, ...project.backlogTaskIds]);
+  const childTaskIds = rootTaskIds.flatMap(
+    (taskId) => state[TASK_FEATURE_NAME].entities[taskId]?.subTaskIds ?? [],
+  );
+  const allTaskIds = unique([
+    ...deleteProjectAction.allTaskIds,
+    ...rootTaskIds,
+    ...childTaskIds,
+  ]);
+  const isUnchanged =
+    allTaskIds.length === deleteProjectAction.allTaskIds.length &&
+    allTaskIds.every((taskId, index) => taskId === deleteProjectAction.allTaskIds[index]);
+
+  if (isUnchanged) return action;
+  const enrichedAction = { ...deleteProjectAction, allTaskIds };
+  return enrichedAction;
 };
 
 // =============================================================================
