@@ -1,6 +1,6 @@
 # Sync Simplification Plan
 
-**Status:** Rebased and revised after three independent safety, compatibility, execution, and cost-benefit reviews
+**Status:** Rebased and revised after three independent safety, compatibility, execution, and cost-benefit reviews; amended 2026-07-14 after a code-verified audit of every factual claim (four parallel code reviews)
 
 **Date:** 2026-07-14
 
@@ -22,25 +22,27 @@ The smallest safe order is:
 6. remove only the conflict-review producers and UI that the deployment/persisted-data audit proves disposable;
 7. correct current sync documentation after behavior settles.
 
+**Timing constraint:** the conflict-review feature (962c5bbeb1, merged 2026-07-11) is on master but in no release tag, and releases ship every one to two weeks. Every stable release cut before Task 6 expands the persisted-data obligation from edge/dogfood cohorts to the whole fleet. If the Task 1 audit authorizes deletion, land a minimal producer freeze — stop conflict-journal writes and disable the disjoint-merge producer — before the next release cut, ahead of Phase 1. The freeze is a small reversible diff; the full rollback (Task 6) then proceeds on its own schedule.
+
 Atomic browser startup and replacement of flag-and-poll maintenance exclusion remain worthwhile correctness projects, but they are not prerequisites for deleting the two partial SuperSync pipelines. Keeping them separate avoids turning a bounded simplification into a cross-tab/bootstrap and every-import-owner rewrite.
 
 ## 2. Removal verdict
 
-| Surface                                                                       | Verdict                                      | Cost-benefit conclusion                                                                                                                                                                       |
-| ----------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema v3, v2-to-v3 barrier, IndexedDB version 10, and replace/patch readers  | **Keep**                                     | Removing them can reject stored operations or silently diverge. Their maintenance cost is tiny relative to data-loss risk.                                                                    |
-| Disjoint-merge planner/writer                                                 | **Conditional removal; high benefit**        | Removing the experimental producer reduces conflict states. Keep both payload readers because deployed non-stable builds and persisted providers may already contain patch operations.        |
-| Conflict journal writer and review UI/route/banner/badge                      | **Conditional removal; high benefit**        | No stable tag contains the feature, but master edge artifacts, Android internal builds, and previews may contain device-local discarded values. Task 1 decides the supported-data obligation. |
-| Conflict journal database/reader                                              | **Keep until the data obligation expires**   | It may hold the only copy of discarded values. A temporary read/export path is cheaper than silently stranding supported data.                                                                |
-| Flip-specific capture/replay handling                                         | **Nothing to remove**                        | Flip dispatches an ordinary synced entity update. Remove UI references only, never generic update capture/replay.                                                                             |
-| File-target state leak                                                        | **Fix now; high value**                      | This is a contained correctness issue that can cause cross-target reads or writes. It is not counted as simplification.                                                                       |
-| WebSocket partial-download pipeline                                           | **Remove; allow a thin adapter**             | Duplicated validation/conflict/apply/cursor/status ownership is costly. A small high-watermark/retry/auth adapter may remain when it is safer than inventing a scheduler outcome protocol.    |
-| ImmediateUploadService                                                        | **Conditional removal; likely high benefit** | Normal full sync can replace it under the exact stable SuperSync eligibility policy. File providers must never inherit the trigger.                                                           |
-| SyncCycleGuardService                                                         | **Keep in this roadmap**                     | Full sync and force upload still use it. Removal belongs to a later exclusion-boundary project after all references move.                                                                     |
-| Flag-and-poll maintenance exclusion                                           | **Worth fixing separately**                  | The same-tab check-then-set race is real, but migrating sync, encryption, imports, restore, profile switch, and undo is a larger correctness project, not a deletion prerequisite.            |
-| Page-lifetime Web Lock                                                        | **Worth a separate startup proposal**        | It improves current/current startup but cannot make an old client acquire the lock, adds bootstrap/fallback states, and deletes no sync path.                                                 |
-| Full enforcement/test matrix document                                         | **Do not add now**                           | It creates another truth surface during active changes. Correct false claims now; consolidate current contracts after implementation.                                                         |
-| Split-file, tombstone, migration, native-transition, and older-schema readers | **Keep**                                     | Retirement conditions are not met; payoff is low and recovery/downgrade risk is high.                                                                                                         |
+| Surface                                                                       | Verdict                                      | Cost-benefit conclusion                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema v3, v2-to-v3 barrier, IndexedDB version 10, and replace/patch readers  | **Keep**                                     | Removing them can reject stored operations or silently diverge. Their maintenance cost is tiny relative to data-loss risk.                                                                                                                                                                                                                              |
+| Disjoint-merge planner/writer                                                 | **Conditional removal; high benefit**        | Removing the experimental producer reduces conflict states. Keep both payload readers because deployed non-stable builds and persisted providers may already contain patch operations.                                                                                                                                                                  |
+| Conflict journal writer and review UI/route/banner/badge                      | **Conditional removal; high benefit**        | No stable tag contains the feature, but master edge artifacts, Android internal builds, and previews may contain device-local discarded values. Task 1 decides the supported-data obligation.                                                                                                                                                           |
+| Conflict journal database/reader                                              | **Keep until the data obligation expires**   | It may hold the only copy of discarded values. A temporary read/export path is cheaper than silently stranding supported data.                                                                                                                                                                                                                          |
+| Flip-specific capture/replay handling                                         | **Nothing to remove**                        | Flip dispatches an ordinary synced entity update. Remove UI references only, never generic update capture/replay.                                                                                                                                                                                                                                       |
+| File-target state leak                                                        | **Fix now; high value**                      | This is a contained correctness issue that can cause cross-target reads or writes. It is not counted as simplification.                                                                                                                                                                                                                                 |
+| WebSocket partial-download pipeline                                           | **Remove; allow a thin adapter**             | It duplicates the orchestration shell (session boundary, provider resolution, error-to-status mapping, cursor gate, cycle-guard claim); apply/conflict already delegate to the shared download core, and it never publishes IN_SYNC. A small high-watermark/retry/auth adapter may remain when it is safer than inventing a scheduler outcome protocol. |
+| ImmediateUploadService                                                        | **Conditional removal; likely high benefit** | Normal full sync can replace it under the exact stable SuperSync eligibility policy. File providers must never inherit the trigger.                                                                                                                                                                                                                     |
+| SyncCycleGuardService                                                         | **Keep in this roadmap**                     | Full sync and force upload still use it. Removal belongs to a later exclusion-boundary project after all references move.                                                                                                                                                                                                                               |
+| Flag-and-poll maintenance exclusion                                           | **Worth fixing separately**                  | The same-tab check-then-set race is real, but migrating sync, encryption, imports, restore, profile switch, and undo is a larger correctness project, not a deletion prerequisite.                                                                                                                                                                      |
+| Page-lifetime Web Lock                                                        | **Worth a separate startup proposal**        | It improves current/current startup but cannot make an old client acquire the lock, adds bootstrap/fallback states, and deletes no sync path.                                                                                                                                                                                                           |
+| Full enforcement/test matrix document                                         | **Do not add now**                           | It creates another truth surface during active changes. Correct false claims now; consolidate current contracts after implementation.                                                                                                                                                                                                                   |
+| Split-file, tombstone, migration, native-transition, and older-schema readers | **Keep**                                     | Retirement conditions are not met; payoff is low and recovery/downgrade risk is high.                                                                                                                                                                                                                                                                   |
 
 The previous broad “remove roughly 6,000 lines together” decision is rejected. Schema-v3 and multi-entity recovery follow-ups now share that area. Compatibility readers and unrelated data-loss fixes must be fenced explicitly.
 
@@ -72,6 +74,7 @@ The previous broad “remove roughly 6,000 lines together” decision is rejecte
 - [ ] File providers receive no new automatic I/O.
 - [ ] The partial WebSocket download pipeline and ImmediateUploadService disappear only after focused replacement tests and the request-cost gate pass.
 - [ ] Conflict-review producers/UI disappear only to the extent authorized by the deployed-build and persisted-data audit.
+- [ ] Conflict-journal and disjoint-merge producers stop writing before the first stable release that would otherwise ship them, or the audit explicitly accepts shipping and the expanded data obligation.
 - [ ] No public provider protocol, server contract, persistence repository layer, cross-tab lease, or general error taxonomy is introduced.
 - [ ] Each deletion slice removes more production state/policy than its replacement adds.
 
@@ -101,6 +104,7 @@ If a task requires one of these, stop and write a separate behavior proposal wit
 Record:
 
 - every distribution channel containing commits at or after 962c5bbeb1, including master edge artifacts, Android internal builds, and previews;
+- the stable baseline: v18.14.0 ships schema v2 and operation-log DB version 7; schema v3, the v2-to-v3 barrier, DB version 10, and the conflict-review feature are all unreleased and reach stable together in the next tag;
 - whether those cohorts are supported/dogfood-only and what persisted-data promise applies;
 - the representations supported cohorts can create: schema-v3 replace/patch operations in IndexedDB, file providers, backups, or SuperSync, plus the device-local conflict journal;
 - the retention/export/deletion decision for journal rows containing discarded values.
@@ -109,7 +113,8 @@ Only after the cohort audit, add or retain persisted fixtures for representation
 
 **Acceptance criteria:**
 
-- [ ] The baseline is schema v3, not v2.
+- [ ] The master baseline is schema v3, not v2; the audit records that the deployed stable fleet stays v2/DB 7 until the next tag.
+- [ ] The producer-freeze-before-next-release decision (see Outcome) is made explicitly.
 - [ ] Supported and unsupported cohorts are an explicit product decision, not inferred from release tags.
 - [ ] Journal rows have a documented read/export/expiry or deletion policy.
 - [ ] Replace/patch fixtures cover each persisted path the supported-cohort audit proves reachable.
@@ -132,15 +137,23 @@ Use the smallest conservative design:
 5. validate the generation before every remote upload, delete, or backup side effect;
 6. force discovery/full read after any configuration save.
 
-Accept the extra full read even when the target is unchanged. Do not add stable target identities unless later profiling proves the optimization worthwhile. Never put credentials, keys, or raw secret-bearing URLs in an identity, log, or cache key.
+Accept the extra full read even when the target is unchanged. Do not add stable target identities unless later profiling proves the optimization worthwhile. Never put credentials, keys, or raw secret-bearing URLs in an identity, log, or cache key; SuperSync's target-keyed cursor hashes baseUrl plus access token and must not be copied.
 
-Cover one normal configuration-driven provider plus Electron LocalFile's picker path, which bypasses ProviderManager. The common adapter path should cover other file providers without a provider-specific test matrix.
+Three verified constraints on the design:
+
+- The generation bump must also fire from the Electron LocalFile picker success callback: since #8228 the folder lives main-side, not in privateCfg, so config-store change events cannot observe it.
+- "Any configuration save" includes encryption, compression, and interval toggles; each forces a full-file re-download, and a forced from-zero read with pending local operations can surface the whole-file conflict dialog. Accept and test this consequence; narrow the invalidation to identity-affecting fields only if it proves painful in practice.
+- Reuse the existing delete-all state clearing in FileBasedSyncAdapterService as the clear primitive and providerConfigChanged$ as one trigger source.
+
+Cover one normal configuration-driven provider plus Electron LocalFile's picker path, which bypasses ProviderManager. Also cover an OAuth re-authentication to a different account (Dropbox/OneDrive keep the same provider ID) and the within-cycle download cache, which can otherwise embed target A's snapshot in a file written to target B. The common adapter path should cover other file providers without a provider-specific test matrix.
 
 **Acceptance criteria:**
 
 - [ ] A late A operation performs no upload/delete/backup against B and cannot repopulate B state.
 - [ ] Restart cannot reload A revision/cursor/cache state under B's provider ID.
 - [ ] Normal configuration changes and LocalFile picker changes invalidate authoritatively.
+- [ ] An account switch behind an unchanged provider ID invalidates like a target change.
+- [ ] The within-cycle cache cannot carry target-A data into a target-B write.
 - [ ] Every configuration save forces safe discovery/full read.
 - [ ] Split migration, tombstones, pending-revision promotion, backup recovery, and delete ordering remain unchanged.
 
@@ -158,7 +171,7 @@ The supported-data boundary is explicit and target-switch in-flight/restart regr
 
 **Size:** Medium
 
-The scheduler observes all active full-sync runs, including foreground and initial sync; it cannot track only work it starts. It is the sole owner of generic pending/dirty background work. SyncCycleGuard remains authoritative for cycle exclusion.
+The scheduler observes all active full-sync runs, including foreground and initial sync; it cannot track only work it starts. SyncWrapperService.isSyncInProgress$ already observes every sync() run, so the new work is reconciling the four non-aligned busy signals — isSyncInProgress$ (excludes force upload), isEncryptionOperationInProgress (encryption and force upload), the provider manager's SYNCING status, and SyncCycleGuard.isActive (does not span conflict-dialog waits) — into one busy definition. The scheduler is the sole owner of generic pending/dirty background work. SyncCycleGuard remains authoritative for cycle exclusion.
 
 Its public contract is fire-and-forget request(), with bounded idle/running/dirty state:
 
@@ -173,7 +186,7 @@ Its public contract is fire-and-forget request(), with bounded idle/running/dirt
 
 Triggers during a trailing run may set dirty once again, but there is never more than one generic pending rerun.
 
-Do not add foreground result waiters, presentation state, a public failure taxonomy, or cross-tab scheduler state. Preserve SyncEffects initial-sync bookkeeping and synchronous resume/visibility suppression at the existing trigger boundary.
+Do not add foreground result waiters, presentation state, a public failure taxonomy, or cross-tab scheduler state. Preserve SyncEffects initial-sync bookkeeping and synchronous resume/visibility suppression at the existing trigger boundary. Initial and after-enable triggers stay on a directly awaited sync() call — SyncEffects flips initial-sync-done from that promise, and every afterInitialSyncDone-gated effect otherwise stalls to its timer fallback — so they must never route through fire-and-forget request().
 
 **Acceptance criteria:**
 
@@ -182,16 +195,19 @@ Do not add foreground result waiters, presentation state, a public failure taxon
 - [ ] Failure releases state; source-specific retry remains outside the generic scheduler.
 - [ ] Foreground result/error and initial-sync behavior are unchanged.
 - [ ] There is one generic dirty owner, not one in the scheduler and another in an exclusion service.
+- [ ] One busy definition reconciles the four existing activity signals.
 
 **Verification:** Unit-test idle, burst, external-busy, foreground overlap after download, maintenance overlap, dirty rerun, repeated dirty, failure, and release.
 
-**Stop condition:** If direct foreground/initial runs cannot be observed, route their activity signal through the coordinator or defer Tasks 4–5. Never interpret HANDLED_ERROR as completed work.
+**Stop condition:** If direct foreground/initial runs cannot be observed, route their activity signal through the coordinator or defer Tasks 4–5. Never interpret HANDLED_ERROR as completed work; it is a truthy string, so a naive truthiness check reads it as success.
 
 ### Task 4: Make WebSocket events notification-only
 
 **Size:** Medium, deletion-heavy
 
 Keep the WebSocket connection/authentication transport and a thin notification adapter. A valid event records the maximum advertised sequence and requests Task 3 full sync.
+
+The current pipeline already delegates download, conflict, and apply to the shared download core and never publishes IN_SYNC; the deletion target is its duplicated orchestration shell (session boundary, provider resolution, error-to-status mapping, cursor gate, cycle-guard claim). The second IN_SYNC owner is ImmediateUploadService, removed in Task 5. The transport keeps its own reconnect/backoff and terminal auth-close handling; the adapter's suspension must not duplicate it.
 
 The adapter owns only:
 
@@ -200,7 +216,7 @@ The adapter owns only:
 - bounded delayed retry after transient failure or a successful sync whose durable downloaded cursor is still below the high-watermark;
 - suspension on missing credentials or terminal authentication failure.
 
-The high-watermark clears only after the durably committed cursor is greater than or equal to it. Generic full-sync success alone is insufficient.
+The high-watermark clears only after the durably committed cursor is greater than or equal to it. Generic full-sync success alone is insufficient. This is an intentional behavior correction: today a successful but paginated download drops the watermark without checking the cursor. Do not add a characterization test blessing the current lossy behavior.
 
 Delete or shrink WsTriggeredDownloadService. Success means removing its direct download, validation, conflict, apply, cursor-commit, provider-status, and cycle-guard pipeline; the final thin adapter or filename may remain if that is the smallest reliable design.
 
@@ -223,11 +239,11 @@ Delete or shrink WsTriggeredDownloadService. Success means removing its direct d
 After the existing persistence debounce, split the current predicate into:
 
 - stable eligibility: E2E block flag is false, client is online, and an active operation-sync-capable non-file provider exists;
-- occupancy: active full sync or encryption/maintenance.
+- occupancy: the provider manager's active-sync signal plus the encryption-operation flag, which also covers force upload.
 
 Stable ineligibility continues to skip. Occupancy becomes a Task 3 dirty request instead of dropping the trigger; this is the intentional behavior correction required to prevent lost local work during an active run.
 
-Do not add a manual-only check in this refactor: ImmediateUploadService does not currently have one. A manual-only behavior change needs separate product approval and tests. Provider readiness remains checked before the full sync performs I/O.
+Do not add a manual-only check in this refactor: ImmediateUploadService does not currently have one. A manual-only behavior change needs separate product approval and tests. Provider readiness remains checked before the full sync performs I/O. The two low-level upload calls below the wrapper (encryption password change and the import-conflict coordinator) are not triggers and stay where they are.
 
 Delete ImmediateUploadService only after piggyback ordering and the request-cost gate pass. “One extra round trip” is not assumed because full download can paginate.
 
@@ -249,6 +265,16 @@ Delete ImmediateUploadService only after piggyback ordering and the request-cost
 **Verification:** Cover stable eligibility, file-provider exclusion, foreground/maintenance overlap, piggyback ordering, and request counts with unit/integration tests. Extend the single live notification/restart E2E with one local append if practical. Run the scheduled SuperSync/WebDAV workflow.
 
 **Stop condition:** Retain ImmediateUploadService if the focused request delta is unacceptable or stable provider eligibility cannot be preserved. Do not rebuild upload-only policy inside the scheduler.
+
+### Phase 1 incidental deletions (verified zero or spec-only references)
+
+Bundle these with the matching task; re-verify references at deletion time:
+
+- SyncTriggerService's dead local-data trigger branch: `_onUpdateLocalDataTrigger$` is a constant `of(null)`, so its interval-reset branch fires once at startup and never again (Task 5).
+- Legacy SyncStatus enum members UpdateLocalAll, Conflict, IncompleteRemoteData, and NotConfigured; the wrapper only returns InSync/UpdateRemote today (Task 3).
+- The deprecated `skipDuringSync` alias of `skipWhileApplyingRemoteOps` (spec-only references).
+- The write-only plain `isDataImportInProgress` field on ImexViewService; the observable stays.
+- After Tasks 4–5 delete two of the three identical error-to-status mapping blocks, extract the survivor into a helper rather than leaving it inline.
 
 ### Phase 1 checkpoint
 
@@ -278,9 +304,12 @@ Preserve:
 - replace/patch payload types, conversion/replay, and supported persisted fixtures;
 - ordinary single- and multi-entity conflict recovery;
 - live-versus-hydration and transaction-rollback coverage;
+- the legacy whole-file conflict dialog (DialogSyncConflictComponent under imex/sync), which predates the review feature and stays;
 - unrelated fixes added after 962c5bbeb1.
 
 There is no Flip-specific operation handler to remove. UI deletion must not touch generic entity-update capture/replay.
+
+Known seams for the deletion diff: inside ConflictResolutionService the merge producer shares the recovery apply batch, checkpoint-exempt op IDs, the atomic mixed-source append, and the failed-merge fallback re-entry with the multi-entity recovery fix (#8990); review the diff against those seams specifically. The journal clearAll() hooks in OperationLogSyncService and BackupService stay wired while the reader/store stays and leave only with the store. The corruption-classification WeakSet side channel exists only for journal taxonomy and goes with the writer. Disjoint-merge eligibility is coupled to the recreate-fallback constants; the review-UI translations exist in en.json only.
 
 If supported users can still have journal rows, first stop new writes and retain a read-only review/export path for the decided support window. Do not orphan or silently delete the only discarded values.
 
@@ -371,6 +400,7 @@ After each phase collect:
 - focused, full-suite, live-trigger, and scheduled E2E failures;
 - deterministic provider request deltas;
 - persisted-format/downgrade fixture results;
+- consumer counts for SyncSessionValidationService and SyncCycleGuardService (Tasks 4–5 each remove consumers, strengthening proposal B);
 - known cross-tab limitations.
 
 Approve work in reviewable tranches:
