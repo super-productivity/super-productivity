@@ -4,6 +4,7 @@ import { LocalRestApiHandlerService } from './local-rest-api-handler.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
+import { Project } from '../../features/project/project.model';
 import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
@@ -137,7 +138,7 @@ describe('LocalRestApiHandlerService', () => {
 
     projectServiceMock = jasmine.createSpyObj(
       'ProjectService',
-      ['add', 'update', 'remove', 'archive'],
+      ['add', 'update', 'remove', 'archive', 'getByIdOnce$'],
       {
         list$: of([]),
       },
@@ -830,6 +831,111 @@ describe('LocalRestApiHandlerService', () => {
           timeEstimate: 1000,
           isDone: true,
         });
+      });
+
+      it('should update projectId together with other fields in one dispatch', async () => {
+        let mockTask = createMockTask('task-1', { projectId: 'project-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          if (id === mockTask.id) {
+            mockTask = { ...mockTask, ...changes };
+          }
+        });
+        projectServiceMock.getByIdOnce$.and.returnValue(
+          of({ id: 'project-2' } as Project),
+        );
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { projectId: 'project-2', title: 'Moved task' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          projectId: 'project-2',
+          title: 'Moved task',
+        });
+        if (!response.body.ok) {
+          throw new Error('Expected a success response');
+        }
+        expect(response.body.data).toEqual(
+          jasmine.objectContaining({
+            projectId: 'project-2',
+            title: 'Moved task',
+          }),
+        );
+      });
+
+      it('should reject projectId changes for subtasks', async () => {
+        const mockTask = createMockTask('subtask-1', {
+          parentId: 'parent-1',
+          projectId: 'project-1',
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/subtask-1', {
+            body: { projectId: 'project-2' },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject an unknown destination project', async () => {
+        const mockTask = createMockTask('task-1', { projectId: 'project-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+        projectServiceMock.getByIdOnce$.and.returnValue(of(undefined));
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { projectId: 'missing-project' },
+          }),
+        );
+
+        expect(response.status).toBe(404);
+        expect(response.body.ok).toBe(false);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('PROJECT_NOT_FOUND');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject empty or whitespace-only projectIds', async () => {
+        const mockTask = createMockTask('task-1', { projectId: 'project-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        for (const projectId of ['', '   ']) {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { projectId },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(response.body.ok).toBe(false);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe('INVALID_INPUT');
+        }
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
     });
 

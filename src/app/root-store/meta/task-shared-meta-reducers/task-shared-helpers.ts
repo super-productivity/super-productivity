@@ -3,6 +3,7 @@ import { RootState } from '../../root-state';
 import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
 import { Task } from '../../../features/tasks/task.model';
+import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import {
   PROJECT_FEATURE_NAME,
   projectAdapter,
@@ -47,6 +48,44 @@ export const updateTags = (state: RootState, updates: Update<Tag>[]): RootState 
 });
 
 /**
+ * Collects parent task IDs plus children found through either side of the
+ * parent/subtask relationship. The reverse lookup mirrors deleteTaskHelper's
+ * protection against sync races where parent.subTaskIds is incomplete.
+ */
+export const collectTaskAndSubTaskIds = (
+  state: RootState,
+  parentTaskIds: string[],
+): string[] => {
+  const parentIdSet = new Set(parentTaskIds);
+  const taskIds = new Set(parentTaskIds);
+  const taskState = state[TASK_FEATURE_NAME];
+
+  for (const parentTaskId of parentTaskIds) {
+    const parentTask = taskState.entities[parentTaskId];
+    for (const subTaskId of parentTask?.subTaskIds ?? []) {
+      taskIds.add(subTaskId);
+    }
+  }
+
+  for (const taskId of taskState.ids as string[]) {
+    const task = taskState.entities[taskId];
+    if (task?.parentId && parentIdSet.has(task.parentId)) {
+      taskIds.add(taskId);
+    }
+  }
+
+  return Array.from(taskIds);
+};
+
+export const isValidTaskProjectIdUpdate = (
+  state: RootState,
+  task: Task,
+  projectId: string,
+): boolean =>
+  !task.parentId &&
+  (projectId === '' || !!state[PROJECT_FEATURE_NAME].entities[projectId]);
+
+/**
  * Removes the given task IDs from every tag's `taskIds`. Scans ALL tags from
  * the CURRENT state (not a payload-provided list or the task's own `tagIds`)
  * so sync replays with divergent tag associations are fully cleaned up: a
@@ -59,6 +98,8 @@ export const removeTasksFromAllTags = (
   state: RootState,
   taskIds: string[],
 ): RootState => {
+  if (taskIds.length === 0) return state;
+
   const taskIdSet = new Set(taskIds);
   const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[])
     .map((tagId) => state[TAG_FEATURE_NAME].entities[tagId])
@@ -67,11 +108,54 @@ export const removeTasksFromAllTags = (
       (tag): Update<Tag> => ({
         id: tag.id,
         changes: {
-          taskIds: removeTasksFromList(tag.taskIds, taskIds),
+          taskIds: tag.taskIds.filter((id) => !taskIdSet.has(id)),
         },
       }),
     );
   return updateTags(state, tagUpdates);
+};
+
+/**
+ * Removes the given task IDs from every project's regular and backlog lists.
+ * Scanning all projects also repairs one-sided references left by older clients
+ * or partial updates where task.projectId no longer matches the containing list.
+ */
+export const removeTasksFromAllProjects = (
+  state: RootState,
+  taskIds: string[],
+): RootState => {
+  if (taskIds.length === 0) return state;
+
+  const taskIdSet = new Set(taskIds);
+  const projectUpdates = (state[PROJECT_FEATURE_NAME].ids as string[])
+    .map((projectId) => state[PROJECT_FEATURE_NAME].entities[projectId])
+    .filter(
+      (project): project is Project =>
+        !!project &&
+        (project.taskIds.some((id) => taskIdSet.has(id)) ||
+          project.backlogTaskIds.some((id) => taskIdSet.has(id))),
+    )
+    .map(
+      (project): Update<Project> => ({
+        id: project.id,
+        changes: {
+          taskIds: project.taskIds.filter((id) => !taskIdSet.has(id)),
+          backlogTaskIds: project.backlogTaskIds.filter((id) => !taskIdSet.has(id)),
+        },
+      }),
+    );
+
+  if (projectUpdates.length === 0) {
+    return state;
+  }
+
+  return {
+    ...state,
+    [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
+      projectUpdates,
+      state[PROJECT_FEATURE_NAME],
+    ),
+  };
 };
 
 // =============================================================================

@@ -19,6 +19,10 @@ import { WorkContextType } from '../../../features/work-context/work-context.mod
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
+import {
+  collectTaskAndSubTaskIds,
+  isValidTaskProjectIdUpdate,
+} from './task-shared-helpers';
 
 // Must run before taskSharedCrudMetaReducer — handlers read pre-update
 // task state to compute cleanups. Position pinned by
@@ -28,21 +32,6 @@ interface ExtendedState extends RootState {
 }
 
 type Handler = (state: ExtendedState, action: Action) => ExtendedState;
-
-const collectAffectedTaskIds = (
-  state: ExtendedState,
-  primaryTaskIds: string[],
-): string[] => {
-  const taskState = state[TASK_FEATURE_NAME];
-  const all = new Set<string>(primaryTaskIds);
-  for (const id of primaryTaskIds) {
-    const t = taskState.entities[id];
-    if (t?.subTaskIds?.length) {
-      for (const sub of t.subTaskIds) all.add(sub);
-    }
-  }
-  return Array.from(all);
-};
 
 /**
  * Walk `taskIds` once removing entries in `removedSet`. Returns `null`
@@ -140,6 +129,36 @@ const removeTaskIdsFromProjectSections = (
 };
 
 /**
+ * Strip task IDs from every project section except the destination project's.
+ * This is used by generic task updates, which may be repairing state where the
+ * task's current projectId no longer identifies every stale section reference.
+ */
+const removeTaskIdsFromOtherProjectSections = (
+  sectionState: SectionState,
+  taskIds: string[],
+  targetProjectId: string,
+): SectionState => {
+  if (taskIds.length === 0) return sectionState;
+
+  const taskIdSet = new Set(taskIds);
+  const updates: Update<Section>[] = [];
+
+  for (const id of sectionState.ids) {
+    const section = sectionState.entities[id];
+    if (!section) continue;
+    if (section.contextType !== WorkContextType.PROJECT) continue;
+    if (section.contextId === targetProjectId) continue;
+    const filtered = filterRemovingTaskIds(section.taskIds, taskIdSet);
+    if (filtered !== null) {
+      updates.push({ id: section.id, changes: { taskIds: filtered } });
+    }
+  }
+
+  if (!updates.length) return sectionState;
+  return sectionAdapter.updateMany(updates, sectionState);
+};
+
+/**
  * Strip `taskIds` from the singleton TODAY-tag section bucket.
  */
 const removeTaskIdsFromTodaySections = (
@@ -178,7 +197,7 @@ const handleTaskRemoval = (
   state: ExtendedState,
   primaryTaskIds: string[],
 ): ExtendedState => {
-  const affectedIds = collectAffectedTaskIds(state, primaryTaskIds);
+  const affectedIds = collectTaskAndSubTaskIds(state, primaryTaskIds);
   return withSectionStateUpdate(
     state,
     cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], affectedIds),
@@ -198,7 +217,7 @@ const handleMoveToOtherProject = (
   const oldProjectId = t?.projectId;
   if (!oldProjectId || oldProjectId === targetProjectId) return state;
 
-  const affectedTaskIds = collectAffectedTaskIds(state, [taskId]);
+  const affectedTaskIds = collectTaskAndSubTaskIds(state, [taskId]);
   return withSectionStateUpdate(
     state,
     removeTaskIdsFromProjectSections(
@@ -326,7 +345,7 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       idSet.add(t.id);
       if (t.subTasks?.length) for (const st of t.subTasks) idSet.add(st.id);
     }
-    const stateExpanded = collectAffectedTaskIds(
+    const stateExpanded = collectTaskAndSubTaskIds(
       state,
       tasks.map((t) => t.id),
     );
@@ -361,6 +380,48 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       typeof TaskSharedActions.moveToOtherProject
     >;
     return handleMoveToOtherProject(state, task.id, targetProjectId);
+  },
+  [TaskSharedActions.restoreTask.type]: (state, action) => {
+    const { task, subTasks } = action as ReturnType<typeof TaskSharedActions.restoreTask>;
+    const taskIds = Array.from(
+      new Set([
+        task.id,
+        ...(task.subTaskIds ?? []),
+        ...subTasks.map((subTask) => subTask.id),
+      ]),
+    );
+    return withSectionStateUpdate(
+      state,
+      cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], taskIds),
+    );
+  },
+  [TaskSharedActions.updateTask.type]: (state, action) => {
+    const { task, projectMoveSubTaskIds } = action as ReturnType<
+      typeof TaskSharedActions.updateTask
+    >;
+    const targetProjectId = task.changes.projectId;
+    if (typeof targetProjectId !== 'string') return state;
+
+    const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task | undefined;
+    if (
+      !currentTask ||
+      !isValidTaskProjectIdUpdate(state, currentTask, targetProjectId)
+    ) {
+      return state;
+    }
+
+    const affectedTaskIds =
+      projectMoveSubTaskIds !== undefined
+        ? [task.id as string, ...projectMoveSubTaskIds]
+        : collectTaskAndSubTaskIds(state, [task.id as string]);
+    return withSectionStateUpdate(
+      state,
+      removeTaskIdsFromOtherProjectSections(
+        state[SECTION_FEATURE_NAME],
+        affectedTaskIds,
+        targetProjectId,
+      ),
+    );
   },
   [TaskSharedActions.convertToSubTask.type]: (state, action) => {
     const { taskId, targetParentId } = action as ReturnType<
@@ -411,7 +472,7 @@ export const sectionSharedMetaReducer: MetaReducer<RootState> = (
     // removes ids from TODAY without going through a known action.
     const removedFromToday = diffRemovedTodayTaskIds(state, next);
     if (!removedFromToday) return next;
-    const affected = collectAffectedTaskIds(next as ExtendedState, removedFromToday);
+    const affected = collectTaskAndSubTaskIds(next as ExtendedState, removedFromToday);
     return applyTodayTagSectionCleanup(next, affected);
   };
 };

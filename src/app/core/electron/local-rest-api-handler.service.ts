@@ -512,6 +512,38 @@ export class LocalRestApiHandlerService {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
+        if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
+          const targetProjectId = changes.projectId;
+          if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
+            return createErrorResponse(
+              requestId,
+              400,
+              'INVALID_INPUT',
+              'projectId must be a non-empty string',
+            );
+          }
+          if (task.parentId) {
+            return createErrorResponse(
+              requestId,
+              400,
+              'UNSUPPORTED_FIELD',
+              'projectId cannot be changed directly on a subtask — move its parent task instead',
+            );
+          }
+
+          const targetProject = await firstValueFrom(
+            this._projectService.getByIdOnce$(targetProjectId),
+          );
+          if (!targetProject) {
+            return createErrorResponse(
+              requestId,
+              404,
+              'PROJECT_NOT_FOUND',
+              'Destination project not found',
+            );
+          }
+        }
+
         this._taskService.update(taskId, changes);
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }

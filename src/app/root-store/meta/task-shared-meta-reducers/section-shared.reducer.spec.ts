@@ -39,6 +39,19 @@ const stateWith = (
   };
 };
 
+const addProject = (state: RootState, projectId: string): void => {
+  const template = state[PROJECT_FEATURE_NAME].entities.project1;
+  if (!template) throw new Error('Expected project1 test fixture');
+  state[PROJECT_FEATURE_NAME].entities[projectId] = {
+    ...template,
+    id: projectId,
+    title: projectId,
+    taskIds: [],
+    backlogTaskIds: [],
+  };
+  (state[PROJECT_FEATURE_NAME].ids as string[]).push(projectId);
+};
+
 describe('sectionSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
   let metaReducer: ActionReducer<any, Action>;
@@ -454,6 +467,168 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sOther']?.taskIds).toEqual([]);
       // Tag-context section keeps the parent — tag membership didn't change.
       expect(updated.entities['sTag']?.taskIds).toEqual(['parent']);
+    });
+
+    it('strips project sections when updateTask changes projectId', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'sub1', 'unrelated'],
+          },
+          {
+            id: 'sOther',
+            contextId: 'newP',
+            contextType: WorkContextType.PROJECT,
+            title: 'target project section',
+            taskIds: [],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent', changes: { projectId: 'newP' } },
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([
+        'unrelated',
+      ]);
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOther']?.taskIds).toEqual([]);
+    });
+
+    it('uses captured subtask ids when cleaning project sections', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: [] },
+          orphan: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'orphan'],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent', changes: { projectId: 'newP' } },
+        projectMoveSubTaskIds: ['orphan'],
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([]);
+    });
+
+    it('keeps sections unchanged for a missing project destination', () => {
+      const state = stateWith({ task1: { projectId: 'project1' } }, [
+        {
+          id: 'sCurrent',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'current project section',
+          taskIds: ['task1'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.updateTask({
+          task: { id: 'task1', changes: { projectId: 'missing-project' } },
+        }),
+      );
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sCurrent']?.taskIds).toEqual([
+        'task1',
+      ]);
+    });
+
+    it('removes stale section references when restoring a task family', () => {
+      const state = stateWith({}, [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['parent', 'subtask', 'unrelated'],
+        },
+      ]);
+      const parent = createMockTask({
+        id: 'parent',
+        projectId: 'newP',
+        subTaskIds: ['subtask'],
+      });
+      const subTask = createMockTask({
+        id: 'subtask',
+        parentId: 'parent',
+        projectId: 'oldP',
+      });
+
+      metaReducer(
+        state,
+        TaskSharedActions.restoreTask({ task: parent, subTasks: [subTask] }),
+      );
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([
+        'unrelated',
+      ]);
+    });
+
+    it('repairs stale project sections when projectId is patched unchanged', () => {
+      const state = stateWith({ task1: { projectId: 'newP' } }, [
+        {
+          id: 'sStale',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'stale project section',
+          taskIds: ['task1'],
+        },
+        {
+          id: 'sTarget',
+          contextId: 'newP',
+          contextType: WorkContextType.PROJECT,
+          title: 'target project section',
+          taskIds: ['task1'],
+        },
+      ]);
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task1', changes: { projectId: 'newP' } },
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sStale']?.taskIds).toEqual([]);
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sTarget']?.taskIds).toEqual([
+        'task1',
+      ]);
     });
 
     it('updateTask without tagIds change is a no-op for sections', () => {

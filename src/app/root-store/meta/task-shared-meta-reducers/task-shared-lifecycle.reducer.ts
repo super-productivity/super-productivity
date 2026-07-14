@@ -12,7 +12,6 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Tag } from '../../../features/tag/tag.model';
-import { Project } from '../../../features/project/project.model';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
@@ -20,10 +19,10 @@ import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/
 import { unique } from '../../../util/unique';
 import {
   ActionHandlerMap,
-  getProject,
+  collectTaskAndSubTaskIds,
   getTag,
+  removeTasksFromAllProjects,
   removeTasksFromAllTags,
-  removeTasksFromList,
   TaskEntity,
   updateTags,
 } from './task-shared-helpers';
@@ -33,44 +32,15 @@ import {
 // =============================================================================
 
 const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootState => {
-  const taskIdsToArchive = tasks.flatMap((t) => [t.id, ...t.subTasks.map((st) => st.id)]);
+  const parentTaskIds = tasks.map((task) => task.id);
+  const taskIdsToArchive = unique([
+    ...collectTaskAndSubTaskIds(state, parentTaskIds),
+    ...tasks.flatMap((task) => task.subTasks.map((subTask) => subTask.id)),
+  ]);
 
-  // Get tag/project associations from CURRENT STATE, not payload.
-  // This is critical for remote sync: the payload reflects the originating client's
-  // state, but this client may have different tag/project associations for the same tasks.
-  // Using current state ensures we clean up all references on THIS client.
-  const projectIds = unique(
-    taskIdsToArchive
-      .map((taskId) => state[TASK_FEATURE_NAME].entities[taskId]?.projectId)
-      .filter((pid): pid is string => !!pid),
-  );
-
-  let updatedState = state;
-
-  if (projectIds.length > 0) {
-    const projectUpdates = projectIds
-      .filter((pid) => !!state[PROJECT_FEATURE_NAME].entities[pid])
-      .map((pid): Update<Project> => {
-        const project = getProject(state, pid);
-        return {
-          id: pid,
-          changes: {
-            taskIds: removeTasksFromList(project.taskIds, taskIdsToArchive),
-            backlogTaskIds: removeTasksFromList(project.backlogTaskIds, taskIdsToArchive),
-          },
-        };
-      });
-
-    if (projectUpdates.length > 0) {
-      updatedState = {
-        ...updatedState,
-        [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
-          projectUpdates,
-          updatedState[PROJECT_FEATURE_NAME],
-        ),
-      };
-    }
-  }
+  // Scan every project instead of trusting task.projectId. Older partial updates
+  // could leave a task referenced by a different project than the task claims.
+  const updatedState = removeTasksFromAllProjects(state, taskIdsToArchive);
 
   // Scan every tag, not just each task's own `tagIds` — see
   // removeTasksFromAllTags for why (one-sided tag refs after sync).
@@ -116,25 +86,35 @@ const handleRestoreTask = (
   subTasks: Task[],
 ): RootState => {
   // Normalize stale refs before adding to active state
-  const restoredTask = normalizeRestoredTask(
+  const normalizedRestoredTask = normalizeRestoredTask(
     { ...task, isDone: false, doneOn: undefined },
     state,
   );
-  const restoredSubTasks = subTasks.map((st) => normalizeRestoredTask(st, state));
+  const restoredTask = {
+    ...normalizedRestoredTask,
+    projectId: normalizedRestoredTask.projectId ?? '',
+  };
+  const restoredSubTasks = subTasks.map((subTask) => ({
+    ...normalizeRestoredTask(subTask, state),
+    projectId: restoredTask.projectId,
+  }));
 
   const updatedTaskState = taskAdapter.addMany(
     [restoredTask as Task, ...restoredSubTasks],
     state[TASK_FEATURE_NAME],
   );
 
-  let updatedState = {
-    ...state,
-    [TASK_FEATURE_NAME]: updatedTaskState,
-  };
+  let updatedState = removeTasksFromAllProjects(
+    {
+      ...state,
+      [TASK_FEATURE_NAME]: updatedTaskState,
+    },
+    [restoredTask.id, ...restoredSubTasks.map((subTask) => subTask.id)],
+  );
 
   // Update project
   if (restoredTask.projectId) {
-    const project = state[PROJECT_FEATURE_NAME].entities[restoredTask.projectId];
+    const project = updatedState[PROJECT_FEATURE_NAME].entities[restoredTask.projectId];
     if (project) {
       updatedState = {
         ...updatedState,
