@@ -1014,6 +1014,299 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     ]);
   });
 
+  it('keeps concurrently bulk-deleted tasks deleted on every client during project recovery (#8997)', async () => {
+    // A wins a project rename vs B's deleteProject (B loses LWW). In the same
+    // batch, C's bulk deleteTasks([bulk-1, bulk-2]) lands as a non-conflicting
+    // op. Verified at REPLAY level (not just emission): a client that applied
+    // C's delete must NOT have bulk-1/bulk-2 resurrected by the recovery rows.
+    const survivorId = 'survivor-task';
+    const bulkId1 = 'bulk-1';
+    const bulkId2 = 'bulk-2';
+    const survivorTask: Task = {
+      ...DEFAULT_TASK,
+      id: survivorId,
+      title: 'Survivor',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const bulkTask1: Task = {
+      ...DEFAULT_TASK,
+      id: bulkId1,
+      title: 'Bulk one',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const bulkTask2: Task = {
+      ...DEFAULT_TASK,
+      id: bulkId2,
+      title: 'Bulk two',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const initialTaskState = createTaskReplayState(
+      [survivorTask, bulkTask1, bulkTask2],
+      [survivorId, bulkId1, bulkId2],
+    );
+    const project = initialTaskState[PROJECT_FEATURE_NAME].entities.project1;
+    if (!project) {
+      throw new Error('Test fixture project1 is missing.');
+    }
+
+    const localProjectEdit: Operation = {
+      id: 'local-project-edit',
+      actionType: toLwwUpdateActionType('PROJECT'),
+      opType: OpType.Update,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: project as unknown as Record<string, unknown>,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteProjectDelete: Operation = {
+      id: 'remote-project-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+      opType: OpType.Delete,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: {
+          projectId: 'project1',
+          allTaskIds: [survivorId, bulkId1, bulkId2],
+          noteIds: [],
+        },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    // A bulk deleteTasks op carries every id in entityIds and only the first in
+    // entityId, with an empty entityChanges — the shape the guard must union.
+    const remoteBulkDelete: Operation = {
+      id: 'remote-bulk-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: bulkId1,
+      entityIds: [bulkId1, bulkId2],
+      payload: {
+        actionPayload: { taskIds: [bulkId1, bulkId2] },
+        entityChanges: [],
+      },
+      clientId: 'third-client',
+      vectorClock: { ['third-client']: 1 },
+      timestamp: 1_500,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(
+        props?.id === 'project1'
+          ? project
+          : props?.id === survivorId
+            ? survivorTask
+            : props?.id === bulkId1
+              ? bulkTask1
+              : props?.id === bulkId2
+                ? bulkTask2
+                : undefined,
+      ),
+    );
+    await opLogStore.append(localProjectEdit, 'local');
+
+    await service.autoResolveConflictsLWW(
+      [
+        {
+          entityType: 'PROJECT',
+          entityId: 'project1',
+          localOps: [localProjectEdit],
+          remoteOps: [remoteProjectDelete],
+          suggestedResolution: 'manual',
+        },
+      ],
+      [remoteBulkDelete],
+    );
+
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const compensationOps = storedEntries
+      .filter(({ op, source }) => source === 'local' && op.id !== localProjectEdit.id)
+      .map(({ op }) => op);
+
+    // A fresh client that applied B's project delete AND C's bulk delete, then
+    // replays the recovery rows.
+    const remoteClientState = applyTaskOperations(
+      initialTaskState,
+      [remoteProjectDelete, remoteBulkDelete, ...compensationOps],
+      REMOTE_CLIENT_ID,
+    );
+    const ids = remoteClientState[TASK_FEATURE_NAME].ids as string[];
+    expect(ids).withContext('the uncontested task is recovered').toContain(survivorId);
+    expect(ids)
+      .withContext('bulk-deleted tasks must stay deleted, not resurrected')
+      .not.toContain(bulkId1);
+    expect(ids)
+      .withContext('every trailing bulk-deleted id must stay deleted')
+      .not.toContain(bulkId2);
+  });
+
+  it('keeps a task whose delete won its own conflict deleted on every client during project recovery (#8997)', async () => {
+    // A edits project P (wins vs B's deleteProject) and also edits task T; C
+    // deletes T. T's own LWW conflict resolves to C's delete (remote wins).
+    // Verified at REPLAY level: recovery must not resurrect T on a client that
+    // applied C's delete — the borrowed `modified` timestamp does NOT make the
+    // recreation lose, because it dominates the delete by clock/seq.
+    const survivorId = 'survivor-task';
+    const contestedId = 'contested-task';
+    const survivorTask: Task = {
+      ...DEFAULT_TASK,
+      id: survivorId,
+      title: 'Survivor',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const contestedTask: Task = {
+      ...DEFAULT_TASK,
+      id: contestedId,
+      title: 'Contested',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const initialTaskState = createTaskReplayState(
+      [survivorTask, contestedTask],
+      [survivorId, contestedId],
+    );
+    const project = initialTaskState[PROJECT_FEATURE_NAME].entities.project1;
+    if (!project) {
+      throw new Error('Test fixture project1 is missing.');
+    }
+
+    const localProjectEdit: Operation = {
+      id: 'local-project-edit',
+      actionType: toLwwUpdateActionType('PROJECT'),
+      opType: OpType.Update,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: project as unknown as Record<string, unknown>,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteProjectDelete: Operation = {
+      id: 'remote-project-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+      opType: OpType.Delete,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: {
+          projectId: 'project1',
+          allTaskIds: [survivorId, contestedId],
+          noteIds: [],
+        },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    // This client's own edit to T loses to C's delete.
+    const localTaskEdit: Operation = {
+      id: 'local-task-edit',
+      actionType: ActionType.TASK_SHARED_UPDATE,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: contestedId,
+      payload: {
+        actionPayload: { task: { id: contestedId, changes: { title: 'Mine' } } },
+        entityChanges: [],
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 500,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteTaskDelete: Operation = {
+      id: 'remote-task-delete',
+      actionType: ActionType.TASK_SHARED_DELETE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: contestedId,
+      payload: {
+        actionPayload: { task: contestedTask as unknown as Record<string, unknown> },
+        entityChanges: [],
+      },
+      clientId: 'third-client',
+      vectorClock: { ['third-client']: 1 },
+      timestamp: 3_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(
+        props?.id === 'project1'
+          ? project
+          : props?.id === survivorId
+            ? survivorTask
+            : props?.id === contestedId
+              ? contestedTask
+              : undefined,
+      ),
+    );
+    await opLogStore.append(localProjectEdit, 'local');
+    await opLogStore.append(localTaskEdit, 'local');
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'PROJECT',
+        entityId: 'project1',
+        localOps: [localProjectEdit],
+        remoteOps: [remoteProjectDelete],
+        suggestedResolution: 'manual',
+      },
+      {
+        entityType: 'TASK',
+        entityId: contestedId,
+        localOps: [localTaskEdit],
+        remoteOps: [remoteTaskDelete],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const compensationOps = storedEntries
+      .filter(
+        ({ op, source }) =>
+          source === 'local' &&
+          op.id !== localProjectEdit.id &&
+          op.id !== localTaskEdit.id,
+      )
+      .map(({ op }) => op);
+
+    // A fresh client that applied B's project delete AND C's winning task
+    // delete, then replays the recovery rows.
+    const remoteClientState = applyTaskOperations(
+      initialTaskState,
+      [remoteProjectDelete, remoteTaskDelete, ...compensationOps],
+      REMOTE_CLIENT_ID,
+    );
+    const ids = remoteClientState[TASK_FEATURE_NAME].ids as string[];
+    expect(ids).withContext('the uncontested task is recovered').toContain(survivorId);
+    expect(ids)
+      .withContext('a task whose delete won its conflict must stay deleted')
+      .not.toContain(contestedId);
+  });
+
   it('keeps a winning remote archive as an archive on every client', async () => {
     const taskId = 'task-to-archive';
     const task = {
