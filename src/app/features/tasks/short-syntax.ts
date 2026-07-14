@@ -3,6 +3,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { stringToMs } from '../../ui/duration/string-to-ms.pipe';
 import { Tag } from '../tag/tag.model';
 import { Project } from '../project/project.model';
+import { Section } from '../section/section.model';
 import { ShortSyntaxConfig } from '../config/global-config.model';
 import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
@@ -11,6 +12,7 @@ import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
+  sectionId?: string;
 };
 type TagChanges = {
   taskChanges?: Partial<TaskCopy>;
@@ -30,6 +32,8 @@ const CH_PRO = '+';
 const CH_TAG = '#';
 const CH_DUE = '@';
 const CH_DEADLINE = '!';
+// Separates the section from the project inside a "+Project/Section" token.
+const CH_SECTION = '/';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
 
 let customDateParserPromise: Promise<Chrono> | null = null;
@@ -117,12 +121,17 @@ export const shortSyntax = async (
   allProjects?: Project[],
   now = new Date(),
   mode: 'combine' | 'replace' = 'combine',
+  allSections?: Section[],
+  // The project the task will land in when no "+Project" token is typed —
+  // the context a standalone "/Section" token resolves against.
+  contextProjectId?: string,
 ): Promise<
   | {
       taskChanges: Partial<Task> & { hasDeadlineTime?: boolean };
       newTagTitles: string[];
       remindAt: number | null;
       projectId: string | undefined;
+      sectionId?: string;
       attachments: TaskAttachment[];
     }
   | undefined
@@ -157,12 +166,36 @@ export const shortSyntax = async (
     changesForProject = parseProjectChanges(
       { ...task, title: taskChanges.title || task.title },
       allProjects?.filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+      allSections,
     );
     if (changesForProject.projectId) {
       taskChanges = {
         ...taskChanges,
         title: changesForProject.title,
       };
+    }
+
+    // Standalone "/Section" (no "+Project" token): resolve against the
+    // project the task is being added to (an explicit "+Project" wins).
+    if (!changesForProject.sectionId) {
+      const sectionContextProjectId = changesForProject.projectId || contextProjectId;
+      if (sectionContextProjectId) {
+        const standaloneSection = parseStandaloneSectionChanges(
+          { ...task, title: taskChanges.title || task.title },
+          sectionContextProjectId,
+          allSections,
+        );
+        if (standaloneSection.sectionId) {
+          changesForProject = {
+            ...changesForProject,
+            sectionId: standaloneSection.sectionId,
+          };
+          taskChanges = {
+            ...taskChanges,
+            title: standaloneSection.title,
+          };
+        }
+      }
     }
   }
 
@@ -212,14 +245,76 @@ export const shortSyntax = async (
     newTagTitles: changesForTag.newTagTitlesToCreate || [],
     remindAt: null,
     projectId: changesForProject.projectId,
+    ...(changesForProject.sectionId ? { sectionId: changesForProject.sectionId } : {}),
     attachments,
     // remindAt: changesForDue.remindAt
+  };
+};
+
+// Prefix-match typed text against a project's sections; falls back to first
+// word only (like project matching). Returns the exact typed text to strip
+// from the title alongside the id.
+const matchSectionByTypedText = (
+  typed: string,
+  projectId: string,
+  allSections?: Section[],
+): { sectionId: string; typedText: string } | undefined => {
+  if (!typed.trim() || !Array.isArray(allSections) || !allSections.length) {
+    return undefined;
+  }
+  const projectSections = allSections
+    .filter((s) => s.contextId === projectId)
+    .sort((s1, s2) => s1.title.length - s2.title.length);
+  const attempts = [typed.trim(), typed.trim().split(' ')[0]];
+  for (const typedText of attempts) {
+    const toMatch = typedText.replaceAll(' ', '').toLowerCase();
+    const existing = projectSections.find(
+      (s) => s.title.replaceAll(' ', '').toLowerCase().indexOf(toMatch) === 0,
+    );
+    if (existing) {
+      return { sectionId: existing.id, typedText };
+    }
+  }
+  return undefined;
+};
+
+// Standalone "/Section" token (word boundary before "/", no space after it) —
+// only meaningful when a context project is known. Nothing is stripped from
+// the title unless a section actually matches, so slashes in ordinary prose
+// ("either/or", "w/ milk") and URLs stay untouched.
+const SHORT_SYNTAX_STANDALONE_SECTION_REG_EX = new RegExp(
+  `(?:^|\\s)\\${CH_SECTION}(?!\\s|\\${CH_SECTION})([^${ALL_SPECIAL}]+)`,
+);
+
+export const parseStandaloneSectionChanges = (
+  task: Partial<TaskCopy>,
+  contextProjectId: string,
+  allSections?: Section[],
+): { title?: string; sectionId?: string } => {
+  if (!task.title || !contextProjectId) {
+    return {};
+  }
+  const rr = task.title.match(SHORT_SYNTAX_STANDALONE_SECTION_REG_EX);
+  if (!rr || !rr[1]) {
+    return {};
+  }
+  const section = matchSectionByTypedText(rr[1], contextProjectId, allSections);
+  if (!section) {
+    return {};
+  }
+  return {
+    title: task.title
+      .replace(`${CH_SECTION}${section.typedText}`, '')
+      .trim()
+      .replace('  ', ' '),
+    sectionId: section.sectionId,
   };
 };
 
 export const parseProjectChanges = (
   task: Partial<TaskCopy>,
   allProjects?: Project[],
+  allSections?: Section[],
 ): ProjectChanges => {
   if (
     task.issueId || // don't allow for issue tasks
@@ -234,7 +329,13 @@ export const parseProjectChanges = (
   const rr = task.title.match(SHORT_SYNTAX_PROJECT_REG_EX);
 
   if (rr && rr[0]) {
-    const projectTitle: string = rr[0].trim().replace(CH_PRO, '');
+    const rawToken: string = rr[0].trim().replace(CH_PRO, '');
+    // "+Project/Section" targets a section within the matched project;
+    // everything after the first "/" is the section part.
+    const slashIndex = rawToken.indexOf(CH_SECTION);
+    const projectTitle = slashIndex === -1 ? rawToken : rawToken.slice(0, slashIndex);
+    const sectionPart = slashIndex === -1 ? '' : rawToken.slice(slashIndex + 1);
+
     const projectTitleToMatch = projectTitle.replaceAll(' ', '').toLowerCase();
     const indexBeforePlus =
       task.title.toLowerCase().lastIndexOf(CH_PRO + projectTitleToMatch) - 1;
@@ -250,40 +351,52 @@ export const parseProjectChanges = (
       .slice()
       .sort((p1, p2) => p1.title.length - p2.title.length);
 
-    const existingProject = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch) ===
-        0,
-    );
+    const matchProject = (titleToMatch: string): Project | undefined =>
+      sortedAllProjects.find(
+        (project) =>
+          project.title.replaceAll(' ', '').toLowerCase().indexOf(titleToMatch) === 0,
+      );
 
-    if (existingProject) {
+    const buildResult = (project: Project, typedProjectText: string): ProjectChanges => {
+      const section = matchSectionByTypedText(sectionPart, project.id, allSections);
+      const textToStrip = section
+        ? `${CH_PRO}${typedProjectText}${CH_SECTION}${section.typedText}`
+        : `${CH_PRO}${typedProjectText}`;
       return {
-        title: task.title
-          ?.replace(`${CH_PRO}${projectTitle}`, '')
-          .trim()
-          .replace('  ', ' '),
-        projectId: existingProject.id,
+        title: task.title?.replace(textToStrip, '').trim().replace('  ', ' '),
+        projectId: project.id,
+        ...(section ? { sectionId: section.sectionId } : {}),
       };
+    };
+
+    // Legacy first: the whole token as a project title, so projects whose
+    // titles themselves contain "/" (e.g. "A/B Testing") keep matching and
+    // never get misread as project/section.
+    if (slashIndex !== -1) {
+      const wholeTokenProject = matchProject(rawToken.replaceAll(' ', '').toLowerCase());
+      if (wholeTokenProject) {
+        return {
+          title: task.title
+            ?.replace(`${CH_PRO}${rawToken}`, '')
+            .trim()
+            .replace('  ', ' '),
+          projectId: wholeTokenProject.id,
+        };
+      }
+    }
+
+    const existingProject = matchProject(projectTitleToMatch);
+    if (existingProject) {
+      return buildResult(existingProject, projectTitle);
     }
 
     // also try only first word after special char
     const projectTitleFirstWordOnly = projectTitle.split(' ')[0];
     const projectTitleToMatch2 = projectTitleFirstWordOnly.replace(' ', '').toLowerCase();
-    const existingProjectForFirstWordOnly = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch2) ===
-        0,
-    );
+    const existingProjectForFirstWordOnly = matchProject(projectTitleToMatch2);
 
     if (existingProjectForFirstWordOnly) {
-      return {
-        title: task.title
-          ?.replace(`${CH_PRO}${projectTitleFirstWordOnly}`, '')
-          .trim()
-          // get rid of excess whitespaces
-          .replace('  ', ' '),
-        projectId: existingProjectForFirstWordOnly.id,
-      };
+      return buildResult(existingProjectForFirstWordOnly, projectTitleFirstWordOnly);
     }
   }
 

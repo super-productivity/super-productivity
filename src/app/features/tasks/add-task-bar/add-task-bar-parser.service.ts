@@ -1,6 +1,9 @@
 import { inject, Injectable } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { firstValueFrom } from 'rxjs';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
+import { selectAllSections } from '../../section/store/section.selectors';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
@@ -12,6 +15,7 @@ import { millisecondsDiffToRemindOption } from '../util/remind-option-to-millise
 interface PreviousParseResult {
   cleanText: string | null;
   projectId: string | null;
+  sectionId: string | null;
   tagIds: string[];
   newTagTitles: string[];
   timeSpentOnDay: TimeSpentOnDay | null;
@@ -28,6 +32,7 @@ interface PreviousParseResult {
 @Injectable()
 export class AddTaskBarParserService {
   private readonly _stateService = inject(AddTaskBarStateService);
+  private readonly _store = inject(Store);
   private _previousParseResult: PreviousParseResult | null = null;
   private _parseRunId = 0;
 
@@ -68,6 +73,7 @@ export class AddTaskBarParserService {
 
     // Get current tags from state to preserve pre-selected tags
     const currentState = this._stateService.state();
+    const allSections = await firstValueFrom(this._store.select(selectAllSections));
     const parseResult = await shortSyntax(
       { title: text, tagIds: currentState.tagIdsFromTxt },
       config,
@@ -75,6 +81,9 @@ export class AddTaskBarParserService {
       allProjects,
       undefined,
       'replace',
+      allSections,
+      // Context for a standalone "/Section" token (no "+Project" typed)
+      currentState.projectId || defaultProject?.id,
     );
 
     if (parseRunId !== this._parseRunId) {
@@ -106,6 +115,7 @@ export class AddTaskBarParserService {
         projectId: this._stateService.isAutoDetected()
           ? defaultProject?.id || null
           : null,
+        sectionId: null,
         tagIds: currentState.tagIdsFromTxt, // Preserve pre-selected tags
         newTagTitles: [],
         timeSpentOnDay: null,
@@ -186,6 +196,7 @@ export class AddTaskBarParserService {
       currentResult = {
         cleanText: parseResult.taskChanges.title || text,
         projectId: parseResult.projectId || null,
+        sectionId: parseResult.sectionId || null,
         tagIds: tagIds,
         newTagTitles: newTagTitles,
         timeSpentOnDay: parseResult.taskChanges.timeSpentOnDay || null,
@@ -222,6 +233,15 @@ export class AddTaskBarParserService {
           this._stateService.updateProjectId(defaultProject.id);
         }
       }
+    }
+
+    // After the project (updateProjectId resets the section to null)
+    if (
+      !this._previousParseResult ||
+      this._previousParseResult.sectionId !== currentResult.sectionId ||
+      this._stateService.state().sectionId !== currentResult.sectionId
+    ) {
+      this._stateService.updateSectionId(currentResult.sectionId);
     }
 
     if (

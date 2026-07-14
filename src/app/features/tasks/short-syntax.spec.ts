@@ -8,6 +8,7 @@ import {
 import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG } from '../tag/tag.const';
 import { Project } from '../project/project.model';
+import { Section } from '../section/section.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { INBOX_PROJECT } from '../project/project.const';
 
@@ -1354,6 +1355,276 @@ describe('shortSyntax', () => {
         });
       }
     }
+  });
+
+  describe('project sections (+Project/Section)', () => {
+    let projects: Project[];
+    let sections: Section[];
+    beforeEach(() => {
+      projects = [
+        {
+          title: 'Work',
+          id: 'WorkID',
+        },
+        {
+          title: 'A/B Testing',
+          id: 'SlashProjectID',
+        },
+      ] as any;
+      sections = [
+        {
+          id: 'DesignSectionID',
+          contextId: 'WorkID',
+          contextType: 'PROJECT',
+          title: 'Design Reviews',
+          taskIds: [],
+        },
+        {
+          id: 'OtherProjectSectionID',
+          contextId: 'OtherProjectID',
+          contextType: 'PROJECT',
+          title: 'Design Reviews',
+          taskIds: [],
+        },
+      ] as any;
+    });
+
+    it('should match a section within the matched project', async () => {
+      const t = {
+        ...TASK,
+        title: 'Review mockups +Work/Design Reviews',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('Review mockups');
+    });
+
+    it('should match a section by prefix', async () => {
+      const t = {
+        ...TASK,
+        title: 'Review mockups +Work/des',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('Review mockups');
+    });
+
+    it('should match section by first word with trailing text kept in title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Work/design fix the login flow',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('fix the login flow');
+    });
+
+    it('should only match sections belonging to the matched project', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/Design',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.sectionId).not.toBe('OtherProjectSectionID');
+    });
+
+    it('should prefer a project whose title contains "/" over section syntax', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +A/B Testing',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('SlashProjectID');
+      expect(r?.sectionId).toBeUndefined();
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should match the project without a section when the section part matches nothing', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/nonexistent',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+    });
+
+    it('should not return a section when no sections are passed', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/Design',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+    });
+
+    describe('standalone /Section (context project)', () => {
+      it('should match a section of the context project without a + token', async () => {
+        const t = {
+          ...TASK,
+          title: 'Review mockups /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.projectId).toBeUndefined();
+        expect(r?.taskChanges.title).toBe('Review mockups');
+      });
+
+      it('should let an explicit +Project/Section win over the context project', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task +Work/Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+          'OtherProjectID',
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBe('DesignSectionID');
+      });
+
+      it('should leave the title untouched when nothing matches', async () => {
+        const t = {
+          ...TASK,
+          title: 'Deploy w/ care /nonexistent',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title ?? t.title).toBe('Deploy w/ care /nonexistent');
+      });
+
+      it('should ignore slashes inside words and after spaces', async () => {
+        const t = {
+          ...TASK,
+          title: 'either/or / Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBeUndefined();
+      });
+
+      it('should do nothing without a context project', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+        );
+        expect(r?.sectionId).toBeUndefined();
+      });
+
+      it('should not break time estimate syntax with slashes', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task 1h/2h /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.timeSpentOnDay).toBeDefined();
+        expect(r?.taskChanges.timeEstimate).toBe(2 * 60 * 60 * 1000);
+      });
+    });
   });
 
   // This group of tests address Chrono's parsing the format "<date> <month> <yy}>" as year

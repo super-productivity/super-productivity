@@ -38,9 +38,18 @@ export class AddTaskBarStateService {
   }
 
   updateProjectId(projectId: string): void {
-    this._taskInputState.update((state) => ({ ...state, projectId }));
+    this._taskInputState.update((state) => ({
+      ...state,
+      projectId,
+      // A section only makes sense within its project
+      sectionId: null,
+    }));
     // Clear auto-detected flag when manually changing project
     this.isAutoDetected.set(false);
+  }
+
+  updateSectionId(sectionId: string | null): void {
+    this._taskInputState.update((state) => ({ ...state, sectionId }));
   }
 
   updateDate(date: string | null, time?: string | null): void {
@@ -189,6 +198,10 @@ export class AddTaskBarStateService {
     // Only clear input text and tags, preserve project, date, and estimate
     this._taskInputState.update((state) => ({
       ...state,
+      // Unlike the project, the section came from the (now cleared) input
+      // text and has no visible UI element — keeping it would silently file
+      // follow-up tasks into it.
+      sectionId: null,
       tagIds: [],
       tagIdsFromTxt: [],
       newTagTitles: [],
