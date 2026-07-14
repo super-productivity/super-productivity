@@ -228,6 +228,14 @@
                         [listModelId]="section.id"
                       ></task-list>
                     </collapsible>
+                    @if (!section.isExpanded) {
+                      <task-list
+                        class="collapsed-section-drop-target"
+                        [tasks]="[]"
+                        [listId]="'PARENT'"
+                        [listModelId]="section.id"
+                      ></task-list>
+                    }
                   </div>
                 }
               </div>
