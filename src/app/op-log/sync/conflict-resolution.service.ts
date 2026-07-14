@@ -1017,6 +1017,12 @@ export class ConflictResolutionService {
     // its still-present cascade victims too: a TASK parent's subtasks (#8956)
     // and a PROJECT's active tasks (#8997). Archive ops are OpType.Update, so
     // archive precedence is untouched.
+    //
+    // Recovery reads task presence from the pre-batch store, so it is blind to
+    // deletes piggybacked as non-conflicting ops in this same batch. Exclude
+    // those task ids so recovery does not resurrect a task another device is
+    // concurrently deleting (#8997 review).
+    const concurrentlyDeletedTaskIds = this._collectDeletedTaskIds(nonConflictingOps);
     for (const resolution of resolutions) {
       if (resolution.winner !== 'local' || !resolution.localWinOp) {
         continue;
@@ -1041,6 +1047,7 @@ export class ConflictResolutionService {
           ...(await this._createTaskRecreationOpsForWinningProject(
             parentCompensationOp,
             remoteOp,
+            concurrentlyDeletedTaskIds,
           )),
         ];
         // Not queued for live apply: the pure loser is never applied live, so
@@ -2827,6 +2834,33 @@ export class ConflictResolutionService {
   }
 
   /**
+   * Collects the TASK ids removed by DELETE ops in the same resolution batch
+   * (single and multi-entity). Used to keep project/parent recovery from
+   * recreating a task another device is concurrently deleting. Archive ops are
+   * `OpType.Update` and are intentionally excluded.
+   */
+  private _collectDeletedTaskIds(ops: readonly Operation[]): Set<string> {
+    const deletedTaskIds = new Set<string>();
+    for (const op of ops) {
+      if (op.entityType === 'TASK' && op.opType === OpType.Delete && op.entityId) {
+        deletedTaskIds.add(op.entityId);
+      }
+      if (isMultiEntityPayload(op.payload)) {
+        for (const change of op.payload.entityChanges) {
+          if (
+            change.entityType === 'TASK' &&
+            change.opType === OpType.Delete &&
+            change.entityId
+          ) {
+            deletedTaskIds.add(change.entityId);
+          }
+        }
+      }
+    }
+    return deletedTaskIds;
+  }
+
+  /**
    * Recreates the active tasks removed by a losing remote `deleteProject`.
    *
    * The first PROJECT compensation makes the parent available before any TASK
@@ -2845,6 +2879,7 @@ export class ConflictResolutionService {
   private async _createTaskRecreationOpsForWinningProject(
     projectCompensationOp: Operation,
     remoteDeleteOp: Operation,
+    concurrentlyDeletedTaskIds: ReadonlySet<string> = new Set(),
   ): Promise<Operation[]> {
     if (
       projectCompensationOp.entityType !== 'PROJECT' ||
@@ -2877,6 +2912,9 @@ export class ConflictResolutionService {
         rootTaskId,
       );
       taskStateCache.set(rootTaskId, rootTaskState);
+      // A root deleted concurrently in this batch takes its subtree with it;
+      // don't gather its children only to recreate them as orphans.
+      if (concurrentlyDeletedTaskIds.has(rootTaskId)) continue;
       const subTaskIds =
         typeof rootTaskState === 'object' && rootTaskState !== null
           ? (rootTaskState as Record<string, unknown>)['subTaskIds']
@@ -2889,6 +2927,14 @@ export class ConflictResolutionService {
       );
     }
     for (const taskId of childTaskIds) uniqueTaskIds.add(taskId);
+    // Recovery decides "still present" from the pre-batch store, so it cannot
+    // see a delete piggybacked as a non-conflicting op in the same batch.
+    // Recreating such a task would resurrect it (with a borrowed newer
+    // timestamp) on every client that applied the delete, while this client's
+    // own delete wins locally — a silent divergence (#8997 review).
+    for (const deletedTaskId of concurrentlyDeletedTaskIds) {
+      uniqueTaskIds.delete(deletedTaskId);
+    }
     if (uniqueTaskIds.size === 0) return [];
 
     const clientId = await this.clientIdProvider.loadClientId();
@@ -2913,6 +2959,15 @@ export class ConflictResolutionService {
         continue;
       }
       recreationTaskStates.set(taskId, taskState);
+      // Prefer the task's own last-modified time as the LWW timestamp. The
+      // project timestamp is unrelated to task content, so borrowing it lets
+      // the snapshot clobber a CONCURRENT content edit made on another device;
+      // the task's `modified` keeps that edit winning. Clock domination over
+      // the delete is independent of this (it comes from recreationClock).
+      const taskModified =
+        typeof taskState === 'object' && taskState !== null
+          ? (taskState as Record<string, unknown>)['modified']
+          : undefined;
       recreationOps.push(
         markLwwDeleteRecreation(
           this.createLWWUpdateOp(
@@ -2921,7 +2976,9 @@ export class ConflictResolutionService {
             taskState,
             clientId,
             recreationClock,
-            projectCompensationOp.timestamp,
+            typeof taskModified === 'number'
+              ? taskModified
+              : projectCompensationOp.timestamp,
           ),
         ),
       );
