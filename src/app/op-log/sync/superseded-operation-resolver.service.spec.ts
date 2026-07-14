@@ -91,20 +91,19 @@ describe('SupersededOperationResolverService', () => {
         clientId: string,
         vectorClock: VectorClock,
         timestamp: number,
-        projectMoveSubTaskIds?: string[],
+        isTaskProjectMove: boolean = false,
       ) => ({
         id: 'generated-id-' + Math.random().toString(36).substring(7),
         actionType: `[${entityType}] LWW Update` as ActionType,
         opType: OpType.Update,
         entityType,
         entityId,
-        payload:
-          projectMoveSubTaskIds === undefined
-            ? entityState
-            : {
-                ...(entityState as Record<string, unknown>),
-                projectMoveSubTaskIds,
-              },
+        payload: !isTaskProjectMove
+          ? entityState
+          : {
+              ...(entityState as Record<string, unknown>),
+              projectMoveSubTaskIds: [],
+            },
         clientId,
         vectorClock,
         timestamp,
@@ -269,7 +268,7 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.entityIds).toBeUndefined();
       expect(appendedOp.payload).toEqual({
         ...entityState,
-        projectMoveSubTaskIds: ['subtask-1'],
+        projectMoveSubTaskIds: [],
       });
       expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
       expect(appendedOp.timestamp).toBe(1000); // Preserved from original
@@ -325,7 +324,7 @@ describe('SupersededOperationResolverService', () => {
         id: 'task-1',
         title: 'Test Task',
         projectId: 'project-2',
-        projectMoveSubTaskIds: ['subtask-1'],
+        projectMoveSubTaskIds: [],
       });
     });
 
@@ -397,7 +396,7 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.entityIds).toBeUndefined();
       expect(appendedOp.payload).toEqual({
         ...entityState,
-        projectMoveSubTaskIds: ['current-subtask'],
+        projectMoveSubTaskIds: [],
       });
     });
 

@@ -110,10 +110,12 @@ interface AutoResolveConflictsLwwOptions {
 const isSafeEntityId = (value: unknown): value is string =>
   typeof value === 'string' &&
   value.length > 0 &&
+  value !== 'undefined' &&
+  value !== 'null' &&
   !Object.prototype.hasOwnProperty.call(Object.prototype, value);
 
-const getTaskProjectMoveSubTaskIds = (operation: Operation): string[] | undefined => {
-  if (!isSafeEntityId(operation.entityId)) return undefined;
+const isTaskProjectMoveOperation = (operation: Operation): boolean => {
+  if (!isSafeEntityId(operation.entityId)) return false;
 
   const operationPayload = operation.payload;
   if (
@@ -121,7 +123,7 @@ const getTaskProjectMoveSubTaskIds = (operation: Operation): string[] | undefine
     typeof operationPayload !== 'object' ||
     Array.isArray(operationPayload)
   ) {
-    return undefined;
+    return false;
   }
 
   const payload = operationPayload as Record<string, unknown>;
@@ -135,76 +137,39 @@ const getTaskProjectMoveSubTaskIds = (operation: Operation): string[] | undefine
   let changes: Record<string, unknown> | undefined;
   if (operation.actionType === ActionType.TASK_SHARED_UPDATE) {
     const task = actionPayload['task'];
-    if (!task || typeof task !== 'object' || Array.isArray(task)) return undefined;
+    if (!task || typeof task !== 'object' || Array.isArray(task)) return false;
     const taskUpdate = task as Record<string, unknown>;
-    if (taskUpdate['id'] !== operation.entityId) return undefined;
+    if (taskUpdate['id'] !== operation.entityId) return false;
     const taskChanges = taskUpdate['changes'];
     if (!taskChanges || typeof taskChanges !== 'object' || Array.isArray(taskChanges)) {
-      return undefined;
+      return false;
     }
     changes = taskChanges as Record<string, unknown>;
   } else if (operation.actionType === toLwwUpdateActionType('TASK')) {
-    if (actionPayload['id'] !== operation.entityId) return undefined;
+    if (actionPayload['id'] !== operation.entityId) return false;
     changes = actionPayload;
   } else {
-    return undefined;
+    return false;
   }
 
   if (
     !Object.prototype.hasOwnProperty.call(changes, 'projectId') ||
     typeof changes['projectId'] !== 'string'
   ) {
-    return undefined;
+    return false;
   }
 
-  const subTaskIds = actionPayload['projectMoveSubTaskIds'];
-  if (!Array.isArray(subTaskIds) || subTaskIds.some((id) => !isSafeEntityId(id))) {
-    return undefined;
-  }
-
-  return Array.from(new Set(subTaskIds as string[])).filter(
-    (id) => id !== operation.entityId,
-  );
+  return Array.isArray(actionPayload['projectMoveSubTaskIds']);
 };
 
-export const getLatestTaskProjectMoveSubTaskIds = (
-  operations: Operation[],
-): string[] | undefined => {
-  let latest: { operation: Operation; subTaskIds: string[] } | undefined;
-  for (const operation of operations) {
-    const subTaskIds = getTaskProjectMoveSubTaskIds(operation);
-    if (!subTaskIds) continue;
-    if (!latest) {
-      latest = { operation, subTaskIds };
-      continue;
-    }
+export const hasTaskProjectMove = (operations: Operation[]): boolean =>
+  operations.some(isTaskProjectMoveOperation);
 
-    const clockComparison = compareVectorClocks(
-      operation.vectorClock,
-      latest.operation.vectorClock,
-    );
-    const isCausallyLater = clockComparison === VectorClockComparison.GREATER_THAN;
-    const isCausallyEarlier = clockComparison === VectorClockComparison.LESS_THAN;
-    const winsTieBreak =
-      operation.timestamp > latest.operation.timestamp ||
-      (operation.timestamp === latest.operation.timestamp &&
-        operation.id > latest.operation.id);
-    if (isCausallyLater || (!isCausallyEarlier && winsTieBreak)) {
-      latest = { operation, subTaskIds };
-    }
-  }
-
-  return latest?.subTaskIds;
-};
-
-const latestProjectMoveSubTaskIds = (
+const hasTaskProjectMoveForEntity = (
   entityId: string,
   operations: Operation[],
-): string[] | undefined => {
-  return getLatestTaskProjectMoveSubTaskIds(
-    operations.filter((operation) => operation.entityId === entityId),
-  );
-};
+): boolean =>
+  hasTaskProjectMove(operations.filter((operation) => operation.entityId === entityId));
 
 // The only legacy bulk operation whose captured per-task deltas are known to be
 // independently replayable. Do not generalize this from payload shape alone:
@@ -336,7 +301,7 @@ export class ConflictResolutionService {
    * @param clientId - Client creating this operation
    * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
    * @param timestamp - Preserved timestamp for correct LWW semantics
-   * @param projectMoveSubTaskIds - Captured task-project-move footprint, when applicable
+   * @param isTaskProjectMove - Whether this snapshot derives from a task project move
    * @returns New UPDATE operation ready for upload
    */
   createLWWUpdateOp(
@@ -346,7 +311,7 @@ export class ConflictResolutionService {
     clientId: string,
     vectorClock: VectorClock,
     timestamp: number,
-    projectMoveSubTaskIds?: string[],
+    isTaskProjectMove: boolean = false,
   ): Operation {
     // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
     // NOT in the ActionType enum. They are dynamically constructed here and matched
@@ -369,16 +334,12 @@ export class ConflictResolutionService {
       : { ...basePayload, id: entityId };
     if (
       entityType === 'TASK' &&
-      projectMoveSubTaskIds !== undefined &&
+      isTaskProjectMove &&
       typeof payload['projectId'] === 'string'
     ) {
       payload = {
         ...payload,
-        projectMoveSubTaskIds: Array.from(
-          new Set(
-            projectMoveSubTaskIds.filter((id) => isSafeEntityId(id) && id !== entityId),
-          ),
-        ),
+        projectMoveSubTaskIds: [],
       };
     }
     return {
@@ -1629,7 +1590,7 @@ export class ConflictResolutionService {
       clientId,
       newClock,
       mergedTimestamp,
-      latestProjectMoveSubTaskIds(conflict.entityId, [
+      hasTaskProjectMoveForEntity(conflict.entityId, [
         ...conflict.localOps,
         ...conflict.remoteOps,
       ]),
@@ -1737,7 +1698,7 @@ export class ConflictResolutionService {
       clientId,
       newClock,
       preservedTimestamp,
-      latestProjectMoveSubTaskIds(conflict.entityId, conflict.localOps),
+      hasTaskProjectMoveForEntity(conflict.entityId, conflict.localOps),
     );
   }
 

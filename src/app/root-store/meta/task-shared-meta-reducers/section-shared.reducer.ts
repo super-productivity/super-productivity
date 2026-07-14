@@ -24,7 +24,9 @@ import {
   collectTaskAndSubTaskIds,
   getProjectOrUndefined,
   getTaskOrUndefined,
+  isSafeEntityId,
   isValidTaskProjectIdUpdate,
+  isTaskUpdate,
 } from './task-shared-helpers';
 import { toLwwUpdateActionType } from '../../../op-log/core/lww-update-action-types';
 
@@ -403,9 +405,15 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     );
   },
   [TaskSharedActions.updateTask.type]: (state, action) => {
-    const updateAction = action as ReturnType<typeof TaskSharedActions.updateTask>;
-    const { task, projectMoveSubTaskIds } = updateAction;
-    if (task.id !== updateAction.meta.entityId || typeof task.id !== 'string') {
+    const updateAction = action as unknown as Record<string, unknown>;
+    const task = updateAction['task'];
+    const meta = updateAction['meta'];
+    if (
+      !isTaskUpdate(task) ||
+      !meta ||
+      typeof meta !== 'object' ||
+      task.id !== (meta as { entityId?: unknown }).entityId
+    ) {
       return state;
     }
     const targetProjectId = task.changes.projectId;
@@ -419,10 +427,7 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       return state;
     }
 
-    const affectedTaskIds = [
-      task.id,
-      ...collectProjectMoveSubTaskIds(state, task.id, projectMoveSubTaskIds),
-    ];
+    const affectedTaskIds = [task.id, ...collectProjectMoveSubTaskIds(state, task.id)];
     return withSectionStateUpdate(
       state,
       removeTaskIdsFromOtherProjectSections(
@@ -439,12 +444,7 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       projectId?: unknown;
       projectMoveSubTaskIds?: unknown;
     };
-    if (
-      typeof update.id !== 'string' ||
-      Object.prototype.hasOwnProperty.call(Object.prototype, update.id)
-    ) {
-      return state;
-    }
+    if (!isSafeEntityId(update.id)) return state;
 
     const hasParentId = Object.prototype.hasOwnProperty.call(update, 'parentId');
     const hasProjectId = Object.prototype.hasOwnProperty.call(update, 'projectId');
@@ -455,12 +455,12 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     if (!hasParentId && !hasProjectId && !hasProjectMoveFootprint) return state;
 
     const currentTask = getTaskOrUndefined(state, update.id);
-    const affectedTaskIds = [
-      update.id,
-      ...collectProjectMoveSubTaskIds(state, update.id, update.projectMoveSubTaskIds),
-    ];
 
     if (!currentTask) {
+      const affectedTaskIds = [
+        update.id,
+        ...collectProjectMoveSubTaskIds(state, update.id),
+      ];
       return withSectionStateUpdate(
         state,
         removeTaskIdsFromProjectSections(state[SECTION_FEATURE_NAME], affectedTaskIds),
@@ -510,6 +510,11 @@ const ACTION_HANDLERS: Record<string, Handler> = {
         targetProjectId !== currentTask.projectId ||
         becomesSubTask !== !!currentTask.parentId);
     if (!leavesCurrentProjectSection && !repairsRootProjectRefs) return state;
+
+    const affectedTaskIds = [
+      update.id,
+      ...collectProjectMoveSubTaskIds(state, update.id),
+    ];
 
     return withSectionStateUpdate(
       state,

@@ -380,7 +380,7 @@ describe('TaskService', () => {
       expect(flushOneSpy).not.toHaveBeenCalled();
     });
 
-    it('should capture linked and reverse-linked subtasks for project moves', () => {
+    it('should mark root project moves without enumerating subtasks', () => {
       const parent = createMockTask('parent', { subTaskIds: ['listed-subtask'] });
       const listedSubTask = createMockTask('listed-subtask', {
         parentId: 'parent',
@@ -411,12 +411,11 @@ describe('TaskService', () => {
           id: 'parent',
           changes: { projectId: 'project-2', title: 'Moved' },
         },
-        projectMoveSubTaskIds: ['listed-subtask', 'reverse-linked-subtask'],
+        projectMoveSubTaskIds: [],
       });
       expect(store.dispatch).toHaveBeenCalledWith(expectedAction);
-      // Moving children is a derived part of the root task operation. Exposing
-      // the footprint as generic entityIds makes conflict resolution treat it
-      // as an unsafe batch and also hits the wire protocol's 1,000-id cap.
+      // Moving children is derived from state during replay. The empty array is
+      // only a durable project-move marker and cannot hit the wire ID cap.
       expect((expectedAction.meta as { entityIds?: string[] }).entityIds).toBeUndefined();
     });
 

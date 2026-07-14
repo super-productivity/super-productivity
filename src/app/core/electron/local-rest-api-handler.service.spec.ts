@@ -1035,6 +1035,23 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
+      it('should reject an own project entity with a prototype-like id', async () => {
+        const mockTask = createMockTask('task-1', { projectId: 'project-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+        activeProjects = [{ id: 'constructor', isArchived: false } as Project];
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { projectId: 'constructor' },
+          }),
+        );
+
+        expect(response.status).toBe(404);
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
       it('should reject prototype-property names as missing task ids', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(Object.prototype as Task),
@@ -1052,6 +1069,21 @@ describe('LocalRestApiHandlerService', () => {
           throw new Error('Expected an error response');
         }
         expect(response.body.error.code).toBe('TASK_NOT_FOUND');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject an own task entity with a prototype-like id', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('constructor')),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/constructor', {
+            body: { title: 'Ignored' },
+          }),
+        );
+
+        expect(response.status).toBe(404);
         expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 

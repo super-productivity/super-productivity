@@ -31,7 +31,6 @@ import { isTodayWithOffset } from '../../../util/is-today.util';
 import {
   collectProjectMoveSubTaskIds,
   getProjectOrUndefined,
-  normalizeProjectMoveSubTaskIds,
   repairTaskProjectMembership,
 } from './task-shared-helpers';
 
@@ -480,9 +479,6 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     const hasProjectMoveFootprint =
       entityType === 'TASK' &&
       Object.prototype.hasOwnProperty.call(actionAny, 'projectMoveSubTaskIds');
-    const projectMoveSubTaskIds = hasProjectMoveFootprint
-      ? normalizeProjectMoveSubTaskIds(actionAny['projectMoveSubTaskIds'])
-      : undefined;
     let entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
       if (
@@ -755,11 +751,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           oldIsSubTask !== newIsSubTask ||
           hasProjectMoveFootprint;
         if (shouldRepairProjectMembership) {
-          const subTaskIds = collectProjectMoveSubTaskIds(
-            updatedState,
-            entityId,
-            projectMoveSubTaskIds,
-          );
+          const subTaskIds = collectProjectMoveSubTaskIds(updatedState, entityId);
           updatedState = repairTaskProjectMembership(
             updatedState,
             entityId,

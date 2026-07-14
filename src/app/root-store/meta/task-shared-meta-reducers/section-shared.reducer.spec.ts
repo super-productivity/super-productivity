@@ -595,6 +595,28 @@ describe('sectionSharedMetaReducer', () => {
       expect(updatedState[SECTION_FEATURE_NAME].entities['sOther']?.taskIds).toEqual([]);
     });
 
+    for (const malformedTask of [null, { id: 'parent', changes: null }]) {
+      it('keeps sections unchanged for a malformed remote update action', () => {
+        const state = stateWith({ parent: { projectId: 'oldP' } }, [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent'],
+          },
+        ]);
+        const action = {
+          type: TaskSharedActions.updateTask.type,
+          task: malformedTask,
+          meta: { entityId: 'parent' },
+        } as unknown as Action;
+
+        expect(() => metaReducer(state, action)).not.toThrow();
+        expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+      });
+    }
+
     it('strips old-project sections when a task moves through LWW resolution', () => {
       const state = stateWith(
         {

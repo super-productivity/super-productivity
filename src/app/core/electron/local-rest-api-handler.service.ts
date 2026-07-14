@@ -17,6 +17,12 @@ import {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const isSafeEntityId = (value: string): boolean =>
+  value.length > 0 &&
+  value !== 'undefined' &&
+  value !== 'null' &&
+  !Object.prototype.hasOwnProperty.call(Object.prototype, value);
+
 /** Only these fields may be set via the REST API to prevent state corruption. */
 const ALLOWED_TASK_FIELDS = new Set<string>([
   'title',
@@ -543,6 +549,14 @@ export class LocalRestApiHandlerService {
           }
 
           if (isProjectChange) {
+            if (!isSafeEntityId(targetProjectId)) {
+              return createErrorResponse(
+                requestId,
+                404,
+                'PROJECT_NOT_FOUND',
+                'Destination project not found or archived',
+              );
+            }
             // list() only contains unarchived projects, and matching by iteration
             // (not entity-map lookup) keeps prototype-property names like
             // 'constructor' from resolving to a truthy non-project.
@@ -675,6 +689,7 @@ export class LocalRestApiHandlerService {
   // The id equality checks reject prototype-property names ('constructor',
   // 'toString', …) that entity-map lookups resolve to truthy non-tasks.
   private async _getTaskById(taskId: string): Promise<Task | undefined> {
+    if (!isSafeEntityId(taskId)) return undefined;
     const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
     return task?.id === taskId ? task : undefined;
   }
@@ -682,6 +697,7 @@ export class LocalRestApiHandlerService {
   private async _getTaskWithSubTasksById(
     taskId: string,
   ): Promise<TaskWithSubTasks | undefined> {
+    if (!isSafeEntityId(taskId)) return undefined;
     const task = await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId));
     return task?.id === taskId ? task : undefined;
   }

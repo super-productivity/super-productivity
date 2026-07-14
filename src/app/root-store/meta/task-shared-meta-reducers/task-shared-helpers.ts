@@ -34,10 +34,23 @@ export type TaskWithTags = Task & { tagIds: string[] };
 export type ActionHandler = (state: RootState) => RootState;
 export type ActionHandlerMap = Record<string, ActionHandler>;
 
-const isSafeEntityId = (value: unknown): value is string =>
+export const isSafeEntityId = (value: unknown): value is string =>
   typeof value === 'string' &&
   value.length > 0 &&
+  value !== 'undefined' &&
+  value !== 'null' &&
   !Object.prototype.hasOwnProperty.call(Object.prototype, value);
+
+export const isTaskUpdate = (value: unknown): value is Update<Task> & { id: string } => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const update = value as Record<string, unknown>;
+  return (
+    isSafeEntityId(update['id']) &&
+    !!update['changes'] &&
+    typeof update['changes'] === 'object' &&
+    !Array.isArray(update['changes'])
+  );
+};
 
 // =============================================================================
 // STATE UPDATE HELPERS
@@ -94,28 +107,14 @@ export const collectTaskAndSubTaskIds = (
 };
 
 /**
- * Normalizes replay-only metadata without trusting data from older or remote
- * clients. `undefined` means no footprint was captured; an invalid value is an
- * explicit but empty footprint so malformed data never broadens the mutation.
- */
-export const normalizeProjectMoveSubTaskIds = (value: unknown): string[] | undefined => {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value)) return [];
-  return unique(value.filter(isSafeEntityId));
-};
-
-/**
  * Resolves the children that still belong to a root task at apply time. The
- * captured footprint repairs one-sided relationships, while the parentId check
- * prevents a concurrent reparent/promotion from being overwritten.
+ * parentId check prevents a concurrent reparent/promotion from being overwritten.
  */
 export const collectProjectMoveSubTaskIds = (
   state: RootState,
   parentTaskId: string,
-  capturedSubTaskIds: unknown,
 ): string[] => {
-  const captured = normalizeProjectMoveSubTaskIds(capturedSubTaskIds) ?? [];
-  return collectTaskAndSubTaskIds(state, [parentTaskId], captured).filter((id) => {
+  return collectTaskAndSubTaskIds(state, [parentTaskId]).filter((id) => {
     if (id === parentTaskId || !isSafeEntityId(id)) return false;
     return getTaskOrUndefined(state, id)?.parentId === parentTaskId;
   });
@@ -217,12 +216,21 @@ export const repairTaskProjectMembership = (
   const targetProject = targetProjectId
     ? getProjectOrUndefined(state, targetProjectId)
     : undefined;
+  const allTaskIds = unique([taskId, ...subTaskIds]).filter(isSafeEntityId);
 
   // Project creation can arrive after a task recreation LWW. Preserve that
-  // out-of-order task snapshot until the referenced project is replayed.
-  if (targetProjectId && !targetProject) return state;
+  // out-of-order project-index snapshot, but update the task entities now so
+  // parent and children cannot remain split across projects.
+  if (targetProjectId && !targetProject) {
+    return {
+      ...state,
+      [TASK_FEATURE_NAME]: taskAdapter.updateMany(
+        allTaskIds.map((id) => ({ id, changes: { projectId: targetProjectId } })),
+        state[TASK_FEATURE_NAME],
+      ),
+    };
+  }
 
-  const allTaskIds = unique([taskId, ...subTaskIds]).filter(isSafeEntityId);
   let updatedState = removeTasksFromAllProjects(state, allTaskIds);
 
   if (targetProjectId && targetProject) {
@@ -277,6 +285,7 @@ export const getTag = (state: RootState, tagId: string): Tag => {
 };
 
 export const getTagOrUndefined = (state: RootState, tagId: string): Tag | undefined => {
+  if (!isSafeEntityId(tagId)) return undefined;
   const tag = state[TAG_FEATURE_NAME].entities[tagId] as Tag | undefined;
   return tag?.id === tagId ? tag : undefined;
 };
@@ -286,11 +295,8 @@ export const getTagOrUndefined = (state: RootState, tagId: string): Tag | undefi
  * Callers should check existence before calling if project may not exist.
  */
 export const getProject = (state: RootState, projectId: string): Project => {
-  const project = state[PROJECT_FEATURE_NAME].entities[projectId];
-  // The id equality check rejects inherited Object.prototype members
-  // ('constructor', 'toString', …) that a bare entities[id] lookup returns
-  // truthy for when the id comes from external input (REST API, remote ops).
-  if (!project || project.id !== projectId) {
+  const project = getProjectOrUndefined(state, projectId);
+  if (!project) {
     throw new Error(
       `Project ${projectId} not found in state. This may indicate an out-of-order remote operation.`,
     );
@@ -306,6 +312,7 @@ export const getProjectOrUndefined = (
   state: RootState,
   projectId: string,
 ): Project | undefined => {
+  if (!isSafeEntityId(projectId)) return undefined;
   const project = state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined;
   return project?.id === projectId ? project : undefined;
 };
@@ -314,6 +321,7 @@ export const getTaskOrUndefined = (
   state: RootState,
   taskId: string,
 ): Task | undefined => {
+  if (!isSafeEntityId(taskId)) return undefined;
   const task = state[TASK_FEATURE_NAME].entities[taskId] as Task | undefined;
   return task?.id === taskId ? task : undefined;
 };

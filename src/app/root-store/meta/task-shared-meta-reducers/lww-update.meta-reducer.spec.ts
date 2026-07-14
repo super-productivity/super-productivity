@@ -513,6 +513,50 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.projectId).toBe(INBOX_PROJECT.id);
     });
 
+    it('should update reverse-linked children before a missing project arrives', () => {
+      const state = createMockState();
+      delete state[TASK_FEATURE_NAME]?.entities[TASK_ID];
+      state[TASK_FEATURE_NAME]!.ids = ['child'];
+      state[TASK_FEATURE_NAME]!.entities.child = createMockTask({
+        id: 'child',
+        parentId: 'restored-root',
+        projectId: PROJECT_ID,
+      });
+
+      reducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'restored-root',
+        title: 'Restored root',
+        projectId: 'future-project',
+        subTaskIds: ['child'],
+        projectMoveSubTaskIds: [],
+      } as Action);
+
+      const afterTask = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(afterTask[TASK_FEATURE_NAME].entities['restored-root']?.projectId).toBe(
+        'future-project',
+      );
+      expect(afterTask[TASK_FEATURE_NAME].entities.child?.projectId).toBe(
+        'future-project',
+      );
+
+      reducer(afterTask, {
+        type: '[PROJECT] LWW Update',
+        id: 'future-project',
+        title: 'Future project',
+        taskIds: ['restored-root'],
+        backlogTaskIds: [],
+      } as Action);
+
+      const afterProject = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(afterProject[TASK_FEATURE_NAME].entities.child?.projectId).toBe(
+        'future-project',
+      );
+      expect(
+        afterProject[PROJECT_FEATURE_NAME].entities['future-project']?.taskIds,
+      ).toEqual(['restored-root']);
+    });
+
     it('should not warn when a TASK LWW Update payload is complete', () => {
       const state = createMockState();
       const completeAction = {

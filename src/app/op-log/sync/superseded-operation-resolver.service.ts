@@ -5,7 +5,7 @@ import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import {
   ConflictResolutionService,
-  getLatestTaskProjectMoveSubTaskIds,
+  hasTaskProjectMove,
 } from './conflict-resolution.service';
 import { VectorClockService } from './vector-clock.service';
 import { LockService } from './lock.service';
@@ -248,9 +248,7 @@ export class SupersededOperationResolverService {
         // would have a later timestamp than the original user action, causing it to
         // incorrectly win against concurrent ops that were actually made earlier.
         const preservedTimestamp = Math.max(...entityOps.map((e) => e.op.timestamp));
-        const projectMoveSubTaskIds = getLatestTaskProjectMoveSubTaskIds(
-          entityOps.map(({ op }) => op),
-        );
+        const isTaskProjectMove = hasTaskProjectMove(entityOps.map(({ op }) => op));
 
         // Create new UPDATE op with current state and merged clock
         const newOp = this.conflictResolutionService.createLWWUpdateOp(
@@ -260,7 +258,7 @@ export class SupersededOperationResolverService {
           clientId,
           mergedClock,
           preservedTimestamp,
-          projectMoveSubTaskIds,
+          isTaskProjectMove,
         );
 
         newOpsCreated.push(newOp);

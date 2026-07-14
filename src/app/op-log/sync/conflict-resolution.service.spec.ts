@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import {
   ConflictResolutionService,
-  getLatestTaskProjectMoveSubTaskIds,
+  hasTaskProjectMove,
 } from './conflict-resolution.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
@@ -3000,7 +3000,7 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-upd']);
     });
 
-    it('should preserve the local winner operation footprint in its LWW op', async () => {
+    it('should preserve the local winner project-move marker in its LWW op', async () => {
       const now = Date.now();
       const localOp = createOpWithTimestamp('local-upd', 'client-a', now);
       localOp.actionType = ActionType.TASK_SHARED_UPDATE;
@@ -3025,7 +3025,7 @@ describe('ConflictResolutionService', () => {
 
       expect(lwwOp.entityIds).toBeUndefined();
       expect(lwwOp.payload).toEqual(
-        jasmine.objectContaining({ projectMoveSubTaskIds: ['subtask-1'] }),
+        jasmine.objectContaining({ projectMoveSubTaskIds: [] }),
       );
     });
 
@@ -3057,7 +3057,7 @@ describe('ConflictResolutionService', () => {
       const replacement = getFirstMixedLocalOp();
       expect(replacement.entityIds).toBeUndefined();
       expect(replacement.payload).toEqual(
-        jasmine.objectContaining({ projectMoveSubTaskIds: ['subtask-1'] }),
+        jasmine.objectContaining({ projectMoveSubTaskIds: [] }),
       );
     });
 
@@ -3087,7 +3087,7 @@ describe('ConflictResolutionService', () => {
       expect(lwwOp.payload['projectMoveSubTaskIds']).toBeUndefined();
     });
 
-    it('should choose the causally latest footprint when its timestamp moved backwards', () => {
+    it('should detect a project-move marker regardless of operation order', () => {
       const clientId = 'client-a';
       const earlier = createOpWithTimestamp('move-1', 'client-a', 2000);
       earlier.actionType = ActionType.TASK_SHARED_UPDATE;
@@ -3110,9 +3110,11 @@ describe('ConflictResolutionService', () => {
         entityChanges: [],
       };
 
-      expect(getLatestTaskProjectMoveSubTaskIds([earlier, later])).toEqual([
-        'current-subtask',
-      ]);
+      expect(hasTaskProjectMove([earlier, later])).toBeTrue();
+      expect(hasTaskProjectMove([later, earlier])).toBeTrue();
+      expect(
+        hasTaskProjectMove([createOpWithTimestamp('title-only', 'client-a', 3000)]),
+      ).toBeFalse();
     });
 
     it('should not create local-win op when clientId is unavailable', async () => {
@@ -4832,7 +4834,7 @@ describe('ConflictResolutionService', () => {
       expect((op.payload as Record<string, unknown>)['id']).toBe('task-canonical');
     });
 
-    it('should preserve and normalize replay-only project-move metadata', () => {
+    it('should preserve replay-only project-move metadata as a marker', () => {
       const op = service.createLWWUpdateOp(
         'TASK',
         'task-canonical',
@@ -4840,14 +4842,14 @@ describe('ConflictResolutionService', () => {
         TEST_CLIENT_ID,
         { [TEST_CLIENT_ID]: 1 },
         Date.now(),
-        ['subtask-1', 'task-canonical', 'subtask-1'],
+        true,
       );
 
       expect(op.entityIds).toBeUndefined();
       expect(op.payload).toEqual(
         jasmine.objectContaining({
           id: 'task-canonical',
-          projectMoveSubTaskIds: ['subtask-1'],
+          projectMoveSubTaskIds: [],
         }),
       );
     });

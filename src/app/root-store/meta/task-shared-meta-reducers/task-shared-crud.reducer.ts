@@ -35,13 +35,17 @@ import {
   addTaskToPlannerDay,
   collectProjectMoveSubTaskIds,
   getProject,
+  getProjectOrUndefined,
   getTaskOrUndefined,
   getTag,
   hasInvalidTodayTag,
   isValidTaskProjectIdUpdate,
+  isTaskUpdate,
+  isSafeEntityId,
   ProjectTaskList,
   filterOutTodayTag,
   removeTaskFromPlannerDays,
+  removeTasksFromAllProjects,
   removeTasksFromAllTags,
   removeTasksFromList,
   repairTaskProjectMembership,
@@ -157,10 +161,18 @@ const handleConvertToMainTask = (
   capturedModified?: number,
 ): RootState => {
   // First, get the parent task to copy its properties
-  const parentTask = state[TASK_FEATURE_NAME].entities[task.parentId as string] as Task;
+  const parentTask =
+    typeof task.parentId === 'string'
+      ? getTaskOrUndefined(state, task.parentId)
+      : undefined;
   if (!parentTask) {
     throw new Error('No parent for sub task');
   }
+  const capturedProjectId =
+    typeof task.projectId === 'string' &&
+    (task.projectId === '' || isSafeEntityId(task.projectId))
+      ? task.projectId
+      : parentTask.projectId;
 
   const todayStr = capturedToday ?? state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   // `Array.isArray` guard (not `??`): a truthy non-array `parentTagIds`
@@ -192,6 +204,9 @@ const handleConvertToMainTask = (
       id: task.id,
       changes: {
         parentId: undefined,
+        // Promotion is an independent intent from a concurrent parent move.
+        // Reapply the source project explicitly so both replay orders converge.
+        projectId: capturedProjectId,
         // Filter out TODAY_TAG.id - it's a virtual tag where membership is
         // determined by task.dueDay, not by being in tagIds
         tagIds: (Array.isArray(parentTask.tagIds) ? parentTask.tagIds : []).filter(
@@ -231,13 +246,16 @@ const handleConvertToMainTask = (
     ...state,
     [TASK_FEATURE_NAME]: updatedTaskState,
   };
+  updatedState = removeTasksFromAllProjects(updatedState, [task.id]);
 
-  // Update project if task has projectId
-  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
-    const project = getProject(state, task.projectId);
-    updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: positionConvertedTask(project.taskIds),
-    });
+  // Update project if the captured project is currently available.
+  if (capturedProjectId) {
+    const project = getProjectOrUndefined(state, capturedProjectId);
+    if (project) {
+      updatedState = updateProject(updatedState, capturedProjectId, {
+        taskIds: positionConvertedTask(project.taskIds),
+      });
+    }
   }
 
   // Update tags - only update tags that exist
@@ -637,11 +655,7 @@ const removeInProgressTagOnCompletion = (
   };
 };
 
-const handleUpdateTask = (
-  state: RootState,
-  taskUpdate: Update<Task>,
-  projectMoveSubTaskIds?: unknown,
-): RootState => {
+const handleUpdateTask = (state: RootState, taskUpdate: Update<Task>): RootState => {
   const taskId = taskUpdate.id;
   if (typeof taskId !== 'string') return state;
   const currentTask = getTaskOrUndefined(state, taskId);
@@ -698,7 +712,7 @@ const handleUpdateTask = (
     typeof targetProjectId === 'string' &&
     !currentTask.parentId
   ) {
-    const subTaskIds = collectProjectMoveSubTaskIds(state, taskId, projectMoveSubTaskIds);
+    const subTaskIds = collectProjectMoveSubTaskIds(state, taskId);
     updatedState = repairTaskProjectMembership(
       updatedState,
       taskId,
@@ -906,10 +920,18 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     );
   },
   [TaskSharedActions.updateTask.type]: () => {
-    const updateAction = action as ReturnType<typeof TaskSharedActions.updateTask>;
-    const { task, projectMoveSubTaskIds } = updateAction;
-    if (task.id !== updateAction.meta.entityId) return state;
-    return handleUpdateTask(state, task, projectMoveSubTaskIds);
+    const updateAction = action as unknown as Record<string, unknown>;
+    const task = updateAction['task'];
+    const meta = updateAction['meta'];
+    if (
+      !isTaskUpdate(task) ||
+      !meta ||
+      typeof meta !== 'object' ||
+      task.id !== (meta as { entityId?: unknown }).entityId
+    ) {
+      return state;
+    }
+    return handleUpdateTask(state, task);
   },
 });
 
