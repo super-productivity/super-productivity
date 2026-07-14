@@ -64,6 +64,21 @@ test.describe('@webdav WebDAV Split-file Sync', () => {
       expect(opsFile).toMatch(/^pf_3__/);
       expect(stateFile).toMatch(/^pf_3__/);
 
+      // Prove the snapshot deliberately lags the retained ops suffix, so Client B
+      // is forced through the "replay ops newer than the snapshot" path (the fix
+      // under test). Without this guard the test silently degrades into a no-op if
+      // the snapshot write cadence ever changes and the snapshot stops lagging.
+      // The pf_3__ envelope is plaintext here (no compression/encryption), so the
+      // body parses directly.
+      const clockOf = (raw: string): Record<string, number> =>
+        JSON.parse(raw.slice(raw.indexOf('__') + 2)).vectorClock ?? {};
+      const snapshotClock = clockOf(stateFile);
+      const opsClock = clockOf(opsFile);
+      const isSnapshotBehind = Object.entries(opsClock).some(
+        ([client, seq]) => seq > (snapshotClock[client] ?? 0),
+      );
+      expect(isSnapshotBehind, 'snapshot clock should lag the ops file').toBe(true);
+
       const syncB = new SyncPage(pageB);
       const workViewB = new WorkViewPage(pageB);
       await workViewB.waitForTaskList();
