@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { registerLocaleData } from '@angular/common';
+import localeSv from '@angular/common/locales/sv';
 import { HabitTrackerComponent } from './habit-tracker.component';
 import { SimpleCounterService } from '../simple-counter.service';
 import { DateService } from '../../../core/date/date.service';
@@ -29,6 +31,7 @@ describe('HabitTrackerComponent', () => {
   };
 
   beforeEach(async () => {
+    registerLocaleData(localeSv, 'sv');
     simpleCounterService = jasmine.createSpyObj('SimpleCounterService', [
       'setCounterForDate',
       'updateOrder',
@@ -43,7 +46,13 @@ describe('HabitTrackerComponent', () => {
         { provide: SimpleCounterService, useValue: simpleCounterService },
         { provide: MatDialog, useValue: matDialog },
         { provide: DateService, useValue: { todayStr: () => '2026-05-18' } },
-        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
+        {
+          provide: DateTimeFormatService,
+          useValue: {
+            currentLocale: () => 'sv',
+            isoTextLocale: () => 'en-US',
+          },
+        },
       ],
     }).compileComponents();
 
@@ -51,6 +60,19 @@ describe('HabitTrackerComponent', () => {
     component = fixture.componentInstance;
     fixture.componentRef.setInput('simpleCounters', [mockCounter]);
     fixture.detectChanges();
+  });
+
+  it('uses the UI language for weekday headers with ISO formatting enabled', () => {
+    const element = fixture.nativeElement as HTMLElement;
+    const dayNames = Array.from(
+      element.querySelectorAll<HTMLElement>('.day-name'),
+      (dayName) => dayName.textContent?.trim(),
+    );
+
+    expect(dayNames).toHaveSize(7);
+    expect(dayNames).toEqual(
+      jasmine.arrayWithExactContents(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']),
+    );
   });
 
   it('should not open edit dialog on long-press if day is disabled', fakeAsync(() => {
