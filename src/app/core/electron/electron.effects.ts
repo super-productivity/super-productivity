@@ -17,8 +17,14 @@ export class ElectronEffects {
       () =>
         ipcAnyFileDownloaded$.pipe(
           tap((args) => {
-            const fileParam = (args as any)[1];
-            const path = fileParam.path;
+            // The payload-only IPC listener strips the raw Electron event, so
+            // the download payload is now the first arg (was [1] before the
+            // event was stripped). Guard against a malformed payload.
+            const fileParam = (args as [{ path?: unknown }?])[0];
+            const path = typeof fileParam?.path === 'string' ? fileParam.path : null;
+            if (!path) {
+              return;
+            }
             const fileName = path.replace(/^.*[\\\/]/, '');
             const dir = path.replace(/[^\/]*$/, '');
             this._snackService.open({

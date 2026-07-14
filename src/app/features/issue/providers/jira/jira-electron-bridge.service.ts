@@ -10,6 +10,10 @@ import {
 @Injectable({ providedIn: 'root' })
 export class JiraElectronBridgeService {
   #api: JiraElectronApi | null | undefined;
+  // Whether image auth has been set up in the main process. Lets the (common)
+  // non-Jira path skip a no-op clear IPC round-trip on every detail-panel
+  // open/close.
+  #hasImgHeaders = false;
 
   initialize(): void {
     if (this.#api !== undefined) {
@@ -31,11 +35,19 @@ export class JiraElectronBridgeService {
 
   setupImgHeaders(config: JiraImageAuthConfig): Promise<void> {
     this.initialize();
-    return this.#api ? this.#api.setupImgHeaders(config) : Promise.resolve();
+    if (!this.#api) {
+      return Promise.resolve();
+    }
+    this.#hasImgHeaders = true;
+    return this.#api.setupImgHeaders(config);
   }
 
   clearImgHeaders(): Promise<void> {
     this.initialize();
-    return this.#api ? this.#api.clearImgHeaders() : Promise.resolve();
+    if (!this.#api || !this.#hasImgHeaders) {
+      return Promise.resolve();
+    }
+    this.#hasImgHeaders = false;
+    return this.#api.clearImgHeaders();
   }
 }

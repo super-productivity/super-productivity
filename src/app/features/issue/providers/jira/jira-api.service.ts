@@ -683,13 +683,18 @@ export class JiraApiService {
 
     const requestToSend = { requestId, requestInit, url };
     if (IS_ELECTRON) {
-      void this._jiraElectronBridge
-        .makeRequest({
-          requestId,
-          url,
-          requestInit: this._toElectronRequestInit(requestInit),
-          allowSelfSignedCertificate: jiraCfg.isAllowSelfSignedCertificate === true,
-        })
+      // Wrap in Promise.resolve().then so a synchronous throw from
+      // _toElectronRequestInit is routed through _handleResponse (which clears
+      // the logged request) rather than escaping past the .catch.
+      void Promise.resolve()
+        .then(() =>
+          this._jiraElectronBridge.makeRequest({
+            requestId,
+            url,
+            requestInit: this._toElectronRequestInit(requestInit),
+            allowSelfSignedCertificate: jiraCfg.isAllowSelfSignedCertificate === true,
+          }),
+        )
         .then((response) => this._handleResponse(response))
         .catch((error: unknown) =>
           this._handleResponse({

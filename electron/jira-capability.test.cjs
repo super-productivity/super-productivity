@@ -8,12 +8,20 @@ const { JiraCapabilityRegistry } = require(
   path.resolve(__dirname, 'jira-capability.ts'),
 );
 
-test('issues one Jira capability per renderer document', () => {
-  const registry = new JiraCapabilityRegistry(() => 'test-token');
+test('rotates the Jira capability when a renderer document re-registers', () => {
+  let counter = 0;
+  const registry = new JiraCapabilityRegistry(() => `test-token-${(counter += 1)}`);
   const frame = {};
 
-  assert.equal(registry.register(frame), 'test-token');
-  assert.equal(registry.register(frame), null);
+  const first = registry.register(frame);
+  assert.equal(first, 'test-token-1');
+
+  // A reload re-registers the same frame object: a fresh token is issued and
+  // the stale one is invalidated, so the reloaded document is never locked out.
+  const second = registry.register(frame);
+  assert.equal(second, 'test-token-2');
+  assert.equal(registry.isAuthorized(frame, first), false);
+  assert.equal(registry.isAuthorized(frame, second), true);
 });
 
 test('only authorizes the issued token from the same renderer document', () => {

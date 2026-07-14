@@ -39,7 +39,11 @@ test('Jira IPC issues a capability only to the main renderer frame', () => {
 
   const token = register(event);
   assert.equal(typeof token, 'string');
-  assert.equal(register(event), null);
+  // Re-registering (e.g. after a renderer reload) rotates the token instead of
+  // locking the frame out.
+  const rotated = register(event);
+  assert.equal(typeof rotated, 'string');
+  assert.notEqual(rotated, token);
 
   const subFrame = {};
   assert.equal(register({ senderFrame: subFrame, sender: { mainFrame } }), null);

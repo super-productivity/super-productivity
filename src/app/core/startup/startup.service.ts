@@ -79,7 +79,12 @@ export class StartupService {
   private _jiraElectronBridge = inject(JiraElectronBridgeService);
 
   constructor() {
-    // Claim privileged Jira IPC before deferred plugin initialization begins.
+    // Claim the privileged Jira IPC capability here, in trusted startup code,
+    // before any untrusted renderer code (plugins) is loaded. This one-shot
+    // ordering — not the main-frame IPC check — is the real security boundary:
+    // same-origin plugin iframes can reach window.top.ea, so the frame check
+    // alone is bypassable. Once consumed, consumeJiraApi() returns null to
+    // everyone else. Do NOT move plugin/3rd-party loading before this call.
     this._jiraElectronBridge.initialize();
 
     // Initialize electron error handler in an effect

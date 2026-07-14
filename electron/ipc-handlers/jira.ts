@@ -11,13 +11,18 @@ const capabilityRegistry = new JiraCapabilityRegistry();
 
 export const initJiraIpc = (): void => {
   ipcMain.handle(IPC.JIRA_REGISTER_CAPABILITY, (event) => {
+    // NOTE: this main-frame check is a secondary guard, not the real boundary:
+    // same-origin plugin iframes can reach window.top.ea, so their IPC also
+    // arrives with senderFrame === mainFrame. The actual protection is that
+    // trusted startup code consumes the one-shot capability before any plugin
+    // code runs (see JiraElectronBridgeService.initialize / StartupService).
     if (event.senderFrame !== event.sender.mainFrame) {
       return null;
     }
     const token = capabilityRegistry.register(event.senderFrame);
-    if (token) {
-      clearRequestHeadersForImages();
-    }
+    // A fresh document just claimed the capability — drop any stale image auth
+    // left over from the previous renderer document.
+    clearRequestHeadersForImages();
     return token;
   });
 

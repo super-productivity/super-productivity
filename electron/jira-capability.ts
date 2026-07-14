@@ -14,11 +14,13 @@ export class JiraCapabilityRegistry {
       randomBytes(TOKEN_BYTES).toString('base64url'),
   ) {}
 
-  register(frame: object): string | null {
-    if (this._tokens.has(frame)) {
-      return null;
-    }
-
+  register(frame: object): string {
+    // Always issue a fresh token, even when this frame object already has one.
+    // A renderer reload re-runs the preload and re-registers; if Electron hands
+    // back the same WebFrameMain object, returning null would leave the new
+    // document permanently without a capability (Jira broken until a full app
+    // restart). Rotating the token also invalidates any stale token still held
+    // by the previous document.
     const token = this._createToken();
     this._tokens.set(frame, token);
     return token;
