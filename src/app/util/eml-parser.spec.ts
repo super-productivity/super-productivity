@@ -268,6 +268,73 @@ describe('parseEml', () => {
     expect(data.text).toBe('REAL BODY');
   });
 
+  it('should skip a legacy Content-Type name= attachment that has no Content-Disposition at all', async () => {
+    const legacyNameAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Legacy name attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain; name="notes.txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(legacyNameAttachmentEml, 'legacy-name-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should treat an unrecognized (non-inline) disposition type as an attachment', async () => {
+    const unknownDispositionEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Unknown disposition',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: x-download; filename="notes.txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(unknownDispositionEml, 'unknown-disposition.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should keep a part with an explicit inline disposition despite a legacy name= parameter', async () => {
+    const inlineWithNameEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Inline with name',
+      'Content-Type: text/plain; name="notes.txt"',
+      'Content-Disposition: inline',
+      '',
+      'inline body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(inlineWithNameEml, 'inline-with-name.eml'));
+
+    expect(data.text).toBe('inline body\n');
+  });
+
   it('should return undefined for a multipart body with no closing boundary (malformed)', async () => {
     const unterminatedEml = [
       'From: Alice <alice@example.com>',

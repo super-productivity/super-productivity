@@ -21,9 +21,12 @@ const MAX_MIME_DEPTH = 10;
  * UTF-8/US-ASCII `text/plain` part, found by walking `multipart/*` structures
  * (bounded depth) for the first such leaf; `7bit`/`8bit`/unencoded,
  * `quoted-printable`, and `base64` transfer encodings on that leaf are decoded.
- * Any part (leaf or multipart container) marked `Content-Disposition:
- * attachment` is skipped entirely, so an attached file can never shadow or be
- * mistaken for the actual message body. HTML bodies and non-UTF-8/ASCII
+ * Any attachment-like part (leaf or multipart container) is skipped entirely,
+ * so an attached file can never shadow or be mistaken for the actual message
+ * body: a `Content-Disposition` other than `inline` (recognized or not, per
+ * RFC 2183 §2.8), or — since `Content-Disposition` is optional — the legacy
+ * pre-`Content-Disposition` `Content-Type; name=` filename hint. HTML bodies
+ * and non-UTF-8/ASCII
  * charsets are still omitted by design (`text: undefined`), never decoded.
  * The caller stores the body as an untrusted, inert note, so we favour safety
  * and simplicity over completeness; do not add HTML decoding or charset
@@ -78,14 +81,16 @@ const _extractPlainText = (
     return undefined;
   }
 
-  // Skip the whole subtree for anything marked as an attachment — leaf or
-  // multipart container alike — so an attached file never shadows or is
-  // mistaken for the actual message body.
-  if (_parseDispositionType(headers.get('content-disposition')) === 'attachment') {
+  const { mediaType, charset, boundary, name } = _parseContentType(
+    headers.get('content-type'),
+  );
+
+  // Skip the whole subtree for anything attachment-like — leaf or multipart
+  // container alike — so an attached file never shadows or is mistaken for
+  // the actual message body.
+  if (_isAttachmentPart(headers, name)) {
     return undefined;
   }
-
-  const { mediaType, charset, boundary } = _parseContentType(headers.get('content-type'));
 
   if (mediaType?.startsWith('multipart/')) {
     if (!boundary) {
@@ -134,6 +139,29 @@ const _extractPlainText = (
   }
 
   return undefined;
+};
+
+// RFC 2183 §2.8: a present disposition type other than `inline` — whether
+// recognized (`attachment`) or not (`x-download`, or malformed with a
+// `filename` param but no parseable type) — is treated as an attachment.
+// `Content-Disposition` is optional, so a part with none is only flagged via
+// the legacy pre-Content-Disposition `Content-Type; name=` filename hint.
+const _isAttachmentPart = (
+  headers: Map<string, string>,
+  contentTypeName?: string,
+): boolean => {
+  const { type: dispositionType, hasFilename } = _parseContentDisposition(
+    headers.get('content-disposition'),
+  );
+
+  if (dispositionType !== undefined) {
+    return dispositionType !== 'inline';
+  }
+  if (hasFilename) {
+    return true;
+  }
+
+  return contentTypeName !== undefined;
 };
 
 // Splits a multipart body on its boundary delimiter line-by-line (RFC 2046),
@@ -207,24 +235,11 @@ const _parseAddress = (fromHeader?: string): ParsedEmlAddress | undefined => {
   return address ? { address } : undefined;
 };
 
-// Take only the leading disposition-type token (RFC 2183), so a value like
-// `attachment; filename="notes.txt"` still matches on `attachment`.
-const _parseDispositionType = (value?: string): string | undefined =>
-  value
-    ?.trim()
-    .split(/[\s(;]/)[0]
-    .toLowerCase() || undefined;
-
-const _parseContentType = (
-  value?: string,
-): { mediaType?: string; charset?: string; boundary?: string } => {
-  if (!value) {
-    return {};
-  }
-
-  // Split parameters on ';', but not inside a double-quoted value, so a `charset=`
-  // embedded in another quoted parameter (e.g. a filename) can't be mistaken for
-  // the real charset.
+// Split a header value's `;`-separated parameters, but not inside a
+// double-quoted value, so a `charset=`/`filename=` embedded in another quoted
+// parameter can't be mistaken for the real one. The leading token (media type
+// or disposition type) is `parts[0]`; parameters are `parts[1..]`.
+const _splitParams = (value: string): string[] => {
   const parts: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -239,12 +254,44 @@ const _parseContentType = (
     current += char;
   }
   parts.push(current);
+  return parts;
+};
+
+// RFC 2183 disposition-type + presence of a `filename` parameter. A
+// disposition value that fails to parse a leading token (e.g. malformed,
+// leading straight into `; filename=...`) still surfaces `hasFilename` so the
+// caller can fall back on that signal.
+const _parseContentDisposition = (
+  value?: string,
+): { type?: string; hasFilename: boolean } => {
+  if (!value) {
+    return { hasFilename: false };
+  }
+
+  const parts = _splitParams(value);
+  const type = parts[0].trim().split(/[\s(]/)[0].toLowerCase() || undefined;
+  const hasFilename = parts
+    .slice(1)
+    .some((part) => part.trim().toLowerCase().startsWith('filename='));
+
+  return { type, hasFilename };
+};
+
+const _parseContentType = (
+  value?: string,
+): { mediaType?: string; charset?: string; boundary?: string; name?: string } => {
+  if (!value) {
+    return {};
+  }
+
+  const parts = _splitParams(value);
 
   // The media type is the first token; drop any trailing RFC 822 comment/whitespace.
   const mediaType = parts[0].trim().split(/[\s(]/)[0].toLowerCase() || undefined;
 
   let charset: string | undefined;
   let boundary: string | undefined;
+  let name: string | undefined;
   for (const part of parts.slice(1)) {
     const eq = part.indexOf('=');
     if (eq < 0) {
@@ -262,10 +309,15 @@ const _parseContentType = (
       // Boundary values are case-sensitive and must match the body's delimiter
       // lines verbatim, unlike charset.
       boundary = rawValue;
+    } else if (key === 'name') {
+      // Legacy pre-Content-Disposition filename hint (RFC 2045); presence
+      // alone is enough to flag the part as attachment-like, so the value
+      // itself is never used.
+      name = rawValue;
     }
   }
 
-  return { mediaType, charset, boundary };
+  return { mediaType, charset, boundary, name };
 };
 
 // Decode RFC 2047 encoded-words (`=?charset?B|Q?text?=`) for the UTF-8/US-ASCII
