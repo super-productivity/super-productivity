@@ -20,6 +20,10 @@ const MAX_MIME_DEPTH = 10;
 // decoded/reassembled since we only need to know a filename hint exists.
 const _NAME_PARAM_KEY_RE = /^name(\*\d*\*?)?$/;
 
+// Same RFC 2231 spellings for the `Content-Disposition` `filename` parameter
+// (`filename`, `filename*`, `filename*0`, `filename*0*`, ...); presence-only.
+const _FILENAME_PARAM_KEY_RE = /^filename(\*\d*\*?)?$/;
+
 /**
  * Minimal, dependency-free RFC 822 / MIME reader for the drop-an-`.eml` feature.
  *
@@ -264,10 +268,11 @@ const _splitParams = (value: string): string[] => {
   return parts;
 };
 
-// RFC 2183 disposition-type + presence of a `filename` parameter. A
-// disposition value that fails to parse a leading token (e.g. malformed,
-// leading straight into `; filename=...`) still surfaces `hasFilename` so the
-// caller can fall back on that signal.
+// RFC 2183 disposition-type + presence of a `filename` parameter (in any RFC
+// 2231 spelling: `filename`, `filename*`, `filename*0`, ...). A disposition
+// value that fails to parse a leading token (e.g. malformed, leading straight
+// into `; filename=...`) still surfaces `hasFilename` so the caller can fall
+// back on that signal.
 const _parseContentDisposition = (
   value?: string,
 ): { type?: string; hasFilename: boolean } => {
@@ -277,9 +282,10 @@ const _parseContentDisposition = (
 
   const parts = _splitParams(value);
   const type = parts[0].trim().split(/[\s(]/)[0].toLowerCase() || undefined;
-  const hasFilename = parts
-    .slice(1)
-    .some((part) => part.trim().toLowerCase().startsWith('filename='));
+  const hasFilename = parts.slice(1).some((part) => {
+    const eq = part.indexOf('=');
+    return eq >= 0 && _FILENAME_PARAM_KEY_RE.test(part.slice(0, eq).trim().toLowerCase());
+  });
 
   return { type, hasFilename };
 };
