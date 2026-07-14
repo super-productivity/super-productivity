@@ -118,10 +118,9 @@ export class TaskArchiveService {
    * mutex; a bypassed remote mutation could interleave with a locked local one
    * and silently drop one side's archive write.
    *
-   * Known paths still OUTSIDE the lock (tracked in #8941):
-   * TimeTrackingService's project/tag archive cleanups. Compression and remote
-   * full-state archive replacement use the same lock for their complete
-   * read-modify-write cycles.
+   * ArchiveCompressionService, TimeTrackingService, snapshot hydration/import,
+   * remote full-state replay, and authoritative op-log state replacements use
+   * the same mutex.
    */
   private _runTaskArchiveMutation(mutation: () => Promise<void>): Promise<void> {
     return this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, mutation);
