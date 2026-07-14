@@ -131,7 +131,7 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
 
       await clientB.sync.syncImportUseRemoteBtn.click();
       await crashObserved;
-      await clientB.page.reload();
+      await clientB.page.reload({ waitUntil: 'domcontentloaded' });
       await waitForAppReady(clientB.page);
       expect(
         await clientB.page.evaluate(
