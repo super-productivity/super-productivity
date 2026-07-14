@@ -538,6 +538,146 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     );
   });
 
+  it('converges an outright-losing remote delete of a parent with subtasks (#8956)', async () => {
+    // Pure loser: the remote delete conflicts only with the winning parent
+    // edit — no uncontested sibling, so nothing is applied live. Status-blind
+    // hydration still replays the durable loser (cascading the subtask), and
+    // the originating client applied it long ago. Both must converge to the
+    // winning subtree via the persisted compensations.
+    const parentId = 'parent';
+    const subtaskId = 'subtask';
+    const parent: Task = {
+      ...DEFAULT_TASK,
+      id: parentId,
+      title: 'Local winning parent',
+      projectId: 'project1',
+      subTaskIds: [subtaskId],
+    } as Task;
+    const subtask: Task = {
+      ...DEFAULT_TASK,
+      id: subtaskId,
+      title: 'Surviving subtask',
+      projectId: 'project1',
+      parentId,
+      subTaskIds: [],
+    } as Task;
+    const initialTaskState = createTaskReplayState([parent, subtask], [parentId]);
+
+    const localParentEdit: Operation = {
+      id: 'local-parent-edit',
+      actionType: toLwwUpdateActionType('TASK'),
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: parentId,
+      payload: {
+        actionPayload: parent,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteDelete: Operation = {
+      id: 'remote-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: parentId,
+      entityIds: [parentId],
+      payload: {
+        actionPayload: { taskIds: [parentId] },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+      of(props?.id === parentId ? parent : props?.id === subtaskId ? subtask : undefined),
+    );
+    await opLogStore.append(localParentEdit, 'local');
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'TASK',
+        entityId: parentId,
+        localOps: [localParentEdit],
+        remoteOps: [remoteDelete],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    // Nothing applies live: local state already holds the winning subtree.
+    expect(operationApplier.applyOperations).not.toHaveBeenCalled();
+
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const compensationOps = storedEntries
+      .filter(({ op, source }) => source === 'local' && op.id !== localParentEdit.id)
+      .map(({ op }) => op);
+    expect(compensationOps.map(({ entityId }) => entityId)).toEqual([
+      parentId,
+      subtaskId,
+    ]);
+    // The durable loser precedes its compensations in seq order.
+    expect(storedEntries.map(({ op }) => op.id)).toEqual([
+      localParentEdit.id,
+      remoteDelete.id,
+      ...compensationOps.map(({ id }) => id),
+    ]);
+
+    // Restart: status-blind seq-order replay of the full log (loser + comps
+    // in ONE batch — exercises the same-batch recreate exemption).
+    const restartedClientState = applyTaskOperations(
+      initialTaskState,
+      storedEntries.map(({ op }) => op),
+      LOCAL_CLIENT_ID,
+    );
+    // Originating client: applied its own delete earlier, then downloads the
+    // compensations in a later batch (cross-batch recreate path).
+    const remoteClientAfterDelete = applyTaskOperations(
+      initialTaskState,
+      [remoteDelete],
+      REMOTE_CLIENT_ID,
+    );
+    expect(taskShape(remoteClientAfterDelete)).toEqual({
+      ids: [],
+      tasks: {},
+      projectTaskIds: [],
+    });
+    const remoteClientState = applyTaskOperations(
+      remoteClientAfterDelete,
+      compensationOps,
+      REMOTE_CLIENT_ID,
+    );
+
+    const expectedShape = {
+      ids: [parentId, subtaskId].sort(),
+      tasks: {
+        [parentId]: {
+          title: 'Local winning parent',
+          parentId: undefined,
+          subTaskIds: [subtaskId],
+        },
+        [subtaskId]: {
+          title: 'Surviving subtask',
+          parentId,
+          subTaskIds: [],
+        },
+      },
+      projectTaskIds: [parentId],
+    };
+    expect(taskShape(initialTaskState))
+      .withContext('live state (nothing applied)')
+      .toEqual(expectedShape);
+    expect(taskShape(restartedClientState)).withContext('restart').toEqual(expectedShape);
+    expect(taskShape(remoteClientState))
+      .withContext('originating client')
+      .toEqual(expectedShape);
+  });
+
   it('keeps a winning remote archive as an archive on every client', async () => {
     const taskId = 'task-to-archive';
     const task = {
