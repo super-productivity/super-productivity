@@ -2330,6 +2330,7 @@ describe('OperationLogSyncService', () => {
           );
           expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
             [postSnapshotOp],
+            {},
           );
           expect(callOrder).toEqual(['processRemoteOps', 'setLastServerSeq']);
         });
@@ -2408,8 +2409,8 @@ describe('OperationLogSyncService', () => {
           expect(second.kind).toBe('ops_processed');
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalledTimes(1);
           expect(remoteOpsProcessingServiceSpy.processRemoteOps.calls.allArgs()).toEqual([
-            [[op5, op6]],
-            [[op6]],
+            [[op5, op6], {}],
+            [[op6], {}],
           ]);
           expect(setLastServerSeqSpy).toHaveBeenCalledOnceWith(6);
         });
@@ -2820,6 +2821,7 @@ describe('OperationLogSyncService', () => {
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
           expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledOnceWith(
             [suffixOp],
+            {},
           );
           expect(setLastServerSeqSpy).toHaveBeenCalledOnceWith(2);
         });
