@@ -1,550 +1,453 @@
 # Sync Simplification Plan
 
-**Status:** Proposed after repository audit, three-agent review, and independent Codex adversarial review
-**Date:** 2026-07-13
+**Status:** Revised after repository audit and three independent reviews
+
+**Date:** 2026-07-14
+
 **Baseline commit:** `29a59757ab774c0fe3bb9b9455515cd7cc9e72e9`
-**Scope:** Client-side sync orchestration, file-based protocol support, compatibility surface, and the boundaries around persistence/conflict handling
 
-## 1. Recommendation
+**Scope:** Client sync orchestration, unreleased conflict behavior, file-provider state, and destructive maintenance
 
-Reduce scope and duplicate protocols before adding architecture.
+## 1. Outcome
 
-The recommended order is:
+Reduce the number of sync paths and ownership protocols before extracting architecture.
 
-1. establish one current, executable sync contract;
-2. make explicit product decisions about unreleased conflict-review scope and the released split-file format;
-3. establish cross-tab ownership for maintenance, local capture, and dataset replacement before consolidating the existing in-tab session services;
-4. route partial sync triggers through the existing full-sync coordinator and delete their duplicate lifecycle policy;
-5. delete compatibility paths that have proven expiry conditions;
-6. consider upload-protocol changes only if they demonstrably remove more state and compatibility code than they add;
-7. reassess the remaining hotspots before extracting file drivers or large workflows.
+The implementation order is:
 
-This plan deliberately does **not** commit to a new `@sp/sync-engine` package, a new provider exchange layer, new persistence repositories, a general error-classifier hierarchy, or an immediate split of `ConflictResolutionService`. Those moves may reorganize complexity without reducing it.
+1. remove the unreleased conflict-journal/review experiment as one semantic rollback;
+2. document only the sync behavior that exists today;
+3. fix file-provider state leaking across remote-target changes;
+4. make the existing single-active-browser-tab policy atomic;
+5. route background triggers through full sync and delete both partial-sync lifecycles;
+6. replace flag-and-poll maintenance exclusion with one in-tab exclusive boundary;
+7. reassess the remaining hotspots before authorizing more work.
 
-## 2. Evidence
+This deliberately avoids a cross-tab sync-session protocol. The product already rejects a second active browser tab. Making that rule atomic removes the need for cross-tab capture gates, generation counters, owner heartbeats, waiter lists, and retry coordination.
 
-At the baseline commit:
+## 2. Decisions from review
 
-| Area                | Current evidence                                                                                                                     | Consequence                                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Orchestration       | `SyncWrapperService` is 1,656 lines; `OperationLogSyncService` is 2,091 lines; immediate upload and WebSocket download add 568 lines | Normal sync, upload-only, download-only, force, and encryption maintenance have overlapping lifecycle policy                 |
-| Upload piggybacking | SuperSync upload can return remote operations that enter validation, conflict, apply, cursor, and follow-up-upload paths             | Upload is a second download protocol; “upload-only” is not actually isolated                                                 |
-| File sync           | `FileBasedSyncAdapterService` is 2,540 lines and supports released single-file and split-file formats                                | Revision state, migration, recovery, deletion, and format detection are cross-cutting; two naïve drivers are not independent |
-| Conflict review     | Unreleased commit `962c5bbeb1` added about 6,007 lines across journal, disjoint merge, review UI, banner/badge, and flip behavior    | This is the last inexpensive point to trim a large permanent product/maintenance surface                                     |
-| Persistence         | `OperationLogStoreService` is 2,512 lines while native SQLite migration/rollout remains active                                       | Implementation splitting now would overlap a storage migration and endanger atomic transitions                               |
-| Documentation       | Effect guidance conflicts across docs; the architecture doc still contains schema-version-1 status while code is version 2           | Engineers cannot reliably distinguish current contracts from historical design                                               |
+| Question                                                           | Decision                          | Reason                                                                                                                       |
+| ------------------------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Unreleased conflict journal, review UI, `Flip`, and disjoint merge | Remove together                   | They form one coupled semantic feature of roughly 6,000 lines. Keeping only part creates ambiguous conflict behavior.        |
+| Released split-file format                                         | Retain unchanged                  | Old clients still require compatibility. Freezing the format now adds a third compatibility state without enabling deletion. |
+| Browser concurrency                                                | One active tab                    | This is already product behavior and is covered by the existing multi-tab E2E. Web Locks should make ownership atomic.       |
+| Background sync                                                    | Full sync only                    | WebSocket and local-operation triggers do not need independent validation, conflict, cursor, and status lifecycles.          |
+| Foreground sync                                                    | Preserve current result semantics | A user-triggered sync must not be converted into a fire-and-forget background waiter.                                        |
+| Destructive maintenance                                            | Serialize in the active tab       | Atomic single-tab ownership removes the need to coordinate maintenance with another current client tab.                      |
+| Compatibility retirement                                           | Conditional                       | No format or storage path is removed without a support-version condition and rollback path.                                  |
 
-The previous `2026-07-03-sync-engine-extraction-plan.md` remains useful research for a future standalone library, but this plan supersedes it as the immediate complexity-reduction roadmap. The active `@sp/sync-core` / `@sp/sync-providers` dependency direction remains unchanged.
+## 3. Success criteria
 
-## 3. Non-negotiable contracts
+- [ ] Current browsers cannot initialize two active app tabs for the same origin.
+- [ ] The conflict journal/review UI, `Flip`, and disjoint-merge implementation are absent.
+- [ ] A file provider cannot reuse cached revision/cursor state after its configured remote target changes.
+- [ ] WebSocket notifications and persisted local operations both request normal full sync.
+- [ ] `WsTriggeredDownloadService` and `ImmediateUploadService` are deleted.
+- [ ] Background triggers use only `idle`, `running`, and `dirty` state, with at most one pending rerun.
+- [ ] Foreground `sync()` behavior and initial-sync bookkeeping remain unchanged.
+- [ ] Sync and destructive maintenance share one authoritative in-tab exclusion mechanism.
+- [ ] No new public package, provider protocol, server contract, persistence repository layer, or general error hierarchy is introduced.
+- [ ] The net production change is deletion-heavy after each phase.
 
-Unless a task is explicitly approved as a separate behavior or correctness change:
+Line count is evidence, not the goal. A phase succeeds only when it removes behavioral states and failure paths.
 
-1. One user intent creates one durable operation. Remote/replayed operations do not re-trigger local effects.
-2. Remote operations are appended before reducer application. Reducer checkpoint, vector-clock merge, archive completion, application status, and downloaded cursor retain their crash-safe ordering.
-3. A genuine cross-tab session/maintenance Web Lock complements rather than replaces the existing upload, download, operation-log, and archive resource locks. Browser-based destructive maintenance fails before mutation when that primitive is unavailable; a per-tab fallback is not presented as cross-tab safety.
-4. The synchronous, failsafe-backed trigger-suppression window still opens on resume/visibility before debounce or lock acquisition. It is distinct from session-owned validation, apply, status, and long-lived hydration lifecycle, which starts only after ownership is acquired.
-5. Destructive maintenance serializes against cross-tab local operation capture as well as sync entry points. Its final unsynced preflight and state snapshot are consistent with shared `SUP_OPS`; unseen work from another tab aborts or is incorporated rather than being cleared.
-6. There is one shared validation session. Nested piggyback/download/conflict work can fail its enclosing top-level session.
-7. No caller publishes `IN_SYNC` before the enclosing validation session is classified.
-8. Normal and conflict-compensation operations retain full client clocks until the server compares them. Client pruning remains allowed for the existing bounded full-state, migration, repair, snapshot, compaction, and hydration paths; the size limit remains 20.
-9. A receiver stops at the first unsupported, newer, invalid, or migration-failing operation, processes only the valid prefix, and does not advance the cursor past the blocked operation. A migration returning `null` remains an intentional terminal drop.
-10. Ordinary upload/download does not run over incomplete remote application state. Raw rebuild resumes first; reducer-pending work blocks; archive-only failures get only the existing idempotent repair attempt before blocking.
-11. Import and raw rebuild retain clean-slate semantics, preflight-before-mutation, backup, atomic replacement, cursor, and crash-resume ordering.
-12. Encryption fails closed. No refactor creates a plaintext fallback when encryption is configured or mandatory. Because current E2EE authenticates payloads but not operation metadata, client decisions do not treat metadata or `isPayloadEncrypted` as authenticated.
-13. File download revisions are staged until operations are durably applied and the cursor is committed. Eager revision promotion can permanently skip unapplied work.
-14. File delete-all remains one ordered cross-format operation: split sources, single-file/tombstone, then backup artifacts.
-15. Pending and deferred local writes are flushed before conflict frontier reads. Frontier read, detection, host-state enrichment, planning, durable execution, and deferred-action drain remain inside the existing operation-log critical section so new writes cannot invalidate the decision.
-16. A merged conflict operation is durable before its best-effort, non-atomic journal entry. Journal failure never fails sync.
-17. Compatibility is removed only with an explicit supported-version condition and rollback path.
-18. Under the current SuperSync protocol, conflict prefetch and the shared per-user `user_sync_state.lastSeq` sequence reservation remain in the same transaction. This per-user serialization is part of conflict safety; `RepeatableRead` alone is insufficient. Clean-slate deletion preserves monotonic `lastSeq` so existing clients cannot miss the replacement import through sequence reuse.
-19. The client applies piggybacked operations returned with an accepted upload before marking its local entries synced. Any future decoupled acknowledgement protocol requires a stable conflict-decision watermark and stronger frontier rules as separate behavior work.
+## 4. Current contracts to preserve
 
-## 4. Non-goals
+These are current safety rules, not proposed architecture:
 
-- Replacing the operation log, vector clocks, offline-first behavior, or E2EE.
-- Introducing CRDTs, global timestamp LWW, or full-state-only sync.
-- Changing operation action strings, compact codes, schema versions, encryption envelopes, or server contracts inside behavior-preserving refactors.
-- Treating smaller files, more interfaces, or fewer lines as success without a smaller change surface.
-- Encoding a known divergence as expected behavior to make a characterization test green.
-- Adding a public package or host port without a concrete second consumer.
+1. One user intent creates one durable operation. Remote or replayed operations do not re-trigger local effects.
+2. Remote operations are durable before reducer application. Apply status, vector-clock merge, archive completion, and downloaded cursor retain crash-safe ordering.
+3. Resume and visibility handling opens the trigger-suppression window synchronously, before debounce or lock acquisition.
+4. One validation session owns nested download, piggyback, conflict, and apply work. No caller publishes `IN_SYNC` before that session is classified.
+5. Normal and conflict-compensation operations retain full client clocks until the server compares them. Existing bounded snapshot, migration, repair, compaction, and hydration paths may prune; the maximum remains 20.
+6. A receiver stops at the first unsupported, newer, invalid, or migration-failing operation and advances only through the valid prefix.
+7. Ordinary sync does not run over incomplete remote application state. Raw rebuild resumes first; reducer-pending work blocks.
+8. Import and raw rebuild retain preflight-before-mutation, backup, atomic replacement, cursor, and crash-resume ordering.
+9. Encryption fails closed. Operation metadata and `isPayloadEncrypted` are not authenticated policy inputs.
+10. File revisions remain staged until operations are durably applied and the cursor is committed. Delete-all remains ordered across split, single-file/tombstone, and backup artifacts.
+11. Pending local writes are flushed before the conflict frontier is read. Conflict planning and durable execution remain inside the operation-log critical section.
+12. SuperSync conflict prefetch and per-user `lastSeq` reservation remain in the same transaction; clean-slate replacement preserves monotonic `lastSeq`.
+13. Piggybacked remote operations from an accepted upload are applied before the corresponding local entries are marked synced.
+14. Compatibility is deleted only after its explicit support condition is true.
 
-## 5. Phase 0 — Establish truth and decide what should exist
+The new contract document in Task 2 must link each rule to its enforcement point and one focused test. It must not copy historical design prose or describe work in this plan as already implemented.
 
-### Task 1: Create one authoritative sync contract
+## 5. Explicit non-goals
 
-**Description:** Add a concise current contract and make the README/contributor docs point to it. Mark the large architecture document as explanatory/historical where it duplicates current rules.
+- A new `@sp/sync-engine` package or host-port abstraction.
+- CRDTs, timestamp last-write-wins, or full-state-only sync.
+- New operation action strings, compact codes, schema versions, encryption envelopes, or server exchanges.
+- An acknowledgement-only upload protocol.
+- Separate single-file and split-file driver hierarchies.
+- Splitting persistence services while native SQLite migration and rollout are active.
+- Splitting `ConflictResolutionService` merely to reduce file length.
+- A universal sync queue with foreground waiter lists, presentation metadata, cross-tab generations, or retries.
+- A new cross-tab local-operation capture gate.
+- Characterization tests that bless a known divergence.
+
+If a later task requires one of these, stop and write a separate behavior proposal with migration and rollback analysis.
+
+## 6. Phase 0 — Remove scope and establish truth
+
+### Task 1: Roll back the unreleased conflict-review feature
+
+**Size:** Large deletion, one atomic semantic change
+
+**Dependencies:** None
+
+Remove the journal, review route/UI, banner/badge, `Flip` behavior, and disjoint-merge behavior introduced by `962c5bbeb1` and its follow-ups. Restore the previously tested conflict semantics; do not blindly revert unrelated subsequent fixes.
+
+This task spans more files than a normal slice because partial removal would leave persisted and runtime behavior disagreeing. Keep it one logical change and make no adjacent refactors.
 
 **Acceptance criteria:**
 
-- [ ] One document owns the contracts in Section 3 and labels implemented behavior, compatibility behavior, and known gaps.
-- [ ] Every contract is linked to its production enforcement and focused regression tests; a sync-doc and load-bearing-ADR inventory adds any current invariant missing from Section 3 before the document is declared authoritative.
-- [ ] The obsolete regular-`Actions` exception is removed; schema-version status matches `CURRENT_SCHEMA_VERSION = 2`.
-- [ ] The current server-backed upload/conflict invariant is distinguished from the stronger watermark/frontier contract required by any future ack-only design.
-- [ ] Other sync docs link to the contract instead of redefining it.
+- [ ] Conflict outcomes match the last behavior before the feature was introduced.
+- [ ] Journal database/schema code, journal services, review models, review UI, navigation, badge/banner, translations, and dedicated tests are removed.
+- [ ] `Flip` and disjoint-merge action/operation handling are removed from capture, replay, conflict resolution, and documentation.
+- [ ] Existing ordinary conflict, replay, migration, and sync tests remain green.
+- [ ] Repository searches find no production references to removed symbols or routes.
+- [ ] No released operation or persisted format is removed accidentally.
 
 **Verification:**
 
-- [ ] `npx prettier --check` passes for edited Markdown.
-- [ ] Searches for stale effect guidance and `CURRENT_SCHEMA_VERSION = 1` return only explicitly historical content.
-- [ ] Searches for duplicate contract language identify each remaining occurrence as current explanatory detail, compatibility history, or stale content to remove.
+- Run focused conflict-resolution, operation-capture/replay, and migration specs.
+- Run `npm run checkFile` for every changed TypeScript or SCSS file.
+- Run the full unit suite before merging the rollback.
+- Inspect the final diff specifically for unrelated modifications hidden among deletions.
 
-**Dependencies:** None.
-**Likely files:** `docs/sync-and-op-log/sync-contract.md`, `docs/sync-and-op-log/README.md`, `docs/sync-and-op-log/operation-rules.md`, `docs/sync-and-op-log/operation-log-architecture.md`.
-**Scope:** Medium.
+**Stop condition:** If any removed operation was present in a released schema or can exist on supported clients, stop. Convert that operation to an explicit compatibility reader instead of deleting it.
 
-### Task 2: Create the compatibility ledger
+### Task 2: Publish one concise current sync contract
 
-**Description:** Inventory compatibility code before introducing new boundaries. Record owner, oldest supported producer/client, evidence query, retain/remove condition, migration behavior, and rollback.
+**Size:** Small
 
-**Initial candidates:**
+**Dependencies:** Task 1
 
-- released single-file/split-file format migration and tombstones;
-- legacy PFAPI metadata bridge (`_syncVectorClockToPfapi`);
-- deprecated schema/snapshot aliases;
-- `CONFLICT_STALE` server compatibility;
-- transitional IndexedDB `adoptConnection` ownership;
-- provider/config cache invalidation and per-target local sync metadata.
+Create `docs/sync-and-op-log/sync-contract.md`. Keep the rules in Section 4 in a compact table with columns for contract, enforcement, and focused test.
+
+Update the README and contributor guide to point to it. Fix, rather than duplicate, stale claims:
+
+- `ALL_ACTIONS` is exceptional for op-log capture; ordinary state-changing effects use `LOCAL_ACTIONS`.
+- The shared schema version is 2, not 1.
+- Removed conflict-review behavior is not described as current.
+
+Do not create a separate coverage map or compatibility ledger. Add a short compatibility table to this document only where it clarifies a currently supported reader/writer path.
 
 **Acceptance criteria:**
 
-- [ ] Every candidate is classified as retain, normalize at ingress, freeze adoption, or remove after a named condition.
-- [ ] No removal is bundled with this inventory task.
-- [ ] File-format and server-version decisions have explicit multi-release rollback notes.
+- [ ] Every statement describes implemented behavior or is labeled as a known gap.
+- [ ] Each contract has an enforcement link and at least one focused test link.
+- [ ] README, contributor guidance, operation rules, and architecture status do not contradict it.
+- [ ] Proposed work remains in this plan, not the current contract.
 
 **Verification:**
 
-- [ ] Every ledger entry links to production call sites and focused tests/fixtures.
-- [ ] Markdown formatting passes.
+- Run Prettier on changed Markdown.
+- Search for the stale `Actions` exception and schema-version-1 claims.
+- Review links from a clean checkout path.
 
-**Dependencies:** None.
-**Likely file:** `docs/sync-and-op-log/compatibility-ledger.md`.
-**Scope:** Small.
+### Task 3: Isolate file-adapter state when the remote target changes
 
-### Gate A: Decide unreleased conflict-review scope
+**Size:** Small to medium
 
-The conflict journal/disjoint merge/review feature is not in `v18.14.0`. Before release, choose deliberately:
+**Dependencies:** None; may run independently of Tasks 1–2
 
-1. **Trim (recommended unless product value is clear):** remove review page, badge/banner, and mutable Flip workflow; independently decide whether disjoint merge is safe enough to retain.
-2. **Diagnostic middle ground:** retain a device-local read-only journal without review mutation or attention-grabbing UI.
-3. **Retain full feature:** accept its permanent UI, storage, test, and conflict-execution costs; create separate correctness work for the documented composition and Flip gaps.
+`FileBasedSyncAdapterService` currently keys long-lived revision/cache maps by provider ID. A WebDAV or local-file configuration can point the same provider ID at another remote target while the singleton adapter survives.
 
-Do not refactor this surface before the decision. If retained, conflict decomposition requires its own implementation plan after the known convergence gap is resolved or explicitly excluded.
+Start with a failing regression test that changes the configured target on the same adapter instance.
 
-### Gate B: Decide split-file lifecycle
+Prefer the smallest safe fix:
 
-Split-file sync is contained in `v18.14.0`; it cannot be reverted as unreleased code.
+1. explicitly clear target-scoped cached revision/cursor state and require a full remote read when the target configuration changes;
+2. introduce a stable target identity only if an explicit reset cannot be made correct.
 
-Choose:
-
-1. **Freeze adoption:** stop current clients from migrating fresh or single-file targets while keeping existing split targets joinable from upgraded, fresh, and reinstalled clients. This requires a remote-format-aware gate: hiding the global toggle alone is unsafe because an OFF client currently cannot open an existing split folder, while a carried `true` can migrate a different target. Record that supported old clients can still enable/re-enable it, so this reduces adoption but is not yet a retirement gate.
-2. **Retain:** characterize how the synchronized toggle propagates through ordinary operations, snapshots, old clients, provider switching, and locally hydrated state; only then consider remote-format auto-detection and internal strategy extraction.
-3. **Retire later:** freeze adoption first. Retirement is not implementable while supported released clients can automatically migrate a restored single-file folder back to split format; local-file/WebDAV storage has no server capability gate that can stop them.
-
-Driver extraction is conditional on retaining both formats. Retirement requires a separate mixed-version plan after every re-upgrading release is outside the supported window. Do not ship Freeze until Tasks 4A-4C prove both sides of its boundary: existing split remotes remain accessible, and new/single-file remotes are not upgraded by inherited configuration.
-
-### Task 2A: Execute the Gate A scope decision
-
-**Description:** Turn the product decision into deletion or an explicit retention commitment before adding architecture.
+Never place credentials, encryption keys, or raw secret-bearing URLs in an identity, log, or persistent cache key. Do not change the public provider interface unless the regression proves it necessary.
 
 **Acceptance criteria:**
 
-- [ ] If Trim is selected, remove one independently revertible family per PR: review route/page/badge/banner, mutable Flip workflow, journal, and disjoint merge. Decide journal and disjoint merge independently rather than treating the original feature commit as indivisible.
-- [ ] If the diagnostic middle ground is selected, delete mutation and attention UI before retaining the read-only journal.
-- [ ] If the full feature is retained, record the owner and correctness work for the known composition/Flip gaps; do not refactor it in Phase 0.
-- [ ] Each chosen deletion lands with its references, translations, tests, and documentation removed in the same PR.
-
-**Verification:** affected focused specs, `checkFile` for every changed TypeScript/SCSS file, full unit tests after the final family, and `git grep` proving removed entry points have no production references.
-**Dependencies:** Gate A.
-**Scope:** One small/medium PR per selected family.
-
-### Task 2B: Execute the Gate B adoption decision
-
-**Description:** If Freeze or Retire later is selected, replace the general migration toggle with a remote-format-aware compatibility path. Preserve existing split folders and allow a current fresh/reinstalled client to join one after explicit detection, while refusing to migrate a fresh or single-file target even when synchronized or locally retained configuration carries `true`. If Retain is selected, make no production change here and proceed to the characterization slices below.
-
-**Acceptance criteria:**
-
-- [ ] Freeze never coerces an existing `true` value to false and never downgrades a remote folder.
-- [ ] Existing split-enabled configurations still sync after upgrade; a fresh or reinstalled current client can join an already-split remote without exposing general new-format enablement.
-- [ ] A carried `true` value followed by provider/account/remote-target switching cannot migrate a fresh or single-file target.
-- [ ] Detection distinguishes “join an existing split remote” from “upgrade this remote”; the OFF-client recovery message never points to a removed control.
-- [ ] The limitation that supported old clients can re-enable/re-upgrade remains in the compatibility ledger.
-
-**Verification:** config form/default/hydration tests; fresh-client and reinstall joins of an existing split remote; an existing-`true` client upgrade; and `true` plus new-target/provider-switch cases that prove no migration write occurs.
-**Dependencies:** Gate B and Tasks 4A-4C.
-**Scope:** Medium if Freeze/Retire later is selected; no-op if Retain is selected.
-
-### Task 2C: Delete evidence-expired compatibility one family at a time
-
-**Description:** Use Task 2's ledger to select only proven-expired paths. Candidates include `migrateIfNeeded`, deprecated snapshot aliases/re-exports, `clearCache`, the PFAPI bridge, and `CONFLICT_STALE`; names are candidates, not authorization to delete.
-
-**Acceptance criteria:**
-
-- [ ] Each PR removes one ledger family and its tests after its producer/support condition is proven.
-- [ ] Migration, mixed-version, downgrade, and rollback evidence is attached to the ledger entry.
-- [ ] If no family is safely expired, record that result with evidence rather than manufacturing a deletion.
-
-**Verification:** focused compatibility/migration tests, full relevant package tests, and production-reference searches.
-**Dependencies:** Task 2.
-**Scope:** One small PR per eligible family.
-
-### Task 3: Produce a coverage map and fill only session-boundary gaps
-
-**Description:** Map existing specs to the session contract. Most download/upload/retry/latch behavior is already covered; add only missing external boundaries.
-
-**Missing currently-green cases to verify/add:**
-
-- normal sync and force upload skip when the session is busy and release ownership after resolve/reject;
-- immediate and WebSocket paths release after a rejected promise;
-- a busy entrant never resets the active session’s validation state.
-
-**Acceptance criteria:**
-
-- [ ] A checked-in matrix maps each top-level entry and maintenance path to its ownership, validation, error, and release tests.
-- [ ] Only uncovered cases add tests; existing assertions are not weakened.
-- [ ] Tests characterize unchanged production behavior. Any newly exposed failure becomes a separate red/green correctness slice rather than a blessed expectation.
+- [ ] State learned from target A cannot suppress reads or writes for target B.
+- [ ] Switching targets forces safe discovery/full-read behavior.
+- [ ] Reusing the same target retains existing revision optimizations.
+- [ ] Split migration, tombstones, pending-revision promotion, backup recovery, and delete ordering remain unchanged.
 
 **Verification:**
 
-- [ ] Focused wrapper, guard, validation, immediate-upload, WebSocket, and encryption-maintenance specs pass.
-- [ ] `npm run checkFile <filepath>` passes for every changed TypeScript file.
+- Add the red/green target-switch regression to the file adapter specs.
+- Run the focused file-adapter and wrapped-provider specs.
+- Run `npm run checkFile` for every changed TypeScript file.
 
-**Dependencies:** None.
-**Likely files:** one matrix document plus existing focused specs.
-**Scope:** Small.
+### Phase 0 checkpoint
 
-### Task 4A: Pin load-bearing dual-format adapter invariants
+Do not start orchestration work until:
 
-**Description:** Existing file integration suites use the default single-file mode. Add only the minimum shared matrix needed to protect existing folders before any file-format behavior change, including Task 2B's adoption freeze.
+- the semantic rollback is green;
+- the current contract has no proposed behavior in it;
+- the target-switch regression passes; and
+- the production diff is materially smaller than the baseline.
 
-**Acceptance criteria:**
+## 7. Phase 1 — Make the existing browser policy atomic
 
-- [ ] Single and split modes cover migration/tombstone, pending-revision promotion, backup recovery, cross-format delete ordering, and one concurrent-conflict case.
-- [ ] No broad parameterization of unrelated edge suites is included; add cases later only for code a subsequent task changes.
+### Task 4: Hold an exclusive page-lifetime Web Lock
 
-**Verification:** focused file integration specs, adapter spec, and every changed-file `checkFile` pass.
-**Dependencies:** Gate B must record a decision. Complete before Task 2B. Do not skip this coverage for a future retirement; it is evidence required to design that retirement safely.
-**Likely files:** file-based test harness plus at most two integration specs.
-**Scope:** Small/medium.
+**Size:** Medium
 
-### Task 4B: Pin synchronized-toggle and remote-target behavior
+**Dependencies:** Phase 0 checkpoint
 
-**Description:** Characterize that `isUseSplitSyncFiles` is synchronized configuration through ordinary operations, snapshots, and runtime hydration. Separately pin provider/account/remote-target switching before changing persisted map ownership, keying, or adoption behavior.
+Extend `LockService` with the narrow primitive needed by startup and acquire an exclusive, page-lifetime application-instance lock before data-bearing initialization.
 
-**Acceptance criteria:**
+For browsers with Web Locks:
 
-- [ ] Local-only-key boundary tests prove the toggle is not excluded, and operation/snapshot round trips prove its actual propagation.
-- [ ] Target switching proves whether cached expected versions, revisions, cursors, and clocks reset or are keyed safely.
+- request the lock with `ifAvailable`;
+- signal startup as soon as the callback receives a non-null lock;
+- keep the callback pending for the page lifetime;
+- release on unload/teardown;
+- treat failure to acquire as authoritative and show the existing multi-instance blocker.
 
-**Verification:** focused config/hydration, adapter, and target-switching specs pass.
-**Dependencies:** Task 4A. Complete before Task 2B.
-**Scope:** Small/medium.
+Do not await the lifetime request itself from startup; it resolves only when ownership ends.
 
-### Task 4C: Pin mixed-release migration and re-upgrade
+Keep BroadcastChannel detection for supported old clients and browsers without Web Locks. When Web Locks are available, the lock is the authority and BroadcastChannel is only compatibility/notification. Electron and native platforms retain their process-local behavior.
 
-**Description:** Add fixtures/cases for a current client, a released split-enabled client, and restored single-file data. Prove the current automatic re-upgrade and tombstone behavior before any retirement design.
-
-**Acceptance criteria:**
-
-- [ ] A restored single-file folder plus a released split-enabled client reproduces automatic migration back to split format.
-- [ ] Old-client writes, current-client recovery, and the current re-upgrade behavior are pinned as the baseline that Task 2B may change; this characterization task does not encode the future freeze as already implemented.
-- [ ] Broader multi-client/failure matrices are deferred until a production format change needs them.
-
-**Verification:** focused mixed-fixture file integration specs and scheduled WebDAV workflow pass.
-**Dependencies:** Tasks 4A and 4B. Complete before Task 2B.
-**Scope:** Medium.
-
-### Cross-tab ownership policy
-
-The implementation tasks below must first encode these semantics:
-
-- resume/visibility triggers keep opening the existing failsafe-backed suppression window synchronously, before debounce, the in-tab guard, or cross-tab acquisition; this early window suppresses stale selector-driven repair only and does not claim validation or publish sync status;
-- user-triggered sync, force operations, and destructive maintenance wait for the shared owner up to the existing lock timeout;
-- background immediate/WebSocket/automatic entries use a non-blocking `ifAvailable`/fallback equivalent and make no status or validation mutation when busy; a busy result registers one shared, coalesced after-release retry rather than relying on an unrelated future event;
-- a foreground acquisition timeout uses the current handled-error path; a background miss remains quiet and retryable;
-- after the early trigger-suppression step, the entry order is: synchronously claim the in-tab guard, acquire the cross-tab owner, then open/extend the session-owned hydration and validation lifecycle, set `_isSyncInProgress`, and publish `SYNCING` inside the lock callback; timeout/busy paths release the guard and perform none of those session lifecycle mutations;
-- a sync that already owns the session keeps it across conflict dialogs because the conflict critical section cannot be split safely; background entrants publish no lifecycle while waiting, but one coalesced waiter may remain pending and run after release;
-- maintenance confirmation happens before acquisition, mutable preflight is repeated after acquisition, and no interactive prompt occurs after the first destructive mutation;
-- only top-level sync/maintenance entries acquire the owner. If the selected edit policy makes local capture participate, acquisition occurs at one explicit capture boundary; nested upload/download/operation-log/archive helpers remain non-reentrant, retain their names/order/scope, and never acquire the session owner.
-
-Extending `LockService` with non-blocking acquisition must include an equivalent atomic fallback for Electron/Android/single-instance use; do not bypass the service with ad hoc `navigator.locks` calls. In a multi-tab-capable browser without `navigator.locks`, normal sync may retain today's explicitly unsafe fallback, but destructive maintenance must reject before its first mutation. The startup instance handshake is not a substitute because simultaneous tabs can both pass it.
-
-The owner returns an explicit `busy` outcome. One per-tab retry registration waits/requeues with a capped delay until the owner releases, sync is disabled/offline, or the app is destroyed; timeout alone does not silently discard pending work. During Phase 0 it retries the original entry class. After Task 6 it marks the full-sync coalescer dirty. Collision tests must prove `busy -> owner release -> successful work` without another user, timer, visibility, or network event.
-
-The session owner alone does not protect destructive maintenance from local actions in another tab: operation capture currently takes only the operation-log resource lock, and its pending-write counter is per tab. Before implementation, choose and document one safe cross-tab edit policy:
-
-1. local capture participates in maintenance ownership, queued actions detect the dataset generation change, and stale tabs rehydrate before their actions are persisted; or
-2. destructive maintenance refuses while another writable tab exists through an atomic presence/exclusion mechanism.
-
-Merely repeating `getUnsynced()` under the session owner is insufficient. The final preflight, state snapshot, and destructive `SUP_OPS` replacement must observe one shared cut of state; an operation already durable in another tab must never be absent from the snapshot and then cleared.
-
-### Task 5A: Establish ownership and close password/local-capture races
-
-**Description:** First create real two-page, same-origin browser reproducers for password-change versus normal sync and for a local action racing the destructive clean slate. In the same red/green PR, add the shared owner to normal sync and password change and implement the chosen cross-tab edit policy, retaining the in-tab guard, validation latch, and all resource locks.
+Expose only the reliability fact later maintenance needs: whether cross-tab ownership is guaranteed. Do not add owner IDs, heartbeats, generations, cross-tab busy states, or retries.
 
 **Acceptance criteria:**
 
-- [ ] The test is observed failing against baseline behavior and passes with the implementation; no red test is merged.
-- [ ] Password change cannot enter its first mutation while normal sync in another tab owns the session, and normal sync cannot enter while password mutation is active.
-- [ ] A local action dispatched and persisted immediately before or during password maintenance is either incorporated/serialized after a safe rehydrate or causes maintenance to abort; it is never silently removed from shared `SUP_OPS`.
-- [ ] The state snapshot used for clean slate is consistent with the final shared unsynced-op preflight, including work produced by another tab.
-- [ ] With `navigator.locks` unavailable, destructive maintenance fails before mutation; a simultaneous-start two-page case proves the per-tab mutex/startup handshake is not mistaken for exclusion.
-- [ ] Only top-level entries and, if selected, the one explicit local-capture boundary acquire the new lock; nested helpers cannot re-enter it and deadlock.
-- [ ] Lock timeout, rejection, conflict-dialog hold, preflight revalidation, preservation of the early trigger-suppression window, zero pre-acquisition validation/status mutation, and release-in-`finally` behavior follow the policy above.
+- [ ] Two simultaneous current browser tabs result in exactly one app initialization.
+- [ ] A second tab fails quickly instead of waiting to become active behind the first.
+- [ ] Closing/crashing the owner permits a later tab to initialize.
+- [ ] A current client and an old BroadcastChannel-only client still detect each other where the old protocol permits.
+- [ ] Missing Web Locks uses the existing fallback for ordinary startup but is reported as unreliable ownership.
+- [ ] Electron and native startup behavior is unchanged.
 
-**Verification:** focused unit specs plus two-page browser tests for wait/exclusion/release, local action before/during replacement, synchronous resume suppression, and missing-Web-Locks failure; password-change, clean-slate, operation-capture, and normal-sync specs pass.
-**Dependencies:** Task 3 and recorded Gate A/B decisions. Scope deletion and evidence-expired compatibility work do not block this correctness fix.
-**Scope:** One medium/large correctness PR; split the cross-tab capture mechanism from caller migration only if each intermediate state remains fail-safe.
+**Verification:**
 
-### Task 5B: Migrate remaining top-level sync entries one at a time
+- Unit-test acquired, unavailable, release, and missing-API paths.
+- Read `e2e/CLAUDE.md`, then extend the existing multi-tab E2E for simultaneous and sequential startup.
+- Run the focused startup/lock specs, E2E, and required `checkFile` commands.
 
-**Description:** Migrate force upload, immediate upload, and WebSocket download in separate PRs. Retain every existing guard until all entries and maintenance callers use the shared owner.
+**Stop condition:** If a supported browser cannot provide atomic ownership and BroadcastChannel cannot exclude a simultaneous startup, do not invent a distributed lease in this plan. Document that browser limitation and keep destructive maintenance fail-closed there.
 
-**Acceptance criteria:**
+### Phase 1 checkpoint
 
-- [ ] Each PR changes one entry class and adds its two-page exclusion/rejection-release case.
-- [ ] Foreground force waits; background immediate/WebSocket paths use non-blocking acquisition and preserve quiet retry semantics.
-- [ ] Password change cannot overlap the newly migrated entry from a second tab.
-- [ ] A background miss registers exactly one after-release retry and eventually runs without an external trigger.
+Stress simultaneous startup before relying on the single-tab invariant. No later task may claim cross-tab safety from the BroadcastChannel timeout alone.
 
-**Verification:** focused entry-path and password-race specs plus the same-origin browser test after each migration.
-**Dependencies:** Task 5A.
-**Scope:** One small/medium PR per entry class.
+## 8. Phase 2 — Collapse background sync paths
 
-### Task 5C: Move remaining encryption transitions into exclusive maintenance
+### Task 5: Add a background-only coalescer
 
-**Description:** Migrate enable/disable and any remaining destructive encryption callers one at a time, preserving their existing resource locks and fail-closed behavior. Delete the old flag-plus-polling exclusion only after every caller and top-level entry uses the shared owner.
+**Size:** Small
 
-**Acceptance criteria:**
+**Dependencies:** Task 4
 
-- [ ] Enable, disable, and password change cannot overlap sync or each other across tabs.
-- [ ] Every caller has pre-mutation failure, active-work drain, concurrent-maintenance, success, failure, and retry coverage.
-- [ ] The old exclusion mechanism is deleted only when production references reach zero.
+Add the smallest background entry point around normal full sync. Its complete state machine is:
 
-**Verification:** unit and two-page concurrency specs, clean-slate/rebuild specs, and scheduled encrypted SuperSync E2E pass after each caller migration.
-**Dependencies:** Task 5B. Implement before moving or removing side-channel guards.
-**Scope:** One small/medium PR per remaining caller, not one combined change.
+- `idle`: start one background full sync;
+- `running`: set `dirty`;
+- completion with `dirty`: clear it and run once more;
+- completion without `dirty`: return to `idle`.
 
-### Task 5D: Move every dataset replacement into exclusive maintenance
+Further triggers during the trailing run may set `dirty` again, but there is never more than one pending rerun.
 
-**Description:** Inventory and migrate every top-level `BackupService.importCompleteBackup()` family—JSON import, local-backup restore, SuperSync restore, profile switch, and persistent Undo/restore—without extracting or reorganizing the durable replacement workflow. Ownership starts after confirmation and covers the final shared preflight, backup-ID revalidation, atomic replacement, cursor reset, NgRx dispatch, and the cross-tab rehydrate/retirement handling required by the selected edit policy.
+Keep this entry point fire-and-forget. It must not accumulate result waiters or presentation state. Preserve the exact foreground `SyncWrapperService.sync()` result/error semantics and keep initial-sync bookkeeping in `SyncEffects`.
+
+The resume/visibility suppression window must still open synchronously at the existing trigger boundary, before debounce and before the coalescer.
 
 **Acceptance criteria:**
 
-- [ ] No top-level dataset replacement can overlap any sync entry, encryption maintenance, or another replacement across tabs.
-- [ ] The replacement retains the Task 5A cross-tab edit policy: another tab's durable or queued local action is never silently wiped.
-- [ ] Backup-ID mismatch, pre-import-backup failure, replacement failure, cursor-reset failure, and post-commit dispatch/reload behavior retain their current fail-safe or crash-resume semantics.
-- [ ] `OPERATION_LOG` remains the atomic persistence lock; the session owner surrounds the workflow but is never reacquired by nested persistence helpers.
+- [ ] A burst while idle starts one full sync.
+- [ ] Any burst while running causes one pending rerun, not one run per event.
+- [ ] A failure still permits the dirty rerun and leaves the coalescer idle afterward.
+- [ ] Foreground/user-triggered sync behavior is unchanged.
+- [ ] No cross-tab state, waiter list, retry timer, or new result type is added.
 
-**Verification:** focused backup/import/restore/profile specs plus two-page collision cases for sync, local capture, concurrent import, and Undo; relevant restore/conflict E2E passes.
-**Dependencies:** Tasks 5A-5C.
-**Scope:** One caller-family PR at a time.
+**Verification:**
 
-### Checkpoint 0
+- Unit-test idle, burst, dirty-rerun, repeated-dirty, and failure paths with deferred promises.
+- Run focused sync-wrapper/effects specs and required `checkFile` commands.
 
-- [ ] Contract and compatibility ledger reviewed by a sync maintainer.
-- [ ] Gates A and B have recorded decisions.
-- [ ] Gate A/B implementation tasks are complete or explicitly deferred with owner/rationale; every evidence-expired compatibility family selected in Task 2 is removed one family at a time.
-- [ ] Missing session, local-capture, replacement, encryption, and retained-format tests are green.
-- [ ] All destructive encryption and dataset-replacement callers use the shared owner and satisfy the cross-tab edit policy.
-- [ ] No public API or speculative engine/provider abstraction exists; the only new production ownership primitive is justified by the reproduced cross-tab maintenance race.
+### Task 6: Make WebSocket events notification-only
 
-**Rollback:** Documentation/test-only tasks can be reverted independently. If characterization exposes a correctness failure, stop structural work and open a focused correctness task; do not change the test to bless the failure.
+**Size:** Medium, deletion-heavy
 
-## 6. Phase 1 — Collapse duplicate top-level sync paths
+**Dependencies:** Task 5
 
-This phase changes trigger timing but deliberately keeps the existing upload/download protocol. It requires separate approval after Checkpoint 0 and must not be mixed with server-contract changes.
+Keep the WebSocket connection, authentication, and notification transport. Replace its download-only lifecycle with a request to the background coalescer, retaining only the useful debounce/event budget.
 
-### Gate C: Collapse partial side channels
-
-The current `SyncEffects` path is not a queue: leading-only `throttleTime` plus `exhaustMap` drops triggers during an active run. Phase 1 must first create one explicit `idle | running | dirty` coalescer, then choose the smallest WebSocket outcome:
-
-1. **Delete push transport (preferred if product requirements allow):** rely on visibility, online, activity, local-edit, startup, and manual triggers. Trade-off: no immediate convergence on an idle visible device; SuperSync currently has no wall-clock polling fallback. Remove the client first and keep the server endpoint through the old-client support window.
-2. **Retain transport as notification-only:** a WebSocket notification marks the full-sync coalescer dirty; it owns no download, validation, conflict, cursor, status, or auth lifecycle.
-3. **Retain a measured partial path:** use Section 7 only if the first two choices fail explicit latency/request budgets.
-
-Record these budgets before implementation:
-
-- an idle local edit starts its sync attempt within the current 2,000 ms immediate-upload debounce plus 250 ms scheduler tolerance;
-- if WebSocket push remains, an idle notification starts its attempt within the current 500 ms debounce plus 250 ms tolerance;
-- an idle local-edit burst adds at most one HTTP round trip versus today's immediate-upload path;
-- any number of triggers during one active run causes exactly one follow-up run, never zero or more than one;
-- initial-sync completion bookkeeping, user-triggered error presentation, and quiet background failure behavior remain unchanged.
-
-Only the normal coordinator publishes global sync status. Upload piggyback/conflict/frontier ordering remains unchanged. Do not add an ack-only protocol merely to preserve the old request count.
-
-### Task 6: Replace the drop-based trigger operator with one coalescer
-
-**Description:** Introduce one coordinator at the public full-sync request boundary before routing any new source to it. `idle | running | dirty` describes execution state, not the complete request contract: both `SyncEffects` and direct callers enter through one public request method returning `Promise<SyncStatus | 'HANDLED_ERROR'>`, while a private single-run method owns the actual wrapper lifecycle. The one pending-follow-up record aggregates presentation priority, initial-sync bookkeeping, and deferred result-bearing waiters. Do not create parallel queues in services.
+Delete `WsTriggeredDownloadService` and its duplicated validation, conflict, apply, cursor, provider-status, and cycle-guard policy.
 
 **Acceptance criteria:**
 
-- [ ] Inventory every direct top-level `SyncWrapperService.sync()` caller, including manual sync, before-close, initial/enablement flow, and wrapper-internal resyncs; classify each as queued or an evidence-backed bypass.
-- [ ] One public request path owns queuing and one private path executes a cycle; no direct caller can accidentally bypass the coordinator by calling the old single-run method.
-- [ ] The pending-follow-up record retains foreground waiters, `SyncStatus | 'HANDLED_ERROR'` results, presentation priority, and initial-sync completion metadata; the `dirty` bit is never the only retained request state.
-- [ ] Existing startup, visibility, online, activity, interval, enablement, and manual sources use the same owner.
-- [ ] Triggers during `running` set `dirty`; completion atomically starts exactly one follow-up and clears it.
-- [ ] Initial-sync completion is not lost when its trigger coalesces, and foreground/background origin only affects surviving presentation policy—not queue identity.
-- [ ] A foreground request arriving during a background run attaches to the required follow-up and its promise resolves/rejects with that follow-up's `SyncStatus | 'HANDLED_ERROR'`; it never inherits the background run's quiet result.
-- [ ] Multiple foreground requests for the same pending follow-up share that result. Before-close and internal resync callers are explicitly tested as queued or intentional bypasses rather than silently dropped.
-- [ ] A cross-tab owner's `busy` result marks pending work and produces exactly one run after owner release even though the local coalescer was not already `running`.
-- [ ] Resume/visibility sources still open the early trigger-suppression window synchronously before debounce and ownership; a coalesced or busy result cannot reopen the stale `DAY_CHANGE` repair race.
-- [ ] The fixed budgets above are executable assertions or recorded benchmark thresholds.
+- [ ] A valid WebSocket notification requests full sync through Task 5.
+- [ ] Bursts remain bounded.
+- [ ] Authentication/terminal connection errors retain their existing handling.
+- [ ] Piggyback, validation, conflict, cursor, and status behavior come only from full sync.
+- [ ] The download-only service and its production references are gone.
 
-**Verification:** deterministic trigger/effect specs for idle/running/dirty, direct-caller promise results, initial sync, before-close, internal resync, online/offline, foreground/background priority, cross-tab busy/release, failure, and one follow-up; wrapper specs pass.
-**Dependencies:** Gate C.
-**Scope:** Medium behavior change; no WebSocket/immediate deletion in this PR.
+**Verification:**
 
-### Task 7: Delete WebSocket push or reduce it to a notification source
+- Update WebSocket trigger tests to assert notification-to-background-sync behavior.
+- Run focused WebSocket, sync-wrapper, and operation-sync specs.
+- Run required `checkFile` commands.
 
-**Option A — delete:** remove client connection/reconnect/heartbeat and notification code; prove return-to-visible, online, activity, startup, local-edit, and manual convergence. Retain the server endpoint until the compatibility ledger's old-client condition expires, then delete server routing/limits in a separate PR.
+### Task 7: Make persisted local operations trigger full sync
 
-**Option B — notification-only:** characterize transient versus terminal auth first, route notifications into Task 6's coalescer, centralize terminal SuperSync auth/socket-stop policy in the surviving wrapper, and delete `WsTriggeredDownloadService`. Do not pass trigger provenance through the queue for auth handling.
+**Size:** Medium, deletion-heavy
 
-**Acceptance criteria:**
+**Dependencies:** Task 6
 
-- [ ] The chosen option meets its convergence and latency budgets.
-- [ ] No WebSocket event starts a parallel partial session or owns validation/status.
-- [ ] If retained, any terminal SuperSync auth failure stops the socket at the common wrapper boundary while tolerated transient 401 behavior remains unchanged.
-- [ ] Deleted client/server pieces have independent compatibility and rollback points.
+After the existing two-second persistence debounce, request background full sync. Delete `ImmediateUploadService` and its upload-only validation, piggyback, conflict, cursor, status, and retry lifecycle.
 
-**Verification:** coalescer/wrapper/provider-auth tests, multi-client convergence, visibility/online/activity cases, request-count comparison, and scheduled SuperSync E2E.
-**Dependencies:** Task 6 and Gate C.
-**Scope:** One medium client PR; later server deletion is a separate small/medium PR after its support condition.
-
-### Task 8: Route local-operation triggers through the same queue
+One extra HTTP round trip is an acceptable simplification cost. Do not re-create upload-only behavior inside the coalescer.
 
 **Acceptance criteria:**
 
-- [ ] The current 2,000 ms debounce is preserved unless Gate C explicitly changes its budget.
-- [ ] Local edits during an active session produce at most one follow-up session.
-- [ ] `ImmediateUploadService` is deleted only after edit-to-remote latency and request-count evidence is accepted.
-- [ ] Upload piggyback processing remains inside the normal coordinator, preserving deferred acknowledgement and conflict-frontier ordering.
+- [ ] Persisted local work requests full sync after the existing debounce.
+- [ ] Bursts are coalesced and no local operation is silently ignored because a run was already active.
+- [ ] Piggybacked remote operations follow the normal full-sync ordering contract.
+- [ ] The immediate-upload service and its production references are gone.
+- [ ] Removing the side path does not delay durable local operation capture behind a long-lived sync or maintenance lock.
 
-**Verification:** capture-effect, sync-trigger, wrapper, upload/conflict, and multi-client SuperSync specs plus scheduled E2E pass.
-**Dependencies:** Tasks 6 and 7 plus Gate C.
-**Scope:** Medium.
+**Verification:**
 
-### Checkpoint 1 — Primary simplification boundary
+- Update local-operation trigger tests for debounce, burst, running, and failure behavior.
+- Run focused capture, upload/piggyback, conflict, sync-wrapper, and effects specs.
+- Run required `checkFile` commands.
 
-- [ ] Partial triggers share the existing queue/coordinator, or each retained partial path has measured value.
-- [ ] Upload piggyback conflict/frontier ordering is unchanged unless the conditional protocol research below is separately approved.
-- [ ] Encryption and dataset-replacement maintenance have real exclusive ownership without dropping cross-tab local work.
-- [ ] Full unit/integration suites and scheduled SuperSync/WebDAV workflows pass.
+### Task 7 cleanup: remove obsolete cycle policy only when proven unused
 
-**Rollback:** Each trigger migration must be independently revertible. Do not delete an old side channel until the replacement path passes the same focused specs, concurrency cases, latency/request-count comparison, and scheduled E2E.
+After Tasks 6–7, delete `SyncCycleGuardService` only if:
 
-## 7. Fallback — Session consolidation if partial paths remain
+- production references are zero;
+- full sync cannot re-enter through another public path; and
+- session validation still has exactly one top-level owner.
 
-If Gate C retains multiple top-level paths, use one lifetime-only session abstraction. Do not add a third permanent wrapper around the existing guard and latch.
+Otherwise retain it and record the remaining owner. Do not contort code merely to satisfy a deletion target.
 
-Preferred end state: merge `SyncCycleGuardService` and `SyncSessionValidationService` into one `SyncSessionService` with a single state instance. During incremental migration, any compatibility facade must delegate to that same instance.
+### Phase 2 checkpoint
 
-Required result shape:
+Before maintenance work:
 
-```ts
-type SessionRunResult<T> =
-  | { kind: 'busy' }
-  | { kind: 'ran'; value: T; validationFailed: boolean };
-```
+- WebSocket and local-operation events both reach normal full sync;
+- foreground sync tests are unchanged;
+- no partial-sync service owns validation/status/cursor policy; and
+- the phase deletes substantially more production code than it adds.
 
-The service synchronously claims ownership, opens exactly one validation session, runs the callback, samples validation only after callback transitions finish, and releases in `finally`. Callers retain status/dialog policy.
+## 9. Phase 3 — Narrow in-tab maintenance correctness
 
-Migrate one path per PR in this order:
+### Task 8: Replace flag-and-poll exclusion with one exclusive boundary
 
-1. WebSocket download;
-2. immediate upload;
-3. normal sync;
-4. force upload, only after characterizing its currently different validation semantics;
-5. encryption and dataset-replacement maintenance through the exclusive/waiting API, not the busy-skipping API.
+**Size:** Medium
 
-At completion, production top-level in-tab sync-session lifecycle calls exist in one service only; the cross-tab owner remains the outer exclusion boundary. If old guard/latch services cannot be deleted, stop and reassess whether the abstraction reduced complexity.
+**Dependencies:** Phase 2 checkpoint
 
-## 8. Conditional later work
+Replace the check-then-set behavior in `runWithSyncBlocked()` with one exclusive in-tab boundary shared by:
 
-These are follow-up decisions, not pre-approved implementation phases.
+- normal foreground/background sync entry;
+- force/maintenance sync entry; and
+- encryption maintenance.
 
-### Ack-only upload protocol research
+Use the existing lock infrastructure and one lock name. Keep UI status signals as observations, not ownership authority. Activate the new boundary for all remaining entry points in the same change; do not leave a mixed flag/lock state between commits.
 
-This is not part of the recommended immediate roadmap. Reconsider it only if trigger consolidation leaves upload piggybacking as a measured dominant source of change cost.
+Do not make optimistic local operation capture acquire this long-lived boundary. Capture remains protected by the short operation-log critical section.
 
-Any spike must satisfy all of these before production adoption:
+**Acceptance criteria:**
 
-- the server response carries an explicit capability/version marker; a new client retains the old piggyback pipeline until it has observed that marker, including for self-hosted servers and server rollback;
-- the response supplies a stable server-sequence watermark covering its conflict decision; accepted local sequence IDs remain staged/unsynced until download, conflict/rejection handling, and the durable client cursor reach that watermark, so `getUnsyncedByEntity()` still provides the local conflict frontier;
-- staged acknowledgements/frontiers survive restart; the current in-memory pending-ack list is insufficient;
-- crash/retry tests cover server acceptance, response receipt, download, conflict resolution, cursor commit, and local acknowledgement boundaries and prove request-ID deduplication cannot lose an accepted acknowledgement or frontier;
-- compatibility tests cover new-client/old-server, old-client/new-server, server rollback, and capability loss;
-- the measured deletion of piggyback processing/status/test code exceeds the new capability, staging, retry, and rollout code.
+- [ ] Sync and maintenance cannot pass a check-then-set race.
+- [ ] A maintenance operation waits for active sync and prevents a new sync until it ends.
+- [ ] Foreground operations receive their current result/error behavior.
+- [ ] No nested acquisition occurs in force/encryption paths.
+- [ ] Operation capture remains durable while sync is running.
 
-If satisfying those conditions requires a second durable acknowledgement/frontier state machine, reject the protocol change and retain piggybacking.
+**Verification:**
 
-### File-format strategy extraction
+- Write deferred-promise tests for both race directions, failure release, timeout policy, and operation capture.
+- Run sync-wrapper, encryption, force-upload, capture, and lock specs.
+- Run required `checkFile` commands.
 
-Proceed only if Gate B retains both formats and Checkpoint 1 leaves the adapter as a proven hotspot.
+### Task 9: Keep each dataset replacement workflow inside the boundary
 
-First write an ownership design for:
+**Size:** Medium; split by caller family if more than five production files change
 
-- shared per-remote-target state: expected version, synthetic cursor, pending/committed revision, last clock, and caches;
-- a stable non-secret remote-target identity or safe reset/full-download rule on config/account change;
-- common encoded-file I/O, encryption, backup/recovery, and revision CAS;
-- cross-format detection and single-to-split migration;
-- cross-format delete-all ordering.
+**Dependencies:** Task 8
 
-Keep revision promotion in the facade/session-state owner after durable cursor commit. Keep migration/delete in cross-format coordinators. Only format algorithms belong in plain internal strategy modules; avoid additional Angular services. Preserve facade-level contract tests throughout. Because the move is over 500 lines, use a reproducible mechanical extraction and review semantic edits separately.
+Inventory the production callers of `BackupService.importCompleteBackup()`. Acquire the maintenance boundary at the workflow owner, after user confirmation and before the final mutable preflight.
 
-Write a dedicated implementation plan after the owner map is approved.
+The JSON file-import workflow must keep both backup import and import-encryption handling inside one acquisition. Nested persistence helpers continue to use the short operation-log lock and must not reacquire the maintenance boundary.
 
-### Destructive dataset replacement
+Wrap other caller families only with a failing concurrency test or a demonstrated path to overlap with sync. Make each additional family a focused follow-up rather than broadening the common abstraction.
 
-Phase 0 Task 5D already gives every replacement caller cross-tab ownership; this conditional work concerns internal workflow extraction only. If the implementation remains painful after Checkpoint 1, create a separate plan with three green slices:
+When reliable browser ownership from Task 4 is unavailable, destructive replacement must fail before mutation. Electron/native remain protected by their single-instance plus in-process boundary.
 
-1. characterize preflight, capture-race, backup, atomic replacement, cursor, replay, resume, and rollback ordering;
-2. extract the durable workflow behind existing delegating methods;
-3. separate boot-time recovery presentation without losing persistent Undo, dismissal/retirement, or backup-ID mismatch handling.
+**Acceptance criteria:**
 
-### Persistence
+- [ ] No sync can begin between JSON state replacement and its encryption/server-reset handling.
+- [ ] User confirmation occurs before acquiring the boundary; mutable preflight is repeated after acquisition.
+- [ ] No prompt occurs after destructive mutation begins.
+- [ ] E2EE server-restore prohibitions fail before local or remote mutation.
+- [ ] The workflow has one maintenance owner and no nested maintenance acquisition.
+- [ ] Backup atomicity, recovery, and clean-slate ordering remain unchanged.
 
-Finish native SQLite token flip, migration wiring, staged retained-source rollout, and removal of `adoptConnection` first. Retain `OperationLogStoreService` as the atomic facade. `RemoteOperationApplyStorePort` already exists; do not recreate it. After rollout, inventory consumer method sets and add at most one capability seam only if it deletes a real dependency or enables substitution without extra Angular tokens.
+**Verification:**
 
-### Conflict execution
+- Add a red/green JSON import-versus-sync concurrency test.
+- Test unavailable reliable ownership, cancellation, encryption failure, and release on error.
+- Run focused file-import, backup, encryption, sync-wrapper, and lock specs.
+- Run required `checkFile` commands.
 
-Keep behind Gate A and a separate correctness/implementation plan. Any future split must preserve the entire existing operation-log critical section. Reuse existing `@sp/sync-core` planners; do not create another generic planning layer. Preserve the exact “merged op appended, then best-effort journal” ordering.
+## 10. Deferred compatibility work
 
-### Public engine package
+No compatibility deletion is authorized by this plan.
 
-Create `@sp/sync-engine` only when a concrete second host exists and the app-side seam is stable enough that extraction is mostly mechanical.
+| Surface                             | Keep now | Reconsider only when                                                                                     |
+| ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| Split-file read/write/migration     | Yes      | The minimum supported client can read the chosen successor and rollback no longer requires split writes. |
+| Single-file/tombstone readers       | Yes      | Remote-format telemetry is not required; use an explicit support/version policy and fixture audit.       |
+| Native persistence transition paths | Yes      | SQLite migration and rollout are complete, downgrade behavior is decided, and recovery fixtures pass.    |
+| Operation/schema migrations         | Yes      | No supported client or stored backup can emit the old form.                                              |
 
-### Wrapper error-policy extraction
+Existing split-format tests already cover migration/tombstones, pending-revision promotion, backup recovery, and delete ordering. Do not add a second characterization suite unless it exposes a missing contract.
 
-Do not characterize every branch in the already-large wrapper spec pre-emptively. Before a concrete error-policy move, cover only the families that extraction will touch—such as empty body/legacy format, lock/auth, password/decryption, WebCrypto, or packaged-platform permission handling—and land those tests against unchanged production behavior first.
+## 11. Reassessment gate
 
-## 9. Verification and rollback matrix
+After Phase 3, collect:
 
-| Area                          | Focused verification                                   | Checkpoint verification             | Rollback                                               |
-| ----------------------------- | ------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Contracts/compatibility       | Markdown + evidence searches                           | Maintainer review                   | Revert docs independently                              |
-| Session/maintenance           | guard, validation, capture, entry, import, encryption  | full unit + encrypted SuperSync E2E | revert one path; no partial mutation                   |
-| Trigger consolidation         | WS/immediate/trigger/wrapper specs                     | scheduled SuperSync                 | keep old trigger until parity, revert independently    |
-| Conditional ack-only research | capability/frontier/crash/old-server contracts         | multi-client + scheduled SuperSync  | retain piggyback pipeline until capability window ends |
-| File strategies               | adapter + both-format integration + migration/recovery | scheduled WebDAV/SuperSync          | unchanged public facade; revert mechanical stack       |
-| Replacement                   | rebuild/backend/recovery specs                         | restore/conflict E2E                | delegating facade + preserved backup                   |
-| Persistence                   | IDB/SQLite contracts                                   | native device gate                  | retained IDB source/feature flag                       |
-| Conflict                      | conflict/journal/archive/convergence                   | multi-client SuperSync              | separate semantic project; no mixed refactor           |
+- production lines and services deleted versus added;
+- remaining independent sync lifecycle owners;
+- remaining branches in `SyncWrapperService`, `OperationLogSyncService`, and `FileBasedSyncAdapterService`;
+- focused and full-suite failures;
+- performance/network impact of full sync for former partial triggers; and
+- unsupported-browser behavior.
 
-Every modified `.ts` or `.scss` file must pass `npm run checkFile <filepath>`. Run the full scheduled SuperSync and WebDAV workflow at each protocol or high-risk checkpoint.
+Only then decide whether another extraction is justified.
 
-## 10. Success measures
+A new abstraction is allowed only when it:
 
-- Top-level trigger work has one queue/coordinator; encryption and dataset-replacement maintenance participate in cross-tab exclusion without dropping another tab's local actions.
-- Current upload acknowledgement preserves the server's atomic conflict-decision contract; any future decoupling proves a durable decision watermark/frontier before adoption.
-- Normal sync changes do not require editing normal, immediate, and WebSocket lifecycle code separately.
-- Compatibility surface has owners and expiry conditions; expired branches are deleted one family at a time.
-- If both file formats remain, format-specific changes normally stay in one strategy while shared revision/migration/delete invariants have one owner.
-- Persistence atomicity and the existing resource-lock scopes remain unchanged.
-- Documentation has one current invariant source and an explicit known-gap list.
-- No new public package or abstraction survives unless it deletes more code/dependencies than it adds.
+1. has at least two concrete current consumers;
+2. removes more state and policy than it adds;
+3. preserves the contracts in Section 4;
+4. has a migration and rollback story; and
+5. can be reviewed as a behavior-neutral change.
 
-## 11. First approval tranche
+## 12. Approval and commit boundaries
 
-Approve only Tasks 1-5D and the Gate A/B decisions initially. Then approve trigger consolidation (Gate C and Tasks 6-8) separately. Do not approve conditional protocol or extraction work until Checkpoint 1 shows which complexity remains.
+Approve work in tranches:
+
+1. Tasks 1–3;
+2. Task 4;
+3. Tasks 5–7;
+4. Tasks 8–9.
+
+Stop after each checkpoint for review. Do not combine phases into one pull request.
+
+Suggested commit boundaries:
+
+1. `refactor(sync): remove unreleased conflict review flow`
+2. `docs(sync): define current sync contract`
+3. `fix(sync): reset file state when remote target changes`
+4. `fix(startup): make browser single-instance ownership atomic`
+5. `refactor(sync): coalesce background full-sync requests`
+6. `refactor(sync): route websocket events through full sync`
+7. `refactor(sync): replace immediate upload with full sync`
+8. `fix(sync): serialize sync and maintenance atomically`
+9. `fix(sync): keep import and encryption maintenance atomic`
+
+Each implementation commit must contain its focused tests. Every modified TypeScript or SCSS file must pass `npm run checkFile <filepath>`.
