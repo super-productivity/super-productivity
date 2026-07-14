@@ -16,6 +16,7 @@ import { Operation } from '../../core/operation.types';
 import { convertOpToAction } from '../../apply/operation-converter.util';
 import { roundTimeSpentForDay } from '../../../features/tasks/store/task.actions';
 import { taskReducer } from '../../../features/tasks/store/task.reducer';
+import { selectTaskById } from '../../../features/tasks/store/task.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Task } from '../../../features/tasks/task.model';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
@@ -99,6 +100,10 @@ describe('round-time conflict convergence integration (#8944)', () => {
   };
 
   beforeEach(async () => {
+    // MockStore.overrideSelector() mutates the shared selector singleton. This
+    // integration invokes the real selector directly, so clear any result left
+    // by another spec in the same randomized Karma bundle.
+    selectTaskById.clearResult();
     resetTestUuidCounter();
 
     initialState = createStateWithExistingTasks([TASK_X, TASK_Y]);
@@ -196,6 +201,7 @@ describe('round-time conflict convergence integration (#8944)', () => {
   });
 
   afterEach(async () => {
+    selectTaskById.clearResult();
     await opLogStore._clearAllDataForTesting();
     await journal.clearAll();
     TestBed.resetTestingModule();
