@@ -454,7 +454,7 @@ describe('TaskUiEffects', () => {
       sub.unsubscribe();
     });
 
-    it('should show the "moved to project" snack for a real move (task had a source project)', () => {
+    it('should show the "moved to project" snack for a real move of a task that had a source project into the Inbox', () => {
       const sub = effects.goToProjectSnack$.subscribe();
       actions$.next(
         TaskSharedActions.moveToOtherProject({
@@ -466,6 +466,19 @@ describe('TaskUiEffects', () => {
       expect(snackServiceMock.open).toHaveBeenCalled();
       const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
       expect(snackParams.msg).toBe(T.F.TASK.S.MOVED_TO_PROJECT);
+      sub.unsubscribe();
+    });
+
+    it('should still show the snack for a project-less task assigned to a NON-Inbox project (quick-add default-project), since the suppression is scoped to Inbox filing', () => {
+      const sub = effects.goToProjectSnack$.subscribe();
+      actions$.next(
+        TaskSharedActions.moveToOtherProject({
+          task: createMockTaskWithSubTasks({ id: 'quick-1', projectId: '' }),
+          targetProjectId: 'default-project',
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
       sub.unsubscribe();
     });
   });

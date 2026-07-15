@@ -36,11 +36,21 @@ export class NavigateToTaskService {
       if (!task) {
         throw new Error(`Task with id ${taskId} not found`);
       }
-      const location = await this._getLocation(task, isArchiveTask);
+      const { location, orphanToHeal } = await this._resolveNavTarget(
+        task,
+        isArchiveTask,
+      );
       if (!location) {
         // Never fall through with an empty location: `''.startsWith` would make
         // the same-context check below always true and swallow the navigation.
         throw new Error(`Could not resolve a location for task ${taskId}`);
+      }
+      // Perform the orphan self-heal here (not inside the resolver) so the
+      // synced state mutation is an explicit navigation step, not a hidden side
+      // effect of computing a URL. Must run before the same-context check below
+      // so the task is added to the Inbox list in either branch. (#8780)
+      if (orphanToHeal) {
+        this._healOrphanTaskToInbox(orphanToHeal);
       }
       recordSearchNavDebug('navigateToTask:start', {
         taskId,
@@ -85,7 +95,16 @@ export class NavigateToTaskService {
     }
   }
 
-  private async _getLocation(task: Task, isArchiveTask: boolean): Promise<string> {
+  /**
+   * Pure resolver: computes the navigation location and, for an orphan task,
+   * returns the top-level task that must be re-homed into the Inbox — WITHOUT
+   * mutating state. The caller (`navigate`) performs the heal, keeping this a
+   * side-effect-free "where does this task live?" query. (#8780)
+   */
+  private async _resolveNavTarget(
+    task: Task,
+    isArchiveTask: boolean,
+  ): Promise<{ location: string; orphanToHeal: Task | null }> {
     const tasksOrWorklog = isArchiveTask ? 'history' : 'tasks';
 
     let taskToCheck = task;
@@ -100,24 +119,34 @@ export class NavigateToTaskService {
     }
 
     if (!isArchiveTask && this._isDueToday(taskToCheck)) {
-      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
+      return { location: `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`, orphanToHeal: null };
     }
 
     if (taskToCheck.projectId) {
-      return `/project/${taskToCheck.projectId}/${tasksOrWorklog}`;
+      return {
+        location: `/project/${taskToCheck.projectId}/${tasksOrWorklog}`,
+        orphanToHeal: null,
+      };
     } else if (taskToCheck.tagIds?.length > 0 && taskToCheck.tagIds[0]) {
-      return `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`;
+      return {
+        location: `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`,
+        orphanToHeal: null,
+      };
     } else if (!isArchiveTask) {
       // No project, no tag, and not due today: the task's id is in no work
       // context's `taskIds` ordering array, so it renders in no list view
-      // (routing to Today only reveals tasks due or overdue *today*). Self-heal
-      // the orphan into the Inbox — this assigns its projectId and adds it to the
-      // Inbox list — so navigation can actually reveal and focus it. (#8780)
-      this._healOrphanTaskToInbox(taskToCheck);
-      return `/project/${INBOX_PROJECT.id}/${tasksOrWorklog}`;
+      // (routing to Today only reveals tasks due or overdue *today*). It must be
+      // self-healed into the Inbox — assigning its projectId and adding it to the
+      // Inbox list — so navigation can actually reveal and focus it. moveToOther-
+      // Project operates on a top-level task, so an orphaned subtask whose parent
+      // could not be loaded (still has `parentId`) is routed but not healed. (#8780)
+      return {
+        location: `/project/${INBOX_PROJECT.id}/${tasksOrWorklog}`,
+        orphanToHeal: taskToCheck.parentId ? null : taskToCheck,
+      };
     } else {
       devError("Couldn't find task location");
-      return '';
+      return { location: '', orphanToHeal: null };
     }
   }
 
@@ -129,9 +158,9 @@ export class NavigateToTaskService {
    * passing an empty `subTasks` here is safe. (#8780)
    */
   private _healOrphanTaskToInbox(task: Task): void {
-    // moveToOtherProject operates on a top-level task; `task` is already the
-    // parent for subtasks. Skip (rather than throw) if we somehow still hold a
-    // subtask — e.g. an orphaned subtask whose parent could not be loaded.
+    // Defense-in-depth: `moveToOtherProject` operates on a top-level task, so
+    // never move a subtask as if it were a parent (the resolver already returns
+    // `null` for subtasks, so this only guards against future misuse).
     if (task.parentId) {
       return;
     }

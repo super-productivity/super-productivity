@@ -17,6 +17,7 @@ import {
   expectTagUpdates,
 } from './test-utils';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   TaskRepeatCfg,
@@ -101,6 +102,49 @@ describe('projectSharedMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    it('should heal an orphan task (empty-string source projectId) into the Inbox without throwing (#8780)', () => {
+      // This is the exact repair the #8780 navigation self-heal relies on: an
+      // orphan with a falsy `projectId` whose source "project" does not exist.
+      const testState = createBaseState();
+      testState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id] = createMockProject({
+        id: INBOX_PROJECT.id,
+        title: 'Inbox',
+        taskIds: [],
+        backlogTaskIds: [],
+      });
+      (testState[PROJECT_FEATURE_NAME].ids as string[]) = [
+        ...(testState[PROJECT_FEATURE_NAME].ids as string[]),
+        INBOX_PROJECT.id,
+      ];
+      testState[TASK_FEATURE_NAME].entities.orphan1 = createMockTask({
+        id: 'orphan1',
+        projectId: '',
+        tagIds: [],
+        subTaskIds: [],
+      });
+      (testState[TASK_FEATURE_NAME].ids as string[]) = ['orphan1'];
+
+      const payload: TaskWithSubTasks = {
+        ...createMockTask({ id: 'orphan1', projectId: '', subTaskIds: [] }),
+        subTasks: [],
+      };
+      const action = createMoveToOtherProjectAction(payload, INBOX_PROJECT.id);
+
+      expect(() => metaReducer(testState, action)).not.toThrow();
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+
+      // (a) the orphan is now owned by the Inbox
+      expect(updatedState[TASK_FEATURE_NAME].entities.orphan1.projectId).toBe(
+        INBOX_PROJECT.id,
+      );
+      // (b) and added to the Inbox's ordering array so it renders
+      expect(
+        updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].taskIds,
+      ).toContain('orphan1');
+      // (c) the (non-existent) empty source project caused no source-strip / crash
+      expect(updatedState[PROJECT_FEATURE_NAME].entities.project1.taskIds).toEqual([]);
     });
 
     it('should remove task from actual source project even if payload is stale', () => {

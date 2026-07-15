@@ -160,4 +160,50 @@ describe('NavigateToTaskService', () => {
       jasmine.objectContaining({ type: 'ERROR' }),
     );
   });
+
+  it('heals an orphan and focuses it in place when already on the Inbox (same-context)', async () => {
+    // Already on the Inbox, so navigate() takes the same-context branch — but the
+    // heal must still fire first so the task is added to the Inbox list.
+    router.url = `/project/${INBOX_PROJECT.id}/tasks`;
+    taskService.getByIdFromEverywhere.and.resolveTo(
+      createTask({ id: 't6', projectId: '', tagIds: [] }),
+    );
+
+    await service.navigate('t6');
+
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.moveToOtherProject.type,
+        targetProjectId: INBOX_PROJECT.id,
+      }),
+    );
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(layoutService.focusTaskInViewWhenReady).toHaveBeenCalled();
+  });
+
+  it('does NOT re-home an orphaned subtask whose parent cannot be loaded (moveToOtherProject is top-level only)', async () => {
+    // The subtask itself resolves; its parent lookup returns undefined, so
+    // `taskToCheck` stays the subtask. It routes to the Inbox but must NOT be
+    // dispatched as a top-level move (which would corrupt the parent/child link).
+    taskService.getByIdFromEverywhere.and.callFake((id: string) =>
+      Promise.resolve(
+        id === 'sub-1'
+          ? createTask({
+              id: 'sub-1',
+              parentId: 'missing-parent',
+              projectId: '',
+              tagIds: [],
+            })
+          : (undefined as unknown as Task),
+      ),
+    );
+
+    await service.navigate('sub-1');
+
+    expect(store.dispatch).not.toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(
+      [`/project/${INBOX_PROJECT.id}/tasks`],
+      jasmine.anything(),
+    );
+  });
 });
