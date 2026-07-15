@@ -234,6 +234,49 @@ export class WsTriggeredDownloadService implements OnDestroy {
           return false;
         }
 
+        // A WS-triggered download can create LWW local-win ops when incoming
+        // remote ops conflict with pending local ops (the losing local op is
+        // rejected and a replacement op appended straight to the op-log,
+        // bypassing the capture effect). Unlike ImmediateUploadService and the
+        // main sync loop, this path has no follow-up upload, so those preserved
+        // edits would sit unsynced until the next user edit or periodic sync
+        // (unbounded for manual-sync-only users). Push them now.
+        if (result.kind === 'ops_processed' && result.localWinOpsCreated > 0) {
+          SyncLog.log(
+            `WsTriggeredDownloadService: LWW created ${result.localWinOpsCreated} ` +
+              `local-win op(s), re-uploading`,
+          );
+          const uploadResult =
+            await this._syncService.uploadPendingOps(syncCapableProvider);
+          if (uploadResult.kind === 'blocked_incompatible') {
+            SyncLog.warn(
+              'WsTriggeredDownloadService: Local-win re-upload blocked by an incompatible operation',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+            return false;
+          }
+          // Surface the same terminal outcomes ImmediateUploadService does: a
+          // permanently-rejected or baseline-blocked local-win op is a preserved
+          // edit that failed to converge and must not stay silent (the WS path
+          // never claims IN_SYNC, so under-reporting here would leave it invisible
+          // until the next full sync). Single follow-up only, matching the sibling
+          // side channel — a re-upload that itself yields more local-win ops or a
+          // transient throw defers to the next sync/trigger.
+          if (uploadResult.kind === 'completed') {
+            if (
+              uploadResult.permanentRejectionCount > 0 ||
+              uploadResult.blockedByRejectedFullState === true
+            ) {
+              this._providerManager.setSyncStatus('ERROR');
+              return false;
+            }
+            if (uploadResult.encryptionRequiredKeyMissing === true) {
+              this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+              return false;
+            }
+          }
+        }
+
         if (this._sessionValidation.hasFailed()) {
           SyncLog.err(
             'WsTriggeredDownloadService: Post-sync validation failed during WS download — reporting ERROR',
