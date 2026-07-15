@@ -339,15 +339,15 @@ export const suggestConflictResolution = <TOperation extends Operation<string>>(
  * devices see "local" and "remote" swapped, so comparing timestamps alone makes
  * each keep the other's value and diverge permanently. Comparing the winning
  * clientIds instead — over the same unordered pair on both devices — makes them
- * converge. Mirrors `noiseTiebreakSide`'s `(timestamp, clientId)` rule in the
- * client's disjoint-merge path. A genuine cross-device tie always has exactly one
- * op at the max timestamp per side (same-client ops on one entity are never
+ * converge, following the same `(timestamp, clientId)` principle as the client's
+ * `noiseTiebreakSide`. A genuine cross-device tie always has exactly one op at
+ * the max timestamp per side (same-client ops on one entity are never
  * vector-clock-concurrent, so they never reach here as a conflict).
  */
-const winningClientId = <TOperation extends Operation<string>>(
-  ops: TOperation[],
+const winningClientId = (
+  ops: readonly Operation<string>[],
   maxTimestamp: number,
-): string => (ops.find((op) => op.timestamp === maxTimestamp) ?? ops[0])?.clientId ?? '';
+): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
 
 /**
  * Plans last-write-wins conflict resolution without looking up host state or
