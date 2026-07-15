@@ -310,4 +310,59 @@ describe('Task-time replay state machine integration', () => {
         .toEqual(comparableTaskTimes(acceptedState));
     }
   });
+
+  it('preserves an unflushed tracked-time delta across a snapshot hydration by flushing it into a durable op (#3)', () => {
+    // Reduced repro of the sync-hydration data-loss scenario at the reducer/
+    // replay level. A tracked-but-unflushed delta lives only in the live store
+    // and the in-memory accumulator when a remote snapshot that never saw it
+    // replaces the live store. SyncHydrationService now flush()es the accumulator
+    // BEFORE loadAllData, so the delta becomes a durable op that re-applies
+    // additively on replay onto the delta-less remote baseline.
+    taskTimeSync.clear();
+    dispatchedEntries = [];
+
+    // 1. Live state after tracking +500ms locally (addTimeSpent already applied).
+    const trackedDelta = 500;
+    let liveState = createState([createTask('task-1', { [DATES[0]]: 1000 })]);
+    liveState = taskReducer(
+      liveState,
+      TimeTrackingActions.addTimeSpent({
+        task: liveState.entities['task-1']!,
+        date: DATES[0],
+        duration: trackedDelta,
+        isFromTrackingReminder: false,
+      }),
+    );
+    taskTimeSync.accumulate('task-1', trackedDelta, DATES[0]);
+    expect(liveState.entities['task-1']!.timeSpentOnDay[DATES[0]]).toBe(1500);
+
+    // 2. The fix: flush BEFORE hydration replaces the live store. The delta is
+    // dispatched as a durable syncTimeSpent op (captured here as an entry).
+    taskTimeSync.flush();
+    expect(dispatchedEntries).toEqual([
+      { id: 'task-1', date: DATES[0], duration: trackedDelta },
+    ]);
+    const durableEvents: ReplayEvent[] = dispatchedEntries.map((entry) => ({
+      kind: 'delta',
+      entry,
+    }));
+
+    // 3. Hydration replaces the live store with a REMOTE snapshot that never saw
+    // the delta (it was never uploaded) — task-1 is back to 1000.
+    const hydratedRemoteState = createState([createTask('task-1', { [DATES[0]]: 1000 })]);
+
+    // 4. Replaying the durable op onto the hydrated baseline restores the delta.
+    const afterReplay = durableEvents.reduce(applyReplayEvent, hydratedRemoteState);
+    expect(afterReplay.entities['task-1']!.timeSpentOnDay[DATES[0]]).toBe(1500);
+    expect(afterReplay.entities['task-1']!.timeSpent).toBe(1500);
+
+    // Contrast: without the flush at hydration time the delta is not yet durable,
+    // so replaying the (empty) durable log leaves the hydrated baseline at 1000 —
+    // the silent under-count this fix closes.
+    const withoutFlush = ([] as ReplayEvent[]).reduce(
+      applyReplayEvent,
+      hydratedRemoteState,
+    );
+    expect(withoutFlush.entities['task-1']!.timeSpentOnDay[DATES[0]]).toBe(1000);
+  });
 });
