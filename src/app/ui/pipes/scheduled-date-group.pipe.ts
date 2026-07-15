@@ -42,7 +42,14 @@ export class ScheduledDateGroupPipe implements PipeTransform {
     }
 
     const date = dateStrToUtcDate(value);
-    const locale = this._dateTimeFormatService.currentLocale();
+    // The spelled-out weekday must follow the UI language under the ISO 8601
+    // option (the `sv` sentinel would otherwise leak Swedish, e.g. "ons 15/1").
+    // This is a compact group-header label, so the whole (short) format follows
+    // the UI language when ISO is active rather than splitting weekday vs numeric
+    // and losing the locale-native separator. #8987 follow-up.
+    const locale =
+      this._dateTimeFormatService.isoTextLocale() ??
+      this._dateTimeFormatService.currentLocale();
 
     // Format with weekday and date: "Wed 1/15"
     const formatter = new Intl.DateTimeFormat(locale, {
