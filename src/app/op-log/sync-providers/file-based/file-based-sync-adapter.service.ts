@@ -456,6 +456,35 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
+   * Aborts an in-flight DOWNLOAD before it commits a remote baseline if the
+   * target changed since the download started. Writes are already covered by
+   * `_withTargetGuard`, but a download READS target A, and if the target then
+   * switches (config/account/folder), staging A's baseline (sync version,
+   * vector clock, rev) and letting the caller advance the seq cursor under the
+   * shared provider id would make the next sync skip the NEW target's ops from a
+   * stale cursor — silent data loss. Dropping the target-scoped state and
+   * aborting forces the next sync to re-read the current target from zero;
+   * `SyncWrapperService` maps the error to a silent self-heal.
+   *
+   * This closes the dominant switch-during-download window. A switch after a
+   * successful download — during op apply, or between an upload's write and its
+   * own `setLastServerSeq` cursor commit — is a narrower residual that only a
+   * per-cycle session-generation captured in the orchestrator could fully close;
+   * within the current per-operation model the write guard plus this download
+   * abort cover the realistic exposure. (Task 2.)
+   */
+  private _abortDownloadIfTargetChanged(
+    capturedGeneration: number,
+    providerKey: string,
+  ): void {
+    if (this._targetGeneration !== capturedGeneration) {
+      this._resetTargetState(providerKey);
+      this._persistState();
+      throw new FileSyncTargetChangedError(capturedGeneration, this._targetGeneration);
+    }
+  }
+
+  /**
    * Creates an OperationSyncCapable adapter for a file-based provider.
    *
    * @param provider - The underlying file provider (WebDAV, Dropbox, etc.)
@@ -942,7 +971,8 @@ export class FileBasedSyncAdapterService {
     // generation captured at the download boundary, so a mid-download target
     // switch aborts the resume before it lands the old target's migration on the
     // new one. Reads (downloadFile/getFileRev) pass through unaffected. (Task 2.)
-    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
+    const capturedGeneration = this._targetGeneration;
+    const provider = this._withTargetGuard(rawProvider, capturedGeneration);
     const providerKey = this._getProviderKey(provider);
 
     // SPAP-11: split-file ("Surgical sync") download path (opt-in). When OFF
@@ -956,6 +986,7 @@ export class FileBasedSyncAdapterService {
         excludeClient,
         limit,
         providerKey,
+        capturedGeneration,
       );
     }
 
@@ -1183,6 +1214,12 @@ export class FileBasedSyncAdapterService {
           'Another client may have uploaded a snapshot. Signaling gap detection.',
       );
     }
+
+    // Abort before committing a baseline read from a target that switched
+    // mid-download: staging its sync-version/clock/rev and letting the caller
+    // advance the seq cursor under the shared provider id could make the next
+    // sync skip the NEW target's ops from a stale cursor. (Task 2.)
+    this._abortDownloadIfTargetChanged(capturedGeneration, providerKey);
 
     // Stage the remote baseline until the caller confirms that the downloaded
     // snapshot/ops were durably applied. A cancelled conflict dialog must leave
@@ -2419,6 +2456,7 @@ export class FileBasedSyncAdapterService {
     excludeClient: string | undefined,
     limit: number,
     providerKey: string,
+    capturedGeneration: number,
   ): Promise<FileSnapshotOpDownloadResponse> {
     // SPAP-10 rev pre-check, extended to the ops file. Gated on `sinceSeq > 0`
     // (review follow-up): a forceFromSeq0 download (sinceSeq === 0) re-pulls the
@@ -2537,6 +2575,10 @@ export class FileBasedSyncAdapterService {
       opsFile.oldestOpSyncVersion !== undefined &&
       opsFile.oldestOpSyncVersion > sinceSeq + 1;
     let needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
+
+    // See _downloadOps: abort before committing a baseline read from a target
+    // that switched mid-download. (Task 2.)
+    this._abortDownloadIfTargetChanged(capturedGeneration, providerKey);
 
     this._pendingExpectedSyncVersions.set(providerKey, opsFile.syncVersion);
     this._pendingVectorClocks.set(providerKey, opsFile.vectorClock);
