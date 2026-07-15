@@ -286,6 +286,89 @@ describe('OperationEncryptionService', () => {
       });
     });
 
+    // --- project-move footprint (op.entityIds) across the real crypto flow ---
+    // Proves the attack model concretely: entityIds ride OUTSIDE the AES-GCM
+    // ciphertext (tamperable), the authenticated payload footprint stays intact,
+    // and the interim #2 gate catches the tamper on decrypt without rejecting
+    // legitimate or synthetic (envelope-only) ops.
+
+    const createMoveOp = (): SyncOperation => ({
+      ...createMockSyncOp({
+        actionPayload: {
+          id: 'task-1',
+          projectMoveSubTaskIds: ['sub-1', 'sub-2'],
+          changes: { projectId: 'project-2' },
+        },
+        entityChanges: [],
+      }),
+      actionType: LWW_TASK,
+      opType: 'UPDATE',
+      entityType: 'TASK',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'sub-1', 'sub-2'],
+    });
+
+    it('round-trips a legitimate encrypted project move (entityIds ride outside the ciphertext)', async () => {
+      const encrypted = await service.encryptOperation(createMoveOp(), TEST_PASSWORD);
+      // entityIds are plaintext envelope metadata; only the payload is encrypted.
+      expect(encrypted.entityIds).toEqual(['task-1', 'sub-1', 'sub-2']);
+      expect(typeof encrypted.payload).toBe('string');
+
+      const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+      expect(decrypted.entityIds).toEqual(['task-1', 'sub-1', 'sub-2']);
+      expect(
+        (decrypted.payload as { actionPayload: { projectMoveSubTaskIds: string[] } })
+          .actionPayload.projectMoveSubTaskIds,
+      ).toEqual(['sub-1', 'sub-2']);
+    });
+
+    it('rejects a decrypted move whose entityIds footprint was tampered (single)', async () => {
+      const encrypted = await service.encryptOperation(createMoveOp(), TEST_PASSWORD);
+      // A compromised server appends a victim task id to the plaintext envelope;
+      // the authenticated projectMoveSubTaskIds ciphertext is untouched.
+      const tampered: SyncOperation = {
+        ...encrypted,
+        entityIds: [...(encrypted.entityIds as string[]), 'victim-task'],
+      };
+      await expectAsync(
+        service.decryptOperation(tampered, TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('rejects a tampered entityIds footprint via the batch decrypt path too', async () => {
+      const [encrypted] = await service.encryptOperations(
+        [createMoveOp()],
+        TEST_PASSWORD,
+      );
+      const tampered: SyncOperation = {
+        ...encrypted,
+        entityIds: [...(encrypted.entityIds as string[]), 'victim-task'],
+      };
+      await expectAsync(
+        service.decryptOperations([tampered], TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('accepts a synthetic LWW op that carries entityIds but no authenticated footprint', async () => {
+      // Conflict-resolution synthetic ops legitimately declare entityIds in the
+      // envelope only (no payload projectMoveSubTaskIds); they must NOT be rejected.
+      const syntheticOp: SyncOperation = {
+        ...createMockSyncOp({
+          actionPayload: { id: 'task-1', changes: { projectId: 'project-2' } },
+          entityChanges: [],
+        }),
+        actionType: LWW_TASK,
+        opType: 'UPDATE',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        entityIds: ['task-1', 'sub-1'],
+      };
+      const encrypted = await service.encryptOperation(syntheticOp, TEST_PASSWORD);
+      await expectAsync(
+        service.decryptOperation(encrypted, TEST_PASSWORD),
+      ).toBeResolved();
+    });
+
     describe('full-state opType promotion', () => {
       const createFullStateOp = (
         opType: OpType.SyncImport | OpType.BackupImport | OpType.Repair,
