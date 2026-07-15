@@ -85,6 +85,22 @@ import {
  *
  * @see FileBasedSyncData for the file schema
  */
+declare const GUARDED_PROVIDER_BRAND: unique symbol;
+
+/**
+ * A file provider whose `uploadFile`/`removeFile` are wrapped by
+ * `_withTargetGuard` — a write aborts if the target changed mid-operation. Every
+ * write-path helper takes this branded type instead of the raw provider, so the
+ * compiler rejects passing an unguarded provider to a write path: the in-flight
+ * guard invariant is enforced at compile time, not by call-graph convention (a
+ * future entry point or helper that forgets the guard is a build error, not a
+ * silent cross-target write). Only the raw entry points `createAdapter` and the
+ * intentionally-unguarded `_deleteAllData` keep `FileSyncProvider`. (Task 2.)
+ */
+type GuardedFileSyncProvider = FileSyncProvider<SyncProviderId> & {
+  readonly [GUARDED_PROVIDER_BRAND]: true;
+};
+
 @Injectable({ providedIn: 'root' })
 export class FileBasedSyncAdapterService {
   private _encryptAndCompressHandler = new EncryptAndCompressHandlerService();
@@ -430,12 +446,14 @@ export class FileBasedSyncAdapterService {
   private _withTargetGuard(
     rawProvider: FileSyncProvider<SyncProviderId>,
     capturedGeneration: number,
-  ): FileSyncProvider<SyncProviderId> {
+  ): GuardedFileSyncProvider {
     const assertUnchanged = (): void => {
       if (this._targetGeneration !== capturedGeneration) {
         throw new FileSyncTargetChangedError(capturedGeneration, this._targetGeneration);
       }
     };
+    // The Proxy is structurally a FileSyncProvider; the brand is a phantom type
+    // with no runtime property, so cast through unknown.
     return new Proxy(rawProvider, {
       get: (target, prop, receiver) => {
         if (prop === 'uploadFile' || prop === 'removeFile') {
@@ -452,7 +470,7 @@ export class FileBasedSyncAdapterService {
         const value = Reflect.get(target, prop, receiver);
         return typeof value === 'function' ? value.bind(target) : value;
       },
-    });
+    }) as unknown as GuardedFileSyncProvider;
   }
 
   /**
@@ -617,7 +635,7 @@ export class FileBasedSyncAdapterService {
    * Gets the current sync state from cache or by downloading.
    */
   private async _getCurrentSyncState(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     providerKey: string,
@@ -754,7 +772,7 @@ export class FileBasedSyncAdapterService {
    *   snapshot whose state never saw those ops.
    */
   private async _uploadWithMismatchFallback(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newData: FileBasedSyncData,
@@ -1585,7 +1603,7 @@ export class FileBasedSyncAdapterService {
 
   /** Downloads + decodes `sync-ops.json` and validates its version. */
   private async _downloadOpsFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedOpsFile; rev: string }> {
@@ -1617,7 +1635,7 @@ export class FileBasedSyncAdapterService {
    * the immutable snapshot referenced by an ops file's `snapshotRef.file`.
    */
   private async _downloadStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     path: string = FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
@@ -1651,7 +1669,7 @@ export class FileBasedSyncAdapterService {
    * pre-#9040 clients that don't read `snapshotRef.file`.
    */
   private async _writeStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     data: FileBasedStateFile,
@@ -1702,7 +1720,7 @@ export class FileBasedSyncAdapterService {
    * capability-gated).
    */
   private async _removeGenStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     file: string,
   ): Promise<void> {
     try {
@@ -1714,7 +1732,7 @@ export class FileBasedSyncAdapterService {
 
   /** Copies the current `sync-state.json` to its `.bak` (non-fatal). */
   private async _backupStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<void> {
@@ -1738,7 +1756,7 @@ export class FileBasedSyncAdapterService {
 
   /** Recovers the snapshot from `sync-state.json.bak` (null if unusable). */
   private async _recoverStateFromBackup(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<FileBasedStateFile | null> {
@@ -1777,7 +1795,7 @@ export class FileBasedSyncAdapterService {
    * Returns null when no snapshot validates the ref (caller signals a gap).
    */
   private async _loadValidatedSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     opsFile: FileBasedOpsFile,
@@ -1852,7 +1870,7 @@ export class FileBasedSyncAdapterService {
    * inline comment.
    */
   private async _writeTombstoneAndNeutralizeBak(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     expectedLegacyRev?: string,
@@ -1895,7 +1913,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _writePendingSplitMigration(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     legacy: FileBasedSyncData,
@@ -1956,7 +1974,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _finalizeSplitMigrationMarker(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     pending: FileBasedOpsFile,
@@ -1990,7 +2008,7 @@ export class FileBasedSyncAdapterService {
    * used to build it or fails and causes the newer v2 payload to be re-imported.
    */
   private async _resumePendingSplitMigration(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     initialPending: FileBasedOpsFile,
@@ -2106,7 +2124,7 @@ export class FileBasedSyncAdapterService {
    * rev), or null for a truly fresh folder.
    */
   private async _maybeMigrateLegacyToSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
@@ -2159,7 +2177,7 @@ export class FileBasedSyncAdapterService {
    * to classify transient vs genuine concurrency and never force-overwrites.
    */
   private async _uploadOpsFileWithMismatchFallback(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newOpsFile: FileBasedOpsFile,
@@ -2219,7 +2237,7 @@ export class FileBasedSyncAdapterService {
    * then the trimmed `sync-ops.json` referencing it via snapshotRef.
    */
   private async _uploadOpsSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     ops: SyncOperation[],
@@ -2449,7 +2467,7 @@ export class FileBasedSyncAdapterService {
    * validates it against the ops file's snapshotRef (mismatch ⇒ gap).
    */
   private async _downloadOpsSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
@@ -2653,7 +2671,7 @@ export class FileBasedSyncAdapterService {
    * empty when the folder is truly fresh (or only a tombstone remains).
    */
   private async _tryLegacyReadOnlyDownload(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
@@ -2708,7 +2726,7 @@ export class FileBasedSyncAdapterService {
    * `sync-data.json` so OFF clients don't diverge.
    */
   private async _uploadSnapshotSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
@@ -2834,7 +2852,7 @@ export class FileBasedSyncAdapterService {
    * (conditional PUT) is unaffected.
    */
   private async _writeBakFile<T>(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     bakPath: string,
@@ -2871,7 +2889,7 @@ export class FileBasedSyncAdapterService {
    * caller then surfaces its ORIGINAL corruption error.
    */
   private async _readBakFile<T extends { version: number }>(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     bakPath: string,
@@ -2925,7 +2943,7 @@ export class FileBasedSyncAdapterService {
    * the writes leaves a valid old primary + new .bak — nothing stale to recover.)
    */
   private async _forceUploadWithBakFirst(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     primaryPath: string,
     bakPath: string,
     encoded: string,
@@ -2946,7 +2964,7 @@ export class FileBasedSyncAdapterService {
    * absent" — the provider rejects the write if another client created it.
    */
   private async _conditionalUploadRepairSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     primaryPath: string,
     bakPath: string,
     encoded: string,
@@ -3072,7 +3090,7 @@ export class FileBasedSyncAdapterService {
    * @returns The sync data and its revision (ETag) for conditional upload
    */
   private async _downloadSyncFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {
