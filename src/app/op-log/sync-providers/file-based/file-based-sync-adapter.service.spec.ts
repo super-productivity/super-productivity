@@ -263,6 +263,25 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).toHaveBeenCalled();
     });
 
+    it('aborts a download before committing its baseline when the target changes mid-download', async () => {
+      // The download reads target A; a switch during that read must not let the
+      // stale baseline (sync-version/clock/rev) or its seq cursor be committed
+      // under the shared provider id — otherwise the next sync skips the new
+      // target's ops from a stale cursor (data loss).
+      const syncData = createMockSyncData({ syncVersion: 5, vectorClock: { c1: 5 } });
+      mockProvider.downloadFile.and.callFake(async () => {
+        service.invalidateAllTargets(); // target switch mid-download
+        return { dataStr: addPrefix(syncData), rev: 'rev-A' };
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+
+      // Baseline was not committed: the seq cursor stayed at zero.
+      expect(await adapter.getLastServerSeq()).toBe(0);
+    });
+
     it('guards removeFile as well as uploadFile, and passes reads through', async () => {
       const guarded = service['_withTargetGuard'](
         mockProvider,
