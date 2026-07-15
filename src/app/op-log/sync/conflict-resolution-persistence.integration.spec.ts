@@ -1030,7 +1030,23 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     ]);
   });
 
-  it('converges a losing deleteProject by recreating notes, sections and repeat-cfgs (#9037)', async () => {
+  // Shared fixture: a legacy deleteProject that loses LWW to a concurrent project
+  // edit, with the project holding a task, note, section and repeat-cfg. Returns
+  // the seeded pre-delete state, a full-slice replay reducer (wiring the cascades
+  // this suite's default reducer omits — sections via the section meta-reducer,
+  // notes/repeat-cfgs via their feature reducers, recreations via
+  // lwwUpdateMetaReducer), and the durable ops the service produced.
+  const setupLosingProjectDeleteFixture = async (): Promise<{
+    noteId: string;
+    sectionId: string;
+    cfgId: string;
+    seededState: RootState;
+    replay: (state: RootState, operations: Operation[], clientId: string) => RootState;
+    hasEntity: (state: RootState, feature: string, id: string) => boolean;
+    storedOps: Operation[];
+    localProjectEdit: Operation;
+    remoteProjectDelete: Operation;
+  }> => {
     const noteId = 'note1';
     const sectionId = 'section1';
     const cfgId = 'cfg1';
@@ -1043,8 +1059,6 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
       projectId: 'project1',
       subTaskIds: [],
     } as Task;
-    // Full-slice seed state: the losing delete's cascade removes all four, and
-    // the recovery ops must restore them on replay.
     const baseTaskState = createTaskReplayState([rootTask], [rootTaskId], []);
     const seededState: RootState = {
       ...baseTaskState,
@@ -1079,9 +1093,6 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
       throw new Error('Test fixture project1 is missing.');
     }
 
-    // Replay reducer wiring the cascades this suite's default reducer omits:
-    // sections via the section meta-reducer, notes/repeat-cfgs via their feature
-    // reducers, recreations via lwwUpdateMetaReducer.
     const cascadeRootReducer: ActionReducer<RootState, Action> = (
       state = seededState,
       action,
@@ -1180,6 +1191,32 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     ]);
 
     const storedOps = (await opLogStore.getOpsAfterSeq(0)).map(({ op }) => op);
+    return {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    };
+  };
+
+  it('converges a losing deleteProject by recreating notes, sections and repeat-cfgs (#9037)', async () => {
+    const {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    } = await setupLosingProjectDeleteFixture();
+
     // Sanity: the recovery emitted a recreation op for each victim type.
     expect(storedOps.some((op) => op.entityType === 'NOTE')).toBeTrue();
     expect(storedOps.some((op) => op.entityType === 'SECTION')).toBeTrue();
@@ -1219,6 +1256,58 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
       .toBeTrue();
     expect(hasEntity(remoteClientState, TASK_REPEAT_CFG_FEATURE_NAME, cfgId))
       .withContext('repeat-cfg recreated on originating client')
+      .toBeTrue();
+  });
+
+  it('converges when the note/section/cfg recreations arrive in a later sync batch (#9037)', async () => {
+    const {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    } = await setupLosingProjectDeleteFixture();
+
+    const cascadeTypes = new Set(['NOTE', 'SECTION', 'TASK_REPEAT_CFG']);
+    const compensationOps = storedOps.filter(
+      (op) => op.id !== localProjectEdit.id && op.id !== remoteProjectDelete.id,
+    );
+    const cascadeRecreations = compensationOps.filter((op) =>
+      cascadeTypes.has(op.entityType),
+    );
+    const projectAndTaskComps = compensationOps.filter(
+      (op) => !cascadeTypes.has(op.entityType),
+    );
+    expect(cascadeRecreations.length).toBeGreaterThan(0);
+
+    // Batch 1: durable loser + project/task compensations only. Pagination puts
+    // the note/section/cfg recreations on a later page, so they stay wiped for now.
+    let state = replay(
+      seededState,
+      [remoteProjectDelete, ...projectAndTaskComps],
+      LOCAL_CLIENT_ID,
+    );
+    expect(hasEntity(state, NOTE_FEATURE_NAME, noteId))
+      .withContext('note still absent before its later batch')
+      .toBeFalse();
+    expect(hasEntity(state, SECTION_FEATURE_NAME, sectionId)).toBeFalse();
+    expect(hasEntity(state, TASK_REPEAT_CFG_FEATURE_NAME, cfgId)).toBeFalse();
+
+    // Batch 2: the cascade recreations arrive in a separate page and converge
+    // the state — they carry no cross-batch dependency on the delete/other comps.
+    state = replay(state, cascadeRecreations, LOCAL_CLIENT_ID);
+    expect(hasEntity(state, NOTE_FEATURE_NAME, noteId))
+      .withContext('note recreated from a later batch')
+      .toBeTrue();
+    expect(hasEntity(state, SECTION_FEATURE_NAME, sectionId))
+      .withContext('section recreated from a later batch')
+      .toBeTrue();
+    expect(hasEntity(state, TASK_REPEAT_CFG_FEATURE_NAME, cfgId))
+      .withContext('repeat-cfg recreated from a later batch')
       .toBeTrue();
   });
 
