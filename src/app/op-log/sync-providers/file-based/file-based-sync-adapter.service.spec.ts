@@ -3843,6 +3843,53 @@ describe('FileBasedSyncAdapterService', () => {
       expect(finalizedMarker).toBeDefined();
     });
 
+    it('(e2c) aborts a pending split migration resume without writing when the target changes mid-download', async () => {
+      // The split-format DOWNLOAD path resumes a crashed migration by writing
+      // remote files. Task 2's in-flight guard must cover it too: a target
+      // switch during the download must abort those writes.
+      const clock = { client1: 7 };
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: clock,
+        state: { tasks: ['legacy'] },
+      });
+      const pendingOps = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: clock,
+        snapshotRef: { syncVersion: 7, vectorClock: clock },
+        migration: { status: 'pending', legacyRev: `${C.SYNC_FILE}-rev` },
+      });
+      const map: Record<string, string> = {
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_FILE]: addPrefix(pendingOps, 3),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 7,
+            vectorClock: clock,
+            state: { tasks: ['legacy'] },
+          }),
+          3,
+        ),
+      };
+      // Simulate a concurrent target switch during the download (before the
+      // migration-resume writes) by bumping the generation on the first read.
+      let bumped = false;
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (!bumped) {
+          bumped = true;
+          service.invalidateAllTargets();
+        }
+        if (path in map) return { dataStr: map[path], rev: `${path}-rev` };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      await expectAsync(adapter.downloadOps(0, 'client2')).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      // No migration-resume write reached the (now switched) target.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
     it('(e3) retries migration from a newer legacy revision instead of tombstoning over it', async () => {
       const legacyV7 = createMockSyncData({
         syncVersion: 7,
