@@ -1875,6 +1875,32 @@ describe('SyncWrapperService', () => {
         );
       });
 
+      it('self-heals silently when the target changes during USE_LOCAL force upload', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.rejectWith(new FileSyncTargetChangedError(0, 1));
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+          'UNKNOWN_OR_CHANGED',
+        );
+        // Benign target switch → no error snackbar.
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: 'ERROR' }),
+        );
+      });
+
       it('should translate a typed force-upload failure during conflict resolution', async () => {
         const conflictError = new LocalDataConflictError(
           2,
