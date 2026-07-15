@@ -144,14 +144,16 @@ describe('NoteComponent editFullscreen', () => {
     expect(getFullscreenDialogData().content).toBe('saved content');
   });
 
-  it('should keep the draft and open the saved content when the conflict dialog is dismissed without a decision', async () => {
+  it('should abort (not open the editor) and keep the draft when the conflict dialog is dismissed without a decision', async () => {
     localDraftService.loadDraft.and.resolveTo(draftOf('draft content', 'other base'));
     confirmResult = undefined; // ESC / backdrop / closeAll
 
     await editFullscreen();
 
+    // Opening the editor here would let a checkpoint or Discard overwrite/delete
+    // the still-unresolved draft, so we abort until the user actually chooses.
     expect(localDraftService.clearDraft).not.toHaveBeenCalled();
-    expect(getFullscreenDialogData().content).toBe('saved content');
+    expect(getFullscreenDialogData()).toBeUndefined();
   });
 
   it('should remove the note and clear the draft on a DELETE result', async () => {

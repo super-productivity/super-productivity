@@ -221,9 +221,13 @@ export class NoteComponent implements OnChanges {
       } else if (isReviewDraft === false) {
         // The user explicitly chose the saved version over the draft.
         await this._localDraftService.clearDraft('NOTE', note.id);
+      } else {
+        // No decision (undefined from ESC / backdrop / closeAll). Abort opening
+        // the editor entirely: proceeding would let the checkpoint or a Discard
+        // overwrite/delete the still-unresolved draft. Leave it intact so the
+        // conflict prompt reappears on the next open.
+        return;
       }
-      // Anything else (undefined from ESC / backdrop / closeAll) is no
-      // decision: open the saved content but keep the draft recoverable.
     }
 
     // Saves-and-closes on a navigation (resize across the mobile breakpoint,
