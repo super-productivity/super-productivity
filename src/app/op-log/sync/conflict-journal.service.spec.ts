@@ -280,6 +280,88 @@ describe('ConflictJournalService (store)', () => {
       expect(doneThen).toHaveBeenCalled();
     });
   });
+
+  describe('durable clear boundary (privacy fail-safe on profile switch)', () => {
+    const MARKER_KEY = 'SUP_CONFLICT_JOURNAL_CLEARED_BEFORE';
+
+    afterEach(() => localStorage.removeItem(MARKER_KEY));
+
+    it('hides pre-switch entries and zeroes the badge even when the bulk clear fails', async () => {
+      const now = Date.now();
+      await service.record(
+        makeEntry({ id: 'stale-a', resolvedAt: now - 1000, status: 'unreviewed' }),
+      );
+      await service.record(
+        makeEntry({ id: 'stale-b', resolvedAt: now - 500, status: 'kept' }),
+      );
+      expect(service.unreviewedCount()).toBe(1);
+
+      // The exact failure the fix targets: the IndexedDB bulk clear throws.
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+
+      await expectAsync(service.clearAll()).toBeResolved(); // never throws
+
+      // Survivors physically remain but are hidden from every read path.
+      expect(await service.list('history')).toEqual([]);
+      expect(await service.getEntry('stale-a')).toBeUndefined();
+      expect(await service.getEntry('stale-b')).toBeUndefined();
+      expect(service.unreviewedCount()).toBe(0);
+    });
+
+    it('shows only entries recorded after a failed clear (the new profile stays clean)', async () => {
+      await service.record(makeEntry({ id: 'pre', resolvedAt: Date.now() - 1000 }));
+
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+      await service.clearAll();
+
+      // Record relative to the actual boundary so the assertion is clock-agnostic.
+      const marker = Number(localStorage.getItem(MARKER_KEY));
+      await service.record(
+        makeEntry({ id: 'post', resolvedAt: marker + 1000, status: 'unreviewed' }),
+      );
+
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['post']);
+      expect(await service.getEntry('post')).toBeTruthy();
+      expect(service.unreviewedCount()).toBe(1);
+    });
+
+    it('drops the marker on a successful clear so later entries are never wrongly filtered', async () => {
+      await service.record(makeEntry({ id: 'x', resolvedAt: Date.now() - 1000 }));
+      await service.clearAll(); // succeeds → marker removed
+
+      expect(localStorage.getItem(MARKER_KEY)).toBeNull();
+      // An old-timestamped entry is still visible: no stale boundary lingers.
+      await service.record(makeEntry({ id: 'old-but-valid', resolvedAt: 1000 }));
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['old-but-valid']);
+    });
+
+    it('pruneOnStart reclaims hidden survivors but spares post-marker entries, then drops the marker', async () => {
+      const now = Date.now();
+      await service.record(makeEntry({ id: 'survivor', resolvedAt: now - 1000 }));
+
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+      await service.clearAll();
+      const marker = Number(localStorage.getItem(MARKER_KEY));
+      expect(marker).toBeGreaterThan(0);
+
+      // A conflict recorded by the NEW profile (after the boundary) must NOT be
+      // reclaimed by the marker-aware prune — guards against a "prune deletes
+      // everything while a marker is set" regression.
+      await service.record(makeEntry({ id: 'fresh', resolvedAt: marker + 1000 }));
+
+      // Next app start: prune uses delete (not clear), so it reclaims the hidden
+      // survivor, keeps the fresh entry, and drops the now-unnecessary marker.
+      await service.pruneOnStart(now);
+
+      expect(localStorage.getItem(MARKER_KEY)).toBeNull();
+      expect(await service.getEntry('survivor')).toBeUndefined();
+      expect(await service.getEntry('fresh')).toBeTruthy();
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['fresh']);
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
