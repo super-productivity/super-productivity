@@ -100,6 +100,20 @@ export class FileBasedSyncAdapterService {
    */
   private readonly _MAX_UPLOAD_RETRIES = 2;
 
+  /**
+   * Monotonic target-transition generation. Bumped by `invalidateAllTargets()`
+   * on any user-authoritative provider/target/configuration change. Its purpose
+   * is to let an in-flight file session refuse a remote side effect against a
+   * target that is no longer current; today it drives eager state invalidation
+   * and is exposed for the follow-up that binds a session to a captured
+   * generation. (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+   */
+  private _targetGeneration = 0;
+
+  get targetGeneration(): number {
+    return this._targetGeneration;
+  }
+
   /** Expected sync version for optimistic locking, keyed by provider+user */
   private _expectedSyncVersions = new Map<string, number>();
 
@@ -320,6 +334,72 @@ export class FileBasedSyncAdapterService {
    */
   private _clearCachedSyncData(providerKey: string): void {
     this._syncCycleCache.delete(providerKey);
+  }
+
+  /**
+   * Single source of truth for the target-scoped state maps — everything keyed
+   * by provider id that belongs to one remote target and must not survive a
+   * target transition. Both `_resetTargetState` (single key, used by
+   * `deleteAllData`) and `invalidateAllTargets` (all keys) iterate this list, so
+   * a new per-target map only has to be added here. Includes the two within-cycle
+   * caches so a cached download for one target cannot seed a write to another.
+   */
+  private get _targetScopedMaps(): Map<string, unknown>[] {
+    return [
+      this._expectedSyncVersions,
+      this._pendingExpectedSyncVersions,
+      this._lastSeenVectorClocks,
+      this._pendingVectorClocks,
+      this._localSeqCounters,
+      // Included deliberately: without it a re-used provider key after a target
+      // switch could suppress a genuine corruption notice for the NEW target
+      // based on the OLD target's corrupt rev.
+      this._lastRecoveredCorruptRev,
+      // SPAP-10: dropping the last-seen rev prevents a stale value driving a
+      // false "nothing new" short-circuit against a different target.
+      this._lastSeenRevs,
+      this._pendingRevs,
+      this._syncCycleCache,
+      this._splitOpsCache,
+    ] as Map<string, unknown>[];
+  }
+
+  /**
+   * Clears every target-scoped in-memory entry for one provider key. Shared by
+   * `deleteAllData` and per-key resets. Callers persist afterwards.
+   */
+  private _resetTargetState(providerKey: string): void {
+    for (const map of this._targetScopedMaps) {
+      map.delete(providerKey);
+    }
+  }
+
+  /**
+   * Invalidate all cached target-scoped state after a user-authoritative
+   * provider/target/configuration change. The adapter is keyed only by provider
+   * id, so a provider switch, an account switch behind the same provider id, or
+   * an identity-affecting configuration save would otherwise reuse the previous
+   * target's sync version, rev, vector clock, and within-cycle caches — reading
+   * or writing one target's data against another. Clearing every key forces the
+   * next sync to discover and full-read the current target from zero; the extra
+   * full read (even when the target is unchanged) is accepted per Task 2 of the
+   * sync-simplification plan. Bumps the target generation so a later in-flight
+   * guard can detect the transition.
+   *
+   * Not wired to machine-only token refreshes for an unchanged account: those go
+   * through the provider credential store directly, not `setProviderConfig`, so
+   * they do not fire `providerConfigChanged$`.
+   */
+  invalidateAllTargets(): void {
+    this._loadPersistedState();
+    this._targetGeneration++;
+    for (const map of this._targetScopedMaps) {
+      map.clear();
+    }
+    this._persistState();
+    OpLog.normal(
+      'FileBasedSyncAdapter: target state invalidated after configuration change',
+    );
   }
 
   /**
@@ -1322,18 +1402,10 @@ export class FileBasedSyncAdapterService {
         }
       }
 
-      // Reset local state
-      this._expectedSyncVersions.delete(providerKey);
-      this._localSeqCounters.delete(providerKey);
-      // SPAP-10: drop the last-seen rev so a stale value can't drive a false
-      // "nothing new" short-circuit after the remote file has been deleted.
-      this._lastSeenRevs.delete(providerKey);
-      this._pendingRevs.delete(providerKey);
-      this._lastSeenVectorClocks.delete(providerKey);
-      this._pendingExpectedSyncVersions.delete(providerKey);
-      this._pendingVectorClocks.delete(providerKey);
-      this._clearCachedSyncData(providerKey);
-      this._clearCachedOpsData(providerKey);
+      // Reset all target-scoped local state (incl. last-seen rev, so a stale
+      // value can't drive a false "nothing new" short-circuit after the remote
+      // file has been deleted).
+      this._resetTargetState(providerKey);
       this._persistState();
 
       return { success: true };

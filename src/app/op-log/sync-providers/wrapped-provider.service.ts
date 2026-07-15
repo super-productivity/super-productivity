@@ -52,6 +52,13 @@ export class WrappedProviderService {
       .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe(() => {
         this._cache.clear();
+        // A config save can switch provider, switch account behind the same
+        // provider id, or flip an identity-affecting setting. The file adapter
+        // is keyed only by provider id, so its cached sync-version/rev/clock and
+        // within-cycle caches would otherwise be reused against the new target —
+        // invalidate them so the next sync full-reads the current target.
+        // (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+        this._fileBasedAdapter.invalidateAllTargets();
         OpLog.normal(
           'WrappedProviderService: Cache auto-invalidated due to config change',
         );

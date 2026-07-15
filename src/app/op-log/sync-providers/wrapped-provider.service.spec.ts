@@ -81,6 +81,7 @@ describe('WrappedProviderService', () => {
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
+      'invalidateAllTargets',
     ]);
 
     TestBed.configureTestingModule({
@@ -312,6 +313,17 @@ describe('WrappedProviderService', () => {
       const result2 = await service.getOperationSyncCapable(dropboxProvider);
       expect(result2).toBe(mockAdapter2);
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);
+    });
+
+    it('should invalidate file-adapter target state when providerConfigChanged$ emits', () => {
+      // A config save can switch provider/account/target; the file adapter is
+      // keyed only by provider id, so its per-target state must be dropped or it
+      // leaks across targets (Task 2, sync-simplification plan).
+      expect(mockFileBasedAdapter.invalidateAllTargets).not.toHaveBeenCalled();
+
+      providerConfigChanged$.next();
+
+      expect(mockFileBasedAdapter.invalidateAllTargets).toHaveBeenCalledTimes(1);
     });
   });
 });
