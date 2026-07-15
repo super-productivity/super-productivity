@@ -281,6 +281,32 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
       expect(mockProvider.removeFile).not.toHaveBeenCalled();
     });
+
+    it('aborts a snapshot upload without writing when the target changes mid-operation', async () => {
+      // uploadSnapshot is the second write entry point (initial/recovery/
+      // migration + REPAIR). Loading archive data happens after the operation
+      // captures its generation but before the snapshot write, so bump the
+      // generation there to simulate a concurrent target switch.
+      mockArchiveDbAdapter.loadArchiveYoung.and.callFake(async () => {
+        service.invalidateAllTargets();
+        return mockArchiveYoung;
+      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await expectAsync(
+        adapter.uploadSnapshot(
+          { tasks: [] },
+          'client1',
+          'initial',
+          { client1: 1 },
+          2,
+          undefined, // isPayloadEncrypted
+          'op-1', // opId
+        ),
+      ).toBeRejectedWithError(FileSyncTargetChangedError);
+
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadOps', () => {

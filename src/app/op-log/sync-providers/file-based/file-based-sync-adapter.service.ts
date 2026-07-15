@@ -1278,7 +1278,7 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _uploadSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     state: unknown,
@@ -1288,6 +1288,12 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
+    // Same in-flight target guard as _uploadOps: this is the second remote-write
+    // entry point (initial/recovery/migration + REPAIR snapshot writes, incl.
+    // _conditionalUploadRepairSnapshot and backups). A mid-operation target
+    // switch aborts before any write instead of committing this target's
+    // snapshot to the next one. (Task 2.)
+    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
