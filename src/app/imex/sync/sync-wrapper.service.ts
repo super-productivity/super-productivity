@@ -26,6 +26,7 @@ import {
   UploadRevToMatchMismatchAPIError,
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
+  FileSyncTargetChangedError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -951,6 +952,17 @@ export class SyncWrapperService {
         // next sync cycle triggers and resolves the state.
         SyncLog.log(
           'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      } else if (error instanceof FileSyncTargetChangedError) {
+        // The file sync target (provider/account/folder) changed while this
+        // upload was in flight; the guarded write was abandoned before it could
+        // land the previous target's data on the new one — self-healing. Do not
+        // show an error snackbar; UNKNOWN_OR_CHANGED triggers the next sync,
+        // which re-reads and re-uploads against the current target from zero.
+        SyncLog.log(
+          'SyncWrapperService: Sync target changed mid-operation, will re-sync against the current target',
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';

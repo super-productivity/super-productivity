@@ -14,6 +14,7 @@ import {
 } from './file-based-sync.types';
 import {
   EncryptNoPasswordError,
+  FileSyncTargetChangedError,
   InvalidDataSPError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
@@ -229,6 +230,56 @@ describe('FileBasedSyncAdapterService', () => {
       expect(adapter.setLastServerSeq).toBeDefined();
       expect(adapter.uploadSnapshot).toBeDefined();
       expect(adapter.deleteAllData).toBeDefined();
+    });
+  });
+
+  describe('in-flight target guard (Task 2)', () => {
+    it('aborts the upload without writing when the target changes mid-operation', async () => {
+      // The first download happens inside the upload (to read current state).
+      // Simulate a concurrent provider/account/folder switch during it, then
+      // report the file as absent so the upload would otherwise create it.
+      mockProvider.downloadFile.and.callFake(async () => {
+        service.invalidateAllTargets(); // bumps the target generation mid-op
+        throw new RemoteFileNotFoundAPIError('sync-data.json');
+      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(FileSyncTargetChangedError);
+
+      // The critical assertion: no write reached the (now different) target.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('lets a normal upload write when the generation is stable', async () => {
+      mockProvider.downloadFile.and.throwError(
+        new RemoteFileNotFoundAPIError('sync-data.json'),
+      );
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(mockProvider.uploadFile).toHaveBeenCalled();
+    });
+
+    it('guards removeFile as well as uploadFile, and passes reads through', async () => {
+      const guarded = service['_withTargetGuard'](mockProvider, service.targetGeneration);
+
+      // Reads always pass through.
+      await guarded.downloadFile('any');
+      expect(mockProvider.downloadFile).toHaveBeenCalled();
+
+      // A target change after capture makes both writes throw.
+      service.invalidateAllTargets();
+      await expectAsync(guarded.uploadFile('p', 'd', null, true)).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      await expectAsync(guarded.removeFile('p')).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      expect(mockProvider.removeFile).not.toHaveBeenCalled();
     });
   });
 

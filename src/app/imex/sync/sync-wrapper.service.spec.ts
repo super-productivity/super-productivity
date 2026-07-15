@@ -43,6 +43,7 @@ import {
   ForceUploadPendingOpsError,
   HttpNotOkAPIError,
   IncompleteRemoteOperationsError,
+  FileSyncTargetChangedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
@@ -1235,6 +1236,25 @@ describe('SyncWrapperService', () => {
           msg: T.F.SYNC.S.NETWORK_ERROR,
           type: 'WARNING',
         }),
+      );
+    });
+
+    it('should handle FileSyncTargetChangedError as a silent self-healing re-sync', async () => {
+      // The file target changed mid-upload; the guarded write was abandoned.
+      // This is benign — the next sync re-reads/re-uploads against the current
+      // target — so it must report UNKNOWN_OR_CHANGED with no error snackbar.
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.reject(new FileSyncTargetChangedError(0, 1)),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
       );
     });
 
