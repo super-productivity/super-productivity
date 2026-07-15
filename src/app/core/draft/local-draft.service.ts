@@ -147,7 +147,13 @@ export class LocalDraftService {
       this._persistedProfileIdPromise = this._userProfileStorageService
         .loadProfileMetadata()
         .then((meta) => meta?.activeProfileId || DEFAULT_PROFILE_ID)
-        .catch(() => DEFAULT_PROFILE_ID);
+        .catch((e) => {
+          Log.err(
+            'LocalDraftService: Failed to load persisted profile id, using default',
+            e,
+          );
+          return DEFAULT_PROFILE_ID;
+        });
     }
     return this._persistedProfileIdPromise;
   }
