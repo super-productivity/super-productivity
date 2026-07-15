@@ -1080,6 +1080,45 @@ describe('ConflictResolutionService', () => {
         ).toBeTrue();
       });
 
+      it('should recreate a locally-winning UPDATE over a concurrent remote DELETE on a client-ID tie (#9024)', async () => {
+        const now = Date.now();
+        mockStore.select.and.returnValue(
+          of({ id: 'task-1', title: 'Local winning task' }),
+        );
+        // Exact-timestamp tie against a remote DELETE. Local's clientId
+        // (client-z) is the larger, so the deterministic tiebreak makes the
+        // local UPDATE win — reaching the SAME delete-recreation path as the
+        // "UPDATE is newer" case above, just via the tie rather than the
+        // timestamp. Guards that the #9024 tiebreak doesn't bypass entity
+        // recreation when the loser was a delete.
+        const conflicts: EntityConflict[] = [
+          createConflict(
+            'task-1',
+            [
+              {
+                ...createOpWithTimestamp('local-upd', 'client-z', now),
+                opType: OpType.Update,
+              },
+            ],
+            [
+              {
+                ...createOpWithTimestamp('remote-del', 'client-a', now),
+                opType: OpType.Delete,
+              },
+            ],
+          ),
+        ];
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-upd']);
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-del']);
+        expect(
+          (getFirstMixedLocalOp().payload as { recreatesEntityAfterDelete?: boolean })
+            .recreatesEntityAfterDelete,
+        ).toBeTrue();
+      });
+
       it('should resolve DELETE vs UPDATE conflict when DELETE is older (remote UPDATE wins)', async () => {
         const now = Date.now();
         const conflicts: EntityConflict[] = [
