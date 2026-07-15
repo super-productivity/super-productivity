@@ -5,7 +5,10 @@ import {
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
-import { ConflictResolutionService } from './conflict-resolution.service';
+import {
+  ConflictResolutionService,
+  getLatestTaskProjectMoveEntityIds,
+} from './conflict-resolution.service';
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -403,7 +406,7 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.entityIds).toBeUndefined();
     });
 
-    it('should preserve a project-move footprint through another LWW replacement', async () => {
+    it('should preserve an authenticated project-move footprint through another LWW replacement', async () => {
       const supersededOp = createMockOperation(
         'op-1',
         'TASK',
@@ -413,6 +416,13 @@ describe('SupersededOperationResolverService', () => {
       );
       supersededOp.actionType = '[TASK] LWW Update' as ActionType;
       supersededOp.entityIds = ['task-1', 'subtask-1'];
+      // New-style synthetic LWW op: footprint lives in the authenticated payload.
+      supersededOp.payload = {
+        actionPayload: { id: 'task-1' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+        projectMoveFootprint: ['task-1', 'subtask-1'],
+      } as unknown as Operation['payload'];
       mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
         id: 'task-1',
         title: 'Test Task',
@@ -422,7 +432,29 @@ describe('SupersededOperationResolverService', () => {
 
       const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
         .args[0] as Operation;
+      // The footprint is derived from the authenticated payload and passed to
+      // createLWWUpdateOp (which embeds it in both entityIds and the payload;
+      // real embedding is covered by the conflict-resolution spec).
       expect(appendedOp.entityIds).toEqual(['task-1', 'subtask-1']);
+    });
+
+    it('does not reuse a legacy LWW footprint that exists only in the plaintext entityIds envelope (GHSA-8pxh-mgc7-gp3g)', () => {
+      // A pre-fix synthetic LWW op carries entityIds but no authenticated
+      // projectMoveFootprint. It must NOT be reused as a footprint — reading the
+      // envelope here would launder a (potentially tampered) value into a freshly
+      // authenticated replacement op. The replacement falls back to
+      // receiving-state repair instead.
+      const legacyOp = createMockOperation(
+        'op-legacy',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      legacyOp.actionType = '[TASK] LWW Update' as ActionType;
+      legacyOp.entityIds = ['task-1', 'subtask-1'];
+
+      expect(getLatestTaskProjectMoveEntityIds([legacyOp])).toBeUndefined();
     });
 
     it('should create single merged op for multiple superseded ops on same entity', async () => {
@@ -450,6 +482,7 @@ describe('SupersededOperationResolverService', () => {
       supersededOp1.actionType = ActionType.TASK_SHARED_UPDATE;
       supersededOp1.payload = {
         actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'proj-2' } },
           projectMoveSubTaskIds: ['former-subtask'],
         },
         entityChanges: [],
@@ -457,6 +490,7 @@ describe('SupersededOperationResolverService', () => {
       supersededOp2.actionType = ActionType.TASK_SHARED_UPDATE;
       supersededOp2.payload = {
         actionPayload: {
+          task: { id: 'task-1', changes: { projectId: 'proj-2' } },
           projectMoveSubTaskIds: ['current-subtask'],
         },
         entityChanges: [],

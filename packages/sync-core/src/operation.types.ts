@@ -241,6 +241,15 @@ export interface LwwUpdatePayload<
    * absolute and archived entities must not be resurrected by LWW updates.
    */
   recreatesEntityAfterDelete?: true;
+  /**
+   * Authenticated move footprint: the root entity id plus the subtask ids that
+   * a project move relocates atomically. Carried INSIDE the (E2EE-encrypted,
+   * GCM-authenticated) payload so consumers do not have to trust the plaintext
+   * `op.entityIds` envelope, which a compromised sync server can tamper with to
+   * relocate arbitrary tasks (GHSA-8pxh-mgc7-gp3g). Absent on legacy ops and on
+   * non-project-move LWW updates; consumers fall back to receiving-state repair.
+   */
+  projectMoveFootprint?: readonly string[];
 }
 
 /**

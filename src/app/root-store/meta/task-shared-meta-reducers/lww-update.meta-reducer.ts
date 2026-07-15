@@ -28,7 +28,11 @@ import { filterTaskIdArraysFromTagOrProjectPayload } from '../../../op-log/apply
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../../util/is-today.util';
-import { getProjectOrUndefined, repairTaskProjectForLww } from './task-shared-helpers';
+import {
+  getProjectOrUndefined,
+  parseMoveFootprint,
+  repairTaskProjectForLww,
+} from './task-shared-helpers';
 import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
 import { SyncConfig } from '../../../features/config/global-config.model';
 import { LwwUpdateMode } from '../../../op-log/core/operation.types';
@@ -489,6 +493,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           lwwUpdateMode?: LwwUpdateMode;
           isApplyingFromOtherClient?: boolean;
           recreatesEntityAfterDelete?: boolean;
+          projectMoveFootprint?: readonly string[];
         }
       | undefined;
     let entityData: Record<string, unknown> = {};
@@ -842,25 +847,21 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         }
       }
 
-      const meta = actionAny['meta'];
-      const explicitEntityIds =
-        meta &&
-        typeof meta === 'object' &&
-        Array.isArray((meta as { entityIds?: unknown }).entityIds)
-          ? (meta as { entityIds: unknown[] }).entityIds.filter(
-              (id): id is string => typeof id === 'string',
-            )
-          : undefined;
+      // Use the AUTHENTICATED move footprint (from the encrypted payload,
+      // surfaced onto meta.projectMoveFootprint), NOT the plaintext, server-tamperable
+      // meta.entityIds envelope — otherwise a compromised sync server could
+      // relocate arbitrary tasks (GHSA-8pxh-mgc7-gp3g).
+      const authFootprint = parseMoveFootprint(actionMeta?.projectMoveFootprint);
 
       if (!newIsSubTask) {
         // Root snapshots repair every project list, even when projectId is
-        // unchanged. New synthetic LWW ops replay their source footprint;
-        // old ops without entityIds retain receiving-state repair behavior.
+        // unchanged. New synthetic LWW ops replay their authenticated footprint;
+        // old ops without a footprint retain receiving-state repair behavior.
         updatedState = repairTaskProjectForLww(
           updatedState,
           updatedEntity as unknown as Task,
           newProjectId,
-          explicitEntityIds,
+          authFootprint,
         );
       } else {
         updatedState = syncProjectTaskIds(

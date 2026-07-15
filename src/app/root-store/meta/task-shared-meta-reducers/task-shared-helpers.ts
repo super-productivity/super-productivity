@@ -173,10 +173,28 @@ export const removeTasksFromAllProjects = (
 };
 
 /**
+ * Parses the authenticated LWW move footprint surfaced onto an action's `meta`
+ * (`meta.projectMoveFootprint`, sourced from the E2EE-encrypted `payload
+ * .projectMoveFootprint`). Returns `undefined` for legacy/non-move ops that
+ * carry no authenticated footprint, so callers fall back to receiving-state
+ * repair. Both LWW-TASK trust sites (project repair + section membership) MUST
+ * use this — never the plaintext `meta.entityIds` envelope, which a compromised
+ * sync server can tamper with. GHSA-8pxh-mgc7-gp3g.
+ */
+export const parseMoveFootprint = (moveFootprint: unknown): string[] | undefined => {
+  if (!Array.isArray(moveFootprint)) return undefined;
+  const ids = moveFootprint.filter((id): id is string => typeof id === 'string');
+  // Empty means "no usable footprint" → fall back to receiving-state repair,
+  // never "relocate the root task alone" (which an empty array would imply).
+  return ids.length > 0 ? ids : undefined;
+};
+
+/**
  * Repairs a root task's project relationship after an LWW update. New LWW
- * operations derived from project moves carry the source operation's entityIds,
- * which are the deterministic move footprint. Legacy LWW operations have no
- * such footprint and fall back to deriving children from receiving state.
+ * operations derived from project moves carry an authenticated move footprint
+ * (`meta.projectMoveFootprint`), which is the deterministic set of tasks to relocate.
+ * Legacy LWW operations have no such footprint and fall back to deriving
+ * children from receiving state.
  *
  * Every project is scanned so stale one-sided references are removed. The
  * destination project's existing root placement (regular vs backlog) and

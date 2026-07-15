@@ -24,6 +24,7 @@ import {
   enrichDeleteProjectAction,
   getProjectOrUndefined,
   isValidTaskProjectIdUpdate,
+  parseMoveFootprint,
 } from './task-shared-helpers';
 import { toLwwUpdateActionType } from '../../../op-log/core/lww-update-action-types';
 
@@ -434,7 +435,7 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       id?: unknown;
       parentId?: unknown;
       projectId?: unknown;
-      meta?: { entityIds?: unknown };
+      meta?: { projectMoveFootprint?: readonly string[] };
     };
     if (typeof update.id !== 'string') return state;
 
@@ -443,12 +444,14 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       | undefined;
     const currentTask =
       currentTaskCandidate?.id === update.id ? currentTaskCandidate : undefined;
-    const explicitEntityIds = Array.isArray(update.meta?.entityIds)
-      ? update.meta.entityIds.filter((id): id is string => typeof id === 'string')
-      : undefined;
+    // Use the AUTHENTICATED move footprint (meta.projectMoveFootprint from the encrypted
+    // payload), never the plaintext meta.entityIds envelope. Mirrors
+    // repairTaskProjectForLww so the two LWW-TASK trust sites cannot drift.
+    // GHSA-8pxh-mgc7-gp3g.
+    const authFootprint = parseMoveFootprint(update.meta?.projectMoveFootprint);
     const affectedTaskIds =
-      explicitEntityIds !== undefined
-        ? Array.from(new Set([update.id, ...explicitEntityIds]))
+      authFootprint !== undefined
+        ? Array.from(new Set([update.id, ...authFootprint]))
         : collectTaskAndSubTaskIds(state, [update.id]);
 
     const hasParentId = Object.prototype.hasOwnProperty.call(update, 'parentId');

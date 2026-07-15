@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
-import { ConflictResolutionService } from './conflict-resolution.service';
+import {
+  ConflictResolutionService,
+  getLatestTaskProjectMoveEntityIds,
+} from './conflict-resolution.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -7623,6 +7626,102 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(op.entityIds).toEqual(['task-canonical', 'subtask-1']);
+      // The same footprint must also ride inside the authenticated payload so
+      // remote clients don't have to trust the plaintext envelope.
+      // GHSA-8pxh-mgc7-gp3g.
+      expect(
+        (op.payload as { projectMoveFootprint?: readonly string[] }).projectMoveFootprint,
+      ).toEqual(['task-canonical', 'subtask-1']);
+    });
+
+    it('should omit projectMoveFootprint when no footprint is supplied', () => {
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        { title: 'Local winner' },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect(op.entityIds).toBeUndefined();
+      expect(
+        (op.payload as { projectMoveFootprint?: readonly string[] }).projectMoveFootprint,
+      ).toBeUndefined();
+    });
+
+    describe('getLatestTaskProjectMoveEntityIds (authenticated footprint source)', () => {
+      const lwwMoveOp = (overrides: Partial<Operation>): Operation =>
+        ({
+          id: 'op-x',
+          actionType: toLwwUpdateActionType('TASK'),
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'taskT',
+          payload: {
+            actionPayload: { id: 'taskT' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+          },
+          clientId: 'c',
+          vectorClock: { c: 1 },
+          timestamp: 1,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          ...overrides,
+        }) as Operation;
+
+      it('reuses the footprint from the authenticated payload, ignoring a tampered entityIds envelope (GHSA-8pxh-mgc7-gp3g)', () => {
+        // A compromised server appended 'victim' to a remote LWW op's plaintext
+        // entityIds envelope. Re-derivation must launder nothing: the merged op's
+        // footprint comes from the authenticated payload.projectMoveFootprint.
+        const op = lwwMoveOp({
+          entityIds: ['taskT', 'victim'],
+          payload: {
+            actionPayload: { id: 'taskT' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            projectMoveFootprint: ['taskT', 'sub1'],
+          } as unknown as Operation['payload'],
+        });
+
+        expect(getLatestTaskProjectMoveEntityIds([op])).toEqual(['taskT', 'sub1']);
+      });
+
+      it('returns undefined for a legacy LWW op with entityIds but no authenticated footprint (no laundering)', () => {
+        const op = lwwMoveOp({ entityIds: ['taskT', 'victim'] });
+
+        expect(getLatestTaskProjectMoveEntityIds([op])).toBeUndefined();
+      });
+
+      it('takes the raw TASK_SHARED_UPDATE footprint ROOT from the authenticated payload, not the tampered entityId envelope (GHSA-8pxh-mgc7-gp3g)', () => {
+        // A raw TASK_SHARED_UPDATE op's entityId is NOT bound to payload.id by the
+        // decrypt gate (that gate only covers LWW ops). A compromised server
+        // retargets the plaintext envelope entityId to 'victim' while the
+        // authenticated payload still moves the real task 'taskT'. The footprint
+        // root must come from the authenticated payload.task.id.
+        const op = {
+          id: 'op-upd',
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'victim',
+          payload: {
+            actionPayload: {
+              task: { id: 'taskT', changes: { projectId: 'proj-2' } },
+              projectMoveSubTaskIds: ['sub1'],
+            },
+            entityChanges: [],
+          },
+          clientId: 'c',
+          vectorClock: { c: 1 },
+          timestamp: 1,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+        } as unknown as Operation;
+
+        const result = getLatestTaskProjectMoveEntityIds([op]);
+        expect(result).toEqual(['taskT', 'sub1']);
+        expect(result).not.toContain('victim');
+      });
     });
 
     it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {
