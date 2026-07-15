@@ -104,6 +104,28 @@ describe('EmlDropService', () => {
       'From: Alice <alice@example.com>',
       'Subject: Encoded',
       'Content-Type: text/plain',
+      'Content-Transfer-Encoding: x-unknown-encoding',
+      '',
+      'body',
+      '',
+    ].join('\n');
+
+    await service.createTaskFromEml(makeFile(encodedEml));
+
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Alice: Encoded',
+      false,
+      { notes: undefined },
+      false,
+      true,
+    );
+  });
+
+  it('should decode a base64-encoded body and wrap it in the notes code fence', async () => {
+    const encodedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Encoded',
+      'Content-Type: text/plain',
       'Content-Transfer-Encoding: base64',
       '',
       'Ym9keQ==',
@@ -115,7 +137,7 @@ describe('EmlDropService', () => {
     expect(taskService.add).toHaveBeenCalledWith(
       'Alice: Encoded',
       false,
-      { notes: undefined },
+      { notes: '```\nbody\n```' },
       false,
       true,
     );

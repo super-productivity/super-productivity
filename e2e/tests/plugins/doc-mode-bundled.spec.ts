@@ -13,11 +13,6 @@ test.describe('Doc Mode bundled plugin', () => {
 
     const assetsAvailable = await waitForPluginAssets(page);
     if (!assetsAvailable) {
-      if (process.env.CI) {
-        // Mirrors plugin-loading.spec.ts: assets may not be built in CI.
-        test.skip(true, 'Plugin assets not available in CI');
-        return;
-      }
       throw new Error('Plugin assets not available — run `npm run prebuild`');
     }
 

@@ -437,6 +437,29 @@ export class StorageQuotaService {
           ? state.latestFullStateSeq
           : null;
 
+      // The cached `latestFullStateSeq` marker is NOT self-validating. Installs
+      // upgraded from before the causal-marker migration (#8973) may have set it
+      // from a legacy REPAIR (repairBaseServerSeq NULL) through the old
+      // isFullStateOpType gate, and that migration shipped no backfill to clear
+      // stale markers. Trusting it blindly would prune history behind a repair
+      // the replay path deliberately refuses as a boundary
+      // (LegacyRepairReplayUnsupportedError) — permanent, cross-device loss.
+      // Confirm the marked op is actually causal before it can authorize a
+      // DELETE; otherwise drop to the causal-only lookup below (or skip).
+      if (protectedFromSeq !== null) {
+        const markerIsCausal = await prisma.operation.findFirst({
+          where: {
+            userId: state.userId,
+            serverSeq: protectedFromSeq,
+            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
+          },
+          select: { serverSeq: true },
+        });
+        if (!markerIsCausal) {
+          protectedFromSeq = null;
+        }
+      }
+
       // Existing installations may have full-state rows created before the
       // marker was introduced, and a snapshot can temporarily lag a newer
       // marker. Fall back only for those legacy/stale-marker cases.
@@ -445,7 +468,14 @@ export class StorageQuotaService {
           where: {
             userId: state.userId,
             serverSeq: { lte: lastSnapshotSeq },
-            opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+            // Legacy REPAIR rows carry no causal base cursor, so they must never
+            // authorize history pruning (see CAUSAL_FULL_STATE_OPERATION_WHERE).
+            // This is the one query whose result directly authorizes a DELETE;
+            // it must match the five other full-state queries and the primary
+            // `latestFullStateSeq` marker (validated causal just above). A
+            // legacy-repair-only user then yields protectedFromSeq === null →
+            // eligibleUsersWithoutReplayBase++ → skipped (no deletion).
+            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
           },
           orderBy: { serverSeq: 'desc' },
           select: { serverSeq: true },

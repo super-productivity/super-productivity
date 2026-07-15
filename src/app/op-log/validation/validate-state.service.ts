@@ -121,6 +121,10 @@ export class ValidateStateService {
     const currentState =
       await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
 
+    // This whole method runs inside the sp_op_log lock during background sync,
+    // so repair must stay non-interactive: validateAndRepair and (below)
+    // createRepairOperation both default to non-interactive, so no blocking
+    // native dialog is shown while the lock is held (#9026).
     const result = await this.validateAndRepair(
       currentState as unknown as Record<string, unknown>,
     );
@@ -150,7 +154,9 @@ export class ValidateStateService {
       return false;
     }
 
-    // Create REPAIR operation first (before dispatching state)
+    // Create REPAIR operation first (before dispatching state). Non-interactive
+    // by default, so its "data repaired" acknowledge dialog never blocks the
+    // held lock during background sync (#9026).
     await this.repairOperationService.createRepairOperation(
       result.repairedState,
       result.repairSummary,
@@ -250,25 +256,29 @@ export class ValidateStateService {
    * Validates state and repairs if necessary.
    * Returns the (possibly repaired) state and repair summary.
    *
-   * Shows a confirmation dialog before executing repair to give users
-   * explicit control over when repair runs.
+   * ## Interactive vs. non-interactive (`options.interactive`, default FALSE)
+   * The default is non-interactive (auto-repair, no dialog) — a deliberate
+   * fail-safe default. Interactive repair uses native `confirm()`/`alert()`,
+   * which block the JS thread; shown while the `sp_op_log` lock is held during
+   * background sync, a blocking dialog freezes the event loop and starves lock
+   * contenders (e.g. snapshot compaction) for as long as the dialog sits open
+   * (#9026). Since essentially every caller runs automatically and/or inside
+   * that lock, the safe behavior is the default and can't be forgotten: the
+   * state is already invalid, repair is the safe recovery, so we auto-repair
+   * and surface any failure via the caller's non-blocking session-validation
+   * latch + snack. Only genuinely foreground, non-lock callers (the
+   * user-initiated USE_REMOTE flow) pass `interactive: true` to keep the
+   * confirm-before-repair and acknowledge dialogs.
    *
-   * ## Note on Blocking confirm()
-   * Uses native `confirm()` which blocks the JS thread. This is intentional:
-   * - Prevents race conditions during repair
-   * - Ensures user explicitly acknowledges before data modification
-   * However, this could cause issues if called during background sync with
-   * user not actively looking at the app. Consider deferring repair to app
-   * foreground if this becomes problematic.
-   *
-   * ## TOCTOU Limitation
+   * ## TOCTOU Limitation (interactive path)
    * The state snapshot passed to this method is validated, then user confirms,
    * then repair runs on that same snapshot. If the actual NgRx state changed
    * during the confirm dialog (via another tab, service worker, or user action),
    * we'll repair and dispatch the older snapshot, potentially overwriting recent
    * changes. This is an accepted tradeoff to keep the API simple. The repair
    * operation will still be valid and the REPAIR op in the log reflects what
-   * was applied.
+   * was applied. The non-interactive path has no dialog wait, so this window
+   * shrinks to the surrounding synchronous repair work.
    *
    * ## Repair Summary
    * The `dataRepair()` function returns a `RepairSummary` with accurate
@@ -276,7 +286,13 @@ export class ValidateStateService {
    */
   async validateAndRepair(
     state: Record<string, unknown>,
+    options?: { interactive?: boolean },
   ): Promise<ValidateAndRepairResult> {
+    // Fail-safe default: non-interactive (auto-repair, no blocking dialog). See
+    // the method doc — a native dialog while sp_op_log is held during background
+    // sync starves lock contenders (#9026); only foreground callers opt in.
+    const interactive = options?.interactive ?? false;
+
     // First, validate the state
     const validationResult = await this.validateState(state);
 
@@ -287,9 +303,9 @@ export class ValidateStateService {
       };
     }
 
-    // State is invalid - ask user for confirmation before repair
-    // (the rating-prompt suppression is recorded centrally in validateState).
-    OpLog.log('[ValidateStateService] State invalid, asking user for confirmation...');
+    // State is invalid (the rating-prompt suppression is recorded centrally in
+    // validateState). Interactive callers confirm below; automatic callers repair.
+    OpLog.log('[ValidateStateService] State invalid — repairing');
 
     // Check if repair is possible
     if (!isDataRepairPossible(state as AppDataComplete)) {
@@ -302,20 +318,26 @@ export class ValidateStateService {
       };
     }
 
-    // Show confirmation dialog using translated message
-    const confirmTitle = this.translateService.instant(
-      T.F.SYNC.D_DATA_REPAIR_CONFIRM.TITLE,
-    );
-    const confirmMsg = this.translateService.instant(T.F.SYNC.D_DATA_REPAIR_CONFIRM.MSG);
-    const userConfirmed = confirmDialog(`${confirmTitle}\n\n${confirmMsg}`);
+    // Interactive callers only — see the method doc for why automatic/in-lock
+    // repair must not block on a native dialog (#9026).
+    if (interactive) {
+      // Show confirmation dialog using translated message
+      const confirmTitle = this.translateService.instant(
+        T.F.SYNC.D_DATA_REPAIR_CONFIRM.TITLE,
+      );
+      const confirmMsg = this.translateService.instant(
+        T.F.SYNC.D_DATA_REPAIR_CONFIRM.MSG,
+      );
+      const userConfirmed = confirmDialog(`${confirmTitle}\n\n${confirmMsg}`);
 
-    if (!userConfirmed) {
-      OpLog.warn('[ValidateStateService] User declined repair');
-      return {
-        isValid: false,
-        wasRepaired: false,
-        error: 'User declined repair',
-      };
+      if (!userConfirmed) {
+        OpLog.warn('[ValidateStateService] User declined repair');
+        return {
+          isValid: false,
+          wasRepaired: false,
+          error: 'User declined repair',
+        };
+      }
     }
 
     // User confirmed - proceed with repair
@@ -330,11 +352,14 @@ export class ValidateStateService {
       const revalidationResult = await this.validateState(repairedState);
       if (!revalidationResult.isValid) {
         OpLog.err('[ValidateStateService] State still invalid after repair');
-        // Notify user that repair failed - they confirmed but it didn't work
-        alertDialog(
-          'Repair attempted but failed to fully fix data issues. ' +
-            'Please try restoring from a backup or contact support.',
-        );
+        // Interactive callers only; automatic callers surface failure via the
+        // session-validation latch + non-blocking error snack (#9026).
+        if (interactive) {
+          alertDialog(
+            'Repair attempted but failed to fully fix data issues. ' +
+              'Please try restoring from a backup or contact support.',
+          );
+        }
         return {
           isValid: false,
           wasRepaired: true,

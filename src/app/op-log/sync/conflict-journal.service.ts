@@ -49,6 +49,27 @@ interface ConflictJournalDB extends DBSchema {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Durable "cleared before" timestamp written by clearAll() on a profile/dataset
+// switch and consulted by the read paths. It lives in localStorage on purpose:
+// it must survive — and be readable — even when the journal's own IndexedDB is
+// unhealthy, which is exactly the failure clearAll() has to tolerate. Any entry
+// resolved at or before this instant is hidden, so a swallowed bulk-clear failure
+// can never surface the previous dataset's titles/values.
+//
+// Known limitations (all gated behind the already-rare failed-clear path; the
+// data is device-local, observe-only review metadata — never task data):
+//  - Timestamp boundary, not a monotonic epoch: a backward wall-clock step
+//    between recording an old entry and the clear could let that entry slip the
+//    filter. A monotonic per-entry epoch would be immune; deferred as low-stakes.
+//  - Assumes localStorage outlives the journal's IndexedDB from clear-time until
+//    the next read — seconds, across the profile-switch reload. A successful clear
+//    or the next pruneOnStart drops the marker well before any sustained
+//    storage-pressure eviction (relevant only to mobile WebViews under load).
+//  - The marker's safety assumes nothing bulk-wipes localStorage while journal
+//    entries survive in IndexedDB. No runtime path does today (`clearLS()` is
+//    unused); a future "reset app data" flow MUST also clear the journal DB.
+const CONFLICT_JOURNAL_CLEARED_BEFORE_KEY = 'SUP_CONFLICT_JOURNAL_CLEARED_BEFORE';
+
 @Injectable({
   providedIn: 'root',
 })
@@ -157,7 +178,7 @@ export class ConflictJournalService {
         CONFLICT_JOURNAL_STORE,
         CONFLICT_JOURNAL_INDEX_RESOLVED_AT,
       );
-      const newestFirst = ascending.reverse();
+      const newestFirst = this._dropInvalidated(ascending).reverse();
       if (view === 'unreviewed') {
         return newestFirst.filter((entry) => entry.status === 'unreviewed');
       }
@@ -172,10 +193,57 @@ export class ConflictJournalService {
   async getEntry(id: string): Promise<ConflictJournalEntry | undefined> {
     try {
       const db = await this._ensureDb();
-      return await db.get(CONFLICT_JOURNAL_STORE, id);
+      const entry = await db.get(CONFLICT_JOURNAL_STORE, id);
+      // Hidden behind a durable clear boundary (see _dropInvalidated): read as
+      // "no such entry" so a stale id can never be surfaced or flipped.
+      if (entry && entry.resolvedAt <= this._getClearedBefore()) {
+        return undefined;
+      }
+      return entry;
     } catch (err) {
       OpLog.err('ConflictJournalService: getEntry failed (ignored)', err);
       return undefined;
+    }
+  }
+
+  /**
+   * Hides entries resolved before a durable clear boundary — the fail-safe for a
+   * clearAll() whose bulk delete failed after a profile/dataset switch, so
+   * survivors can never surface the previous dataset's content. No-op when unset.
+   */
+  private _dropInvalidated(entries: ConflictJournalEntry[]): ConflictJournalEntry[] {
+    const clearedBefore = this._getClearedBefore();
+    // Boundary favors hiding: an entry resolved at the exact clear instant is
+    // treated as pre-clear (hidden), never leaked. Legitimate new entries are
+    // recorded strictly after the clear (forward clock), so they stay visible.
+    return clearedBefore > 0
+      ? entries.filter((entry) => entry.resolvedAt > clearedBefore)
+      : entries;
+  }
+
+  private _getClearedBefore(): number {
+    try {
+      const raw = localStorage.getItem(CONFLICT_JOURNAL_CLEARED_BEFORE_KEY);
+      const value = raw === null ? 0 : Number(raw);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private _setClearedBefore(ts: number): void {
+    try {
+      localStorage.setItem(CONFLICT_JOURNAL_CLEARED_BEFORE_KEY, String(ts));
+    } catch (err) {
+      OpLog.err('ConflictJournalService: failed to persist clear marker', err);
+    }
+  }
+
+  private _clearClearedBefore(): void {
+    try {
+      localStorage.removeItem(CONFLICT_JOURNAL_CLEARED_BEFORE_KEY);
+    } catch (err) {
+      OpLog.err('ConflictJournalService: failed to remove clear marker', err);
     }
   }
 
@@ -222,6 +290,10 @@ export class ConflictJournalService {
     try {
       const db = await this._ensureDb();
       const deleted = await this._prune(db, now);
+      // _prune has physically removed any survivors hidden behind a failed
+      // clearAll's durable marker, so the marker (and its filtering) is no longer
+      // needed. Only reached when _prune committed, so no survivor can outlive it.
+      this._clearClearedBefore();
       await this._refreshUnreviewedCount(db);
       return deleted;
     } catch (err) {
@@ -247,10 +319,16 @@ export class ConflictJournalService {
 
     const retentionWindowMs = JOURNAL_RETENTION_DAYS * DAY_MS;
     const cutoff = now - retentionWindowMs;
+    // Also physically drop survivors of a failed clearAll (resolved before the
+    // durable marker); they are already hidden from reads, this reclaims them.
+    const clearedBefore = this._getClearedBefore();
     const idsToDelete = new Set<string>();
 
     for (const entry of ascending) {
-      if (entry.resolvedAt < cutoff) {
+      if (
+        entry.resolvedAt < cutoff ||
+        (clearedBefore > 0 && entry.resolvedAt <= clearedBefore)
+      ) {
         idsToDelete.add(entry.id);
       }
     }
@@ -289,12 +367,29 @@ export class ConflictJournalService {
    * must not fail after the dataset has already been replaced.
    */
   async clearAll(): Promise<void> {
+    // Persist a durable invalidation boundary FIRST, in localStorage — which does
+    // not depend on the (possibly unhealthy) journal IndexedDB. If the bulk clear
+    // below fails, the read paths hide every entry resolved before this instant,
+    // so the next profile can never see the previous dataset's titles/values.
+    const clearedBefore = Date.now();
+    this._setClearedBefore(clearedBefore);
     try {
       const db = await this._ensureDb();
       await db.clear(CONFLICT_JOURNAL_STORE);
+      // Physical clear succeeded — no stale entries remain, so the marker (and
+      // its read-time filtering) is no longer needed.
+      this._clearClearedBefore();
       await this._refreshUnreviewedCount(db);
     } catch (err) {
-      OpLog.err('ConflictJournalService: clearAll failed (ignored)', err);
+      // Clear failed: KEEP the marker so the read paths hide the survivors, and
+      // still reflect the logical clear on the badge. Contract: never throw after
+      // the dataset was replaced.
+      OpLog.err(
+        'ConflictJournalService: clearAll failed; entries hidden via durable marker',
+        err,
+      );
+      this._unreviewedCount.set(0);
+      this._revision.update((r) => r + 1);
     }
   }
 
@@ -307,6 +402,20 @@ export class ConflictJournalService {
     // reflects the committed change; `unreviewedCount` catches up once the query
     // succeeds. Fires on every mutation even when the count is unchanged.
     this._revision.update((r) => r + 1);
+    const clearedBefore = this._getClearedBefore();
+    if (clearedBefore > 0) {
+      // A prior clearAll left a marker (its bulk delete failed): count only
+      // post-marker unreviewed entries so the badge ignores hidden survivors.
+      const unreviewed = await db.getAllFromIndex(
+        CONFLICT_JOURNAL_STORE,
+        CONFLICT_JOURNAL_INDEX_STATUS,
+        IDBKeyRange.only('unreviewed'),
+      );
+      this._unreviewedCount.set(
+        unreviewed.filter((entry) => entry.resolvedAt > clearedBefore).length,
+      );
+      return;
+    }
     const count = await db.countFromIndex(
       CONFLICT_JOURNAL_STORE,
       CONFLICT_JOURNAL_INDEX_STATUS,

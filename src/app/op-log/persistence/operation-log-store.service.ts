@@ -816,6 +816,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     vectorClock: VectorClock;
     compactedAt: number;
     snapshotIncludedOps: readonly Operation[];
+    // Superseded local ops to mark rejected atomically within this same commit.
+    // A standalone markRejected() commits in its own transaction, so it would
+    // persist even when this baseline transaction later rolls back (e.g. the
+    // op-log tail changed): those ops become non-uploadable while the old state
+    // was never replaced — a permanent local edit loss. Rejecting them here ties
+    // their fate to the state replacement.
+    rejectOpIds?: readonly string[];
     archiveYoung?: ArchiveStoreEntry['data'];
     archiveOld?: ArchiveStoreEntry['data'];
   }): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
@@ -855,6 +862,23 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             throw new Error(
               'Cannot commit a file snapshot after the operation-log tail changed',
             );
+          }
+
+          // Reject superseded local ops inside this transaction so their
+          // rejection is atomic with the state replacement — never orphaned by
+          // a rolled-back baseline (see rejectOpIds doc above).
+          if (opts.rejectOpIds?.length) {
+            for (const opId of opts.rejectOpIds) {
+              const rejectEntry = await tx.getFromIndex<StoredOperationLogEntry>(
+                STORE_NAMES.OPS,
+                OPS_INDEXES.BY_ID,
+                opId,
+              );
+              if (rejectEntry) {
+                rejectEntry.rejectedAt = opts.compactedAt;
+                await tx.put(STORE_NAMES.OPS, rejectEntry);
+              }
+            }
           }
 
           const seqs: number[] = [];

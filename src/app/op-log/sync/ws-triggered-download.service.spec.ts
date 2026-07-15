@@ -43,10 +43,20 @@ describe('WsTriggeredDownloadService', () => {
     };
     mockSyncService = jasmine.createSpyObj('OperationLogSyncService', [
       'downloadRemoteOps',
+      'uploadPendingOps',
     ]);
     mockSyncService.downloadRemoteOps.and.returnValue(
       Promise.resolve({ kind: 'no_new_ops' as const }),
     );
+    mockSyncService.uploadPendingOps.and.resolveTo({
+      kind: 'completed' as const,
+      uploadedCount: 0,
+      piggybackedOpsCount: 0,
+      localWinOpsCreated: 0,
+      permanentRejectionCount: 0,
+      hasMorePiggyback: false,
+      rejectedOps: [],
+    });
 
     mockProviderManager = jasmine.createSpyObj(
       'SyncProviderManager',
@@ -463,6 +473,108 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+  }));
+
+  // A WS-triggered download that resolves a conflict against pending local ops
+  // appends LWW local-win replacement ops straight to the op-log (bypassing the
+  // capture effect). Unlike ImmediateUploadService / the main sync loop, this
+  // path previously had no follow-up upload, so the preserved edit sat unsynced
+  // until the next user edit or periodic sync (unbounded for manual-sync-only).
+  it('re-uploads LWW local-win ops created by a WS-triggered download', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.resolveTo({
+      kind: 'ops_processed' as const,
+      newOpsCount: 2,
+      localWinOpsCreated: 1,
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.uploadPendingOps).toHaveBeenCalledWith(syncCapableProvider);
+  }));
+
+  it('does not re-upload when a WS-triggered download created no local-win ops', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.resolveTo({
+      kind: 'ops_processed' as const,
+      newOpsCount: 2,
+      localWinOpsCreated: 0,
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+  }));
+
+  it('reports ERROR when the local-win re-upload is blocked by an incompatible op', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.resolveTo({
+      kind: 'ops_processed' as const,
+      newOpsCount: 1,
+      localWinOpsCreated: 1,
+    });
+    mockSyncService.uploadPendingOps.and.resolveTo({
+      kind: 'blocked_incompatible' as const,
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+  }));
+
+  it('reports ERROR when the local-win re-upload is permanently rejected', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.resolveTo({
+      kind: 'ops_processed' as const,
+      newOpsCount: 1,
+      localWinOpsCreated: 1,
+    });
+    mockSyncService.uploadPendingOps.and.resolveTo({
+      kind: 'completed' as const,
+      uploadedCount: 0,
+      piggybackedOpsCount: 0,
+      localWinOpsCreated: 0,
+      permanentRejectionCount: 1,
+      hasMorePiggyback: false,
+      rejectedOps: [],
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+  }));
+
+  it('reports UNKNOWN_OR_CHANGED when the local-win re-upload needs a missing key', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.resolveTo({
+      kind: 'ops_processed' as const,
+      newOpsCount: 1,
+      localWinOpsCreated: 1,
+    });
+    mockSyncService.uploadPendingOps.and.resolveTo({
+      kind: 'completed' as const,
+      uploadedCount: 0,
+      piggybackedOpsCount: 0,
+      localWinOpsCreated: 0,
+      permanentRejectionCount: 0,
+      hasMorePiggyback: false,
+      rejectedOps: [],
+      encryptionRequiredKeyMissing: true,
+    });
+
+    service.start();
+    notification$.next({ latestSeq: 1 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('UNKNOWN_OR_CHANGED');
   }));
 
   // Defense against stale latch from a prior path: the WS service opens its

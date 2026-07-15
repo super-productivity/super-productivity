@@ -1,4 +1,10 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  fakeAsync,
+  flushMicrotasks,
+  TestBed,
+  tick,
+} from '@angular/core/testing';
 import { FormControl, FormGroup } from '@angular/forms';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -245,7 +251,46 @@ describe('DialogSyncCfgComponent', () => {
     it('does NOT flag when re-saving an already-established SuperSync config', async () => {
       forceOnline();
       mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+      (component as any)._initialProviderId = SyncProviderId.SuperSync;
 
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        isEnabled: true,
+        _isInitialSetup: false,
+      };
+
+      await component.save();
+
+      expect(
+        mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('flags setup sync when switching to an unconfigured SuperSync provider', async () => {
+      forceOnline();
+      mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+      (component as any)._initialProviderId = SyncProviderId.WebDAV;
+      (component as any)._selectedProviderWasConfigured = false;
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        isEnabled: true,
+        _isInitialSetup: false,
+      };
+
+      await component.save();
+
+      expect(
+        mockSyncWrapperService.markPromptEncryptionAfterSetupSync,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT flag setup when returning to an already-configured SuperSync provider', async () => {
+      forceOnline();
+      mockProviderManager.getProviderById.and.resolveTo(superSyncProvider as any);
+      (component as any)._initialProviderId = SyncProviderId.WebDAV;
+      (component as any)._selectedProviderWasConfigured = true;
       (component as any)._tmpUpdatedCfg = {
         ...(component as any)._tmpUpdatedCfg,
         syncProvider: SyncProviderId.SuperSync,
@@ -327,6 +372,7 @@ describe('DialogSyncCfgComponent', () => {
     it('does NOT prompt when re-saving an already-configured provider (not a fresh setup)', async () => {
       setOnline(true);
       mockDialogResult({ success: true, password: 'unused' });
+      (component as any)._initialProviderId = SyncProviderId.WebDAV;
       setFreshWebdavCfg({ _isInitialSetup: false } as any);
 
       await component.save();
@@ -335,14 +381,54 @@ describe('DialogSyncCfgComponent', () => {
       expect(savedConfig().isEncryptionEnabled).toBeFalse();
     });
 
+    it('offers encryption setup when switching to an unconfigured WebDAV provider', async () => {
+      setOnline(true);
+      mockDialogResult({ success: true, password: 'provider-switch-password' });
+      (component as any)._initialProviderId = SyncProviderId.SuperSync;
+      (component as any)._selectedProviderWasConfigured = false;
+      setFreshWebdavCfg({ _isInitialSetup: false } as any);
+
+      await component.save();
+
+      expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+      expect(savedConfig().encryptKey).toBe('provider-switch-password');
+      expect(savedConfig().isEncryptionEnabled).toBeTrue();
+    });
+
+    it('does NOT offer a new key when returning to a configured WebDAV provider', async () => {
+      setOnline(true);
+      mockDialogResult({ success: true, password: 'incompatible-new-password' });
+      (component as any)._initialProviderId = SyncProviderId.SuperSync;
+      (component as any)._selectedProviderWasConfigured = true;
+      setFreshWebdavCfg({ _isInitialSetup: false } as any);
+
+      await component.save();
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(savedConfig().encryptKey).toBe('');
+      expect(savedConfig().isEncryptionEnabled).toBeFalse();
+    });
+
     it('does NOT prompt when encryption is already enabled', async () => {
       setOnline(true);
       mockDialogResult({ success: true, password: 'unused' });
+      mockProviderManager.getProviderById.and.resolveTo({
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            encryptKey: 'stored-webdav-key',
+            isEncryptionEnabled: true,
+          }),
+        },
+        isReady: jasmine.createSpy('isReady').and.resolveTo(true),
+      } as any);
       setFreshWebdavCfg({ isEncryptionEnabled: true });
 
       await component.save();
 
       expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(savedConfig().encryptKey).toBe('stored-webdav-key');
+      expect(savedConfig().isEncryptionEnabled).toBeTrue();
     });
 
     it('does NOT prompt for a non-file-based provider (SuperSync)', async () => {
@@ -402,6 +488,138 @@ describe('DialogSyncCfgComponent', () => {
       expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalled();
     });
+  });
+
+  describe('provider changes', () => {
+    it('clears the previous provider encryption when the new provider has none', fakeAsync(() => {
+      const syncProviderControl = new FormControl<SyncProviderId | null>(null);
+      component.form = new FormGroup({
+        syncProvider: syncProviderControl,
+      }) as unknown as typeof component.form;
+      mockProviderManager.getProviderById.and.resolveTo({
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo(null),
+        },
+      } as any);
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.SuperSync,
+        encryptKey: 'super-sync-secret',
+        isEncryptionEnabled: true,
+      };
+
+      component.ngAfterViewInit();
+      tick();
+      syncProviderControl.setValue(SyncProviderId.WebDAV);
+      flushMicrotasks();
+
+      expect((component as any)._tmpUpdatedCfg.encryptKey).toBe('');
+      expect((component as any)._tmpUpdatedCfg.isEncryptionEnabled).toBeFalse();
+    }));
+
+    it('waits for the selected provider config before saving', fakeAsync(() => {
+      let resolvePrivateCfg: (value: null) => void = () => undefined;
+      const privateCfgPromise = new Promise<null>((resolve) => {
+        resolvePrivateCfg = resolve;
+      });
+      const syncProviderControl = new FormControl<SyncProviderId | null>(null);
+      component.form = new FormGroup({
+        syncProvider: syncProviderControl,
+        encryptKey: new FormControl('stale-super-sync-key'),
+        isEncryptionEnabled: new FormControl(true),
+      }) as unknown as typeof component.form;
+      mockProviderManager.getProviderById.and.resolveTo({
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(privateCfgPromise),
+        },
+      } as any);
+      mockSyncWrapperService.configuredAuthForSyncProviderIfNecessary.and.resolveTo({
+        wasConfigured: false,
+      });
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        encryptKey: 'stale-super-sync-key',
+        isEncryptionEnabled: true,
+      };
+
+      component.ngAfterViewInit();
+      tick();
+      syncProviderControl.setValue(SyncProviderId.WebDAV);
+      void component.save();
+      flushMicrotasks();
+
+      expect(mockSyncConfigService.updateSettingsFromForm).not.toHaveBeenCalled();
+
+      resolvePrivateCfg(null);
+      flushMicrotasks();
+
+      expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalled();
+      expect(
+        (
+          mockSyncConfigService.updateSettingsFromForm.calls.mostRecent()
+            .args[0] as SyncConfig
+        ).encryptKey,
+      ).toBe('');
+      expect(
+        (
+          mockSyncConfigService.updateSettingsFromForm.calls.mostRecent()
+            .args[0] as SyncConfig
+        ).isEncryptionEnabled,
+      ).toBeFalse();
+    }));
+
+    it('ignores an older provider load that resolves after the current one', fakeAsync(() => {
+      let resolveWebDav: (value: { encryptKey: string }) => void = () => undefined;
+      let resolveSuperSync: (value: {
+        encryptKey: string;
+        isEncryptionEnabled: boolean;
+      }) => void = () => undefined;
+      const webDavCfg = new Promise<{ encryptKey: string }>((resolve) => {
+        resolveWebDav = resolve;
+      });
+      const superSyncCfg = new Promise<{
+        encryptKey: string;
+        isEncryptionEnabled: boolean;
+      }>((resolve) => {
+        resolveSuperSync = resolve;
+      });
+      const syncProviderControl = new FormControl<SyncProviderId | null>(null);
+      component.form = new FormGroup({
+        syncProvider: syncProviderControl,
+      }) as unknown as typeof component.form;
+      mockProviderManager.getProviderById.and.callFake(
+        async (providerId) =>
+          ({
+            privateCfg: {
+              load: jasmine
+                .createSpy('load')
+                .and.returnValue(
+                  providerId === SyncProviderId.WebDAV ? webDavCfg : superSyncCfg,
+                ),
+            },
+          }) as any,
+      );
+
+      component.ngAfterViewInit();
+      tick();
+      syncProviderControl.setValue(SyncProviderId.WebDAV);
+      syncProviderControl.setValue(SyncProviderId.SuperSync);
+      flushMicrotasks();
+
+      resolveSuperSync({
+        encryptKey: 'current-super-sync-key',
+        isEncryptionEnabled: true,
+      });
+      flushMicrotasks();
+      resolveWebDav({ encryptKey: 'stale-webdav-key' });
+      flushMicrotasks();
+
+      expect((component as any)._tmpUpdatedCfg.syncProvider).toBe(
+        SyncProviderId.SuperSync,
+      );
+      expect((component as any)._tmpUpdatedCfg.encryptKey).toBe('current-super-sync-key');
+      expect((component as any)._tmpUpdatedCfg.isEncryptionEnabled).toBeTrue();
+    }));
   });
 
   describe('Nextcloud connection test', () => {

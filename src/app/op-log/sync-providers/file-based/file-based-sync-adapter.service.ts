@@ -13,6 +13,7 @@ import {
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
+import { REPAIR_STALE_ERROR_CODE } from '../../core/operation-log.const';
 import {
   Operation,
   VectorClock,
@@ -414,7 +415,7 @@ export class FileBasedSyncAdapterService {
         isPayloadEncrypted: boolean | undefined,
         _opId: string, // Not used in file-based sync (operation IDs are client-local)
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
-        _snapshotOpType?: RestorePointType, // Not used - file-based sync has no server-side op log
+        snapshotOpType?: RestorePointType, // REPAIR triggers a rev-based concurrency guard; see _uploadSnapshot
         _syncImportReason?: string, // Not used - file-based sync has no server-side conflict dialog
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
@@ -426,6 +427,7 @@ export class FileBasedSyncAdapterService {
           reason,
           vectorClock,
           schemaVersion,
+          snapshotOpType,
         );
       },
 
@@ -1152,6 +1154,7 @@ export class FileBasedSyncAdapterService {
     reason: 'initial' | 'recovery' | 'migration',
     vectorClock: Record<string, number>,
     schemaVersion: number,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
     const providerKey = this._getProviderKey(provider);
 
@@ -1170,6 +1173,7 @@ export class FileBasedSyncAdapterService {
         schemaVersion,
         providerKey,
         state,
+        snapshotOpType,
       );
     }
 
@@ -1205,12 +1209,51 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
-    const snapshotUploadRes = await this._forceUploadWithBakFirst(
-      provider,
-      FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-      FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-      uploadData,
-    );
+    let snapshotUploadRes: { rev: string };
+    if (snapshotOpType === 'REPAIR') {
+      // #9023: an automatic REPAIR recovery snapshot must never overwrite a remote
+      // that advanced since this client last synced — otherwise a concurrent edit
+      // from another device (uploaded after our last download) is silently dropped.
+      // Mirror the SuperSync repairBaseServerSeq guard by writing CONDITIONALLY on
+      // the rev we last downloaded+applied (`_lastSeenRevs` — the repair's base).
+      // A rev, not a vector clock, is used deliberately: two independently-pruned
+      // clocks (MAX_VECTOR_CLOCK_SIZE) can compare CONCURRENT even when one
+      // dominates, which would wedge the repair forever. On a rev mismatch we
+      // signal REPAIR_STALE so the shared rebase path (RejectedOpsHandlerService)
+      // downloads the concurrent ops and rebuilds the repair; that download
+      // promotes `_lastSeenRevs`, so the retry converges. BACKUP_IMPORT / initial /
+      // migration keep force-overwrite: explicit restores or first-time uploads.
+      const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
+      try {
+        snapshotUploadRes = await this._conditionalUploadRepairSnapshot(
+          provider,
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+          uploadData,
+          baseRev,
+        );
+      } catch (e) {
+        if (e instanceof UploadRevToMatchMismatchAPIError) {
+          OpLog.warn(
+            'FileBasedSyncAdapter: REPAIR snapshot is stale (remote advanced since ' +
+              'our last sync); requesting rebase instead of overwriting.',
+          );
+          return {
+            accepted: false,
+            error: 'REPAIR snapshot does not include current remote state',
+            errorCode: REPAIR_STALE_ERROR_CODE,
+          };
+        }
+        throw e;
+      }
+    } else {
+      snapshotUploadRes = await this._forceUploadWithBakFirst(
+        provider,
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        uploadData,
+      );
+    }
 
     // Reset local state
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
@@ -1387,13 +1430,18 @@ export class FileBasedSyncAdapterService {
     }
   }
 
-  /** Downloads + decodes `sync-state.json` and validates its version. */
+  /**
+   * Downloads + decodes a snapshot file and validates its version. Defaults to
+   * the fixed `sync-state.json`; pass a generation-specific name (#9040) to read
+   * the immutable snapshot referenced by an ops file's `snapshotRef.file`.
+   */
   private async _downloadStateFile(
     provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
+    path: string = FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
   ): Promise<{ data: FileBasedStateFile; rev: string }> {
-    const response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.STATE_FILE);
+    const response = await provider.downloadFile(path);
     const data =
       await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedStateFile>(
         cfg,
@@ -1403,22 +1451,30 @@ export class FileBasedSyncAdapterService {
     if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
       throw new SyncDataCorruptedError(
         `Unsupported state-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
-        FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
+        path,
       );
     }
     return { data, rev: response.rev };
   }
 
   /**
-   * Writes `sync-state.json`. Force-overwrite: the ops file (commit point) is the
-   * concurrency gate, and readers only trust a snapshot the ops file's snapshotRef
-   * validates against. Returns the written rev for the snapshotRef pointer.
+   * Writes a snapshot file (default `sync-state.json`). Force-overwrite: the ops
+   * file (commit point) is the concurrency gate, and readers only trust a snapshot
+   * the ops file's snapshotRef validates against. Returns the written rev for the
+   * snapshotRef pointer.
+   *
+   * #9040: pass a generation+client-unique `path` to write the immutable snapshot.
+   * Force-overwrite is safe there because the name is unique per (syncVersion,
+   * clientId) — no concurrent compactor targets the same file, so nothing clobbers
+   * it. The fixed `sync-state.json` remains clobberable and is written only for
+   * pre-#9040 clients that don't read `snapshotRef.file`.
    */
   private async _writeStateFile(
     provider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     data: FileBasedStateFile,
+    path: string = FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
   ): Promise<string> {
     const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
@@ -1427,13 +1483,52 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._writeStateFile');
-    const res = await provider.uploadFile(
-      FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
-      uploadData,
-      null,
-      true,
-    );
+    const res = await provider.uploadFile(path, uploadData, null, true);
     return res.rev;
+  }
+
+  /**
+   * Builds the immutable snapshot filename for a compaction (#9040):
+   * `sync-state__<syncVersion>__<random>.json`. The random suffix (not the
+   * clientId) makes two concurrent compactors target different files without
+   * leaking device identity — filenames are NOT encrypted, so an opaque suffix
+   * keeps device count/platform private from the remote for E2EE users. A
+   * collision is astronomically unlikely and self-heals anyway: the reader
+   * validates loaded content against `snapshotRef` (clock EQUAL), so a wrong
+   * file fails validation and falls back to `sync-state.json`/`.bak`. `syncVersion`
+   * stays in the name for legible ordering and a future `listFiles`-prune.
+   */
+  private _genStateFileName(syncVersion: number): string {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    const random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${FILE_BASED_SYNC_CONSTANTS.STATE_GEN_FILE_PREFIX}${syncVersion}__${random}.json`;
+  }
+
+  /**
+   * Best-effort deletion of a generation-specific immutable snapshot file (#9040).
+   * Non-fatal — an undeleted snapshot only wastes remote space. Two call sites:
+   *   - after a successful compaction: reclaim the PREVIOUS generation's snapshot
+   *     (keeps the steady state at ~one immutable file), and
+   *   - when a compaction fails to commit: reclaim the snapshot THIS compaction
+   *     just wrote, which is now an orphan no committed ops file references (the
+   *     concurrent-compaction case that would otherwise leak).
+   *
+   * Residual: a crash between the snapshot write and either commit or this cleanup
+   * still leaks (rare crash window). Upgrade path if it ever matters — an
+   * opportunistic `listFiles` prune of `STATE_GEN_FILE_PREFIX` files with a stale
+   * syncVersion (listFiles is optional on the provider interface, so it must stay
+   * capability-gated).
+   */
+  private async _removeGenStateFile(
+    provider: FileSyncProvider<SyncProviderId>,
+    file: string,
+  ): Promise<void> {
+    try {
+      await provider.removeFile(file);
+    } catch (e) {
+      OpLog.normal('FileBasedSyncAdapter: snapshot cleanup skipped (non-fatal)', e);
+    }
   }
 
   /** Copies the current `sync-state.json` to its `.bak` (non-fatal). */
@@ -1489,8 +1584,15 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Loads the snapshot referenced by `opsFile.snapshotRef`, validating it against
-   * the ref. On mismatch (e.g. a crash between the state and ops writes left a
-   * newer, unreferenced `sync-state.json`), falls back to `sync-state.json.bak`.
+   * the ref. Resolution order:
+   *   1. #9040: `snapshotRef.file` — the immutable, generation+client-unique
+   *      snapshot. A committed ops file's referenced immutable file is never
+   *      clobbered by a concurrent compactor, so this is the authoritative source
+   *      for post-#9040 ops files.
+   *   2. `sync-state.json` — the fixed compat snapshot (older ops files with no
+   *      `snapshotRef.file`, or defensive fallback).
+   *   3. `sync-state.json.bak` — the crash-window backup (e.g. a crash between the
+   *      state and ops writes left a newer, unreferenced `sync-state.json`).
    * Returns null when no snapshot validates the ref (caller signals a gap).
    */
   private async _loadValidatedSnapshot(
@@ -1499,6 +1601,26 @@ export class FileBasedSyncAdapterService {
     encryptKey: string | undefined,
     opsFile: FileBasedOpsFile,
   ): Promise<FileBasedStateFile | null> {
+    const genFile = opsFile.snapshotRef.file;
+    if (genFile) {
+      try {
+        const { data } = await this._downloadStateFile(
+          provider,
+          cfg,
+          encryptKey,
+          genFile,
+        );
+        if (this._validateSnapshotRef(opsFile, data)) return data;
+        OpLog.warn(
+          'FileBasedSyncAdapter: immutable snapshot does not match snapshotRef; trying sync-state.json',
+        );
+      } catch (e) {
+        OpLog.warn(
+          'FileBasedSyncAdapter: immutable snapshot unreadable; trying sync-state.json',
+          e,
+        );
+      }
+    }
     try {
       const { data } = await this._downloadStateFile(provider, cfg, encryptKey);
       if (this._validateSnapshotRef(opsFile, data)) return data;
@@ -2012,14 +2134,29 @@ export class FileBasedSyncAdapterService {
         schemaVersion,
         localStateSnapshot,
       );
-      // Preserve the pre-compaction snapshot for snapshotRef-mismatch recovery.
+      // #9040: write the snapshot to an IMMUTABLE, per-compaction file first. This
+      // is the snapshot the ops pointer references; because its name carries a
+      // random suffix, a concurrent compactor writes a DIFFERENT file and can never
+      // clobber it, so the winning ops pointer can never be stranded.
+      const genStateFile = this._genStateFileName(newSyncVersion);
+      const stateRev = await this._writeStateFile(
+        provider,
+        cfg,
+        encryptKey,
+        stateData,
+        genStateFile,
+      );
+      // Compat: also refresh the fixed sync-state.json (+ its .bak) so pre-#9040
+      // split clients — which don't read snapshotRef.file — can still hydrate.
+      // This copy stays clobberable, but pre-#9040 clients already carried that
+      // exposure, so it is no regression; post-#9040 clients use snapshotRef.file.
       await this._backupStateFile(provider, cfg, encryptKey);
-      // Atomicity: sync-state.json FIRST, then the ops file that references it.
-      const stateRev = await this._writeStateFile(provider, cfg, encryptKey, stateData);
+      await this._writeStateFile(provider, cfg, encryptKey, stateData);
       snapshotRef = {
         syncVersion: newSyncVersion,
         vectorClock: mergedClock,
         rev: stateRev,
+        file: genStateFile,
       };
       finalOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.SPLIT_COMPACTION_THRESHOLD);
       OpLog.normal(
@@ -2066,13 +2203,45 @@ export class FileBasedSyncAdapterService {
     }
 
     // Commit point.
-    const { finalRev } = await this._uploadOpsFileWithMismatchFallback(
-      provider,
-      cfg,
-      encryptKey,
-      newOpsFile,
-      opsRev,
-    );
+    let finalRev: string;
+    try {
+      ({ finalRev } = await this._uploadOpsFileWithMismatchFallback(
+        provider,
+        cfg,
+        encryptKey,
+        newOpsFile,
+        opsRev,
+      ));
+    } catch (e) {
+      // #9040: reclaim the immutable snapshot we just wrote — but ONLY on a
+      // confirmed rev-mismatch rejection, which proves the server refused our ops
+      // PUT, so a concurrent compactor won and our snapshot is a true orphan. Any
+      // other error (network/5xx) is AMBIGUOUS: the PUT may have landed and
+      // committed, in which case the snapshot is still referenced and MUST survive
+      // (readers would otherwise strand on it). Deleting only applies when we
+      // compacted; otherwise snapshotRef.file is the still-referenced predecessor.
+      if (
+        e instanceof UploadRevToMatchMismatchAPIError &&
+        needsCompaction &&
+        snapshotRef.file
+      ) {
+        await this._removeGenStateFile(provider, snapshotRef.file);
+      }
+      throw e;
+    }
+
+    // #9040: after the commit succeeds, reclaim the immutable snapshot the
+    // superseded ops file referenced (no-op unless this sync compacted). Runs
+    // post-commit so a concurrent reader of the OLD ops file still finds its
+    // snapshot until it too advances.
+    const previousGenStateFile = opsFile?.snapshotRef?.file;
+    if (
+      needsCompaction &&
+      previousGenStateFile &&
+      previousGenStateFile !== snapshotRef.file
+    ) {
+      await this._removeGenStateFile(provider, previousGenStateFile);
+    }
 
     this._clearCachedOpsData(providerKey);
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
@@ -2361,9 +2530,45 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     providerKey: string,
     state: unknown,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
     const newSyncVersion = 1;
     const clock = vectorClock as VectorClock;
+
+    // #9023: same concurrency guard as the single-file path — a REPAIR recovery
+    // snapshot must not overwrite a remote that advanced since our last sync.
+    // The commit-point sync-ops.json is what other clients read, so gate on ITS
+    // rev vs the rev we last downloaded+applied (`_lastSeenRevs`). A rev, not a
+    // vector clock, is used deliberately (see _uploadSnapshot). `getFileRev`
+    // reads metadata only — no decode — so a torn/undecryptable remote does not
+    // block the repair. Missing ops file → no history to clobber, safe.
+    // NOTE: this pre-check closes the concurrent *merge* window; a conditional
+    // (rev-matched) write across the two-file (state + ops) protocol to close the
+    // residual sub-second check→write race is tracked as a follow-up.
+    if (snapshotOpType === 'REPAIR') {
+      const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
+      let remoteOpsRev: string | null = null;
+      try {
+        remoteOpsRev = (
+          await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, null)
+        ).rev;
+      } catch (e) {
+        if (!(e instanceof RemoteFileNotFoundAPIError)) {
+          throw e;
+        }
+      }
+      if (remoteOpsRev !== null && remoteOpsRev !== baseRev) {
+        OpLog.warn(
+          'FileBasedSyncAdapter: REPAIR split snapshot is stale (remote advanced ' +
+            'since our last sync); requesting rebase instead of overwriting.',
+        );
+        return {
+          accepted: false,
+          error: 'REPAIR snapshot does not include current remote state',
+          errorCode: REPAIR_STALE_ERROR_CODE,
+        };
+      }
+    }
 
     const stateData = await this._buildStateFileData(
       clientId,
@@ -2541,6 +2746,29 @@ export class FileBasedSyncAdapterService {
   ): Promise<{ rev: string }> {
     await provider.uploadFile(bakPath, encoded, null, true);
     return provider.uploadFile(primaryPath, encoded, null, true);
+  }
+
+  /**
+   * #9023: writes the primary sync file CONDITIONALLY on `revToMatch`, then (only
+   * once the primary write wins) refreshes the .bak with the same payload. Used
+   * for automatic REPAIR recovery snapshots so a concurrent write that landed
+   * since our last sync throws UploadRevToMatchMismatchAPIError instead of being
+   * silently overwritten. Primary-first (unlike `_forceUploadWithBakFirst`) so a
+   * lost race leaves the .bak untouched — a stale repair payload must never
+   * survive in .bak where a later corrupt-primary recovery could resurrect it and
+   * re-drop the concurrent ops. A null `revToMatch` means "expect the file
+   * absent" — the provider rejects the write if another client created it.
+   */
+  private async _conditionalUploadRepairSnapshot(
+    provider: FileSyncProvider<SyncProviderId>,
+    primaryPath: string,
+    bakPath: string,
+    encoded: string,
+    revToMatch: string | null,
+  ): Promise<{ rev: string }> {
+    const res = await provider.uploadFile(primaryPath, encoded, revToMatch, false);
+    await provider.uploadFile(bakPath, encoded, null, true);
+    return res;
   }
 
   /**

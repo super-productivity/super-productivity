@@ -94,7 +94,7 @@ describe('parseEml', () => {
     await expectAsync(parseEml(file)).toBeRejected();
   });
 
-  it('should omit multipart bodies instead of trying to parse MIME parts', async () => {
+  it('should extract the text/plain part from a multipart/alternative body', async () => {
     const multipartEml = [
       'From: Alice <alice@example.com>',
       'Subject: Multipart',
@@ -112,10 +112,320 @@ describe('parseEml', () => {
 
     expect(data.from?.address).toBe('alice@example.com');
     expect(data.subject).toBe('Multipart');
+    expect(data.text).toBe('plain body');
+  });
+
+  it('should skip the HTML sibling and use the text/plain part in a multipart/alternative body (Outlook-style)', async () => {
+    const outlookLikeEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Alternative',
+      'Content-Type: multipart/alternative; boundary="alt"',
+      '',
+      '--alt',
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      'plain body via =E2=9C=93 quoted-printable',
+      '--alt',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      '<p>html body</p>',
+      '--alt--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(outlookLikeEml, 'outlook.eml'));
+
+    expect(data.text).toBe('plain body via ✓ quoted-printable');
+  });
+
+  it('should find the text/plain leaf inside a nested multipart/mixed > multipart/alternative structure (attachment scenario)', async () => {
+    const nestedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Nested',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: multipart/alternative; boundary="alt"',
+      '',
+      '--alt',
+      'Content-Type: text/plain',
+      '',
+      'nested plain body',
+      '--alt',
+      'Content-Type: text/html',
+      '',
+      '<p>nested html body</p>',
+      '--alt--',
+      '--mixed',
+      'Content-Type: application/pdf',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'JVBERi0xLjQK',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(nestedEml, 'nested.eml'));
+
+    expect(data.text).toBe('nested plain body');
+  });
+
+  it('should return undefined when a multipart body has no supported text/plain part', async () => {
+    const htmlOnlyMultipartEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: HTML only',
+      'Content-Type: multipart/alternative; boundary="example"',
+      '',
+      '--example',
+      'Content-Type: text/html',
+      '',
+      '<p>only html</p>',
+      '--example--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(htmlOnlyMultipartEml, 'html-only.eml'));
+
     expect(data.text).toBeUndefined();
   });
 
-  it('should omit transfer-encoded bodies instead of returning encoded content', async () => {
+  it('should not import a text/plain attachment as the note when the real body is HTML', async () => {
+    const htmlWithTextAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: HTML with attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: attachment; filename="notes.txt"',
+      '',
+      'ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(htmlWithTextAttachmentEml, 'html-with-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should skip a text/plain attachment that precedes the real plain-text body', async () => {
+    const attachmentFirstEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Attachment first',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: attachment; filename="notes.txt"',
+      '',
+      'ATTACHMENT',
+      '--mixed',
+      'Content-Type: text/plain',
+      '',
+      'REAL BODY',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(attachmentFirstEml, 'attachment-first.eml'));
+
+    expect(data.text).toBe('REAL BODY');
+  });
+
+  it('should skip an entire multipart subtree marked as an attachment, not just leaf parts', async () => {
+    const attachedMultipartEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Attached multipart',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: multipart/alternative; boundary="alt"',
+      'Content-Disposition: attachment; filename="attached-message.eml"',
+      '',
+      '--alt',
+      'Content-Type: text/plain',
+      '',
+      'ATTACHED SUBTREE BODY',
+      '--alt--',
+      '--mixed',
+      'Content-Type: text/plain',
+      '',
+      'REAL BODY',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(attachedMultipartEml, 'attached-multipart.eml'));
+
+    expect(data.text).toBe('REAL BODY');
+  });
+
+  it('should skip a legacy Content-Type name= attachment that has no Content-Disposition at all', async () => {
+    const legacyNameAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Legacy name attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain; name="notes.txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(legacyNameAttachmentEml, 'legacy-name-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should treat an unrecognized (non-inline) disposition type as an attachment', async () => {
+    const unknownDispositionEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Unknown disposition',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: x-download; filename="notes.txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(unknownDispositionEml, 'unknown-disposition.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should keep a part with an explicit inline disposition despite a legacy name= parameter', async () => {
+    const inlineWithNameEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Inline with name',
+      'Content-Type: text/plain; name="notes.txt"',
+      'Content-Disposition: inline',
+      '',
+      'inline body',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(inlineWithNameEml, 'inline-with-name.eml'));
+
+    expect(data.text).toBe('inline body\n');
+  });
+
+  it('should skip an attachment identified only by a continued RFC 2231 name*0/name*1 parameter', async () => {
+    const continuedNameAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Continued name attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain; name*0="notes"; name*1=".txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(continuedNameAttachmentEml, 'continued-name-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should skip an attachment whose type-less disposition carries only an RFC 2231 continued filename', async () => {
+    const continuedFilenameAttachmentEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Continued filename attachment',
+      'Content-Type: multipart/mixed; boundary="mixed"',
+      '',
+      '--mixed',
+      'Content-Type: text/html',
+      '',
+      '<p>the real body</p>',
+      '--mixed',
+      'Content-Type: text/plain',
+      'Content-Disposition: ; filename*0="secret"; filename*1=".txt"',
+      '',
+      'PRIVATE ATTACHMENT',
+      '--mixed--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(
+      makeFile(continuedFilenameAttachmentEml, 'continued-filename-attachment.eml'),
+    );
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should return undefined for a multipart body with no closing boundary (malformed)', async () => {
+    const unterminatedEml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Unterminated',
+      'Content-Type: multipart/alternative; boundary="example"',
+      '',
+      '--example',
+      'Content-Type: text/plain',
+      '',
+      'plain body',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(unterminatedEml, 'unterminated.eml'));
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should stop recursing past the MIME depth cap and treat it as unsupported', async () => {
+    // 12 levels of multipart/mixed wrapping — comfortably past MAX_MIME_DEPTH.
+    let inner = ['Content-Type: text/plain', '', 'deeply nested body'].join('\n');
+    for (let i = 0; i < 12; i++) {
+      inner = [
+        `Content-Type: multipart/mixed; boundary="b${i}"`,
+        '',
+        `--b${i}`,
+        inner,
+        `--b${i}--`,
+        '',
+      ].join('\n');
+    }
+    const deepEml = ['From: Alice <alice@example.com>', 'Subject: Deep', inner].join(
+      '\n',
+    );
+
+    const data = await parseEml(makeFile(deepEml, 'deep.eml'));
+
+    expect(data.text).toBeUndefined();
+  });
+
+  it('should decode a base64-encoded plain-text body', async () => {
     const encodedEml = [
       'From: Alice <alice@example.com>',
       'Subject: Encoded',
@@ -130,7 +440,27 @@ describe('parseEml', () => {
 
     expect(data.from?.address).toBe('alice@example.com');
     expect(data.subject).toBe('Encoded');
-    expect(data.text).toBeUndefined();
+    expect(data.text).toBe('secret body');
+  });
+
+  it('should decode a base64-encoded text/plain part nested inside multipart', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Multipart base64',
+      'Content-Type: multipart/mixed; boundary="example"',
+      '',
+      '--example',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'bXVsdGlwYXJ0IHNlY3JldA==',
+      '--example--',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'multipart-base64.eml'));
+
+    expect(data.text).toBe('multipart secret');
   });
 
   it('should omit HTML bodies while preserving sender and subject', async () => {
@@ -150,7 +480,7 @@ describe('parseEml', () => {
     expect(data.text).toBeUndefined();
   });
 
-  it('should omit quoted-printable bodies while preserving sender and subject', async () => {
+  it('should decode a quoted-printable plain-text body', async () => {
     const quotedPrintableEml = [
       'From: Alice <alice@example.com>',
       'Subject: Quoted printable',
@@ -165,6 +495,39 @@ describe('parseEml', () => {
 
     expect(data.from?.address).toBe('alice@example.com');
     expect(data.subject).toBe('Quoted printable');
+    expect(data.text).toBe('encoded body\n');
+  });
+
+  it('should join a quoted-printable soft line break instead of inserting a newline', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: Soft break',
+      'Content-Type: text/plain',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      'this line is=',
+      'joined',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'soft-break.eml'));
+
+    expect(data.text).toBe('this line isjoined\n');
+  });
+
+  it('should omit a quoted-printable body with an unsupported charset', async () => {
+    const eml = [
+      'From: Alice <alice@example.com>',
+      'Subject: QP windows charset',
+      'Content-Type: text/plain; charset=windows-1252',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      'caf=E9',
+      '',
+    ].join('\n');
+
+    const data = await parseEml(makeFile(eml, 'qp-windows.eml'));
+
     expect(data.text).toBeUndefined();
   });
 

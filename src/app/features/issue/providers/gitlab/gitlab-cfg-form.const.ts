@@ -16,7 +16,16 @@ import {
 // about the segment chars (e.g. consecutive hyphens, which GitLab paths allow) to
 // avoid false-rejecting valid paths; the separator lookahead keeps the char class a
 // single unnested quantifier (no catastrophic backtracking).
-export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|(?=.*(?:\/|%2F))[\w.%/-]+)$/i;
+//
+// This pattern's `.source` is handed to Formly's `pattern` option, which both feeds
+// Angular's `Validators.pattern` AND is written verbatim to the native `<input pattern>`
+// attribute. Chromium compiles that attribute with the RegExp `v` flag, under which `/`
+// and `-` are reserved inside a character class and MUST be escaped — hence `[\w.%\/\-]`.
+// It must also stay flag-independent (the attribute cannot carry an `i` flag, and a
+// stringified `/…/i` RegExp is not a valid attribute value), so the only case-sensitive
+// literal, the encoded separator, is written explicitly as `%2[Ff]`. Getting this wrong
+// makes Chromium log "Invalid regular expression" on every change-detection cycle (#9034).
+export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|(?=.*(?:\/|%2[Ff]))[\w.%\/\-]+)$/;
 
 export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[] = [
   ...CROSS_ORIGIN_WARNING,
@@ -27,7 +36,10 @@ export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[]
       required: true,
       label: T.F.GITLAB.FORM.PROJECT,
       type: 'text',
-      pattern: GITLAB_PROJECT_REGEX,
+      // Pass the source string (not the RegExp object): Formly writes this straight to the
+      // native `<input pattern>` attribute, and a stringified `/…/` RegExp is not a valid
+      // attribute value. See GITLAB_PROJECT_REGEX for the `v`-flag constraints (#9034).
+      pattern: GITLAB_PROJECT_REGEX.source,
       description: T.F.GITLAB.FORM.PROJECT_HINT,
     },
   },

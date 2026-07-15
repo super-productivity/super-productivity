@@ -51,10 +51,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
    * - Client B does NOT have the old data (Task-OLD)
    * - Client B does NOT have old archived tasks in worklog
    */
-  // TODO: Skipped — BACKUP_IMPORT with isCleanSlate=true is not clearing old archived data on the server.
-  // The server receives the clean slate flag but Client B still sees old archived tasks.
-  // Needs server-side investigation.
-  test.skip('SYNC_IMPORT clears server state for fresh client joining later', async ({
+  test('SYNC_IMPORT clears server state for fresh client joining later', async ({
     browser,
     baseURL,
     testRunId,
@@ -194,10 +191,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
    * - Client C has ONLY Backup-2 data
    * - Client C does NOT have Backup-1 remnants
    */
-  // TODO: Skipped — BACKUP_IMPORT with isCleanSlate=true is not clearing old data on the server.
-  // The second import's clean slate doesn't remove marker tasks from the first import.
-  // Needs server-side investigation.
-  test.skip('Multiple SYNC_IMPORTs overwrite each other cleanly', async ({
+  test('Multiple SYNC_IMPORTs overwrite each other cleanly', async ({
     browser,
     baseURL,
     testRunId,
@@ -322,10 +316,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
    * Verify:
    * - Client B does NOT have OLD archived task
    */
-  // TODO: Skipped — BACKUP_IMPORT with isCleanSlate=true is not clearing old archived data on the server.
-  // Client B still receives old archived tasks despite the clean slate flag.
-  // Needs server-side investigation.
-  test.skip('SYNC_IMPORT properly clears old archived data from server', async ({
+  test('SYNC_IMPORT properly clears old archived data from server', async ({
     browser,
     baseURL,
     testRunId,

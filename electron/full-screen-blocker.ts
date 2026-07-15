@@ -1,7 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, BrowserWindowConstructorOptions, ipcMain } from 'electron';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { TakeABreakConfig } from '../src/app/features/config/global-config.model';
 import { join, normalize } from 'path';
+import { assertSecureWebPreferences } from './web-preferences-guard';
 
 export const initFullScreenBlocker = (IS_DEV: boolean): void => {
   let isFullScreenWindowOpen = false;
@@ -15,6 +16,15 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
         return;
       }
       let isClosable = false;
+      // This overlay loads a local file with no preload bridge, so it was
+      // relying on Electron's secure defaults. Set the boundary explicitly and
+      // assert it, so a future Electron default change can't silently open it.
+      const webPreferences: BrowserWindowConstructorOptions['webPreferences'] = {
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
+      };
+      assertSecureWebPreferences(webPreferences, 'full-screen-blocker');
       const win = new BrowserWindow({
         title: msg,
         fullscreen: true,
@@ -22,6 +32,7 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
         transparent: true,
         skipTaskbar: true,
         frame: false,
+        webPreferences,
       });
       const randomImgUrl = takeABreakCfg.motivationalImgs?.length
         ? takeABreakCfg.motivationalImgs[

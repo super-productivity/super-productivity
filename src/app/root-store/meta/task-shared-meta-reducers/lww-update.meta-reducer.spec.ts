@@ -333,6 +333,40 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreatedTask.doneOn).toBe(12345);
     });
 
+    it('recreates a deleted SECTION from a [SECTION] LWW Update (project-delete recovery #9037)', () => {
+      const state = createMockState();
+      // The losing deleteProject cascade removed the project's section locally.
+      state[SECTION_FEATURE_NAME] = { ids: [], entities: {} };
+      const action = {
+        type: '[SECTION] LWW Update',
+        id: SECTION_ID,
+        contextId: PROJECT_ID,
+        contextType: WorkContextType.PROJECT,
+        title: 'Recovered Section',
+        taskIds: ['task-1'],
+        meta: {
+          isPersistent: true,
+          entityType: 'SECTION',
+          entityId: SECTION_ID,
+          recreatesEntityAfterDelete: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const section = updatedState[SECTION_FEATURE_NAME]?.entities[SECTION_ID] as Section;
+      expect(section).toBeDefined();
+      expect(section.id).toBe(SECTION_ID);
+      expect(section.title).toBe('Recovered Section');
+      expect(section.contextId).toBe(PROJECT_ID);
+      // Sections are not orphan-filtered by the meta-reducer; the snapshot's
+      // taskIds are preserved verbatim (producer strips dead refs upstream).
+      expect(section.taskIds).toEqual(['task-1']);
+      expect(updatedState[SECTION_FEATURE_NAME]?.ids).toContain(SECTION_ID);
+    });
+
     it('should add recreated entity to the ids array', () => {
       const state = createMockState();
       const action = {
@@ -1799,6 +1833,10 @@ describe('lwwUpdateMetaReducer', () => {
     for (const invalidTarget of [
       { label: 'missing', id: 'missing-project', isArchived: false },
       { label: 'prototype-like', id: '__proto__', isArchived: false },
+      // #9025: an explicit null destination must retain the current project on
+      // the LWW replay path, mirroring the local `handleUpdateTask` strip.
+      // Previously null orphaned the task from every project list here.
+      { label: 'null', id: null, isArchived: false },
     ]) {
       it(`should retain the current project for a ${invalidTarget.label} target`, () => {
         const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
@@ -1832,6 +1870,56 @@ describe('lwwUpdateMetaReducer', () => {
         ]);
       });
     }
+
+    it('keeps the current project for a replace-mode snapshot with an explicit null (#9025)', () => {
+      // Invalid destinations are sanitized identically in every mode. A null is
+      // not a "clear" signal (tasks use '' for no-project), so even an
+      // authoritative replace snapshot keeps the task in its current project
+      // rather than orphaning it.
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        ...createMockTask(),
+        id: TASK_ID,
+        projectId: null,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
+    });
+
+    it('falls back to undefined for a null when the task’s own project is gone (#9025)', () => {
+      // The current-project fallback only applies when that project is itself
+      // valid; an already-orphaned task (its project deleted) resolves to
+      // undefined rather than keeping a dangling reference.
+      const state = createStateWithProjects('gone-project', [], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: null,
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId,
+      ).toBeUndefined();
+    });
 
     it('should replay a move to an archived-but-existing project', () => {
       const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);

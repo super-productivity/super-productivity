@@ -68,11 +68,6 @@ export const waitForPluginAssets = async (
 
   console.error('[Plugin Test] Failed to load plugin assets after all retries');
 
-  // In CI, this might be expected if assets aren't built properly
-  if (process.env.CI) {
-    console.warn('[Plugin Test] Plugin assets unavailable; skipping in CI');
-  }
-
   return false;
 };
 

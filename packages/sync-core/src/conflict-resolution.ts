@@ -334,6 +334,22 @@ export const suggestConflictResolution = <TOperation extends Operation<string>>(
 };
 
 /**
+ * The clientId of the op carrying a side's winning (max) timestamp. Used only as
+ * a deterministic tiebreak when both sides share the same max timestamp: the two
+ * devices see "local" and "remote" swapped, so comparing timestamps alone makes
+ * each keep the other's value and diverge permanently. Comparing the winning
+ * clientIds instead — over the same unordered pair on both devices — makes them
+ * converge, following the same `(timestamp, clientId)` principle as the client's
+ * `noiseTiebreakSide`. A genuine cross-device tie always has exactly one op at
+ * the max timestamp per side (same-client ops on one entity are never
+ * vector-clock-concurrent, so they never reach here as a conflict).
+ */
+const winningClientId = (
+  ops: readonly Operation<string>[],
+  maxTimestamp: number,
+): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
+
+/**
  * Plans last-write-wins conflict resolution without looking up host state or
  * creating operations.
  *
@@ -418,7 +434,19 @@ export const planLwwConflictResolutions = <
     const localMaxTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
     const remoteMaxTimestamp = Math.max(...conflict.remoteOps.map((op) => op.timestamp));
 
-    if (localMaxTimestamp > remoteMaxTimestamp) {
+    // On an exact-millisecond tie, fall back to a deterministic clientId compare
+    // (larger wins) so both devices converge instead of each keeping the other's
+    // value. A local tie-win must carry `localWinOperationKind: 'update'` exactly
+    // like a timestamp win: the host rejects the original local ops regardless of
+    // winner, and only the resulting compensating op (dominating clock) both
+    // preserves the local value and stops the loser from resurfacing.
+    const localWins =
+      localMaxTimestamp > remoteMaxTimestamp ||
+      (localMaxTimestamp === remoteMaxTimestamp &&
+        winningClientId(conflict.localOps, localMaxTimestamp) >
+          winningClientId(conflict.remoteOps, remoteMaxTimestamp));
+
+    if (localWins) {
       return {
         conflict,
         winner: 'local',

@@ -31,6 +31,7 @@ import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
+import { assertSecureWebPreferences } from './web-preferences-guard';
 import { applyJiraImageAuth } from './jira-image-auth';
 
 let mainWin: BrowserWindow;
@@ -187,6 +188,28 @@ export const createWindow = async ({
   // the env var the screenshot fixture sets so normal users still get
   // the default screen-clamping behavior.
   const isScreenshotMode = process.env.SP_SCREENSHOT_MODE === '1';
+  const webPreferences: BrowserWindowConstructorOptions['webPreferences'] = {
+    scrollBounce: true,
+    backgroundThrottling: false,
+    webSecurity: true,
+    preload: path.join(__dirname, 'preload.js'),
+    nodeIntegration: false,
+    // make remote module work with those two settings
+    contextIsolation: true,
+    // Untrusted plugin code runs in sub-frame iframes; keep node integration out
+    // of them explicitly (already the default) so the assert below has a concrete
+    // value to guard.
+    nodeIntegrationInSubFrames: false,
+    // Additional settings for better Linux/Wayland compatibility
+    enableBlinkFeatures: 'OverlayScrollbar',
+    // Disable spell checker to prevent connections to Google services (#5314)
+    // This maintains our "offline-first with zero data collection" promise
+    spellcheck: false,
+  };
+  // Fail closed if the renderer's IPC trust boundary ever silently regresses:
+  // contextIsolation/nodeIntegration are what keep require/ipcRenderer out of
+  // the main world, which every IPC gate (Jira, plugin node-exec) relies on.
+  assertSecureWebPreferences(webPreferences, 'main');
   mainWin = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
@@ -199,20 +222,7 @@ export const createWindow = async ({
     titleBarOverlay,
     enableLargerThanScreen: isScreenshotMode,
     show: false,
-    webPreferences: {
-      scrollBounce: true,
-      backgroundThrottling: false,
-      webSecurity: true,
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      // make remote module work with those two settings
-      contextIsolation: true,
-      // Additional settings for better Linux/Wayland compatibility
-      enableBlinkFeatures: 'OverlayScrollbar',
-      // Disable spell checker to prevent connections to Google services (#5314)
-      // This maintains our "offline-first with zero data collection" promise
-      spellcheck: false,
-    },
+    webPreferences,
     icon: ICONS_FOLDER + '/icon_256x256.png',
     // Wayland compatibility: disable transparent/frameless features that can cause issues
     transparent: false,

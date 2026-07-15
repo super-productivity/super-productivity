@@ -20,6 +20,7 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { alertDialog } from '../../util/native-dialogs';
 import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { SnackService } from '../../core/snack/snack.service';
 
 export interface RebaseStaleRepairOptions {
   staleRepairOpId: string;
@@ -44,6 +45,11 @@ export class RepairOperationService {
   private vectorClockService = inject(VectorClockService);
   private repairSyncContext = inject(RepairSyncContextService);
   private stateSnapshotService = inject(StateSnapshotService);
+  private snackService = inject(SnackService);
+
+  // Once-per-session guard for the non-interactive "data repaired" snack, so a
+  // repeat-repair loop can't spam it (mirrors the version-block snack latch).
+  private _hasShownRepairSnackThisSession = false;
 
   /**
    * Creates a REPAIR operation with the repaired state and saves it to the operation log.
@@ -53,13 +59,16 @@ export class RepairOperationService {
    * @param repairSummary - Summary of what was repaired (counts by category)
    * @param clientId - The client ID for the operation (passed by caller to avoid circular dependency)
    * @param options.skipLock - If true, skip acquiring sp_op_log lock. Use when caller already holds the lock.
+   * @param options.interactive - If true, show the blocking "data repaired" acknowledge
+   *        dialog. Defaults to false (fail-safe): automatic/in-lock repair must never block
+   *        on a native dialog, which would hold sp_op_log open during background sync (#9026).
    * @returns The sequence number of the created operation
    */
   async createRepairOperation(
     repairedState: unknown,
     repairSummary: RepairSummary,
     clientId: string,
-    options?: { skipLock?: boolean },
+    options?: { skipLock?: boolean; interactive?: boolean },
   ): Promise<number> {
     if (!clientId) {
       throw new Error('clientId is required - cannot create repair operation');
@@ -101,8 +110,8 @@ export class RepairOperationService {
       await this.lockService.request(LOCK_NAMES.OPERATION_LOG, doCreateOperation);
     }
 
-    // Notify user that repair happened
-    this._notifyUser(repairSummary);
+    // Notify user that repair happened (non-blocking unless interactive — #9026).
+    this._notifyUser(repairSummary, options?.interactive ?? false);
 
     return seq;
   }
@@ -173,18 +182,39 @@ export class RepairOperationService {
   }
 
   /**
-   * Shows a blocking alert and logs devError when repair happens.
-   * Uses native alert() to prevent reload until user acknowledges.
-   * Always shows alert since user already confirmed the repair.
+   * Records that a repair happened and, for interactive (foreground) callers,
+   * shows a blocking native alert() acknowledgement.
+   *
+   * The `interactive` gate is load-bearing for #9026: automatic/in-lock repair
+   * (background sync) must never reach a blocking dialog — neither this alert()
+   * nor `devError`, which itself pops a blocking alert/confirm in dev builds —
+   * or it would hold the sp_op_log lock open for as long as the dialog sits
+   * there. The summary is six numeric counts (no user content), safe to log.
    */
-  private _notifyUser(summary: RepairSummary): void {
+  private _notifyUser(summary: RepairSummary, interactive: boolean): void {
     const totalFixes = this._getTotalFixes(summary);
+    const logMsg = `Data repair executed: ${totalFixes} issues fixed. Summary: ${JSON.stringify(summary)}`;
 
-    // Always log
-    const errorMsg = `Data repair executed: ${totalFixes} issues fixed. Summary: ${JSON.stringify(summary)}`;
-    devError(errorMsg);
+    if (!interactive) {
+      // Automatic/in-lock repair (background sync): never a native dialog — that
+      // would hold sp_op_log open (#9026). Record it, and surface a single
+      // non-blocking snack per session so a silent data change (auto-repair can
+      // drop entities/refs and propagate cross-device) isn't wholly invisible.
+      // Only when something actually changed.
+      OpLog.err(logMsg);
+      if (totalFixes > 0 && !this._hasShownRepairSnackThisSession) {
+        this._hasShownRepairSnackThisSession = true;
+        this.snackService.open({
+          type: 'WARNING',
+          msg: T.F.SYNC.D_DATA_REPAIRED.MSG,
+          translateParams: { count: totalFixes },
+        });
+      }
+      return;
+    }
 
-    // Always show alert after repair completes (user already confirmed)
+    // Foreground: loud dev diagnostic + user acknowledgement.
+    devError(logMsg);
     const title = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.TITLE);
     const msg = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.MSG, {
       count: totalFixes.toString(),

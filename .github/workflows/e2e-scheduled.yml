@@ -151,16 +151,16 @@ jobs:
           E2E_REQUIRE_WEBDAV: 'true'
         run: npm run e2e:all -- --grep "${{ inputs.webdav_grep || '@webdav' }}"
 
-      - name: Stop Docker Services
-        if: always()
-        run: |
-          docker compose down
-
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
         run: |
           echo "=== WebDAV Logs ==="
           docker compose logs webdav
+
+      - name: Stop Docker Services
+        if: always()
+        run: |
+          docker compose down
 
       - name: Upload E2E Results on Failure
         if: ${{ failure() }}
@@ -170,7 +170,8 @@ jobs:
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
 
-  # Job 3: SuperSync E2E tests (sharded)
+  # Job 3: SuperSync E2E tests (sharded). WebDAV runs in every shard as well so
+  # the provider-switch scenarios are part of the suite rather than skipped.
   e2e-supersync:
     name: E2E Tests (SuperSync ${{ matrix.shard }}/6)
     needs: [build]
@@ -203,7 +204,7 @@ jobs:
         run: |
           cp .env.example .env
 
-      - name: Start SuperSync Docker Service
+      - name: Start Sync Docker Services
         # Retry to survive transient Docker Hub pull timeouts / rate limits;
         # timeout_minutes also bounds the otherwise-unbounded health-wait loop
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
@@ -212,26 +213,29 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           command: |
-            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync
+            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync webdav
             echo "⏳ Waiting for SuperSync server..."
             until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done
             echo "✓ SuperSync server ready!"
+            chmod +x ./scripts/wait-for-webdav.sh
+            ./scripts/wait-for-webdav.sh
 
       - name: Run SuperSync E2E Tests
         env:
           E2E_REQUIRE_SUPERSYNC: 'true'
+          E2E_REQUIRE_WEBDAV: 'true'
         run: npm run e2e:all -- --grep "${{ inputs.grep || '@supersync' }}" --shard=${{ matrix.shard }}/6
-
-      - name: Stop Docker Services
-        if: always()
-        run: |
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync
 
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
         run: |
           echo "=== SuperSync Logs ==="
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs supersync
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs supersync webdav
+
+      - name: Stop Docker Services
+        if: always()
+        run: |
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down
 
       - name: Upload E2E Results on Failure
         if: ${{ failure() }}

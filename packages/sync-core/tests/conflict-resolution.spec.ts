@@ -529,10 +529,13 @@ describe('planLwwConflictResolutions', () => {
     ]);
   });
 
-  it('lets remote win timestamp ties', () => {
+  it('defaults a timestamp tie to remote when both sides share a clientId', () => {
+    // Degenerate case only: same-client ops on one entity are never
+    // vector-clock-concurrent, so a real cross-device tie never has equal
+    // clientIds. Keeping the default deterministic is enough here.
     const conflict = createConflict(
-      [createOp({ id: 'local', timestamp: 1_000 })],
-      [createOp({ id: 'remote', timestamp: 1_000 })],
+      [createOp({ id: 'local', timestamp: 1_000, clientId: 'client-1' })],
+      [createOp({ id: 'remote', timestamp: 1_000, clientId: 'client-1' })],
     );
 
     expect(planLwwConflictResolutions([conflict], { isArchiveAction })).toEqual([
@@ -544,6 +547,61 @@ describe('planLwwConflictResolutions', () => {
         remoteMaxTimestamp: 1_000,
       },
     ]);
+  });
+
+  it('breaks a timestamp tie for local when its winning clientId is larger', () => {
+    const conflict = createConflict(
+      [createOp({ id: 'local', timestamp: 1_000, clientId: 'client-z' })],
+      [createOp({ id: 'remote', timestamp: 1_000, clientId: 'client-a' })],
+    );
+
+    expect(planLwwConflictResolutions([conflict], { isArchiveAction })).toEqual([
+      {
+        conflict,
+        winner: 'local',
+        reason: 'local-timestamp',
+        localWinOperationKind: 'update',
+        localMaxTimestamp: 1_000,
+        remoteMaxTimestamp: 1_000,
+      },
+    ]);
+  });
+
+  it('breaks a timestamp tie for remote when its winning clientId is larger', () => {
+    const conflict = createConflict(
+      [createOp({ id: 'local', timestamp: 1_000, clientId: 'client-a' })],
+      [createOp({ id: 'remote', timestamp: 1_000, clientId: 'client-z' })],
+    );
+
+    expect(planLwwConflictResolutions([conflict], { isArchiveAction })).toEqual([
+      {
+        conflict,
+        winner: 'remote',
+        reason: 'remote-timestamp-or-tie',
+        localMaxTimestamp: 1_000,
+        remoteMaxTimestamp: 1_000,
+      },
+    ]);
+  });
+
+  it('resolves a timestamp tie to the same physical client when sides are swapped', () => {
+    // Commutativity: whichever side "client-b" is on, it wins — so both devices
+    // converge instead of each keeping the other's value.
+    const opA = createOp({ id: 'a', timestamp: 1_000, clientId: 'client-a' });
+    const opB = createOp({ id: 'b', timestamp: 1_000, clientId: 'client-b' });
+
+    const [deviceA] = planLwwConflictResolutions([createConflict([opA], [opB])], {
+      isArchiveAction,
+    });
+    const [deviceB] = planLwwConflictResolutions([createConflict([opB], [opA])], {
+      isArchiveAction,
+    });
+
+    // Device A sees opB as remote and adopts it; device B sees opB as local and
+    // keeps it. Different winner label, same winning op — convergent.
+    expect(deviceA.winner).toBe('remote');
+    expect(deviceB.winner).toBe('local');
+    expect(deviceB.localWinOperationKind).toBe('update');
   });
 });
 

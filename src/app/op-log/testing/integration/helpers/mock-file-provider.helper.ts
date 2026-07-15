@@ -168,15 +168,25 @@ export class MockFileProvider implements FileSyncProvider<SyncProviderId> {
 
     const existingFile = this._files.get(targetPath);
 
-    // Check revision match (conditional upload) unless force overwrite
-    if (!isForceOverwrite && revToMatch !== null) {
-      if (!existingFile) {
+    // Conditional-upload semantics (skipped entirely on force overwrite):
+    // - revToMatch === null  → create-if-absent (WebDAV `If-None-Match: *`): the
+    //   PUT only succeeds when the file does not yet exist. This gates concurrent
+    //   first-writers so exactly one wins, matching real providers.
+    // - revToMatch !== null  → If-Match: the PUT only succeeds when the current
+    //   rev equals revToMatch.
+    if (!isForceOverwrite) {
+      if (revToMatch === null) {
+        if (existingFile) {
+          throw new UploadRevToMatchMismatchAPIError(
+            `File ${targetPath} already exists (create-if-absent write)`,
+          );
+        }
+      } else if (!existingFile) {
         // File doesn't exist but revToMatch was provided - mismatch
         throw new UploadRevToMatchMismatchAPIError(
           `File ${targetPath} does not exist but revToMatch was provided`,
         );
-      }
-      if (existingFile.rev !== revToMatch) {
+      } else if (existingFile.rev !== revToMatch) {
         throw new UploadRevToMatchMismatchAPIError(
           `Rev mismatch for ${targetPath}: expected ${revToMatch}, found ${existingFile.rev}`,
         );

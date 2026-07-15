@@ -744,6 +744,70 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sOld']?.taskIds).toEqual([]);
     });
 
+    it('keeps the current-project section for a patch-mode null projectId (#9025)', () => {
+      // A patch-path null keeps the task in its current project (mirroring the
+      // task slice), so its current-project section membership must survive
+      // while stale other-project references are still repaired.
+      const state = stateWith({ parent: { projectId: 'project1' } }, [
+        {
+          id: 'sTarget',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'target section',
+          taskIds: ['parent'],
+        },
+        {
+          id: 'sStale',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'stale section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: null,
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sTarget']?.taskIds).toEqual(['parent']);
+      expect(updated.entities['sStale']?.taskIds).toEqual([]);
+    });
+
+    it('keeps the current-project section for a replace-mode null projectId (#9025)', () => {
+      // Invalid destinations are mode-independent: even a replace snapshot's
+      // null keeps the task in its current project, so its section survives.
+      const state = stateWith({ parent: { projectId: 'project1' } }, [
+        {
+          id: 'sTarget',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'target section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: null,
+        meta: { lwwUpdateMode: 'replace' },
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sTarget']?.taskIds).toEqual(['parent']);
+    });
+
     it('strips project sections for reverse-linked children when LWW recreates a parent', () => {
       const state = stateWith({ sub1: { projectId: 'oldP', parentId: 'parent' } }, [
         {

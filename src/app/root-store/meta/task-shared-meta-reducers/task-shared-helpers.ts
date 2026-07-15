@@ -424,6 +424,42 @@ export const removeTasksFromPlannerDays = (
 };
 
 /**
+ * Removes multiple tasks from a SINGLE planner day, leaving all other days
+ * intact. Distinct from `removeTasksFromPlannerDays` (all days) — the scope
+ * difference is data-loss-sensitive, hence the explicit name.
+ * @param state Root state
+ * @param taskIds Task IDs to remove
+ * @param day Day (date string) to remove them from
+ * @returns Updated state, or original state if no changes
+ */
+export const removeTasksFromSinglePlannerDay = (
+  state: RootState,
+  taskIds: string[],
+  day: string,
+): RootState => {
+  const dayTasks = state.planner?.days?.[day];
+  if (!dayTasks || taskIds.length === 0) {
+    return state;
+  }
+
+  const filtered = removeTasksFromList(dayTasks, taskIds);
+  if (filtered.length === dayTasks.length) {
+    return state;
+  }
+
+  return {
+    ...state,
+    [plannerFeatureKey]: {
+      ...state.planner,
+      days: {
+        ...state.planner.days,
+        [day]: filtered,
+      },
+    },
+  };
+};
+
+/**
  * Adds a task to a specific planner day.
  * Removes the task from all other days first (task can only be in one day).
  * @param state Root state

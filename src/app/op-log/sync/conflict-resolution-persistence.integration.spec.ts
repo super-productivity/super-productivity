@@ -10,6 +10,22 @@ import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/ti
 import { RootState } from '../../root-store/root-state';
 import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import { createBaseState } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { sectionSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/section-shared.reducer';
+import {
+  NOTE_FEATURE_NAME,
+  initialNoteState,
+  noteReducer,
+} from '../../features/note/store/note.reducer';
+import {
+  SECTION_FEATURE_NAME,
+  initialSectionState,
+} from '../../features/section/store/section.reducer';
+import {
+  TASK_REPEAT_CFG_FEATURE_NAME,
+  initialTaskRepeatCfgState,
+  taskRepeatCfgReducer,
+} from '../../features/task-repeat-cfg/store/task-repeat-cfg.reducer';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { bulkOperationsMetaReducer } from '../apply/bulk-hydration.meta-reducer';
@@ -1012,6 +1028,287 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     expect(moveWinnerState[PROJECT_FEATURE_NAME].entities.project2?.taskIds).toEqual([
       regularTaskId,
     ]);
+  });
+
+  // Shared fixture: a legacy deleteProject that loses LWW to a concurrent project
+  // edit, with the project holding a task, note, section and repeat-cfg. Returns
+  // the seeded pre-delete state, a full-slice replay reducer (wiring the cascades
+  // this suite's default reducer omits — sections via the section meta-reducer,
+  // notes/repeat-cfgs via their feature reducers, recreations via
+  // lwwUpdateMetaReducer), and the durable ops the service produced.
+  const setupLosingProjectDeleteFixture = async (): Promise<{
+    noteId: string;
+    sectionId: string;
+    cfgId: string;
+    seededState: RootState;
+    replay: (state: RootState, operations: Operation[], clientId: string) => RootState;
+    hasEntity: (state: RootState, feature: string, id: string) => boolean;
+    storedOps: Operation[];
+    localProjectEdit: Operation;
+    remoteProjectDelete: Operation;
+  }> => {
+    const noteId = 'note1';
+    const sectionId = 'section1';
+    const cfgId = 'cfg1';
+    const rootTaskId = 'root-task';
+
+    const rootTask: Task = {
+      ...DEFAULT_TASK,
+      id: rootTaskId,
+      title: 'Root task',
+      projectId: 'project1',
+      subTaskIds: [],
+    } as Task;
+    const baseTaskState = createTaskReplayState([rootTask], [rootTaskId], []);
+    const seededState: RootState = {
+      ...baseTaskState,
+      [NOTE_FEATURE_NAME]: {
+        ...initialNoteState,
+        ids: [noteId],
+        entities: {
+          [noteId]: { id: noteId, content: 'Kept note', modified: 5_000 },
+        },
+      },
+      [SECTION_FEATURE_NAME]: {
+        ...initialSectionState,
+        ids: [sectionId],
+        entities: {
+          [sectionId]: {
+            id: sectionId,
+            title: 'Project section',
+            contextType: WorkContextType.PROJECT,
+            contextId: 'project1',
+            taskIds: [rootTaskId],
+          },
+        },
+      },
+      [TASK_REPEAT_CFG_FEATURE_NAME]: {
+        ...initialTaskRepeatCfgState,
+        ids: [cfgId],
+        entities: { [cfgId]: { id: cfgId, projectId: 'project1' } },
+      },
+    } as unknown as RootState;
+    const project = seededState[PROJECT_FEATURE_NAME].entities.project1;
+    if (!project) {
+      throw new Error('Test fixture project1 is missing.');
+    }
+
+    const cascadeRootReducer: ActionReducer<RootState, Action> = (
+      state = seededState,
+      action,
+    ) => ({
+      ...state,
+      [TASK_FEATURE_NAME]: taskReducer(state[TASK_FEATURE_NAME], action),
+      [NOTE_FEATURE_NAME]: noteReducer(state[NOTE_FEATURE_NAME], action),
+      [TASK_REPEAT_CFG_FEATURE_NAME]: taskRepeatCfgReducer(
+        state[TASK_REPEAT_CFG_FEATURE_NAME],
+        action,
+      ),
+    });
+    const cascadeReplayReducer = bulkOperationsMetaReducer(
+      sectionSharedMetaReducer(
+        createCombinedTaskSharedMetaReducer(lwwUpdateMetaReducer(cascadeRootReducer)),
+      ),
+    ) as ActionReducer<RootState, Action>;
+    const replay = (
+      state: RootState,
+      operations: Operation[],
+      clientId: string,
+    ): RootState =>
+      cascadeReplayReducer(
+        state,
+        bulkApplyOperations({ operations, localClientId: clientId }),
+      );
+    const hasEntity = (state: RootState, feature: string, id: string): boolean =>
+      !!(state[feature as keyof RootState] as { entities: Record<string, unknown> })
+        .entities[id];
+
+    const localProjectEdit: Operation = {
+      id: 'local-project-edit',
+      actionType: toLwwUpdateActionType('PROJECT'),
+      opType: OpType.Update,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: project as unknown as Record<string, unknown>,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: LOCAL_CLIENT_ID,
+      vectorClock: { [LOCAL_CLIENT_ID]: 1 },
+      timestamp: 2_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    const remoteProjectDelete: Operation = {
+      id: 'remote-project-delete',
+      actionType: ActionType.TASK_SHARED_DELETE_PROJECT,
+      opType: OpType.Delete,
+      entityType: 'PROJECT',
+      entityId: 'project1',
+      payload: {
+        actionPayload: {
+          projectId: 'project1',
+          allTaskIds: [rootTaskId],
+          noteIds: [noteId],
+        },
+        entityChanges: [],
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 1 },
+      timestamp: 1_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+
+    const registry = TestBed.inject(ENTITY_REGISTRY);
+    const noteSel = registry.NOTE!.selectEntities;
+    const sectionSel = registry.SECTION!.selectEntities;
+    const cfgSel = registry.TASK_REPEAT_CFG!.selectEntities;
+    // Resolution-time snapshot the recovery reads (the winner still holds all).
+    store.select.and.callFake((selector: unknown, props?: { id?: string }) => {
+      if (props?.id === 'project1') return of(project);
+      if (props?.id === rootTaskId) return of(rootTask);
+      if (selector === noteSel) {
+        return of(seededState[NOTE_FEATURE_NAME].entities);
+      }
+      if (selector === sectionSel) {
+        return of(seededState[SECTION_FEATURE_NAME].entities);
+      }
+      if (selector === cfgSel) {
+        return of(seededState[TASK_REPEAT_CFG_FEATURE_NAME].entities);
+      }
+      return of(undefined);
+    });
+    await opLogStore.append(localProjectEdit, 'local');
+
+    await service.autoResolveConflictsLWW([
+      {
+        entityType: 'PROJECT',
+        entityId: 'project1',
+        localOps: [localProjectEdit],
+        remoteOps: [remoteProjectDelete],
+        suggestedResolution: 'manual',
+      },
+    ]);
+
+    const storedOps = (await opLogStore.getOpsAfterSeq(0)).map(({ op }) => op);
+    return {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    };
+  };
+
+  it('converges a losing deleteProject by recreating notes, sections and repeat-cfgs (#9037)', async () => {
+    const {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    } = await setupLosingProjectDeleteFixture();
+
+    // Sanity: the recovery emitted a recreation op for each victim type.
+    expect(storedOps.some((op) => op.entityType === 'NOTE')).toBeTrue();
+    expect(storedOps.some((op) => op.entityType === 'SECTION')).toBeTrue();
+    expect(storedOps.some((op) => op.entityType === 'TASK_REPEAT_CFG')).toBeTrue();
+
+    // The delete cascade alone wipes all three — proves the recreation does real work.
+    const afterDeleteOnly = replay(seededState, [remoteProjectDelete], REMOTE_CLIENT_ID);
+    expect(hasEntity(afterDeleteOnly, NOTE_FEATURE_NAME, noteId)).toBeFalse();
+    expect(hasEntity(afterDeleteOnly, SECTION_FEATURE_NAME, sectionId)).toBeFalse();
+    expect(hasEntity(afterDeleteOnly, TASK_REPEAT_CFG_FEATURE_NAME, cfgId)).toBeFalse();
+
+    // Replaying the full durable log (delete + compensations) restores all three
+    // on the restarted local client — the convergence the fix guarantees.
+    const restartedClientState = replay(seededState, storedOps, LOCAL_CLIENT_ID);
+    expect(hasEntity(restartedClientState, NOTE_FEATURE_NAME, noteId))
+      .withContext('note recreated on restart')
+      .toBeTrue();
+    expect(hasEntity(restartedClientState, SECTION_FEATURE_NAME, sectionId))
+      .withContext('section recreated on restart')
+      .toBeTrue();
+    expect(hasEntity(restartedClientState, TASK_REPEAT_CFG_FEATURE_NAME, cfgId))
+      .withContext('repeat-cfg recreated on restart')
+      .toBeTrue();
+
+    // The originating (delete) client converges to the same shape: apply its own
+    // delete, then the winner's compensations.
+    const compensationOps = storedOps.filter(
+      (op) => op.id !== localProjectEdit.id && op.id !== remoteProjectDelete.id,
+    );
+    let remoteClientState = replay(seededState, [remoteProjectDelete], REMOTE_CLIENT_ID);
+    remoteClientState = replay(remoteClientState, compensationOps, REMOTE_CLIENT_ID);
+    expect(hasEntity(remoteClientState, NOTE_FEATURE_NAME, noteId))
+      .withContext('note recreated on originating client')
+      .toBeTrue();
+    expect(hasEntity(remoteClientState, SECTION_FEATURE_NAME, sectionId))
+      .withContext('section recreated on originating client')
+      .toBeTrue();
+    expect(hasEntity(remoteClientState, TASK_REPEAT_CFG_FEATURE_NAME, cfgId))
+      .withContext('repeat-cfg recreated on originating client')
+      .toBeTrue();
+  });
+
+  it('converges when the note/section/cfg recreations arrive in a later sync batch (#9037)', async () => {
+    const {
+      noteId,
+      sectionId,
+      cfgId,
+      seededState,
+      replay,
+      hasEntity,
+      storedOps,
+      localProjectEdit,
+      remoteProjectDelete,
+    } = await setupLosingProjectDeleteFixture();
+
+    const cascadeTypes = new Set(['NOTE', 'SECTION', 'TASK_REPEAT_CFG']);
+    const compensationOps = storedOps.filter(
+      (op) => op.id !== localProjectEdit.id && op.id !== remoteProjectDelete.id,
+    );
+    const cascadeRecreations = compensationOps.filter((op) =>
+      cascadeTypes.has(op.entityType),
+    );
+    const projectAndTaskComps = compensationOps.filter(
+      (op) => !cascadeTypes.has(op.entityType),
+    );
+    expect(cascadeRecreations.length).toBeGreaterThan(0);
+
+    // Batch 1: durable loser + project/task compensations only. Pagination puts
+    // the note/section/cfg recreations on a later page, so they stay wiped for now.
+    let state = replay(
+      seededState,
+      [remoteProjectDelete, ...projectAndTaskComps],
+      LOCAL_CLIENT_ID,
+    );
+    expect(hasEntity(state, NOTE_FEATURE_NAME, noteId))
+      .withContext('note still absent before its later batch')
+      .toBeFalse();
+    expect(hasEntity(state, SECTION_FEATURE_NAME, sectionId)).toBeFalse();
+    expect(hasEntity(state, TASK_REPEAT_CFG_FEATURE_NAME, cfgId)).toBeFalse();
+
+    // Batch 2: the cascade recreations arrive in a separate page and converge
+    // the state — they carry no cross-batch dependency on the delete/other comps.
+    state = replay(state, cascadeRecreations, LOCAL_CLIENT_ID);
+    expect(hasEntity(state, NOTE_FEATURE_NAME, noteId))
+      .withContext('note recreated from a later batch')
+      .toBeTrue();
+    expect(hasEntity(state, SECTION_FEATURE_NAME, sectionId))
+      .withContext('section recreated from a later batch')
+      .toBeTrue();
+    expect(hasEntity(state, TASK_REPEAT_CFG_FEATURE_NAME, cfgId))
+      .withContext('repeat-cfg recreated from a later batch')
+      .toBeTrue();
   });
 
   it('keeps concurrently bulk-deleted tasks deleted on every client during project recovery (#8997)', async () => {

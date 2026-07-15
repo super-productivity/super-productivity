@@ -8,6 +8,8 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { TranslateService } from '@ngx-translate/core';
 import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 describe('RepairOperationService', () => {
   let service: RepairOperationService;
@@ -17,6 +19,7 @@ describe('RepairOperationService', () => {
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let repairSyncContext: RepairSyncContextService;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
+  let mockSnackService: jasmine.SpyObj<SnackService>;
   let alertSpy: jasmine.Spy;
   let confirmSpy: jasmine.Spy;
 
@@ -51,6 +54,7 @@ describe('RepairOperationService', () => {
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshotAsync',
     ]);
+    mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
     // Default mock implementations
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
@@ -94,6 +98,7 @@ describe('RepairOperationService', () => {
         { provide: TranslateService, useValue: mockTranslateService },
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
+        { provide: SnackService, useValue: mockSnackService },
       ],
     });
 
@@ -258,25 +263,67 @@ describe('RepairOperationService', () => {
       ).toBeRejectedWithError('clientId is required - cannot create repair operation');
     });
 
-    it('should notify user when fixes were made', async () => {
+    it('should notify user when fixes were made (interactive)', async () => {
       const summary = createRepairSummary({
         entityStateFixed: 2,
         orphanedEntitiesRestored: 3,
       });
 
-      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
 
       expect(mockTranslateService.instant).toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalled();
     });
 
-    it('should always notify user even when no fixes were made', async () => {
-      // Always show alert since user already confirmed the repair
+    it('should always alert an interactive caller even when no fixes were made', async () => {
+      const summary = createRepairSummary(); // All zeros
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
+
+      expect(alertSpy).toHaveBeenCalled();
+    });
+
+    // #9026: the default is non-interactive (automatic/in-lock repair). It must
+    // never reach the blocking "data repaired" alert() — that would hold
+    // sp_op_log open during background sync — but a non-blocking snack still
+    // surfaces the silent data change, and the REPAIR op is still created.
+    it('shows a non-blocking snack (not the blocking alert) for a non-interactive repair', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 2 });
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+      // translateService.instant + alert() are only reached by the blocking path.
+      expect(mockTranslateService.instant).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.D_DATA_REPAIRED.MSG,
+          translateParams: { count: 2 },
+        }),
+      );
+    });
+
+    it('does not snack a non-interactive repair when nothing changed', async () => {
       const summary = createRepairSummary(); // All zeros
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(alertSpy).toHaveBeenCalled();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('snacks a non-interactive repair only once per session', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 1 });
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockSnackService.open).toHaveBeenCalledTimes(1);
     });
 
     it('should generate unique operation ID', async () => {
@@ -334,7 +381,9 @@ describe('RepairOperationService', () => {
         typeErrorsFixed: 6,
       });
 
-      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
 
       // Total fixes = 1+2+3+4+5+6 = 21
       expect(mockTranslateService.instant).toHaveBeenCalledWith(

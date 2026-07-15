@@ -30,6 +30,7 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 interface SnapshotHydrationHooks {
   /** Remote operations already represented by a file-based snapshot. */
@@ -70,6 +71,7 @@ export class SyncHydrationService {
   private snackService = inject(SnackService);
   private archiveDbAdapter = inject(ArchiveDbAdapter);
   private lockService = inject(LockService);
+  private taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
    * Handles hydration after a remote sync download.
@@ -247,26 +249,13 @@ export class SyncHydrationService {
           'SyncHydrationService: Skipping SYNC_IMPORT creation (file-based bootstrap)',
         );
 
-        // CRITICAL: Reject any local pending ops since they're now based on superseded state.
-        // Without SYNC_IMPORT, SyncImportFilterService won't automatically filter them.
-        // These ops have superseded clocks and payloads that don't match the new snapshot.
-        if (unsyncedOpsToReject.length > 0) {
-          const opIds = unsyncedOpsToReject.map((entry) => entry.op.id);
-          await this.opLogStore.markRejected(opIds);
-          OpLog.normal(
-            `SyncHydrationService: Rejected ${unsyncedOpsToReject.length} local pending op(s) ` +
-              `(superseded after file-based sync snapshot)`,
-          );
-
-          // Notify user that local changes were discarded
-          this.snackService.open({
-            msg: T.F.SYNC.S.LOCAL_CHANGES_DISCARDED_SNAPSHOT,
-            translateParams: {
-              count: unsyncedOpsToReject.length,
-            },
-          });
-        }
-
+        // Any local pending ops are now based on superseded state and must be
+        // rejected: without a SYNC_IMPORT, SyncImportFilterService won't filter
+        // them automatically. The rejection is deferred into
+        // commitFileSnapshotBaseline() below so it commits atomically with the
+        // state replacement. Rejecting here (a separate transaction) would
+        // strand these ops as permanently non-uploadable if the baseline commit
+        // then failed (e.g. the op-log tail changed) and the old state survived.
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
@@ -287,6 +276,9 @@ export class SyncHydrationService {
             globalConfig: normalizedGlobalConfig,
           }
         : downloadedAppData;
+      // Runs inside the sp_op_log lock (flushThenRunExclusive) during automatic
+      // snapshot hydration, so rely on the non-interactive default — a blocking
+      // dialog on an invalid remote snapshot would starve lock contenders (#9026).
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
@@ -340,12 +332,15 @@ export class SyncHydrationService {
         // working clock separately on this legacy full-state-import path.
         await this.opLogStore.setVectorClock(clockForStorage);
       } else {
+        // Reject superseded local ops atomically with the state replacement.
+        const rejectOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
         const appendResult = await this.opLogStore.commitFileSnapshotBaseline({
           state: dataToLoad,
           lastAppliedOpSeq: lastSeq,
           vectorClock: clockForStorage,
           compactedAt: Date.now(),
           snapshotIncludedOps: hooks?.snapshotIncludedOps ?? [],
+          ...(rejectOpIds.length ? { rejectOpIds } : {}),
           ...(downloadedArchiveYoung ? { archiveYoung: downloadedArchiveYoung } : {}),
           ...(downloadedArchiveOld ? { archiveOld: downloadedArchiveOld } : {}),
         });
@@ -360,9 +355,38 @@ export class SyncHydrationService {
               ? `; skipped ${appendResult.skippedCount} duplicate(s)`
               : ''),
         );
+
+        // Notify the user only after the rejection durably committed with the
+        // new baseline — never before, so a failed commit leaves both the old
+        // state and the still-uploadable local ops intact.
+        if (rejectOpIds.length > 0) {
+          OpLog.normal(
+            `SyncHydrationService: Rejected ${rejectOpIds.length} local pending op(s) ` +
+              `(superseded after file-based sync snapshot)`,
+          );
+          this.snackService.open({
+            msg: T.F.SYNC.S.LOCAL_CHANGES_DISCARDED_SNAPSHOT,
+            translateParams: { count: rejectOpIds.length },
+          });
+        }
       }
       hooks?.afterSnapshotPersisted?.();
       OpLog.normal('SyncHydrationService: Committed snapshot persistence baseline');
+
+      // Flush the in-memory tracked-time accumulator into a durable syncTimeSpent
+      // op BEFORE replacing NgRx. The accumulator holds time already applied to
+      // the live state we are about to discard; left in place, that stale delta
+      // later flushes as a LOCAL (non-remote) syncTimeSpent that the reducer
+      // intentionally ignores (task.reducer only applies remote syncTimeSpent),
+      // so the accepted time silently vanishes from live state until the next
+      // op-log replay. Flushing captures it as a pending op (re-applied
+      // additively on replay, and uploaded) and empties the accumulator so
+      // nothing stale survives the replacement. Placed AFTER the baseline commit
+      // so the appended op cannot move the op-log tail past the seq that
+      // commitFileSnapshotBaseline() asserts. Unlike backup import — which
+      // clear()s because it deliberately discards local concurrent state — sync
+      // hydration preserves local edits (cf. snapshot-hydration handling).
+      this.taskTimeSyncService.flush();
 
       // 10. Dispatch loadAllData to update NgRx
       hooks?.beforeStateLoad?.();
