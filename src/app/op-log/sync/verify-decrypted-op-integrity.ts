@@ -153,25 +153,98 @@ export const assertDecryptedOpMetadataIntegrity = (
   // (unauthenticated) `op.entityId`. Missing / non-string / mismatched all mean
   // the metadata cannot be trusted — convertOpToAction coerces `id = op.entityId`
   // in every one of those cases, so anything but a positive match is rejected.
-  if (typeof payloadId === 'string' && payloadId === op.entityId) {
+  if (!(typeof payloadId === 'string' && payloadId === op.entityId)) {
+    // Log ids only — never payload content (op log is exportable). Rule 9.
+    SyncLog.err(
+      '[assertDecryptedOpMetadataIntegrity] encrypted op entityId does not match authenticated payload.id — rejecting (possible sync-server tampering)',
+      {
+        opId: op.id,
+        entityType: op.entityType,
+        opEntityId: op.entityId,
+        payloadId: typeof payloadId === 'string' ? payloadId : `<${typeof payloadId}>`,
+        actionType: op.actionType,
+      },
+    );
+    throw new OperationIntegrityError(
+      `Operation ${op.id} failed metadata integrity check: encrypted payload id ` +
+        `does not match op.entityId (possible sync-server tampering). ` +
+        `GHSA-8pxh-mgc7-gp3g`,
+    );
+  }
+
+  // Second vector on the same LWW update: the multi-task project-move footprint.
+  assertEncryptedProjectMoveFootprintIntegrity(op, actionPayload);
+};
+
+/**
+ * A task project-move LWW update declares its multi-task footprint twice: as the
+ * authenticated `payload.projectMoveSubTaskIds` (inside the AES-GCM ciphertext)
+ * and as the plaintext `op.entityIds` envelope field. The LWW project-repair
+ * reducer (task-shared-meta-reducers/lww-update.meta-reducer.ts) trusts
+ * `meta.entityIds` — copied verbatim from that envelope by convertOpToAction —
+ * as the source footprint and moves EVERY declared task out of its current
+ * project. A compromised sync server could therefore append victim task ids to
+ * the envelope of an otherwise-valid encrypted move and orphan those tasks,
+ * without touching (or being able to decrypt) the ciphertext.
+ *
+ * Bind the envelope footprint to the authenticated one: require exact-set
+ * equality between `op.entityIds` and `{op.entityId} ∪ projectMoveSubTaskIds`.
+ *
+ * INTERIM hardening — only enforceable when the authenticated payload actually
+ * carries a `projectMoveSubTaskIds` array. Synthetic LWW ops minted by conflict
+ * resolution legitimately carry `entityIds` WITHOUT that payload field (their
+ * footprint lives only in the plaintext envelope), so they cannot be validated
+ * here and are intentionally left untouched to avoid rejecting valid ops. Fully
+ * closing the envelope-injection vector needs the durable fix that is still
+ * OPEN: bind the complete footprint as GCM AAD behind an envelope-versioned
+ * migration so every producer's footprint is authenticated. GHSA-8pxh-mgc7-gp3g.
+ *
+ * @throws OperationIntegrityError when the declared footprint diverges from the
+ *   authenticated one.
+ */
+const assertEncryptedProjectMoveFootprintIntegrity = (
+  op: SyncOperation,
+  actionPayload: Record<string, unknown> | undefined,
+): void => {
+  if (op.entityIds === undefined || !op.entityId) {
+    return;
+  }
+  const subTaskIds = actionPayload?.['projectMoveSubTaskIds'];
+  if (!Array.isArray(subTaskIds)) {
+    // No authenticated footprint to bind against (e.g. synthetic LWW op) — see
+    // the "INTERIM hardening" note above. Leave the op unchanged.
     return;
   }
 
-  // Log ids only — never payload content (op log is exportable). Rule 9.
+  const authenticatedFootprint = new Set<string>([
+    op.entityId,
+    ...subTaskIds.filter((id): id is string => typeof id === 'string'),
+  ]);
+  // Exact-set equality: same size (no extras, no duplicates, no non-strings) and
+  // every declared id is in the authenticated footprint (no injected victim id).
+  const isExactSet =
+    op.entityIds.length === authenticatedFootprint.size &&
+    op.entityIds.every((id) => typeof id === 'string' && authenticatedFootprint.has(id));
+  if (isExactSet) {
+    return;
+  }
+
+  // Log ids/counts only — never payload content (op log is exportable). Rule 9.
   SyncLog.err(
-    '[assertDecryptedOpMetadataIntegrity] encrypted op entityId does not match authenticated payload.id — rejecting (possible sync-server tampering)',
+    '[assertDecryptedOpMetadataIntegrity] encrypted op entityIds do not match the authenticated project-move footprint — rejecting (possible sync-server tampering)',
     {
       opId: op.id,
       entityType: op.entityType,
       opEntityId: op.entityId,
-      payloadId: typeof payloadId === 'string' ? payloadId : `<${typeof payloadId}>`,
+      declaredCount: op.entityIds.length,
+      authenticatedCount: authenticatedFootprint.size,
       actionType: op.actionType,
     },
   );
   throw new OperationIntegrityError(
-    `Operation ${op.id} failed metadata integrity check: encrypted payload id ` +
-      `does not match op.entityId (possible sync-server tampering). ` +
-      `GHSA-8pxh-mgc7-gp3g`,
+    `Operation ${op.id} failed metadata integrity check: encrypted op entityIds do ` +
+      `not match the authenticated project-move footprint (possible sync-server ` +
+      `tampering). GHSA-8pxh-mgc7-gp3g`,
   );
 };
 
