@@ -1445,13 +1445,21 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Builds the generation+client-unique immutable snapshot filename (#9040).
-   * `clientId` is sanitized to path-safe characters; `syncVersion` + `clientId`
-   * together guarantee two concurrent compactors never target the same file.
+   * Builds the immutable snapshot filename for a compaction (#9040):
+   * `sync-state__<syncVersion>__<random>.json`. The random suffix (not the
+   * clientId) makes two concurrent compactors target different files without
+   * leaking device identity — filenames are NOT encrypted, so an opaque suffix
+   * keeps device count/platform private from the remote for E2EE users. A
+   * collision is astronomically unlikely and self-heals anyway: the reader
+   * validates loaded content against `snapshotRef` (clock EQUAL), so a wrong
+   * file fails validation and falls back to `sync-state.json`/`.bak`. `syncVersion`
+   * stays in the name for legible ordering and a future `listFiles`-prune.
    */
-  private _genStateFileName(syncVersion: number, clientId: string): string {
-    const safeClientId = clientId.replace(/[^A-Za-z0-9_-]/g, '_');
-    return `${FILE_BASED_SYNC_CONSTANTS.STATE_GEN_FILE_PREFIX}${syncVersion}__${safeClientId}.json`;
+  private _genStateFileName(syncVersion: number): string {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    const random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${FILE_BASED_SYNC_CONSTANTS.STATE_GEN_FILE_PREFIX}${syncVersion}__${random}.json`;
   }
 
   /**
@@ -2083,12 +2091,11 @@ export class FileBasedSyncAdapterService {
         schemaVersion,
         localStateSnapshot,
       );
-      // #9040: write the snapshot to a generation+client-unique IMMUTABLE file
-      // first. This is the snapshot the ops pointer references; because its name
-      // is unique per (syncVersion, clientId), a concurrent compactor writes a
-      // DIFFERENT file and can never clobber it, so the winning ops pointer can
-      // never be stranded.
-      const genStateFile = this._genStateFileName(newSyncVersion, clientId);
+      // #9040: write the snapshot to an IMMUTABLE, per-compaction file first. This
+      // is the snapshot the ops pointer references; because its name carries a
+      // random suffix, a concurrent compactor writes a DIFFERENT file and can never
+      // clobber it, so the winning ops pointer can never be stranded.
+      const genStateFile = this._genStateFileName(newSyncVersion);
       const stateRev = await this._writeStateFile(
         provider,
         cfg,

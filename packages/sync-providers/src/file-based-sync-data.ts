@@ -98,13 +98,13 @@ export interface FileBasedSnapshotRef {
   /** Optional provider rev of the referenced snapshot file (best-effort). */
   rev?: string;
   /**
-   * #9040: generation+client-unique, immutable snapshot filename this ops file
-   * was built against (e.g. `sync-state__7__clientA.json`). Present on ops files
-   * written by post-#9040 clients. Readers MUST prefer it over the fixed
-   * `sync-state.json`: a concurrent compactor force-writes its own snapshot to a
-   * DIFFERENT immutable file, so the winning ops pointer can never be stranded by
-   * a clobbered `sync-state.json`. Optional for backward compatibility — when
-   * absent (older ops files), readers fall back to `sync-state.json`/`.bak`.
+   * #9040: immutable, per-compaction snapshot filename this ops file was built
+   * against (e.g. `sync-state__7__9f3a1c8b0d2e4f6a.json` — `<syncVersion>__<random>`).
+   * Present on ops files written by post-#9040 clients. Readers MUST prefer it over
+   * the fixed `sync-state.json`: a concurrent compactor force-writes its own
+   * snapshot to a DIFFERENT immutable file, so the winning ops pointer can never be
+   * stranded by a clobbered `sync-state.json`. Optional for backward compatibility
+   * — when absent (older ops files), readers fall back to `sync-state.json`/`.bak`.
    */
   file?: string;
 }
@@ -191,8 +191,8 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   // old and new clients must agree on these names forever.
   OPS_BACKUP_FILE: 'sync-ops.json.bak',
   STATE_BACKUP_FILE: 'sync-state.json.bak',
-  // #9040: prefix for the generation+client-unique immutable snapshot files
-  // (`sync-state__<syncVersion>__<clientId>.json`). Distinct from the fixed
+  // #9040: prefix for the immutable per-compaction snapshot files
+  // (`sync-state__<syncVersion>__<random>.json`). Distinct from the fixed
   // `sync-state.json` (no `__`) so the two never collide. Remote-format surface:
   // old and new clients must keep this stable forever.
   STATE_GEN_FILE_PREFIX: 'sync-state__',

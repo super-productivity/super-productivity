@@ -97,8 +97,16 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     return (await fresh.downloadOps(0)) as FileSnapshotOpDownloadResponse;
   };
 
+  // The immutable per-compaction snapshot files currently on the remote. Their
+  // names carry a random suffix (#9040 keeps the clientId out of plaintext file
+  // names), so tests assert on their COUNT rather than exact names.
+  const genStateFiles = (): string[] =>
+    harness
+      .getProvider()
+      .getFilePaths()
+      .filter((p) => p.startsWith(C.STATE_GEN_FILE_PREFIX));
+
   it('harmful interleave: loser clobbers sync-state.json but cannot strand the immutable snapshot', async () => {
-    const provider = harness.getProvider();
     await seedFolderAtCap();
 
     // Control: the seeded folder is healthy and fully hydratable BEFORE the race,
@@ -124,12 +132,11 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
       UploadRevToMatchMismatchAPIError,
     );
 
-    // The winner's immutable snapshot (syncVersion 3) survives the loser's clobber,
-    // the superseded predecessor (seed's syncVersion 1) was garbage-collected, and
-    // the loser cleaned up its own orphaned snapshot on its failed commit.
-    expect(provider.hasFile('sync-state__3__winner-client.json')).toBe(true);
-    expect(provider.hasFile('sync-state__1__seed-client.json')).toBe(false);
-    expect(provider.hasFile('sync-state__3__loser-client.json')).toBe(false);
+    // Exactly one immutable snapshot remains: the winner's. The seed's predecessor
+    // was GC'd on the winner's commit, and the loser cleaned up its own orphaned
+    // snapshot on its failed commit. A fresh client hydrating without a gap proves
+    // the survivor is the one the committed ops file references (the winner's).
+    expect(genStateFiles().length).toBe(1);
 
     const download = await downloadFresh();
     expect(download.gapDetected).toBeFalsy();
@@ -156,8 +163,6 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
   });
 
   it('fresh-folder concurrent compaction: create-if-absent picks one winner, no strand', async () => {
-    const provider = harness.getProvider();
-
     // Both clients compact a fresh folder (no snapshot yet). Park the loser just
     // before it creates sync-ops.json; the winner then creates it first and wins
     // the create-if-absent gate, so the loser's create fails.
@@ -178,10 +183,9 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     const download = await downloadFresh();
     expect(download.gapDetected).toBeFalsy();
     expect(download.snapshotState).toBeDefined();
-    // The winner's immutable snapshot (syncVersion 1) survives the loser's clobber,
-    // and the loser cleaned up its own orphan on its failed commit.
-    expect(provider.hasFile('sync-state__1__winner-client.json')).toBe(true);
-    expect(provider.hasFile('sync-state__1__loser-client.json')).toBe(false);
+    // Only the winner's immutable snapshot remains — the loser cleaned up its own
+    // orphan on its failed commit (no predecessor exists on a fresh folder).
+    expect(genStateFiles().length).toBe(1);
   });
 
   it('ambiguous (non-mismatch) commit failure keeps the immutable snapshot', async () => {
@@ -194,8 +198,10 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     // reader of the committed ops file would strand on it.
     const client = harness.createClient('netfail-client');
     const realUploadFile = provider.uploadFile.bind(provider);
+    let writtenGenFile: string | undefined;
     spyOn(provider, 'uploadFile').and.callFake(
       async (path: string, data: string, rev: string | null, isForce?: boolean) => {
+        if (path.startsWith(C.STATE_GEN_FILE_PREFIX)) writtenGenFile = path;
         if (path === C.OPS_FILE) throw new Error('simulated network failure');
         return realUploadFile(path, data, rev, isForce);
       },
@@ -203,7 +209,8 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
 
     await expectAsync(client.uploadOps([addTaskOp(client, 'netfail-op')])).toBeRejected();
 
-    // syncVersion 3 (seed 1 → fill 2 → this compaction 3): snapshot must remain.
-    expect(provider.hasFile('sync-state__3__netfail-client.json')).toBe(true);
+    // The immutable snapshot this compaction wrote must NOT have been reclaimed.
+    expect(writtenGenFile).toBeDefined();
+    expect(provider.hasFile(writtenGenFile as string)).toBe(true);
   });
 });
