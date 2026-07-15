@@ -248,6 +248,19 @@ module.exports = tseslint.config(
       'no-console': 'error',
     },
   },
+  // Service size cap (AGENTS.md → Project rules): no service may exceed 1000
+  // lines. Kept at 'warn' for now so the existing sync/op-log/plugin offenders
+  // (conflict-resolution, operation-log-store, file-based-sync-adapter,
+  // operation-log-sync, plugin-bridge/plugin, sync-wrapper, task, ...) don't
+  // red-CI while they are split down. Flip to 'error' once every *.service.ts
+  // is under the cap. Spec files end in `.service.spec.ts`, so they are not
+  // matched by this glob and are exempt.
+  {
+    files: ['**/*.service.ts'],
+    rules: {
+      'max-lines': ['warn', { max: 1000 }],
+    },
+  },
   // HTML files
   {
     files: ['**/*.html'],
