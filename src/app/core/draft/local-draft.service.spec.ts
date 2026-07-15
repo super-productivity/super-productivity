@@ -1,11 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { DRAFT_LOAD_ERROR, LocalDraft, LocalDraftService } from './local-draft.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { UserProfileStorageService } from '../../features/user-profile/user-profile-storage.service';
 import { DEFAULT_PROFILE_ID } from '../../features/user-profile/user-profile.model';
 
 describe('LocalDraftService', () => {
   let service: LocalDraftService;
   let activeProfileId: string | null;
+  let persistedActiveProfileId: string | null;
 
   const uniqueId = (): string =>
     `test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -19,12 +21,24 @@ describe('LocalDraftService', () => {
 
   beforeEach(() => {
     activeProfileId = null;
+    persistedActiveProfileId = null;
     TestBed.configureTestingModule({
       providers: [
         {
           provide: UserProfileService,
           useValue: {
             activeProfile: () => (activeProfileId ? { id: activeProfileId } : null),
+          },
+        },
+        {
+          provide: UserProfileStorageService,
+          useValue: {
+            loadProfileMetadata: () =>
+              Promise.resolve(
+                persistedActiveProfileId
+                  ? { activeProfileId: persistedActiveProfileId }
+                  : null,
+              ),
           },
         },
       ],
@@ -150,6 +164,98 @@ describe('LocalDraftService', () => {
     });
     const draft = await loadDraft(entityId);
     expect(draft?.content).toBe('recovered');
+    await service.clearDraft('NOTE', entityId);
+  });
+
+  it('should key drafts to the persisted active profile when no profile is active in memory (feature disabled)', async () => {
+    // Feature disabled: activeProfile() is null, but the last active profile id
+    // is persisted. Drafts must key to it, not to DEFAULT_PROFILE_ID.
+    const entityId = uniqueId();
+    activeProfileId = null;
+    persistedActiveProfileId = 'persisted-profile';
+
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId,
+      content: 'draft content',
+      baseContent: 'base content',
+    });
+
+    const draft = await loadDraft(entityId);
+    expect(draft?.profileId).toBe('persisted-profile');
+    expect(draft?.content).toBe('draft content');
+    await service.clearDraft('NOTE', entityId);
+  });
+
+  it('should delete all drafts for a profile while preserving other profiles drafts', async () => {
+    const idA = uniqueId();
+    const idB = uniqueId();
+
+    activeProfileId = 'profile-a';
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: idA,
+      content: 'a1',
+      baseContent: 'base',
+    });
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: idB,
+      content: 'a2',
+      baseContent: 'base',
+    });
+
+    activeProfileId = 'profile-b';
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: idA,
+      content: 'b1',
+      baseContent: 'base',
+    });
+
+    await service.deleteDraftsForProfile('profile-a');
+
+    // profile-a drafts are gone
+    activeProfileId = 'profile-a';
+    expect(await service.loadDraft('NOTE', idA)).toBeUndefined();
+    expect(await service.loadDraft('NOTE', idB)).toBeUndefined();
+
+    // profile-b draft survives
+    activeProfileId = 'profile-b';
+    const survivor = await loadDraft(idA);
+    expect(survivor?.content).toBe('b1');
+    await service.clearDraft('NOTE', idA);
+  });
+
+  it('should retry once and succeed when the connection closes mid-operation (iOS #6643)', async () => {
+    // Seed a draft, then simulate the iOS "connection is closing" DOMException
+    // on the first read; the retry-once wrapper must re-open and succeed.
+    const entityId = uniqueId();
+    activeProfileId = 'profile-a';
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId,
+      content: 'survives',
+      baseContent: 'base',
+    });
+
+    const closingError = new DOMException(
+      "Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing.",
+      'InvalidStateError',
+    );
+    // Fail the first get on the cached connection. The wrapper invalidates the
+    // handle and re-opens a fresh connection (a new db instance, so this spy no
+    // longer applies), whose real get returns the still-persisted draft. A
+    // successful, correct result therefore can only happen via the retry — the
+    // outer catch would otherwise surface DRAFT_LOAD_ERROR.
+    const db = await (service as any)._ensureDb();
+    const getSpy = spyOn(db, 'get').and.returnValue(Promise.reject(closingError));
+
+    // loadDraft() already asserts the result is not DRAFT_LOAD_ERROR — reaching a
+    // correct value proves the retry recovered rather than surfacing the error.
+    const draft = await loadDraft(entityId);
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(draft?.content).toBe('survives');
     await service.clearDraft('NOTE', entityId);
   });
 });

@@ -2,7 +2,9 @@ import { inject, Injectable } from '@angular/core';
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import { Log } from '../log';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { UserProfileStorageService } from '../../features/user-profile/user-profile-storage.service';
 import { DEFAULT_PROFILE_ID } from '../../features/user-profile/user-profile.model';
+import { isConnectionClosingError } from '../../op-log/persistence/op-log-errors.const';
 
 export type LocalDraftEntityType = 'NOTE';
 
@@ -47,8 +49,10 @@ interface DraftsDb extends DBSchema {
 @Injectable({ providedIn: 'root' })
 export class LocalDraftService {
   private readonly _userProfileService = inject(UserProfileService);
+  private readonly _userProfileStorageService = inject(UserProfileStorageService);
   private _db: IDBPDatabase<DraftsDb> | undefined;
   private _initPromise: Promise<IDBPDatabase<DraftsDb>> | undefined;
+  private _persistedProfileIdPromise: Promise<string> | undefined;
 
   async saveDraft({
     entityType,
@@ -62,17 +66,18 @@ export class LocalDraftService {
     baseContent: string;
   }): Promise<void> {
     try {
-      const profileId = this._activeProfileId();
-      const db = await this._ensureDb();
-      await db.put(DB_STORE_NAME, {
-        key: this._key(profileId, entityType, entityId),
-        entityType,
-        entityId,
-        profileId,
-        content,
-        baseContent,
-        updatedAt: Date.now(),
-      });
+      const profileId = await this._activeProfileId();
+      await this._withRetryOnClose((db) =>
+        db.put(DB_STORE_NAME, {
+          key: this._key(profileId, entityType, entityId),
+          entityType,
+          entityId,
+          profileId,
+          content,
+          baseContent,
+          updatedAt: Date.now(),
+        }),
+      );
     } catch (e) {
       Log.err('LocalDraftService: Failed to save draft', e);
     }
@@ -83,10 +88,9 @@ export class LocalDraftService {
     entityId: string,
   ): Promise<LocalDraft | undefined | typeof DRAFT_LOAD_ERROR> {
     try {
-      const db = await this._ensureDb();
-      return await db.get(
-        DB_STORE_NAME,
-        this._key(this._activeProfileId(), entityType, entityId),
+      const profileId = await this._activeProfileId();
+      return await this._withRetryOnClose((db) =>
+        db.get(DB_STORE_NAME, this._key(profileId, entityType, entityId)),
       );
     } catch (e) {
       Log.err('LocalDraftService: Failed to load draft', e);
@@ -96,18 +100,81 @@ export class LocalDraftService {
 
   async clearDraft(entityType: LocalDraftEntityType, entityId: string): Promise<void> {
     try {
-      const db = await this._ensureDb();
-      await db.delete(
-        DB_STORE_NAME,
-        this._key(this._activeProfileId(), entityType, entityId),
+      const profileId = await this._activeProfileId();
+      await this._withRetryOnClose((db) =>
+        db.delete(DB_STORE_NAME, this._key(profileId, entityType, entityId)),
       );
     } catch (e) {
       Log.err('LocalDraftService: Failed to clear draft', e);
     }
   }
 
-  private _activeProfileId(): string {
-    return this._userProfileService.activeProfile()?.id || DEFAULT_PROFILE_ID;
+  /**
+   * Deletes every draft belonging to a profile. Called from the profile-deletion
+   * lifecycle (UserProfileService.deleteProfile) so a deleted profile does not
+   * leave its (never-synced) draft contents behind. Drafts of other profiles are
+   * untouched — keys are `${profileId}:${entityType}:${entityId}` and the profile
+   * id cannot contain a `:` separator, so the prefix match is unambiguous.
+   */
+  async deleteDraftsForProfile(profileId: string): Promise<void> {
+    try {
+      await this._withRetryOnClose(async (db) => {
+        const prefix = `${profileId}:`;
+        const keys = await db.getAllKeys(DB_STORE_NAME);
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith(prefix))
+            .map((key) => db.delete(DB_STORE_NAME, key)),
+        );
+      });
+    } catch (e) {
+      Log.err('LocalDraftService: Failed to delete drafts for profile', e);
+    }
+  }
+
+  private async _activeProfileId(): Promise<string> {
+    const active = this._userProfileService.activeProfile()?.id;
+    if (active) {
+      return active;
+    }
+    // The profile feature can be disabled, in which case UserProfileService is
+    // never initialized and its in-memory signal stays null — but the last
+    // active profile id is still persisted (localStorage). Fall back to it so
+    // drafts stay keyed to the profile whose data is actually loaded, instead
+    // of a wrong DEFAULT_PROFILE_ID. The persisted id is stable for the session
+    // (switching profiles reloads the app), so it is read at most once.
+    if (!this._persistedProfileIdPromise) {
+      this._persistedProfileIdPromise = this._userProfileStorageService
+        .loadProfileMetadata()
+        .then((meta) => meta?.activeProfileId || DEFAULT_PROFILE_ID)
+        .catch(() => DEFAULT_PROFILE_ID);
+    }
+    return this._persistedProfileIdPromise;
+  }
+
+  /**
+   * Runs a draft DB operation, recovering once from an iOS/WebKit "connection
+   * is closing" error (#6643): the OS can silently close the IndexedDB
+   * connection when the app backgrounds, leaving the cached handle stale so
+   * every later op fails for the rest of the session. Mirrors
+   * ArchiveStoreService._withRetryOnClose — invalidate the cached handle and
+   * retry once against a fresh connection.
+   */
+  private async _withRetryOnClose<T>(
+    fn: (db: IDBPDatabase<DraftsDb>) => Promise<T>,
+  ): Promise<T> {
+    const db = await this._ensureDb();
+    try {
+      return await fn(db);
+    } catch (e) {
+      if (isConnectionClosingError(e)) {
+        Log.warn('LocalDraftService: Connection closing error detected, re-opening', e);
+        this._db = undefined;
+        this._initPromise = undefined;
+        return await fn(await this._ensureDb());
+      }
+      throw e;
+    }
   }
 
   private _key(
@@ -137,6 +204,15 @@ export class LocalDraftService {
         },
       }).then(
         (opened) => {
+          // A newer tab is upgrading this DB (future schema bump). Close now so
+          // this connection does not block the upgrade; the next op reopens
+          // transparently via _ensureDb(). (The `close`/`terminated` case above
+          // already resets the cached handle.)
+          opened.addEventListener('versionchange', () => {
+            opened.close();
+            this._db = undefined;
+            this._initPromise = undefined;
+          });
           this._db = opened;
           return opened;
         },
