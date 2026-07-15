@@ -445,7 +445,14 @@ export class StorageQuotaService {
           where: {
             userId: state.userId,
             serverSeq: { lte: lastSnapshotSeq },
-            opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+            // Legacy REPAIR rows carry no causal base cursor, so they must never
+            // authorize history pruning (see CAUSAL_FULL_STATE_OPERATION_WHERE).
+            // This is the one query whose result directly authorizes a DELETE;
+            // it must match the five other full-state queries and the primary
+            // `latestFullStateSeq` marker, which are all causal-only. A
+            // legacy-repair-only user then yields protectedFromSeq === null →
+            // eligibleUsersWithoutReplayBase++ → skipped (no deletion).
+            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
           },
           orderBy: { serverSeq: 'desc' },
           select: { serverSeq: true },
