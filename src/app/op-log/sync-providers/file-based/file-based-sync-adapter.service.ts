@@ -34,6 +34,7 @@ import { OpLog } from '../../../core/log';
 import {
   DecompressError,
   DecryptError,
+  FileSyncTargetChangedError,
   InvalidDataSPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
@@ -403,6 +404,51 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
+   * Wraps a provider so every remote write (`uploadFile`, `removeFile`) first
+   * asserts the target generation has not moved since `capturedGeneration`.
+   * A config/account/folder change mid-upload bumps the generation (via
+   * `invalidateAllTargets()`) and the same provider object then reads the new
+   * target's config, so an in-flight write of the previous target's merged data
+   * would land on the new target. The guard aborts before that write with
+   * `FileSyncTargetChangedError`; the next sync re-reads the current target.
+   *
+   * Reads (`downloadFile`, `getFileRev`) pass through — reading the wrong target
+   * cannot corrupt it, and the subsequent write is what the guard blocks. Writes
+   * are checked individually rather than once per operation: this narrows (does
+   * not eliminate) the check→write race, and a mid-atomic-pair abort strands the
+   * write on the *previous* target exactly as a crash would, which the read path
+   * already tolerates. Capture the generation once at the operation boundary and
+   * thread this wrapper to every write site. (Task 2.)
+   */
+  private _withTargetGuard(
+    rawProvider: FileSyncProvider<SyncProviderId>,
+    capturedGeneration: number,
+  ): FileSyncProvider<SyncProviderId> {
+    const assertUnchanged = (): void => {
+      if (this._targetGeneration !== capturedGeneration) {
+        throw new FileSyncTargetChangedError(capturedGeneration, this._targetGeneration);
+      }
+    };
+    return new Proxy(rawProvider, {
+      get: (target, prop, receiver) => {
+        if (prop === 'uploadFile' || prop === 'removeFile') {
+          const writeFn = Reflect.get(target, prop, receiver) as (
+            ...args: unknown[]
+          ) => Promise<unknown>;
+          // Async wrapper so a guard rejection is a promise rejection, matching
+          // the real (Promise-returning) methods rather than a synchronous throw.
+          return async (...args: unknown[]): Promise<unknown> => {
+            assertUnchanged();
+            return writeFn.apply(target, args);
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  }
+
+  /**
    * Creates an OperationSyncCapable adapter for a file-based provider.
    *
    * @param provider - The underlying file provider (WebDAV, Dropbox, etc.)
@@ -750,7 +796,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _uploadOps(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     ops: SyncOperation[],
@@ -758,6 +804,12 @@ export class FileBasedSyncAdapterService {
     lastKnownServerSeq?: number,
     localStateSnapshot?: unknown,
   ): Promise<OpUploadResponse> {
+    // Capture the target generation at the operation boundary and thread a
+    // write-guarded provider through the whole upload (single-file, split,
+    // REPAIR, and backup paths all receive it), so a mid-operation target switch
+    // aborts before any write instead of committing this target's merged data to
+    // the next one. (Task 2.)
+    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     // SPAP-11: split-file ("Surgical sync") path is fully separate and only
