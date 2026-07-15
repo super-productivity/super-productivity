@@ -10,6 +10,7 @@ import { T } from '../../t.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { AppDataComplete, MODEL_CONFIGS } from '../../op-log/model/model-config';
 import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import type { LocalDraftService } from '../../core/draft/local-draft.service';
 
 /**
  * Core service for user profile management
@@ -35,6 +36,17 @@ export class UserProfileService {
       this._syncWrapperServiceCache = this._injector.get(SWS);
     }
     return this._syncWrapperServiceCache!;
+  }
+
+  // Lazy-loaded to avoid a DI cycle: LocalDraftService injects UserProfileService.
+  private _localDraftServiceCache: LocalDraftService | null = null;
+  private get _localDraftService(): LocalDraftService {
+    if (!this._localDraftServiceCache) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { LocalDraftService: LDS } = require('../../core/draft/local-draft.service');
+      this._localDraftServiceCache = this._injector.get(LDS);
+    }
+    return this._localDraftServiceCache!;
   }
 
   readonly isInitialized = signal(false);
@@ -233,6 +245,10 @@ export class UserProfileService {
 
     // Delete profile data
     await this._storageService.deleteProfileData(profileId);
+
+    // Delete this profile's device-local drafts too — they are never synced, so
+    // nothing else reclaims them and their full contents would otherwise linger.
+    await this._localDraftService.deleteDraftsForProfile(profileId);
 
     // Save updated metadata
     await this._storageService.saveProfileMetadata(updatedMetadata);
