@@ -3376,6 +3376,83 @@ describe('FileBasedSyncAdapterService', () => {
       expect(res.snapshotState).toBeUndefined();
     });
 
+    // #9040: an ops file with snapshotRef.file reads the immutable snapshot in
+    // PREFERENCE to the fixed sync-state.json (which a concurrent compactor may
+    // have clobbered with a different generation).
+    it('#9040 prefers the immutable snapshotRef.file over the fixed sync-state.json', async () => {
+      const clock = { client1: 5 };
+      const opsFile = makeOpsFile({
+        syncVersion: 5,
+        recentOps: [makeCompactOp()],
+        snapshotRef: {
+          syncVersion: 5,
+          vectorClock: clock,
+          rev: 'sr5',
+          file: 'sync-state__5__client1.json',
+        },
+      });
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(opsFile, 3),
+        ['sync-state__5__client1.json']: addPrefix(
+          makeStateFile({
+            syncVersion: 5,
+            vectorClock: clock,
+            state: { tasks: ['from-immutable'] },
+          }),
+          3,
+        ),
+        // A concurrent compactor clobbered the fixed file with another generation.
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 5,
+            vectorClock: { client2: 5 },
+            state: { tasks: ['clobbered'] },
+          }),
+          3,
+        ),
+      });
+
+      const res = await adapter.downloadOps(0, 'client2');
+
+      expect(res.gapDetected).toBeFalsy();
+      expect((res.snapshotState as { tasks: string[] }).tasks).toEqual([
+        'from-immutable',
+      ]);
+    });
+
+    // #9040: when the immutable snapshot is missing (e.g. an over-eager GC or a
+    // provider hiccup), fall back to the dual-written fixed sync-state.json.
+    it('#9040 falls back to sync-state.json when the immutable snapshot is missing', async () => {
+      const clock = { client1: 5 };
+      const opsFile = makeOpsFile({
+        syncVersion: 5,
+        recentOps: [makeCompactOp()],
+        snapshotRef: {
+          syncVersion: 5,
+          vectorClock: clock,
+          rev: 'sr5',
+          file: 'sync-state__5__client1.json',
+        },
+      });
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(opsFile, 3),
+        // Immutable file absent (404) → fall back to the fixed compat snapshot.
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 5,
+            vectorClock: clock,
+            state: { tasks: ['from-compat'] },
+          }),
+          3,
+        ),
+      });
+
+      const res = await adapter.downloadOps(0, 'client2');
+
+      expect(res.gapDetected).toBeFalsy();
+      expect((res.snapshotState as { tasks: string[] }).tasks).toEqual(['from-compat']);
+    });
+
     // (e) legacy v2 sync-data.json migrates in place: state+ops written, tombstone
     // over sync-data.json, .bak neutralized, sync-data.json NOT removed.
     it('(e) migrates legacy v2 sync-data.json to split format with a v3 tombstone', async () => {
