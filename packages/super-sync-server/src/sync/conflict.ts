@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import { Logger } from '../logger';
 import {
   BatchUploadCandidate,
@@ -255,7 +254,13 @@ export const detectConflictForEntity = async (
             userId,
             entityType: 'GLOBAL_CONFIG',
             entityId: 'misc',
-            schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
+            // Only pre-split (< v2) misc rows carry migrated task settings; a
+            // post-split v2/v3 misc write is disjoint from `tasks`. Gate on the
+            // fixed split boundary, NOT the moving CURRENT_SCHEMA_VERSION, or
+            // every schema bump aliases already-split misc writes to tasks and
+            // fabricates conflicts between disjoint settings (matches the
+            // isLegacyMiscConfigOperation gate).
+            schemaVersion: { lt: MISC_TASKS_SPLIT_SCHEMA_VERSION },
           },
           select: { clientId: true, vectorClock: true, serverSeq: true },
           orderBy: { serverSeq: 'desc' },
@@ -548,7 +553,9 @@ export const prefetchLatestEntityOpsForBatch = async (
         userId,
         entityType: 'GLOBAL_CONFIG',
         entityId: 'misc',
-        schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
+        // Gate on the fixed split boundary, not CURRENT_SCHEMA_VERSION; see the
+        // detectConflictForEntity legacy-misc lookup for the full rationale.
+        schemaVersion: { lt: MISC_TASKS_SPLIT_SCHEMA_VERSION },
       },
       select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
       orderBy: { serverSeq: 'desc' },
