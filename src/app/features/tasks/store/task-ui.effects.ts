@@ -221,7 +221,13 @@ export class TaskUiEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.moveToOtherProject),
         filter(
-          ({ targetProjectId }) =>
+          ({ task, targetProjectId }) =>
+            // Skip the self-heal of an orphan task (no source project) into the
+            // Inbox: that is a silent data repair triggered by navigation, not a
+            // user-initiated move, so a "Moved to project" snack would be
+            // confusing noise (and the user is being navigated there anyway). A
+            // real move always has a source project. (#8780)
+            !!task.projectId &&
             targetProjectId !== this._workContextService.activeWorkContextId,
         ),
         withLatestFrom(this._workContextService.mainListTaskIds$),

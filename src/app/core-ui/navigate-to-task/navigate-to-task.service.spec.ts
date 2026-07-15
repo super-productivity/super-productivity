@@ -72,10 +72,13 @@ describe('NavigateToTaskService', () => {
   });
 
   it('self-heals an orphan task (no project, no tags, not due today) into the Inbox and navigates there (#8780)', async () => {
-    // Overdue = dueDay in the past → the task is in no list's ordering array, so
-    // it renders in no view. It must be re-homed into the Inbox to be reachable.
+    // Empty-string projectId is the real-world case: it survives hydration
+    // (passes typia validation, unlike `undefined`). With no tags and no due
+    // date, the task's id is in no project's or tag's `taskIds` array and it is
+    // not overdue/due-today, so it renders in no reachable list. It must be
+    // re-homed into the Inbox to become focusable.
     taskService.getByIdFromEverywhere.and.resolveTo(
-      createTask({ id: 't1', dueDay: '2020-01-01', projectId: undefined, tagIds: [] }),
+      createTask({ id: 't1', projectId: '', tagIds: [] }),
     );
 
     await service.navigate('t1');

@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { LayoutService } from './layout.service';
 import { hideAddTaskBar, showAddTaskBar } from './store/layout.actions';
@@ -340,5 +340,20 @@ describe('LayoutService', () => {
         done();
       }, 400);
     });
+
+    it('should invoke onFailure (and not onSuccess) once the retries are exhausted', fakeAsync(() => {
+      const onSuccess = jasmine.createSpy('onSuccess');
+      const onFailure = jasmine.createSpy('onFailure');
+
+      // No element with id `t-never-rendered` exists, so the task never becomes
+      // focusable. Use a small retry budget so the loop exhausts quickly.
+      service.focusTaskInViewWhenReady('never-rendered', onSuccess, onFailure, 2);
+
+      // 2 retries * 250ms delay; tick generously to drain every scheduled retry.
+      tick(1000);
+
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+    }));
   });
 });
