@@ -72,6 +72,11 @@ export class NavigateToTaskService {
         return;
       }
 
+      // Route-change path: focus is handed off to the destination view via the
+      // `focusItem` query param (AppComponent), which owns its own reveal/retry.
+      // The explicit onFailure error snack is only wired to the same-context
+      // branch above; here a heal always adds the task to the Inbox main list, so
+      // it renders and focuses normally.
       const queryParams: SearchQueryParams = { focusItem: taskId };
       if (isArchiveTask) {
         queryParams.dateStr = await this._getArchivedDate(task);
