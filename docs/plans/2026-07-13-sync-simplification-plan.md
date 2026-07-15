@@ -22,7 +22,7 @@ The smallest safe order is:
 6. remove only the conflict-review producers and UI that the deployment/persisted-data audit proves disposable;
 7. correct current sync documentation after behavior settles.
 
-**Timing constraint:** the conflict-review feature (962c5bbeb1, merged 2026-07-11) is on master but in no release tag, and releases ship every one to two weeks. Every stable release cut before Task 6 expands the persisted-data obligation from edge/dogfood cohorts to the whole fleet. If the Task 1 audit authorizes deletion, land a minimal producer freeze — stop conflict-journal writes and disable the disjoint-merge producer — before the next release cut, ahead of Phase 1. The freeze is a small reversible diff; the full rollback (Task 6) then proceeds on its own schedule.
+**Timing constraint:** the conflict-review feature (962c5bbeb1, merged 2026-07-11) is on master but in no release tag, and releases ship every one to two weeks. Every stable release cut before Task 6 expands the persisted-data obligation from edge/dogfood cohorts to the whole fleet. If the Task 1 audit authorizes deletion, land a minimal producer freeze — stop conflict-journal writes and disable the disjoint-merge producer — before the next release cut, ahead of Phase 1. The disjoint-merge gate (`disableDisjointMerge`) already exists but is currently a per-call option set only by the internal failed-merge fallback, so the freeze is a small wiring change at the `autoResolveConflictsLWW` call sites (or a global flag feeding it), not a ready toggle. The freeze is a small reversible diff; the full rollback (Task 6) then proceeds on its own schedule.
 
 Atomic browser startup and replacement of flag-and-poll maintenance exclusion remain worthwhile correctness projects, but they are not prerequisites for deleting the two partial SuperSync pipelines. Keeping them separate avoids turning a bounded simplification into a cross-tab/bootstrap and every-import-owner rewrite.
 
@@ -58,7 +58,7 @@ The previous broad “remove roughly 6,000 lines together” decision is rejecte
 8. A file snapshot's state cache, archives, vector clock, and snapshot-included operations commit as one baseline. A failed commit leaves the previous baseline intact.
 9. Split-file operations newer than the referenced snapshot apply normally before the downloaded cursor advances.
 10. Persistent local actions arriving during snapshot hydration are deferred, durably restored on top of the new baseline, replayed into live state, and have archive side effects restored before the remote-apply window closes.
-11. Archive read-modify-write operations and remote/import replacements serialize through the `TASK_ARCHIVE` boundary.
+11. Archive read-modify-write operations and remote/import replacements serialize through the `TASK_ARCHIVE` boundary. (Known residual: `TimeTrackingService` project/tag cleanup runs outside this mutex — #8941; do not treat that gap as resolved.)
 12. Raw rebuild resumes before ordinary sync; reducer-pending work blocks sync.
 13. Import/rebuild retain preflight-before-mutation, backup, atomic replacement, cursor, and crash-resume ordering.
 14. Encryption fails closed. Operation metadata and isPayloadEncrypted are not authenticated policy inputs.
@@ -149,7 +149,7 @@ Four verified constraints on the design:
 
 - The generation bump must also fire from the Electron LocalFile picker success callback and Android `setupSaf()`: both mutate the target outside ProviderManager, and since #8228 the Electron folder lives main-side rather than in privateCfg.
 - "Any user-authoritative configuration save" includes encryption, compression, and interval toggles; each forces a full-file re-download, and a forced from-zero read with pending local operations can surface the whole-file conflict dialog. Accept and test this consequence; narrow the invalidation to identity-affecting fields only if it proves painful in practice.
-- Extract and extend the existing delete-all reset into one helper used by both deletion and target transition. The current block is not exhaustive: it must cover expected and pending expected sync versions, last-seen and pending vector clocks, local sequence/cursor state, last recovered-corrupt revision, last-seen and pending file revisions, both within-cycle caches, and persisted entries.
+- Extract and extend the existing delete-all reset into one helper used by both deletion and target transition. The helper must cover expected and pending expected sync versions, last-seen and pending vector clocks, local sequence/cursor state, last recovered-corrupt revision, last-seen and pending file revisions, both within-cycle caches, and persisted entries. In current code the delete-all block already clears every one of these except the last recovered-corrupt revision (`_lastRecoveredCorruptRev`), so the extraction's value is the shared call site at the target-transition boundary, not a large missing field set — the actual gap is a single `.delete(providerKey)`.
 - `providerConfigChanged$` is one trigger source, not the boundary. OneDrive settings and platform folder pickers currently have direct writes, while automatic token refreshes must remain generation-neutral when the account and target are unchanged.
 
 Cover one normal configuration-driven provider, OneDrive's direct settings write, Electron LocalFile's picker, and Android SAF selection. Also cover an OAuth re-authentication to a different account (Dropbox/OneDrive keep the same provider ID), an unchanged-account token refresh that must not invalidate, staged expected-version/vector-clock/revision promotion, corruption-notice state, and the within-cycle download cache, which can otherwise embed target A's snapshot in a file written to target B. The common adapter path should cover other file providers without a full provider-specific matrix.
@@ -179,7 +179,7 @@ The supported-data boundary is explicit and target-switch in-flight/restart regr
 
 **Size:** Medium
 
-The scheduler observes all active full-sync runs, including foreground and initial sync; it cannot track only work it starts. `SyncWrapperService.isSyncInProgress$` spans every `sync()` run, including conflict-dialog waits, `isEncryptionOperationInProgress` covers encryption and force upload, and `SyncCycleGuard.isActive` spans the full-sync and side-channel cycle but currently has no release observable. The authoritative busy definition is the union of those three signals. Provider `SYNCING` status remains presentation state and a consistency assertion, not another exclusion authority. Expose one observable busy/idle definition rather than polling the signals independently. The scheduler is the sole owner of generic pending/dirty background work; SyncCycleGuard remains authoritative for cycle exclusion.
+The scheduler observes all active full-sync runs, including foreground and initial sync; it cannot track only work it starts. `SyncWrapperService.isSyncInProgress$` spans every `sync()` run, including conflict-dialog waits, `isEncryptionOperationInProgress` covers encryption and force upload, and `SyncCycleGuard.isActive` spans the full-sync and side-channel cycle but currently has no release observable. The authoritative busy definition is the union of those three signals. Provider `SYNCING` status remains presentation state and a consistency assertion, not another exclusion authority. It is today still a real exclusion gate for the two side channels — immediate upload and WS download both skip when `isSyncInProgress` is true — but both also claim `SyncCycleGuard`, so demoting the `SYNCING` check to presentation is safe only once cycle-guard activity fully covers that side-channel exclusion (Tasks 4–5 remove those channels, so the demotion lands with them). Expose one observable busy/idle definition rather than polling the signals independently. The scheduler is the sole owner of generic pending/dirty background work; SyncCycleGuard remains authoritative for cycle exclusion.
 
 Its public contract remains fire-and-forget `request()`. Each request captures the active provider ID plus a monotonic, in-tab configuration epoch; the scheduler revalidates them, sync enabled/readiness, and the initial/after-enable gate immediately before I/O. ProviderManager owns the non-secret epoch, incrementing it from the authoritative configuration/target transitions inventoried in Task 2; it is neither persisted nor a cross-tab protocol. A new request replaces the pending epoch with the newest current one while retaining a single dirty bit. A stale request is discarded rather than retargeted. Expose only a narrow internal settled/idle notification so high-watermark owners can re-check durable progress without a public result waiter or failure taxonomy.
 
@@ -297,11 +297,11 @@ Delete ImmediateUploadService only after piggyback ordering and the request-cost
 
 Bundle these with the matching task; re-verify references at deletion time:
 
-- SyncTriggerService's dead local-data trigger branch: `_onUpdateLocalDataTrigger$` is a constant `of(null)`, so its interval-reset branch fires once at startup and never again (Task 5).
+- SyncTriggerService's `_onUpdateLocalDataTrigger$` source is now a dead `of(null)` (its former local-data-change semantics are gone), **but the branch it feeds is not dead** and must not be removed as a zero-reference cleanup. `_immediateSyncTrigger$.pipe(startWith(...), switchMap(() => _onUpdateLocalDataTrigger$.pipe(auditTime(syncInterval))))` fires a trailing full sync ~`syncInterval` after activity settles: `of(null) | auditTime(N)` emits one trailing value after N ms, and `switchMap` re-subscribes on every immediate trigger. For SuperSync `useIntervalTimer` is false, so this is the only periodic re-sync. Treat it as behavior: preserve the trailing/settle cadence through the scheduler, or make its removal an explicit, tested cadence change — not an incidental deletion (Task 5).
 - Legacy SyncStatus enum members UpdateLocalAll, Conflict, IncompleteRemoteData, and NotConfigured; the wrapper only returns InSync/UpdateRemote today (Task 3).
 - The deprecated `skipDuringSync` alias of `skipWhileApplyingRemoteOps` (spec-only references).
 - The write-only plain `isDataImportInProgress` field on ImexViewService; the observable stays.
-- After Tasks 4–5 delete two of the three identical error-to-status mapping blocks, extract the survivor into a helper rather than leaving it inline.
+- After Tasks 4–5 delete the two side-channel error-to-status mapping blocks (WS and immediate-upload, near-identical to each other), extract their shared subset into a helper. The wrapper's block is a superset with many extra branches (CORS, auth, decrypt, timeout, empty-body); extract the shared mapping, do not replace the wrapper block with it.
 
 ### Phase 1 checkpoint
 
@@ -327,7 +327,7 @@ Remove only what the supported-build/persisted-data decision authorizes:
 Preserve:
 
 - schema version 3 replace/patch compatibility and its v2-to-v3 migration/barrier;
-- schema version 4 and its v3-to-v4 migration/barrier, `PROJECT_DELETE_WINS_MARKER`, authenticated project-ID check, shared planner/server delete-wins classification, local replacement-op construction, and union of cascaded task/note IDs across concurrent marked deletes;
+- schema version 4 and its v3-to-v4 migration/barrier, `PROJECT_DELETE_WINS_MARKER`, authenticated project-ID check, the shared-package (`@sp/sync-core`) delete-wins classification consumed by the client planner (the server does not classify delete-wins — the marker lives inside the E2EE auth tag and is unreadable server-side), local replacement-op construction, and union of cascaded task/note IDs across concurrent marked deletes;
 - IndexedDB version 10 downgrade protection;
 - replace/patch payload types, conversion/replay, and supported persisted fixtures;
 - ordinary single- and multi-entity conflict recovery, including historical unmarked project-delete loser recovery, task/subtask recreation, exact project/parent relationship follow-ups, same-batch delete exclusion, and replacement when a recovery row later loses its own conflict;
@@ -438,6 +438,23 @@ After each phase collect:
 - stale-request invalidation across provider, account, and configuration transitions;
 - consumer counts for SyncSessionValidationService and SyncCycleGuardService (Tasks 4–5 each remove consumers, strengthening proposal B);
 - known cross-tab limitations.
+
+### Expected footprint (evidence, not a target)
+
+Measured against baseline `7e273a0e5c`, to anchor the "removes more than it adds" gate — not a goal to optimize toward:
+
+| Tranche                                         | Gross production lines removed (approx.) | Added                              |
+| ----------------------------------------------- | ---------------------------------------- | ---------------------------------- |
+| Task 4 — WsTriggeredDownloadService (287)       | ~200 (thin adapter retained)             | ~40 watermark/retry adapter        |
+| Task 5 — ImmediateUploadService (394)           | ~370                                     | ~30 predicate→request wiring        |
+| Task 6 — disjoint-merge planner+in-service      | ~330 util + ~380–450 in conflict service | 0                                  |
+| Task 6 — conflict-review UI/banner/util/i18n    | ~1,020 (page 636 + banner 130 + util 202 + en.json ~50) | 0                  |
+| Task 6 — journal writer + emission util         | ~300 now; +~500 (store 317 + model 185) when the data obligation ends | 0 |
+| Phase-1 incidentals                             | ~50                                      | ~0                                 |
+| Task 2 (correctness, not simplification)        | 0                                        | ~120–200 isolation/generation code |
+| Task 3 (background scheduler)                   | 0                                        | ~150–250 new service               |
+
+Net production reduction is roughly **2,300–2,800 lines** with the journal store retained, rising toward **~2,900–3,300** once its retention/export obligation ends and the store+model go. This is deliberately far below the rejected "~6,000 lines together" figure: the difference is the compatibility readers, delete-wins/recovery follow-ups, and thin adapters that stay. Test-file churn is larger still (disjoint-merge and review specs ~2,700+ lines removed) but is not counted here — it roughly nets out against new scheduler/adapter/isolation specs and is not the success measure. The number a phase must clear is qualitative (contract 19 and §4's last line): it removes behavioral states and failure paths, not just lines.
 
 Approve work in reviewable tranches:
 
