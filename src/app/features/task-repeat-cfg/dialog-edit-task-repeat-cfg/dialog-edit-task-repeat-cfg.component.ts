@@ -120,15 +120,17 @@ export class DialogEditTaskRepeatCfgComponent {
     // Spelled-out weekday/month names follow the UI language under the ISO 8601
     // option (the `sv` sentinel would otherwise leak Swedish, e.g. "ons 15 juli
     // 2026"). The clock time below keeps currentLocale() so 24h is preserved.
-    const textLocale = this._dateTimeFormatService.textLocale();
-    const time = this.repeatCfg().startTime;
-    if (time && isValidSplitTime(time)) {
-      const formattedDate = date.toLocaleDateString(textLocale, {
+    const formattedDate = date.toLocaleDateString(
+      this._dateTimeFormatService.textLocale(),
+      {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-      });
+      },
+    );
+    const time = this.repeatCfg().startTime;
+    if (time && isValidSplitTime(time)) {
       const [hours, minutes] = time.split(':').map(Number);
       const safeTimeDate = new Date(2000, 0, 1, hours, minutes, 0, 0);
       const formattedTime = this._dateTimeFormatService.formatTime(
@@ -137,12 +139,7 @@ export class DialogEditTaskRepeatCfgComponent {
       );
       return `${formattedDate}, ${formattedTime}`;
     }
-    return date.toLocaleDateString(textLocale, {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return formattedDate;
   });
 
   openScheduleDialog(): void {
@@ -399,9 +396,12 @@ export class DialogEditTaskRepeatCfgComponent {
     let lastLocale: string | undefined;
     let cachedOptions: { value: string; label: string }[];
 
-    // Update options reactively when startDate or locale changes. The cache key
-    // tracks textLocale too: under the ISO option a UI-language switch leaves
-    // currentLocale() at 'sv', but the spelled-out weekday label must rebuild.
+    // Update options when startDate or locale changes. The cache key tracks
+    // textLocale too because buildOptions now depends on it — under the ISO
+    // option currentLocale() stays 'sv' while textLocale() carries the UI
+    // language for the weekday label. (This modal dialog can't have its UI
+    // language changed mid-life, so the first build already reads the right
+    // textLocale; the composite key just keeps the memo honest.)
     quickSettingField.expressionProperties = {
       ...quickSettingField.expressionProperties,
       ['templateOptions.options']: (model: Record<string, unknown>) => {

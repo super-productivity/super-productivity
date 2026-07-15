@@ -79,6 +79,7 @@ describe('TaskDetailPanelComponent paste handler', () => {
       ['formatDateTime'],
       {
         currentLocale: jasmine.createSpy().and.returnValue('en'),
+        textLocale: jasmine.createSpy().and.returnValue('en'),
       },
     );
     const mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
