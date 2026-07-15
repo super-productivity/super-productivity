@@ -657,9 +657,14 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           ? currentProjectId
           : undefined;
 
-      if (requestedProjectId == null) {
-        entityData['projectId'] = undefined;
-      } else if (
+      // Any invalid destination — null/undefined, a non-string, or an unknown
+      // project id — falls back to the task's current project (or undefined only
+      // when that is itself invalid), mirroring the local `handleUpdateTask`
+      // strip so the local and LWW-replay paths stay symmetric (#9025). This
+      // applies in every mode: tasks use '' for "no project", so an explicit
+      // null — even in an authoritative replace snapshot — is a malformed value
+      // to sanitize, not a signal to orphan the task. '' stays valid.
+      if (
         typeof requestedProjectId !== 'string' ||
         (requestedProjectId !== '' &&
           !getProjectOrUndefined(rootState, requestedProjectId))

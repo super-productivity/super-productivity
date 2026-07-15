@@ -465,9 +465,12 @@ const ACTION_HANDLERS: Record<string, Handler> = {
     let targetProjectId: string | undefined = currentTask.projectId;
     let requestedProjectId: string | undefined = currentTask.projectId;
     if (hasProjectId) {
-      if (update.projectId == null) {
-        requestedProjectId = undefined;
-      } else if (
+      // Only a valid destination moves the task; any invalid one (null/
+      // undefined, non-string, or an unknown project) leaves it in its current
+      // project — so its current-project section survives — mirroring the task
+      // slice and the local handleUpdateTask strip (#9025). '' is a valid
+      // no-project value.
+      if (
         typeof update.projectId === 'string' &&
         (update.projectId === '' || getProjectOrUndefined(state, update.projectId))
       ) {
