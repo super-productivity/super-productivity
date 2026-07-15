@@ -1096,6 +1096,147 @@ describe('FileBasedSyncAdapterService', () => {
     });
   });
 
+  describe('uploadSnapshot REPAIR concurrency guard (#9023)', () => {
+    // An automatic REPAIR recovery snapshot must never blindly overwrite a remote
+    // that advanced since this client last synced: if another device uploaded ops
+    // this client never merged, the snapshot yields (REPAIR_STALE) so the shared
+    // rebase path pulls those ops in first. Mirrors the SuperSync
+    // repairBaseServerSeq guard, but keyed on the remote REV — a vector clock can
+    // compare CONCURRENT under pruning and wedge the repair forever.
+
+    // Seeds `_lastSeenRevs` = `rev` exactly as a real sync cycle does: download
+    // the file (stages the rev) then setLastServerSeq (promotes it after apply).
+    const seedBaseRev = async (rev: string): Promise<void> => {
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({
+          dataStr: addPrefix(createMockSyncData({ syncVersion: 2, recentOps: [] })),
+          rev,
+        }),
+      );
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(2);
+      mockProvider.downloadFile.calls.reset();
+    };
+
+    const uploadRepair = (): Promise<{
+      accepted: boolean;
+      errorCode?: string;
+      serverSeq?: number;
+    }> =>
+      adapter.uploadSnapshot(
+        { tasks: [] },
+        'client1',
+        'recovery',
+        { client1: 2 },
+        1,
+        undefined, // isPayloadEncrypted
+        'repair-op-id',
+        false, // isCleanSlate
+        'REPAIR', // snapshotOpType — triggers the guard
+      );
+
+    // Records every write (path, rev-to-match, force) in call order.
+    const captureWrites = (): { path: string; rev: string | null; force?: boolean }[] => {
+      const writes: { path: string; rev: string | null; force?: boolean }[] = [];
+      mockProvider.uploadFile.and.callFake(
+        async (path: string, _data: string, rev: string | null, force?: boolean) => {
+          writes.push({ path, rev, force });
+          return { rev: 'new-rev' };
+        },
+      );
+      return writes;
+    };
+    const primaryOf = (
+      writes: { path: string; rev: string | null; force?: boolean }[],
+    ): { path: string; rev: string | null; force?: boolean }[] =>
+      writes.filter((w) => w.path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+
+    it('writes CONDITIONALLY on the base rev — primary before .bak — when the remote is unchanged', async () => {
+      await seedBaseRev('rev-1');
+      const writes = captureWrites();
+      const result = await uploadRepair();
+
+      expect(result.accepted).toBe(true);
+      const primary = primaryOf(writes);
+      expect(primary.length).toBe(1);
+      // Conditional on the rev we last synced, NOT a force overwrite.
+      expect(primary[0].rev).toBe('rev-1');
+      expect(primary[0].force).toBe(false);
+      // .bak is refreshed only AFTER the primary conditional write wins.
+      const order = writes.map((w) => w.path);
+      expect(order.indexOf(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)).toBeLessThan(
+        order.indexOf(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE),
+      );
+    });
+
+    it('rejects as REPAIR_STALE — leaving .bak untouched — when the conditional write loses to a concurrent upload', async () => {
+      await seedBaseRev('rev-1');
+      const writes: { path: string }[] = [];
+      mockProvider.uploadFile.and.callFake(
+        async (path: string, _data: string, _rev: string | null, force?: boolean) => {
+          // The remote advanced past 'rev-1' → provider rejects the conditional
+          // primary write.
+          if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE && force === false) {
+            throw new UploadRevToMatchMismatchAPIError('rev changed');
+          }
+          writes.push({ path });
+          return { rev: 'x' };
+        },
+      );
+
+      const result = await uploadRepair();
+      expect(result.accepted).toBe(false);
+      expect(result.errorCode).toBe('REPAIR_STALE');
+      // The concurrent writer's data survives, AND the stale repair never reaches
+      // .bak (where a later corrupt-primary recovery could resurrect it).
+      expect(writes.some((w) => w.path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE)).toBe(
+        false,
+      );
+    });
+
+    it('writes with a null rev-to-match ("expect absent") when this client has no last-seen rev', async () => {
+      // No seedBaseRev → _lastSeenRevs is empty.
+      const writes = captureWrites();
+      const result = await uploadRepair();
+      expect(result.accepted).toBe(true);
+      expect(primaryOf(writes)[0].rev).toBeNull();
+      expect(primaryOf(writes)[0].force).toBe(false);
+    });
+
+    it('does NOT guard BACKUP_IMPORT — an explicit restore still force-overwrites', async () => {
+      await seedBaseRev('rev-1');
+      const writes = captureWrites();
+      const result = await adapter.uploadSnapshot(
+        { tasks: [] },
+        'client1',
+        'recovery',
+        { client1: 2 },
+        1,
+        undefined,
+        'backup-op-id',
+        false,
+        'BACKUP_IMPORT',
+      );
+      expect(result.accepted).toBe(true);
+      // Forced overwrite (not conditional) — the guard is REPAIR-only.
+      expect(primaryOf(writes)[0].force).toBe(true);
+    });
+
+    it('split format: rejects as REPAIR_STALE when the remote ops-file rev advanced past our base', async () => {
+      await seedBaseRev('rev-1'); // seed via the single-file path, then switch
+      splitSyncEnabled = true;
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.OPS_FILE) return { rev: 'rev-2' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+      const result = await uploadRepair();
+      expect(result.accepted).toBe(false);
+      expect(result.errorCode).toBe('REPAIR_STALE');
+      // Gated before any write — the concurrent ops survive.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deleteAllData', () => {
     it('should delete sync file and backup', async () => {
       mockProvider.removeFile.and.returnValue(Promise.resolve());

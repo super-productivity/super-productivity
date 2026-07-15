@@ -414,7 +414,7 @@ export class FileBasedSyncAdapterService {
         isPayloadEncrypted: boolean | undefined,
         _opId: string, // Not used in file-based sync (operation IDs are client-local)
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
-        _snapshotOpType?: RestorePointType, // Not used - file-based sync has no server-side op log
+        snapshotOpType?: RestorePointType, // REPAIR triggers a rev-based concurrency guard; see _uploadSnapshot
         _syncImportReason?: string, // Not used - file-based sync has no server-side conflict dialog
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
@@ -426,6 +426,7 @@ export class FileBasedSyncAdapterService {
           reason,
           vectorClock,
           schemaVersion,
+          snapshotOpType,
         );
       },
 
@@ -1152,6 +1153,7 @@ export class FileBasedSyncAdapterService {
     reason: 'initial' | 'recovery' | 'migration',
     vectorClock: Record<string, number>,
     schemaVersion: number,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
     const providerKey = this._getProviderKey(provider);
 
@@ -1170,6 +1172,7 @@ export class FileBasedSyncAdapterService {
         schemaVersion,
         providerKey,
         state,
+        snapshotOpType,
       );
     }
 
@@ -1205,12 +1208,51 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
-    const snapshotUploadRes = await this._forceUploadWithBakFirst(
-      provider,
-      FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-      FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-      uploadData,
-    );
+    let snapshotUploadRes: { rev: string };
+    if (snapshotOpType === 'REPAIR') {
+      // #9023: an automatic REPAIR recovery snapshot must never overwrite a remote
+      // that advanced since this client last synced — otherwise a concurrent edit
+      // from another device (uploaded after our last download) is silently dropped.
+      // Mirror the SuperSync repairBaseServerSeq guard by writing CONDITIONALLY on
+      // the rev we last downloaded+applied (`_lastSeenRevs` — the repair's base).
+      // A rev, not a vector clock, is used deliberately: two independently-pruned
+      // clocks (MAX_VECTOR_CLOCK_SIZE) can compare CONCURRENT even when one
+      // dominates, which would wedge the repair forever. On a rev mismatch we
+      // signal REPAIR_STALE so the shared rebase path (RejectedOpsHandlerService)
+      // downloads the concurrent ops and rebuilds the repair; that download
+      // promotes `_lastSeenRevs`, so the retry converges. BACKUP_IMPORT / initial /
+      // migration keep force-overwrite: explicit restores or first-time uploads.
+      const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
+      try {
+        snapshotUploadRes = await this._conditionalUploadRepairSnapshot(
+          provider,
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+          uploadData,
+          baseRev,
+        );
+      } catch (e) {
+        if (e instanceof UploadRevToMatchMismatchAPIError) {
+          OpLog.warn(
+            'FileBasedSyncAdapter: REPAIR snapshot is stale (remote advanced since ' +
+              'our last sync); requesting rebase instead of overwriting.',
+          );
+          return {
+            accepted: false,
+            error: 'REPAIR snapshot does not include current remote state',
+            errorCode: 'REPAIR_STALE',
+          };
+        }
+        throw e;
+      }
+    } else {
+      snapshotUploadRes = await this._forceUploadWithBakFirst(
+        provider,
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        uploadData,
+      );
+    }
 
     // Reset local state
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
@@ -2361,9 +2403,45 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     providerKey: string,
     state: unknown,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
     const newSyncVersion = 1;
     const clock = vectorClock as VectorClock;
+
+    // #9023: same concurrency guard as the single-file path — a REPAIR recovery
+    // snapshot must not overwrite a remote that advanced since our last sync.
+    // The commit-point sync-ops.json is what other clients read, so gate on ITS
+    // rev vs the rev we last downloaded+applied (`_lastSeenRevs`). A rev, not a
+    // vector clock, is used deliberately (see _uploadSnapshot). `getFileRev`
+    // reads metadata only — no decode — so a torn/undecryptable remote does not
+    // block the repair. Missing ops file → no history to clobber, safe.
+    // NOTE: this pre-check closes the concurrent *merge* window; a conditional
+    // (rev-matched) write across the two-file (state + ops) protocol to close the
+    // residual sub-second check→write race is tracked as a follow-up.
+    if (snapshotOpType === 'REPAIR') {
+      const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
+      let remoteOpsRev: string | null = null;
+      try {
+        remoteOpsRev = (
+          await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, null)
+        ).rev;
+      } catch (e) {
+        if (!(e instanceof RemoteFileNotFoundAPIError)) {
+          throw e;
+        }
+      }
+      if (remoteOpsRev !== null && remoteOpsRev !== baseRev) {
+        OpLog.warn(
+          'FileBasedSyncAdapter: REPAIR split snapshot is stale (remote advanced ' +
+            'since our last sync); requesting rebase instead of overwriting.',
+        );
+        return {
+          accepted: false,
+          error: 'REPAIR snapshot does not include current remote state',
+          errorCode: 'REPAIR_STALE',
+        };
+      }
+    }
 
     const stateData = await this._buildStateFileData(
       clientId,
@@ -2541,6 +2619,29 @@ export class FileBasedSyncAdapterService {
   ): Promise<{ rev: string }> {
     await provider.uploadFile(bakPath, encoded, null, true);
     return provider.uploadFile(primaryPath, encoded, null, true);
+  }
+
+  /**
+   * #9023: writes the primary sync file CONDITIONALLY on `revToMatch`, then (only
+   * once the primary write wins) refreshes the .bak with the same payload. Used
+   * for automatic REPAIR recovery snapshots so a concurrent write that landed
+   * since our last sync throws UploadRevToMatchMismatchAPIError instead of being
+   * silently overwritten. Primary-first (unlike `_forceUploadWithBakFirst`) so a
+   * lost race leaves the .bak untouched — a stale repair payload must never
+   * survive in .bak where a later corrupt-primary recovery could resurrect it and
+   * re-drop the concurrent ops. A null `revToMatch` means "expect the file
+   * absent" — the provider rejects the write if another client created it.
+   */
+  private async _conditionalUploadRepairSnapshot(
+    provider: FileSyncProvider<SyncProviderId>,
+    primaryPath: string,
+    bakPath: string,
+    encoded: string,
+    revToMatch: string | null,
+  ): Promise<{ rev: string }> {
+    const res = await provider.uploadFile(primaryPath, encoded, revToMatch, false);
+    await provider.uploadFile(bakPath, encoded, null, true);
+    return res;
   }
 
   /**
