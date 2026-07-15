@@ -19,6 +19,7 @@ import { SyncPage } from '../../pages/sync.page';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
+import { isWebDavServerUp } from '../../utils/check-webdav';
 
 /**
  * SuperSync Provider Switch (WebDAV → SuperSync) E2E Tests
@@ -37,21 +38,6 @@ import { waitForStatePersistence } from '../../utils/waits';
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-provider-switch-to-supersync.spec.ts
  */
-
-/**
- * Check if the WebDAV server is available.
- */
-const isWebDAVAvailable = async (): Promise<boolean> => {
-  try {
-    const response = await fetch('http://localhost:2345', {
-      method: 'OPTIONS',
-      signal: AbortSignal.timeout(3000),
-    });
-    return response.ok || response.status === 200 || response.status === 207;
-  } catch {
-    return false;
-  }
-};
 
 test.describe('@supersync Provider Switch WebDAV to SuperSync', () => {
   /**
@@ -74,7 +60,10 @@ test.describe('@supersync Provider Switch WebDAV to SuperSync', () => {
     test.setTimeout(180000);
 
     // Skip if WebDAV server is not available
-    const webdavAvailable = await isWebDAVAvailable();
+    const webdavAvailable = await isWebDavServerUp();
+    if (!webdavAvailable && process.env.E2E_REQUIRE_WEBDAV === 'true') {
+      throw new Error('WebDAV is required for provider-switch coverage.');
+    }
     testInfo.skip(!webdavAvailable, 'WebDAV server not running on localhost:2345');
 
     const appUrl = baseURL || 'http://localhost:4242';
