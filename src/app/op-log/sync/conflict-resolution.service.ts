@@ -41,6 +41,7 @@ import {
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import {
@@ -1192,6 +1193,16 @@ export class ConflictResolutionService {
             parentCompensationOp,
             remoteOp,
             concurrentlyDeletedTaskIds,
+          )),
+          // Emitted after the task recreations so sections referencing recreated
+          // tasks land in seq order after them (#9037).
+          ...(await this._createCascadeRecreationOpsForWinningProject(
+            parentCompensationOp,
+            remoteOp,
+            {
+              concurrentlyDeletedTaskIds,
+              batchOps: [...nonConflictingOps, ...remoteDeleteWinnerOps],
+            },
           )),
         ];
         // Not queued for live apply: the pure loser is never applied live, so
@@ -3036,6 +3047,205 @@ export class ConflictResolutionService {
       }
     }
     return deletedTaskIds;
+  }
+
+  /**
+   * Collects the ids removed by single/bulk DELETE ops of one entity type in the
+   * same resolution batch. Unlike `_collectDeletedTaskIds` this does not scan
+   * multi-entity `entityChanges`: `deleteNote`/`deleteSection`/`deleteTaskRepeatCfg(s)`
+   * are all single- or bulk-entity deletes, so `getOpEntityIds` covers them. Used
+   * to keep the project cascade recovery from resurrecting a note/section/repeat-cfg
+   * another device is concurrently deleting (same divergence guard as tasks, #8997).
+   */
+  private _collectDeletedEntityIds(
+    ops: readonly Operation[],
+    entityType: EntityType,
+  ): Set<string> {
+    const deletedIds = new Set<string>();
+    for (const op of ops) {
+      if (op.entityType === entityType && op.opType === OpType.Delete) {
+        for (const id of getOpEntityIds(op)) deletedIds.add(id);
+      }
+    }
+    return deletedIds;
+  }
+
+  /**
+   * Reads the full current entity dictionary for an adapter entity type from the
+   * store. Used to enumerate a deleted project's still-present sections and repeat
+   * configs at resolution time (they are not carried in the `deleteProject`
+   * payload). Returns `{}` for non-adapter types or when no selector is
+   * registered. Unlike `getCurrentEntityState`, this never routes through the
+   * per-id selectors, some of which THROW on a missing id (`selectNoteById`,
+   * `selectTaskRepeatCfgById`) — enumerating a stale id set would spam errors.
+   */
+  private async _getCurrentEntitiesOfType(
+    entityType: EntityType,
+  ): Promise<Record<string, unknown>> {
+    const config = getEntityConfigFromRegistry(this.entityRegistry, entityType);
+    if (!config || !isAdapterEntity(config) || !config.selectEntities) {
+      return {};
+    }
+    const dict = await firstValueFrom(this.store.select(config.selectEntities));
+    return (dict as Record<string, unknown>) ?? {};
+  }
+
+  /**
+   * Recreates the non-task main-state cascade victims of a losing remote
+   * `deleteProject` that the task-recovery path leaves deleted: notes, sections,
+   * and task-repeat-cfgs. Runs alongside `_createTaskRecreationOpsForWinningProject`
+   * on the winner, which still holds every victim at resolution time (the losing
+   * delete is never applied live). Without this, the durable loser row replays on
+   * every client's status-blind hydration and strips these entities, so the whole
+   * fleet converges to a lossy shape (#9037) even though the winning UPDATE meant
+   * "keep the project".
+   *
+   * All three are adapter entities recreated by `lwwUpdateMetaReducer`'s generic
+   * `addOne` path (TASK-only logic is gated there). One shared `recreationClock`
+   * dominates the delete; every op targets a distinct id, so they never conflict
+   * with each other.
+   *
+   * KNOWN LIMITATIONS (all converge — no split-brain — and are strictly better
+   * than losing the entity outright):
+   * - Sections and repeat-cfgs have no `modified` field, so their LWW timestamp
+   *   falls back to the project timestamp; a CONCURRENT content edit on another
+   *   device can be clobbered by the replace snapshot. Notes carry `modified`,
+   *   which keeps a concurrent note edit winning.
+   * - A note's `NoteState.todayOrder` slot is not restored (the adapter recreate
+   *   only touches `entities`/`ids`); a today-pinned note reappears but loses its
+   *   today-list ordering. Project-level note membership IS restored via the
+   *   project compensation snapshot's `noteIds`.
+   * - A section/cfg concurrently ADDED on a third device (not yet applied, so not
+   *   enumerable here) is still removed by the loser's dynamic-filter replay.
+   * - Like the task path, the merged delete clock can over-resurrect an entity a
+   *   third device had already durably deleted before the losing delete synced.
+   *
+   * Archived tasks, archive time-tracking, current time-tracking, and menu-tree
+   * stay outside this path (separate persistence / singleton state) — their own
+   * snapshot design is deferred (#9037).
+   */
+  private async _createCascadeRecreationOpsForWinningProject(
+    projectCompensationOp: Operation,
+    remoteDeleteOp: Operation,
+    guard: {
+      concurrentlyDeletedTaskIds: ReadonlySet<string>;
+      batchOps: readonly Operation[];
+    },
+  ): Promise<Operation[]> {
+    if (
+      projectCompensationOp.entityType !== 'PROJECT' ||
+      remoteDeleteOp.entityType !== 'PROJECT' ||
+      remoteDeleteOp.actionType !== ActionType.TASK_SHARED_DELETE_PROJECT ||
+      !projectCompensationOp.entityId
+    ) {
+      return [];
+    }
+    const projectId = projectCompensationOp.entityId;
+
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err(
+        'ConflictResolutionService: Cannot recreate winning project cascade - no client ID',
+      );
+      return [];
+    }
+    const recreationClock = this.mergeAndIncrementClocks(
+      [remoteDeleteOp.vectorClock, projectCompensationOp.vectorClock],
+      clientId,
+    );
+
+    const buildRecreationOp = (
+      entityType: EntityType,
+      entityId: string,
+      entityState: Record<string, unknown>,
+    ): Operation => {
+      const modified = entityState['modified'];
+      return markLwwDeleteRecreation(
+        this.createLWWUpdateOp(
+          entityType,
+          entityId,
+          entityState,
+          clientId,
+          recreationClock,
+          typeof modified === 'number' ? modified : projectCompensationOp.timestamp,
+        ),
+      );
+    };
+
+    const recreationOps: Operation[] = [];
+
+    // Notes: enumerable from the delete payload's `noteIds`. Guard the array for
+    // legacy pre-`noteIds` deleteProject ops (the #9037 rollout window is exactly
+    // legacy deletes losing).
+    const deletePayload = extractActionPayload(remoteDeleteOp.payload);
+    const noteIds = deletePayload['noteIds'];
+    if (Array.isArray(noteIds) && noteIds.length > 0) {
+      const noteEntities = await this._getCurrentEntitiesOfType('NOTE' as EntityType);
+      const deletedNoteIds = this._collectDeletedEntityIds(
+        guard.batchOps,
+        'NOTE' as EntityType,
+      );
+      for (const noteId of noteIds) {
+        if (typeof noteId !== 'string' || deletedNoteIds.has(noteId)) continue;
+        const note = noteEntities[noteId] as Record<string, unknown> | undefined;
+        if (!note || note['id'] !== noteId) continue;
+        recreationOps.push(buildRecreationOp('NOTE' as EntityType, noteId, note));
+      }
+    }
+
+    // Sections: not in the payload — scan the store for project-owned sections
+    // (same predicate as `removeProjectSections`). Strip taskIds pointing at a
+    // concurrently-deleted task so the recreated section carries no dangling ref.
+    const sectionEntities = await this._getCurrentEntitiesOfType('SECTION' as EntityType);
+    const deletedSectionIds = this._collectDeletedEntityIds(
+      guard.batchOps,
+      'SECTION' as EntityType,
+    );
+    for (const [sectionId, sectionRaw] of Object.entries(sectionEntities)) {
+      const section = sectionRaw as Record<string, unknown>;
+      if (
+        section['id'] !== sectionId ||
+        section['contextType'] !== WorkContextType.PROJECT ||
+        section['contextId'] !== projectId ||
+        deletedSectionIds.has(sectionId)
+      ) {
+        continue;
+      }
+      const taskIds = section['taskIds'];
+      const cleanedSection = Array.isArray(taskIds)
+        ? {
+            ...section,
+            taskIds: taskIds.filter(
+              (id) => typeof id === 'string' && !guard.concurrentlyDeletedTaskIds.has(id),
+            ),
+          }
+        : section;
+      recreationOps.push(
+        buildRecreationOp('SECTION' as EntityType, sectionId, cleanedSection),
+      );
+    }
+
+    // Task-repeat-cfgs: not in the payload — scan the store by projectId.
+    const repeatCfgEntities = await this._getCurrentEntitiesOfType(
+      'TASK_REPEAT_CFG' as EntityType,
+    );
+    const deletedRepeatCfgIds = this._collectDeletedEntityIds(
+      guard.batchOps,
+      'TASK_REPEAT_CFG' as EntityType,
+    );
+    for (const [cfgId, cfgRaw] of Object.entries(repeatCfgEntities)) {
+      const cfg = cfgRaw as Record<string, unknown>;
+      if (
+        cfg['id'] !== cfgId ||
+        cfg['projectId'] !== projectId ||
+        deletedRepeatCfgIds.has(cfgId)
+      ) {
+        continue;
+      }
+      recreationOps.push(buildRecreationOp('TASK_REPEAT_CFG' as EntityType, cfgId, cfg));
+    }
+
+    return recreationOps;
   }
 
   /**

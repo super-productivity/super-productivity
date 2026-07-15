@@ -333,6 +333,40 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreatedTask.doneOn).toBe(12345);
     });
 
+    it('recreates a deleted SECTION from a [SECTION] LWW Update (project-delete recovery #9037)', () => {
+      const state = createMockState();
+      // The losing deleteProject cascade removed the project's section locally.
+      state[SECTION_FEATURE_NAME] = { ids: [], entities: {} };
+      const action = {
+        type: '[SECTION] LWW Update',
+        id: SECTION_ID,
+        contextId: PROJECT_ID,
+        contextType: WorkContextType.PROJECT,
+        title: 'Recovered Section',
+        taskIds: ['task-1'],
+        meta: {
+          isPersistent: true,
+          entityType: 'SECTION',
+          entityId: SECTION_ID,
+          recreatesEntityAfterDelete: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const section = updatedState[SECTION_FEATURE_NAME]?.entities[SECTION_ID] as Section;
+      expect(section).toBeDefined();
+      expect(section.id).toBe(SECTION_ID);
+      expect(section.title).toBe('Recovered Section');
+      expect(section.contextId).toBe(PROJECT_ID);
+      // Sections are not orphan-filtered by the meta-reducer; the snapshot's
+      // taskIds are preserved verbatim (producer strips dead refs upstream).
+      expect(section.taskIds).toEqual(['task-1']);
+      expect(updatedState[SECTION_FEATURE_NAME]?.ids).toContain(SECTION_ID);
+    });
+
     it('should add recreated entity to the ids array', () => {
       const state = createMockState();
       const action = {
