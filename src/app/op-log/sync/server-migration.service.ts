@@ -244,7 +244,9 @@ export class ServerMigrationService {
 
       // Validate and repair state before creating SYNC_IMPORT
       // This prevents corrupted state (e.g., orphaned menuTree references) from
-      // propagating to other clients via the full state import.
+      // propagating to other clients via the full state import. Runs inside the
+      // sp_op_log lock (flushThenRunExclusive) during automatic sync, so rely on
+      // the non-interactive default — no blocking dialog under the lock (#9026).
       const validationResult =
         await this.validateStateService.validateAndRepair(currentState);
 

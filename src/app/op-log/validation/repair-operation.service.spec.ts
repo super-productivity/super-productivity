@@ -258,25 +258,42 @@ describe('RepairOperationService', () => {
       ).toBeRejectedWithError('clientId is required - cannot create repair operation');
     });
 
-    it('should notify user when fixes were made', async () => {
+    it('should notify user when fixes were made (interactive)', async () => {
       const summary = createRepairSummary({
         entityStateFixed: 2,
         orphanedEntitiesRestored: 3,
       });
 
-      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
 
       expect(mockTranslateService.instant).toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalled();
     });
 
-    it('should always notify user even when no fixes were made', async () => {
-      // Always show alert since user already confirmed the repair
+    it('should always alert an interactive caller even when no fixes were made', async () => {
       const summary = createRepairSummary(); // All zeros
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
+
+      expect(alertSpy).toHaveBeenCalled();
+    });
+
+    // #9026: the default is non-interactive (automatic/in-lock repair). It must
+    // never reach the blocking "data repaired" alert() — that would hold
+    // sp_op_log open during background sync — while still creating the REPAIR op.
+    it('does not show the blocking alert for a non-interactive (automatic) repair', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 2 });
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(alertSpy).toHaveBeenCalled();
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+      // translateService.instant is only reached by the alert path in _notifyUser.
+      expect(mockTranslateService.instant).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
     });
 
     it('should generate unique operation ID', async () => {
@@ -334,7 +351,9 @@ describe('RepairOperationService', () => {
         typeErrorsFixed: 6,
       });
 
-      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        interactive: true,
+      });
 
       // Total fixes = 1+2+3+4+5+6 = 21
       expect(mockTranslateService.instant).toHaveBeenCalledWith(

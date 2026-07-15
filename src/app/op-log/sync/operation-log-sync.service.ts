@@ -1753,7 +1753,14 @@ export class OperationLogSyncService {
         stripLocalOnlySyncSettingsFromAppData(snapshotState),
         localOnlySyncSettings,
       ) as Record<string, unknown>;
-      const validation = await this.validateStateService.validateAndRepair(snapshotState);
+      // User-initiated USE_REMOTE recovery: this validates in PHASE 1, before
+      // the destructive replace acquires sp_op_log, and the user is in the
+      // foreground — so keep the interactive confirm/acknowledge dialogs. Every
+      // automatic/in-lock repair path uses the non-interactive default (#9026).
+      const validation = await this.validateStateService.validateAndRepair(
+        snapshotState,
+        { interactive: true },
+      );
       if (!validation.isValid) {
         throw new Error(
           'USE_REMOTE aborted: remote snapshot is invalid and could not be repaired.',

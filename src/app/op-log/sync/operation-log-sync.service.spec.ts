@@ -4979,8 +4979,10 @@ describe('OperationLogSyncService', () => {
         service.forceDownloadRemoteState(mockProvider),
       ).toBeRejectedWithError(/snapshot is invalid/);
 
+      // USE_REMOTE is a foreground, user-initiated recovery → interactive (#9026).
       expect(validateStateServiceSpy.validateAndRepair).toHaveBeenCalledOnceWith(
         snapshotState,
+        { interactive: true },
       );
       expect(backupServiceSpy.captureImportBackup).not.toHaveBeenCalled();
       expect(opLogStoreSpy.runRemoteStateReplacement).not.toHaveBeenCalled();
@@ -5032,6 +5034,7 @@ describe('OperationLogSyncService', () => {
             }),
           }),
         }),
+        { interactive: true },
       );
     });
 

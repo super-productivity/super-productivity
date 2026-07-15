@@ -287,6 +287,9 @@ export class SyncHydrationService {
             globalConfig: normalizedGlobalConfig,
           }
         : downloadedAppData;
+      // Runs inside the sp_op_log lock (flushThenRunExclusive) during automatic
+      // snapshot hydration, so rely on the non-interactive default — a blocking
+      // dialog on an invalid remote snapshot would starve lock contenders (#9026).
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
