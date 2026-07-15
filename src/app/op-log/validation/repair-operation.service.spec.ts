@@ -8,6 +8,8 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { TranslateService } from '@ngx-translate/core';
 import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 describe('RepairOperationService', () => {
   let service: RepairOperationService;
@@ -17,6 +19,7 @@ describe('RepairOperationService', () => {
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let repairSyncContext: RepairSyncContextService;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
+  let mockSnackService: jasmine.SpyObj<SnackService>;
   let alertSpy: jasmine.Spy;
   let confirmSpy: jasmine.Spy;
 
@@ -51,6 +54,7 @@ describe('RepairOperationService', () => {
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshotAsync',
     ]);
+    mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
     // Default mock implementations
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
@@ -94,6 +98,7 @@ describe('RepairOperationService', () => {
         { provide: TranslateService, useValue: mockTranslateService },
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
+        { provide: SnackService, useValue: mockSnackService },
       ],
     });
 
@@ -284,16 +289,41 @@ describe('RepairOperationService', () => {
 
     // #9026: the default is non-interactive (automatic/in-lock repair). It must
     // never reach the blocking "data repaired" alert() — that would hold
-    // sp_op_log open during background sync — while still creating the REPAIR op.
-    it('does not show the blocking alert for a non-interactive (automatic) repair', async () => {
+    // sp_op_log open during background sync — but a non-blocking snack still
+    // surfaces the silent data change, and the REPAIR op is still created.
+    it('shows a non-blocking snack (not the blocking alert) for a non-interactive repair', async () => {
       const summary = createRepairSummary({ entityStateFixed: 2 });
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
-      // translateService.instant is only reached by the alert path in _notifyUser.
+      // translateService.instant + alert() are only reached by the blocking path.
       expect(mockTranslateService.instant).not.toHaveBeenCalled();
       expect(alertSpy).not.toHaveBeenCalled();
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.D_DATA_REPAIRED.MSG,
+          translateParams: { count: 2 },
+        }),
+      );
+    });
+
+    it('does not snack a non-interactive repair when nothing changed', async () => {
+      const summary = createRepairSummary(); // All zeros
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('snacks a non-interactive repair only once per session', async () => {
+      const summary = createRepairSummary({ entityStateFixed: 1 });
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockSnackService.open).toHaveBeenCalledTimes(1);
     });
 
     it('should generate unique operation ID', async () => {

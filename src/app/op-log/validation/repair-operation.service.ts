@@ -20,6 +20,7 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { alertDialog } from '../../util/native-dialogs';
 import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { SnackService } from '../../core/snack/snack.service';
 
 export interface RebaseStaleRepairOptions {
   staleRepairOpId: string;
@@ -44,6 +45,11 @@ export class RepairOperationService {
   private vectorClockService = inject(VectorClockService);
   private repairSyncContext = inject(RepairSyncContextService);
   private stateSnapshotService = inject(StateSnapshotService);
+  private snackService = inject(SnackService);
+
+  // Once-per-session guard for the non-interactive "data repaired" snack, so a
+  // repeat-repair loop can't spam it (mirrors the version-block snack latch).
+  private _hasShownRepairSnackThisSession = false;
 
   /**
    * Creates a REPAIR operation with the repaired state and saves it to the operation log.
@@ -190,8 +196,20 @@ export class RepairOperationService {
     const logMsg = `Data repair executed: ${totalFixes} issues fixed. Summary: ${JSON.stringify(summary)}`;
 
     if (!interactive) {
-      // Non-blocking record only — no native dialog while a caller may hold the lock.
+      // Automatic/in-lock repair (background sync): never a native dialog — that
+      // would hold sp_op_log open (#9026). Record it, and surface a single
+      // non-blocking snack per session so a silent data change (auto-repair can
+      // drop entities/refs and propagate cross-device) isn't wholly invisible.
+      // Only when something actually changed.
       OpLog.err(logMsg);
+      if (totalFixes > 0 && !this._hasShownRepairSnackThisSession) {
+        this._hasShownRepairSnackThisSession = true;
+        this.snackService.open({
+          type: 'WARNING',
+          msg: T.F.SYNC.D_DATA_REPAIRED.MSG,
+          translateParams: { count: totalFixes },
+        });
+      }
       return;
     }
 
