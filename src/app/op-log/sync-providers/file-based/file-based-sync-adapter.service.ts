@@ -1471,11 +1471,18 @@ export class FileBasedSyncAdapterService {
    *     just wrote, which is now an orphan no committed ops file references (the
    *     concurrent-compaction case that would otherwise leak).
    *
-   * Residual: a crash between the snapshot write and either commit or this cleanup
-   * still leaks (rare crash window). Upgrade path if it ever matters — an
-   * opportunistic `listFiles` prune of `STATE_GEN_FILE_PREFIX` files with a stale
-   * syncVersion (listFiles is optional on the provider interface, so it must stay
-   * capability-gated).
+   * Residual leaks these two call sites do NOT cover (all inert — orphaned
+   * snapshots only waste remote space, never affect correctness):
+   *   - a crash between the snapshot write and either commit or this cleanup;
+   *   - a force-upload (`_uploadSnapshotSplit`: USE_LOCAL / recovery), which resets
+   *     to a fixed `sync-state.json` with a `snapshotRef` carrying no `file`, so the
+   *     previous compaction's immutable snapshot is left unreferenced and the next
+   *     compaction's predecessor-delete (which reads `snapshotRef.file`) can't find
+   *     it.
+   * Upgrade path if these ever matter — an opportunistic `listFiles` prune that
+   * deletes every `STATE_GEN_FILE_PREFIX` file except the one the current ops file
+   * references (listFiles is optional on the provider interface, so it must stay
+   * capability-gated). That single prune reclaims all of the above.
    */
   private async _removeGenStateFile(
     provider: FileSyncProvider<SyncProviderId>,
