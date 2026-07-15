@@ -84,7 +84,8 @@ test('rejects an explicit sandbox: false, but allows it omitted', () => {
 
 test('rejects nodeIntegrationInWorker: true, allows it omitted', () => {
   assert.throws(
-    () => assertSecureWebPreferences({ ...SECURE, nodeIntegrationInWorker: true }, 'test'),
+    () =>
+      assertSecureWebPreferences({ ...SECURE, nodeIntegrationInWorker: true }, 'test'),
     /nodeIntegrationInWorker must not be true/,
   );
   assert.doesNotThrow(() => assertSecureWebPreferences({ ...SECURE }, 'test'));
@@ -98,6 +99,17 @@ test('rejects webviewTag: true, allows it omitted', () => {
   assert.doesNotThrow(() => assertSecureWebPreferences({ ...SECURE }, 'test'));
 });
 
+test('rejects webSecurity: false, allows it omitted or true', () => {
+  assert.throws(
+    () => assertSecureWebPreferences({ ...SECURE, webSecurity: false }, 'test'),
+    /webSecurity must not be explicitly false/,
+  );
+  assert.doesNotThrow(() => assertSecureWebPreferences({ ...SECURE }, 'test'));
+  assert.doesNotThrow(() =>
+    assertSecureWebPreferences({ ...SECURE, webSecurity: true }, 'test'),
+  );
+});
+
 test('error names the offending window', () => {
   assert.throws(
     () => assertSecureWebPreferences({ ...SECURE, nodeIntegration: true }, 'task-widget'),
@@ -105,17 +117,18 @@ test('error names the offending window', () => {
   );
 });
 
-// Wiring guard: every `new BrowserWindow(...)` in electron/ must route through
-// assertSecureWebPreferences. This is the actual regression this feature exists
-// to prevent — a NEW window creation site that silently ships without the
-// boundary check. Text-scan the sources (importing them would drag in Electron).
+// Wiring guard: every renderer-window constructor in electron/ — `new BrowserWindow`,
+// `new BrowserView`, `new WebContentsView` (each carries its own webPreferences) —
+// must route through assertSecureWebPreferences. This is the actual regression this
+// feature exists to prevent — a NEW window creation site that silently ships without
+// the boundary check. Text-scan the sources (importing them would drag in Electron).
 //
 // We count constructor sites vs guard calls PER FILE rather than a per-file
-// boolean, so a second unguarded `new BrowserWindow(` in an already-guarded file
-// is caught too. This stays a heuristic: it cannot see an aliased constructor
+// boolean, so a second unguarded constructor in an already-guarded file is caught
+// too. This stays a heuristic: it cannot see an aliased constructor
 // (`const BW = BrowserWindow`) or a window created from a non-`.ts` source, and
 // a guard call in a comment would count. Those are acceptable gaps for a tripwire.
-test('every `new BrowserWindow` site has a matching assertSecureWebPreferences call', () => {
+test('every renderer-window constructor site has a matching assertSecureWebPreferences call', () => {
   const electronDir = __dirname;
   const tsFiles = [];
   const walk = (dir) => {
@@ -132,7 +145,7 @@ test('every `new BrowserWindow` site has a matching assertSecureWebPreferences c
   walk(electronDir);
 
   const count = (src, re) => (src.match(re) || []).length;
-  const NEW_WINDOW_RE = /new\s+BrowserWindow\s*\(/g;
+  const NEW_WINDOW_RE = /new\s+(?:BrowserWindow|BrowserView|WebContentsView)\s*\(/g;
   const GUARD_CALL_RE = /assertSecureWebPreferences\s*\(/g;
 
   const offenders = tsFiles

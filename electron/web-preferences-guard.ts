@@ -26,24 +26,27 @@ type WebPreferences = BrowserWindowConstructorOptions['webPreferences'];
  *   value is rejected too, so the guard never depends on the Electron default
  *   staying safe across upgrades. (Sub-frames are included because that flag
  *   governs whether the preload bridge reaches plugin iframes.)
- * - The additional node-capability surfaces — `sandbox`, `nodeIntegrationInWorker`,
- *   `webviewTag` — are checked **directionally**: only an explicit insecure value
- *   is rejected; an omitted key keeps Electron's secure default so no call site is
- *   forced to enumerate them. This trio stays default-dependent by choice.
+ * - The additional insecure overrides — `sandbox`, `nodeIntegrationInWorker`,
+ *   `webviewTag`, `webSecurity` — are checked **directionally**: only an explicit
+ *   insecure value is rejected; an omitted key keeps Electron's secure default so
+ *   no call site is forced to enumerate them. These stay default-dependent by choice.
  *
  * Scope notes:
  * - Electron exposes no getter for a webContents' *effective* webPreferences, so
- *   this can only validate the options object we pass to `new BrowserWindow`.
- * - It guards `new BrowserWindow` only. A future `BrowserView` / `WebContentsView`
- *   or a `<webview>` guest would each need their own validation (e.g. a
- *   `will-attach-webview` handler) — none exist today.
+ *   this can only validate the options object we pass to the constructor.
+ * - The wiring-guard test requires this call for `new BrowserWindow`,
+ *   `new BrowserView`, and `new WebContentsView`. A `<webview>` guest has no such
+ *   constructor and would still need its own validation (e.g. a
+ *   `will-attach-webview` handler) — none of these exist today.
  */
 export const assertSecureWebPreferences = (
   webPreferences: WebPreferences,
   windowLabel: string,
 ): void => {
-  // Returns (not throws) so callers use `throw fail(...)` — this narrows the type
-  // for TS control-flow analysis, matching the sibling guard `file-path-guard.ts`.
+  // Returns an Error (callers `throw fail(...)`) so the shared message prefix/suffix
+  // is defined once — mirroring the `throw fail(...)` shape of the sibling guard
+  // `file-path-guard.ts` (that one also hardens the error for the renderer; here the
+  // error only ever surfaces in the main process, so it needs no such hardening).
   const fail = (detail: string): Error =>
     new Error(
       `Insecure webPreferences for the "${windowLabel}" window: ${detail}. ` +
@@ -83,5 +86,11 @@ export const assertSecureWebPreferences = (
     throw fail(
       'webviewTag must not be true (a <webview> guest needs its own validation)',
     );
+  }
+  // webSecurity is the same-origin policy rather than a node capability, but with the
+  // app's blanket Access-Control-Allow-Origin: * an explicit `false` here would widen
+  // a node-bridged renderer's cross-origin reach — reject it (directional, like above).
+  if (webPreferences.webSecurity === false) {
+    throw fail('webSecurity must not be explicitly false');
   }
 };
