@@ -1336,6 +1336,29 @@ describe('FileBasedSyncAdapterService', () => {
     });
   });
 
+  describe('invalidateAllTargets', () => {
+    it('clears target-scoped state so the next sync full-reads the current target', async () => {
+      // Establish per-target state the way a normal sync cycle would.
+      await adapter.setLastServerSeq(50);
+      expect(await adapter.getLastServerSeq()).toBe(50);
+
+      // A user-authoritative config change (provider switch, account switch
+      // behind the same provider id, or an identity-affecting setting) must
+      // invalidate the provider-id-keyed state, or it is reused against the new
+      // target and can read/write one target's data against another.
+      service.invalidateAllTargets();
+
+      expect(await adapter.getLastServerSeq()).toBe(0);
+    });
+
+    it('advances the target generation on each invalidation', () => {
+      const before = service.targetGeneration;
+      service.invalidateAllTargets();
+      service.invalidateAllTargets();
+      expect(service.targetGeneration).toBe(before + 2);
+    });
+  });
+
   describe('latestSeq and snapshotState behavior', () => {
     it('should return latestSeq based on syncVersion (not recentOps.length) to prevent repeated fresh downloads', async () => {
       // This test ensures that after a snapshot upload (where recentOps is empty),
