@@ -922,13 +922,20 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _downloadOps(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
     excludeClient?: string,
     limit: number = 500,
   ): Promise<FileSnapshotOpDownloadResponse> {
+    // Download is read-only for the caller, but the split-format path resumes a
+    // crashed split migration by WRITING remote files (state/tombstone/marker)
+    // via _resumePendingSplitMigration. Guard those writes with the same
+    // generation captured at the download boundary, so a mid-download target
+    // switch aborts the resume before it lands the old target's migration on the
+    // new one. Reads (downloadFile/getFileRev) pass through unaffected. (Task 2.)
+    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     // SPAP-11: split-file ("Surgical sync") download path (opt-in). When OFF
