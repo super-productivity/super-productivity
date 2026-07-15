@@ -102,18 +102,16 @@ export class FileBasedSyncAdapterService {
   private readonly _MAX_UPLOAD_RETRIES = 2;
 
   /**
-   * Monotonic target-transition generation. Bumped by `invalidateAllTargets()`
-   * on any user-authoritative provider/target/configuration change. Its purpose
-   * is to let an in-flight file session refuse a remote side effect against a
-   * target that is no longer current; today it drives eager state invalidation
-   * and is exposed for the follow-up that binds a session to a captured
-   * generation. (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+   * Monotonic in-tab target-transition generation. Bumped by
+   * `invalidateAllTargets()` on any user-authoritative provider/target/
+   * configuration change. Captured at each remote-operation boundary
+   * (`_uploadOps`/`_uploadSnapshot`/`_downloadOps`) and checked by
+   * `_withTargetGuard` before every write, so an in-flight operation refuses a
+   * remote side effect against a target that is no longer current. Not
+   * persisted (a fresh tab starts clean; there is nothing in-flight to guard).
+   * (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
    */
   private _targetGeneration = 0;
-
-  get targetGeneration(): number {
-    return this._targetGeneration;
-  }
 
   /** Expected sync version for optimistic locking, keyed by provider+user */
   private _expectedSyncVersions = new Map<string, number>();
@@ -342,8 +340,17 @@ export class FileBasedSyncAdapterService {
    * by provider id that belongs to one remote target and must not survive a
    * target transition. Both `_resetTargetState` (single key, used by
    * `deleteAllData`) and `invalidateAllTargets` (all keys) iterate this list, so
-   * a new per-target map only has to be added here. Includes the two within-cycle
-   * caches so a cached download for one target cannot seed a write to another.
+   * a new per-target map only has to be added here. The two within-cycle caches
+   * are included so a subsequent sync starts clean.
+   *
+   * Note: clearing these maps is not by itself what prevents a cross-target
+   * write. A download already in flight when the switch fires can repopulate a
+   * cache (a read path — `_setCachedSyncData` inside `_downloadOps`), and a
+   * switch landing entirely between the download and the upload is caught by
+   * neither per-operation guard. What actually blocks committing one target's
+   * data to another is the in-flight generation guard (`_withTargetGuard`) plus
+   * the conditional-write rev check (`revToMatch`): a stale-rev write fails
+   * against a populated new target and self-heals on the next sync.
    */
   private get _targetScopedMaps(): Map<string, unknown>[] {
     return [

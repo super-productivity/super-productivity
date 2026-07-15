@@ -264,7 +264,10 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('guards removeFile as well as uploadFile, and passes reads through', async () => {
-      const guarded = service['_withTargetGuard'](mockProvider, service.targetGeneration);
+      const guarded = service['_withTargetGuard'](
+        mockProvider,
+        service['_targetGeneration'],
+      );
 
       // Reads always pass through.
       await guarded.downloadFile('any');
@@ -1429,10 +1432,10 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('advances the target generation on each invalidation', () => {
-      const before = service.targetGeneration;
+      const before = service['_targetGeneration'];
       service.invalidateAllTargets();
       service.invalidateAllTargets();
-      expect(service.targetGeneration).toBe(before + 2);
+      expect(service['_targetGeneration']).toBe(before + 2);
     });
   });
 
