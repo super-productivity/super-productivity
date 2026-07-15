@@ -16,6 +16,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 describe('SyncHydrationService', () => {
   let service: SyncHydrationService;
@@ -28,6 +29,7 @@ describe('SyncHydrationService', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let mockTaskTimeSyncService: jasmine.SpyObj<TaskTimeSyncService>;
 
   // Default local sync config for tests
   const defaultLocalSyncConfig = {
@@ -80,6 +82,12 @@ describe('SyncHydrationService', () => {
     mockArchiveDbAdapter.saveArchiveOld.and.resolveTo();
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockLockService.request.and.callFake(async (_lockName, callback) => callback());
+    mockTaskTimeSyncService = jasmine.createSpyObj('TaskTimeSyncService', [
+      'flush',
+      'clear',
+      'accumulate',
+      'shouldFlush',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -93,6 +101,7 @@ describe('SyncHydrationService', () => {
         { provide: SnackService, useValue: mockSnackService },
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: LockService, useValue: mockLockService },
+        { provide: TaskTimeSyncService, useValue: mockTaskTimeSyncService },
       ],
     });
     service = TestBed.inject(SyncHydrationService);
@@ -392,6 +401,40 @@ describe('SyncHydrationService', () => {
       );
     });
 
+    // Regression: the in-memory time-sync delta must be captured as a durable op
+    // before loadAllData wipes the live state it was applied to. Otherwise a later
+    // flush dispatches a local syncTimeSpent the reducer ignores, silently dropping
+    // the tracked time. Order matters: flush must precede loadAllData.
+    const loadAllDataAlreadyDispatched = (): boolean =>
+      mockStore.dispatch.calls
+        .all()
+        .some((c) => (c.args[0] as { type?: string })?.type === loadAllData.type);
+
+    it('flushes the tracked-time accumulator BEFORE replacing NgRx state', async () => {
+      let flushedBeforeLoad = false;
+      mockTaskTimeSyncService.flush.and.callFake(() => {
+        flushedBeforeLoad = !loadAllDataAlreadyDispatched();
+      });
+
+      await service.hydrateFromRemoteSync({ task: { ids: ['t1'] } });
+
+      expect(mockTaskTimeSyncService.flush).toHaveBeenCalledTimes(1);
+      expect(flushedBeforeLoad).toBe(true);
+    });
+
+    it('flushes the accumulator on the file-based bootstrap path too', async () => {
+      let flushedBeforeLoad = false;
+      mockTaskTimeSyncService.flush.and.callFake(() => {
+        flushedBeforeLoad = !loadAllDataAlreadyDispatched();
+      });
+
+      // createSyncImportOp = false → file-based bootstrap (no SYNC_IMPORT).
+      await service.hydrateFromRemoteSync({ task: { ids: ['t1'] } }, undefined, false);
+
+      expect(mockTaskTimeSyncService.flush).toHaveBeenCalledTimes(1);
+      expect(flushedBeforeLoad).toBe(true);
+    });
+
     it('should use repaired state when validation detects issues', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
       const repairedState = { task: { ids: ['t1'], repaired: true } } as any;
@@ -544,9 +587,13 @@ describe('SyncHydrationService', () => {
 
         await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
 
-        expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([
-          pendingBeforeHydration.op.id,
-        ]);
+        // The rejection is now folded into the atomic baseline commit (rejectOpIds)
+        // rather than a standalone markRejected() that could outlive a failed
+        // commit. Only the op captured before the snapshot read is rejected — the
+        // one that arrived during hydration is preserved.
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        const commitCall = mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent();
+        expect(commitCall.args[0].rejectOpIds).toEqual([pendingBeforeHydration.op.id]);
       });
 
       it('should commit the file snapshot baseline when createSyncImportOp is false', async () => {

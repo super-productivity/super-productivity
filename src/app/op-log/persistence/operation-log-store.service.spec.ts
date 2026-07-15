@@ -1721,6 +1721,56 @@ describe('OperationLogStoreService', () => {
       expect((await service.loadStateCache())?.state).toEqual(priorState);
       expect(await service.getVectorClock()).toEqual({ testClient: 1 });
     });
+
+    it('marks rejectOpIds rejected atomically within the baseline commit', async () => {
+      const supersededLocalOp = createTestOperation({ id: 'superseded-local' });
+      await service.append(supersededLocalOp, 'local');
+      expect((await service.getUnsynced()).map(({ op }) => op.id)).toEqual([
+        'superseded-local',
+      ]);
+
+      await service.commitFileSnapshotBaseline({
+        state: { sentinel: 'hydrated' },
+        lastAppliedOpSeq: 1,
+        vectorClock: { remote: 3 },
+        compactedAt: 5,
+        snapshotIncludedOps: [],
+        rejectOpIds: [supersededLocalOp.id],
+      });
+
+      // Rejected in the same commit as the state replacement → no longer uploadable.
+      expect(await service.getUnsynced()).toEqual([]);
+      expect((await service.loadStateCache())?.state).toEqual({ sentinel: 'hydrated' });
+    });
+
+    it('does not reject rejectOpIds when the baseline commit rolls back (tail changed)', async () => {
+      // The exact Finding #5 scenario: a standalone markRejected() would have
+      // committed before this failing baseline, stranding the op as permanently
+      // non-uploadable while the old state survived. Folding it into the commit
+      // ties its fate to the rollback.
+      const supersededLocalOp = createTestOperation({ id: 'superseded-local-2' });
+      await service.append(supersededLocalOp, 'local');
+
+      // Stale lastAppliedOpSeq (0 ≠ current tail 1) trips the tail-changed guard.
+      await expectAsync(
+        service.commitFileSnapshotBaseline({
+          state: { sentinel: 'should-not-apply' },
+          lastAppliedOpSeq: 0,
+          vectorClock: { remote: 9 },
+          compactedAt: 7,
+          snapshotIncludedOps: [],
+          rejectOpIds: [supersededLocalOp.id],
+        }),
+      ).toBeRejectedWithError(/operation-log tail changed/);
+
+      // The op remains unsynced/uploadable — rejection never outlived the commit.
+      expect((await service.getUnsynced()).map(({ op }) => op.id)).toEqual([
+        'superseded-local-2',
+      ]);
+      expect((await service.loadStateCache())?.state).not.toEqual({
+        sentinel: 'should-not-apply',
+      });
+    });
   });
 
   describe('appendMixedSourceBatchSkipDuplicates', () => {
