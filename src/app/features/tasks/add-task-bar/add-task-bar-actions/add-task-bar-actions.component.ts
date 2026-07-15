@@ -191,6 +191,9 @@ export class AddTaskBarActionsComponent {
       refDate,
       this._dateTimeFormatService.currentLocale(),
       this._translateService,
+      // Spelled-out weekday follows the UI language under the ISO option, so it
+      // isn't shown in Swedish (the `sv` sentinel); #8987 follow-up.
+      this._dateTimeFormatService.textLocale(),
     );
   });
 

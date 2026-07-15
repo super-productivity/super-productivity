@@ -47,6 +47,17 @@ export class DateTimeFormatService {
     );
   });
 
+  /**
+   * Locale for spelled-out weekday/month names (e.g. "Wed", "July"). Under the
+   * ISO 8601 option this resolves to the UI language, so names aren't shown in
+   * Swedish (the `sv` sync sentinel) — mirrors the calendar fix in `CustomDateAdapter`.
+   * Numeric dates and clock times must keep `currentLocale()` instead, so ISO
+   * stays YYYY-MM-DD and the 24h clock is preserved (#8987 follow-up).
+   */
+  readonly textLocale = computed<string>(
+    () => this.isoTextLocale() ?? this.currentLocale(),
+  );
+
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
   private readonly _testFormats = computed(() => {
     const locale = this.currentLocale();

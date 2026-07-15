@@ -89,6 +89,7 @@ describe('AddTaskBarActionsComponent', () => {
     ['formatTime'],
     {
       currentLocale: () => 'en-US',
+      textLocale: () => 'en-US',
     },
   );
   mockDateTimeFormatService.formatTime.and.callFake((timestamp: number) =>
@@ -495,6 +496,7 @@ describe('AddTaskBarActionsComponent', () => {
             provide: DateTimeFormatService,
             useValue: jasmine.createSpyObj('DateTimeFormatService', ['-'], {
               currentLocale: () => 'de-de',
+              textLocale: () => 'de-de',
             }),
           },
           { provide: DateService, useValue: mockDateService },

@@ -117,10 +117,13 @@ export class DialogEditTaskRepeatCfgComponent {
     const d = this.repeatCfg().startDate;
     if (!d) return this._translateService.instant(T.F.TASK_REPEAT.F.START_DATE);
     const date = dateStrToUtcDate(d);
-    const locale = this._dateTimeFormatService.currentLocale();
+    // Spelled-out weekday/month names follow the UI language under the ISO 8601
+    // option (the `sv` sentinel would otherwise leak Swedish, e.g. "ons 15 juli
+    // 2026"). The clock time below keeps currentLocale() so 24h is preserved.
+    const textLocale = this._dateTimeFormatService.textLocale();
     const time = this.repeatCfg().startTime;
     if (time && isValidSplitTime(time)) {
-      const formattedDate = date.toLocaleDateString(locale, {
+      const formattedDate = date.toLocaleDateString(textLocale, {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
@@ -130,11 +133,11 @@ export class DialogEditTaskRepeatCfgComponent {
       const safeTimeDate = new Date(2000, 0, 1, hours, minutes, 0, 0);
       const formattedTime = this._dateTimeFormatService.formatTime(
         safeTimeDate.getTime(),
-        locale,
+        this._dateTimeFormatService.currentLocale(),
       );
       return `${formattedDate}, ${formattedTime}`;
     }
-    return date.toLocaleDateString(locale, {
+    return date.toLocaleDateString(textLocale, {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -360,10 +363,13 @@ export class DialogEditTaskRepeatCfgComponent {
       // Read currentLocale() reactively each time options are built so the
       // correct locale is used even when the config store hasn't emitted yet
       // at construction time (previously captured once as a const → en-GB).
+      // textLocale() localizes the spelled-out weekday name (UI language under
+      // the ISO option), while numeric day/month keep currentLocale().
       buildRepeatQuickSettingOptions(
         refDate,
         this._dateTimeFormatService.currentLocale(),
         translateService,
+        this._dateTimeFormatService.textLocale(),
       );
 
     const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
@@ -393,15 +399,19 @@ export class DialogEditTaskRepeatCfgComponent {
     let lastLocale: string | undefined;
     let cachedOptions: { value: string; label: string }[];
 
-    // Update options reactively when startDate or locale changes
+    // Update options reactively when startDate or locale changes. The cache key
+    // tracks textLocale too: under the ISO option a UI-language switch leaves
+    // currentLocale() at 'sv', but the spelled-out weekday label must rebuild.
     quickSettingField.expressionProperties = {
       ...quickSettingField.expressionProperties,
       ['templateOptions.options']: (model: Record<string, unknown>) => {
         const sd = model['startDate'] as string | undefined;
         const currentLocale = this._dateTimeFormatService.currentLocale();
-        if (sd !== lastStartDate || currentLocale !== lastLocale || !cachedOptions) {
+        const textLocale = this._dateTimeFormatService.textLocale();
+        const localeKey = `${currentLocale}|${textLocale}`;
+        if (sd !== lastStartDate || localeKey !== lastLocale || !cachedOptions) {
           lastStartDate = sd;
-          lastLocale = currentLocale;
+          lastLocale = localeKey;
           const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
           cachedOptions = buildOptions(refDate);
         }
