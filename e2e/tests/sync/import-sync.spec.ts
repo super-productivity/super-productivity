@@ -1,11 +1,10 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
   waitForTask,
-  isServerHealthy,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
@@ -15,7 +14,7 @@ import { waitForAppReady } from '../../utils/waits';
  * Import + Sync E2E Tests
  *
  * These tests verify that imported backup data syncs correctly between clients.
- * This includes active tasks, archived tasks (worklog), and projects.
+ * This includes active tasks, subtasks, and replacement of existing state.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -24,56 +23,30 @@ import { waitForAppReady } from '../../utils/waits';
  * Run with: npm run e2e:playwright -- --grep @importsync
  */
 
-const generateTestRunId = (workerIndex: number): string => {
-  return `${Date.now()}-${workerIndex}`;
-};
-
 /** Default encryption password used by setupSuperSync's mandatory encryption dialog */
 const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
 
 base.describe('@importsync @supersync Import + Sync E2E', () => {
-  let serverHealthy: boolean | null = null;
-
-  base.beforeEach(async ({}, testInfo) => {
-    if (serverHealthy === null) {
-      serverHealthy = await isServerHealthy();
-      if (!serverHealthy) {
-        console.warn(
-          'SuperSync server not healthy at http://localhost:1901 - skipping tests',
-        );
-      }
-    }
-    testInfo.skip(!serverHealthy, 'SuperSync server not running');
-  });
-
   /**
    * Scenario: Import backup file and sync to second client
    *
    * This test verifies that importing a backup file creates sync operations
-   * that propagate all data (including archives) to other clients.
+   * that propagate the imported active data to other clients.
    *
    * Setup: Client A and B with shared SuperSync account, empty server
    *
    * Actions:
    * 1. Client A imports JSON backup file containing:
-   *    - Active tasks (with subtasks)
-   *    - Archived tasks in archiveYoung/archiveOld
-   *    - Projects and tags
+   *    - Active tasks with a parent/subtask relationship
    * 2. Client A syncs
    * 3. Client B syncs
    *
    * Verify:
-   * - Client B has all active tasks
-   * - Client B has archived tasks in worklog view
-   * - Projects and tags match
+   * - Client B has all active tasks and the imported subtask relationship
    */
-  // SKIPPED: Pre-existing issue. After configuring sync and then importing a backup,
-  // the imported state doesn't persist - likely overwritten by sync activity.
-  // The import+sync interaction needs investigation in the app code itself.
-  base.skip(
+  base(
     'Import backup file on Client A, sync to Client B',
-    async ({ browser, baseURL }, testInfo) => {
-      const testRunId = generateTestRunId(testInfo.workerIndex);
+    async ({ browser, baseURL, testRunId }) => {
       let clientA: SimulatedE2EClient | null = null;
       let clientB: SimulatedE2EClient | null = null;
 
@@ -85,7 +58,11 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         // ============ PHASE 1: Client A Sets Up Sync and Imports Backup ============
         console.log('[Import Test] Phase 1: Client A importing backup');
         clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-        await clientA.sync.setupSuperSync(syncConfig);
+        await clientA.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+        });
 
         // Navigate to import page
         const importPage = new ImportPage(clientA.page);
@@ -114,7 +91,12 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
 
         // Re-enable sync after import (import overwrites globalConfig including sync settings)
         console.log('[Import Test] Re-enabling sync after import');
-        await clientA.sync.setupSuperSync(syncConfig);
+        await clientA.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+          syncImportChoice: 'local',
+        });
 
         // ============ PHASE 2: Client A Syncs to Server ============
         console.log('[Import Test] Phase 2: Client A syncing to server');
@@ -149,63 +131,33 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await waitForTask(clientB.page, 'E2E Import Test - Simple Active Task');
 
         // Verify both active tasks are visible
-        const activeTask1 = clientB.page.locator(
-          'task:has-text("E2E Import Test - Active Task With Subtask")',
-        );
-        const activeTask2 = clientB.page.locator(
-          'task:has-text("E2E Import Test - Simple Active Task")',
-        );
+        const activeTask1 = clientB.page
+          .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+          .first();
+        const activeTask2 = clientB.page
+          .locator('task:has-text("E2E Import Test - Simple Active Task")')
+          .first();
         await expect(activeTask1).toBeVisible({ timeout: 10000 });
         await expect(activeTask2).toBeVisible({ timeout: 10000 });
         console.log('[Import Test] Client B has both active tasks');
 
-        // Expand parent task to see subtask
-        const expandBtn = activeTask1.locator('.expand-btn');
-        if (await expandBtn.isVisible()) {
-          await expandBtn.click();
-          await waitForTask(clientB.page, 'E2E Import Test - Subtask of Active Task');
-          console.log('[Import Test] Client B has subtask visible');
-        }
+        // The imported subtask is nested under its parent and follows the
+        // parent's visibility toggle, proving the relationship survived sync.
+        const subTask = activeTask1
+          .locator('task')
+          .filter({ hasText: 'E2E Import Test - Subtask of Active Task' })
+          .first();
+        const toggleSubTasksBtn = activeTask1.locator('.toggle-sub-tasks-btn');
+        await expect(toggleSubTasksBtn).toBeVisible();
+        await expect(subTask).toBeVisible();
+        await toggleSubTasksBtn.click();
+        await expect(subTask).toBeHidden();
+        await toggleSubTasksBtn.click();
+        await expect(subTask).toBeVisible();
+        console.log('[Import Test] Client B has subtask visible');
 
-        // ============ PHASE 5: Verify Archived Tasks in Worklog ============
-        console.log('[Import Test] Phase 5: Verifying archived tasks in worklog');
-
-        // Navigate to worklog on Client B
-        await clientB.page.goto('/#/tag/TODAY/history');
-        await clientB.page.waitForLoadState('networkidle');
-        await clientB.page.waitForSelector('history', { timeout: 10000 });
-
-        // Expand worklog to see archived tasks
-        const weekRow = clientB.page.locator('.week-row').first();
-        if (await weekRow.isVisible()) {
-          await weekRow.click();
-          await clientB.page.waitForTimeout(500);
-        }
-
-        // Archived tasks should appear in the worklog
-        // The test backup has archived tasks with titles containing "E2E Import Test - Archived"
-        // Note: Archived tasks appear in worklog if they have timeSpentOnDay entries
-        // Our test backup has archived tasks with time entries
-        console.log('[Import Test] Checking for archived tasks in worklog...');
-
-        // Try to find archived task entries - they appear under the dates they were worked on
-        const hasArchivedTasks =
-          (await clientB.page
-            .locator('.task-summary-table .task-title')
-            .count()
-            .catch(() => 0)) > 0;
-
-        if (hasArchivedTasks) {
-          console.log('[Import Test] Client B worklog has archived task entries');
-        } else {
-          // Archive data may not show in TODAY tag worklog - navigate to project worklog
-          await clientB.page.goto('/#/project/test-project-1/history');
-          await clientB.page.waitForLoadState('networkidle');
-          console.log('[Import Test] Checking project worklog for archived tasks');
-        }
-
-        // ============ PHASE 6: Final Verification ============
-        console.log('[Import Test] Phase 6: Final state verification');
+        // ============ PHASE 5: Final Verification ============
+        console.log('[Import Test] Phase 5: Final state verification');
 
         // Go back to project view on both clients and wait for app to be ready
         await clientA.page.goto('/#/project/INBOX_PROJECT/tasks');
@@ -237,10 +189,10 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
   );
 
   /**
-   * Scenario: Import with existing data (merge scenario)
+   * Scenario: Import with existing data (replacement scenario)
    *
-   * Tests that importing a backup on one client merges with
-   * existing data on another client after sync.
+   * Tests that importing a backup on one client replaces the old baseline on
+   * every client after sync.
    *
    * Actions:
    * 1. Client A creates a task "Existing Task A"
@@ -252,17 +204,12 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
    * 7. Client B syncs
    *
    * Verify:
-   * - Client A has: imported tasks + Existing Task A + Existing Task B
-   * - Client B has: imported tasks + Existing Task A + Existing Task B
+   * - Both clients have the imported tasks
+   * - Neither client keeps Existing Task A or Existing Task B
    */
-  // SKIPPED: Pre-existing issue. After backup import on Client A with existing synced data,
-  // the imported tasks don't appear in the TODAY view. The BACKUP_IMPORT operation's
-  // interaction with pre-existing server operations needs investigation.
-  // The simpler "Import backup file" test (above) verifies import+sync on a clean server.
-  base.skip(
-    'Import merges with existing synced data',
-    async ({ browser, baseURL }, testInfo) => {
-      const testRunId = generateTestRunId(testInfo.workerIndex);
+  base(
+    'Import replaces existing synced data on all clients',
+    async ({ browser, baseURL, testRunId }) => {
       const uniqueId = Date.now();
       let clientA: SimulatedE2EClient | null = null;
       let clientB: SimulatedE2EClient | null = null;
@@ -275,7 +222,11 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         console.log('[Merge Test] Phase 1: Creating initial tasks');
 
         clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-        await clientA.sync.setupSuperSync(syncConfig);
+        await clientA.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+        });
 
         // Client A creates a task
         const existingTaskA = `ExistingA-${uniqueId}`;
@@ -328,7 +279,12 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
 
         // Re-enable sync after import (import overwrites globalConfig including sync settings)
         console.log('[Merge Test] Re-enabling sync after import');
-        await clientA.sync.setupSuperSync(syncConfig);
+        await clientA.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+          syncImportChoice: 'local',
+        });
 
         // ============ PHASE 3: Sync After Import ============
         console.log('[Merge Test] Phase 3: Syncing after import');
@@ -344,6 +300,14 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         });
         await waitForAppReady(clientB.page);
 
+        for (const client of [clientA, clientB]) {
+          await client.page.goto('/#/project/INBOX_PROJECT/tasks', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+          });
+          await waitForAppReady(client.page);
+        }
+
         // ============ PHASE 4: Verify Merged Data ============
         console.log('[Merge Test] Phase 4: Verifying merged data');
 
@@ -355,11 +319,16 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
         console.log('[Merge Test] Client B received imported tasks via sync');
 
-        // Note: The import replaces state rather than merging, so existing tasks
-        // may be gone after import. This test documents the actual behavior.
-        // If merge behavior is desired, the app would need to implement it differently.
+        for (const client of [clientA, clientB]) {
+          await expect(
+            client.page.locator(`task:has-text("${existingTaskA}")`),
+          ).not.toBeVisible();
+          await expect(
+            client.page.locator(`task:has-text("${existingTaskB}")`),
+          ).not.toBeVisible();
+        }
 
-        console.log('[Merge Test] ✓ Import merge test passed!');
+        console.log('[Merge Test] ✓ Import replacement test passed!');
       } finally {
         if (clientA) await closeClient(clientA);
         if (clientB) await closeClient(clientB);
