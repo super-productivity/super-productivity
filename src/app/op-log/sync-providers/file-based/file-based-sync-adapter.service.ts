@@ -2163,12 +2163,18 @@ export class FileBasedSyncAdapterService {
         opsRev,
       ));
     } catch (e) {
-      // #9040: our ops never committed — a concurrent compactor won the ops race.
-      // The immutable snapshot we wrote this compaction is now an orphan no
-      // committed ops file references, so reclaim it before bubbling up. (Only
-      // when we compacted; otherwise snapshotRef.file is the still-referenced
-      // predecessor and must NOT be deleted.)
-      if (needsCompaction && snapshotRef.file) {
+      // #9040: reclaim the immutable snapshot we just wrote — but ONLY on a
+      // confirmed rev-mismatch rejection, which proves the server refused our ops
+      // PUT, so a concurrent compactor won and our snapshot is a true orphan. Any
+      // other error (network/5xx) is AMBIGUOUS: the PUT may have landed and
+      // committed, in which case the snapshot is still referenced and MUST survive
+      // (readers would otherwise strand on it). Deleting only applies when we
+      // compacted; otherwise snapshotRef.file is the still-referenced predecessor.
+      if (
+        e instanceof UploadRevToMatchMismatchAPIError &&
+        needsCompaction &&
+        snapshotRef.file
+      ) {
         await this._removeGenStateFile(provider, snapshotRef.file);
       }
       throw e;

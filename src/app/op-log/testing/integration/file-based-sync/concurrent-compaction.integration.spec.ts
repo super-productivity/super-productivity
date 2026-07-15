@@ -183,4 +183,27 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     expect(provider.hasFile('sync-state__1__winner-client.json')).toBe(true);
     expect(provider.hasFile('sync-state__1__loser-client.json')).toBe(false);
   });
+
+  it('ambiguous (non-mismatch) commit failure keeps the immutable snapshot', async () => {
+    const provider = harness.getProvider();
+    await seedFolderAtCap();
+
+    // A compactor writes its immutable snapshot, then its ops commit fails with a
+    // NON-mismatch error (e.g. a dropped connection). That is ambiguous — the PUT
+    // may have landed and committed — so the snapshot MUST NOT be reclaimed, or a
+    // reader of the committed ops file would strand on it.
+    const client = harness.createClient('netfail-client');
+    const realUploadFile = provider.uploadFile.bind(provider);
+    spyOn(provider, 'uploadFile').and.callFake(
+      async (path: string, data: string, rev: string | null, isForce?: boolean) => {
+        if (path === C.OPS_FILE) throw new Error('simulated network failure');
+        return realUploadFile(path, data, rev, isForce);
+      },
+    );
+
+    await expectAsync(client.uploadOps([addTaskOp(client, 'netfail-op')])).toBeRejected();
+
+    // syncVersion 3 (seed 1 → fill 2 → this compaction 3): snapshot must remain.
+    expect(provider.hasFile('sync-state__3__netfail-client.json')).toBe(true);
+  });
 });
