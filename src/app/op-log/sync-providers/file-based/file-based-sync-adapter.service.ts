@@ -13,6 +13,7 @@ import {
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
+import { REPAIR_STALE_ERROR_CODE } from '../../core/operation-log.const';
 import {
   Operation,
   VectorClock,
@@ -1240,7 +1241,7 @@ export class FileBasedSyncAdapterService {
           return {
             accepted: false,
             error: 'REPAIR snapshot does not include current remote state',
-            errorCode: 'REPAIR_STALE',
+            errorCode: REPAIR_STALE_ERROR_CODE,
           };
         }
         throw e;
@@ -2438,7 +2439,7 @@ export class FileBasedSyncAdapterService {
         return {
           accepted: false,
           error: 'REPAIR snapshot does not include current remote state',
-          errorCode: 'REPAIR_STALE',
+          errorCode: REPAIR_STALE_ERROR_CODE,
         };
       }
     }

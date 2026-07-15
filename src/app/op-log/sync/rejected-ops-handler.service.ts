@@ -7,7 +7,10 @@ import { T } from '../../t.const';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { DownloadCallback, RejectedOpInfo } from '../core/types/sync-results.types';
 import { handleStorageQuotaError } from './sync-error-utils';
-import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
+import {
+  MAX_CONCURRENT_RESOLUTION_ATTEMPTS,
+  REPAIR_STALE_ERROR_CODE,
+} from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
 import { RepairOperationService } from '../validation/repair-operation.service';
 
@@ -209,7 +212,10 @@ export class RejectedOpsHandlerService {
         continue;
       }
 
-      if (rejected.errorCode === 'REPAIR_STALE' && entry.op.opType === OpType.Repair) {
+      if (
+        rejected.errorCode === REPAIR_STALE_ERROR_CODE &&
+        entry.op.opType === OpType.Repair
+      ) {
         const repairSummary = getRepairSummary(entry.op.payload);
         if (!repairSummary) {
           throw new Error(
