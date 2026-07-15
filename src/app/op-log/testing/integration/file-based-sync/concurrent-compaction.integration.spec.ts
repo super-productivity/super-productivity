@@ -125,9 +125,11 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     );
 
     // The winner's immutable snapshot (syncVersion 3) survives the loser's clobber,
-    // and the superseded predecessor (seed's syncVersion 1) was garbage-collected.
+    // the superseded predecessor (seed's syncVersion 1) was garbage-collected, and
+    // the loser cleaned up its own orphaned snapshot on its failed commit.
     expect(provider.hasFile('sync-state__3__winner-client.json')).toBe(true);
     expect(provider.hasFile('sync-state__1__seed-client.json')).toBe(false);
+    expect(provider.hasFile('sync-state__3__loser-client.json')).toBe(false);
 
     const download = await downloadFresh();
     expect(download.gapDetected).toBeFalsy();
@@ -176,7 +178,9 @@ describe('File-Based Sync Integration - Concurrent Split Compaction (#9040)', ()
     const download = await downloadFresh();
     expect(download.gapDetected).toBeFalsy();
     expect(download.snapshotState).toBeDefined();
-    // The winner's immutable snapshot (syncVersion 1) survives the loser's clobber.
+    // The winner's immutable snapshot (syncVersion 1) survives the loser's clobber,
+    // and the loser cleaned up its own orphan on its failed commit.
     expect(provider.hasFile('sync-state__1__winner-client.json')).toBe(true);
+    expect(provider.hasFile('sync-state__1__loser-client.json')).toBe(false);
   });
 });

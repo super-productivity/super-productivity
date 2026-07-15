@@ -1455,31 +1455,28 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Best-effort deletion of the immutable snapshot the PRE-compaction ops file
-   * referenced (#9040). Keeps the steady state at ~one immutable snapshot: every
-   * successful compaction supersedes the previous one, deleted here in O(1).
+   * Best-effort deletion of a generation-specific immutable snapshot file (#9040).
+   * Non-fatal — an undeleted snapshot only wastes remote space. Two call sites:
+   *   - after a successful compaction: reclaim the PREVIOUS generation's snapshot
+   *     (keeps the steady state at ~one immutable file), and
+   *   - when a compaction fails to commit: reclaim the snapshot THIS compaction
+   *     just wrote, which is now an orphan no committed ops file references (the
+   *     concurrent-compaction case that would otherwise leak).
    *
-   * shortcut: a losing concurrent compactor's same-generation snapshot is an
-   * orphan no committed ops file ever references, so it is never a future
-   * predecessor and leaks. That only happens on the rare concurrent-compaction
-   * race; upgrade path if it ever matters — an opportunistic `listFiles` prune of
-   * `STATE_GEN_FILE_PREFIX` files with a stale syncVersion (listFiles is optional
-   * on the provider interface, so it must stay capability-gated).
+   * Residual: a crash between the snapshot write and either commit or this cleanup
+   * still leaks (rare crash window). Upgrade path if it ever matters — an
+   * opportunistic `listFiles` prune of `STATE_GEN_FILE_PREFIX` files with a stale
+   * syncVersion (listFiles is optional on the provider interface, so it must stay
+   * capability-gated).
    */
-  private async _gcSupersededGenStateFile(
+  private async _removeGenStateFile(
     provider: FileSyncProvider<SyncProviderId>,
-    previousFile: string | undefined,
-    newFile: string,
+    file: string,
   ): Promise<void> {
-    if (!previousFile || previousFile === newFile) return;
     try {
-      await provider.removeFile(previousFile);
+      await provider.removeFile(file);
     } catch (e) {
-      // Non-fatal: an orphaned snapshot only wastes remote space.
-      OpLog.normal(
-        `FileBasedSyncAdapter: superseded snapshot cleanup skipped (non-fatal)`,
-        e,
-      );
+      OpLog.normal('FileBasedSyncAdapter: snapshot cleanup skipped (non-fatal)', e);
     }
   }
 
@@ -2156,24 +2153,38 @@ export class FileBasedSyncAdapterService {
     }
 
     // Commit point.
-    const { finalRev } = await this._uploadOpsFileWithMismatchFallback(
-      provider,
-      cfg,
-      encryptKey,
-      newOpsFile,
-      opsRev,
-    );
+    let finalRev: string;
+    try {
+      ({ finalRev } = await this._uploadOpsFileWithMismatchFallback(
+        provider,
+        cfg,
+        encryptKey,
+        newOpsFile,
+        opsRev,
+      ));
+    } catch (e) {
+      // #9040: our ops never committed — a concurrent compactor won the ops race.
+      // The immutable snapshot we wrote this compaction is now an orphan no
+      // committed ops file references, so reclaim it before bubbling up. (Only
+      // when we compacted; otherwise snapshotRef.file is the still-referenced
+      // predecessor and must NOT be deleted.)
+      if (needsCompaction && snapshotRef.file) {
+        await this._removeGenStateFile(provider, snapshotRef.file);
+      }
+      throw e;
+    }
 
     // #9040: after the commit succeeds, reclaim the immutable snapshot the
     // superseded ops file referenced (no-op unless this sync compacted). Runs
     // post-commit so a concurrent reader of the OLD ops file still finds its
     // snapshot until it too advances.
-    if (needsCompaction) {
-      await this._gcSupersededGenStateFile(
-        provider,
-        opsFile?.snapshotRef?.file,
-        snapshotRef.file as string,
-      );
+    const previousGenStateFile = opsFile?.snapshotRef?.file;
+    if (
+      needsCompaction &&
+      previousGenStateFile &&
+      previousGenStateFile !== snapshotRef.file
+    ) {
+      await this._removeGenStateFile(provider, previousGenStateFile);
     }
 
     this._clearCachedOpsData(providerKey);
