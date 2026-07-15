@@ -1,11 +1,14 @@
 import { inject, Injectable } from '@angular/core';
+import { Store } from '@ngrx/store';
 import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { first } from 'rxjs/operators';
 import { devError } from '../../util/dev-error';
 import { TaskService } from '../../features/tasks/task.service';
 import { ProjectService } from '../../features/project/project.service';
 import { Router } from '@angular/router';
-import { Task } from '../../features/tasks/task.model';
+import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
@@ -19,6 +22,7 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
   providedIn: 'root',
 })
 export class NavigateToTaskService {
+  private _store = inject(Store);
   private _taskService = inject(TaskService);
   private _projectService = inject(ProjectService);
   private _router = inject(Router);
@@ -77,10 +81,7 @@ export class NavigateToTaskService {
         error: err instanceof Error ? err.message : String(err),
       });
       Log.err(err);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_ERR,
-      });
+      this._showNavErrorSnack();
     }
   }
 
@@ -107,15 +108,46 @@ export class NavigateToTaskService {
     } else if (taskToCheck.tagIds?.length > 0 && taskToCheck.tagIds[0]) {
       return `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`;
     } else if (!isArchiveTask) {
-      // A non-archived task with neither project nor tags only ever lives in the
-      // Today list — either due today (handled above) or overdue. Route there so
-      // navigation reveals it instead of resolving to '' and silently no-op'ing
-      // (an empty location makes `url.startsWith(location)` always true). (#8780)
-      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
+      // No project, no tag, and not due today: the task's id is in no work
+      // context's `taskIds` ordering array, so it renders in no list view
+      // (routing to Today only reveals tasks due or overdue *today*). Self-heal
+      // the orphan into the Inbox — this assigns its projectId and adds it to the
+      // Inbox list — so navigation can actually reveal and focus it. (#8780)
+      this._healOrphanTaskToInbox(taskToCheck);
+      return `/project/${INBOX_PROJECT.id}/${tasksOrWorklog}`;
     } else {
       devError("Couldn't find task location");
       return '';
     }
+  }
+
+  /**
+   * Assign a project-less, tag-less task to the Inbox so it lives in a real list
+   * and can be revealed. The move reducer only strips the task from its source
+   * project when that project exists, so an empty or dangling projectId is
+   * handled gracefully, and it reads canonical subtask data from the store, so
+   * passing an empty `subTasks` here is safe. (#8780)
+   */
+  private _healOrphanTaskToInbox(task: Task): void {
+    // moveToOtherProject operates on a top-level task; `task` is already the
+    // parent for subtasks. Skip (rather than throw) if we somehow still hold a
+    // subtask — e.g. an orphaned subtask whose parent could not be loaded.
+    if (task.parentId) {
+      return;
+    }
+    this._store.dispatch(
+      TaskSharedActions.moveToOtherProject({
+        task: { ...task, subTasks: [] } as TaskWithSubTasks,
+        targetProjectId: INBOX_PROJECT.id,
+      }),
+    );
+  }
+
+  private _showNavErrorSnack(): void {
+    this._snackService.open({
+      type: 'ERROR',
+      msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_ERR,
+    });
   }
 
   private _isDueToday(task: Task): boolean {
@@ -126,7 +158,12 @@ export class NavigateToTaskService {
   }
 
   private _focusTaskElement(taskId: string): void {
-    this._layoutService.focusTaskInViewWhenReady(taskId);
+    // Never swallow silently: if the task never becomes focusable in the current
+    // context, surface the error instead of leaving the user on the wrong view.
+    this._layoutService.focusTaskInViewWhenReady(taskId, undefined, () => {
+      recordSearchNavDebug('navigateToTask:focusFailed', { taskId });
+      this._showNavErrorSnack();
+    });
   }
 
   private async _isInBacklog(task: Task): Promise<boolean> {
