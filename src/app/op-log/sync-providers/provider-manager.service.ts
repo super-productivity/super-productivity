@@ -32,6 +32,30 @@ export type SyncStatusChangePayload =
   | 'IN_SYNC'
   | 'SYNCING';
 
+// Module-level reference so static sync-form handlers can signal a target
+// change without an injector (mirrors the encryption-dialog-opener pattern).
+let providerManagerInstance: SyncProviderManager | null = null;
+
+const setProviderManagerInstance = (instance: SyncProviderManager): void => {
+  providerManagerInstance = instance;
+};
+
+/**
+ * Signal that the active file-provider target changed through an ingress that
+ * bypasses `setProviderConfig()` — the Electron LocalFile folder picker (which
+ * persists the folder main-side, post-#8228) and Android `setupSaf()` (which
+ * writes `safFolderUri` straight to the credential store). Both mutate the
+ * target without firing `providerConfigChanged$`, so the file adapter would keep
+ * the previous folder's revs/clocks/caches keyed by the (unchanged) `LocalFile`
+ * provider id. This fires the same signal a config save does, invalidating the
+ * wrapped-adapter cache and file-adapter target state before the next sync. It
+ * no-ops if the manager was never instantiated — nothing is cached to leak.
+ * (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+ */
+export const notifyFileProviderTargetChanged = (): void => {
+  providerManagerInstance?.notifyProviderConfigChanged();
+};
+
 /**
  * Service for managing sync providers.
  *
@@ -115,7 +139,9 @@ export class SyncProviderManager {
     this._currentProviderPrivateCfg$.pipe(shareReplay(1));
 
   /**
-   * Emits whenever provider config is updated via setProviderConfig().
+   * Emits whenever the active provider target changes: every
+   * `setProviderConfig()` save, plus the file-provider ingresses that bypass it
+   * (LocalFile picker / Android SAF) via `notifyProviderConfigChanged()`.
    * Used by WrappedProviderService to auto-invalidate its adapter cache.
    */
   public readonly providerConfigChanged$: Observable<void> =
@@ -130,6 +156,10 @@ export class SyncProviderManager {
     );
 
   constructor() {
+    // Self-register so the module-level notifyFileProviderTargetChanged() can
+    // reach this singleton from static form config handlers.
+    setProviderManagerInstance(this);
+
     // Listen to sync config changes and update active provider
     this._syncConfig$.subscribe((cfg) => {
       try {
@@ -255,6 +285,17 @@ export class SyncProviderManager {
       this._isProviderReady$.next(ready);
       this._maybeShowLocalFileReselectSnack(providerId, ready, config);
     }
+  }
+
+  /**
+   * Fires `providerConfigChanged$` for a target change that did not go through
+   * `setProviderConfig()` — the LocalFile folder picker and Android SAF setup.
+   * Kept minimal on purpose: it only re-emits the existing invalidation signal;
+   * it does not reload provider config (the picker/SAF already persisted the new
+   * target). See `notifyFileProviderTargetChanged()`.
+   */
+  notifyProviderConfigChanged(): void {
+    this._providerConfigChanged$.next();
   }
 
   /**

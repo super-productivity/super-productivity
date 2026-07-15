@@ -2,6 +2,7 @@
 import { T } from '../../../t.const';
 import { ConfigFormSection, SyncConfig } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { notifyFileProviderTargetChanged } from '../../../op-log/sync-providers/provider-manager.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../../app.constants';
 import {
@@ -235,7 +236,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               const localProvider = providers.find(
                 (p) => p.id === SyncProviderId.LocalFile,
               );
-              return (localProvider as LocalFileSyncPicker | undefined)?.pickDirectory();
+              const pickedPath = await (
+                localProvider as LocalFileSyncPicker | undefined
+              )?.pickDirectory();
+              // The picker persists the folder main-side (post-#8228) without
+              // going through setProviderConfig, so invalidate file-provider
+              // target state here (Task 2). Only on an actual pick, not cancel.
+              if (pickedPath) {
+                notifyFileProviderTargetChanged();
+              }
+              return pickedPath;
             },
           },
         },
@@ -267,7 +277,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               const localProvider = providers.find(
                 (p) => p.id === SyncProviderId.LocalFile,
               );
-              return (localProvider as LocalFileSyncPicker | undefined)?.setupSaf();
+              const safUri = await (
+                localProvider as LocalFileSyncPicker | undefined
+              )?.setupSaf();
+              // setupSaf writes safFolderUri to privateCfg directly (outside
+              // setProviderConfig), so invalidate file-provider target state
+              // here (Task 2). setupSaf throws on cancel, so a value = success.
+              if (safUri) {
+                notifyFileProviderTargetChanged();
+              }
+              return safUri;
             },
           },
           expressions: {
