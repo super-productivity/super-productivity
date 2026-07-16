@@ -393,15 +393,16 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Memoize to avoid rebuilding options on every formly change cycle
     let lastStartDate: string | undefined;
-    let lastLocale: string | undefined;
+    let lastLocaleKey: string | undefined;
     let cachedOptions: { value: string; label: string }[];
 
-    // Update options when startDate or locale changes. The cache key tracks
-    // textLocale too because buildOptions now depends on it — under the ISO
-    // option currentLocale() stays 'sv' while textLocale() carries the UI
-    // language for the weekday label. (This modal dialog can't have its UI
-    // language changed mid-life, so the first build already reads the right
-    // textLocale; the composite key just keeps the memo honest.)
+    // Update options when startDate or either locale changes. The key must track
+    // textLocale, not just currentLocale: under the ISO option currentLocale()
+    // stays 'sv' while textLocale() carries the UI language for the weekday
+    // label. Those move independently — applyLanguageFromState$ deliberately
+    // applies the UI language from remote sync too, so lng can change while this
+    // dialog is open, shifting textLocale() with currentLocale() frozen at 'sv'.
+    // A currentLocale-only key would serve a stale weekday label there.
     quickSettingField.expressionProperties = {
       ...quickSettingField.expressionProperties,
       ['templateOptions.options']: (model: Record<string, unknown>) => {
@@ -409,9 +410,9 @@ export class DialogEditTaskRepeatCfgComponent {
         const currentLocale = this._dateTimeFormatService.currentLocale();
         const textLocale = this._dateTimeFormatService.textLocale();
         const localeKey = `${currentLocale}|${textLocale}`;
-        if (sd !== lastStartDate || localeKey !== lastLocale || !cachedOptions) {
+        if (sd !== lastStartDate || localeKey !== lastLocaleKey || !cachedOptions) {
           lastStartDate = sd;
-          lastLocale = localeKey;
+          lastLocaleKey = localeKey;
           const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
           cachedOptions = buildOptions(refDate);
         }

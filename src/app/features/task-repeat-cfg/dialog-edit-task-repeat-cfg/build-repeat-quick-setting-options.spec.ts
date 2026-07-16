@@ -27,6 +27,7 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date(2026, 5, 2),
       'en-US',
       translateService,
+      'en-US',
     );
     expect(options.map((o) => o.value)).toEqual([
       'DAILY',
@@ -54,7 +55,12 @@ describe('buildRepeatQuickSettingOptions', () => {
   // and `ORDINAL_KEYS[NaN-1]` → undefined → instant(undefined) threw.
   it('should not throw when given an invalid date', () => {
     expect(() =>
-      buildRepeatQuickSettingOptions(new Date('Invalid Date'), 'en-US', translateService),
+      buildRepeatQuickSettingOptions(
+        new Date('Invalid Date'),
+        'en-US',
+        translateService,
+        'en-US',
+      ),
     ).not.toThrow();
   });
 
@@ -63,6 +69,7 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date('Invalid Date'),
       'en-US',
       translateService,
+      'en-US',
     );
     expect(options.length).toBe(9);
     options.forEach((o) => expect(o.label).toBeTruthy());
@@ -92,14 +99,14 @@ describe('buildRepeatQuickSettingOptions', () => {
     expect(yearlyCall!.params.dayAndMonthStr).toBe('15/7');
   });
 
-  it('should default weekdayLocale to locale when omitted', () => {
+  it('should use locale for the weekday when both locales match (non-ISO)', () => {
     const weekdayCalls: { key: string; params: any }[] = [];
     spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
       weekdayCalls.push({ key, params });
       return key;
     });
 
-    buildRepeatQuickSettingOptions(new Date(2026, 6, 15), 'sv', translateService);
+    buildRepeatQuickSettingOptions(new Date(2026, 6, 15), 'sv', translateService, 'sv');
 
     const weeklyCall = weekdayCalls.find(
       (c) => c.params?.weekdayStr !== undefined && c.params?.ordinalStr === undefined,
