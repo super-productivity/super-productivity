@@ -14,7 +14,7 @@ describe('WrappedProviderService', () => {
   let service: WrappedProviderService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockFileBasedAdapter: jasmine.SpyObj<FileBasedSyncAdapterService>;
-  let providerConfigChanged$: Subject<void>;
+  let providerConfigChanged$: Subject<{ isTargetChanged: boolean }>;
 
   const createMockBaseProvider = (
     id: SyncProviderId,
@@ -66,7 +66,7 @@ describe('WrappedProviderService', () => {
   });
 
   beforeEach(() => {
-    providerConfigChanged$ = new Subject<void>();
+    providerConfigChanged$ = new Subject<{ isTargetChanged: boolean }>();
 
     mockProviderManager = jasmine.createSpyObj(
       'SyncProviderManager',
@@ -81,6 +81,7 @@ describe('WrappedProviderService', () => {
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
+      'invalidateAllTargets',
     ]);
 
     TestBed.configureTestingModule({
@@ -306,12 +307,43 @@ describe('WrappedProviderService', () => {
       expect(result1).toBe(mockAdapter1);
 
       // Simulate config change
-      providerConfigChanged$.next();
+      providerConfigChanged$.next({ isTargetChanged: false });
 
       // Next call should create a new adapter (cache was auto-cleared)
       const result2 = await service.getOperationSyncCapable(dropboxProvider);
       expect(result2).toBe(mockAdapter2);
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);
+    });
+
+    it('should invalidate file-adapter target state when the target moved', () => {
+      // A real target move (account switch behind the same provider id, folder
+      // change); the file adapter is keyed only by provider id, so its per-target
+      // state must be dropped or it leaks across targets (Task 2).
+      expect(mockFileBasedAdapter.invalidateAllTargets).not.toHaveBeenCalled();
+
+      providerConfigChanged$.next({ isTargetChanged: true });
+
+      expect(mockFileBasedAdapter.invalidateAllTargets).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT invalidate file-adapter target state on a config-only change', () => {
+      // The cursor lives in the file adapter's target state. Wiping it on a save
+      // that did not move the target (sync interval, compression, an encryption
+      // key rotation, the isEncryptionEnabled backfill, or Save with nothing
+      // changed) sends the next sync down the sinceSeq===0 snapshot-bootstrap
+      // path, which dead-ends in a spurious conflict dialog for any client
+      // holding unsynced ops.
+      providerConfigChanged$.next({ isTargetChanged: false });
+
+      expect(mockFileBasedAdapter.invalidateAllTargets).not.toHaveBeenCalled();
+    });
+
+    it('should still drop the adapter cache on a config-only change', () => {
+      // The cache holds the resolved encryption key/intent, so it must be
+      // rebuilt even when the target stayed put.
+      providerConfigChanged$.next({ isTargetChanged: false });
+
+      expect(service['_cache'].size).toBe(0);
     });
   });
 });

@@ -383,6 +383,32 @@ describe('projectReducer', () => {
       // When target is DONE and afterTaskId is null, append to end
       expect((r.entities as any).P1.taskIds).toEqual(['T1', 'T2', 'B1']);
     });
+
+    it('should not duplicate the task id when re-replayed (DONE, null anchor) (#8469)', () => {
+      const s = fakeEntityStateFromArray([
+        {
+          id: 'P1',
+          taskIds: ['T1', 'T2'],
+          backlogTaskIds: ['B1', 'B2'],
+          isEnableBacklog: true,
+        },
+      ] as Partial<Project>[]);
+
+      const action = moveProjectTaskToRegularList({
+        taskId: 'B1',
+        afterTaskId: null,
+        workContextId: 'P1',
+        src: 'BACKLOG',
+        target: 'DONE',
+      }) as any;
+
+      // Re-applying the same op on top of already-applied state (snapshot
+      // re-replay window, #8469) must not append the id a second time.
+      const once = projectReducer(s as any, action);
+      const twice = projectReducer(once, action);
+      expect((twice.entities as any).P1.taskIds).toEqual(['T1', 'T2', 'B1']);
+      expect((twice.entities as any).P1.backlogTaskIds).toEqual(['B2']);
+    });
   });
 
   describe('moveTaskInTodayList (anchor-based)', () => {

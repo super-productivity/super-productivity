@@ -84,11 +84,17 @@ describe('AddTaskBarActionsComponent', () => {
       localization: () => ({ timeLocale: locale }),
     });
   };
+  // Mutable locales backing the mock so a test can simulate the ISO 8601 option
+  // (numeric locale = sv sentinel, spelled-out names = UI language). Reset in
+  // beforeEach.
+  let mockCurrentLocale = 'en-US';
+  let mockTextLocale = 'en-US';
   const mockDateTimeFormatService = jasmine.createSpyObj(
     'DateTimeFormatService',
     ['formatTime'],
     {
-      currentLocale: () => 'en-US',
+      currentLocale: () => mockCurrentLocale,
+      textLocale: () => mockTextLocale,
     },
   );
   mockDateTimeFormatService.formatTime.and.callFake((timestamp: number) =>
@@ -99,6 +105,8 @@ describe('AddTaskBarActionsComponent', () => {
   );
 
   beforeEach(async () => {
+    mockCurrentLocale = 'en-US';
+    mockTextLocale = 'en-US';
     // Create proper signal mocks
     const mockStateSignal = signal(mockState);
     const mockAutoDetectedSignal = signal(false);
@@ -393,6 +401,25 @@ describe('AddTaskBarActionsComponent', () => {
       expect(result).toContain(futureDate.getDate().toString());
     });
 
+    it('should render dateDisplay month name in the UI language under the ISO option (#8987)', () => {
+      // ISO 8601 option: numeric locale is the sv sentinel, spelled-out month
+      // name must follow the UI language ('en').
+      mockCurrentLocale = 'sv';
+      mockTextLocale = 'en';
+      mockDateService.getLogicalTodayDate.and.returnValue(new Date(2020, 0, 1));
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        date: '2026-07-15',
+        time: null,
+      });
+
+      fixture.detectChanges();
+      const result = component.dateDisplay();
+      // English 'Jul 15', not Swedish '15 juli'.
+      expect(result).toContain('Jul');
+      expect(result).not.toContain('juli');
+    });
+
     it('should compute estimateDisplay correctly', () => {
       const estimate = 1800000; // 30 minutes
       const stateWithEstimate = {
@@ -495,6 +522,7 @@ describe('AddTaskBarActionsComponent', () => {
             provide: DateTimeFormatService,
             useValue: jasmine.createSpyObj('DateTimeFormatService', ['-'], {
               currentLocale: () => 'de-de',
+              textLocale: () => 'de-de',
             }),
           },
           { provide: DateService, useValue: mockDateService },

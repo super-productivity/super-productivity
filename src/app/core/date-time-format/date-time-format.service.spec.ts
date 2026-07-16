@@ -305,6 +305,17 @@ describe('DateTimeFormatService', () => {
       expect(service.dateFormat().raw).toBe('yyyy-MM-dd');
       expect(service.is24HourFormat()).toBe(true);
     });
+
+    it('exposes the UI language as textLocale, tracking language changes', () => {
+      // Spelled-out weekday/month names must not render in Swedish under the
+      // sv sentinel (#8987 follow-up); textLocale resolves to the UI language.
+      expect(service.textLocale()).toBe('en');
+
+      service.setUiLanguage('de');
+      TestBed.flushEffects();
+
+      expect(service.textLocale()).toBe('de');
+    });
   });
 
   describe('dateTimeLocale config fallback', () => {
@@ -411,6 +422,9 @@ describe('DateTimeFormatService', () => {
 
       expect(service.currentLocale()).toBe(DateTimeLocales.ja_jp);
       expect(service.isoTextLocale()).toBeNull();
+      // Non-ISO options keep spelled-out names on the configured locale, so
+      // ja/ar/etc. still render their native month/weekday names.
+      expect(service.textLocale()).toBe(DateTimeLocales.ja_jp);
       expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
     });
 

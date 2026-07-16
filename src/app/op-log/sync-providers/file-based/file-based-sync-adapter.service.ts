@@ -34,6 +34,7 @@ import { OpLog } from '../../../core/log';
 import {
   DecompressError,
   DecryptError,
+  FileSyncTargetChangedError,
   InvalidDataSPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
@@ -84,6 +85,22 @@ import {
  *
  * @see FileBasedSyncData for the file schema
  */
+declare const GUARDED_PROVIDER_BRAND: unique symbol;
+
+/**
+ * A file provider whose `uploadFile`/`removeFile` are wrapped by
+ * `_withTargetGuard` — a write aborts if the target changed mid-operation. Every
+ * write-path helper takes this branded type instead of the raw provider, so the
+ * compiler rejects passing an unguarded provider to a write path: the in-flight
+ * guard invariant is enforced at compile time, not by call-graph convention (a
+ * future entry point or helper that forgets the guard is a build error, not a
+ * silent cross-target write). Only the raw entry points `createAdapter` and the
+ * intentionally-unguarded `_deleteAllData` keep `FileSyncProvider`. (Task 2.)
+ */
+type GuardedFileSyncProvider = FileSyncProvider<SyncProviderId> & {
+  readonly [GUARDED_PROVIDER_BRAND]: true;
+};
+
 @Injectable({ providedIn: 'root' })
 export class FileBasedSyncAdapterService {
   private _encryptAndCompressHandler = new EncryptAndCompressHandlerService();
@@ -99,6 +116,18 @@ export class FileBasedSyncAdapterService {
    * retryable error. The retry path never force-overwrites the primary sync file.
    */
   private readonly _MAX_UPLOAD_RETRIES = 2;
+
+  /**
+   * Monotonic in-tab target-transition generation. Bumped by
+   * `invalidateAllTargets()` on any user-authoritative provider/target/
+   * configuration change. Captured at each remote-operation boundary
+   * (`_uploadOps`/`_uploadSnapshot`/`_downloadOps`) and checked by
+   * `_withTargetGuard` before every write, so an in-flight operation refuses a
+   * remote side effect against a target that is no longer current. Not
+   * persisted (a fresh tab starts clean; there is nothing in-flight to guard).
+   * (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+   */
+  private _targetGeneration = 0;
 
   /** Expected sync version for optimistic locking, keyed by provider+user */
   private _expectedSyncVersions = new Map<string, number>();
@@ -331,6 +360,173 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
+   * Single source of truth for the target-scoped state maps — everything keyed
+   * by provider id that belongs to one remote target and must not survive a
+   * target transition. Both `_resetTargetState` (single key, used by
+   * `deleteAllData`) and `invalidateAllTargets` (all keys) iterate this list, so
+   * a new per-target map only has to be added here. The two within-cycle caches
+   * are included so a subsequent sync starts clean.
+   *
+   * Note: clearing these maps is not by itself what prevents a cross-target
+   * write. A download already in flight when the switch fires can repopulate a
+   * cache (a read path — `_setCachedSyncData` inside `_downloadOps`), and a
+   * switch landing entirely between the download and the upload is caught by
+   * neither per-operation guard. What actually blocks committing one target's
+   * data to another is the in-flight generation guard (`_withTargetGuard`) plus
+   * the conditional-write rev check (`revToMatch`): a stale-rev write fails
+   * against a populated new target and self-heals on the next sync.
+   */
+  private get _targetScopedMaps(): Map<string, unknown>[] {
+    return [
+      this._expectedSyncVersions,
+      this._pendingExpectedSyncVersions,
+      this._lastSeenVectorClocks,
+      this._pendingVectorClocks,
+      this._localSeqCounters,
+      // Included deliberately: without it a re-used provider key after a target
+      // switch could suppress a genuine corruption notice for the NEW target
+      // based on the OLD target's corrupt rev.
+      this._lastRecoveredCorruptRev,
+      // SPAP-10: dropping the last-seen rev prevents a stale value driving a
+      // false "nothing new" short-circuit against a different target.
+      this._lastSeenRevs,
+      this._pendingRevs,
+      this._syncCycleCache,
+      this._splitOpsCache,
+    ] as Map<string, unknown>[];
+  }
+
+  /**
+   * Clears every target-scoped in-memory entry for one provider key. Shared by
+   * `deleteAllData` and per-key resets. Callers persist afterwards.
+   */
+  private _resetTargetState(providerKey: string): void {
+    for (const map of this._targetScopedMaps) {
+      map.delete(providerKey);
+    }
+  }
+
+  /**
+   * Invalidate all cached target-scoped state after a user-authoritative
+   * provider/target/configuration change. The adapter is keyed only by provider
+   * id, so a provider switch, an account switch behind the same provider id, or
+   * an identity-affecting configuration save would otherwise reuse the previous
+   * target's sync version, rev, vector clock, and within-cycle caches — reading
+   * or writing one target's data against another. Clearing every key forces the
+   * next sync to discover and full-read the current target from zero. Bumps the
+   * target generation so a later in-flight guard can detect the transition.
+   *
+   * CANONICAL WARNING — only call this when the target ACTUALLY moved
+   * (`providerConfigChanged$`'s `isTargetChanged`, via `isSyncTargetChanged`),
+   * never on every config save. This drops `_localSeqCounters`, and a cursor back
+   * at 0 makes the next download return a `snapshotState` (`isForceFromZero`);
+   * for a client holding unsynced ops that classifies CONCURRENT and, with
+   * `AUTO_MERGE_CONCURRENT_SNAPSHOT` false, dead-ends in a binary conflict dialog
+   * whose either answer discards data. (The same hazard is documented from the
+   * other direction at the `latestSeq` computation in `_downloadOps`.) A real
+   * target move has no cursor worth keeping, so the reset is correct there and
+   * only there.
+   *
+   * Not wired to machine-only writes for an UNCHANGED account: OAuth token
+   * refresh goes through the provider credential store directly (never
+   * `setProviderConfig`), and content-only saves — encryption key rotation, the
+   * `isEncryptionEnabled` backfill — are filtered out by `isSyncTargetChanged`.
+   */
+  invalidateAllTargets(): void {
+    this._loadPersistedState();
+    this._targetGeneration++;
+    for (const map of this._targetScopedMaps) {
+      map.clear();
+    }
+    this._persistState();
+    OpLog.normal(
+      'FileBasedSyncAdapter: target state invalidated after configuration change',
+    );
+  }
+
+  /**
+   * Wraps a provider so every remote write (`uploadFile`, `removeFile`) first
+   * asserts the target generation has not moved since `capturedGeneration`.
+   * A config/account/folder change mid-upload bumps the generation (via
+   * `invalidateAllTargets()`) and the same provider object then reads the new
+   * target's config, so an in-flight write of the previous target's merged data
+   * would land on the new target. The guard aborts before that write with
+   * `FileSyncTargetChangedError`; the next sync re-reads the current target.
+   *
+   * Reads (`downloadFile`, `getFileRev`) pass through — reading the wrong target
+   * cannot corrupt it, and the subsequent write is what the guard blocks. Writes
+   * are checked individually rather than once per operation: this narrows (does
+   * not eliminate) the check→write race, and a mid-atomic-pair abort strands the
+   * write on the *previous* target exactly as a crash would, which the read path
+   * already tolerates. Capture the generation once at the operation boundary and
+   * thread this wrapper to every write site. (Task 2.)
+   */
+  private _withTargetGuard(
+    rawProvider: FileSyncProvider<SyncProviderId>,
+    capturedGeneration: number,
+  ): GuardedFileSyncProvider {
+    const assertUnchanged = (): void => {
+      if (this._targetGeneration !== capturedGeneration) {
+        throw new FileSyncTargetChangedError(capturedGeneration, this._targetGeneration);
+      }
+    };
+    // The Proxy is structurally a FileSyncProvider; the brand is a phantom type
+    // with no runtime property, so cast through unknown.
+    return new Proxy(rawProvider, {
+      get: (target, prop, receiver) => {
+        if (prop === 'uploadFile' || prop === 'removeFile') {
+          const writeFn = Reflect.get(target, prop, receiver) as (
+            ...args: unknown[]
+          ) => Promise<unknown>;
+          // Async wrapper so a guard rejection is a promise rejection, matching
+          // the real (Promise-returning) methods rather than a synchronous throw.
+          return async (...args: unknown[]): Promise<unknown> => {
+            assertUnchanged();
+            return writeFn.apply(target, args);
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as unknown as GuardedFileSyncProvider;
+  }
+
+  /**
+   * Aborts an in-flight DOWNLOAD before it commits a remote baseline if the
+   * target changed since the download started. Writes are already covered by
+   * `_withTargetGuard`, but a download READS target A, and if the target then
+   * switches (config/account/folder), staging A's baseline (sync version,
+   * vector clock, rev) and letting the caller advance the seq cursor under the
+   * shared provider id is silent data loss on the NEXT sync. The mechanism is
+   * suppressed gap detection, not skipped ops: both download paths return every
+   * op in the file and let the caller's `appliedOpIds` dedup filter, but a
+   * stale-HIGH `sinceSeq` makes `partialTrimGap` (`oldestOpSyncVersion >
+   * sinceSeq + 1`) false while a cleared `_expectedSyncVersions` makes
+   * `versionWasReset` false — so `needsGapDetection` stays false and the new
+   * target's SNAPSHOT is never loaded. Any history the new target compacted below
+   * that snapshot is then silently missing. Dropping the target-scoped state and
+   * aborting forces the next sync to re-read the current target from zero;
+   * `SyncWrapperService` maps the error to a silent self-heal.
+   *
+   * This closes the dominant switch-during-download window. A switch after a
+   * successful download — during op apply, or between an upload's write and its
+   * own `setLastServerSeq` cursor commit — is a narrower residual that only a
+   * per-cycle session-generation captured in the orchestrator could fully close;
+   * within the current per-operation model the write guard plus this download
+   * abort cover the realistic exposure. (Task 2.)
+   */
+  private _abortDownloadIfTargetChanged(
+    capturedGeneration: number,
+    providerKey: string,
+  ): void {
+    if (this._targetGeneration !== capturedGeneration) {
+      this._resetTargetState(providerKey);
+      this._persistState();
+      throw new FileSyncTargetChangedError(capturedGeneration, this._targetGeneration);
+    }
+  }
+
+  /**
    * Creates an OperationSyncCapable adapter for a file-based provider.
    *
    * @param provider - The underlying file provider (WebDAV, Dropbox, etc.)
@@ -463,7 +659,7 @@ export class FileBasedSyncAdapterService {
    * Gets the current sync state from cache or by downloading.
    */
   private async _getCurrentSyncState(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     providerKey: string,
@@ -600,7 +796,7 @@ export class FileBasedSyncAdapterService {
    *   snapshot whose state never saw those ops.
    */
   private async _uploadWithMismatchFallback(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newData: FileBasedSyncData,
@@ -678,7 +874,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _uploadOps(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     ops: SyncOperation[],
@@ -686,6 +882,12 @@ export class FileBasedSyncAdapterService {
     lastKnownServerSeq?: number,
     localStateSnapshot?: unknown,
   ): Promise<OpUploadResponse> {
+    // Capture the target generation at the operation boundary and thread a
+    // write-guarded provider through the whole upload (single-file, split,
+    // REPAIR, and backup paths all receive it), so a mid-operation target switch
+    // aborts before any write instead of committing this target's merged data to
+    // the next one. (Task 2.)
+    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     // SPAP-11: split-file ("Surgical sync") path is fully separate and only
@@ -798,13 +1000,21 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _downloadOps(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
     excludeClient?: string,
     limit: number = 500,
   ): Promise<FileSnapshotOpDownloadResponse> {
+    // Download is read-only for the caller, but the split-format path resumes a
+    // crashed split migration by WRITING remote files (state/tombstone/marker)
+    // via _resumePendingSplitMigration. Guard those writes with the same
+    // generation captured at the download boundary, so a mid-download target
+    // switch aborts the resume before it lands the old target's migration on the
+    // new one. Reads (downloadFile/getFileRev) pass through unaffected. (Task 2.)
+    const capturedGeneration = this._targetGeneration;
+    const provider = this._withTargetGuard(rawProvider, capturedGeneration);
     const providerKey = this._getProviderKey(provider);
 
     // SPAP-11: split-file ("Surgical sync") download path (opt-in). When OFF
@@ -818,6 +1028,7 @@ export class FileBasedSyncAdapterService {
         excludeClient,
         limit,
         providerKey,
+        capturedGeneration,
       );
     }
 
@@ -1046,6 +1257,12 @@ export class FileBasedSyncAdapterService {
       );
     }
 
+    // Abort before committing a baseline read from a target that switched
+    // mid-download: staging its sync-version/clock/rev and letting the caller
+    // advance the seq cursor under the shared provider id could make the next
+    // sync skip the NEW target's ops from a stale cursor. (Task 2.)
+    this._abortDownloadIfTargetChanged(capturedGeneration, providerKey);
+
     // Stage the remote baseline until the caller confirms that the downloaded
     // snapshot/ops were durably applied. A cancelled conflict dialog must leave
     // the committed baseline intact so a later reset still triggers a gap.
@@ -1154,7 +1371,7 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async _uploadSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    rawProvider: FileSyncProvider<SyncProviderId>,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     state: unknown,
@@ -1164,6 +1381,12 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
+    // Same in-flight target guard as _uploadOps: this is the second remote-write
+    // entry point (initial/recovery/migration + REPAIR snapshot writes, incl.
+    // _conditionalUploadRepairSnapshot and backups). A mid-operation target
+    // switch aborts before any write instead of committing this target's
+    // snapshot to the next one. (Task 2.)
+    const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
@@ -1330,18 +1553,10 @@ export class FileBasedSyncAdapterService {
         }
       }
 
-      // Reset local state
-      this._expectedSyncVersions.delete(providerKey);
-      this._localSeqCounters.delete(providerKey);
-      // SPAP-10: drop the last-seen rev so a stale value can't drive a false
-      // "nothing new" short-circuit after the remote file has been deleted.
-      this._lastSeenRevs.delete(providerKey);
-      this._pendingRevs.delete(providerKey);
-      this._lastSeenVectorClocks.delete(providerKey);
-      this._pendingExpectedSyncVersions.delete(providerKey);
-      this._pendingVectorClocks.delete(providerKey);
-      this._clearCachedSyncData(providerKey);
-      this._clearCachedOpsData(providerKey);
+      // Reset all target-scoped local state (incl. last-seen rev, so a stale
+      // value can't drive a false "nothing new" short-circuit after the remote
+      // file has been deleted).
+      this._resetTargetState(providerKey);
       this._persistState();
 
       return { success: true };
@@ -1422,7 +1637,7 @@ export class FileBasedSyncAdapterService {
 
   /** Downloads + decodes `sync-ops.json` and validates its version. */
   private async _downloadOpsFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedOpsFile; rev: string }> {
@@ -1454,7 +1669,7 @@ export class FileBasedSyncAdapterService {
    * the immutable snapshot referenced by an ops file's `snapshotRef.file`.
    */
   private async _downloadStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     path: string = FILE_BASED_SYNC_CONSTANTS.STATE_FILE,
@@ -1488,7 +1703,7 @@ export class FileBasedSyncAdapterService {
    * pre-#9040 clients that don't read `snapshotRef.file`.
    */
   private async _writeStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     data: FileBasedStateFile,
@@ -1539,7 +1754,7 @@ export class FileBasedSyncAdapterService {
    * capability-gated).
    */
   private async _removeGenStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     file: string,
   ): Promise<void> {
     try {
@@ -1551,7 +1766,7 @@ export class FileBasedSyncAdapterService {
 
   /** Copies the current `sync-state.json` to its `.bak` (non-fatal). */
   private async _backupStateFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<void> {
@@ -1575,7 +1790,7 @@ export class FileBasedSyncAdapterService {
 
   /** Recovers the snapshot from `sync-state.json.bak` (null if unusable). */
   private async _recoverStateFromBackup(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<FileBasedStateFile | null> {
@@ -1614,7 +1829,7 @@ export class FileBasedSyncAdapterService {
    * Returns null when no snapshot validates the ref (caller signals a gap).
    */
   private async _loadValidatedSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     opsFile: FileBasedOpsFile,
@@ -1689,7 +1904,7 @@ export class FileBasedSyncAdapterService {
    * inline comment.
    */
   private async _writeTombstoneAndNeutralizeBak(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     expectedLegacyRev?: string,
@@ -1732,7 +1947,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _writePendingSplitMigration(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     legacy: FileBasedSyncData,
@@ -1793,7 +2008,7 @@ export class FileBasedSyncAdapterService {
   }
 
   private async _finalizeSplitMigrationMarker(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     pending: FileBasedOpsFile,
@@ -1827,7 +2042,7 @@ export class FileBasedSyncAdapterService {
    * used to build it or fails and causes the newer v2 payload to be re-imported.
    */
   private async _resumePendingSplitMigration(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     initialPending: FileBasedOpsFile,
@@ -1943,7 +2158,7 @@ export class FileBasedSyncAdapterService {
    * rev), or null for a truly fresh folder.
    */
   private async _maybeMigrateLegacyToSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
@@ -1996,7 +2211,7 @@ export class FileBasedSyncAdapterService {
    * to classify transient vs genuine concurrency and never force-overwrites.
    */
   private async _uploadOpsFileWithMismatchFallback(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     newOpsFile: FileBasedOpsFile,
@@ -2056,7 +2271,7 @@ export class FileBasedSyncAdapterService {
    * then the trimmed `sync-ops.json` referencing it via snapshotRef.
    */
   private async _uploadOpsSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     ops: SyncOperation[],
@@ -2320,13 +2535,14 @@ export class FileBasedSyncAdapterService {
    * validates it against the ops file's snapshotRef (mismatch ⇒ gap).
    */
   private async _downloadOpsSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
     excludeClient: string | undefined,
     limit: number,
     providerKey: string,
+    capturedGeneration: number,
   ): Promise<FileSnapshotOpDownloadResponse> {
     // SPAP-10 rev pre-check, extended to the ops file. Gated on `sinceSeq > 0`
     // (review follow-up): a forceFromSeq0 download (sinceSeq === 0) re-pulls the
@@ -2446,6 +2662,10 @@ export class FileBasedSyncAdapterService {
       opsFile.oldestOpSyncVersion > sinceSeq + 1;
     let needsGapDetection = versionWasReset || snapshotReplacement || partialTrimGap;
 
+    // See _downloadOps: abort before committing a baseline read from a target
+    // that switched mid-download. (Task 2.)
+    this._abortDownloadIfTargetChanged(capturedGeneration, providerKey);
+
     this._pendingExpectedSyncVersions.set(providerKey, opsFile.syncVersion);
     this._pendingVectorClocks.set(providerKey, opsFile.vectorClock);
     this._stageOrDropDownloadedRev(providerKey, opsRev, recoveredFromBackup);
@@ -2519,7 +2739,7 @@ export class FileBasedSyncAdapterService {
    * empty when the folder is truly fresh (or only a tombstone remains).
    */
   private async _tryLegacyReadOnlyDownload(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     sinceSeq: number,
@@ -2574,7 +2794,7 @@ export class FileBasedSyncAdapterService {
    * `sync-data.json` so OFF clients don't diverge.
    */
   private async _uploadSnapshotSplit(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
@@ -2700,7 +2920,7 @@ export class FileBasedSyncAdapterService {
    * (conditional PUT) is unaffected.
    */
   private async _writeBakFile<T>(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     bakPath: string,
@@ -2737,7 +2957,7 @@ export class FileBasedSyncAdapterService {
    * caller then surfaces its ORIGINAL corruption error.
    */
   private async _readBakFile<T extends { version: number }>(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     bakPath: string,
@@ -2791,7 +3011,7 @@ export class FileBasedSyncAdapterService {
    * the writes leaves a valid old primary + new .bak — nothing stale to recover.)
    */
   private async _forceUploadWithBakFirst(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     primaryPath: string,
     bakPath: string,
     encoded: string,
@@ -2812,7 +3032,7 @@ export class FileBasedSyncAdapterService {
    * absent" — the provider rejects the write if another client created it.
    */
   private async _conditionalUploadRepairSnapshot(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     primaryPath: string,
     bakPath: string,
     encoded: string,
@@ -2938,7 +3158,7 @@ export class FileBasedSyncAdapterService {
    * @returns The sync data and its revision (ETag) for conditional upload
    */
   private async _downloadSyncFile(
-    provider: FileSyncProvider<SyncProviderId>,
+    provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {

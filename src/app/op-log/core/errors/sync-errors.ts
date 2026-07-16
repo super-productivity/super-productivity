@@ -123,6 +123,25 @@ export class ForceUploadPendingOpsError extends Error {
 }
 
 /**
+ * The file-sync target changed (provider switch, account switch behind the same
+ * provider id, or an identity-affecting config/folder change) while a file
+ * upload was in flight — detected by a bumped adapter target generation before a
+ * remote write. The in-flight write carries the previous target's merged data,
+ * so it is abandoned rather than committed to the new target. The next sync
+ * re-reads and re-uploads against the current target from zero. Transient by
+ * design; not a corruption. (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+ */
+export class FileSyncTargetChangedError extends Error {
+  override name = 'FileSyncTargetChangedError';
+
+  constructor(capturedGeneration: number, currentGeneration: number) {
+    super(
+      `File sync target changed mid-operation (generation ${capturedGeneration} → ${currentGeneration}); write abandoned.`,
+    );
+  }
+}
+
+/**
  * A deferred action can never be persisted (invalid entity identifiers or an
  * invalid operation payload) — a deterministic condition, not a transient
  * I/O failure. The reducer already committed, so the action stays buffered and

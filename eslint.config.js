@@ -248,6 +248,37 @@ module.exports = tseslint.config(
       'no-console': 'error',
     },
   },
+  // Service size cap (AGENTS.md → Project rules): no service may exceed 1200
+  // lines. 'error' so a new service crossing the cap fails CI on the PR that
+  // introduces it — 'warn' would be inert, since `ng lint` defaults to
+  // maxWarnings: -1 and never fails a build on warnings. Spec files end in
+  // `.service.spec.ts`, so they are not matched by this glob and are exempt.
+  {
+    files: ['**/*.service.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1200 }],
+    },
+  },
+  // Grandfathered offenders: services already over the cap, downgraded to a
+  // (non-failing) warning so they don't red-CI while they are split down. They
+  // still warn at their real size, so the debt stays visible in lint output.
+  // This list may only ever SHRINK — a new entry means the cap was bypassed.
+  // Delete the block once every file below is under 1200 lines.
+  {
+    files: [
+      'src/app/op-log/sync/conflict-resolution.service.ts',
+      'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts',
+      'src/app/op-log/persistence/operation-log-store.service.ts',
+      'src/app/op-log/sync/operation-log-sync.service.ts',
+      'src/app/plugins/plugin-bridge.service.ts',
+      'src/app/plugins/plugin.service.ts',
+      'src/app/imex/sync/sync-wrapper.service.ts',
+      'src/app/features/tasks/task.service.ts',
+    ],
+    rules: {
+      'max-lines': ['warn', { max: 1200 }],
+    },
+  },
   // HTML files
   {
     files: ['**/*.html'],

@@ -47,14 +47,27 @@ export class WrappedProviderService {
   private _cache = new Map<string, OperationSyncCapable>();
 
   constructor() {
-    // Auto-invalidate cache when provider config changes
     this._providerManager.providerConfigChanged$
       .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe(() => {
+      .subscribe(({ isTargetChanged }) => {
+        // Always: the cached adapter closes over the resolved encryption
+        // key/intent, so any config edit must rebuild it.
         this._cache.clear();
         OpLog.normal(
           'WrappedProviderService: Cache auto-invalidated due to config change',
         );
+
+        // Only on a real target move: the file adapter is keyed by provider id
+        // alone, so its sync-version/rev/clock and within-cycle caches would be
+        // reused against the new target. Guarded rather than unconditional
+        // because this also wipes the seq cursor — see invalidateAllTargets().
+        // (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+        if (isTargetChanged) {
+          this._fileBasedAdapter.invalidateAllTargets();
+          OpLog.normal(
+            'WrappedProviderService: File-adapter target state invalidated (target changed)',
+          );
+        }
       });
   }
 

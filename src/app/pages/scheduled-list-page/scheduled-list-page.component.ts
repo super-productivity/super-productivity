@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { T } from '../../t.const';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskCopy } from '../../features/tasks/task.model';
@@ -66,8 +66,16 @@ export class ScheduledListPageComponent {
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   // Exposed so the template can pass the reactive locale to the now-pure
-  // `localeDate` pipe, preserving re-render on a locale change.
-  readonly locale = this._dateTimeFormatService.currentLocale;
+  // `localeDate` pipe, preserving re-render on a locale change. Every localeDate
+  // usage on this page renders spelled-out weekday/month names (e.g. 'EE, d MMM'),
+  // so under the ISO 8601 option we follow the UI language (isoTextLocale) rather
+  // than the `sv` sentinel — which would otherwise leak Swedish ("ons, 15 juli").
+  // #8987 follow-up.
+  readonly locale = computed(
+    () =>
+      this._dateTimeFormatService.isoTextLocale() ??
+      this._dateTimeFormatService.currentLocale(),
+  );
   T: typeof T = T;
   TODAY_TAG: Tag = TODAY_TAG;
   taskRepeatCfgs$ = this._store.select(selectTaskRepeatCfgsSortedByTitleAndProject);

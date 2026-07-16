@@ -1,11 +1,14 @@
 import { inject, Injectable } from '@angular/core';
+import { Store } from '@ngrx/store';
 import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { first } from 'rxjs/operators';
 import { devError } from '../../util/dev-error';
 import { TaskService } from '../../features/tasks/task.service';
 import { ProjectService } from '../../features/project/project.service';
 import { Router } from '@angular/router';
-import { Task } from '../../features/tasks/task.model';
+import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
@@ -19,6 +22,7 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
   providedIn: 'root',
 })
 export class NavigateToTaskService {
+  private _store = inject(Store);
   private _taskService = inject(TaskService);
   private _projectService = inject(ProjectService);
   private _router = inject(Router);
@@ -32,11 +36,21 @@ export class NavigateToTaskService {
       if (!task) {
         throw new Error(`Task with id ${taskId} not found`);
       }
-      const location = await this._getLocation(task, isArchiveTask);
+      const { location, orphanToHeal } = await this._resolveNavTarget(
+        task,
+        isArchiveTask,
+      );
       if (!location) {
         // Never fall through with an empty location: `''.startsWith` would make
         // the same-context check below always true and swallow the navigation.
         throw new Error(`Could not resolve a location for task ${taskId}`);
+      }
+      // Perform the orphan self-heal here (not inside the resolver) so the
+      // synced state mutation is an explicit navigation step, not a hidden side
+      // effect of computing a URL. Must run before the same-context check below
+      // so the task is added to the Inbox list in either branch. (#8780)
+      if (orphanToHeal) {
+        this._healOrphanTaskToInbox(orphanToHeal);
       }
       recordSearchNavDebug('navigateToTask:start', {
         taskId,
@@ -58,6 +72,11 @@ export class NavigateToTaskService {
         return;
       }
 
+      // Route-change path: focus is handed off to the destination view via the
+      // `focusItem` query param (AppComponent), which owns its own reveal/retry.
+      // The explicit onFailure error snack is only wired to the same-context
+      // branch above; here a heal always adds the task to the Inbox main list, so
+      // it renders and focuses normally.
       const queryParams: SearchQueryParams = { focusItem: taskId };
       if (isArchiveTask) {
         queryParams.dateStr = await this._getArchivedDate(task);
@@ -77,14 +96,20 @@ export class NavigateToTaskService {
         error: err instanceof Error ? err.message : String(err),
       });
       Log.err(err);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_ERR,
-      });
+      this._showNavErrorSnack();
     }
   }
 
-  private async _getLocation(task: Task, isArchiveTask: boolean): Promise<string> {
+  /**
+   * Pure resolver: computes the navigation location and, for an orphan task,
+   * returns the top-level task that must be re-homed into the Inbox — WITHOUT
+   * mutating state. The caller (`navigate`) performs the heal, keeping this a
+   * side-effect-free "where does this task live?" query. (#8780)
+   */
+  private async _resolveNavTarget(
+    task: Task,
+    isArchiveTask: boolean,
+  ): Promise<{ location: string; orphanToHeal: Task | null }> {
     const tasksOrWorklog = isArchiveTask ? 'history' : 'tasks';
 
     let taskToCheck = task;
@@ -99,23 +124,64 @@ export class NavigateToTaskService {
     }
 
     if (!isArchiveTask && this._isDueToday(taskToCheck)) {
-      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
+      return { location: `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`, orphanToHeal: null };
     }
 
     if (taskToCheck.projectId) {
-      return `/project/${taskToCheck.projectId}/${tasksOrWorklog}`;
+      return {
+        location: `/project/${taskToCheck.projectId}/${tasksOrWorklog}`,
+        orphanToHeal: null,
+      };
     } else if (taskToCheck.tagIds?.length > 0 && taskToCheck.tagIds[0]) {
-      return `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`;
+      return {
+        location: `/tag/${taskToCheck.tagIds[0]}/${tasksOrWorklog}`,
+        orphanToHeal: null,
+      };
     } else if (!isArchiveTask) {
-      // A non-archived task with neither project nor tags only ever lives in the
-      // Today list — either due today (handled above) or overdue. Route there so
-      // navigation reveals it instead of resolving to '' and silently no-op'ing
-      // (an empty location makes `url.startsWith(location)` always true). (#8780)
-      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
+      // No project, no tag, and not due today: the task's id is in no work
+      // context's `taskIds` ordering array, so it renders in no list view
+      // (routing to Today only reveals tasks due or overdue *today*). It must be
+      // self-healed into the Inbox — assigning its projectId and adding it to the
+      // Inbox list — so navigation can actually reveal and focus it. moveToOther-
+      // Project operates on a top-level task, so an orphaned subtask whose parent
+      // could not be loaded (still has `parentId`) is routed but not healed. (#8780)
+      return {
+        location: `/project/${INBOX_PROJECT.id}/${tasksOrWorklog}`,
+        orphanToHeal: taskToCheck.parentId ? null : taskToCheck,
+      };
     } else {
       devError("Couldn't find task location");
-      return '';
+      return { location: '', orphanToHeal: null };
     }
+  }
+
+  /**
+   * Assign a project-less, tag-less task to the Inbox so it lives in a real list
+   * and can be revealed. The move reducer only strips the task from its source
+   * project when that project exists, so an empty or dangling projectId is
+   * handled gracefully, and it reads canonical subtask data from the store, so
+   * passing an empty `subTasks` here is safe. (#8780)
+   */
+  private _healOrphanTaskToInbox(task: Task): void {
+    // Defense-in-depth: `moveToOtherProject` operates on a top-level task, so
+    // never move a subtask as if it were a parent (the resolver already returns
+    // `null` for subtasks, so this only guards against future misuse).
+    if (task.parentId) {
+      return;
+    }
+    this._store.dispatch(
+      TaskSharedActions.moveToOtherProject({
+        task: { ...task, subTasks: [] } as TaskWithSubTasks,
+        targetProjectId: INBOX_PROJECT.id,
+      }),
+    );
+  }
+
+  private _showNavErrorSnack(): void {
+    this._snackService.open({
+      type: 'ERROR',
+      msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_ERR,
+    });
   }
 
   private _isDueToday(task: Task): boolean {
@@ -126,7 +192,12 @@ export class NavigateToTaskService {
   }
 
   private _focusTaskElement(taskId: string): void {
-    this._layoutService.focusTaskInViewWhenReady(taskId);
+    // Never swallow silently: if the task never becomes focusable in the current
+    // context, surface the error instead of leaving the user on the wrong view.
+    this._layoutService.focusTaskInViewWhenReady(taskId, undefined, () => {
+      recordSearchNavDebug('navigateToTask:focusFailed', { taskId });
+      this._showNavErrorSnack();
+    });
   }
 
   private async _isInBacklog(task: Task): Promise<boolean> {

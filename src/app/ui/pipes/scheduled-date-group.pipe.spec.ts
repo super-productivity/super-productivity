@@ -12,6 +12,8 @@ describe('ScheduledDateGroupPipe', () => {
   beforeEach(() => {
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
       currentLocale: () => 'en-US',
+      // null = non-ISO option: the pipe falls back to currentLocale.
+      isoTextLocale: () => null,
     });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => {
@@ -108,6 +110,22 @@ describe('ScheduledDateGroupPipe', () => {
     // Wednesday in German is "Mi" (Mittwoch)
     const result = pipe.transform('2025-01-15');
     expect(result).toMatch(/Mi/i);
+  });
+
+  it('should follow the UI language (isoTextLocale) for the weekday under the ISO option (#8987)', () => {
+    // ISO 8601 option: currentLocale is the sv sentinel, but isoTextLocale
+    // carries the UI language ('de-DE'); the weekday must not leak Swedish.
+    Object.defineProperty(mockDateTimeFormatService, 'currentLocale', {
+      get: () => () => 'sv',
+    });
+    Object.defineProperty(mockDateTimeFormatService, 'isoTextLocale', {
+      get: () => () => 'de-DE',
+    });
+
+    // Wednesday 2025-01-15 → German "Mi", not Swedish "ons".
+    const result = pipe.transform('2025-01-15');
+    expect(result).toMatch(/Mi/i);
+    expect(result).not.toMatch(/ons/i);
   });
 
   it('should pass through non-date strings that are not "No date"', () => {

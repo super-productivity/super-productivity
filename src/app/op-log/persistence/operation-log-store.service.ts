@@ -312,6 +312,28 @@ interface OpLogDB extends DBSchema {
 type OpLogStoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
 
 /**
+ * Rebases a local operation's proposed clock onto the durable clock read in
+ * the same transaction: entry-wise max, with this client's counter bumped
+ * past the durable value. Makes counter reuse/regression unrepresentable
+ * regardless of what the caller derived its proposed clock from (#8939).
+ */
+const rebaseLocalClockOnDurable = (
+  durableClock: VectorClock,
+  proposedClock: VectorClock,
+  clientId: string,
+): VectorClock => {
+  const merged: VectorClock = { ...durableClock };
+  for (const [id, counter] of Object.entries(proposedClock)) {
+    merged[id] = Math.max(merged[id] ?? 0, counter);
+  }
+  merged[clientId] = Math.max(
+    (durableClock[clientId] ?? 0) + 1,
+    proposedClock[clientId] ?? 0,
+  );
+  return merged;
+};
+
+/**
  * Manages the persistence of operations and state snapshots in IndexedDB.
  * It uses a dedicated IndexedDB database ('SUP_OPS') to store:
  * - A chronological log of all application changes (`ops` object store).
@@ -486,7 +508,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   /**
    * Builds a StoredOperationLogEntry (minus auto-incremented seq) from an
    * Operation, encoding it to compact format. Shared by append/appendBatch/
-   * appendBatchSkipDuplicates/appendWithVectorClockUpdate.
+   * appendBatchSkipDuplicates/appendWithVectorClockOverwrite.
    */
   private _buildStoredEntry(
     op: Operation,
@@ -1118,13 +1140,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
                   'Cannot append a local operation for a non-current client ID.',
                 );
               }
-              const mergedClock: VectorClock = { ...runningClock };
-              for (const [clientId, counter] of Object.entries(proposedOp.vectorClock)) {
-                mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
-              }
-              mergedClock[currentClientId] = Math.max(
-                (runningClock[currentClientId] ?? 0) + 1,
-                proposedOp.vectorClock[currentClientId] ?? 0,
+              const mergedClock = rebaseLocalClockOnDurable(
+                runningClock,
+                proposedOp.vectorClock,
+                currentClientId,
               );
               runningClock = mergedClock;
               op = { ...proposedOp, vectorClock: mergedClock };
@@ -2607,23 +2626,29 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
-   * Appends an operation AND updates the vector clock in a SINGLE atomic transaction.
+   * Appends an operation AND OVERWRITES the durable vector clock with
+   * `op.vectorClock` as-is, in a single atomic transaction. No rebase, no
+   * merge — whatever clock the caller built replaces the durable one.
+   *
+   * INVARIANT (#8939): the caller MUST derive `op.vectorClock` from the
+   * durable clock inside the same sp_op_log lock hold, after
+   * `clearVectorClockCache()` — the capture path in OperationLogEffects is the
+   * only production caller and does exactly that. Any other derivation (e.g.
+   * from the per-tab in-memory cache) can regress the durable clock and reuse
+   * counters. New writers must use `appendMixedSourceBatchSkipDuplicates`,
+   * whose in-transaction rebase makes regression unrepresentable.
    *
    * PERFORMANCE: This is the key optimization for mobile devices. Previously, each action
    * required two separate IndexedDB transactions (one to SUP_OPS, one to pf.META_MODEL).
    * By consolidating the vector clock into SUP_OPS, we can write both in a single transaction,
    * reducing disk I/O by ~50%.
    *
-   * NOTE: The operation's vectorClock field should already contain the incremented clock
-   * (incremented by the caller). This method stores that clock as the current vector clock,
-   * it does NOT increment again.
-   *
    * @param op The operation to append (with vectorClock already set)
    * @param source Whether this is a local or remote operation
    * @param options Additional options (e.g., pendingApply for remote ops)
    * @returns The sequence number of the appended operation
    */
-  async appendWithVectorClockUpdate(
+  async appendWithVectorClockOverwrite(
     op: Operation,
     source: 'local' | 'remote' = 'local',
     options?: { pendingApply?: boolean },
@@ -2675,6 +2700,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
 
     const { staleRepairOpId, replacementOp, repairedState } = opts;
+    let committedClock: VectorClock | undefined;
     const seq = await this._adapter.transaction(
       [
         STORE_NAMES.OPS,
@@ -2696,28 +2722,42 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         staleEntry.rejectedAt = Date.now();
         await tx.put(STORE_NAMES.OPS, staleEntry);
 
-        const replacementEntry = this._buildStoredEntry(replacementOp, 'local');
+        // Rebase onto the durable clock read in this same transaction — the
+        // caller-built clock may come from a stale in-memory cache (#8939).
+        const currentClockEntry = await tx.get<VectorClockEntry>(
+          STORE_NAMES.VECTOR_CLOCK,
+          SINGLETON_KEY,
+        );
+        const rebasedClock = rebaseLocalClockOnDurable(
+          currentClockEntry?.clock ?? {},
+          replacementOp.vectorClock,
+          replacementOp.clientId,
+        );
+        const rebasedOp: Operation = { ...replacementOp, vectorClock: rebasedClock };
+
+        const replacementEntry = this._buildStoredEntry(rebasedOp, 'local');
         const replacementSeq = await tx.add(STORE_NAMES.OPS, replacementEntry);
         await this._recordFullStateOpInTx(tx, replacementEntry.op, replacementSeq);
         await tx.put(
           STORE_NAMES.VECTOR_CLOCK,
-          { clock: replacementOp.vectorClock, lastUpdate: Date.now() },
+          { clock: rebasedClock, lastUpdate: Date.now() },
           SINGLETON_KEY,
         );
         await tx.put(STORE_NAMES.STATE_CACHE, {
           id: SINGLETON_KEY,
           state: repairedState,
           lastAppliedOpSeq: replacementSeq,
-          vectorClock: replacementOp.vectorClock,
+          vectorClock: rebasedClock,
           compactedAt: Date.now(),
-          schemaVersion: replacementOp.schemaVersion,
+          schemaVersion: rebasedOp.schemaVersion,
         });
 
+        committedClock = rebasedClock;
         return replacementSeq;
       },
     );
 
-    this._vectorClockCache = replacementOp.vectorClock;
+    this._vectorClockCache = committedClock ?? null;
     this._invalidateUnsyncedCache();
     return seq;
   }

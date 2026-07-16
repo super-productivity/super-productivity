@@ -26,6 +26,7 @@ import {
   UploadRevToMatchMismatchAPIError,
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
+  FileSyncTargetChangedError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
@@ -954,6 +955,17 @@ export class SyncWrapperService {
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         return 'HANDLED_ERROR';
+      } else if (error instanceof FileSyncTargetChangedError) {
+        // The file sync target (provider/account/folder) changed while this
+        // upload was in flight; the guarded write was abandoned before it could
+        // land the previous target's data on the new one — self-healing. Do not
+        // show an error snackbar; UNKNOWN_OR_CHANGED triggers the next sync,
+        // which re-reads and re-uploads against the current target from zero.
+        SyncLog.log(
+          'SyncWrapperService: Sync target changed mid-operation, will re-sync against the current target',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
       } else if (error instanceof OperationIntegrityError) {
         // A decrypted op's unauthenticated metadata contradicted its authenticated
         // payload, or a plaintext op arrived while encryption is mandatory
@@ -1079,11 +1091,20 @@ export class SyncWrapperService {
         );
         SyncLog.log('SyncWrapperService: Force upload complete');
       } catch (error) {
-        // GHSA-9544-hjjr-fg8h: a keyless-but-encryption-enabled provider makes
-        // force upload refuse to send plaintext. Route to the enter-password
-        // recovery dialog like the main sync path, not a dead-end error snack —
-        // otherwise "force overwrite" (offered as the lost-key recovery) loops.
-        if (error instanceof EncryptNoPasswordError) {
+        if (error instanceof FileSyncTargetChangedError) {
+          // The file target switched during the force upload; the guarded write
+          // was abandoned before it could hit the new target. Self-healing like
+          // the main sync path — report UNKNOWN_OR_CHANGED (no error snack) so
+          // the next sync re-reads/re-uploads against the current target.
+          SyncLog.log(
+            'SyncWrapperService: target changed mid-force-upload, will re-sync against the current target',
+          );
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        } else if (error instanceof EncryptNoPasswordError) {
+          // GHSA-9544-hjjr-fg8h: a keyless-but-encryption-enabled provider makes
+          // force upload refuse to send plaintext. Route to the enter-password
+          // recovery dialog like the main sync path, not a dead-end error snack —
+          // otherwise "force overwrite" (offered as the lost-key recovery) loops.
           this._handleMissingPasswordDialog();
         } else {
           SyncLog.err('SyncWrapperService: Force upload failed:', error);
@@ -1404,6 +1425,16 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       }
     } catch (resolutionError) {
+      if (resolutionError instanceof FileSyncTargetChangedError) {
+        // Target switched during USE_LOCAL force upload; the guarded write was
+        // abandoned. Self-heal silently (UNKNOWN_OR_CHANGED) like the main sync
+        // path instead of a dead-end error snack.
+        SyncLog.log(
+          'SyncWrapperService: target changed mid-conflict-resolution, will re-sync against the current target',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      }
       // GHSA-9544-hjjr-fg8h: USE_LOCAL force-uploads, which refuses to send
       // plaintext when the key is missing. Route to the enter-password recovery
       // dialog instead of a dead-end error snack (mirrors the main sync path).

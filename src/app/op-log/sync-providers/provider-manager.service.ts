@@ -22,6 +22,7 @@ import {
   CurrentProviderPrivateCfg,
 } from '../core/types/sync.types';
 import { loadSyncProviders } from './sync-providers.factory';
+import { isSyncTargetChanged } from './sync-target-identity.util';
 
 /**
  * Sync status change payload type
@@ -31,6 +32,37 @@ export type SyncStatusChangePayload =
   | 'ERROR'
   | 'IN_SYNC'
   | 'SYNCING';
+
+/** Payload of `providerConfigChanged$`. See that observable for the semantics. */
+export interface ProviderConfigChange {
+  /** True only when the write moved the sync target (see `isSyncTargetChanged`). */
+  isTargetChanged: boolean;
+}
+
+// Module-level reference so static sync-form handlers can signal a target
+// change without an injector (mirrors the encryption-dialog-opener pattern).
+let providerManagerInstance: SyncProviderManager | null = null;
+
+const setProviderManagerInstance = (instance: SyncProviderManager): void => {
+  providerManagerInstance = instance;
+};
+
+/**
+ * Signal that the active file-provider target changed through an ingress that
+ * bypasses `setProviderConfig()` — the Electron LocalFile folder picker (which
+ * persists the folder main-side, post-#8228) and Android `setupSaf()` (which
+ * writes `safFolderUri` straight to the credential store). Both mutate the
+ * target without firing `providerTargetChanged$`, so the file adapter would keep
+ * the previous folder's revs/clocks/caches keyed by the (unchanged) `LocalFile`
+ * provider id. Both ingresses are unambiguous target moves (the user picked a
+ * different folder), so this asserts a target change directly rather than
+ * inferring one from a config diff. It no-ops if the manager was never
+ * instantiated — nothing is cached to leak.
+ * (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+ */
+export const notifyFileProviderTargetChanged = (): void => {
+  providerManagerInstance?.notifyProviderTargetChanged();
+};
 
 /**
  * Service for managing sync providers.
@@ -74,7 +106,7 @@ export class SyncProviderManager {
     new BehaviorSubject<CurrentProviderPrivateCfg | null>(null);
 
   // Emits whenever provider config is updated via setProviderConfig()
-  private _providerConfigChanged$ = new Subject<void>();
+  private _providerConfigChanged$ = new Subject<ProviderConfigChange>();
   private _hasShownLocalFileReselectSnack = false;
 
   /**
@@ -115,10 +147,21 @@ export class SyncProviderManager {
     this._currentProviderPrivateCfg$.pipe(shareReplay(1));
 
   /**
-   * Emits whenever provider config is updated via setProviderConfig().
-   * Used by WrappedProviderService to auto-invalidate its adapter cache.
+   * Emits on EVERY provider-config write, carrying whether that write moved the
+   * sync TARGET — an account switch behind the same provider id, or a folder/URL
+   * change — as opposed to a content-only edit. Both ride ONE emission so a
+   * caller cannot raise a move without the cache drop, which would leave a stale
+   * encryption key cached against fresh target state.
+   * See `isSyncTargetChanged` and `FileBasedSyncAdapterService.invalidateAllTargets`.
+   *
+   * `isTargetChanged` is scoped to ONE provider's config and says nothing about
+   * which provider is ACTIVE — the two axes have separate detectors. A provider
+   * SWITCH is handled by `SyncWrapperService`'s `getLastSyncedProviderId()` check
+   * → `forceFromSeq0`, so switching to an already-configured provider correctly
+   * emits `isTargetChanged: false`: its provider-id-keyed state still describes
+   * its own unchanged remote.
    */
-  public readonly providerConfigChanged$: Observable<void> =
+  public readonly providerConfigChanged$: Observable<ProviderConfigChange> =
     this._providerConfigChanged$.asObservable();
 
   /**
@@ -130,6 +173,10 @@ export class SyncProviderManager {
     );
 
   constructor() {
+    // Self-register so the module-level notifyFileProviderTargetChanged() can
+    // reach this singleton from static form config handlers.
+    setProviderManagerInstance(this);
+
     // Listen to sync config changes and update active provider
     this._syncConfig$.subscribe((cfg) => {
       try {
@@ -236,13 +283,22 @@ export class SyncProviderManager {
     if (!provider) {
       throw new Error(`Provider not found: ${providerId}`);
     }
+    // Read the previous config BEFORE the write so an identity-affecting change
+    // (account/folder/URL) can be told apart from a content-only one. Callers
+    // save the whole privateCfg on every settings-dialog Save — including saves
+    // that only touched a global setting — so "config was written" is far weaker
+    // than "the target moved". See providerTargetChanged$.
+    const prevCfg = await provider.privateCfg.load();
+
     // Use setPrivateCfg() instead of privateCfg.setComplete() to ensure
     // provider-specific caches (like lastServerSeq key) are invalidated.
     // This is critical for server migration detection when switching users.
     await provider.setPrivateCfg(config);
 
     // Notify subscribers (e.g., WrappedProviderService) that config changed
-    this._providerConfigChanged$.next();
+    this._providerConfigChanged$.next({
+      isTargetChanged: isSyncTargetChanged(prevCfg, config),
+    });
 
     // If this is the active provider, update the current config observable
     if (this._activeProvider?.id === providerId) {
@@ -255,6 +311,21 @@ export class SyncProviderManager {
       this._isProviderReady$.next(ready);
       this._maybeShowLocalFileReselectSnack(providerId, ready, config);
     }
+  }
+
+  /**
+   * Asserts a target change for a write that bypassed `setProviderConfig()`, so
+   * no config diff is available to infer it from. Three such ingresses exist: the
+   * Electron LocalFile folder picker, Android `setupSaf()`, and the OneDrive
+   * pre-auth cfg write in `dialog-sync-cfg.component`. Callers that fire on every
+   * save (OneDrive) MUST gate this on `isSyncTargetChanged` — an unconditional
+   * notify reintroduces the cursor wipe this signal exists to avoid.
+   *
+   * Kept minimal on purpose: it does not reload provider config (the caller
+   * already persisted the new target). See `notifyFileProviderTargetChanged()`.
+   */
+  notifyProviderTargetChanged(): void {
+    this._providerConfigChanged$.next({ isTargetChanged: true });
   }
 
   /**

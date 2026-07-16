@@ -309,6 +309,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
 
   // IMPORTANT: Spread actionPayload FIRST, then set type, to prevent entity properties
   // named 'type' (like SimpleCounter.type = 'ClickCounter') from overwriting the action type.
+  const lwwPayload = isLwwUpdatePayload(op.payload) ? op.payload : undefined;
   return {
     ...actionPayload,
     type: replayActionType,
@@ -316,14 +317,23 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       isPersistent: true,
       entityType: op.entityType,
       entityId: op.entityId,
+      // Plaintext, UNAUTHENTICATED envelope footprint. Never trust it for an
+      // LWW-TASK relocation / task-set decision — use the authenticated
+      // meta.projectMoveFootprint instead. GHSA-8pxh-mgc7-gp3g. (Still surfaced
+      // here for the non-relocation consumers that legitimately read it.)
       entityIds: op.entityIds,
       opType: op.opType,
       isRemote: true, // Important to prevent re-logging during replay/sync
-      ...(isLwwUpdatePayload(op.payload)
-        ? { lwwUpdateMode: op.payload.lwwUpdateMode }
-        : {}),
-      ...(isLwwUpdatePayload(op.payload) && op.payload.recreatesEntityAfterDelete === true
+      ...(lwwPayload ? { lwwUpdateMode: lwwPayload.lwwUpdateMode } : {}),
+      ...(lwwPayload?.recreatesEntityAfterDelete === true
         ? { recreatesEntityAfterDelete: true }
+        : {}),
+      // Surface the AUTHENTICATED move footprint from the encrypted payload so
+      // reducers can relocate task families without trusting the plaintext
+      // op.entityIds envelope (which a compromised server can tamper with).
+      // GHSA-8pxh-mgc7-gp3g. Absent on legacy/non-move ops → receiving-state repair.
+      ...(lwwPayload?.projectMoveFootprint !== undefined
+        ? { projectMoveFootprint: lwwPayload.projectMoveFootprint }
         : {}),
     },
   };

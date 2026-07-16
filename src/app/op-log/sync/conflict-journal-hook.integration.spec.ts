@@ -82,7 +82,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'appendBatchSkipDuplicates',
       'appendMixedSourceBatchSkipDuplicates',
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'markApplied',
       'markRejected',
       'markFailed',
@@ -103,7 +103,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
       skippedCount: 0,
     }));
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
-    mockOpLogStore.appendWithVectorClockUpdate.and.resolveTo(undefined);
+    mockOpLogStore.appendWithVectorClockOverwrite.and.resolveTo(undefined);
     mockOpLogStore.markRejected.and.resolveTo(undefined);
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
@@ -269,19 +269,19 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
     // Control run: journaling works normally.
     await service.autoResolveConflictsLWW([buildConflict()]);
     const controlRejected = mockOpLogStore.markRejected.calls.allArgs();
-    const controlAppended = mockOpLogStore.appendWithVectorClockUpdate.calls
+    const controlAppended = mockOpLogStore.appendWithVectorClockOverwrite.calls
       .allArgs()
       .map(([o]) => (o as Operation).entityId);
 
     mockOpLogStore.markRejected.calls.reset();
-    mockOpLogStore.appendWithVectorClockUpdate.calls.reset();
+    mockOpLogStore.appendWithVectorClockOverwrite.calls.reset();
 
     // Sabotaged run: force record() to reject — resolution must be unaffected.
     spyOn(journal, 'record').and.rejectWith(new Error('journal boom'));
 
     await service.autoResolveConflictsLWW([buildConflict()]);
     const sabotagedRejected = mockOpLogStore.markRejected.calls.allArgs();
-    const sabotagedAppended = mockOpLogStore.appendWithVectorClockUpdate.calls
+    const sabotagedAppended = mockOpLogStore.appendWithVectorClockOverwrite.calls
       .allArgs()
       .map(([o]) => (o as Operation).entityId);
 

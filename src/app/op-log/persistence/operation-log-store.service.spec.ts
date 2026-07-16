@@ -3430,13 +3430,13 @@ describe('OperationLogStoreService', () => {
     });
   });
 
-  describe('appendWithVectorClockUpdate', () => {
+  describe('appendWithVectorClockOverwrite', () => {
     it('should append operation and update vector clock atomically for local ops', async () => {
       const op = createTestOperation({
         vectorClock: { testClient: 1 },
       });
 
-      const seq = await service.appendWithVectorClockUpdate(op, 'local');
+      const seq = await service.appendWithVectorClockOverwrite(op, 'local');
 
       // Operation should be stored
       const ops = await service.getOpsAfterSeq(0);
@@ -3458,7 +3458,7 @@ describe('OperationLogStoreService', () => {
         vectorClock: { remoteClient: 10 },
       });
 
-      await service.appendWithVectorClockUpdate(remoteOp, 'remote');
+      await service.appendWithVectorClockOverwrite(remoteOp, 'remote');
 
       // Vector clock should NOT be updated (remote ops don't change local clock)
       const clock = await service.getVectorClock();
@@ -3479,15 +3479,15 @@ describe('OperationLogStoreService', () => {
         vectorClock: { testClient: 3, otherClient: 1 },
       });
 
-      await service.appendWithVectorClockUpdate(op1, 'local');
+      await service.appendWithVectorClockOverwrite(op1, 'local');
       let clock = await service.getVectorClock();
       expect(clock).toEqual({ testClient: 1 });
 
-      await service.appendWithVectorClockUpdate(op2, 'local');
+      await service.appendWithVectorClockOverwrite(op2, 'local');
       clock = await service.getVectorClock();
       expect(clock).toEqual({ testClient: 2 });
 
-      await service.appendWithVectorClockUpdate(op3, 'local');
+      await service.appendWithVectorClockOverwrite(op3, 'local');
       clock = await service.getVectorClock();
       expect(clock).toEqual({ testClient: 3, otherClient: 1 });
     });
@@ -3495,7 +3495,7 @@ describe('OperationLogStoreService', () => {
     it('should set applicationStatus to pending for remote ops with pendingApply', async () => {
       const op = createTestOperation();
 
-      await service.appendWithVectorClockUpdate(op, 'remote', { pendingApply: true });
+      await service.appendWithVectorClockOverwrite(op, 'remote', { pendingApply: true });
 
       const ops = await service.getOpsAfterSeq(0);
       expect(ops[0].applicationStatus).toBe('pending');
@@ -3504,7 +3504,7 @@ describe('OperationLogStoreService', () => {
     it('should set applicationStatus to applied for remote ops without pendingApply', async () => {
       const op = createTestOperation();
 
-      await service.appendWithVectorClockUpdate(op, 'remote');
+      await service.appendWithVectorClockOverwrite(op, 'remote');
 
       const ops = await service.getOpsAfterSeq(0);
       expect(ops[0].applicationStatus).toBe('applied');
@@ -3514,7 +3514,7 @@ describe('OperationLogStoreService', () => {
       const beforeTime = Date.now();
       const op = createTestOperation();
 
-      await service.appendWithVectorClockUpdate(op, 'remote');
+      await service.appendWithVectorClockOverwrite(op, 'remote');
       const afterTime = Date.now();
 
       const ops = await service.getOpsAfterSeq(0);
@@ -3526,7 +3526,7 @@ describe('OperationLogStoreService', () => {
     it('should NOT set syncedAt for local ops', async () => {
       const op = createTestOperation();
 
-      await service.appendWithVectorClockUpdate(op, 'local');
+      await service.appendWithVectorClockOverwrite(op, 'local');
 
       const ops = await service.getOpsAfterSeq(0);
       expect(ops[0].syncedAt).toBeUndefined();
@@ -3542,7 +3542,7 @@ describe('OperationLogStoreService', () => {
 
       // Append concurrently
       await Promise.all(
-        ops.map((op) => service.appendWithVectorClockUpdate(op, 'local')),
+        ops.map((op) => service.appendWithVectorClockOverwrite(op, 'local')),
       );
 
       const storedOps = await service.getOpsAfterSeq(0);
@@ -3585,6 +3585,42 @@ describe('OperationLogStoreService', () => {
       expect((await service.loadStateCache())?.state).toEqual(repairedState);
       expect(await service.getVectorClock()).toEqual(replacement.vectorClock);
       expect((await service.getLatestFullStateOpEntry())?.op.id).toBe(replacement.id);
+    });
+
+    // #8939: the caller-built clock may be stale (derived from a lagging
+    // in-memory cache); the replacement must be rebased onto the durable
+    // clock inside the transaction so the clock can never regress.
+    it('should rebase the replacement clock past a durable clock that advanced since it was built', async () => {
+      const staleRepair = createTestOperation({
+        id: 'stale-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+      });
+      await service.append(staleRepair);
+      await service.setVectorClock({ testClient: 9, otherClient: 4 });
+      const repairedState = { task: { ids: [], entities: {} } };
+      const replacement = createTestOperation({
+        id: 'replacement-repair',
+        opType: OpType.Repair,
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { appDataComplete: repairedState },
+        vectorClock: { testClient: 2 },
+      });
+
+      await service.replaceRejectedRepair({
+        staleRepairOpId: staleRepair.id,
+        replacementOp: replacement,
+        repairedState,
+      });
+
+      const expectedClock = { testClient: 10, otherClient: 4 };
+      expect(await service.getVectorClock()).toEqual(expectedClock);
+      expect((await service.getOpById(replacement.id))?.op.vectorClock).toEqual(
+        expectedClock,
+      );
+      expect((await service.loadStateCache())?.vectorClock).toEqual(expectedClock);
     });
 
     it('should abort without appending when the stale repair is missing', async () => {
@@ -3630,7 +3666,7 @@ describe('OperationLogStoreService', () => {
       const op = createTestOperation({
         vectorClock: { snapshotClient: 51 },
       });
-      await service.append(op); // Using append, not appendWithVectorClockUpdate
+      await service.append(op); // Using append, not appendWithVectorClockOverwrite
 
       // VectorClockService should fall back to computing from snapshot+ops
       const clock = await vectorClockService.getCurrentVectorClock();
@@ -3795,7 +3831,7 @@ describe('OperationLogStoreService', () => {
         vectorClock: { localClient: 5 },
       });
 
-      await service.appendWithVectorClockUpdate(localOp, 'local');
+      await service.appendWithVectorClockOverwrite(localOp, 'local');
 
       // Cache should be updated with the new clock
       const clock = await service.getVectorClock();
@@ -3811,7 +3847,7 @@ describe('OperationLogStoreService', () => {
         clientId: 'remoteClient',
         vectorClock: { remoteClient: 99, localClient: 15 },
       });
-      await service.appendWithVectorClockUpdate(remoteOp, 'remote');
+      await service.appendWithVectorClockOverwrite(remoteOp, 'remote');
 
       // Cache should NOT be updated - still returns local clock
       const clock = await service.getVectorClock();
@@ -3824,7 +3860,7 @@ describe('OperationLogStoreService', () => {
         entityId: 'task1',
         vectorClock: { localClient: 1 },
       });
-      await service.appendWithVectorClockUpdate(localOp1, 'local');
+      await service.appendWithVectorClockOverwrite(localOp1, 'local');
 
       // Remote op (should not affect cache)
       const remoteOp = createTestOperation({
@@ -3832,14 +3868,14 @@ describe('OperationLogStoreService', () => {
         clientId: 'remoteClient',
         vectorClock: { remoteClient: 50, localClient: 5 },
       });
-      await service.appendWithVectorClockUpdate(remoteOp, 'remote');
+      await service.appendWithVectorClockOverwrite(remoteOp, 'remote');
 
       // Local op 2
       const localOp2 = createTestOperation({
         entityId: 'task3',
         vectorClock: { localClient: 2 },
       });
-      await service.appendWithVectorClockUpdate(localOp2, 'local');
+      await service.appendWithVectorClockOverwrite(localOp2, 'local');
 
       // Cache should reflect the last LOCAL op's clock
       const clock = await service.getVectorClock();

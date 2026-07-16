@@ -92,6 +92,7 @@ describe('TagListComponent', () => {
 
     const dateTimeFormatServiceMock = {
       currentLocale: () => 'en',
+      textLocale: () => 'en',
     };
 
     const pluginRegistryMock = {

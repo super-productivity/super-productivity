@@ -40,6 +40,12 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
   let mockDateService: jasmine.SpyObj<DateService>;
 
+  // Mutable locale backing the DateTimeFormatService mock, so a test can
+  // simulate the ISO 8601 option (numeric locale = sv sentinel, spelled-out
+  // names = UI language). Reset in setupTestBed.
+  let mockCurrentLocale = 'en-US';
+  let mockTextLocale = 'en-US';
+
   // DateService is mocked to this fixed day; assertions about "today" must
   // derive from these consts, never from the real clock (see #8017 CI breakage).
   const MOCK_TODAY = new Date(2026, 5, 9, 0, 0, 0, 0);
@@ -112,8 +118,13 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
+    mockCurrentLocale = 'en-US';
+    mockTextLocale = 'en-US';
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: () => 'en-US',
+      currentLocale: () => mockCurrentLocale,
+      // Mirrors the real service: spelled-out names follow this locale (equals
+      // currentLocale() unless the ISO option remaps it to the UI language).
+      textLocale: () => mockTextLocale,
       dateFormat: () => ({
         parse: 'MM/dd/yyyy',
         display: { dateInput: 'MM/dd/yyyy' },
@@ -340,6 +351,42 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const component = fixture.componentInstance;
 
       expect(component.isEdit()).toBe(false);
+    });
+  });
+
+  describe('plannedStartDateStr localization (#8987 follow-up)', () => {
+    it('renders the start-date value in the UI language under the ISO option, not sv', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      // ISO 8601 option: numeric locale is the sv sentinel, but spelled-out
+      // names must follow the UI language ('en').
+      mockCurrentLocale = 'sv';
+      mockTextLocale = 'en';
+
+      fixture.componentInstance.repeatCfg.set({
+        ...DEFAULT_TASK_REPEAT_CFG,
+        startDate: '2026-07-15',
+      });
+
+      const label = fixture.componentInstance.plannedStartDateStr();
+      // English spelled-out names ("Wed, Jul 15, 2026"), not Swedish
+      // ("ons 15 juli 2026").
+      expect(label).toContain('Jul');
+      expect(label).not.toContain('juli');
+      expect(label).not.toContain('ons');
+    });
+
+    it('keeps the configured locale for spelled-out names when not the ISO option', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      // de-DE renders its own spelled-out names; textLocale equals currentLocale.
+      mockCurrentLocale = 'de-DE';
+      mockTextLocale = 'de-DE';
+
+      fixture.componentInstance.repeatCfg.set({
+        ...DEFAULT_TASK_REPEAT_CFG,
+        startDate: '2026-07-15',
+      });
+
+      expect(fixture.componentInstance.plannedStartDateStr()).toContain('Juli');
     });
   });
 

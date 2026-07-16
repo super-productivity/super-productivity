@@ -163,8 +163,10 @@ describe('AddTaskBarComponent', () => {
 
   const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [
     'currentLocale',
+    'textLocale',
   ]);
   mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
+  mockDateTimeFormatService.textLocale.and.returnValue('en-US');
 
   beforeEach(async () => {
     // The state service seeds its note draft (and thus isNoteExpanded) from

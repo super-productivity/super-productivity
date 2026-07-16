@@ -27,6 +27,7 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date(2026, 5, 2),
       'en-US',
       translateService,
+      'en-US',
     );
     expect(options.map((o) => o.value)).toEqual([
       'DAILY',
@@ -54,7 +55,12 @@ describe('buildRepeatQuickSettingOptions', () => {
   // and `ORDINAL_KEYS[NaN-1]` → undefined → instant(undefined) threw.
   it('should not throw when given an invalid date', () => {
     expect(() =>
-      buildRepeatQuickSettingOptions(new Date('Invalid Date'), 'en-US', translateService),
+      buildRepeatQuickSettingOptions(
+        new Date('Invalid Date'),
+        'en-US',
+        translateService,
+        'en-US',
+      ),
     ).not.toThrow();
   });
 
@@ -63,8 +69,48 @@ describe('buildRepeatQuickSettingOptions', () => {
       new Date('Invalid Date'),
       'en-US',
       translateService,
+      'en-US',
     );
     expect(options.length).toBe(9);
     options.forEach((o) => expect(o.label).toBeTruthy());
+  });
+
+  // #8987 follow-up: under the ISO 8601 option the numeric locale is the `sv`
+  // sentinel; the spelled-out weekday must follow the UI language instead, while
+  // numeric day/month keep the sv (day-first) ordering.
+  it('should use weekdayLocale for the spelled-out weekday, keeping locale for numeric parts', () => {
+    // 2026-07-15 is a Wednesday.
+    const weekdayCalls: { key: string; params: any }[] = [];
+    spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
+      weekdayCalls.push({ key, params });
+      return key;
+    });
+
+    buildRepeatQuickSettingOptions(new Date(2026, 6, 15), 'sv', translateService, 'en');
+
+    const weeklyCall = weekdayCalls.find(
+      (c) => c.params?.weekdayStr !== undefined && c.params?.ordinalStr === undefined,
+    );
+    const yearlyCall = weekdayCalls.find((c) => c.params?.dayAndMonthStr !== undefined);
+
+    // Weekday follows the UI language ('en' → "Wednesday"), not sv ("onsdag").
+    expect(weeklyCall!.params.weekdayStr).toBe('Wednesday');
+    // Numeric day/month keeps the sv locale → day-first "15/7".
+    expect(yearlyCall!.params.dayAndMonthStr).toBe('15/7');
+  });
+
+  it('should use locale for the weekday when both locales match (non-ISO)', () => {
+    const weekdayCalls: { key: string; params: any }[] = [];
+    spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
+      weekdayCalls.push({ key, params });
+      return key;
+    });
+
+    buildRepeatQuickSettingOptions(new Date(2026, 6, 15), 'sv', translateService, 'sv');
+
+    const weeklyCall = weekdayCalls.find(
+      (c) => c.params?.weekdayStr !== undefined && c.params?.ordinalStr === undefined,
+    );
+    expect(weeklyCall!.params.weekdayStr).toBe('onsdag');
   });
 });

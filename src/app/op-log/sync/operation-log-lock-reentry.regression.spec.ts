@@ -77,11 +77,11 @@ describe('regression #7700: operation-log lock reentry', () => {
 
   beforeEach(() => {
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'getCompactionCounter',
       'clearVectorClockCache',
     ]);
-    opLogStoreSpy.appendWithVectorClockUpdate.and.resolveTo(1);
+    opLogStoreSpy.appendWithVectorClockOverwrite.and.resolveTo(1);
     opLogStoreSpy.getCompactionCounter.and.resolveTo(0);
 
     vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
@@ -198,7 +198,7 @@ describe('regression #7700: operation-log lock reentry', () => {
     const elapsed = Date.now() - start;
 
     expect(order).toEqual(['outer-start', 'outer-end']);
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
     // Should be near-instant — orders of magnitude under the 30s lock timeout.
     expect(elapsed).toBeLessThan(2000);
   }, 10000);
@@ -230,7 +230,7 @@ describe('regression #7700: operation-log lock reentry', () => {
     ).toBeRejected();
 
     // Action was NOT written — no silent persistence.
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
     // The differentiating assertion: pre-loud-fail, writeOperation
     // swallowed the timeout and returned success → the retry loop
     // exited on attempt #1 and DEFERRED_ACTION_FAILED never fired.
@@ -281,8 +281,8 @@ describe('regression #7700: operation-log lock reentry', () => {
       await effects.processDeferredActions({ callerHoldsOperationLogLock: true });
     });
 
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
-    const writtenOp = opLogStoreSpy.appendWithVectorClockUpdate.calls.mostRecent()
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
+    const writtenOp = opLogStoreSpy.appendWithVectorClockOverwrite.calls.mostRecent()
       .args[0] as { vectorClock: Record<string, number> };
 
     // The merged remote entries must be present.

@@ -14,6 +14,7 @@ import {
 } from './file-based-sync.types';
 import {
   EncryptNoPasswordError,
+  FileSyncTargetChangedError,
   InvalidDataSPError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
@@ -229,6 +230,104 @@ describe('FileBasedSyncAdapterService', () => {
       expect(adapter.setLastServerSeq).toBeDefined();
       expect(adapter.uploadSnapshot).toBeDefined();
       expect(adapter.deleteAllData).toBeDefined();
+    });
+  });
+
+  describe('in-flight target guard (Task 2)', () => {
+    it('aborts the upload without writing when the target changes mid-operation', async () => {
+      // The first download happens inside the upload (to read current state).
+      // Simulate a concurrent provider/account/folder switch during it, then
+      // report the file as absent so the upload would otherwise create it.
+      mockProvider.downloadFile.and.callFake(async () => {
+        service.invalidateAllTargets(); // bumps the target generation mid-op
+        throw new RemoteFileNotFoundAPIError('sync-data.json');
+      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(FileSyncTargetChangedError);
+
+      // The critical assertion: no write reached the (now different) target.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('lets a normal upload write when the generation is stable', async () => {
+      mockProvider.downloadFile.and.throwError(
+        new RemoteFileNotFoundAPIError('sync-data.json'),
+      );
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(mockProvider.uploadFile).toHaveBeenCalled();
+    });
+
+    it('aborts a download before committing its baseline when the target changes mid-download', async () => {
+      // The download reads target A; a switch during that read must not let the
+      // stale baseline (sync-version/clock/rev) or its seq cursor be committed
+      // under the shared provider id — otherwise the next sync skips the new
+      // target's ops from a stale cursor (data loss).
+      const syncData = createMockSyncData({ syncVersion: 5, vectorClock: { c1: 5 } });
+      mockProvider.downloadFile.and.callFake(async () => {
+        service.invalidateAllTargets(); // target switch mid-download
+        return { dataStr: addPrefix(syncData), rev: 'rev-A' };
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+
+      // Baseline was not committed: the seq cursor stayed at zero.
+      expect(await adapter.getLastServerSeq()).toBe(0);
+    });
+
+    it('guards removeFile as well as uploadFile, and passes reads through', async () => {
+      const guarded = service['_withTargetGuard'](
+        mockProvider,
+        service['_targetGeneration'],
+      );
+
+      // Reads always pass through.
+      await guarded.downloadFile('any');
+      expect(mockProvider.downloadFile).toHaveBeenCalled();
+
+      // A target change after capture makes both writes throw.
+      service.invalidateAllTargets();
+      await expectAsync(guarded.uploadFile('p', 'd', null, true)).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      await expectAsync(guarded.removeFile('p')).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      expect(mockProvider.removeFile).not.toHaveBeenCalled();
+    });
+
+    it('aborts a snapshot upload without writing when the target changes mid-operation', async () => {
+      // uploadSnapshot is the second write entry point (initial/recovery/
+      // migration + REPAIR). Loading archive data happens after the operation
+      // captures its generation but before the snapshot write, so bump the
+      // generation there to simulate a concurrent target switch.
+      mockArchiveDbAdapter.loadArchiveYoung.and.callFake(async () => {
+        service.invalidateAllTargets();
+        return mockArchiveYoung;
+      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
+
+      await expectAsync(
+        adapter.uploadSnapshot(
+          { tasks: [] },
+          'client1',
+          'initial',
+          { client1: 1 },
+          2,
+          undefined, // isPayloadEncrypted
+          'op-1', // opId
+        ),
+      ).toBeRejectedWithError(FileSyncTargetChangedError);
+
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
   });
 
@@ -1333,6 +1432,36 @@ describe('FileBasedSyncAdapterService', () => {
       const downloadResult = await adapter.downloadOps(0);
       expect(downloadResult.ops.length).toBe(1);
       expect(downloadResult.latestSeq).toBe(1);
+    });
+  });
+
+  describe('invalidateAllTargets', () => {
+    it('clears target-scoped state so the next sync full-reads the current target', async () => {
+      // Establish per-target state the way a normal sync cycle would.
+      await adapter.setLastServerSeq(50);
+      expect(await adapter.getLastServerSeq()).toBe(50);
+
+      // A real target move (provider switch, account switch behind the same
+      // provider id, or a folder/URL change) must invalidate the
+      // provider-id-keyed state, or it is reused against the new target and can
+      // read/write one target's data against another.
+      service.invalidateAllTargets();
+
+      // NOTE: resetting the cursor to 0 is correct ONLY for a real target move.
+      // On a save that left the target put, a 0 cursor makes the next download
+      // return a snapshotState (isForceFromZero), which for a client holding
+      // unsynced ops dead-ends in a binary conflict dialog — see the
+      // latestSeq/snapshotState suite below. Hence invalidateAllTargets() rides
+      // providerTargetChanged$, never providerConfigChanged$; that wiring is
+      // covered in wrapped-provider.service.spec.ts.
+      expect(await adapter.getLastServerSeq()).toBe(0);
+    });
+
+    it('advances the target generation on each invalidation', () => {
+      const before = service['_targetGeneration'];
+      service.invalidateAllTargets();
+      service.invalidateAllTargets();
+      expect(service['_targetGeneration']).toBe(before + 2);
     });
   });
 
@@ -3780,6 +3909,53 @@ describe('FileBasedSyncAdapterService', () => {
         .map((args) => parseWithPrefix(args[1] as string) as unknown as FileBasedOpsFile)
         .find((opsFile) => opsFile.migration === undefined);
       expect(finalizedMarker).toBeDefined();
+    });
+
+    it('(e2c) aborts a pending split migration resume without writing when the target changes mid-download', async () => {
+      // The split-format DOWNLOAD path resumes a crashed migration by writing
+      // remote files. Task 2's in-flight guard must cover it too: a target
+      // switch during the download must abort those writes.
+      const clock = { client1: 7 };
+      const legacy = createMockSyncData({
+        syncVersion: 7,
+        vectorClock: clock,
+        state: { tasks: ['legacy'] },
+      });
+      const pendingOps = makeOpsFile({
+        syncVersion: 7,
+        vectorClock: clock,
+        snapshotRef: { syncVersion: 7, vectorClock: clock },
+        migration: { status: 'pending', legacyRev: `${C.SYNC_FILE}-rev` },
+      });
+      const map: Record<string, string> = {
+        [C.SYNC_FILE]: addPrefix(legacy, 2),
+        [C.OPS_FILE]: addPrefix(pendingOps, 3),
+        [C.STATE_FILE]: addPrefix(
+          makeStateFile({
+            syncVersion: 7,
+            vectorClock: clock,
+            state: { tasks: ['legacy'] },
+          }),
+          3,
+        ),
+      };
+      // Simulate a concurrent target switch during the download (before the
+      // migration-resume writes) by bumping the generation on the first read.
+      let bumped = false;
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (!bumped) {
+          bumped = true;
+          service.invalidateAllTargets();
+        }
+        if (path in map) return { dataStr: map[path], rev: `${path}-rev` };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+
+      await expectAsync(adapter.downloadOps(0, 'client2')).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      // No migration-resume write reached the (now switched) target.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
     it('(e3) retries migration from a newer legacy revision instead of tombstoning over it', async () => {

@@ -1985,7 +1985,11 @@ describe('lwwUpdateMetaReducer', () => {
       );
     });
 
-    it('should replay only the LWW operation footprint on divergent state', () => {
+    it('should replay only the authenticated move footprint on divergent state', () => {
+      // The move footprint is the authenticated meta.projectMoveFootprint (sourced from
+      // the encrypted payload), NOT the plaintext meta.entityIds envelope.
+      // 'receiver-child' is a divergent receiver-only child outside the footprint,
+      // so it must NOT be relocated.
       const state = createStateWithProjects(
         PROJECT_A,
         [TASK_ID, 'captured-child', 'receiver-child'],
@@ -2020,7 +2024,7 @@ describe('lwwUpdateMetaReducer', () => {
           isPersistent: true,
           entityType: 'TASK',
           entityId: TASK_ID,
-          entityIds: [TASK_ID, 'captured-child'],
+          projectMoveFootprint: [TASK_ID, 'captured-child'],
         },
       };
 
@@ -2039,6 +2043,101 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds).toEqual([
         TASK_ID,
       ]);
+    });
+
+    it('ignores a tampered meta.entityIds envelope and does not relocate an unrelated task (GHSA-8pxh-mgc7-gp3g)', () => {
+      // A compromised sync server appends an unrelated 'victim' task to the
+      // plaintext meta.entityIds envelope of a genuine, correctly-encrypted move
+      // op. 'victim' is a root task with no parent relationship to TASK_ID, so
+      // nothing authentic implicates it in the move — it must stay in PROJECT_A.
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID, 'victim'], []);
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'victim'],
+        entities: {
+          [TASK_ID]: createMockTask({ projectId: PROJECT_A, subTaskIds: [] }),
+          ['victim']: createMockTask({ id: 'victim', projectId: PROJECT_A }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Moved task',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          // Attacker-injected: 'victim' is not part of any authenticated footprint.
+          entityIds: [TASK_ID, 'victim'],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['victim']?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toContain(
+        'victim',
+      );
+      expect(
+        updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds,
+      ).not.toContain('victim');
+    });
+
+    it('relocates only the authenticated footprint when meta.entityIds is tampered alongside it (GHSA-8pxh-mgc7-gp3g)', () => {
+      // Production tamper shape: a genuine authenticated footprint
+      // (meta.projectMoveFootprint) plus a larger meta.entityIds envelope into which the
+      // server injected an unrelated 'victim'. Only the footprint members move.
+      const state = createStateWithProjects(
+        PROJECT_A,
+        [TASK_ID, 'captured-child', 'victim'],
+        [],
+      );
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'captured-child', 'victim'],
+        entities: {
+          [TASK_ID]: createMockTask({
+            projectId: PROJECT_A,
+            subTaskIds: ['captured-child'],
+          }),
+          ['captured-child']: createMockTask({
+            id: 'captured-child',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+          ['victim']: createMockTask({ id: 'victim', projectId: PROJECT_A }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Moved task',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          projectMoveFootprint: [TASK_ID, 'captured-child'],
+          entityIds: [TASK_ID, 'captured-child', 'victim'],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['captured-child']?.projectId).toBe(
+        PROJECT_B,
+      );
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['victim']?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toContain(
+        'victim',
+      );
     });
 
     it('should repair stale project references without changing target backlog placement', () => {

@@ -120,7 +120,11 @@ export class HabitTrackerComponent {
     const first = days[0].date;
     const last = days[days.length - 1].date;
 
-    const locale = this._dateTimeFormatService.currentLocale();
+    // Spelled-out `month: 'short'` name follows the UI language under the ISO
+    // 8601 option (the `sv` sentinel would otherwise leak Swedish). #8987 f/u.
+    const locale =
+      this._dateTimeFormatService.isoTextLocale() ??
+      this._dateTimeFormatService.currentLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     const firstStr = first.toLocaleDateString(locale, formatOptions);
     const lastStr = last.toLocaleDateString(locale, formatOptions);

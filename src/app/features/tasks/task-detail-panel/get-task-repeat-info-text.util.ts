@@ -18,6 +18,10 @@ export const getTaskRepeatInfoText = (
   dateTimeFormatService: DateTimeFormatService | undefined,
   translateService: TranslateService,
 ): [string, { [key: string]: string | number }] => {
+  // Spelled-out weekday names follow the UI language under the ISO 8601 option
+  // (the `sv` sentinel would otherwise leak Swedish, e.g. "mån"); numeric day/
+  // month below stay on `locale` so ISO day-first ordering is kept. #8987 f/u.
+  const weekdayLocale = dateTimeFormatService?.textLocale() ?? locale;
   const timeStr =
     repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)
       ? dateTimeFormatService
@@ -82,7 +86,7 @@ export const getTaskRepeatInfoText = (
       ];
 
     case 'WEEKLY':
-      const localWeekDays = getWeekdaysMin(locale);
+      const localWeekDays = getWeekdaysMin(weekdayLocale);
       const enabledDays = TASK_REPEAT_WEEKDAY_MAP.filter((day) => repeatCfg[day]);
 
       if (enabledDays.length === 1) {
@@ -90,7 +94,7 @@ export const getTaskRepeatInfoText = (
           (day) => repeatCfg[day],
         );
         const weekDayDate = new Date(Date.UTC(2026, 0, 4 + enabledDayIndex));
-        const weekdayStr = weekDayDate.toLocaleDateString(locale, {
+        const weekdayStr = weekDayDate.toLocaleDateString(weekdayLocale, {
           weekday: 'short',
           timeZone: 'UTC',
         });
@@ -134,7 +138,7 @@ export const getTaskRepeatInfoText = (
     case 'MONTHLY':
       if (hasNthWeekdayAnchor(repeatCfg)) {
         const weekDayDate = new Date(Date.UTC(2026, 0, 4 + repeatCfg.monthlyWeekday));
-        const weekdayStr = weekDayDate.toLocaleDateString(locale, {
+        const weekdayStr = weekDayDate.toLocaleDateString(weekdayLocale, {
           weekday: 'long',
           timeZone: 'UTC',
         });

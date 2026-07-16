@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
-import { ConflictResolutionService } from './conflict-resolution.service';
+import {
+  ConflictResolutionService,
+  getLatestTaskProjectMoveEntityIds,
+} from './conflict-resolution.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -8,6 +11,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
+import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import {
@@ -595,6 +599,114 @@ describe('ConflictResolutionService', () => {
       );
       // The generic "N local/remote wins" count snack must NOT fire for content loss.
       expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    describe('content-conflict banner REVIEW action', () => {
+      // This banner fires off the resolutions, NOT off the journal, so its
+      // REVIEW action has to be gated on the journal actually holding rows —
+      // otherwise the producer freeze (or a swallowed record() failure) sends
+      // the user to an empty review page at the exact moment they are worried
+      // about a discarded edit.
+      const buildContentLossConflicts = (): EntityConflict[] => {
+        const now = Date.now();
+        return [
+          createConflict(
+            'task-1',
+            [
+              {
+                ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+                payload: {
+                  actionPayload: {
+                    task: { id: 'task-1', changes: { title: 'My local title' } },
+                  },
+                  entityChanges: [],
+                },
+              },
+            ],
+            [
+              {
+                ...createOpWithTimestamp('remote-1', 'client-b', now),
+                payload: {
+                  actionPayload: {
+                    task: { id: 'task-1', changes: { title: 'Remote title' } },
+                  },
+                  entityChanges: [],
+                },
+              },
+            ],
+          ),
+        ];
+      };
+
+      const getJournal = (): ConflictJournalService =>
+        (service as unknown as { conflictJournal: ConflictJournalService })
+          .conflictJournal;
+
+      const openContentBanner = async (): Promise<jasmine.Spy<BannerService['open']>> => {
+        const openBannerSpy = spyOn(TestBed.inject(BannerService), 'open');
+        mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Remote title' }));
+        const conflicts = buildContentLossConflicts();
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+        await service.autoResolveConflictsLWW(conflicts);
+        return openBannerSpy;
+      };
+
+      it('omits the REVIEW action when the journal has nothing to review', async () => {
+        // record() no-ops, so the unreviewed count stays 0 — the state produced
+        // both by the producer freeze and by a swallowed record() failure.
+        spyOn(getJournal(), 'record').and.resolveTo();
+
+        const openBannerSpy = await openContentBanner();
+
+        const banner = openBannerSpy.calls.mostRecent().args[0];
+        expect(banner.id).toBe(BannerId.SyncConflictContentResolved);
+        // Message + built-in dismiss = exactly the released v18.14.0 banner.
+        expect(banner.action).toBeUndefined();
+      });
+
+      it('keeps the REVIEW action when the journal holds unreviewed entries', async () => {
+        spyOn(getJournal(), 'record').and.resolveTo();
+        (
+          getJournal() as unknown as {
+            _unreviewedCount: { set: (v: number) => void };
+          }
+        )._unreviewedCount.set(2);
+
+        const openBannerSpy = await openContentBanner();
+
+        const banner = openBannerSpy.calls.mostRecent().args[0];
+        expect(banner.action?.label).toBe(T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW);
+      });
+    });
+
+    // Callee half of the producer freeze: remote-ops-processing.service.spec.ts
+    // asserts the production caller PASSES the flag, but without this, deleting
+    // the gate inside autoResolveConflictsLWW leaves every spec green while the
+    // fleet silently resumes persisting the discarded side of every conflict.
+    // The journal-ON default is already covered by the #8956 multi-entity test.
+    it('records nothing when disableConflictJournal is set (producer freeze)', async () => {
+      const journal = (service as unknown as { conflictJournal: ConflictJournalService })
+        .conflictJournal;
+      const recordSpy = spyOn(journal, 'record').and.resolveTo();
+      const now = Date.now();
+      const conflicts = [
+        createConflict(
+          'task-1',
+          [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+          [createOpWithTimestamp('remote-1', 'client-b', now)],
+        ),
+      ];
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
+      });
+
+      await service.autoResolveConflictsLWW(conflicts, [], {
+        disableConflictJournal: true,
+      });
+
+      expect(recordSpy).not.toHaveBeenCalled();
     });
 
     it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {
@@ -7623,6 +7735,102 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(op.entityIds).toEqual(['task-canonical', 'subtask-1']);
+      // The same footprint must also ride inside the authenticated payload so
+      // remote clients don't have to trust the plaintext envelope.
+      // GHSA-8pxh-mgc7-gp3g.
+      expect(
+        (op.payload as { projectMoveFootprint?: readonly string[] }).projectMoveFootprint,
+      ).toEqual(['task-canonical', 'subtask-1']);
+    });
+
+    it('should omit projectMoveFootprint when no footprint is supplied', () => {
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        'task-canonical',
+        { title: 'Local winner' },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect(op.entityIds).toBeUndefined();
+      expect(
+        (op.payload as { projectMoveFootprint?: readonly string[] }).projectMoveFootprint,
+      ).toBeUndefined();
+    });
+
+    describe('getLatestTaskProjectMoveEntityIds (authenticated footprint source)', () => {
+      const lwwMoveOp = (overrides: Partial<Operation>): Operation =>
+        ({
+          id: 'op-x',
+          actionType: toLwwUpdateActionType('TASK'),
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'taskT',
+          payload: {
+            actionPayload: { id: 'taskT' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+          },
+          clientId: 'c',
+          vectorClock: { c: 1 },
+          timestamp: 1,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          ...overrides,
+        }) as Operation;
+
+      it('reuses the footprint from the authenticated payload, ignoring a tampered entityIds envelope (GHSA-8pxh-mgc7-gp3g)', () => {
+        // A compromised server appended 'victim' to a remote LWW op's plaintext
+        // entityIds envelope. Re-derivation must launder nothing: the merged op's
+        // footprint comes from the authenticated payload.projectMoveFootprint.
+        const op = lwwMoveOp({
+          entityIds: ['taskT', 'victim'],
+          payload: {
+            actionPayload: { id: 'taskT' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            projectMoveFootprint: ['taskT', 'sub1'],
+          } as unknown as Operation['payload'],
+        });
+
+        expect(getLatestTaskProjectMoveEntityIds([op])).toEqual(['taskT', 'sub1']);
+      });
+
+      it('returns undefined for a legacy LWW op with entityIds but no authenticated footprint (no laundering)', () => {
+        const op = lwwMoveOp({ entityIds: ['taskT', 'victim'] });
+
+        expect(getLatestTaskProjectMoveEntityIds([op])).toBeUndefined();
+      });
+
+      it('takes the raw TASK_SHARED_UPDATE footprint ROOT from the authenticated payload, not the tampered entityId envelope (GHSA-8pxh-mgc7-gp3g)', () => {
+        // A raw TASK_SHARED_UPDATE op's entityId is NOT bound to payload.id by the
+        // decrypt gate (that gate only covers LWW ops). A compromised server
+        // retargets the plaintext envelope entityId to 'victim' while the
+        // authenticated payload still moves the real task 'taskT'. The footprint
+        // root must come from the authenticated payload.task.id.
+        const op = {
+          id: 'op-upd',
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'victim',
+          payload: {
+            actionPayload: {
+              task: { id: 'taskT', changes: { projectId: 'proj-2' } },
+              projectMoveSubTaskIds: ['sub1'],
+            },
+            entityChanges: [],
+          },
+          clientId: 'c',
+          vectorClock: { c: 1 },
+          timestamp: 1,
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+        } as unknown as Operation;
+
+        const result = getLatestTaskProjectMoveEntityIds([op]);
+        expect(result).toEqual(['taskT', 'sub1']);
+        expect(result).not.toContain('victim');
+      });
     });
 
     it('should ensure _convertToLWWUpdatesIfNeeded merged payload has id even when base entity lacks id', () => {

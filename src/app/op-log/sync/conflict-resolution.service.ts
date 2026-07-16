@@ -124,6 +124,22 @@ interface ResolvedConflicts {
 interface AutoResolveConflictsLwwOptions {
   callerHoldsOperationLogLock?: boolean;
   disableDisjointMerge?: boolean;
+  /**
+   * Skip conflict-journal emission entirely (observe-only hook, so this can
+   * never change which op resolution picks).
+   *
+   * Set by the production caller as a PRODUCER FREEZE ahead of the
+   * conflict-review rollback: journal rows capture the discarded side of a
+   * conflict verbatim (titles, arbitrary field values), and that device-local
+   * data obligation must not expand to the stable fleet on the next release
+   * tag while the feature is still slated for removal.
+   *
+   * Ceiling: rows already written on edge/internal builds stay readable and
+   * expire on their own (14 days / 200 rows). Upgrade path: the store, reader,
+   * UI and the `SUP_CONFLICT_JOURNAL_CLEARED_BEFORE` marker are deleted
+   * together in the conflict-review rollback, after which this option goes too.
+   */
+  disableConflictJournal?: boolean;
   remoteApplyLifecycleOwnedByCaller?: boolean;
 }
 
@@ -190,12 +206,24 @@ const mergeMarkedProjectDeleteOps = (localOps: Operation[]): Operation | undefin
 };
 
 const getTaskProjectMoveEntityIds = (operation: Operation): string[] | undefined => {
-  if (
-    operation.actionType === toLwwUpdateActionType('TASK') &&
-    operation.entityId &&
-    Array.isArray(operation.entityIds)
-  ) {
-    return Array.from(new Set([operation.entityId, ...operation.entityIds]));
+  // Reuse a prior synthetic LWW op's footprint ONLY from the AUTHENTICATED
+  // payload (projectMoveFootprint), never the plaintext op.entityIds envelope.
+  // A compromised server can tamper a remote op's envelope; reading it here
+  // would launder those ids into a freshly-authenticated merged op that every
+  // client then trusts — the same GHSA-8pxh-mgc7-gp3g vector, one merge removed.
+  // Legacy LWW ops carry no authenticated footprint → no reusable set (the
+  // merged op then falls back to receiving-state repair, mirroring the reducers).
+  if (operation.actionType === toLwwUpdateActionType('TASK') && operation.entityId) {
+    const footprint = isLwwUpdatePayload(operation.payload)
+      ? operation.payload.projectMoveFootprint
+      : undefined;
+    if (!Array.isArray(footprint)) return undefined;
+    return Array.from(
+      new Set([
+        operation.entityId,
+        ...footprint.filter((id): id is string => typeof id === 'string'),
+      ]),
+    );
   }
 
   if (
@@ -215,11 +243,21 @@ const getTaskProjectMoveEntityIds = (operation: Operation): string[] | undefined
   const subTaskIds = actionPayload['projectMoveSubTaskIds'];
   if (!Array.isArray(subTaskIds)) return undefined;
 
+  // SECURITY: the footprint ROOT must come from the AUTHENTICATED payload
+  // (actionPayload.task.id), NOT the plaintext op.entityId envelope. Unlike LWW
+  // ops — whose entityId is bound to payload.id by assertDecryptedOpMetadataIntegrity
+  // — a raw TASK_SHARED_UPDATE op's entityId is unauthenticated, so reading it here
+  // would let a compromised server launder a victim id into the authenticated
+  // projectMoveFootprint of the synthesized merged op. GHSA-8pxh-mgc7-gp3g.
+  const task = actionPayload['task'];
+  const rootId =
+    task && typeof task === 'object'
+      ? (task as Record<string, unknown>)['id']
+      : undefined;
+  if (typeof rootId !== 'string') return undefined;
+
   return Array.from(
-    new Set([
-      operation.entityId,
-      ...subTaskIds.filter((id): id is string => typeof id === 'string'),
-    ]),
+    new Set([rootId, ...subTaskIds.filter((id): id is string => typeof id === 'string')]),
   );
 };
 
@@ -433,10 +471,19 @@ export class ConflictResolutionService {
     const actionPayload = isSingletonEntityId(entityId)
       ? basePayload
       : { ...basePayload, id: entityId };
+    // Compute the move footprint once and carry it BOTH in the plaintext
+    // envelope (op.entityIds — the server needs it for its indexed conflict
+    // detection and cannot read the encrypted payload) AND inside the
+    // authenticated payload (projectMoveFootprint). Remote clients trust only
+    // the authenticated copy, closing the envelope-injection vector
+    // (GHSA-8pxh-mgc7-gp3g).
+    const moveFootprint =
+      entityIds !== undefined ? Array.from(new Set([entityId, ...entityIds])) : undefined;
     const payload: LwwUpdatePayload = {
       actionPayload,
       entityChanges: [],
       lwwUpdateMode,
+      ...(moveFootprint !== undefined && { projectMoveFootprint: moveFootprint }),
     };
     return {
       id: uuidv7(),
@@ -444,9 +491,7 @@ export class ConflictResolutionService {
       opType: OpType.Update,
       entityType,
       entityId,
-      ...(entityIds !== undefined && {
-        entityIds: Array.from(new Set([entityId, ...entityIds])),
-      }),
+      ...(moveFootprint !== undefined && { entityIds: moveFootprint }),
       payload,
       clientId,
       vectorClock,
@@ -1691,12 +1736,14 @@ export class ConflictResolutionService {
       );
     }
 
-    for (const plan of lwwPlans) {
-      await this._journalResolution(plan);
-    }
-    for (const merged of successfulMergedResolutions) {
-      if (writtenMergedOpIds.has(merged.mergedOp.id)) {
-        await this._journalMergedResolution(merged.plan);
+    if (!options.disableConflictJournal) {
+      for (const plan of lwwPlans) {
+        await this._journalResolution(plan);
+      }
+      for (const merged of successfulMergedResolutions) {
+        if (writtenMergedOpIds.has(merged.mergedOp.id)) {
+          await this._journalMergedResolution(merged.plan);
+        }
       }
     }
 
@@ -1787,16 +1834,25 @@ export class ConflictResolutionService {
     const named = labels.join(', ');
     const taskList = contentConflicts.length > MAX_NAMED ? `${named} …` : named;
 
+    // This banner fires off the resolutions, not off the journal, so REVIEW must
+    // be gated on the journal actually holding rows: under the producer freeze
+    // (or a swallowed `record()` failure) it would otherwise land the user on the
+    // review page's empty state. Without the action this is exactly the released
+    // v18.14.0 banner — message + built-in dismiss (no action2). Count is fresh:
+    // the journal loop awaits `record()`, which refreshes it, before this step.
+    const hasEntriesToReview = this.conflictJournal.unreviewedCount() > 0;
+
     this.bannerService.open({
       id: BannerId.SyncConflictContentResolved,
       ico: 'sync_problem',
       msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
       translateParams: { taskList },
-      // SPAP-15: REVIEW opens the conflicts page; DISMISS auto-renders (no action2).
-      action: {
-        label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
-        fn: () => this.syncConflictBanner.navigateToReview(),
-      },
+      action: hasEntriesToReview
+        ? {
+            label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
+            fn: () => this.syncConflictBanner.navigateToReview(),
+          }
+        : undefined,
     });
   }
 

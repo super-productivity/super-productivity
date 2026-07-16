@@ -427,6 +427,53 @@ describe('RemoteOpsProcessingService', () => {
       expect(JSON.stringify(summary)).not.toContain('private');
     });
 
+    // Producer freeze for the conflict-review rollback: this is the only
+    // production entry point into autoResolveConflictsLWW, so if these two flags
+    // are ever dropped the stable fleet silently starts persisting the discarded
+    // side of every conflict verbatim again. Delete this test with the freeze.
+    it('should freeze both conflict-review producers on the production resolve path', async () => {
+      const localOp = {
+        id: 'local-op',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'local title' },
+      } as Operation;
+      const remoteOp = {
+        id: 'remote-op',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'remote title' },
+        schemaVersion: 1,
+      } as Operation;
+      spyOn(service, 'detectConflicts').and.resolveTo({
+        nonConflicting: [],
+        conflicts: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            localOps: [localOp],
+            remoteOps: [remoteOp],
+            suggestedResolution: 'manual',
+          },
+        ],
+      });
+      conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
+        localWinOpsCreated: 0,
+      });
+      vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+
+      await service.processRemoteOps([remoteOp]);
+
+      expect(conflictResolutionServiceSpy.autoResolveConflictsLWW).toHaveBeenCalledWith(
+        jasmine.any(Array),
+        jasmine.any(Array),
+        jasmine.objectContaining({
+          disableDisjointMerge: true,
+          disableConflictJournal: true,
+        }),
+      );
+    });
+
     it('should drop operations if migrateOperation returns null', async () => {
       const remoteOps: Operation[] = [
         { id: 'op1', schemaVersion: 1 } as Operation,

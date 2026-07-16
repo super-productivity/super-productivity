@@ -8,7 +8,7 @@ import {
   ActionType,
 } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
-import { incrementVectorClock, limitVectorClockSize } from '../../core/util/vector-clock';
+import { incrementVectorClock } from '../../core/util/vector-clock';
 import { LockService } from '../sync/lock.service';
 import { T } from '../../t.const';
 import { OpLog } from '../../core/log';
@@ -84,15 +84,25 @@ export class RepairOperationService {
         this.repairSyncContext.baseServerSeq,
       );
 
-      // 1. Append REPAIR operation to log and update vector clock atomically
-      seq = await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+      // 1. Append via the mixed-source batch: its in-transaction rebase derives
+      // the final clock from the durable clock, so a stale in-memory clock
+      // cache (e.g. another tab advanced the clock since our last read) can
+      // never regress the durable clock or reuse counters (#8939).
+      const { written } = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
+        { ops: [op], source: 'local' },
+      ]);
+      const writtenOp = written[0];
+      if (!writtenOp) {
+        throw new Error('REPAIR operation was not appended');
+      }
+      seq = writtenOp.seq;
 
-      // 2. Save state cache with repaired state for fast hydration
-      // Note: vector clock is already updated in step 1, so we omit it here
+      // 2. Save state cache with repaired state for fast hydration.
+      // Use the rebased clock that was actually written, not the proposed one.
       await this.opLogStore.saveStateCache({
         state: repairedState,
         lastAppliedOpSeq: seq,
-        vectorClock: op.vectorClock,
+        vectorClock: writtenOp.op.vectorClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
@@ -160,11 +170,13 @@ export class RepairOperationService {
       repairSummary,
       ...(repairBaseServerSeq !== undefined ? { repairBaseServerSeq } : {}),
     };
+    // Proposed clock only — both write paths rebase it onto the durable clock
+    // in-transaction (#8939). No client-side pruning: like capture ops, REPAIR
+    // ops ship the full clock; the server prunes AFTER conflict detection, and
+    // pruning here would drop client IDs the server still tracks, causing
+    // false CONCURRENT comparisons.
     const currentClock = await this.vectorClockService.getCurrentVectorClock();
-    const newClock = limitVectorClockSize(
-      incrementVectorClock(currentClock, clientId),
-      clientId,
-    );
+    const newClock = incrementVectorClock(currentClock, clientId);
 
     return {
       id: uuidv7(),

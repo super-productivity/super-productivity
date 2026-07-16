@@ -43,6 +43,7 @@ import {
   ForceUploadPendingOpsError,
   HttpNotOkAPIError,
   IncompleteRemoteOperationsError,
+  FileSyncTargetChangedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
@@ -1238,6 +1239,25 @@ describe('SyncWrapperService', () => {
       );
     });
 
+    it('should handle FileSyncTargetChangedError as a silent self-healing re-sync', async () => {
+      // The file target changed mid-upload; the guarded write was abandoned.
+      // This is benign — the next sync re-reads/re-uploads against the current
+      // target — so it must report UNKNOWN_OR_CHANGED with no error snackbar.
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.reject(new FileSyncTargetChangedError(0, 1)),
+      );
+
+      const result = await service.sync(true);
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+    });
+
     it('should handle NetworkUnavailableSPError silently for automatic syncs', async () => {
       // The auto-sync fired on Android resume hits a not-yet-ready network and
       // throws this transient error; the next cycle retries, so no snack should
@@ -1852,6 +1872,32 @@ describe('SyncWrapperService', () => {
         );
         expect(mockSnackService.open).not.toHaveBeenCalledWith(
           jasmine.objectContaining({ msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED }),
+        );
+      });
+
+      it('self-heals silently when the target changes during USE_LOCAL force upload', async () => {
+        const conflictError = new LocalDataConflictError(
+          2,
+          { tasks: [] },
+          { clientB: 3 },
+        );
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.rejectWith(new FileSyncTargetChangedError(0, 1));
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+          'UNKNOWN_OR_CHANGED',
+        );
+        // Benign target switch → no error snackbar.
+        expect(mockSnackService.open).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: 'ERROR' }),
         );
       });
 

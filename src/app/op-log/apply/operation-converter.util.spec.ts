@@ -81,6 +81,41 @@ describe('operation-converter utility', () => {
       expect(action.meta.opType).toBe(OpType.Create);
     });
 
+    it('should surface the authenticated projectMoveFootprint onto meta.projectMoveFootprint', () => {
+      // The footprint rides inside the (encrypted) payload; convertOpToAction
+      // exposes it to reducers so they never trust the plaintext op.entityIds
+      // envelope. GHSA-8pxh-mgc7-gp3g.
+      const op = createMockOperation({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-456', title: 'Moved' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          projectMoveFootprint: ['task-456', 'subtask-1'],
+        } as any,
+      });
+      const action = convertOpToAction(op);
+
+      expect((action.meta as any).projectMoveFootprint).toEqual([
+        'task-456',
+        'subtask-1',
+      ]);
+    });
+
+    it('should not set meta.projectMoveFootprint when the LWW payload carries no footprint', () => {
+      const op = createMockOperation({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-456' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        } as any,
+      });
+      const action = convertOpToAction(op);
+
+      expect((action.meta as any).projectMoveFootprint).toBeUndefined();
+    });
+
     describe('task-time sync payload validation', () => {
       const createTaskTimeOp = (
         payload: Record<string, unknown>,

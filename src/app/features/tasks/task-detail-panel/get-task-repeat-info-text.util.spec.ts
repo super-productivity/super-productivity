@@ -5,6 +5,7 @@ import {
 } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { T } from '../../../t.const';
 import { TranslateService } from '@ngx-translate/core';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 const mockTranslateService = {
   instant: (key: string) => {
@@ -275,6 +276,57 @@ describe('getTaskRepeatInfoText()', () => {
           mockTranslateService,
         ),
       ).toEqual([translationKey, translateParams]);
+    });
+  });
+
+  // #8987 follow-up: under the ISO 8601 option the numeric locale is the `sv`
+  // sentinel; spelled-out weekday names must follow the UI language (from
+  // DateTimeFormatService.textLocale), while numeric day/month keep `locale`.
+  describe('ISO 8601 option (sv sentinel) weekday localization', () => {
+    const isoDateTimeFormatService = {
+      textLocale: () => 'en',
+    } as unknown as DateTimeFormatService;
+
+    it('renders the single-weekday name in the UI language, not Swedish', () => {
+      const [, params] = getTaskRepeatInfoText(
+        {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'IDDD',
+          repeatEvery: 1,
+          repeatCycle: 'WEEKLY',
+          // DEFAULT has Mon–Fri true; zero them so only Monday is enabled and
+          // the single-weekday branch is exercised.
+          monday: true,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          saturday: false,
+          sunday: false,
+        },
+        'sv',
+        isoDateTimeFormatService,
+        mockTranslateService,
+      );
+      // English 'Mon', not Swedish 'mån'.
+      expect(params.weekdayStr).toBe('Mon');
+    });
+
+    it('keeps numeric day/month on the configured (sv, day-first) locale', () => {
+      const [, params] = getTaskRepeatInfoText(
+        {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'IDDD',
+          repeatEvery: 1,
+          repeatCycle: 'YEARLY',
+          startDate: '2022-02-24',
+        },
+        'sv',
+        isoDateTimeFormatService,
+        mockTranslateService,
+      );
+      // sv keeps day-first ordering '24/2' (would be '2/24' under en).
+      expect(params.dayAndMonthStr).toBe('24/2');
     });
   });
 
