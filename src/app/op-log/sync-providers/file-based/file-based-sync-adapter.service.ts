@@ -405,14 +405,24 @@ export class FileBasedSyncAdapterService {
    * an identity-affecting configuration save would otherwise reuse the previous
    * target's sync version, rev, vector clock, and within-cycle caches — reading
    * or writing one target's data against another. Clearing every key forces the
-   * next sync to discover and full-read the current target from zero; the extra
-   * full read (even when the target is unchanged) is accepted per Task 2 of the
-   * sync-simplification plan. Bumps the target generation so a later in-flight
-   * guard can detect the transition.
+   * next sync to discover and full-read the current target from zero. Bumps the
+   * target generation so a later in-flight guard can detect the transition.
    *
-   * Not wired to machine-only token refreshes for an unchanged account: those go
-   * through the provider credential store directly, not `setProviderConfig`, so
-   * they do not fire `providerConfigChanged$`.
+   * CANONICAL WARNING — only call this when the target ACTUALLY moved
+   * (`providerConfigChanged$`'s `isTargetChanged`, via `isSyncTargetChanged`),
+   * never on every config save. This drops `_localSeqCounters`, and a cursor back
+   * at 0 makes the next download return a `snapshotState` (`isForceFromZero`);
+   * for a client holding unsynced ops that classifies CONCURRENT and, with
+   * `AUTO_MERGE_CONCURRENT_SNAPSHOT` false, dead-ends in a binary conflict dialog
+   * whose either answer discards data. (The same hazard is documented from the
+   * other direction at the `latestSeq` computation in `_downloadOps`.) A real
+   * target move has no cursor worth keeping, so the reset is correct there and
+   * only there.
+   *
+   * Not wired to machine-only writes for an UNCHANGED account: OAuth token
+   * refresh goes through the provider credential store directly (never
+   * `setProviderConfig`), and content-only saves — encryption key rotation, the
+   * `isEncryptionEnabled` backfill — are filtered out by `isSyncTargetChanged`.
    */
   invalidateAllTargets(): void {
     this._loadPersistedState();
@@ -479,8 +489,14 @@ export class FileBasedSyncAdapterService {
    * `_withTargetGuard`, but a download READS target A, and if the target then
    * switches (config/account/folder), staging A's baseline (sync version,
    * vector clock, rev) and letting the caller advance the seq cursor under the
-   * shared provider id would make the next sync skip the NEW target's ops from a
-   * stale cursor — silent data loss. Dropping the target-scoped state and
+   * shared provider id is silent data loss on the NEXT sync. The mechanism is
+   * suppressed gap detection, not skipped ops: both download paths return every
+   * op in the file and let the caller's `appliedOpIds` dedup filter, but a
+   * stale-HIGH `sinceSeq` makes `partialTrimGap` (`oldestOpSyncVersion >
+   * sinceSeq + 1`) false while a cleared `_expectedSyncVersions` makes
+   * `versionWasReset` false — so `needsGapDetection` stays false and the new
+   * target's SNAPSHOT is never loaded. Any history the new target compacted below
+   * that snapshot is then silently missing. Dropping the target-scoped state and
    * aborting forces the next sync to re-read the current target from zero;
    * `SyncWrapperService` maps the error to a silent self-heal.
    *

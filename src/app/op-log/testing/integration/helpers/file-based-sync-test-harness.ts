@@ -28,6 +28,13 @@ export interface HarnessClient {
   /** The operation sync adapter for this client */
   adapter: OperationSyncCapable;
 
+  /**
+   * The adapter SERVICE backing `adapter` — one per client, mirroring production
+   * (each app instance owns its own). Exposed so tests can drive service-level
+   * transitions such as `invalidateAllTargets()`.
+   */
+  adapterService: FileBasedSyncAdapterService;
+
   /** Test client for vector clock management */
   testClient: TestClient;
 
@@ -294,6 +301,7 @@ export class FileBasedSyncTestHarness {
     const client: HarnessClient = {
       clientId,
       adapter,
+      adapterService,
       testClient,
 
       uploadOps: async (ops: SyncOperation[]): Promise<OpUploadResponse> => {

@@ -38,6 +38,7 @@ import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { isFileBasedProviderId } from '../../../op-log/sync/operation-sync.util';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { isSyncTargetChanged } from '../../../op-log/sync-providers/sync-target-identity.util';
 
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
@@ -611,6 +612,17 @@ export class DialogSyncCfgComponent implements AfterViewInit {
         tokenExpiresAt: identityChanged ? 0 : existingCfg?.tokenExpiresAt,
       };
       await oneDriveProvider.privateCfg.setComplete(mergedCfg);
+
+      // This write bypasses setProviderConfig() (the OAuth flow below reads
+      // clientId/tenantId straight from the store), so the save's later
+      // setProviderConfig sees THIS cfg on both sides of its diff and can't
+      // infer the move — `syncFolderPath` would change while the old folder's
+      // cursor stays keyed under 'OneDrive'. Raise the signal here instead.
+      // Gated because this runs on EVERY save: an unconditional notify would
+      // wipe the seq cursor on a no-op save. See `providerConfigChanged$`.
+      if (isSyncTargetChanged(existingCfg, mergedCfg)) {
+        this._providerManager.notifyProviderTargetChanged();
+      }
     }
   }
 

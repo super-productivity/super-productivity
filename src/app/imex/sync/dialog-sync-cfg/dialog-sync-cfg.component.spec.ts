@@ -61,6 +61,7 @@ describe('DialogSyncCfgComponent', () => {
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getProviderById',
+      'notifyProviderTargetChanged',
     ]);
 
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
@@ -797,6 +798,64 @@ describe('DialogSyncCfgComponent', () => {
 
       expect(mockSyncConfigService.updateSettingsFromForm).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('save() — OneDrive pre-auth cfg write (Task 2 target isolation)', () => {
+    const storedCfg = {
+      clientId: 'cid',
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
+      accessToken: 'at',
+      refreshToken: 'rt',
+      tokenExpiresAt: 1,
+    };
+    let setComplete: jasmine.Spy;
+
+    const arrangeOneDrive = (formOneDriveCfg: Record<string, unknown>): void => {
+      setComplete = jasmine.createSpy('setComplete').and.resolveTo(undefined);
+      mockProviderManager.getProviderById.and.resolveTo({
+        id: SyncProviderId.OneDrive,
+        isReady: jasmine.createSpy('isReady').and.resolveTo(true),
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({ ...storedCfg }),
+          setComplete,
+        },
+      } as any);
+      mockSyncWrapperService.configuredAuthForSyncProviderIfNecessary.and.resolveTo({
+        isSuccess: true,
+      } as any);
+      (component as any)._tmpUpdatedCfg = {
+        ...(component as any)._tmpUpdatedCfg,
+        syncProvider: SyncProviderId.OneDrive,
+        isEnabled: true,
+        oneDrive: formOneDriveCfg,
+      };
+    };
+
+    it('signals a target change when the sync folder moves', async () => {
+      // This write bypasses setProviderConfig(), so by the time the save's later
+      // setProviderConfig runs, load() already returns the NEW folder and its
+      // diff is a no-op. Without the explicit signal the previous folder's seq
+      // cursor/revs/clocks stay keyed under 'OneDrive' and get reused against the
+      // new folder — the cross-target data loss Task 2 exists to prevent.
+      arrangeOneDrive({ ...storedCfg, syncFolderPath: 'Elsewhere' });
+
+      await component.save();
+
+      expect(setComplete).toHaveBeenCalled();
+      expect(mockProviderManager.notifyProviderTargetChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT signal a target change when nothing moved', async () => {
+      // This runs on EVERY OneDrive save. Signalling unconditionally would wipe
+      // the seq cursor and dead-end the next sync in a spurious conflict dialog.
+      arrangeOneDrive({ ...storedCfg });
+
+      await component.save();
+
+      expect(setComplete).toHaveBeenCalled();
+      expect(mockProviderManager.notifyProviderTargetChanged).not.toHaveBeenCalled();
     });
   });
 });

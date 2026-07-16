@@ -1441,12 +1441,19 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.setLastServerSeq(50);
       expect(await adapter.getLastServerSeq()).toBe(50);
 
-      // A user-authoritative config change (provider switch, account switch
-      // behind the same provider id, or an identity-affecting setting) must
-      // invalidate the provider-id-keyed state, or it is reused against the new
-      // target and can read/write one target's data against another.
+      // A real target move (provider switch, account switch behind the same
+      // provider id, or a folder/URL change) must invalidate the
+      // provider-id-keyed state, or it is reused against the new target and can
+      // read/write one target's data against another.
       service.invalidateAllTargets();
 
+      // NOTE: resetting the cursor to 0 is correct ONLY for a real target move.
+      // On a save that left the target put, a 0 cursor makes the next download
+      // return a snapshotState (isForceFromZero), which for a client holding
+      // unsynced ops dead-ends in a binary conflict dialog — see the
+      // latestSeq/snapshotState suite below. Hence invalidateAllTargets() rides
+      // providerTargetChanged$, never providerConfigChanged$; that wiring is
+      // covered in wrapped-provider.service.spec.ts.
       expect(await adapter.getLastServerSeq()).toBe(0);
     });
 
