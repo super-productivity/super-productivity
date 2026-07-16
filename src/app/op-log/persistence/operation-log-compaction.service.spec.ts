@@ -762,7 +762,10 @@ describe('OperationLogCompactionService', () => {
       // the flag ever gets set. The pending counter is incremented in the
       // same reducer pass that applies the state change, so it closes that
       // window.
-      spyOn(captureService, 'getPendingCount').and.returnValue(1);
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        captureService.incrementPending(FAKE_PENDING_ACTION);
+        return [];
+      });
 
       const result = await service.compact();
 
@@ -772,11 +775,14 @@ describe('OperationLogCompactionService', () => {
     });
 
     it('should compact again once pending writes have settled', async () => {
-      const pendingCount = spyOn(captureService, 'getPendingCount');
-      pendingCount.and.returnValue(1);
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        captureService.incrementPending(FAKE_PENDING_ACTION);
+        return [];
+      });
       expect(await service.compact()).toBeFalse();
 
-      pendingCount.and.returnValue(0);
+      captureService.decrementPending();
+      mockOpLogStore.getPendingRemoteOps.and.resolveTo([]);
 
       expect(await service.compact()).toBeTrue();
       expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
@@ -786,22 +792,9 @@ describe('OperationLogCompactionService', () => {
       // Liveness regression. triggerCompaction() fires from INSIDE the write
       // path, so the triggering action is still counted pending when compact()
       // is called; it is decremented on a microtask chain once the write
-      // releases the op-log lock. The guard therefore only ever observes a
-      // drained counter because it runs AFTER an await (getPendingRemoteOps).
-      // Hoisting it above that await — a natural "check the cheap guard first"
-      // refactor — makes it observe the still-pending write and skip on EVERY
-      // attempt, permanently starving compaction. The other specs here pin
-      // getPendingCount to a constant and cannot catch that.
-      let pendingCount = 1;
-      spyOn(captureService, 'getPendingCount').and.callFake(() => pendingCount);
-      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
-        // Stand in for writeOperationFromEffect's `finally`: queued before the
-        // guard's continuation, so it lands first at any correct guard position.
-        void Promise.resolve().then(() => {
-          pendingCount = 0;
-        });
-        return [];
-      });
+      // releases the op-log lock.
+      captureService.incrementPending(FAKE_PENDING_ACTION);
+      void Promise.resolve().then(() => captureService.decrementPending());
 
       const result = await service.compact();
 

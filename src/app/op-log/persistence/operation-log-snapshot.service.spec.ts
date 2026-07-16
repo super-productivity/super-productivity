@@ -19,11 +19,6 @@ import {
   clearDeferredActions,
 } from '../capture/operation-capture.meta-reducer';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/sync-core';
-import { OperationCaptureService } from '../capture/operation-capture.service';
-import {
-  bufferDeferredAction,
-  clearDeferredActions,
-} from '../capture/operation-capture.meta-reducer';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { OpType } from '../core/operation.types';
 
@@ -398,7 +393,13 @@ describe('OperationLogSnapshotService', () => {
     });
 
     it('should skip the save while captured writes are still pending', async () => {
-      TestBed.inject(OperationCaptureService).incrementPending(createPersistentAction());
+      const writeFlushService = TestBed.inject(OperationWriteFlushService);
+      spyOn(writeFlushService, 'flushThenRunExclusive').and.callFake(
+        async <T>(fn: () => Promise<T>) => {
+          captureService.incrementPending(createPersistentAction());
+          return fn();
+        },
+      );
 
       await service.saveCurrentStateAsSnapshot();
 
@@ -414,13 +415,21 @@ describe('OperationLogSnapshotService', () => {
     });
 
     it('should save once the phantom risk has cleared', async () => {
-      const captureService = TestBed.inject(OperationCaptureService);
+      const writeFlushService = TestBed.inject(OperationWriteFlushService);
       const action = createPersistentAction();
-      captureService.incrementPending(action);
+      const flushThenRunExclusive = spyOn(
+        writeFlushService,
+        'flushThenRunExclusive',
+      ).and.callFake(async <T>(fn: () => Promise<T>) => {
+        captureService.incrementPending(action);
+        return fn();
+      });
+
       await service.saveCurrentStateAsSnapshot();
       expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
 
       captureService.decrementPending(action);
+      flushThenRunExclusive.and.callThrough();
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ c1: 1 });
 
       await service.saveCurrentStateAsSnapshot();

@@ -741,7 +741,7 @@ describe('OperationLogEffects', () => {
     // state_cache as permanent, silent cross-device divergence).
 
     it('should mark the divergence when the append fails for good', (done) => {
-      mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(
+      mockOpLogStore.appendWithVectorClockOverwrite.and.rejectWith(
         new Error('Write failed'),
       );
       const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
@@ -774,7 +774,7 @@ describe('OperationLogEffects', () => {
     it('should NOT mark a divergence when a quota failure recovers via emergency compaction', fakeAsync(() => {
       const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
       let callCount = 0;
-      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => {
+      mockOpLogStore.appendWithVectorClockOverwrite.and.callFake(() => {
         callCount++;
         return callCount === 1 ? Promise.reject(quotaError) : Promise.resolve(1);
       });
@@ -804,7 +804,7 @@ describe('OperationLogEffects', () => {
 
       effects.persistOperation$.subscribe({
         complete: () => {
-          expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+          expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
           expect(
             mockOperationCaptureService.markUnrecoveredPersistFailure,
           ).toHaveBeenCalled();
