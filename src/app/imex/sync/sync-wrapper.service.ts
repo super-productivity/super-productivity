@@ -184,6 +184,16 @@ export class SyncWrapperService {
   private _isEncryptionOperationInProgress$ = new BehaviorSubject(false);
 
   /**
+   * Observable form of {@link isEncryptionOperationInProgress}, for consumers
+   * that need an edge rather than a point-in-time read (the getter cannot tell
+   * a waiter when the operation ends). Same coverage as the getter: everything
+   * routed through `runWithSyncBlocked()` — password change, enable/disable
+   * encryption, and `forceUpload()`, which `isSyncInProgress$` does NOT span.
+   */
+  readonly isEncryptionOperationInProgress$: Observable<boolean> =
+    this._isEncryptionOperationInProgress$.asObservable();
+
+  /**
    * When true, encryption-related dialogs (missing password, decrypt error) are suppressed.
    * Set after the user cancels a dialog so they can navigate to settings to change the password
    * without being blocked by recurring auto-sync dialogs. Cleared when encryption config changes.

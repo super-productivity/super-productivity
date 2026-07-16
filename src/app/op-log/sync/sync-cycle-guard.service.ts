@@ -1,4 +1,12 @@
 import { Injectable } from '@angular/core';
+import {
+  BehaviorSubject,
+  distinctUntilChanged,
+  filter,
+  map,
+  Observable,
+  pairwise,
+} from 'rxjs';
 
 /**
  * In-tab mutual-exclusion guard for the three top-level sync entry points:
@@ -26,15 +34,54 @@ import { Injectable } from '@angular/core';
  *   guard itself: immediate/user-triggered flows skip, while the WebSocket
  *   high-watermark queue retries later. Therefore the guard cannot deadlock.
  *
+ * {@link released$} does NOT weaken that: it is a re-check *hint*, never a wait
+ * primitive. A subscriber may use it to retry `tryBegin()` at a moment when the
+ * claim is likelier to succeed, but must still treat a `false` return as
+ * "skip/retry later" and must never block on the notification. Waiting for
+ * `released$` as if it were a lock hand-off would reintroduce exactly the
+ * deadlock this design rules out — the emission carries no claim, and any
+ * number of subscribers may race for the next `tryBegin()`.
+ *
  * Cross-tab apply-phase serialization remains the job of the existing Web
  * Locks; cross-tab gate/seq staleness is out of scope for this guard.
  */
 @Injectable({ providedIn: 'root' })
 export class SyncCycleGuardService {
-  private _isActive = false;
+  private _isActive$ = new BehaviorSubject(false);
+
+  /**
+   * Cycle activity as an edge, for busy definitions built on {@link isActive}
+   * (the getter alone cannot tell a subscriber when it changes). Emits on BOTH
+   * transitions: the side channels claim a cycle without touching any other
+   * sync signal, so a claim-only-visible-on-release stream would report those
+   * cycles as idle for their whole duration.
+   *
+   * Observing activity is NOT holding it — see the class docblock.
+   */
+  readonly isActive$: Observable<boolean> = this._isActive$
+    .asObservable()
+    .pipe(distinctUntilChanged());
+
+  /**
+   * Sugar for the release edge of {@link isActive$}, for callers that want to
+   * re-attempt {@link tryBegin} when a claim is likelier to succeed.
+   *
+   * A re-check hint, NOT a lock hand-off — see the class docblock. It carries no
+   * claim: subscribers must still call {@link tryBegin} and handle `false`.
+   *
+   * Keys off the active→inactive transition, not merely on `isActive === false`:
+   * `isActive$` replays its current value to each subscriber, so filtering on
+   * the value alone would fire a phantom release at subscribe time on an idle
+   * guard.
+   */
+  readonly released$: Observable<void> = this.isActive$.pipe(
+    pairwise(),
+    filter(([wasActive, isActive]) => wasActive && !isActive),
+    map(() => undefined),
+  );
 
   get isActive(): boolean {
-    return this._isActive;
+    return this._isActive$.getValue();
   }
 
   /**
@@ -43,20 +90,33 @@ export class SyncCycleGuardService {
    * so the check-and-set is atomic within the single-threaded event loop.
    */
   tryBegin(): boolean {
-    if (this._isActive) {
+    if (this.isActive) {
       return false;
     }
-    this._isActive = true;
+    this._isActive$.next(true);
     return true;
   }
 
   /** Release the cycle. Always call from a `finally` block. */
   end(): void {
-    this._isActive = false;
+    this._setInactive();
   }
 
   /** @internal Test-only reset for the root singleton between unit tests. */
   _resetForTest(): void {
-    this._isActive = false;
+    this._setInactive();
+  }
+
+  /**
+   * Single active→inactive transition point, so every release site notifies.
+   * `end()` is called unconditionally from `finally` blocks that may not hold
+   * the cycle, so the guard suppresses no-op releases rather than emitting a
+   * spurious edge for a cycle that was never active.
+   */
+  private _setInactive(): void {
+    if (!this.isActive) {
+      return;
+    }
+    this._isActive$.next(false);
   }
 }
