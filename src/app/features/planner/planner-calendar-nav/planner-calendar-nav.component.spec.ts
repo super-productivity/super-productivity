@@ -11,6 +11,13 @@ import {
 } from './planner-calendar-gesture-handler';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { getWeekRange } from '../../../util/get-week-range';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+
+// The app locale the component must follow. Deliberately NOT the browser's:
+// monthLabel used to pass no locale at all, so a German browser rendered
+// "Juli 2026" in an English app. Asserting against a fixed locale here would
+// pass either way if it matched the runner's browser, so it must not.
+const MOCK_TEXT_LOCALE = 'fr-FR';
 
 describe('PlannerCalendarNavComponent', () => {
   let fixture: ComponentFixture<PlannerCalendarNavComponent>;
@@ -47,6 +54,11 @@ describe('PlannerCalendarNavComponent', () => {
         {
           provide: GlobalTrackingIntervalService,
           useValue: mockGlobalTrackingIntervalService,
+        },
+        {
+          provide: DateTimeFormatService,
+          // monthLabel formats a spelled-out month, so it reads textLocale().
+          useValue: { textLocale: () => MOCK_TEXT_LOCALE },
         },
       ],
     });
@@ -195,7 +207,7 @@ describe('PlannerCalendarNavComponent', () => {
       const weeks = component.weeks();
       const midDay = weeks[0][3];
       const midDate = parseDbDateStr(midDay.dateStr);
-      const expected = midDate.toLocaleDateString(undefined, {
+      const expected = midDate.toLocaleDateString(MOCK_TEXT_LOCALE, {
         month: 'long',
         year: 'numeric',
       });
@@ -211,7 +223,7 @@ describe('PlannerCalendarNavComponent', () => {
       const midWeekIdx = Math.floor(weeks.length / 2);
       const midDay = weeks[midWeekIdx][3];
       const midDate = parseDbDateStr(midDay.dateStr);
-      const expected = midDate.toLocaleDateString(undefined, {
+      const expected = midDate.toLocaleDateString(MOCK_TEXT_LOCALE, {
         month: 'long',
         year: 'numeric',
       });
