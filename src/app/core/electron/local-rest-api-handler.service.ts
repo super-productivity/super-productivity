@@ -54,6 +54,15 @@ const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
       result[key] = body[key];
     }
   }
+
+  if (
+    Object.prototype.hasOwnProperty.call(result, 'plannedAt') &&
+    !Object.prototype.hasOwnProperty.call(result, 'dueWithTime')
+  ) {
+    result['dueWithTime'] = result['plannedAt'];
+  }
+  delete result['plannedAt'];
+
   return result as Partial<Task>;
 };
 
@@ -75,7 +84,7 @@ interface WritableTaskFields {
   tagIds?: string[];
   dueDay?: string | null;
   dueWithTime?: number | null;
-  plannedAt?: number;
+  plannedAt?: number | null;
 }
 
 type FieldTypeError = { path: string; expected: string };
