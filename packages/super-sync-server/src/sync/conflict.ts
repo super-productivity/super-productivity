@@ -288,7 +288,20 @@ export const isSameDuplicateOperation = (
   maxClockDriftMs: number,
   originalTimestamp: number = op.timestamp,
 ): boolean => {
-  const storedVectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+  // Reproduce the normalization of the already-stored row. Storage may protect
+  // a low-counter causal full-state author in addition to the uploader, so use
+  // the stored clock's IDs as the authoritative protected set. Otherwise a
+  // genuine retry of an oversized post-import op compares as an ID collision.
+  const storedClockClientIds =
+    existingOp.vectorClock !== null &&
+    typeof existingOp.vectorClock === 'object' &&
+    !Array.isArray(existingOp.vectorClock)
+      ? Object.keys(existingOp.vectorClock)
+      : [];
+  const storedVectorClock = limitVectorClockSize(op.vectorClock, [
+    op.clientId,
+    ...storedClockClientIds,
+  ]);
   const incomingEncrypted = op.isPayloadEncrypted ?? false;
 
   // encrypt() uses a fresh random IV per call, so retried ciphertext differs
@@ -578,9 +591,15 @@ export const prefetchLatestEntityOpsForBatch = async (
   return latestByEntity;
 };
 
-export const pruneVectorClockForStorage = (op: Operation): void => {
+export const pruneVectorClockForStorage = (
+  op: Operation,
+  preserveClientIds: readonly string[] = [],
+): void => {
   const beforeSize = Object.keys(op.vectorClock).length;
-  op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+  op.vectorClock = limitVectorClockSize(op.vectorClock, [
+    op.clientId,
+    ...preserveClientIds,
+  ]);
   const afterSize = Object.keys(op.vectorClock).length;
   if (afterSize < beforeSize) {
     Logger.debug(

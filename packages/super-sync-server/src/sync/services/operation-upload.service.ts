@@ -8,6 +8,7 @@ import {
 import {
   AcceptedBatchOperation,
   BatchUploadCandidate,
+  CAUSAL_FULL_STATE_OPERATION_WHERE,
   CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   ConflictResult,
   DEFAULT_SYNC_CONFIG,
@@ -15,6 +16,7 @@ import {
   isCausalFullStateOperation,
   isFullStateOpType,
   limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
   Operation,
   OP_TYPES,
   ProcessOperationResult,
@@ -228,6 +230,23 @@ export class OperationUploadService {
         latestFullStateVectorClock: mergedClock as Prisma.InputJsonValue,
       },
     });
+  }
+
+  /**
+   * The latest causal full-state author remains a required clock edge for
+   * post-import operations. If pruning drops that low-counter entry, clients
+   * at the boundary classify the operation as concurrent and filter it out.
+   */
+  private async getLatestFullStateAuthor(
+    tx: Prisma.TransactionClient,
+    userId: number,
+  ): Promise<string | undefined> {
+    const latestFullStateOp = await tx.operation.findFirst({
+      where: { userId, ...CAUSAL_FULL_STATE_OPERATION_WHERE },
+      orderBy: { serverSeq: 'desc' },
+      select: { clientId: true },
+    });
+    return latestFullStateOp?.clientId;
   }
 
   async processOperationBatch(
@@ -491,7 +510,7 @@ export class OperationUploadService {
     dbRoundtrips: number;
   }> {
     const entityPairs = getBatchConflictEntityPairs(duplicateFreeCandidates);
-    const dbRoundtrips = Math.ceil(
+    let dbRoundtrips = Math.ceil(
       entityPairs.length / CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
     const latestOpByEntity = await prefetchLatestEntityOpsForBatch(
@@ -503,6 +522,16 @@ export class OperationUploadService {
     const accepted: AcceptedBatchOperation[] = [];
     let acceptedDeltaBytes = 0;
     let unserializableAccepted = 0;
+    let activeFullStateAuthor: string | undefined;
+    if (
+      duplicateFreeCandidates.some(
+        ({ op }) => Object.keys(op.vectorClock).length > MAX_VECTOR_CLOCK_SIZE,
+      )
+    ) {
+      // Pay for this lookup only when at least one accepted clock may be pruned.
+      activeFullStateAuthor = await this.getLatestFullStateAuthor(tx, userId);
+      dbRoundtrips++;
+    }
 
     for (const candidate of duplicateFreeCandidates) {
       const { op } = candidate;
@@ -539,7 +568,13 @@ export class OperationUploadService {
         }
       }
 
-      pruneVectorClockForStorage(op);
+      if (isCausalFullStateOperation(op)) {
+        activeFullStateAuthor = op.clientId;
+      }
+      pruneVectorClockForStorage(
+        op,
+        activeFullStateAuthor ? [activeFullStateAuthor] : [],
+      );
       // Reuse the payload byte size measured during validation; the clock is
       // (re)measured inside computeOpStorageBytes because it was just pruned.
       const sized = computeOpStorageBytes(op, candidate.payloadBytes);
@@ -843,7 +878,14 @@ export class OperationUploadService {
     // clock ID, causing the comparison to return CONCURRENT instead of GREATER_THAN,
     // leading to an infinite rejection loop.
     const beforeSize = Object.keys(op.vectorClock).length;
-    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+    const activeFullStateAuthor =
+      beforeSize > MAX_VECTOR_CLOCK_SIZE && !isCausalFullStateOperation(op)
+        ? await this.getLatestFullStateAuthor(tx, userId)
+        : undefined;
+    op.vectorClock = limitVectorClockSize(op.vectorClock, [
+      op.clientId,
+      ...(activeFullStateAuthor ? [activeFullStateAuthor] : []),
+    ]);
     const afterSize = Object.keys(op.vectorClock).length;
     if (afterSize < beforeSize) {
       Logger.debug(

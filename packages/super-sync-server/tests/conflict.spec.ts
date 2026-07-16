@@ -322,4 +322,24 @@ describe('conflict helpers', () => {
     expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
     expect(incoming.vectorClock['client-25']).toBe(25);
   });
+
+  it('preserves the active full-state author while pruning', () => {
+    const fullStateAuthor = 'import-client';
+    const incoming = op({
+      clientId: 'upload-client',
+      vectorClock: {
+        [fullStateAuthor]: 1,
+        'upload-client': 2,
+        ...Object.fromEntries(
+          Array.from({ length: 25 }, (_, index) => [`old-client-${index}`, 100 + index]),
+        ),
+      },
+    });
+
+    pruneVectorClockForStorage(incoming, [fullStateAuthor]);
+
+    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
+    expect(incoming.vectorClock[fullStateAuthor]).toBe(1);
+    expect(incoming.vectorClock['upload-client']).toBe(2);
+  });
 });

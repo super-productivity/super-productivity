@@ -1016,6 +1016,68 @@ describe('SyncService', () => {
       ['legacy serial', false],
       ['batch', true],
     ])(
+      'preserves the active full-state author when pruning in the %s path',
+      async (_label, batchUpload) => {
+        const service = new SyncService({ batchUpload });
+        const fullStateAuthor = 'import-author';
+        const uploadClient = 'post-import-client';
+        const fullStateOp = makeOp({
+          clientId: fullStateAuthor,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          entityId: undefined,
+          payload: { TASK: {} },
+          vectorClock: { [fullStateAuthor]: 1 },
+        });
+        const oversizedDelta = makeOp({
+          clientId: uploadClient,
+          entityId: 'post-import-task',
+          vectorClock: {
+            [fullStateAuthor]: 1,
+            [uploadClient]: 2,
+            ...Object.fromEntries(
+              Array.from({ length: 25 }, (_, index) => [
+                `old-client-${index}`,
+                100 + index,
+              ]),
+            ),
+          },
+          timestamp: fullStateOp.timestamp + 1,
+        });
+        const retryDelta = makeOp({
+          ...oversizedDelta,
+          vectorClock: { ...oversizedDelta.vectorClock },
+        });
+
+        expect(
+          (await service.uploadOps(userId, fullStateAuthor, [fullStateOp]))[0].accepted,
+        ).toBe(true);
+        expect(
+          (await service.uploadOps(userId, uploadClient, [oversizedDelta]))[0].accepted,
+        ).toBe(true);
+
+        const storedClock = testState.operations.get(oversizedDelta.id)?.vectorClock as
+          | Record<string, number>
+          | undefined;
+        expect(storedClock).toBeDefined();
+        expect(Object.keys(storedClock ?? {})).toHaveLength(20);
+        expect(storedClock?.[fullStateAuthor]).toBe(1);
+        expect(storedClock?.[uploadClient]).toBe(2);
+
+        expect((await service.uploadOps(userId, uploadClient, [retryDelta]))[0]).toEqual(
+          expect.objectContaining({
+            accepted: false,
+            errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+          }),
+        );
+      },
+    );
+
+    it.each([
+      ['legacy serial', false],
+      ['batch', true],
+    ])(
       'rejects a request-start occupied ID in the %s path after its row disappears',
       async (_label, batchUpload) => {
         const service = new SyncService({ batchUpload });
