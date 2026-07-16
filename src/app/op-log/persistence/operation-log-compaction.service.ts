@@ -16,6 +16,9 @@ import { extractEntityKeysFromState } from './extract-entity-keys';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { getDeferredActions } from '../capture/operation-capture.meta-reducer';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -32,6 +35,8 @@ export class OperationLogCompactionService {
   private stateSnapshot = inject(StateSnapshotService);
   private vectorClockService = inject(VectorClockService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private operationCapture = inject(OperationCaptureService);
+  private writeFlushService = inject(OperationWriteFlushService);
 
   async compact(): Promise<boolean> {
     return this._doCompact(COMPACTION_RETENTION_MS, false);
@@ -57,7 +62,7 @@ export class OperationLogCompactionService {
    * @param isEmergency - Whether this is an emergency compaction (for logging)
    */
   private async _doCompact(retentionMs: number, isEmergency: boolean): Promise<boolean> {
-    return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+    const compactExclusively = async (): Promise<boolean> => {
       const startTime = Date.now();
       const label = isEmergency ? 'emergency ' : '';
 
@@ -69,6 +74,28 @@ export class OperationLogCompactionService {
       if (pendingRemoteOps.length > 0) {
         OpLog.warn(
           'OperationLogCompactionService: Skipping compaction — remote reducer work is pending',
+        );
+        return false;
+      }
+
+      // #8469: the await above may have let a local dispatch land. Its reducer
+      // effect would be captured in the state below while its op is still
+      // unsequenced, so the cache would be tagged behind an op it already
+      // contains and the next boot would re-apply it (double-applying
+      // non-idempotent reducers). Deferred actions (buffered during a sync
+      // window, kept across windows after a failed drain) are in the same
+      // position but invisible to the pending counter, so check both. The
+      // check and the state read run in one synchronous block — no dispatch
+      // can interleave, and new deferrals cannot start while we hold the lock
+      // (the sync window that buffers them requires it). Bail; compaction
+      // re-triggers on the next threshold. The emergency path skips this: the
+      // failing write itself keeps the counter elevated (see below).
+      if (
+        !isEmergency &&
+        (this.operationCapture.getPendingCount() > 0 || getDeferredActions().length > 0)
+      ) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — local writes are pending (in-flight or deferred)',
         );
         return false;
       }
@@ -161,7 +188,20 @@ export class OperationLogCompactionService {
       }
 
       return true;
-    });
+    };
+
+    // #8469: drain the capture pipeline before capturing so no action can be
+    // dispatched-but-unsequenced at the state read — otherwise its effect is
+    // baked into the cache while its seq lands after lastAppliedOpSeq, and the
+    // next boot's tail replay double-applies it. Emergency compaction is
+    // invoked from the failing write's own call stack (quota handling), where
+    // that write's pending-counter entry is still elevated — flushing there
+    // would wait on ourselves until the flush timeout and break quota
+    // recovery, so it keeps the bare lock and accepts the residual re-replay
+    // window.
+    return isEmergency
+      ? this.lockService.request(LOCK_NAMES.OPERATION_LOG, compactExclusively)
+      : this.writeFlushService.flushThenRunExclusive(compactExclusively);
   }
 
   /**
