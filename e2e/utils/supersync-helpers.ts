@@ -726,6 +726,14 @@ export const renameTask = async (
   // Type directly into the textarea via evaluate to avoid focus/detach races
   await textarea.evaluate((el: HTMLTextAreaElement, name: string) => {
     el.focus();
+    // Dispatch focus explicitly rather than trusting el.focus() to emit it.
+    // These tests drive two clients as separate pages and only one page can hold
+    // focus, so on CI the event often never fires. TaskTitleComponent then keeps
+    // _isFocused=false, and its resetToLastExternalValueTrigger resets tmpValue
+    // to the stored title on the next task-object emission — blur therefore
+    // computes wasChanged=false, task.component skips update(), and the rename
+    // is silently dropped without ever becoming an op.
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
     el.value = name;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, newName);
@@ -733,10 +741,10 @@ export const renameTask = async (
   await textarea.evaluate((el: HTMLTextAreaElement) => {
     el.dispatchEvent(new Event('blur', { bubbles: true }));
   });
-  // Wait for the committed title rather than a fixed delay: blur -> dispatch ->
-  // re-render outruns a 300ms sleep on a loaded machine, and a following sync
-  // then uploads without the rename op — the caller sees a task that was never
-  // renamed. Same reasoning as markTaskDone's done-state wait.
+  // NOTE: this matches tmpValue (a component-local signal rendered in both the
+  // editing and idle branches), NOT the committed store title — no DOM assertion
+  // can see the store here. The focus dispatch above is what makes the commit
+  // deterministic; this only pins the render.
   await expect(getTaskElement(client, newName).first()).toBeVisible({
     timeout: UI_VISIBLE_TIMEOUT,
   });
