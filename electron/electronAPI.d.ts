@@ -59,15 +59,38 @@ export interface ElectronAPI {
   checkDirExists(args: { relativePath?: string }): Promise<true | Error>;
 
   /**
-   * Opens the native folder picker for the sync folder. Resolves to:
-   * - `string`: the canonicalized, persisted folder path on success
+   * Opens the native folder picker for the sync folder. Prepare-only (#9075):
+   * the pick is held main-side as a pending candidate and does NOT become the
+   * live sync target until `commitPickedDirectory()` (settings Save).
+   * Resolves to:
+   * - `string`: the canonicalized candidate folder path (display only)
    * - `undefined`: the user cancelled the picker
-   * - `Error`: the pick succeeded but main could not canonicalize/persist it
-   *   (e.g. the folder was deleted between pick and commit, EACCES, or the
-   *   folder lives inside the app's private dir). Nothing is persisted in
+   * - `Error`: the pick succeeded but main could not canonicalize/validate it
+   *   (e.g. the folder was deleted right after picking, EACCES, or the
+   *   folder lives inside the app's private dir). No candidate is stored in
    *   this case; the renderer must treat it as a failure, not a picked path.
    */
   pickDirectory(): Promise<string | Error | undefined>;
+
+  /**
+   * Persists the pending picked folder (see `pickDirectory`) as the live sync
+   * target. Call from settings Save only. Resolves to:
+   * - `{ path, isChanged }`: committed; `isChanged` is false when the user
+   *   re-picked the folder that was already configured (callers must skip
+   *   target-change invalidation in that case)
+   * - `null`: no pending candidate (routine save without a pick) — a no-op
+   * - `Error`: validation/persistence failed (e.g. folder deleted between
+   *   pick and Save). The candidate is kept so a retry fails loudly instead
+   *   of silently saving without the folder change.
+   */
+  commitPickedDirectory(): Promise<{ path: string; isChanged: boolean } | null | Error>;
+
+  /**
+   * Drops the pending picked folder without touching the live sync target.
+   * Call when the settings UI closes without a save. No-op if nothing is
+   * pending.
+   */
+  discardPickedDirectory(): Promise<void>;
 
   /**
    * Returns the main-owned sync folder path for display, or null if not yet

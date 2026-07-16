@@ -14,11 +14,25 @@ import { OperationLogEntry } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { MODEL_CONFIGS } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import {
+  bufferDeferredAction,
+  clearDeferredActions,
+} from '../capture/operation-capture.meta-reducer';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// Minimal persistent action for driving the real capture-service pending
+// counter in the quiesce tests (#8469).
+const FAKE_PENDING_ACTION = {
+  type: '[Task] Test pending action',
+  meta: { entityType: 'TASK', entityId: 't-pending' },
+} as any;
+
 describe('OperationLogCompactionService', () => {
   let service: OperationLogCompactionService;
+  let captureService: OperationCaptureService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
@@ -78,6 +92,10 @@ describe('OperationLogCompactionService', () => {
     TestBed.configureTestingModule({
       providers: [
         OperationLogCompactionService,
+        // Real quiesce pipeline (flush + capture counter) on top of the mocked
+        // lock, so the #8469 tests exercise the actual drain behavior.
+        OperationWriteFlushService,
+        OperationCaptureService,
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: LockService, useValue: mockLockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
@@ -87,6 +105,11 @@ describe('OperationLogCompactionService', () => {
     });
 
     service = TestBed.inject(OperationLogCompactionService);
+    captureService = TestBed.inject(OperationCaptureService);
+    // The compaction bail reads the MODULE-LEVEL deferred buffer (#8469);
+    // start clean so a leak from another spec can't fail these tests
+    // order-dependently under jasmine's random order.
+    clearDeferredActions();
   });
 
   describe('compact', () => {
@@ -135,7 +158,12 @@ describe('OperationLogCompactionService', () => {
     it('should not log metrics if compaction is fast', async () => {
       await service.compact();
 
-      expect(OpLog.normal).not.toHaveBeenCalled();
+      // The flush pre-pass logs its own progress lines; only the compaction
+      // metrics line must be absent.
+      expect(OpLog.normal).not.toHaveBeenCalledWith(
+        'OperationLogCompactionService: Compaction completed',
+        jasmine.anything(),
+      );
     });
 
     it('should get current vector clock', async () => {
@@ -447,9 +475,10 @@ describe('OperationLogCompactionService', () => {
 
       await service.compact();
 
-      // All operations should happen between lock-start and lock-end
-      const lockStartIndex = callOrder.indexOf('lock-start');
-      const lockEndIndex = callOrder.indexOf('lock-end');
+      // The flush pre-pass acquires/releases the lock once on its own; all
+      // compaction steps must happen inside the LAST lock window.
+      const lockStartIndex = callOrder.lastIndexOf('lock-start');
+      const lockEndIndex = callOrder.lastIndexOf('lock-end');
 
       expect(callOrder.indexOf('getState')).toBeGreaterThan(lockStartIndex);
       expect(callOrder.indexOf('getState')).toBeLessThan(lockEndIndex);
@@ -605,6 +634,87 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
       expect(mockOpLogStore.resetCompactionCounter).toHaveBeenCalled();
       expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+    });
+  });
+
+  describe('quiesced capture (#8469)', () => {
+    it('compact() should wait for in-flight op writes to drain before capturing', async () => {
+      // An action whose reducer has already run but whose op write is still
+      // queued must end up covered by the saved lastAppliedOpSeq — otherwise
+      // the next boot's tail replay re-applies an op whose effect is already
+      // baked into the cached state (double-applying non-idempotent reducers).
+      captureService.incrementPending(FAKE_PENDING_ACTION);
+      let opWriteDurable = false;
+      mockOpLogStore.getLastSeq.and.callFake(async () => (opWriteDurable ? 101 : 100));
+
+      // Simulate the persist effect completing the queued write while the
+      // compaction's flush pre-pass is polling.
+      setTimeout(() => {
+        opWriteDurable = true;
+        captureService.decrementPending();
+      }, 30);
+
+      const result = await service.compact();
+
+      expect(result).toBeTrue();
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith(
+        jasmine.objectContaining({ lastAppliedOpSeq: 101 }),
+      );
+    });
+
+    it('compact() should bail without saving when a local write lands mid-capture', async () => {
+      // A dispatch landing during the locked body's awaits (the pending
+      // remote-ops read) would be baked into the captured state while its op
+      // is still unsequenced — the cache would be tagged behind an op it
+      // already contains. The re-check at the state-read cutoff must bail;
+      // compaction re-triggers on the next threshold.
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        captureService.incrementPending(FAKE_PENDING_ACTION);
+        return [];
+      });
+
+      const result = await service.compact();
+
+      expect(result).toBeFalse();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
+    it('compact() should bail without saving when deferred actions are pending durable write', async () => {
+      // Deferred actions (buffered during a sync window, kept across windows
+      // after a failed drain) have their reducer effects in state but no seq
+      // yet and are invisible to the pending counter — capturing would tag
+      // the cache behind their future seqs.
+      bufferDeferredAction(FAKE_PENDING_ACTION);
+      try {
+        const result = await service.compact();
+
+        expect(result).toBeFalse();
+        expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+        expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+      } finally {
+        // Module-level buffer persists across TestBed resets — always clean up.
+        clearDeferredActions();
+      }
+    });
+
+    it('emergencyCompact() should NOT wait for pending writes (quota recovery)', async () => {
+      // Emergency compaction is invoked from the failing write's own call
+      // stack, where that write's pending-counter entry is still elevated.
+      // Draining the capture pipeline there would wait on ourselves until the
+      // flush timeout and break quota recovery — the emergency path skips the
+      // quiesce (pending counter AND deferred buffer) and accepts the
+      // residual re-replay window (#8469).
+      captureService.incrementPending(FAKE_PENDING_ACTION); // never drained
+      bufferDeferredAction(FAKE_PENDING_ACTION);
+      try {
+        const result = await service.emergencyCompact();
+
+        expect(result).toBeTrue();
+        expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
+      } finally {
+        clearDeferredActions();
+      }
     });
   });
 
@@ -911,8 +1021,9 @@ describe('OperationLogCompactionService', () => {
       await service.compact();
       await service.compact();
 
-      // Lock should have been requested 3 times
-      expect(lockRequests.length).toBe(3);
+      // At least one acquisition per compact(); the flush pre-pass (#8469
+      // quiesce) may add more — that's an internal detail, not the contract.
+      expect(lockRequests.length).toBeGreaterThanOrEqual(3);
     });
 
     it('should always request lock with correct name', async () => {
@@ -990,8 +1101,12 @@ describe('OperationLogCompactionService', () => {
       expect(regularResult).toBe('regular-done');
       expect(emergencyResult).toBe('emergency-done');
 
-      // Lock should have been acquired twice (serialized)
-      expect(callOrder.filter((c) => c === 'lock-start').length).toBe(2);
+      // Both paths acquire the lock (serialized): regular compact at least
+      // once plus the flush pre-pass (#8469 quiesce), emergency exactly once
+      // (bare lock — pinned separately by the quiesced-capture tests).
+      expect(callOrder.filter((c) => c === 'lock-start').length).toBeGreaterThanOrEqual(
+        2,
+      );
     });
 
     it('should not delete operations that arrive during compaction', async () => {
@@ -1096,22 +1211,24 @@ describe('OperationLogCompactionService', () => {
   // to prevent data corruption from lock expiration.
 
   describe('compaction timeout handling', () => {
+    // NOTE: keep the capture-service pending counter at 0 in these tests —
+    // with the clock frozen by the Date.now spy, the flush pre-pass's poll
+    // loop would never trip its MAX_WAIT_TIME and would spin on real timers
+    // until the jasmine timeout (a confusing hang, not a clean failure).
     it('should throw error when compaction exceeds timeout', async () => {
-      // Simulate slow state retrieval that exceeds the 25s timeout
+      // Simulate slow pending-remote-ops retrieval that exceeds the 25s
+      // timeout. The jump is keyed off getPendingRemoteOps (the first step
+      // inside the compaction body) rather than a Date.now call count, so the
+      // flush pre-pass (#8469) reading the clock first doesn't skew it.
       const originalDateNow = Date.now;
-      let callCount = 0;
+      let timeJumped = false;
 
-      // Mock Date.now to simulate time passing during compaction
-      spyOn(Date, 'now').and.callFake(() => {
-        callCount++;
-        // First call is startTime, subsequent calls simulate 26s elapsed
-        if (callCount === 1) {
-          return 0;
-        }
-        return 26000; // 26 seconds - exceeds 25s timeout
+      spyOn(Date, 'now').and.callFake(() => (timeJumped ? 26000 : 0));
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        timeJumped = true; // 26 seconds elapse "during" the read
+        return [];
       });
 
-      // Make state retrieval trigger a timeout check
       mockStateSnapshot.getStateSnapshot.and.returnValue(mockState);
 
       await expectAsync(service.compact()).toBeRejectedWithError(
@@ -1130,14 +1247,13 @@ describe('OperationLogCompactionService', () => {
     });
 
     it('should include phase info in timeout error message', async () => {
-      let callCount = 0;
+      // Same clock-jump keying as above — see the first timeout test.
+      let timeJumped = false;
 
-      spyOn(Date, 'now').and.callFake(() => {
-        callCount++;
-        if (callCount === 1) {
-          return 0;
-        }
-        return 26000;
+      spyOn(Date, 'now').and.callFake(() => (timeJumped ? 26000 : 0));
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        timeJumped = true;
+        return [];
       });
 
       mockStateSnapshot.getStateSnapshot.and.returnValue(mockState);

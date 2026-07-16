@@ -13,7 +13,7 @@
  * - Singleton stores (`vector_clock`, `client_id`, `state_cache`,
  *   `import_backup`, archive) are keyed by a known string key.
  * - Two flows require atomic multi-store writes:
- *   `appendWithVectorClockUpdate` (OPS + VECTOR_CLOCK) and
+ *   `appendWithVectorClockOverwrite` (OPS + VECTOR_CLOCK) and
  *   `runDestructiveStateReplacement` (OPS + STATE_CACHE + VECTOR_CLOCK +
  *   CLIENT_ID + archive). Hence the callback-based {@link transaction}: commit
  *   on resolve, roll back on throw — the one shape both IDB auto-commit and

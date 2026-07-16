@@ -334,7 +334,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // (one to SUP_OPS, one to pf.META_MODEL) into a single atomic transaction,
         // reducing disk I/O by ~50% on mobile devices.
         // The op.vectorClock already contains the incremented clock (from newClock above).
-        await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        await this.opLogStore.appendWithVectorClockOverwrite(op, 'local');
 
         // The op is durably committed past this point. Bookkeeping failures
         // below must NOT propagate: a throw would send the deferred retry loop

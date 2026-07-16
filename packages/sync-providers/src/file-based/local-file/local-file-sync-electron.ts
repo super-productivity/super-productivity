@@ -4,11 +4,13 @@ import { LocalFileSyncBase, type LocalFileSyncBaseDeps } from './local-file-sync
 export interface LocalFileSyncElectronDeps extends LocalFileSyncBaseDeps {
   isElectron: boolean;
   /**
-   * Show the system folder picker and persist the result main-side. Returns
-   * the picked path for display only, or undefined if the user cancelled.
-   * Rejects when the pick succeeded but main could not canonicalize/persist
-   * the folder (e.g. it was deleted between pick and commit, EACCES, or it
-   * lives inside the app's private dir); nothing is persisted in that case.
+   * Show the system folder picker. Prepare-only (#9075): main holds the pick
+   * as a pending candidate; the live sync target is untouched until
+   * `commitPickedDirectory()` (settings Save). Returns the candidate path for
+   * display only, or undefined if the user cancelled. Rejects when the pick
+   * succeeded but main could not canonicalize/validate the folder (e.g. it
+   * was deleted right after picking, EACCES, or it lives inside the app's
+   * private dir); no candidate is stored in that case.
    * The renderer must NOT pass the returned value back into FS IPCs — those
    * take a relative path and main resolves against its own stored copy.
    */
@@ -68,8 +70,10 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
     this.logger.normal(`${LocalFileSyncElectron.L}.pickDirectory()`);
 
     try {
-      // Main-side handler persists the result; we just relay the display
-      // value to the caller (typically a settings form).
+      // Main-side handler holds the pick as a pending candidate (#9075); we
+      // just relay the display value to the caller (typically a settings
+      // form). Nothing goes live until the settings dialog commits the pick
+      // on Save (host-app concern, straight over the Electron bridge).
       return await this._deps.pickDirectory();
     } catch (e) {
       this.logger.error(

@@ -234,6 +234,7 @@ describe('round-time conflict convergence integration (#8944)', () => {
     const detection = await resolver.checkOpForConflicts(remoteTitleOp, {
       localPendingOpsByEntity: await opLogStore.getUnsyncedByEntity(),
       appliedFrontierByEntity: new Map(),
+      retainedOpsByEntity: new Map(),
       snapshotVectorClock: undefined,
       snapshotEntityKeys: undefined,
       hasNoSnapshotClock: true,

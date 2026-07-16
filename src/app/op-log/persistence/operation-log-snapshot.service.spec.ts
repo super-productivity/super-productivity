@@ -12,6 +12,12 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { ValidateStateService } from '../validation/validate-state.service';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import {
+  bufferDeferredAction,
+  clearDeferredActions,
+} from '../capture/operation-capture.meta-reducer';
 import { MAX_VECTOR_CLOCK_SIZE } from '@sp/sync-core';
 
 // Meaningful state (contains a task) so saveCurrentStateAsSnapshot proceeds past
@@ -22,8 +28,16 @@ const MEANINGFUL_SNAPSHOT_STATE = {
   task: { ids: ['t1'], entities: { t1: { id: 't1' } } },
 } as unknown;
 
+// Minimal persistent action for driving the real capture-service pending
+// counter in the quiesce tests (#8469).
+const FAKE_PENDING_ACTION = {
+  type: '[Task] Test pending action',
+  meta: { entityType: 'TASK', entityId: 't-pending' },
+} as any;
+
 describe('OperationLogSnapshotService', () => {
   let service: OperationLogSnapshotService;
+  let captureService: OperationCaptureService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockStateSnapshotService: jasmine.SpyObj<StateSnapshotService>;
@@ -71,6 +85,10 @@ describe('OperationLogSnapshotService', () => {
     TestBed.configureTestingModule({
       providers: [
         OperationLogSnapshotService,
+        // Real quiesce pipeline (flush + capture counter) on top of the mocked
+        // lock, so the #8469 tests exercise the actual drain behavior.
+        OperationWriteFlushService,
+        OperationCaptureService,
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: StateSnapshotService, useValue: mockStateSnapshotService },
@@ -81,6 +99,11 @@ describe('OperationLogSnapshotService', () => {
       ],
     });
     service = TestBed.inject(OperationLogSnapshotService);
+    captureService = TestBed.inject(OperationCaptureService);
+    // The save bails on a non-empty MODULE-LEVEL deferred buffer (#8469);
+    // start clean so a leak from another spec can't fail these tests
+    // order-dependently under jasmine's random order.
+    clearDeferredActions();
   });
 
   describe('isValidSnapshot', () => {
@@ -348,7 +371,7 @@ describe('OperationLogSnapshotService', () => {
       );
     });
 
-    it('should read lastSeq BEFORE getStateSnapshot inside the lock', async () => {
+    it('should read state BEFORE lastSeq inside the lock (quiesced capture, #8469)', async () => {
       const callOrder: string[] = [];
 
       mockLockService.request.and.callFake(
@@ -375,17 +398,24 @@ describe('OperationLogSnapshotService', () => {
 
       await service.saveCurrentStateAsSnapshot();
 
-      // All operations should happen between lock-start and lock-end
-      const lockStartIndex = callOrder.indexOf('lock-start');
-      const lockEndIndex = callOrder.indexOf('lock-end');
+      // The flush pre-pass acquires/releases the lock once on its own; the
+      // capture body runs inside the LAST lock window.
+      const lockStartIndex = callOrder.lastIndexOf('lock-start');
+      const lockEndIndex = callOrder.lastIndexOf('lock-end');
       expect(callOrder.indexOf('getLastSeq')).toBeGreaterThan(lockStartIndex);
       expect(callOrder.indexOf('getLastSeq')).toBeLessThan(lockEndIndex);
       expect(callOrder.indexOf('getStateSnapshot')).toBeGreaterThan(lockStartIndex);
       expect(callOrder.indexOf('getStateSnapshot')).toBeLessThan(lockEndIndex);
 
-      // Key invariant: lastSeq is read BEFORE state snapshot
-      expect(callOrder.indexOf('getLastSeq')).toBeLessThan(
-        callOrder.indexOf('getStateSnapshot'),
+      // Key invariant (#8469): with the capture pipeline drained and the lock
+      // held, no op can gain a seq during the body. State is read first
+      // (synchronously, before any await can let a dispatch interleave) and
+      // lastSeq after — so every op with seq <= lastAppliedOpSeq has its
+      // effect in the captured state, and every later dispatch is absent from
+      // it and replays cleanly. (Pre-quiesce the order was inverted to bias
+      // the race toward re-replay instead of op-loss.)
+      expect(callOrder.indexOf('getStateSnapshot')).toBeLessThan(
+        callOrder.indexOf('getLastSeq'),
       );
     });
 
@@ -394,6 +424,71 @@ describe('OperationLogSnapshotService', () => {
 
       // Should not throw — errors are caught internally
       await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
+    });
+  });
+
+  describe('saveCurrentStateAsSnapshot — quiesced capture (#8469)', () => {
+    beforeEach(() => {
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(
+        MEANINGFUL_SNAPSHOT_STATE as any,
+      );
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+    });
+
+    it('should wait for in-flight op writes to drain before capturing', async () => {
+      // An action whose reducer has already run but whose op write is still
+      // queued must end up covered by the saved lastAppliedOpSeq — otherwise
+      // the next boot's tail replay re-applies an op whose effect is already
+      // baked into the snapshot state (double-applying non-idempotent
+      // reducers: accumulating time/metric deltas, plain-append branches).
+      captureService.incrementPending(FAKE_PENDING_ACTION);
+      let opWriteDurable = false;
+      mockOpLogStore.getLastSeq.and.callFake(async () => (opWriteDurable ? 11 : 10));
+
+      // Simulate the persist effect completing the queued write while the
+      // snapshot's flush pre-pass is polling.
+      setTimeout(() => {
+        opWriteDurable = true;
+        captureService.decrementPending();
+      }, 30);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith(
+        jasmine.objectContaining({ lastAppliedOpSeq: 11 }),
+      );
+    });
+
+    it('should skip the save without throwing when the pipeline cannot quiesce', async () => {
+      const writeFlushService = TestBed.inject(OperationWriteFlushService);
+      spyOn(writeFlushService, 'flushThenRunExclusive').and.rejectWith(
+        new Error('Operation write cutoff not reached'),
+      );
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+
+      // Skipping is always correctness-safe: the snapshot is only a boot-time
+      // cache and the op-log stays the source of truth.
+      await expectAsync(service.saveCurrentStateAsSnapshot()).toBeResolved();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+    });
+
+    it('should skip the save when deferred actions are pending durable write', async () => {
+      // Deferred actions (buffered during a sync window, kept across windows
+      // after a failed drain) have their reducer effects in state but no seq
+      // yet and are invisible to the pending counter — capturing would tag
+      // the snapshot behind their future seqs.
+      bufferDeferredAction(FAKE_PENDING_ACTION);
+      try {
+        mockOpLogStore.getLastSeq.and.resolveTo(1);
+
+        await service.saveCurrentStateAsSnapshot();
+
+        expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      } finally {
+        // Module-level buffer persists across TestBed resets — always clean up.
+        clearDeferredActions();
+      }
     });
   });
 

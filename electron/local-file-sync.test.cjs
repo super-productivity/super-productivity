@@ -24,6 +24,16 @@ let handlers = {};
 let userDataDir;
 let externalDir;
 let nextDialogResult = { canceled: true, filePaths: [] };
+let winStub;
+
+const makeWinStub = () => ({
+  webContents: {
+    _handlers: {},
+    on(evt, fn) {
+      this._handlers[evt] = fn;
+    },
+  },
+});
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -40,7 +50,7 @@ const installMocks = () => {
       return { log: () => {}, error: () => {} };
     }
     if (/[/\\]main-window$/.test(request)) {
-      return { getWin: () => ({}) };
+      return { getWin: () => winStub };
     }
     return originalModuleLoad.call(this, request, parent, isMain);
   };
@@ -59,17 +69,20 @@ const load = () => {
 };
 
 const configureSyncFolder = async (folder) => {
-  // Drive the real PICK_DIRECTORY path so the test exercises the same
-  // canonicalize-and-persist code production uses.
+  // Drive the real pick → commit path so the test exercises the same
+  // prepare-then-persist code production uses (#9075).
   nextDialogResult = { canceled: false, filePaths: [folder] };
-  const result = await handlers['PICK_DIRECTORY']({});
-  if (result instanceof Error) throw result;
-  return result;
+  const picked = await handlers['PICK_DIRECTORY']({});
+  if (picked instanceof Error) throw picked;
+  const committed = await handlers['COMMIT_PICKED_DIRECTORY']({});
+  if (committed instanceof Error) throw committed;
+  return committed.path;
 };
 
 test.beforeEach(() => {
   userDataDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sp-ud-')));
   externalDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sp-ext-')));
+  winStub = makeWinStub();
   installMocks();
   load();
 });
@@ -263,28 +276,187 @@ test('GET_SYNC_FOLDER_PATH returns null when unconfigured, then the configured p
   assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), externalDir);
 });
 
-test('PICK_DIRECTORY persists the selection main-side', async () => {
+test('PICK_DIRECTORY is prepare-only: nothing goes live until commit (#9075)', async () => {
   nextDialogResult = { canceled: false, filePaths: [externalDir] };
   const returned = await handlers['PICK_DIRECTORY']({});
-  assert.equal(returned, externalDir);
+  assert.equal(returned, externalDir, 'returns the candidate for display');
   assert.equal(
     await handlers['GET_SYNC_FOLDER_PATH']({}),
-    externalDir,
-    'main-side store is updated; renderer does not have to echo back',
+    null,
+    'live target untouched by the pick',
   );
+
+  const committed = await handlers['COMMIT_PICKED_DIRECTORY']({});
+  assert.deepEqual(committed, { path: externalDir, isChanged: true });
+  assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), externalDir);
 });
 
-test('PICK_DIRECTORY surfaces a safe error when persistence fails', async () => {
+test('a sync between pick and commit still resolves against the OLD folder (#9075)', async () => {
+  const oldDir = externalDir;
+  const newDir = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-new-')),
+  );
+  try {
+    await configureSyncFolder(oldDir);
+    nextDialogResult = { canceled: false, filePaths: [newDir] };
+    await handlers['PICK_DIRECTORY']({});
+
+    const result = await handlers['FILE_SYNC_SAVE'](
+      {},
+      { relativePath: 'main.json', dataStr: '{"ok":1}', localRev: null },
+    );
+    assert.ok(!(result instanceof Error));
+    assert.ok(fs.existsSync(path.join(oldDir, 'main.json')), 'written to old folder');
+    assert.equal(fs.existsSync(path.join(newDir, 'main.json')), false);
+  } finally {
+    fs.rmSync(newDir, { recursive: true, force: true });
+  }
+});
+
+test('DISCARD_PICKED_DIRECTORY abandons the pick; the old target stays live (#9075)', async () => {
+  const oldDir = externalDir;
+  const newDir = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-new-')),
+  );
+  try {
+    await configureSyncFolder(oldDir);
+    nextDialogResult = { canceled: false, filePaths: [newDir] };
+    await handlers['PICK_DIRECTORY']({});
+    await handlers['DISCARD_PICKED_DIRECTORY']({});
+
+    assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), oldDir);
+    assert.equal(
+      await handlers['COMMIT_PICKED_DIRECTORY']({}),
+      null,
+      'a later save has nothing to commit',
+    );
+    assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), oldDir);
+  } finally {
+    fs.rmSync(newDir, { recursive: true, force: true });
+  }
+});
+
+test('COMMIT_PICKED_DIRECTORY without a pick is a null no-op (routine save)', async () => {
+  await configureSyncFolder(externalDir);
+  assert.equal(await handlers['COMMIT_PICKED_DIRECTORY']({}), null);
+  assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), externalDir);
+});
+
+test('picking twice keeps only the last candidate', async () => {
+  const otherDir = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-other-')),
+  );
+  try {
+    nextDialogResult = { canceled: false, filePaths: [otherDir] };
+    await handlers['PICK_DIRECTORY']({});
+    nextDialogResult = { canceled: false, filePaths: [externalDir] };
+    await handlers['PICK_DIRECTORY']({});
+
+    const committed = await handlers['COMMIT_PICKED_DIRECTORY']({});
+    assert.equal(committed.path, externalDir);
+  } finally {
+    fs.rmSync(otherDir, { recursive: true, force: true });
+  }
+});
+
+test('re-picking the configured folder commits with isChanged:false', async () => {
+  // The renderer gates its target-change invalidation (cursor wipe) on
+  // isChanged — a same-folder re-pick must not report a move.
+  await configureSyncFolder(externalDir);
+  nextDialogResult = { canceled: false, filePaths: [externalDir] };
+  await handlers['PICK_DIRECTORY']({});
+  const committed = await handlers['COMMIT_PICKED_DIRECTORY']({});
+  assert.deepEqual(committed, { path: externalDir, isChanged: false });
+});
+
+test('PICK_DIRECTORY surfaces a safe error when validation fails', async () => {
   // Picker returns a path that no longer exists on disk → realpath throws
   // → PICK_DIRECTORY must return a distinct Error, not undefined, so the
-  // renderer doesn't confuse persist-failure with user-cancel.
+  // renderer doesn't confuse validation failure with user-cancel.
   const gone = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-gone-'));
   fs.rmSync(gone, { recursive: true, force: true });
   nextDialogResult = { canceled: false, filePaths: [gone] };
   const result = await handlers['PICK_DIRECTORY']({});
   assert.ok(result instanceof Error);
-  // Cache must not be poisoned with a non-existent path.
+  // No candidate stored: a later save must not commit the bad path.
+  assert.equal(await handlers['COMMIT_PICKED_DIRECTORY']({}), null);
   assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), null);
+});
+
+test('COMMIT_PICKED_DIRECTORY errors when the folder vanished between pick and save', async () => {
+  const oldDir = externalDir;
+  const doomed = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-doomed-')),
+  );
+  await configureSyncFolder(oldDir);
+  nextDialogResult = { canceled: false, filePaths: [doomed] };
+  await handlers['PICK_DIRECTORY']({});
+  fs.rmSync(doomed, { recursive: true, force: true });
+
+  const result = await handlers['COMMIT_PICKED_DIRECTORY']({});
+  assert.ok(result instanceof Error);
+  assert.equal(
+    await handlers['GET_SYNC_FOLDER_PATH']({}),
+    oldDir,
+    'live target not poisoned by the failed commit',
+  );
+  // The candidate is kept so a retried save fails loudly instead of
+  // silently saving without the folder change.
+  const retry = await handlers['COMMIT_PICKED_DIRECTORY']({});
+  assert.ok(retry instanceof Error);
+});
+
+test('a discard while the native picker is open prevents arming an orphaned candidate (#9075)', async () => {
+  // closeAllDialogs()/reload can tear down the settings dialog (running its
+  // discard) while the native folder picker is still open. The resolving
+  // pick must NOT arm a candidate nobody owns — a later unrelated save would
+  // silently commit it.
+  await configureSyncFolder(externalDir);
+  let resolveDialog;
+  nextDialogResult = new Promise((resolve) => (resolveDialog = resolve));
+  const newDir = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-new-')),
+  );
+  try {
+    const pickPromise = handlers['PICK_DIRECTORY']({});
+    await handlers['DISCARD_PICKED_DIRECTORY']({});
+    resolveDialog({ canceled: false, filePaths: [newDir] });
+
+    assert.equal(await pickPromise, undefined, 'disowned pick reads as cancel');
+    assert.equal(await handlers['COMMIT_PICKED_DIRECTORY']({}), null);
+    assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), externalDir);
+  } finally {
+    fs.rmSync(newDir, { recursive: true, force: true });
+  }
+});
+
+test('a renderer reload clears the pending pick — no surprise commit on a later save (#9075)', async () => {
+  const newDir = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'sp-new-')),
+  );
+  try {
+    await configureSyncFolder(externalDir);
+    nextDialogResult = { canceled: false, filePaths: [newDir] };
+    await handlers['PICK_DIRECTORY']({});
+
+    // The dialog's renderer-side discard hook dies with the page on reload;
+    // main must drop the candidate itself.
+    winStub.webContents._handlers['did-navigate']();
+
+    assert.equal(await handlers['COMMIT_PICKED_DIRECTORY']({}), null);
+    assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), externalDir);
+  } finally {
+    fs.rmSync(newDir, { recursive: true, force: true });
+  }
+});
+
+test('PICK_DIRECTORY rejects a folder inside userData without storing a candidate', async () => {
+  const inside = path.join(userDataDir, 'sneaky');
+  fs.mkdirSync(inside);
+  nextDialogResult = { canceled: false, filePaths: [inside] };
+  const result = await handlers['PICK_DIRECTORY']({});
+  assert.ok(result instanceof Error);
+  assert.equal(await handlers['COMMIT_PICKED_DIRECTORY']({}), null);
 });
 
 test('PICK_DIRECTORY returns undefined on user-cancel (distinct from error)', async () => {

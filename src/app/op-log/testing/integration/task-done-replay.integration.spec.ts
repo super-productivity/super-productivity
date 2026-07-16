@@ -101,7 +101,7 @@ describe('done task operation replay', () => {
     const actions$: Observable<Action> = of(action);
     const mockOpLogStore = jasmine.createSpyObj<OperationLogStoreService>(
       'OperationLogStoreService',
-      ['appendWithVectorClockUpdate', 'getCompactionCounter', 'clearVectorClockCache'],
+      ['appendWithVectorClockOverwrite', 'getCompactionCounter', 'clearVectorClockCache'],
     );
     const mockLockService = jasmine.createSpyObj<LockService>('LockService', ['request']);
     const mockVectorClockService = jasmine.createSpyObj<VectorClockService>(
@@ -132,7 +132,7 @@ describe('done task operation replay', () => {
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
       fn(),
     );
-    mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
+    mockOpLogStore.appendWithVectorClockOverwrite.and.returnValue(Promise.resolve(1));
     mockOpLogStore.getCompactionCounter.and.returnValue(Promise.resolve(0));
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ clientA: 1 }),
@@ -166,7 +166,7 @@ describe('done task operation replay', () => {
       });
     });
 
-    return mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent()
+    return mockOpLogStore.appendWithVectorClockOverwrite.calls.mostRecent()
       .args[0] as Operation;
   };
 

@@ -482,6 +482,67 @@ describe('ScheduleComponent', () => {
       expect(contextDate.getMonth()).toBe(0);
       expect(contextDate.getFullYear()).toBe(2026);
     });
+
+    it('should keep the reference live as time passes rather than freezing at first read', () => {
+      // The computed caches, and Date.now() is not reactive: without the refresh
+      // tick this pins the layout to whenever the view was first rendered.
+      let clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      // Round-trip through a date: the computed already ran against the real
+      // clock on init, and re-setting null over null would not invalidate it.
+      component['_selectedDate'].set(new Date(2026, 0, 21));
+      component['_selectedDate'].set(null);
+      expect(component['_contextNow']()).toBe(clock);
+
+      clock = new Date(2026, 0, 20, 17, 0, 0).getTime();
+      (mockScheduleService as any).scheduleRefreshTick.set(1);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
+
+    it('should keep using midnight when today sits later in the displayed week', () => {
+      // Week view can show a range that starts before today; day 0 is fully
+      // elapsed, so it stays the layout reference.
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+
+      component['_selectedDate'].set(new Date(2026, 0, 19));
+
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 19).setHours(0, 0, 0, 0));
+    });
+
+    it('should never anchor day 0 with a now that falls outside it', () => {
+      // contextNow anchors dayDates[0], so a now past that day's end would push
+      // every day-0 entry over its boundary and empty the column. Reachable with
+      // a custom start-of-next-day, where the logical "today" is still Jan 20
+      // while the wall clock already reads 02:00 on Jan 21.
+      const clock = new Date(2026, 0, 21, 2, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+
+      const contextNow = component['_contextNow']();
+      expect(contextNow).toBeGreaterThanOrEqual(
+        new Date(2026, 0, 20).setHours(0, 0, 0, 0),
+      );
+      expect(contextNow).toBeLessThan(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
+    });
+
+    it('should switch to the real now once the viewed day rolls over into today', () => {
+      // Viewing tomorrow at 22:00, then the app is left open past midnight. The
+      // view does not move, so the day it shows silently becomes today.
+      let clock = new Date(2026, 0, 20, 22, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      component['_selectedDate'].set(new Date(2026, 0, 21));
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
+
+      // Rollover happens at 00:00 and the user comes back at 09:00; only the
+      // refresh tick moves, exactly as in production.
+      clock = new Date(2026, 0, 21, 9, 0, 0).getTime();
+      (mockScheduleService as any).scheduleRefreshTick.set(1);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
   });
 
   describe('scheduleDays computed', () => {
@@ -524,10 +585,12 @@ describe('ScheduleComponent', () => {
     });
 
     it('should pass both contextNow and realNow when viewing a future date', () => {
-      // Arrange
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 7);
-      component['_selectedDate'].set(futureDate);
+      // Arrange - a week past the mocked today (2026-01-20). The clock is pinned
+      // so both timestamps can be named exactly; asserting only that they differ
+      // would pass for arbitrary wrong values.
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      component['_selectedDate'].set(new Date(2026, 0, 27));
       mockScheduleService.createScheduleDaysWithContext.calls.reset();
 
       // Act
@@ -536,10 +599,8 @@ describe('ScheduleComponent', () => {
       // Assert
       const callArgs =
         mockScheduleService.createScheduleDaysWithContext.calls.mostRecent().args[0];
-      expect(callArgs.contextNow).toBeDefined();
-      expect(callArgs.realNow).toBeDefined();
-      // contextNow should be different from realNow when viewing future
-      expect(callArgs.contextNow).not.toBe(callArgs.realNow);
+      expect(callArgs.contextNow).toBe(new Date(2026, 0, 27).setHours(0, 0, 0, 0));
+      expect(callArgs.realNow).toBe(clock);
     });
   });
 

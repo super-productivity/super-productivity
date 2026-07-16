@@ -431,10 +431,12 @@ export class RemoteOpsProcessingService {
         options?.fenceEpoch,
         'remote-ops apply',
       );
-      const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();
+      const { frontier: appliedFrontierByEntity, retainedOpsByEntity } =
+        await this.vectorClockService.getEntityFrontierWithOps();
       const conflictResult = await this.detectConflicts(
         validOps,
         appliedFrontierByEntity,
+        retainedOpsByEntity,
       );
       const { nonConflicting, conflicts } = conflictResult;
 
@@ -783,11 +785,15 @@ export class RemoteOpsProcessingService {
    *
    * @param remoteOps - Remote operations to check for conflicts
    * @param appliedFrontierByEntity - Per-entity vector clocks of applied ops
+   * @param retainedOpsByEntity - Per-entity retained (non-rejected) ops from the
+   *        same scan as the frontier; reconstructs the local side of no-pending
+   *        CONCURRENT crossings (#9073)
    * @returns Object with `nonConflicting` ops to apply and `conflicts` to resolve
    */
   async detectConflicts(
     remoteOps: Operation[],
     appliedFrontierByEntity: Map<string, VectorClock>,
+    retainedOpsByEntity: Map<string, Operation[]>,
   ): Promise<ConflictResult> {
     const localPendingOpsByEntity = await this.opLogStore.getUnsyncedByEntity();
     const conflicts: EntityConflict[] = [];
@@ -811,6 +817,7 @@ export class RemoteOpsProcessingService {
       const result = await this.conflictResolutionService.checkOpForConflicts(remoteOp, {
         localPendingOpsByEntity,
         appliedFrontierByEntity,
+        retainedOpsByEntity,
         snapshotVectorClock,
         snapshotEntityKeys,
         hasNoSnapshotClock,

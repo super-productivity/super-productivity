@@ -128,10 +128,18 @@ describe('RemoteOpsProcessingService', () => {
     opLogStoreSpy.clearFullStateOpsExcept.and.resolveTo(0);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
       'getEntityFrontier',
+      'getEntityFrontierWithOps',
       'getSnapshotVectorClock',
       'getSnapshotEntityKeys',
       'getCurrentVectorClock',
     ]);
+    // Delegate to the getEntityFrontier spy so the many per-test frontier
+    // stubs keep driving the flow; retained ops default to empty (no
+    // no-pending crossing detection in these tests).
+    vectorClockServiceSpy.getEntityFrontierWithOps.and.callFake(async () => ({
+      frontier: await vectorClockServiceSpy.getEntityFrontier(),
+      retainedOpsByEntity: new Map<string, Operation[]>(),
+    }));
     operationApplierServiceSpy = jasmine.createSpyObj('OperationApplierService', [
       'applyOperations',
     ]);
@@ -795,6 +803,7 @@ describe('RemoteOpsProcessingService', () => {
 
       expect(service.detectConflicts).toHaveBeenCalledWith(
         [migratedOp],
+        jasmine.any(Map),
         jasmine.any(Map),
       );
     });
@@ -1556,7 +1565,7 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteTaskOps, new Map());
+      const result = await service.detectConflicts(remoteTaskOps, new Map(), new Map());
 
       // TASK op should be non-conflicting (not a conflict!)
       expect(result.nonConflicting.length).toBe(1);
@@ -1593,7 +1602,7 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteOps, new Map());
+      const result = await service.detectConflicts(remoteOps, new Map(), new Map());
 
       // Should be detected as conflict (concurrent modifications to same entity)
       expect(result.conflicts.length).toBe(1);
@@ -1628,7 +1637,7 @@ describe('RemoteOpsProcessingService', () => {
         conflicts,
       });
 
-      const result = await service.detectConflicts([remoteOp], new Map());
+      const result = await service.detectConflicts([remoteOp], new Map(), new Map());
 
       expect(result.conflicts.map((conflict) => conflict.entityId)).toEqual([
         'task-1',
@@ -1658,7 +1667,7 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteOps, new Map());
+      const result = await service.detectConflicts(remoteOps, new Map(), new Map());
 
       // Should be skipped (superseded)
       expect(result.nonConflicting.length).toBe(0);
