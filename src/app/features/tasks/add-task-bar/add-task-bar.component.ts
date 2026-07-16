@@ -47,7 +47,7 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, firstValueFrom, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import {
@@ -551,8 +551,32 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
       // Section membership lives on the section (taskIds), not the task —
       // place the new task into the "+Project/Section" target if one parsed.
-      if (state.sectionId && state.projectId) {
-        this._sectionService.addTaskToSection(state.sectionId, taskId, null, null);
+      // Two dispatches for one gesture is the established pattern here: it
+      // mirrors drag-into-section (task-list.component), both ops replay
+      // deterministically, and the section reducer no-ops defensively if the
+      // section vanished concurrently.
+      // Skipped for backlog adds: sections only group the main list
+      // (undoneTasksBySection), so a backlogged task would carry an invisible
+      // section membership.
+      if (state.sectionId && state.projectId && !this.isAddToBacklog()) {
+        const targetSection = await firstValueFrom(
+          this._store.select(selectAllSections).pipe(
+            map((all) => all.find((s) => s.id === state.sectionId)),
+            first(),
+          ),
+        );
+        if (targetSection) {
+          // Respect the add-to-bottom toggle within the section, too
+          const afterTaskId = this.isAddToBottom()
+            ? targetSection.taskIds[targetSection.taskIds.length - 1] || null
+            : null;
+          this._sectionService.addTaskToSection(
+            state.sectionId,
+            taskId,
+            afterTaskId,
+            null,
+          );
+        }
       }
 
       // Resolve remind option once for both scheduleTask and repeat config paths

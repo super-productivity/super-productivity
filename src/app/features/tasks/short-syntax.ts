@@ -302,9 +302,14 @@ export const parseStandaloneSectionChanges = (
   if (!section) {
     return {};
   }
+  // Positional strip of exactly the matched "/<typed>" span (see the same
+  // pattern in parseProjectChanges — reconstructed-string .replace() is
+  // fragile against earlier lookalike substrings).
+  const slashPos =
+    (rr.index as number) + (rr[0].startsWith(CH_SECTION) ? 0 : rr[0].search(/\//));
+  const stripLen = 1 + section.typedText.length;
   return {
-    title: task.title
-      .replace(`${CH_SECTION}${section.typedText}`, '')
+    title: (task.title.slice(0, slashPos) + task.title.slice(slashPos + stripLen))
       .trim()
       .replace('  ', ' '),
     sectionId: section.sectionId,
@@ -357,13 +362,45 @@ export const parseProjectChanges = (
           project.title.replaceAll(' ', '').toLowerCase().indexOf(titleToMatch) === 0,
       );
 
+    // Positional strip: remove exactly `len` chars of the matched token
+    // starting at the "+" — never reconstruct the typed text by string
+    // concatenation (a `.replace()` on a rebuilt string silently no-ops when
+    // the rebuild doesn't byte-match the input, orphaning syntax in the title).
+    const tokenStart = rr.index as number;
+    const stripAt = (len: number): string =>
+      (
+        (task.title as string).slice(0, tokenStart) +
+        (task.title as string).slice(tokenStart + len)
+      )
+        .trim()
+        .replace('  ', ' ');
+
     const buildResult = (project: Project, typedProjectText: string): ProjectChanges => {
-      const section = matchSectionByTypedText(sectionPart, project.id, allSections);
-      const textToStrip = section
-        ? `${CH_PRO}${typedProjectText}${CH_SECTION}${section.typedText}`
-        : `${CH_PRO}${typedProjectText}`;
+      // Sections are only resolved when the FULL left side matched the
+      // project — after a first-word-only match the leftover words sit
+      // between the project and the "/", so a contiguous strip is impossible.
+      const isFullLeftMatch = typedProjectText === projectTitle;
+      const section =
+        slashIndex !== -1 && isFullLeftMatch
+          ? matchSectionByTypedText(sectionPart, project.id, allSections)
+          : undefined;
+
+      let stripLen: number;
+      if (section) {
+        // "+Work/Design …" → strip through the matched section text
+        const leadingWs = sectionPart.length - sectionPart.trimStart().length;
+        stripLen = 1 + projectTitle.length + 1 + leadingWs + section.typedText.length;
+      } else if (slashIndex !== -1 && isFullLeftMatch) {
+        // "+Work/grocer" with no matching section: strip through the slash so
+        // the leftover ("grocer") rejoins the title instead of keeping a
+        // stray "/" (review finding on PR #9014).
+        stripLen = 1 + projectTitle.length + 1;
+      } else {
+        stripLen = 1 + typedProjectText.length;
+      }
+
       return {
-        title: task.title?.replace(textToStrip, '').trim().replace('  ', ' '),
+        title: stripAt(stripLen),
         projectId: project.id,
         ...(section ? { sectionId: section.sectionId } : {}),
       };
@@ -376,10 +413,7 @@ export const parseProjectChanges = (
       const wholeTokenProject = matchProject(rawToken.replaceAll(' ', '').toLowerCase());
       if (wholeTokenProject) {
         return {
-          title: task.title
-            ?.replace(`${CH_PRO}${rawToken}`, '')
-            .trim()
-            .replace('  ', ' '),
+          title: stripAt(1 + rawToken.length),
           projectId: wholeTokenProject.id,
         };
       }

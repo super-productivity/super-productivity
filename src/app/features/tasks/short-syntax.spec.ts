@@ -1499,6 +1499,79 @@ describe('shortSyntax', () => {
       );
       expect(r?.projectId).toBe('WorkID');
       expect(r?.sectionId).toBeUndefined();
+      // Regression (PR #9014 review): the whole "+Work/" must be stripped —
+      // leaving "/nonexistent" in the title orphans a stray slash.
+      expect(r?.taskChanges.title).toBe('Task nonexistent');
+    });
+
+    it('should not leave a slash residue for an unmatched section mid-title', async () => {
+      const t = {
+        ...TASK,
+        title: 'buy milk +Work/grocer',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+      expect(r?.taskChanges.title).toBe('buy milk grocer');
+    });
+
+    it('should not leave a slash residue when the token leads the title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Work/review the Q3 numbers',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.taskChanges.title).toBe('review the Q3 numbers');
+    });
+
+    it('should clean the full token for a multi-word project with a section', async () => {
+      const multiProjects = [
+        ...projects,
+        { title: 'Work Space', id: 'WorkSpaceID' },
+      ] as any;
+      const multiSections = [
+        ...sections,
+        {
+          id: 'WsDesignID',
+          contextId: 'WorkSpaceID',
+          contextType: 'PROJECT',
+          title: 'Design',
+          taskIds: [],
+        },
+      ] as any;
+      const t = {
+        ...TASK,
+        title: 'Task +Work Space/Design',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        multiProjects,
+        undefined,
+        'combine',
+        multiSections,
+      );
+      expect(r?.projectId).toBe('WorkSpaceID');
+      expect(r?.sectionId).toBe('WsDesignID');
+      expect(r?.taskChanges.title).toBe('Task');
     });
 
     it('should not return a section when no sections are passed', async () => {
