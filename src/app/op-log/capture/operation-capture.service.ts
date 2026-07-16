@@ -61,6 +61,24 @@ export class OperationCaptureService {
   private hasWarnedAboutPending = false;
 
   /**
+   * Sticky divergence marker (#8751): set when a captured action's write
+   * attempt failed for good (or its operation was rejected by validation),
+   * i.e. an optimistic NgRx state change has no durable op behind it.
+   * While set, compaction must not snapshot the live store — that would bake
+   * the phantom change into state_cache and turn a transient persistence
+   * failure into permanent, silent cross-device divergence.
+   * Deliberately in-memory and per tab: a reload rebuilds state purely from
+   * durable data, which discards the phantom and thereby resolves the
+   * divergence (the failure paths show a sticky reload snackbar for exactly
+   * that reason). Also deliberately NOT cleared by full-state replacements
+   * (SYNC_IMPORT/BACKUP_IMPORT) even though they discard the phantom too —
+   * keeping it sticky is conservatively simple, and the only cost is
+   * compaction staying suppressed until the reload the snackbar already
+   * demands.
+   */
+  private unrecoveredPersistFailure = false;
+
+  /**
    * Records that a local action has been captured and is awaiting persistence.
    * Called synchronously by the operation-capture meta-reducer.
    */
@@ -158,12 +176,31 @@ export class OperationCaptureService {
   }
 
   /**
+   * Marks that live NgRx state now contains a change with no durable op
+   * behind it (#8751). Consulted by compaction to suppress snapshotting.
+   */
+  markUnrecoveredPersistFailure(): void {
+    if (!this.unrecoveredPersistFailure) {
+      OpLog.err(
+        'OperationCaptureService: Unrecovered persist failure — live state is ahead of the op log; snapshotting is suppressed until reload',
+      );
+    }
+    this.unrecoveredPersistFailure = true;
+  }
+
+  /** True while live state contains changes that no durable op represents (#8751). */
+  hasUnrecoveredPersistFailure(): boolean {
+    return this.unrecoveredPersistFailure;
+  }
+
+  /**
    * Resets the pending counter (for testing and error recovery).
    */
   clear(): void {
     this.pendingCount = 0;
     this.hasWarnedAboutPending = false;
     this.pendingTaskTimeEntries.clear();
+    this.unrecoveredPersistFailure = false;
   }
 
   private _getTaskTimeEntry(action: PersistentAction): BatchedTimeSyncEntry | undefined {

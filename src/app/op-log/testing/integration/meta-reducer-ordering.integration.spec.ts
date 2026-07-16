@@ -11,6 +11,7 @@
  */
 import { ActionReducer, Action, MetaReducer } from '@ngrx/store';
 import {
+  clearDeferredActions,
   operationCaptureMetaReducer,
   setOperationCaptureService,
   setIsApplyingRemoteOps,
@@ -118,6 +119,11 @@ describe('Meta-reducer ordering integration', () => {
     captureService.clear();
     // Ensure sync state is reset after each test
     setIsApplyingRemoteOps(false);
+    // The sync-window tests above buffer real actions into the module-level
+    // deferred buffer; leaking them would make the phantom-change guard
+    // (#8751) skip compaction/snapshot saves in later spec FILES (Karma
+    // shares one browser context).
+    clearDeferredActions();
   });
 
   describe('action capture with meta-reducer chain', () => {

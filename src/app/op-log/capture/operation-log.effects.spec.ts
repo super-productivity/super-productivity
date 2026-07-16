@@ -79,6 +79,7 @@ describe('OperationLogEffects', () => {
     mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
       'extractEntityChanges',
       'decrementPending',
+      'markUnrecoveredPersistFailure',
     ]);
 
     // Default mock implementations
@@ -731,6 +732,93 @@ describe('OperationLogEffects', () => {
         }),
       );
     }));
+  });
+
+  describe('unrecovered persist failures (#8751)', () => {
+    // A failed write keeps the optimistic NgRx change with no durable op
+    // behind it. The effect must mark that divergence so compaction stops
+    // snapshotting the live store (which would bake the phantom change into
+    // state_cache as permanent, silent cross-device divergence).
+
+    it('should mark the divergence when the append fails for good', (done) => {
+      mockOpLogStore.appendWithVectorClockUpdate.and.rejectWith(
+        new Error('Write failed'),
+      );
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).toHaveBeenCalled();
+          done();
+        },
+      });
+    });
+
+    it('should NOT mark a divergence on a successful persist', (done) => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).not.toHaveBeenCalled();
+          done();
+        },
+      });
+    });
+
+    it('should NOT mark a divergence when a quota failure recovers via emergency compaction', fakeAsync(() => {
+      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
+      let callCount = 0;
+      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(() => {
+        callCount++;
+        return callCount === 1 ? Promise.reject(quotaError) : Promise.resolve(1);
+      });
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe();
+
+      tick(100);
+      // The retry after compaction succeeded — the op IS durable, so
+      // suppressing snapshots would be wrong.
+      expect(
+        mockOperationCaptureService.markUnrecoveredPersistFailure,
+      ).not.toHaveBeenCalled();
+    }));
+
+    it('should mark the divergence and show a STICKY snack when validation rejects the operation', (done) => {
+      // syncTimeSpent with a taskId that differs from meta.entityId fails
+      // validateOperationPayload deterministically. The reducer already ran,
+      // so skipping persistence leaves a phantom change in live state.
+      const action = createPersistentAction(
+        ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        false,
+        { taskId: 'some-other-task', date: '2024-01-01', duration: 100 },
+      );
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).toHaveBeenCalled();
+          expect(mockSnackService.open).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              type: 'ERROR',
+              msg: T.F.SYNC.S.INVALID_OPERATION_PAYLOAD,
+              config: jasmine.objectContaining({ duration: 0 }),
+            }),
+          );
+          done();
+        },
+      });
+    });
   });
 
   describe('compaction failures', () => {

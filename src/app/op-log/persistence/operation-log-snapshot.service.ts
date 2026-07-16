@@ -15,6 +15,8 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 
 type StateCache = MigratableStateCache;
 
@@ -38,6 +40,7 @@ export class OperationLogSnapshotService {
   private validateStateService = inject(ValidateStateService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private lockService = inject(LockService);
+  private operationCapture = inject(OperationCaptureService);
 
   /**
    * Validates that a snapshot has the expected structure and data.
@@ -104,6 +107,21 @@ export class OperationLogSnapshotService {
         // NOTE: compaction reads in the opposite order (state, then lastSeq);
         // its failure mode if the lock is bypassed is missed-op data loss.
         const lastSeq = await this.opLogStore.getLastSeq();
+
+        // GUARD (#8751): never snapshot live state while it may contain
+        // changes with no durable op behind them (failed or still-pending
+        // writes, undrained deferred actions from the hydration sync window) —
+        // the cache write below would bake the phantom change in. Checked
+        // synchronously immediately before the snapshot read; skipping only
+        // costs a slower next boot.
+        const phantomRisk = getPhantomChangeRisk(this.operationCapture);
+        if (phantomRisk) {
+          OpLog.warn(
+            `OperationLogSnapshotService: Skipping snapshot save — ${phantomRisk} (#8751)`,
+          );
+          return;
+        }
+
         const currentState = this.stateSnapshotService.getStateSnapshotForOperationLog();
 
         // GUARD (#7892): never cache an empty/degraded state over a good one.

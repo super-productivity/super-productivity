@@ -151,6 +151,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     } catch (e) {
       // Already surfaced to the user inside writeOperation; swallow so the
       // shared effect stream is never torn down by a single failed write.
+      // The optimistic NgRx change now has no durable op behind it — mark the
+      // divergence so compaction won't bake it into state_cache (#8751).
+      this.operationCaptureService.markUnrecoveredPersistFailure();
       OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
     } finally {
       this.operationCaptureService.decrementPending(action);
@@ -199,6 +202,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           `Deferred action ${action.type} has invalid entity identifiers.`,
         );
       }
+      // The reducer already applied this action; skipping persistence leaves a
+      // phantom change in live state — block snapshotting until reload (#8751).
+      // Marked before devError, which throws in dev builds.
+      this.operationCaptureService.markUnrecoveredPersistFailure();
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -310,12 +317,18 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
               `Deferred action ${action.type} has an invalid payload.`,
             );
           }
+          // Same phantom-change situation as a failed write: the reducer ran,
+          // no op will exist. Suppress snapshotting until reload (#8751).
+          this.operationCaptureService.markUnrecoveredPersistFailure();
           this.snackService.open({
             type: 'ERROR',
             msg: T.F.SYNC.S.INVALID_OPERATION_PAYLOAD,
             actionStr: T.PS.RELOAD,
             actionFn: (): void => {
               window.location.reload();
+            },
+            config: {
+              duration: 0, // Sticky — state diverged; only a reload recovers (#8751)
             },
           });
           return; // Skip persisting invalid operation

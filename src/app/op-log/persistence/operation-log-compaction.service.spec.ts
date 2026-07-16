@@ -10,10 +10,16 @@ import {
   SLOW_COMPACTION_THRESHOLD_MS,
 } from '../core/operation-log.const';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
-import { OperationLogEntry } from '../core/operation.types';
+import { OperationLogEntry, OpType } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { MODEL_CONFIGS } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import {
+  bufferDeferredAction,
+  clearDeferredActions,
+} from '../capture/operation-capture.meta-reducer';
+import { PersistentAction } from '../core/persistent-action.interface';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -24,6 +30,7 @@ describe('OperationLogCompactionService', () => {
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
   let mockVectorClockService: jasmine.SpyObj<VectorClockService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
+  let mockOperationCaptureService: jasmine.SpyObj<OperationCaptureService>;
 
   // Meaningful by default (contains a task) so compaction proceeds. The
   // empty-state guard (#7892) is exercised by dedicated tests below.
@@ -53,6 +60,12 @@ describe('OperationLogCompactionService', () => {
     ]);
     mockClientIdProvider = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
     mockClientIdProvider.loadClientId.and.resolveTo('test-client');
+    mockOperationCaptureService = jasmine.createSpyObj('OperationCaptureService', [
+      'hasUnrecoveredPersistFailure',
+      'getPendingCount',
+    ]);
+    mockOperationCaptureService.hasUnrecoveredPersistFailure.and.returnValue(false);
+    mockOperationCaptureService.getPendingCount.and.returnValue(0);
 
     // Mock OpLog methods
     spyOn(OpLog, 'warn');
@@ -83,10 +96,18 @@ describe('OperationLogCompactionService', () => {
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
         { provide: VectorClockService, useValue: mockVectorClockService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: OperationCaptureService, useValue: mockOperationCaptureService },
       ],
     });
 
     service = TestBed.inject(OperationLogCompactionService);
+
+    // Test isolation: the deferred buffer is module-level state.
+    clearDeferredActions();
+  });
+
+  afterEach(() => {
+    clearDeferredActions();
   });
 
   describe('compact', () => {
@@ -605,6 +626,101 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
       expect(mockOpLogStore.resetCompactionCounter).toHaveBeenCalled();
       expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Phantom-change guards (#8751)
+  // =========================================================================
+  // A persist failure (or a still-buffered deferred action) leaves live NgRx
+  // state containing changes that no durable op represents. Snapshotting the
+  // live store then would bake the phantom change into state_cache — durable
+  // locally with no op to sync = permanent, silent cross-device divergence.
+
+  describe('phantom-change guards (#8751)', () => {
+    const createDeferredAction = (): PersistentAction => ({
+      type: '[Task] Update Task',
+      meta: {
+        isPersistent: true,
+        isRemote: false,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-1',
+      },
+    });
+
+    it('should skip compaction after an unrecovered persist failure (persist failure → user keeps working → compaction must not snapshot)', async () => {
+      mockOperationCaptureService.hasUnrecoveredPersistFailure.and.returnValue(true);
+
+      const result = await service.compact();
+
+      expect(result).toBeFalse();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+      expect(mockOpLogStore.resetCompactionCounter).not.toHaveBeenCalled();
+    });
+
+    it('should skip emergency compaction too after an unrecovered persist failure', async () => {
+      // Quota recovery must not become a back door that bakes the phantom in.
+      mockOperationCaptureService.hasUnrecoveredPersistFailure.and.returnValue(true);
+
+      const result = await service.emergencyCompact();
+
+      expect(result).toBeFalse();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+    });
+
+    it('should skip compaction while captured writes are still pending (in-flight write could fail after the snapshot)', async () => {
+      // The sticky flag is a lagging indicator: a write that is pending when
+      // the snapshot is taken and fails afterwards would be baked in before
+      // the flag ever gets set. The pending counter is incremented in the
+      // same reducer pass that applies the state change, so it closes that
+      // window.
+      mockOperationCaptureService.getPendingCount.and.returnValue(1);
+
+      const result = await service.compact();
+
+      expect(result).toBeFalse();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
+    it('should compact again once pending writes have settled', async () => {
+      mockOperationCaptureService.getPendingCount.and.returnValue(1);
+      expect(await service.compact()).toBeFalse();
+
+      mockOperationCaptureService.getPendingCount.and.returnValue(0);
+
+      expect(await service.compact()).toBeTrue();
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
+    });
+
+    it('should not even acquire the lock once the sticky failure flag is set (fast-path)', async () => {
+      mockOperationCaptureService.hasUnrecoveredPersistFailure.and.returnValue(true);
+
+      await service.compact();
+
+      expect(mockLockService.request).not.toHaveBeenCalled();
+    });
+
+    it('should skip compaction while deferred actions from a sync window are still buffered', async () => {
+      bufferDeferredAction(createDeferredAction());
+
+      const result = await service.compact();
+
+      expect(result).toBeFalse();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
+    it('should compact again once the deferred buffer has drained', async () => {
+      bufferDeferredAction(createDeferredAction());
+      expect(await service.compact()).toBeFalse();
+
+      clearDeferredActions();
+
+      expect(await service.compact()).toBeTrue();
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
     });
   });
 

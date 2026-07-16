@@ -106,6 +106,26 @@ describe('OperationCaptureService', () => {
     });
   });
 
+  describe('unrecovered persist failure flag (#8751)', () => {
+    it('should start unset', () => {
+      expect(service.hasUnrecoveredPersistFailure()).toBeFalse();
+    });
+
+    it('should stay set once marked (sticky until reload)', () => {
+      service.markUnrecoveredPersistFailure();
+      service.markUnrecoveredPersistFailure();
+
+      expect(service.hasUnrecoveredPersistFailure()).toBeTrue();
+    });
+
+    it('should reset via clear()', () => {
+      service.markUnrecoveredPersistFailure();
+      service.clear();
+
+      expect(service.hasUnrecoveredPersistFailure()).toBeFalse();
+    });
+  });
+
   describe('extractEntityChanges', () => {
     it('should return empty entityChanges for regular actions', () => {
       const action = createPersistentAction(
