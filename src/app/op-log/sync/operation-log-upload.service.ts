@@ -25,6 +25,7 @@ import {
 } from '../sync-providers/provider.interface';
 import { syncOpToOperation } from './operation-sync.util';
 import { OperationEncryptionService } from './operation-encryption.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import {
   RejectedOpInfo,
   UploadResult,
@@ -68,6 +69,7 @@ export class OperationLogUploadService {
   private lockService = inject(LockService);
   private encryptionService = inject(OperationEncryptionService);
   private stateSnapshotService = inject(StateSnapshotService);
+  private providerManager = inject(SyncProviderManager);
 
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
@@ -100,6 +102,13 @@ export class OperationLogUploadService {
         return;
       }
       if (!options?.deferAcknowledgement) {
+        // #9074: local persist — a stale cycle must not mark ops synced after
+        // a destructive config change. (Deferred acks are a pure in-memory
+        // collect here; their persist is fenced at the caller.)
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'upload acknowledgement',
+        );
         await this.opLogStore.markSynced(seqs);
         return;
       }
@@ -129,6 +138,13 @@ export class OperationLogUploadService {
       // Execute migration/recovery preparation while upload serialization is
       // held. The migration service owns its own operation-log transaction.
       if (options?.preUploadCallback) {
+        // #9074: asserted after the lock wait — the callback appends a
+        // migration SYNC_IMPORT locally; old-epoch state must not seed the
+        // new epoch's server.
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'pre-upload migration',
+        );
         await options.preUploadCallback();
       }
 

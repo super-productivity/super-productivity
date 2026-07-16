@@ -15,7 +15,9 @@ import {
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
+  SyncEpochChangedError,
 } from '../core/errors/sync-errors';
+import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -63,6 +65,7 @@ export class ImmediateUploadService implements OnDestroy {
   private _sessionValidation = inject(SyncSessionValidationService);
   private _syncCycleGuard = inject(SyncCycleGuardService);
   private _snackService = inject(SnackService);
+  private _wrappedProvider = inject(WrappedProviderService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
@@ -203,14 +206,16 @@ export class ImmediateUploadService implements OnDestroy {
       );
       return;
     }
+    // #9074: capture the sync epoch synchronously with the cycle claim.
+    const fenceEpoch = this._providerManager.syncEpoch;
     try {
-      await this._performUploadInner();
+      await this._performUploadInner(fenceEpoch);
     } finally {
       this._syncCycleGuard.end();
     }
   }
 
-  private async _performUploadInner(): Promise<void> {
+  private async _performUploadInner(fenceEpoch: number): Promise<void> {
     const provider = this._providerManager.getActiveProvider();
     if (!provider) {
       return;
@@ -222,9 +227,16 @@ export class ImmediateUploadService implements OnDestroy {
       return;
     }
 
-    // Provider is already validated as OperationSyncCapable in _canUpload()
-    const syncCapableProvider =
-      provider as unknown as import('../sync-providers/provider.interface').OperationSyncCapable;
+    // Provider is already validated as OperationSyncCapable in _canUpload();
+    // the wrapper adds the per-cycle epoch guard (#9074) so a provider
+    // switch/encryption op mid-upload aborts before any remote/cursor write.
+    const syncCapableProvider = await this._wrappedProvider.getOperationSyncCapable(
+      provider,
+      { fenceEpoch },
+    );
+    if (!syncCapableProvider) {
+      return;
+    }
 
     return this._sessionValidation.withSession(async () => {
       try {
@@ -232,7 +244,9 @@ export class ImmediateUploadService implements OnDestroy {
 
         // Use sync service's uploadPendingOps which includes migration detection callback.
         // This ensures SYNC_IMPORT is created when switching to a new/empty server.
-        const result = await this._syncService.uploadPendingOps(syncCapableProvider);
+        const result = await this._syncService.uploadPendingOps(syncCapableProvider, {
+          fenceEpoch,
+        });
         if (result.kind === 'blocked_fresh_client') {
           OpLog.verbose('ImmediateUploadService: Upload blocked (fresh client)');
           return;
@@ -266,8 +280,10 @@ export class ImmediateUploadService implements OnDestroy {
           OpLog.verbose(
             `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
           );
-          const followUpResult =
-            await this._syncService.uploadPendingOps(syncCapableProvider);
+          const followUpResult = await this._syncService.uploadPendingOps(
+            syncCapableProvider,
+            { fenceEpoch },
+          );
           if (followUpResult.kind === 'blocked_incompatible') {
             OpLog.warn(
               'ImmediateUploadService: Local-win follow-up blocked by an incompatible operation',
@@ -340,6 +356,15 @@ export class ImmediateUploadService implements OnDestroy {
           );
         }
       } catch (e) {
+        if (e instanceof SyncEpochChangedError) {
+          // #9074: a provider switch/encryption op landed mid-upload; this
+          // cycle is stale by design — silent skip, no ERROR status. The new
+          // epoch's own sync picks up whatever is still pending.
+          OpLog.verbose(
+            'ImmediateUploadService: Sync epoch changed mid-upload, abandoning stale cycle',
+          );
+          return;
+        }
         if (e instanceof ForceUploadPendingOpsError) {
           this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
           return;

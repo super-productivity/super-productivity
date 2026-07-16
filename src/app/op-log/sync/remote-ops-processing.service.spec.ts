@@ -8,6 +8,7 @@ import {
 } from '../persistence/schema-migration.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
@@ -277,6 +278,11 @@ describe('RemoteOpsProcessingService', () => {
         { provide: OperationLogCompactionService, useValue: compactionServiceSpy },
         { provide: SyncImportFilterService, useValue: syncImportFilterServiceSpy },
         { provide: OperationWriteFlushService, useValue: writeFlushServiceSpy },
+        {
+          // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
+          provide: SyncProviderManager,
+          useValue: { assertSyncEpochUnchanged: () => undefined },
+        },
       ],
     });
 

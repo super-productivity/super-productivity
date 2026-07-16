@@ -201,6 +201,15 @@ export interface UploadOptions {
   deferAcknowledgement?: boolean;
 
   /**
+   * Sync epoch captured at cycle start (#9074). Re-asserted before the local
+   * writes in the upload flow (migration append, acknowledgement persist) so a
+   * stale cycle aborts with SyncEpochChangedError after a destructive config
+   * change instead of writing against the new epoch. Provider I/O is fenced
+   * separately by the epoch-guarded provider delegate.
+   */
+  fenceEpoch?: number;
+
+  /**
    * If true, instructs server to delete all existing user data before accepting uploaded operations.
    * Used for clean slate operations like encryption password changes or full imports.
    */

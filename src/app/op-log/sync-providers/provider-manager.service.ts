@@ -23,6 +23,7 @@ import {
 } from '../core/types/sync.types';
 import { loadSyncProviders } from './sync-providers.factory';
 import { isSyncTargetChanged } from './sync-target-identity.util';
+import { SyncEpochChangedError } from '../core/errors/sync-errors';
 
 /**
  * Sync status change payload type
@@ -82,6 +83,42 @@ export class SyncProviderManager {
 
   /** Counter to detect stale provider activations */
   private _activeProviderSetupId = 0;
+
+  /**
+   * Monotonic sync epoch (#9074). Bumped whenever the sync target/identity
+   * changes underneath in-flight work: an actual provider switch (after the
+   * active-provider swap completes), a target-moving config write (account/
+   * folder/URL — content-only saves do NOT bump), or a destructive config
+   * operation (`SyncWrapperService.runWithSyncBlocked`: encryption ops, force
+   * upload). Sync cycles capture it at cycle start and re-assert it via
+   * {@link assertSyncEpochUnchanged} (and the epoch-guarded provider delegate,
+   * see `WrappedProviderService`) before every apply/ack/cursor/remote write,
+   * so a stale cycle aborts benignly instead of writing against the new
+   * epoch/target. Ordering rule: bump AFTER the state mutation completes —
+   * bumping before it would let a cycle capture the fresh epoch while still
+   * reading the old provider/config.
+   */
+  private _syncEpoch = 0;
+
+  get syncEpoch(): number {
+    return this._syncEpoch;
+  }
+
+  bumpSyncEpoch(reason: string): void {
+    this._syncEpoch++;
+    SyncLog.log(`SyncProviderManager: sync epoch → ${this._syncEpoch} (${reason})`);
+  }
+
+  /**
+   * Throws {@link SyncEpochChangedError} when the epoch moved since `captured`.
+   * `undefined` is a no-op so unthreaded callers keep their current behavior —
+   * an unthreaded flow is an UNFENCED flow (see contributor-sync-model.md).
+   */
+  assertSyncEpochUnchanged(captured: number | undefined, context: string): void {
+    if (captured !== undefined && captured !== this._syncEpoch) {
+      throw new SyncEpochChangedError(captured, this._syncEpoch, context);
+    }
+  }
 
   // Current active provider
   private _activeProvider: SyncProviderBase<SyncProviderId> | null = null;
@@ -296,9 +333,16 @@ export class SyncProviderManager {
     await provider.setPrivateCfg(config);
 
     // Notify subscribers (e.g., WrappedProviderService) that config changed
-    this._providerConfigChanged$.next({
-      isTargetChanged: isSyncTargetChanged(prevCfg, config),
-    });
+    const isTargetChanged = isSyncTargetChanged(prevCfg, config);
+    this._providerConfigChanged$.next({ isTargetChanged });
+
+    // Bump only AFTER the write and the synchronous cache-invalidation
+    // emission above, so a cycle can never capture the fresh epoch while stale
+    // caches/config are still live. Content-only saves must not bump — they
+    // would abort a healthy cycle on every settings save.
+    if (isTargetChanged) {
+      this.bumpSyncEpoch(`target change (${providerId})`);
+    }
 
     // If this is the active provider, update the current config observable
     if (this._activeProvider?.id === providerId) {
@@ -326,6 +370,7 @@ export class SyncProviderManager {
    */
   notifyProviderTargetChanged(): void {
     this._providerConfigChanged$.next({ isTargetChanged: true });
+    this.bumpSyncEpoch('target change (bypass ingress)');
   }
 
   /**
@@ -374,6 +419,7 @@ export class SyncProviderManager {
       this._activeProvider = null;
       this._isProviderReady$.next(false);
       this._currentProviderPrivateCfg$.next(null);
+      this.bumpSyncEpoch('provider disabled');
       return;
     }
 
@@ -390,6 +436,11 @@ export class SyncProviderManager {
           return;
         }
         this._activeProvider = provider;
+        // Bump only now that the swap is complete: a cycle that starts between
+        // the config change and this point still reads the OLD provider, so it
+        // must keep an old (stale-able) epoch — bumping earlier would hand it
+        // a fresh epoch while it runs against the abandoned target.
+        this.bumpSyncEpoch(`provider switch (${providerId})`);
 
         const [ready, privateCfg] = await Promise.all([
           provider.isReady(),

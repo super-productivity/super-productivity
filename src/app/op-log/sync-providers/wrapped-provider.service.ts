@@ -75,9 +75,26 @@ export class WrappedProviderService {
    * Gets an OperationSyncCapable version of the provider.
    *
    * @param provider - The raw sync provider
+   * @param opts.fenceEpoch - Sync epoch captured at the caller's cycle start
+   *   (#9074). When given, the returned provider is a per-cycle delegate that
+   *   re-asserts the epoch before EVERY call, so a stale cycle's remote
+   *   writes/cursor advances abort with `SyncEpochChangedError` instead of
+   *   landing against a new provider/target/encryption epoch. Omitting it
+   *   returns an unfenced provider (existing behavior).
    * @returns OperationSyncCapable provider, or null if provider doesn't support sync
    */
   async getOperationSyncCapable(
+    provider: SyncProviderBase<SyncProviderId> | null,
+    opts?: { fenceEpoch?: number },
+  ): Promise<OperationSyncCapable | null> {
+    const capable = await this._resolveOperationSyncCapable(provider);
+    if (capable && opts?.fenceEpoch !== undefined) {
+      return this._withSyncEpochGuard(capable, opts.fenceEpoch);
+    }
+    return capable;
+  }
+
+  private async _resolveOperationSyncCapable(
     provider: SyncProviderBase<SyncProviderId> | null,
   ): Promise<OperationSyncCapable | null> {
     if (!provider) {
@@ -97,6 +114,37 @@ export class WrappedProviderService {
     // Unknown provider type
     OpLog.warn(`WrappedProviderService: Unknown provider type: ${provider.id}`);
     return null;
+  }
+
+  /**
+   * Per-cycle epoch fence (#9074): a thin delegate over the resolved provider
+   * (raw SuperSync or the CACHED file adapter — the capture must not live in
+   * the cached adapter, which outlives cycles) that asserts the captured epoch
+   * before forwarding any method call. Covers every provider write in one
+   * choke point — uploads, downloads, `setLastServerSeq` cursor advances,
+   * `deleteAllData` — including methods added later. Local (non-provider)
+   * writes are fenced separately via `assertSyncEpochUnchanged` at their call
+   * sites.
+   */
+  private _withSyncEpochGuard(
+    target: OperationSyncCapable,
+    fenceEpoch: number,
+  ): OperationSyncCapable {
+    return new Proxy(target, {
+      get: (t, prop) => {
+        const value = Reflect.get(t, prop, t);
+        if (typeof value !== 'function') {
+          return value;
+        }
+        return (...args: unknown[]): unknown => {
+          this._providerManager.assertSyncEpochUnchanged(
+            fenceEpoch,
+            `provider.${String(prop)}`,
+          );
+          return value.apply(t, args);
+        };
+      },
+    });
   }
 
   /**

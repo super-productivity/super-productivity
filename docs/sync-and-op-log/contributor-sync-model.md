@@ -95,6 +95,37 @@ only understand _why_ (the invariant at the top).
 
 ---
 
+## The sync-epoch fence (#9074)
+
+A sync cycle spans many `await`s; a destructive config change (provider/account
+switch, folder move, encryption enable/disable/password change) can land in any
+of those gaps. A stale cycle must not apply, upload, acknowledge, or advance the
+cursor against the new target/epoch afterwards.
+
+- `SyncProviderManager.syncEpoch` is a monotonic counter, bumped **after** each
+  such change completes (and at `runWithSyncBlocked` entry, which additionally
+  blocks new cycles first and then drains running ones, bounded).
+- Every cycle entry point captures the epoch **synchronously with its
+  `SyncCycleGuardService.tryBegin()` claim** and threads it as `fenceEpoch`.
+- Provider I/O is fenced in one place: `getOperationSyncCapable(provider,
+{ fenceEpoch })` returns a per-cycle delegate that re-asserts the epoch before
+  every provider call. Local writes (apply inside the lock closures, ack
+  persists, hydration, migration appends, rejected-ops handling, rebuild resume)
+  re-assert via `assertSyncEpochUnchanged` at the call site.
+- A failed assert throws `SyncEpochChangedError`, handled at every entry point
+  as a **benign abort** (no error snack, `UNKNOWN_OR_CHANGED`) — each abort
+  point is crash-equivalent by design (deferred acks re-upload, a behind cursor
+  re-downloads with dedup).
+
+**An unthreaded flow is an UNFENCED flow**: `fenceEpoch: undefined` disables the
+assert. When adding a new sync entry point, capture and thread the epoch; when
+adding a new local write inside a cycle, add an assert before it. Deliberately
+unthreaded today: `forceUploadLocalState` / the USE_LOCAL/USE_REMOTE
+conflict-resolution flows (covered by the encryption flag + cycle guard), and
+key-recovery config writes (content-only, must NOT bump).
+
+---
+
 ## Why (deeper)
 
 - **Mechanism & rules:** [`operation-rules.md`](./operation-rules.md)

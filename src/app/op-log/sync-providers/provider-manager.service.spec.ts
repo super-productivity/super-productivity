@@ -9,6 +9,7 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from './provider.const';
 import { SyncProviderBase } from './provider.interface';
+import { SyncEpochChangedError } from '../core/errors/sync-errors';
 
 /**
  * Task 2 (sync-simplification plan). providerConfigChanged$ fires on every save
@@ -116,6 +117,78 @@ describe('SyncProviderManager target-change notification', () => {
       } as never);
 
       expect(provider.privateCfg.load).toHaveBeenCalledBefore(provider.setPrivateCfg);
+    });
+  });
+
+  describe('sync epoch (#9074)', () => {
+    it('assertSyncEpochUnchanged is a no-op for undefined (unfenced flow) and throws after a bump', () => {
+      const captured = service.syncEpoch;
+
+      expect(() => service.assertSyncEpochUnchanged(undefined, 'test')).not.toThrow();
+      expect(() => service.assertSyncEpochUnchanged(captured, 'test')).not.toThrow();
+
+      service.bumpSyncEpoch('test');
+
+      expect(service.syncEpoch).toBe(captured + 1);
+      expect(() => service.assertSyncEpochUnchanged(captured, 'test')).toThrowError(
+        SyncEpochChangedError,
+      );
+      expect(() => service.assertSyncEpochUnchanged(undefined, 'test')).not.toThrow();
+    });
+
+    it('bumps on a target-moving config save but NOT on a content-only save', async () => {
+      // A false-positive bump here would abort a healthy sync cycle on every
+      // settings Save (the dialog rewrites the whole privateCfg each time).
+      stubProvider(webdavCfg);
+      const before = service.syncEpoch;
+
+      await service.setProviderConfig(SyncProviderId.WebDAV, { ...webdavCfg } as never);
+      expect(service.syncEpoch).toBe(before);
+
+      await service.setProviderConfig(SyncProviderId.WebDAV, {
+        ...webdavCfg,
+        baseUrl: 'https://b.example/dav',
+      } as never);
+      expect(service.syncEpoch).toBe(before + 1);
+    });
+
+    it('bumps via notifyProviderTargetChanged (bypass ingresses)', () => {
+      const before = service.syncEpoch;
+
+      service.notifyProviderTargetChanged();
+
+      expect(service.syncEpoch).toBe(before + 1);
+    });
+
+    it('bumps AFTER the active-provider swap on a provider switch, and on disable', async () => {
+      // Bump-after-swap: a cycle starting between the config change and the
+      // swap still reads the OLD provider, so it must keep a stale-able epoch.
+      const provider = stubProvider(webdavCfg);
+      (provider as unknown as { isReady: jasmine.Spy }).isReady = jasmine
+        .createSpy('isReady')
+        .and.resolveTo(true);
+      const before = service.syncEpoch;
+
+      service['_setActiveProvider'](SyncProviderId.WebDAV);
+      expect(service.syncEpoch).toBe(before); // not yet — swap is async
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(service.syncEpoch).toBe(before + 1);
+      expect(service.getActiveProvider()).toBe(
+        provider as unknown as SyncProviderBase<SyncProviderId>,
+      );
+
+      service['_setActiveProvider'](null);
+      expect(service.syncEpoch).toBe(before + 2); // null path swaps synchronously
+      expect(service.getActiveProvider()).toBeNull();
+    });
+
+    it('does not bump when the provider id is unchanged', () => {
+      const before = service.syncEpoch;
+
+      // Initial id is null; setting null again must early-return without a bump.
+      service['_setActiveProvider'](null);
+
+      expect(service.syncEpoch).toBe(before);
     });
   });
 });

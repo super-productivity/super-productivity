@@ -7,6 +7,8 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
+import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
+import { SyncEpochChangedError } from '../core/errors/sync-errors';
 import { BehaviorSubject } from 'rxjs';
 import { RejectedOpInfo } from '../core/types/sync-results.types';
 import { SnackService } from '../../core/snack/snack.service';
@@ -121,6 +123,14 @@ describe('ImmediateUploadService', () => {
         { provide: DataInitStateService, useValue: mockDataInitStateService },
         { provide: SyncWrapperService, useValue: mockSyncWrapperService },
         { provide: SnackService, useValue: mockSnackService },
+        {
+          // Pass-through: the real service would wrap the provider in the
+          // #9074 epoch-guard delegate; identity keeps existing expectations.
+          provide: WrappedProviderService,
+          useValue: {
+            getOperationSyncCapable: (p: unknown) => Promise.resolve(p),
+          },
+        },
       ],
     });
 
@@ -587,6 +597,23 @@ describe('ImmediateUploadService', () => {
       flush();
 
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+    }));
+
+    it('should silently abandon the cycle when the sync epoch changes mid-upload (#9074)', fakeAsync(() => {
+      // A provider switch / encryption op mid-flight surfaces as
+      // SyncEpochChangedError from a fenced write — the stale cycle must skip
+      // silently (no ERROR status), not retry.
+      mockSyncService.uploadPendingOps.and.callFake(() =>
+        Promise.reject(new SyncEpochChangedError(0, 1, 'provider.uploadOps')),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2000);
+      flush();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalled();
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
     }));
 
     it('should handle fresh client (syncService returns null)', fakeAsync(() => {

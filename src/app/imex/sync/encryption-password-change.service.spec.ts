@@ -6,6 +6,7 @@ import { OperationLogUploadService } from '../../op-log/sync/operation-log-uploa
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
+import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { OpType } from '../../op-log/core/operation.types';
 
 describe('EncryptionPasswordChangeService', () => {
@@ -94,6 +95,14 @@ describe('EncryptionPasswordChangeService', () => {
         { provide: OperationLogUploadService, useValue: mockUploadService },
         { provide: SyncWrapperService, useValue: mockSyncWrapper },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
+        {
+          // Pass-through: the real service wraps the provider in the #9074
+          // epoch-guard delegate; identity keeps existing expectations.
+          provide: WrappedProviderService,
+          useValue: {
+            getOperationSyncCapable: (p: unknown) => Promise.resolve(p),
+          },
+        },
       ],
     });
     service = TestBed.inject(EncryptionPasswordChangeService);
@@ -121,9 +130,10 @@ describe('EncryptionPasswordChangeService', () => {
       // clearSessionKeyCache() is called directly (module-level function, not spyable)
 
       // Should upload with isCleanSlate flag
-      expect(mockUploadService.uploadPendingOps).toHaveBeenCalledWith(mockSyncProvider, {
-        isCleanSlate: true,
-      });
+      expect(mockUploadService.uploadPendingOps).toHaveBeenCalledWith(
+        mockSyncProvider,
+        jasmine.objectContaining({ isCleanSlate: true }),
+      );
     });
 
     it('should preserve existing config properties when updating password', async () => {

@@ -49,7 +49,9 @@ import {
   ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
+  SyncEpochChangedError,
 } from '../core/errors/sync-errors';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
@@ -7082,6 +7084,97 @@ describe('OperationLogSyncService', () => {
         // On success, lastServerSeq IS persisted
         expect(setLastServerSeqSpy).toHaveBeenCalledWith(42);
       });
+    });
+  });
+
+  describe('sync-epoch fencing (#9074)', () => {
+    let uploadServiceSpy: jasmine.SpyObj<OperationLogUploadService>;
+    let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+    let providerManager: SyncProviderManager;
+
+    beforeEach(() => {
+      uploadServiceSpy = TestBed.inject(
+        OperationLogUploadService,
+      ) as jasmine.SpyObj<OperationLogUploadService>;
+      downloadServiceSpy = TestBed.inject(
+        OperationLogDownloadService,
+      ) as jasmine.SpyObj<OperationLogDownloadService>;
+      // The spec resolves the REAL SyncProviderManager, so these tests bump the
+      // real epoch mid-flight — the issue's exact repro shape.
+      providerManager = TestBed.inject(SyncProviderManager);
+      (opLogStoreSpy as any).loadStateCache = jasmine
+        .createSpy('loadStateCache')
+        .and.returnValue(Promise.resolve(null));
+      (opLogStoreSpy as any).getLastSeq = jasmine
+        .createSpy('getLastSeq')
+        .and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+    });
+
+    it('abandons the deferred acknowledgement when the epoch changes mid-upload', async () => {
+      const fenceEpoch = providerManager.syncEpoch;
+      uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+        // Destructive config change (provider switch / encryption op) lands
+        // while the upload request is on the wire.
+        providerManager.bumpSyncEpoch('test: mid-upload switch');
+        return {
+          uploadedCount: 1,
+          piggybackedOps: [],
+          rejectedCount: 0,
+          rejectedOps: [],
+          pendingAcknowledgementSeqs: [7],
+        } as any;
+      });
+
+      await expectAsync(
+        service.uploadPendingOps({} as OperationSyncCapable, { fenceEpoch }),
+      ).toBeRejectedWithError(SyncEpochChangedError);
+
+      expect(opLogStoreSpy.markSynced).not.toHaveBeenCalled();
+    });
+
+    it('abandons the server-migration write when the epoch changes mid-download', async () => {
+      const fenceEpoch = providerManager.syncEpoch;
+      downloadServiceSpy.downloadRemoteOps.and.callFake(async () => {
+        providerManager.bumpSyncEpoch('test: mid-download switch');
+        return {
+          newOps: [],
+          latestServerSeq: 0,
+          needsFullStateUpload: true,
+          success: true,
+          providerMode: 'superSyncOps',
+          failedFileCount: 0,
+        } as any;
+      });
+      const setLastServerSeqSpy = jasmine
+        .createSpy('setLastServerSeq')
+        .and.resolveTo(undefined);
+      const mockProvider = { setLastServerSeq: setLastServerSeqSpy } as any;
+
+      await expectAsync(
+        service.downloadRemoteOps(mockProvider, { fenceEpoch }),
+      ).toBeRejectedWithError(SyncEpochChangedError);
+
+      expect(serverMigrationServiceSpy.handleServerMigration).not.toHaveBeenCalled();
+      expect(setLastServerSeqSpy).not.toHaveBeenCalled();
+    });
+
+    it('leaves unthreaded flows unfenced (no fenceEpoch = existing behavior)', async () => {
+      uploadServiceSpy.uploadPendingOps.and.callFake(async () => {
+        providerManager.bumpSyncEpoch('test: bump with no fence threaded');
+        return {
+          uploadedCount: 0,
+          piggybackedOps: [],
+          rejectedCount: 0,
+          rejectedOps: [],
+          pendingAcknowledgementSeqs: [7],
+        } as any;
+      });
+
+      const result = await service.uploadPendingOps({} as OperationSyncCapable);
+
+      expect(result.kind).toBe('completed');
+      expect(opLogStoreSpy.markSynced).toHaveBeenCalledWith([7]);
     });
   });
 });

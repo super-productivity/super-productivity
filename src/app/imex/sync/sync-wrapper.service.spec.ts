@@ -1,6 +1,8 @@
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { SyncCycleGuardService } from '../../op-log/sync/sync-cycle-guard.service';
+import { SYNC_WAIT_TIMEOUT_MS } from './sync.const';
 import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
@@ -104,11 +106,14 @@ describe('SyncWrapperService', () => {
         'clearAuthCredentials',
         'getLastSyncedProviderId',
         'setLastSyncedProviderId',
+        'bumpSyncEpoch',
+        'assertSyncEpochUnchanged',
       ],
       {
         syncStatus$: of('SYNCED'),
         isProviderReady$: of(true),
         isSyncInProgress: false,
+        syncEpoch: 0,
       },
     );
     mockProviderManager.clearAuthCredentials.and.returnValue(Promise.resolve());
@@ -640,7 +645,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true, isNeverSynced: false },
+        { forceFromSeq0: true, isNeverSynced: false, fenceEpoch: 0 },
       );
     });
 
@@ -654,7 +659,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false },
+        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
       );
     });
 
@@ -665,7 +670,7 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false },
+        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
       );
     });
 
@@ -2338,6 +2343,85 @@ describe('SyncWrapperService', () => {
       ).toBeRejectedWith(testError);
     });
 
+    it('bumps the sync epoch before the operation runs (#9074)', async () => {
+      let bumpCountWhenOpRan = -1;
+
+      await service.runWithSyncBlocked(async () => {
+        bumpCountWhenOpRan = mockProviderManager.bumpSyncEpoch.calls.count();
+      });
+
+      expect(bumpCountWhenOpRan).toBe(1);
+      expect(mockProviderManager.bumpSyncEpoch.calls.count()).toBe(1);
+    });
+
+    it('blocks new cycles first, then drains an active side-channel cycle (#9074)', fakeAsync(() => {
+      const guard = TestBed.inject(SyncCycleGuardService);
+      // Simulate an in-flight side channel (immediate upload / WS download).
+      expect(guard.tryBegin()).toBe(true);
+
+      let opRan = false;
+      let result: unknown;
+      service
+        .runWithSyncBlocked(async () => {
+          opRan = true;
+          return 'done';
+        })
+        .then((r) => (result = r));
+      tick(0);
+
+      // Flag is up BEFORE the drain completes (no new cycle can start), and
+      // the operation must not run while the stale cycle holds the guard.
+      expect(service.isEncryptionOperationInProgress).toBe(true);
+      expect(opRan).toBe(false);
+
+      guard.end();
+      tick(0);
+
+      expect(opRan).toBe(true);
+      expect(result).toBe('done');
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    }));
+
+    it('throws and clears the block flag when the guard drain times out (#9074)', fakeAsync(() => {
+      const guard = TestBed.inject(SyncCycleGuardService);
+      expect(guard.tryBegin()).toBe(true);
+
+      let error: Error | undefined;
+      let opRan = false;
+      service
+        .runWithSyncBlocked(async () => {
+          opRan = true;
+        })
+        .catch((e: Error) => (error = e));
+
+      tick(SYNC_WAIT_TIMEOUT_MS + 1);
+
+      expect(opRan).toBe(false);
+      expect(error?.message).toContain('did not finish in time');
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+      guard.end();
+    }));
+
+    it('serializes concurrent destructive operations (#9074)', async () => {
+      const order: string[] = [];
+
+      const first = service.runWithSyncBlocked(async () => {
+        order.push('first-start');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        order.push('first-end');
+      });
+      const second = service.runWithSyncBlocked(async () => {
+        order.push('second');
+      });
+
+      await Promise.all([first, second]);
+
+      expect(order).toEqual(['first-start', 'first-end', 'second']);
+      // One bump per invocation — the second must re-bump so cycles fenced by
+      // the first cannot resume under the second's epoch.
+      expect(mockProviderManager.bumpSyncEpoch.calls.count()).toBe(2);
+    });
+
     it('should block sync during operation', async () => {
       let syncResultDuringOperation: SyncStatus | 'HANDLED_ERROR' | undefined;
 
@@ -2789,9 +2873,11 @@ describe('SyncWrapperService', () => {
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       expect(mockSyncService.uploadPendingOps.calls.argsFor(0)[1]).toEqual({
         isNeverSynced: true,
+        fenceEpoch: 0,
       });
       expect(mockSyncService.uploadPendingOps.calls.argsFor(1)[1]).toEqual({
         isNeverSynced: true,
+        fenceEpoch: 0,
       });
     });
 

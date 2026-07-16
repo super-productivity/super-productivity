@@ -16,6 +16,7 @@ import {
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
+  SyncEpochChangedError,
 } from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -115,7 +116,10 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     expect(mockWrappedProvider.getOperationSyncCapable).toHaveBeenCalled();
-    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(syncCapableProvider);
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
+      syncCapableProvider,
+      jasmine.objectContaining({}),
+    );
   }));
 
   it('should debounce rapid notifications into a single download', fakeAsync(() => {
@@ -252,6 +256,40 @@ describe('WsTriggeredDownloadService', () => {
 
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
     expect(guard.isActive).toBe(false);
+  }));
+
+  it('abandons a stale cycle without retry or ERROR when the epoch changes mid-download (#9074)', fakeAsync(() => {
+    // The issue's repro: a download is in flight when the user switches the
+    // provider / runs an encryption op. The fenced write rejects with
+    // SyncEpochChangedError once the deferred promise resolves — the stale
+    // cycle must become a no-op: no retry, no ERROR status, guard released.
+    let rejectDownload!: (err: unknown) => void;
+    mockSyncService.downloadRemoteOps.and.callFake(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectDownload = reject;
+        }),
+    );
+    const guard = TestBed.inject(SyncCycleGuardService);
+
+    service.start();
+    notification$.next({ latestSeq: 10 });
+    tick(500);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    // Destructive config change lands mid-flight; the old promise settles after.
+    rejectDownload(new SyncEpochChangedError(0, 1, 'provider.setLastServerSeq'));
+    flushMicrotasks();
+    tick(0);
+    flushMicrotasks();
+
+    expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
+    expect(guard.isActive).toBe(false);
+    // No retry: a later tick must not re-trigger the stale download.
+    tick(5000);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
   it('should stop listening after an auth failure', fakeAsync(() => {
@@ -492,7 +530,10 @@ describe('WsTriggeredDownloadService', () => {
     tick(500);
     flushMicrotasks();
 
-    expect(mockSyncService.uploadPendingOps).toHaveBeenCalledWith(syncCapableProvider);
+    expect(mockSyncService.uploadPendingOps).toHaveBeenCalledWith(
+      syncCapableProvider,
+      jasmine.objectContaining({}),
+    );
   }));
 
   it('does not re-upload when a WS-triggered download created no local-win ops', fakeAsync(() => {

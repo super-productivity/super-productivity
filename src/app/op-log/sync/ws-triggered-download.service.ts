@@ -15,6 +15,7 @@ import {
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
+  SyncEpochChangedError,
 } from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -155,12 +156,16 @@ export class WsTriggeredDownloadService implements OnDestroy {
       return;
     }
 
+    // #9074: capture the sync epoch synchronously with the cycle claim; the
+    // provider delegate and the local-write fences re-assert it so a provider
+    // switch/encryption op mid-download aborts this cycle benignly.
+    const fenceEpoch = this._providerManager.syncEpoch;
     const latestSeq = this._pendingLatestSeq;
     this._pendingLatestSeq = undefined;
     this._isDraining = true;
     let retryDelayMs = 0;
     try {
-      const shouldRetry = await this._downloadOpsInner(latestSeq);
+      const shouldRetry = await this._downloadOpsInner(latestSeq, fenceEpoch);
       if (shouldRetry && this._subscription) {
         if (this._downloadRetryCount < WS_DOWNLOAD_MAX_RETRIES) {
           this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
@@ -184,7 +189,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
     }
   }
 
-  private async _downloadOpsInner(latestSeq: number): Promise<boolean> {
+  private async _downloadOpsInner(
+    latestSeq: number,
+    fenceEpoch: number,
+  ): Promise<boolean> {
     // WS-triggered downloads are their own session boundary. The session
     // wrapper resets the latch up-front so the read at the end reflects
     // only this session, and a leaked-failed latch from a prior path can't
@@ -201,8 +209,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
           return false;
         }
 
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+        const syncCapableProvider = await this._wrappedProvider.getOperationSyncCapable(
+          rawProvider,
+          { fenceEpoch },
+        );
         if (!syncCapableProvider) {
           SyncLog.log(
             'WsTriggeredDownloadService: Provider not operation-sync capable, skipping',
@@ -222,7 +232,9 @@ export class WsTriggeredDownloadService implements OnDestroy {
           `WsTriggeredDownloadService: Downloading ops triggered by WS notification (latestSeq=${latestSeq})`,
         );
 
-        const result = await this._syncService.downloadRemoteOps(syncCapableProvider);
+        const result = await this._syncService.downloadRemoteOps(syncCapableProvider, {
+          fenceEpoch,
+        });
 
         SyncLog.log(`WsTriggeredDownloadService: Download complete. kind=${result.kind}`);
 
@@ -246,8 +258,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
             `WsTriggeredDownloadService: LWW created ${result.localWinOpsCreated} ` +
               `local-win op(s), re-uploading`,
           );
-          const uploadResult =
-            await this._syncService.uploadPendingOps(syncCapableProvider);
+          const uploadResult = await this._syncService.uploadPendingOps(
+            syncCapableProvider,
+            { fenceEpoch },
+          );
           if (uploadResult.kind === 'blocked_incompatible') {
             SyncLog.warn(
               'WsTriggeredDownloadService: Local-win re-upload blocked by an incompatible operation',
@@ -312,6 +326,15 @@ export class WsTriggeredDownloadService implements OnDestroy {
               config: { duration: 0 },
             });
           }
+          return false;
+        }
+        if (err instanceof SyncEpochChangedError) {
+          // #9074: a provider switch/encryption op landed mid-download; this
+          // cycle is stale by design. No retry, no ERROR — the new epoch's own
+          // sync covers catch-up.
+          SyncLog.log(
+            'WsTriggeredDownloadService: Sync epoch changed mid-download, abandoning stale cycle',
+          );
           return false;
         }
         if (err instanceof AuthFailSPError || err instanceof MissingCredentialsSPError) {

@@ -142,6 +142,26 @@ export class FileSyncTargetChangedError extends Error {
 }
 
 /**
+ * The global sync epoch changed (provider switch, account/target move, or a
+ * destructive config operation such as an encryption change) while a sync
+ * cycle was in flight — detected by comparing the epoch captured at cycle
+ * start against `SyncProviderManager.syncEpoch` before a write. The stale
+ * cycle's remaining applies/acks/cursor writes are abandoned so they cannot
+ * land against the new epoch/target; the next sync runs against the current
+ * config from scratch. Transient by design; not a corruption. (#9074 — the
+ * cross-provider generalization of {@link FileSyncTargetChangedError}.)
+ */
+export class SyncEpochChangedError extends Error {
+  override name = 'SyncEpochChangedError';
+
+  constructor(capturedEpoch: number, currentEpoch: number, context: string) {
+    super(
+      `Sync epoch changed mid-cycle (${capturedEpoch} → ${currentEpoch}) at ${context}; write abandoned.`,
+    );
+  }
+}
+
+/**
  * A deferred action can never be persisted (invalid entity identifiers or an
  * invalid operation payload) — a deterministic condition, not a transient
  * I/O failure. The reducer already committed, so the action stays buffered and

@@ -239,6 +239,8 @@ export class OperationLogSyncService {
       skipPiggybackProcessing?: boolean;
       skipServerMigrationCheck?: boolean;
       isNeverSynced?: boolean;
+      /** Sync epoch captured at cycle start (#9074); fences local writes. */
+      fenceEpoch?: number;
     },
   ): Promise<UploadOutcome> {
     // CRITICAL: Ensure all pending write operations have completed before uploading.
@@ -279,6 +281,7 @@ export class OperationLogSyncService {
       // Keep accepted operations pending until piggyback processing commits. This
       // preserves the conflict gate across cancellation and crash/retry boundaries.
       deferAcknowledgement: true,
+      ...(options?.fenceEpoch !== undefined ? { fenceEpoch: options.fenceEpoch } : {}),
     });
 
     // STEP 1: Process piggybacked ops FIRST
@@ -380,6 +383,7 @@ export class OperationLogSyncService {
             isNeverSynced: isNeverSyncedAtSyncStart,
             preCapturedPendingOps: result.selectedPendingOps ?? [],
           },
+          fenceEpoch: options?.fenceEpoch,
         },
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
@@ -429,6 +433,13 @@ export class OperationLogSyncService {
 
     const pendingAcknowledgementSeqs = result.pendingAcknowledgementSeqs ?? [];
     if (pendingAcknowledgementSeqs.length > 0) {
+      // #9074: the deferred ack is a local persist — a stale cycle must not
+      // mark ops synced after a destructive config change (they'd never
+      // re-upload to the new epoch's target).
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'deferred acknowledgement',
+      );
       await this.opLogStore.markSynced(pendingAcknowledgementSeqs);
     }
 
@@ -446,6 +457,7 @@ export class OperationLogSyncService {
       const outcome = await this.downloadRemoteOps(syncProvider, {
         ...downloadOptions,
         isNeverSynced: isNeverSyncedAtSyncStart,
+        ...(options?.fenceEpoch !== undefined ? { fenceEpoch: options.fenceEpoch } : {}),
       });
       const latestServerSeq = await syncProvider.getLastServerSeq();
       // Validation failure (if any during the nested download) is on the
@@ -477,6 +489,13 @@ export class OperationLogSyncService {
       }
     };
     try {
+      // #9074: the rejection handler appends merged/local-win ops and flips
+      // rejection markers — old-epoch writes that would resurrect data around
+      // a clean-slate replacement.
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'rejected-ops handling',
+      );
       rejectionResult = await this.rejectedOpsHandlerService.handleRejectedOps(
         result.rejectedOps,
         downloadCallback,
@@ -537,6 +556,8 @@ export class OperationLogSyncService {
       forceFromSeq0?: boolean;
       isNeverSynced?: boolean;
       ignoredLocalFullStateOpIds?: string[];
+      /** Sync epoch captured at cycle start (#9074); fences local writes. */
+      fenceEpoch?: number;
     },
   ): Promise<DownloadOutcome> {
     // Crash-resume: a prior USE_REMOTE rebuild committed its baseline
@@ -544,6 +565,13 @@ export class OperationLogSyncService {
     // path excludes this client's own ops server-side, so resuming through it
     // would silently lose them — redo the raw rebuild instead.
     if (await this.opLogStore.isRawRebuildIncomplete()) {
+      // #9074: the raw rebuild replaces local state wholesale — never from a
+      // stale cycle. (Provider I/O below is fenced by the provider delegate;
+      // these explicit asserts cover the LOCAL writes.)
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'raw-rebuild resume',
+      );
       await this._resumeInterruptedRawRebuild(syncProvider, true);
       // State was replaced wholesale, exactly like a snapshot hydration.
       return { kind: 'snapshot_hydrated' };
@@ -555,6 +583,10 @@ export class OperationLogSyncService {
     // barrier and resume the raw rebuild instead of entering the normal download
     // path with a partial baseline.
     if (await this.opLogStore.isRawRebuildIncomplete()) {
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'raw-rebuild resume (post-flush)',
+      );
       await this._resumeInterruptedRawRebuild(syncProvider, false);
       return { kind: 'snapshot_hydrated' };
     }
@@ -575,6 +607,12 @@ export class OperationLogSyncService {
     // Server migration detected: gap on empty server
     // Create a SYNC_IMPORT operation with full local state to seed the new server
     if (result.needsFullStateUpload) {
+      // #9074: appends a SYNC_IMPORT locally — old-epoch state must not seed
+      // the new epoch's server.
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'server migration',
+      );
       await this.serverMigrationService.handleServerMigration(syncProvider);
       // Persist lastServerSeq=0 for the migration case (server was reset)
       if (result.latestServerSeq !== undefined) {
@@ -641,6 +679,7 @@ export class OperationLogSyncService {
             postSnapshotOps,
             undefined,
             [],
+            { fenceEpoch: options?.fenceEpoch },
           );
           if (suffixProcessResult.blockedByIncompatibleOp) {
             return { kind: 'blocked_incompatible' };
@@ -876,6 +915,13 @@ export class OperationLogSyncService {
         result.snapshotAppliedOpIds,
       );
 
+      // #9074: hydration replaces local state wholesale from the downloaded
+      // snapshot — the single worst write a stale cycle can make after a
+      // provider/target switch (an old provider's snapshot over new state).
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'snapshot hydration',
+      );
       await this.writeFlushService.flushThenRunExclusive(() =>
         this._hydrateSnapshotExclusive(result, initialUnsyncedOpIds, snapshotIncludedOps),
       );
@@ -892,6 +938,7 @@ export class OperationLogSyncService {
           postSnapshotOps,
           undefined,
           [],
+          { fenceEpoch: options?.fenceEpoch },
         );
         if (suffixProcessResult.blockedByIncompatibleOp) {
           return { kind: 'blocked_incompatible' };
@@ -934,6 +981,10 @@ export class OperationLogSyncService {
           OpLog.warn(
             'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
               'Creating SYNC_IMPORT via server migration to seed the server.',
+          );
+          this.providerManager.assertSyncEpochUnchanged(
+            options?.fenceEpoch,
+            'empty-server migration',
           );
           await this.serverMigrationService.handleServerMigration(syncProvider, {
             syncImportReason: 'SERVER_MIGRATION',
@@ -1070,6 +1121,7 @@ export class OperationLogSyncService {
         repairBaseServerSeq: result.latestServerSeq,
         ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
         conflictRecheck: { isNeverSynced: options?.isNeverSynced },
+        fenceEpoch: options?.fenceEpoch,
       },
     );
 
@@ -1184,6 +1236,8 @@ export class OperationLogSyncService {
         isNeverSynced?: boolean;
         preCapturedPendingOps?: OperationLogEntry[];
       };
+      /** Sync epoch captured at cycle start (#9074); fences the apply. */
+      fenceEpoch?: number;
     },
   ): Promise<GuardedRemoteOpsProcessingResult> {
     const startupOpIdsToDiscard = new Set(startupOpIds);
@@ -1220,6 +1274,9 @@ export class OperationLogSyncService {
                 }
               : {}),
             ...(beforeFullStateApply ? { beforeFullStateApply } : {}),
+            ...(options?.fenceEpoch !== undefined
+              ? { fenceEpoch: options.fenceEpoch }
+              : {}),
           }),
       );
       if (

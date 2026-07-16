@@ -1,3 +1,4 @@
+import { fakeAsync, tick } from '@angular/core/testing';
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
 
 describe('SyncCycleGuardService', () => {
@@ -38,5 +39,35 @@ describe('SyncCycleGuardService', () => {
     guard._resetForTest();
     expect(guard.isActive).toBe(false);
     expect(guard.tryBegin()).toBe(true);
+  });
+
+  describe('waitUntilFree (#9074)', () => {
+    it('resolves true immediately when no cycle is active', fakeAsync(() => {
+      let result: boolean | undefined;
+      guard.waitUntilFree(1000).then((r) => (result = r));
+      tick(0);
+      expect(result).toBe(true);
+    }));
+
+    it('resolves true once the active cycle ends', fakeAsync(() => {
+      expect(guard.tryBegin()).toBe(true);
+      let result: boolean | undefined;
+      guard.waitUntilFree(10_000).then((r) => (result = r));
+      tick(500);
+      expect(result).toBeUndefined();
+      guard.end();
+      tick(0);
+      expect(result).toBe(true);
+    }));
+
+    it('resolves false when the cycle outlives the timeout', fakeAsync(() => {
+      expect(guard.tryBegin()).toBe(true);
+      let result: boolean | undefined;
+      guard.waitUntilFree(1000).then((r) => (result = r));
+      tick(1001);
+      expect(result).toBe(false);
+      expect(guard.isActive).toBe(true);
+      guard.end();
+    }));
   });
 });

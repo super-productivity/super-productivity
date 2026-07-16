@@ -10,6 +10,7 @@ import { OperationLogUploadService } from '../../op-log/sync/operation-log-uploa
 import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { isFullStateOpType } from '../../op-log/core/operation.types';
+import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 
 /**
  * Service for changing the encryption password for SuperSync.
@@ -28,6 +29,7 @@ export class EncryptionPasswordChangeService {
   private _uploadService = inject(OperationLogUploadService);
   private _syncWrapper = inject(SyncWrapperService);
   private _opLogStore = inject(OperationLogStoreService);
+  private _wrappedProvider = inject(WrappedProviderService);
 
   /**
    * Changes the encryption password using the clean slate approach.
@@ -130,8 +132,20 @@ export class EncryptionPasswordChangeService {
         'EncryptionPasswordChangeService: Uploading clean slate with new encryption...',
       );
       try {
-        const result = await this._uploadService.uploadPendingOps(syncProvider, {
+        // #9074: captured POST-bump (runWithSyncBlocked bumped on entry), so
+        // this upload passes its own fence; only a FURTHER config change
+        // (e.g. provider switch racing the password change) aborts it.
+        const fenceEpoch = this._providerManager.syncEpoch;
+        const guardedProvider = await this._wrappedProvider.getOperationSyncCapable(
+          syncProvider,
+          { fenceEpoch },
+        );
+        if (!guardedProvider) {
+          throw new Error('Sync provider unavailable for clean slate upload');
+        }
+        const result = await this._uploadService.uploadPendingOps(guardedProvider, {
           isCleanSlate: true,
+          fenceEpoch,
         });
 
         if (result.uploadedCount === 0) {

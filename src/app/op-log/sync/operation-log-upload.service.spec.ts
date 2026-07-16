@@ -7,6 +7,7 @@ import {
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { EncryptNoPasswordError } from '../core/errors/sync-errors';
 import { ActionType, OpType, OperationLogEntry } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
@@ -79,6 +80,11 @@ describe('OperationLogUploadService', () => {
         {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+        {
+          // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
+          provide: SyncProviderManager,
+          useValue: { assertSyncEpochUnchanged: () => undefined },
         },
       ],
     });

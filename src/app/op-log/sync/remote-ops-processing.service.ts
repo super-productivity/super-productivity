@@ -38,6 +38,7 @@ import {
   LocalOnlySyncSettings,
 } from '../../features/config/local-only-sync-settings.util';
 import { HydrationStateService } from '../apply/hydration-state.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -70,6 +71,7 @@ export class RemoteOpsProcessingService {
   private syncImportFilterService = inject(SyncImportFilterService);
   private writeFlushService = inject(OperationWriteFlushService);
   private hydrationStateService = inject(HydrationStateService);
+  private providerManager = inject(SyncProviderManager);
   private injector = inject(Injector);
 
   /** Flag to show version-incompatibility warnings only once per session */
@@ -106,6 +108,13 @@ export class RemoteOpsProcessingService {
        * aborts the apply so the caller can show UI after the lock is released.
        */
       beforeFullStateApply?: (fullStateOps: Operation[]) => Promise<boolean>;
+      /**
+       * Sync epoch captured at cycle start (#9074). Re-asserted INSIDE each
+       * apply-lock closure (i.e. after the lock wait), so a stale cycle that
+       * queued behind a destructive replacement (e.g. createCleanSlate) cannot
+       * apply old-epoch ops onto the fresh state.
+       */
+      fenceEpoch?: number;
     },
   ): Promise<{
     localWinOpsCreated: number;
@@ -281,6 +290,13 @@ export class RemoteOpsProcessingService {
         committedFullStateOpIds: string[];
         blockedByLocalConflict: boolean;
       }> => {
+        // #9074: asserted AFTER the lock wait — the highest-value fence site
+        // for full-state ops (a stale SYNC_IMPORT applied wholesale after a
+        // clean-slate/switch is the worst interleave).
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'full-state apply',
+        );
         // The operation-log lock blocks cross-tab operation writes, while this
         // hold makes same-tab reducer actions enter the deferred queue. Together
         // they keep the final pending-work read and destructive apply stable.
@@ -380,6 +396,7 @@ export class RemoteOpsProcessingService {
         'RemoteOpsProcessingService: Skipping conflict detection (skipConflictDetection=true). ' +
           `Applying ${validOps.length} ops directly.`,
       );
+      this.providerManager.assertSyncEpochUnchanged(options?.fenceEpoch, 'direct apply');
       await this.applyNonConflictingOps(
         validOps,
         options.callerHoldsOperationLogLock ?? false,
@@ -408,6 +425,12 @@ export class RemoteOpsProcessingService {
     // detect conflicts, AND apply resolutions.
     let localWinOpsCreated = 0;
     await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+      // #9074: asserted AFTER the lock wait — a stale cycle that queued behind
+      // a destructive replacement must not apply old-epoch ops onto it.
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'remote-ops apply',
+      );
       const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();
       const conflictResult = await this.detectConflicts(
         validOps,
