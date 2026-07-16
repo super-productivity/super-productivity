@@ -92,7 +92,9 @@ describe('ScheduleComponent', () => {
     );
 
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      localization: signal({ firstDayOfWeek: 1 }),
+      // Pin the date locale so Intl-formatted headers are deterministic across
+      // runners (an en-GB runner would render "20 Jan", not "Jan 20").
+      localization: signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' }),
       cfg: signal(undefined),
     });
 
@@ -930,14 +932,24 @@ describe('ScheduleComponent', () => {
       expect(component.isMonthView()).toBe(false);
     });
 
-    it('renders a single-date header in day mode', () => {
+    it('renders the full single-date header when roomy', () => {
+      // Force the roomy (non-tablet) state so the full form is deterministic
+      // regardless of the test runner's window width.
+      component['_isTablet'] = signal(false);
       mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
       mockLayoutService.selectedTimeView.set('day');
       fixture.detectChanges();
-      // 2026-01-20 is a Tuesday
-      expect(component.headerTitle()).toContain('Jan 20');
-      expect(component.headerTitle()).toContain('Tue');
-      expect(component.headerTitle()).toContain('2026');
+      // 2026-01-20 is a Tuesday (en-US locale pinned in beforeEach).
+      expect(component.headerTitle()).toBe('Tue, Jan 20, 2026');
+    });
+
+    it('compacts the day header to month and day when tight', () => {
+      component['_isTablet'] = signal(true);
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      // Compact form is month + day only (no weekday, no year).
+      expect(component.headerTitle()).toBe('Jan 20');
     });
 
     it('exposes mutually exclusive view-mode flags', () => {
@@ -969,7 +981,9 @@ describe('ScheduleComponent', () => {
 
     it('has a day-view toggle button that selects day mode', () => {
       const el: HTMLElement = fixture.nativeElement;
-      const dayBtn = el.querySelector<HTMLButtonElement>('.week-month-btn.day-view-btn');
+      const dayBtn = el.querySelector<HTMLButtonElement>(
+        '.week-month-btn.e2e-day-view-btn',
+      );
       expect(dayBtn).toBeTruthy();
       dayBtn!.click();
       expect(mockLayoutService.selectedTimeView()).toBe('day');

@@ -13,7 +13,11 @@ const dbDate = (d: Date): string => {
 // week columns only.
 const DAY_COL = 'schedule-week .col:not(.end-of-day)[data-day]';
 
+const DESKTOP_VIEWPORT = { width: 1280, height: 720 };
+
 test.describe('Schedule day view', () => {
+  test.use({ viewport: DESKTOP_VIEWPORT });
+
   test('renders one day, navigates a day at a time, and switches views', async ({
     page,
     workViewPage,
@@ -45,8 +49,9 @@ test.describe('Schedule day view', () => {
     await expect(dayCols).toHaveCount(1);
     await expect(dayCols.first()).toHaveAttribute('data-day', today);
     await expect(dayBtn).toHaveAttribute('aria-pressed', 'true');
-    // Header is a single date ("Tue, Jul 14, 2026"), not a week range.
-    await expect(title).toHaveText(/^\w+, \w+ \d{1,2}, \d{4}$/);
+    // Header is a single en-GB date ("Fri, 17 Jul 2026"; locale pinned in
+    // config), not a week range.
+    await expect(title).toHaveText(/^\w+, \d{1,2} \w+ \d{4}$/);
     // Viewing today: cannot go earlier, "today" reset is disabled.
     await expect(prevBtn).toBeDisabled();
     await expect(todayBtn).toBeDisabled();

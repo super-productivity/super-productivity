@@ -193,14 +193,23 @@ export class ScheduleComponent {
   private _isVeryCompact = computed(
     () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XXS,
   );
+  private _isTablet = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET,
+  );
 
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
     const locale = this._dateTimeFormatService.currentLocale();
 
-    if (this.isDayView())
-      return safeFormatDate(parseDbDateStr(days[0]), 'EEE, MMM d, yyyy', locale);
+    if (this.isDayView()) {
+      // On tablet width and below the full date clips, so drop to month + day
+      // (the weekday still shows in the day-column header).
+      const dayOpts: Intl.DateTimeFormatOptions = this._isTablet()
+        ? { month: 'short', day: 'numeric' }
+        : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      return new Intl.DateTimeFormat(locale, dayOpts).format(parseDbDateStr(days[0]));
+    }
 
     if (this.isMonthView()) {
       const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
