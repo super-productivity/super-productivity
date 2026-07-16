@@ -333,10 +333,12 @@ export const projectReducer = createReducer<ProjectState>(
 
       const filteredBacklog = backlogIdsBefore.filter(filterOutId(taskId));
       // When moving to DONE section with null anchor, append to end
-      // Otherwise use standard anchor-based positioning
+      // Otherwise use standard anchor-based positioning.
+      // Filter the id out before appending (like moveItemAfterAnchor does) so an
+      // op re-replayed on top of already-applied state can't duplicate it (#8469).
       const newTodaysTaskIds =
         afterTaskId === null && target === 'DONE'
-          ? [...todaysTaskIdsBefore, taskId]
+          ? [...todaysTaskIdsBefore.filter(filterOutId(taskId)), taskId]
           : moveItemAfterAnchor(taskId, afterTaskId, todaysTaskIdsBefore);
 
       return projectAdapter.updateOne(
