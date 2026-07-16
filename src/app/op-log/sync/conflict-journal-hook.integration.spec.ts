@@ -56,6 +56,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
   interface Ctx {
     localPendingOpsByEntity: Map<string, Operation[]>;
     appliedFrontierByEntity: Map<string, VectorClock>;
+    retainedOpsByEntity: Map<string, Operation[]>;
     snapshotVectorClock: VectorClock | undefined;
     snapshotEntityKeys: Set<string> | undefined;
     hasNoSnapshotClock: boolean;
@@ -64,6 +65,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
   const ctx = (over: Partial<Ctx> = {}): Ctx => ({
     localPendingOpsByEntity: new Map(),
     appliedFrontierByEntity: new Map(),
+    retainedOpsByEntity: new Map(),
     snapshotVectorClock: undefined,
     snapshotEntityKeys: undefined,
     hasNoSnapshotClock: true,
@@ -87,9 +89,13 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
       'markRejected',
       'markFailed',
       'getUnsyncedByEntity',
+      'getOpById',
       'mergeRemoteOpClocks',
       'markReducersCommittedAndMergeClocks',
     ]);
+    // Row lookup can't resolve in this mocked store → the synced-op rejection
+    // guard fails open (keeps the pending-path rejection behavior).
+    mockOpLogStore.getOpById.and.resolveTo(undefined);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({

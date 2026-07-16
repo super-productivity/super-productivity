@@ -100,9 +100,11 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       'markRejected',
       'markFailed',
       'getUnsyncedByEntity',
+      'getOpById',
       'mergeRemoteOpClocks',
       'markReducersCommittedAndMergeClocks',
     ]);
+    mockOpLogStore.getOpById.and.resolveTo(undefined);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
@@ -1364,9 +1366,11 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
         'markRejected',
         'markFailed',
         'getUnsyncedByEntity',
+        'getOpById',
         'mergeRemoteOpClocks',
         'markReducersCommittedAndMergeClocks',
       ]);
+      opLogStore.getOpById.and.resolveTo(undefined);
       opLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
       opLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
       opLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({

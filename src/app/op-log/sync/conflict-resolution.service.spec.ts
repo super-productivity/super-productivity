@@ -6306,18 +6306,21 @@ describe('ConflictResolutionService', () => {
     const buildCtx = (overrides: {
       localPendingOpsByEntity?: Map<string, Operation[]>;
       appliedFrontierByEntity?: Map<string, VectorClock>;
+      retainedOpsByEntity?: Map<string, Operation[]>;
       snapshotVectorClock?: VectorClock;
       snapshotEntityKeys?: Set<string>;
       hasNoSnapshotClock?: boolean;
     }): {
       localPendingOpsByEntity: Map<string, Operation[]>;
       appliedFrontierByEntity: Map<string, VectorClock>;
+      retainedOpsByEntity: Map<string, Operation[]>;
       snapshotVectorClock: VectorClock | undefined;
       snapshotEntityKeys: Set<string>;
       hasNoSnapshotClock: boolean;
     } => ({
       localPendingOpsByEntity: overrides.localPendingOpsByEntity ?? new Map(),
       appliedFrontierByEntity: overrides.appliedFrontierByEntity ?? new Map(),
+      retainedOpsByEntity: overrides.retainedOpsByEntity ?? new Map(),
       snapshotVectorClock: overrides.snapshotVectorClock,
       snapshotEntityKeys: overrides.snapshotEntityKeys ?? new Set(),
       hasNoSnapshotClock: overrides.hasNoSnapshotClock ?? true,
@@ -6634,6 +6637,380 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.conflicts[0]?.entityId).toBe('task-1');
+    });
+  });
+
+  describe('checkOpForConflicts — no-pending CONCURRENT crossing (#9073)', () => {
+    const KEY = 'TASK:task-1';
+
+    const buildCtx = (overrides: {
+      retainedOpsByEntity?: Map<string, Operation[]>;
+      appliedFrontierByEntity?: Map<string, VectorClock>;
+    }): {
+      localPendingOpsByEntity: Map<string, Operation[]>;
+      appliedFrontierByEntity: Map<string, VectorClock>;
+      retainedOpsByEntity: Map<string, Operation[]>;
+      snapshotVectorClock: VectorClock | undefined;
+      snapshotEntityKeys: Set<string>;
+      hasNoSnapshotClock: boolean;
+    } => ({
+      localPendingOpsByEntity: new Map(),
+      appliedFrontierByEntity: overrides.appliedFrontierByEntity ?? new Map(),
+      retainedOpsByEntity: overrides.retainedOpsByEntity ?? new Map(),
+      snapshotVectorClock: undefined,
+      snapshotEntityKeys: new Set(),
+      hasNoSnapshotClock: true,
+    });
+
+    const updateOp = (over: {
+      id: string;
+      clientId: string;
+      vectorClock: VectorClock;
+      timestamp: number;
+      changes: Record<string, unknown>;
+      actionType?: ActionType;
+      opType?: OpType;
+      entityIds?: string[];
+    }): Operation => ({
+      id: over.id,
+      clientId: over.clientId,
+      actionType: over.actionType ?? ('[Task] Update' as ActionType),
+      opType: over.opType ?? OpType.Update,
+      entityType: 'TASK',
+      entityId: 'task-1',
+      ...(over.entityIds ? { entityIds: over.entityIds } : {}),
+      payload: { task: { id: 'task-1', changes: over.changes } },
+      vectorClock: over.vectorClock,
+      timestamp: over.timestamp,
+      schemaVersion: 1,
+    });
+
+    /** Runs detection from one client's point of view (entity exists). */
+    const detect = async (
+      incoming: Operation,
+      retained: Operation[],
+    ): Promise<{ isSupersededOrDuplicate: boolean; conflicts: EntityConflict[] }> => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'existing' }));
+      return service.checkOpForConflicts(
+        incoming,
+        buildCtx({
+          retainedOpsByEntity: new Map([[KEY, retained]]),
+          appliedFrontierByEntity: new Map([
+            [KEY, retained[retained.length - 1]?.vectorClock ?? {}],
+          ]),
+        }),
+      );
+    };
+
+    // X and Y form a plain two-client crossing: both already synced, both
+    // sides pending-empty, same real field → NOT commutative.
+    const opX = updateOp({
+      id: 'op-x',
+      clientId: 'clientA',
+      vectorClock: { clientA: 1 },
+      timestamp: 1000,
+      changes: { title: 'from A' },
+    });
+    const opY = updateOp({
+      id: 'op-y',
+      clientId: 'clientB',
+      vectorClock: { clientB: 1 },
+      timestamp: 2000,
+      changes: { title: 'from B' },
+    });
+
+    it('routes a reversed-delivery crossing into a conflict on BOTH sides (was: silent arrival-order apply)', async () => {
+      // Client A's view: applied+synced X, receives Y.
+      const onA = await detect(opY, [opX]);
+      // Client B's view: applied+synced Y, receives X.
+      const onB = await detect(opX, [opY]);
+
+      expect(onA.isSupersededOrDuplicate).toBe(false);
+      expect(onB.isSupersededOrDuplicate).toBe(false);
+      expect(onA.conflicts.length).toBe(1);
+      expect(onB.conflicts.length).toBe(1);
+      expect(onA.conflicts[0].localOps).toEqual([opX]);
+      expect(onA.conflicts[0].remoteOps).toEqual([opY]);
+      expect(onB.conflicts[0].localOps).toEqual([opY]);
+      expect(onB.conflicts[0].remoteOps).toEqual([opX]);
+    });
+
+    it('resolves the mirrored conflicts to the SAME winner on both sides (convergence)', async () => {
+      const onA = await detect(opY, [opX]);
+      const onB = await detect(opX, [opY]);
+
+      // A: remote (Y, ts 2000) wins → Y is applied via the pipeline, no local-win op.
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from A' }));
+      const resolutionA = await service.autoResolveConflictsLWW(onA.conflicts);
+      // B: local (Y) wins → ONE dominating LWW op carries B's state everywhere.
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from B' }));
+      const resolutionB = await service.autoResolveConflictsLWW(onB.conflicts);
+
+      expect(resolutionA.localWinOpsCreated).toBe(0);
+      expect(resolutionB.localWinOpsCreated).toBe(1);
+      const healOp = getFirstMixedLocalOp();
+      // The heal dominates BOTH sides of the crossing and preserves the
+      // winner's timestamp (no unfair advantage in later conflicts).
+      expect(compareVectorClocks(healOp.vectorClock, { clientA: 1, clientB: 1 })).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      expect(healOp.timestamp).toBe(2000);
+      expect(extractActionPayload(healOp.payload as never)['title']).toBe('from B');
+    });
+
+    it('does NOT reject the already-synced local side when the remote op wins', async () => {
+      const onA = await detect(opY, [opX]);
+      // op-x is a SYNCED row: rejecting it would erase it from frontier scans.
+      mockOpLogStore.getOpById.and.callFake(async (id: string) =>
+        id === 'op-x'
+          ? ({ op: opX, seq: 1, source: 'local', syncedAt: 123 } as never)
+          : undefined,
+      );
+
+      await service.autoResolveConflictsLWW(onA.conflicts);
+
+      const rejectedIds = mockOpLogStore.markRejected.calls.allArgs().flat(2) as string[];
+      expect(rejectedIds).not.toContain('op-x');
+    });
+
+    it('uses ALL retained concurrent ops — a newer disjoint op must not mask an older overlapping one', async () => {
+      // L1 changes g (ts 1000), L2 changes h (ts 1100); incoming R changes g
+      // (ts 900). Pairing R against L2 alone would look disjoint and slip
+      // through as a silent apply, losing g's newer value on this client only.
+      const l1 = updateOp({
+        id: 'op-l1',
+        clientId: 'clientA',
+        vectorClock: { clientA: 2 },
+        timestamp: 1000,
+        changes: { title: 'newer title' },
+      });
+      const l2 = updateOp({
+        id: 'op-l2',
+        clientId: 'clientA',
+        vectorClock: { clientA: 3 },
+        timestamp: 1100,
+        changes: { notes: 'unrelated' },
+      });
+      const remote = updateOp({
+        id: 'op-r',
+        clientId: 'clientB',
+        vectorClock: { clientA: 1, clientB: 1 },
+        timestamp: 900,
+        changes: { title: 'older title' },
+      });
+
+      const result = await detect(remote, [l1, l2]);
+
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].localOps).toEqual([l1, l2]);
+    });
+
+    it('excludes retained ops the incoming clock already dominates', async () => {
+      const ancestor = updateOp({
+        id: 'op-ancestor',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 500,
+        changes: { title: 'ancestor' },
+      });
+      const concurrent = updateOp({
+        id: 'op-concurrent',
+        clientId: 'clientA',
+        vectorClock: { clientA: 2 },
+        timestamp: 1000,
+        changes: { title: 'concurrent' },
+      });
+      // Incoming saw the ancestor (clientA: 1) but not the concurrent op.
+      const remote = updateOp({
+        id: 'op-r',
+        clientId: 'clientB',
+        vectorClock: { clientA: 1, clientB: 1 },
+        timestamp: 2000,
+        changes: { title: 'remote' },
+      });
+
+      const result = await detect(remote, [ancestor, concurrent]);
+
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].localOps).toEqual([concurrent]);
+    });
+
+    it('applies as-is when the retained concurrent history was compacted away (status quo)', async () => {
+      // Frontier still says CONCURRENT (snapshot clock), but the concurrent
+      // local ops themselves are gone — no deterministic local side.
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'existing' }));
+
+      const result = await service.checkOpForConflicts(
+        opY,
+        buildCtx({
+          retainedOpsByEntity: new Map(),
+          appliedFrontierByEntity: new Map([[KEY, { clientA: 5 }]]),
+        }),
+      );
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('applies disjoint real-field crossings as-is (lossless commute preserved)', async () => {
+      const localNotes = updateOp({
+        id: 'op-notes',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: { notes: 'local notes' },
+      });
+
+      const result = await detect(opY, [localNotes]);
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('applies identical-content crossings as-is (also damps heal-op echoes)', async () => {
+      const sameContent = updateOp({
+        id: 'op-same',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: { title: 'from B' },
+      });
+      const incoming = updateOp({
+        id: 'op-same-remote',
+        clientId: 'clientB',
+        vectorClock: { clientB: 1 },
+        timestamp: 2000,
+        changes: { title: 'from B' },
+      });
+
+      const result = await detect(incoming, [sameContent]);
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('applies noise-only crossings as-is instead of minting whole-entity heals', async () => {
+      const noiseOnly = updateOp({
+        id: 'op-noise',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 3000,
+        changes: { modified: 3000 },
+      });
+
+      // Even though the noise side has the LATER timestamp, the real edit must
+      // not be clobbered by a whole-entity LWW win of a `modified` bump.
+      const result = await detect(opY, [noiseOnly]);
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('keeps concurrent task-time deltas non-conflicting (commute, mirror of pending-path exemption)', async () => {
+      const timeOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({
+          id,
+          clientId,
+          vectorClock: clock,
+          timestamp: 1000,
+          changes: {},
+        }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+      });
+
+      const result = await detect(timeOp('op-time-r', 'clientB', { clientB: 1 }), [
+        timeOp('op-time-l', 'clientA', { clientA: 1 }),
+      ]);
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('applies multi-entity remote ops as-is (needs the pending path compensation machinery)', async () => {
+      const multiRemote = updateOp({
+        id: 'op-multi',
+        clientId: 'clientB',
+        vectorClock: { clientB: 1 },
+        timestamp: 2000,
+        changes: { title: 'bulk' },
+        entityIds: ['task-1', 'task-2'],
+      });
+
+      const result = await detect(multiRemote, [opX]);
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('applies as-is when the local side contains a Delete, archive, or multi-entity op', async () => {
+      const localDelete = updateOp({
+        id: 'op-del',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: {},
+        opType: OpType.Delete,
+      });
+      const localArchive = updateOp({
+        id: 'op-arch',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: {},
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      });
+      const localMulti = updateOp({
+        id: 'op-lmulti',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: { title: 'bulk' },
+        entityIds: ['task-1', 'task-2'],
+      });
+
+      for (const local of [localDelete, localArchive, localMulti]) {
+        const result = await detect(opY, [local]);
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      }
+    });
+
+    it('still skips the remote op when the entity is absent (archive/delete wins, unchanged)', async () => {
+      mockStore.select.and.returnValue(of(undefined));
+
+      const result = await service.checkOpForConflicts(
+        opY,
+        buildCtx({
+          retainedOpsByEntity: new Map([[KEY, [opX]]]),
+          appliedFrontierByEntity: new Map([[KEY, opX.vectorClock]]),
+        }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(true);
+      expect(result.conflicts).toEqual([]);
+    });
+
+    it('ties on timestamp resolve by clientId, symmetrically', async () => {
+      const tieX = updateOp({
+        id: 'op-tie-x',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+        changes: { title: 'from A' },
+      });
+      const tieY = updateOp({
+        id: 'op-tie-y',
+        clientId: 'clientB',
+        vectorClock: { clientB: 1 },
+        timestamp: 1000,
+        changes: { title: 'from B' },
+      });
+
+      const onA = await detect(tieY, [tieX]);
+      const onB = await detect(tieX, [tieY]);
+
+      // 'clientB' > 'clientA' → Y wins on BOTH sides: remote-wins on A
+      // (no local-win op), local-wins on B (one heal op).
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'x' }));
+      const resolutionA = await service.autoResolveConflictsLWW(onA.conflicts);
+      const resolutionB = await service.autoResolveConflictsLWW(onB.conflicts);
+
+      expect(resolutionA.localWinOpsCreated).toBe(0);
+      expect(resolutionB.localWinOpsCreated).toBe(1);
     });
   });
 

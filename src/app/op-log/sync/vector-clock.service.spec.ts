@@ -532,4 +532,77 @@ describe('VectorClockService', () => {
       expect(frontier.size).toBe(0);
     });
   });
+
+  describe('getEntityFrontierWithOps', () => {
+    it('should return a frontier identical to getEntityFrontier plus every retained op per entity', async () => {
+      mockStoreService.loadStateCache.and.returnValue(Promise.resolve(null));
+
+      const op1 = createMockOperation('op1', { clientA: 1 }, 'TASK', 'task-1');
+      const op2 = createMockOperation('op2', { clientA: 2 }, 'TASK', 'task-1');
+      const op3 = createMockOperation('op3', { clientB: 1 }, 'TASK', 'task-2');
+      const ops: OperationLogEntry[] = [
+        createMockEntry(1, op1),
+        createMockEntry(2, op2),
+        createMockEntry(3, op3),
+      ];
+      mockStoreService.getOpsAfterSeq.and.returnValue(Promise.resolve(ops));
+
+      const { frontier, retainedOpsByEntity } = await service.getEntityFrontierWithOps();
+
+      expect(frontier).toEqual(await service.getEntityFrontier());
+      expect(frontier.get('TASK:task-1')).toEqual({ clientA: 2 });
+      expect(retainedOpsByEntity.get('TASK:task-1')).toEqual([op1, op2]);
+      expect(retainedOpsByEntity.get('TASK:task-2')).toEqual([op3]);
+    });
+
+    it('should skip rejected ops in BOTH maps (filter-identical to the frontier)', async () => {
+      mockStoreService.loadStateCache.and.returnValue(Promise.resolve(null));
+
+      const keptOp = createMockOperation('op1', { clientA: 1 }, 'TASK', 'task-1');
+      const rejectedOp = createMockOperation('op2', { clientA: 2 }, 'TASK', 'task-1');
+      const ops: OperationLogEntry[] = [
+        createMockEntry(1, keptOp),
+        { ...createMockEntry(2, rejectedOp), rejectedAt: Date.now() },
+      ];
+      mockStoreService.getOpsAfterSeq.and.returnValue(Promise.resolve(ops));
+
+      const { frontier, retainedOpsByEntity } = await service.getEntityFrontierWithOps();
+
+      expect(frontier.get('TASK:task-1')).toEqual({ clientA: 1 });
+      expect(retainedOpsByEntity.get('TASK:task-1')).toEqual([keptOp]);
+    });
+
+    it('should record a multi-entity op under every entity it touches', async () => {
+      mockStoreService.loadStateCache.and.returnValue(Promise.resolve(null));
+
+      const bulkOp = createMockOperation('op1', { clientA: 1 }, 'TASK', 'task-1', [
+        'task-1',
+        'task-2',
+      ]);
+      mockStoreService.getOpsAfterSeq.and.returnValue(
+        Promise.resolve([createMockEntry(1, bulkOp)]),
+      );
+
+      const { retainedOpsByEntity } = await service.getEntityFrontierWithOps();
+
+      expect(retainedOpsByEntity.get('TASK:task-1')).toEqual([bulkOp]);
+      expect(retainedOpsByEntity.get('TASK:task-2')).toEqual([bulkOp]);
+    });
+
+    it('should scan from the snapshot lastAppliedOpSeq', async () => {
+      mockStoreService.loadStateCache.and.returnValue(
+        Promise.resolve({
+          vectorClock: { clientA: 10 },
+          lastAppliedOpSeq: 50,
+          state: {},
+          compactedAt: Date.now(),
+        }),
+      );
+      mockStoreService.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
+
+      await service.getEntityFrontierWithOps();
+
+      expect(mockStoreService.getOpsAfterSeq).toHaveBeenCalledWith(50);
+    });
+  });
 });
