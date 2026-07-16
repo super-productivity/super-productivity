@@ -124,6 +124,22 @@ interface ResolvedConflicts {
 interface AutoResolveConflictsLwwOptions {
   callerHoldsOperationLogLock?: boolean;
   disableDisjointMerge?: boolean;
+  /**
+   * Skip conflict-journal emission entirely (observe-only hook, so this can
+   * never change which op resolution picks).
+   *
+   * Set by the production caller as a PRODUCER FREEZE ahead of the
+   * conflict-review rollback: journal rows capture the discarded side of a
+   * conflict verbatim (titles, arbitrary field values), and that device-local
+   * data obligation must not expand to the stable fleet on the next release
+   * tag while the feature is still slated for removal.
+   *
+   * Ceiling: rows already written on edge/internal builds stay readable and
+   * expire on their own (14 days / 200 rows). Upgrade path: the store, reader,
+   * UI and the `SUP_CONFLICT_JOURNAL_CLEARED_BEFORE` marker are deleted
+   * together in the conflict-review rollback, after which this option goes too.
+   */
+  disableConflictJournal?: boolean;
   remoteApplyLifecycleOwnedByCaller?: boolean;
 }
 
@@ -1720,12 +1736,14 @@ export class ConflictResolutionService {
       );
     }
 
-    for (const plan of lwwPlans) {
-      await this._journalResolution(plan);
-    }
-    for (const merged of successfulMergedResolutions) {
-      if (writtenMergedOpIds.has(merged.mergedOp.id)) {
-        await this._journalMergedResolution(merged.plan);
+    if (!options.disableConflictJournal) {
+      for (const plan of lwwPlans) {
+        await this._journalResolution(plan);
+      }
+      for (const merged of successfulMergedResolutions) {
+        if (writtenMergedOpIds.has(merged.mergedOp.id)) {
+          await this._journalMergedResolution(merged.plan);
+        }
       }
     }
 
