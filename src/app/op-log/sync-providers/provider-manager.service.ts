@@ -339,8 +339,12 @@ export class SyncProviderManager {
     // Bump only AFTER the write and the synchronous cache-invalidation
     // emission above, so a cycle can never capture the fresh epoch while stale
     // caches/config are still live. Content-only saves must not bump — they
-    // would abort a healthy cycle on every settings save.
-    if (isTargetChanged) {
+    // would abort a healthy cycle on every settings save. First-time setup
+    // (no previous config) must not bump either: there is no old target an
+    // in-flight cycle could be running against, and the bump races the fresh
+    // config's first sync into a spurious abort (seen as every conflict-dialog
+    // E2E timing out on `SyncEpochChangedError (1 → 2)`).
+    if (isTargetChanged && prevCfg) {
       this.bumpSyncEpoch(`target change (${providerId})`);
     }
 
@@ -412,6 +416,7 @@ export class SyncProviderManager {
       return;
     }
 
+    const prevProviderId = this._activeProviderId$.getValue();
     const setupId = ++this._activeProviderSetupId;
     this._activeProviderId$.next(providerId);
 
@@ -439,8 +444,13 @@ export class SyncProviderManager {
         // Bump only now that the swap is complete: a cycle that starts between
         // the config change and this point still reads the OLD provider, so it
         // must keep an old (stale-able) epoch — bumping earlier would hand it
-        // a fresh epoch while it runs against the abandoned target.
-        this.bumpSyncEpoch(`provider switch (${providerId})`);
+        // a fresh epoch while it runs against the abandoned target. First-ever
+        // activation (null → X) must not bump: no cycle can have run against a
+        // previous target (getActiveProvider() was null), and the async bump
+        // would race the fresh setup's first sync into a spurious abort.
+        if (prevProviderId !== null) {
+          this.bumpSyncEpoch(`provider switch (${providerId})`);
+        }
 
         const [ready, privateCfg] = await Promise.all([
           provider.isReady(),

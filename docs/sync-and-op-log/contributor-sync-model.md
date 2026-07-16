@@ -104,7 +104,10 @@ cursor against the new target/epoch afterwards.
 
 - `SyncProviderManager.syncEpoch` is a monotonic counter, bumped **after** each
   such change completes (and at `runWithSyncBlocked` entry, which additionally
-  blocks new cycles first and then drains running ones, bounded).
+  blocks new cycles first and then drains running ones, bounded). First-time
+  setup (no previous config / first provider activation) does NOT bump — there
+  is no old target to fence, and the bump would race the fresh config's first
+  sync into a spurious abort.
 - Every cycle entry point captures the epoch **synchronously with its
   `SyncCycleGuardService.tryBegin()` claim** and threads it as `fenceEpoch`.
 - Provider I/O is fenced in one place: `getOperationSyncCapable(provider,

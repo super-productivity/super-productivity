@@ -152,6 +152,18 @@ describe('SyncProviderManager target-change notification', () => {
       expect(service.syncEpoch).toBe(before + 1);
     });
 
+    it('does NOT bump on a first-time config save (no previous target to fence)', async () => {
+      // First-time setup has no old target an in-flight cycle could be running
+      // against; a bump here races the fresh config's first sync into a
+      // spurious abort (every conflict-dialog E2E timed out on it).
+      stubProvider(null);
+      const before = service.syncEpoch;
+
+      await service.setProviderConfig(SyncProviderId.WebDAV, { ...webdavCfg } as never);
+
+      expect(service.syncEpoch).toBe(before);
+    });
+
     it('bumps via notifyProviderTargetChanged (bypass ingresses)', () => {
       const before = service.syncEpoch;
 
@@ -160,9 +172,12 @@ describe('SyncProviderManager target-change notification', () => {
       expect(service.syncEpoch).toBe(before + 1);
     });
 
-    it('bumps AFTER the active-provider swap on a provider switch, and on disable', async () => {
+    it('bumps AFTER the swap on a real switch and on disable, but NOT on first activation', async () => {
       // Bump-after-swap: a cycle starting between the config change and the
       // swap still reads the OLD provider, so it must keep a stale-able epoch.
+      // First activation (null → X) must not bump: no cycle can have run
+      // against a previous target, and the async bump would race the fresh
+      // setup's first sync into a spurious abort.
       const provider = stubProvider(webdavCfg);
       (provider as unknown as { isReady: jasmine.Spy }).isReady = jasmine
         .createSpy('isReady')
@@ -170,12 +185,16 @@ describe('SyncProviderManager target-change notification', () => {
       const before = service.syncEpoch;
 
       service['_setActiveProvider'](SyncProviderId.WebDAV);
-      expect(service.syncEpoch).toBe(before); // not yet — swap is async
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(service.syncEpoch).toBe(before + 1);
+      expect(service.syncEpoch).toBe(before); // first activation — no bump
       expect(service.getActiveProvider()).toBe(
         provider as unknown as SyncProviderBase<SyncProviderId>,
       );
+
+      service['_setActiveProvider'](SyncProviderId.Dropbox);
+      expect(service.syncEpoch).toBe(before); // not yet — swap is async
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(service.syncEpoch).toBe(before + 1);
 
       service['_setActiveProvider'](null);
       expect(service.syncEpoch).toBe(before + 2); // null path swaps synchronously
