@@ -6,6 +6,7 @@ import { SyncBusyService } from './sync-busy.service';
 import { SyncTriggerService } from './sync-trigger.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+import { SYNC_MIN_INTERVAL } from './sync.const';
 import { SyncLog } from '../../core/log';
 
 /** What a request was made against, revalidated before every run. */
@@ -65,6 +66,9 @@ export class BackgroundSyncSchedulerService {
   private _isRunning = false;
   private _pending: PendingRequest | null = null;
   private _settled$ = new Subject<void>();
+  /** 0 = nothing has run yet, so the first request is never spaced. */
+  private _lastSettleAt = 0;
+  private _spacingTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Emits after every run settles, successfully or not. Deliberately narrow: it
@@ -83,7 +87,7 @@ export class BackgroundSyncSchedulerService {
         filter((isBusy) => !isBusy),
         takeUntilDestroyed(this._destroyRef),
       )
-      .subscribe(() => void this._drain());
+      .subscribe(() => this._scheduleDrain());
 
     // Gate opening: the initial sync's own `finally` releases the busy signals
     // BEFORE SyncEffects flips the gate in its `.then()`. So the busy-falling
@@ -96,7 +100,48 @@ export class BackgroundSyncSchedulerService {
         filter((isOpen) => isOpen),
         takeUntilDestroyed(this._destroyRef),
       )
-      .subscribe(() => void this._drain());
+      .subscribe(() => this._scheduleDrain());
+
+    this._destroyRef.onDestroy(() => {
+      if (this._spacingTimer !== null) {
+        clearTimeout(this._spacingTimer);
+        this._spacingTimer = null;
+      }
+    });
+  }
+
+  /**
+   * Wake-ups must NOT drain on the emitting call stack.
+   *
+   * The busy edge fires from `SyncCycleGuard.end()`, which `sync()` calls from
+   * inside its own `finally`. Draining synchronously there starts the next sync
+   * re-entrantly, part-way through the previous one's teardown — before the
+   * wrapper's SYNCING safeguard runs, which would then see the NEW sync's status
+   * and reset it to UNKNOWN_OR_CHANGED. Provider status is still a live
+   * exclusion gate for the immediate-upload side channel, so corrupting it is
+   * not merely cosmetic.
+   *
+   * Yielding a microtask lets the finishing cycle unwind completely, so the next
+   * sync starts from a settled state. Found by wiring the real guard and busy
+   * service together — the fakes could not surface it.
+   */
+  private _scheduleDrain(): void {
+    queueMicrotask(() => void this._drain());
+  }
+
+  /**
+   * Re-check once the duty-cycle floor has elapsed. A single timer, because the
+   * dirty bit is single: re-arming per request would stack timers that all drain
+   * the same one slot.
+   */
+  private _armSpacingTimer(delayMs: number): void {
+    if (this._spacingTimer !== null) {
+      return;
+    }
+    this._spacingTimer = setTimeout(() => {
+      this._spacingTimer = null;
+      void this._drain();
+    }, delayMs);
   }
 
   /**
@@ -126,6 +171,24 @@ export class BackgroundSyncSchedulerService {
     if (!this._syncTrigger.isInitialSyncDoneSync()) {
       return;
     }
+    // Duty-cycle floor. Deferring instead of dropping removed the only thing
+    // that bounded the SYNC rate: exhaustMap. The trigger-side throttle never
+    // bounded it — the interval timer is self-sustaining and independent of sync
+    // activity, so whenever a sync outlasts syncInterval (a 90s WebDAV sync on a
+    // 60s interval is ordinary — getFileRev is a full GET, not a cheap ETag),
+    // every tick lands mid-sync and drains the instant the previous one settles.
+    // That is a permanent back-to-back sync loop with no idle gap.
+    //
+    // The wasted I/O is the lesser harm. sync() opens the hydration window and
+    // closes it in its finally, so with no gap `isInSyncWindow` is effectively
+    // always true and skipDuringSyncWindow() would suppress TODAY_TAG repair and
+    // day-change effects INDEFINITELY. The floor guarantees a real idle window
+    // between runs, in which those effects can fire.
+    const sinceLastSettle = Date.now() - this._lastSettleAt;
+    if (this._lastSettleAt !== 0 && sinceLastSettle < SYNC_MIN_INTERVAL) {
+      this._armSpacingTimer(SYNC_MIN_INTERVAL - sinceLastSettle);
+      return;
+    }
 
     const request = this._pending;
     this._pending = null;
@@ -148,6 +211,7 @@ export class BackgroundSyncSchedulerService {
       SyncLog.err('BackgroundSyncScheduler: background sync threw', err);
     } finally {
       this._isRunning = false;
+      this._lastSettleAt = Date.now();
       this._settled$.next();
     }
 

@@ -328,16 +328,21 @@ export class SyncTriggerService {
    * different question ("may the UI show data yet?") and short-circuits to true
    * for SuperSync and when initial sync is disabled.
    *
-   * Deliberately excludes the `MAX_WAIT_FOR_INITIAL_SYNC` failsafe that
-   * `afterInitialSyncDoneAndDataLoadedInitially$` and `afterInitialSyncDoneStrict$`
-   * merge in: that timer exists so the UI cannot hang forever waiting on a sync
-   * that never lands, which is right for rendering and wrong here — it would
-   * declare the gate open on a schedule rather than on the initial sync actually
-   * having completed.
+   * Emits on a `setInitialSyncDone()` call: replays the latest value to late
+   * subscribers, and emits nothing at all before the first flip (the gate reads
+   * closed via the getter until then).
    *
-   * Emits only on a real `setInitialSyncDone()` call: replays the latest value
-   * to late subscribers, and emits nothing at all before the first flip (the
-   * gate reads closed via the getter until then).
+   * CAVEAT — this does NOT mean "the initial sync completed". The
+   * `MAX_WAIT_FOR_INITIAL_SYNC` (8s) failsafes inside
+   * `afterInitialSyncDoneAndDataLoadedInitially$` and `afterInitialSyncDoneStrict$`
+   * call `setInitialSyncDone(true)` from a `tap`, so a wall-clock timer opens
+   * this gate too — and both are subscribed live across the app, so the timers
+   * really are armed. The honest reading is "the gate is open", not "the initial
+   * sync landed": if the initial path hangs (e.g. the PWA update check, also 8s),
+   * the failsafe can open it first, a deferred background sync drains, and the
+   * later initial `sync()` bounces off `SyncCycleGuard.tryBegin()` and returns
+   * HANDLED_ERROR. Both paths call the same `sync()`, so the practical harm is
+   * low — but do not build a stronger invariant on this than it can carry.
    */
   readonly initialSyncGateOpen$: Observable<boolean> =
     this._isInitialSyncDoneManual$.asObservable();

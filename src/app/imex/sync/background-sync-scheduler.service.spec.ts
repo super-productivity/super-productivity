@@ -6,6 +6,7 @@ import { SyncTriggerService } from './sync-trigger.service';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+import { SYNC_MIN_INTERVAL } from './sync.const';
 
 class FakeBusy {
   private _isBusy$ = new BehaviorSubject(false);
@@ -62,7 +63,15 @@ describe('BackgroundSyncSchedulerService', () => {
     await Promise.resolve();
   };
 
+  /** Advances past the duty-cycle floor so a deferred trailing run may proceed. */
+  const passFloor = async (): Promise<void> => {
+    jasmine.clock().tick(SYNC_MIN_INTERVAL + 1);
+    await flush();
+  };
+
   beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(1_000_000));
     busy = new FakeBusy();
     trigger = new FakeTrigger();
     providerManager = new FakeProviderManager();
@@ -81,6 +90,8 @@ describe('BackgroundSyncSchedulerService', () => {
     // Default: past the initial gate, nothing running.
     trigger.setInitialSyncDone(true);
   });
+
+  afterEach(() => jasmine.clock().uninstall());
 
   describe('idle', () => {
     it('runs one sync for one request', async () => {
@@ -106,6 +117,7 @@ describe('BackgroundSyncSchedulerService', () => {
       scheduler.request();
       scheduler.request();
       await flush();
+      await passFloor();
 
       // One leading run + exactly one trailing rerun for the collapsed burst.
       expect(sync).toHaveBeenCalledTimes(2);
@@ -129,8 +141,48 @@ describe('BackgroundSyncSchedulerService', () => {
       sync.and.resolveTo('InSync');
       release();
       await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('duty-cycle floor', () => {
+    it('does not run a trailing sync back-to-back with the one that just settled', async () => {
+      // Deferring instead of dropping removed the only bound on the SYNC rate
+      // (exhaustMap). When a sync outlasts syncInterval, every tick lands
+      // mid-sync and would drain the instant the previous settled — a permanent
+      // loop with no idle gap, in which skipDuringSyncWindow() would suppress
+      // TODAY_TAG repair and day-change effects indefinitely.
+      scheduler.request();
+      await flush();
+      expect(sync).toHaveBeenCalledTimes(1);
+
+      // A tick that arrived during the run must not drain immediately.
+      scheduler.request();
+      await flush();
+      expect(sync).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs the deferred trailing sync once the floor has elapsed', async () => {
+      scheduler.request();
+      await flush();
+      expect(sync).toHaveBeenCalledTimes(1);
+
+      scheduler.request();
+      await flush();
+      expect(sync).toHaveBeenCalledTimes(1);
+
+      await passFloor();
+
+      expect(sync).toHaveBeenCalledTimes(2);
+    });
+
+    it('never spaces the first request of the session', async () => {
+      scheduler.request();
+      await flush();
+
+      expect(sync).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -290,6 +342,7 @@ describe('BackgroundSyncSchedulerService', () => {
       sync.and.resolveTo('InSync');
       scheduler.request();
       await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(2);
     });
@@ -309,6 +362,7 @@ describe('BackgroundSyncSchedulerService', () => {
       sync.and.resolveTo('InSync');
       reject(new Error('boom'));
       await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(2);
     });
