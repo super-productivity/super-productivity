@@ -91,11 +91,23 @@ export class OperationLogCompactionService {
       // undrained deferred actions) — the state-cache write below would bake
       // such a phantom change in as permanent, silent cross-device divergence.
       // Checked synchronously IMMEDIATELY before the snapshot read (no awaits
-      // in between) so nothing can slip in behind the guard. Skipping is
-      // always safe: the op-log stays the source of truth, and compaction
-      // re-runs once writes settle / the deferred drain succeeds / the user
-      // reloads after an unrecovered failure (the sticky snackbar asks for
-      // exactly that). Note the quota corollary: emergency compaction is
+      // in between) so nothing can slip in behind the guard.
+      //
+      // DO NOT HOIST THIS ABOVE THE getPendingRemoteOps() AWAIT. The position
+      // is load-bearing in both directions, and this is the upper bound:
+      // triggerCompaction() fires from inside the write path, so the action
+      // that triggered us is still counted pending here and is decremented on
+      // a microtask chain once that write releases the lock we just took. The
+      // await above is a real IndexedDB round-trip, which lets those
+      // microtasks drain first — that is the ONLY reason the guard observes a
+      // settled counter rather than skipping on every single attempt.
+      // Checking earlier ("the cheap guard first") starves compaction
+      // permanently. Covered by the guard-position spec.
+      //
+      // Skipping is always safe: the op-log stays the source of truth, and
+      // compaction re-runs once writes settle / the deferred drain succeeds /
+      // the user reloads after an unrecovered failure (the sticky snackbar
+      // asks for exactly that). Note the quota corollary: emergency compaction is
       // invoked while the failing write is still pending, so it skips here
       // deterministically — freeing space at that moment is impossible
       // without baking that write's phantom change.

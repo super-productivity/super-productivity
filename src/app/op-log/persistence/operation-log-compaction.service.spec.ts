@@ -695,6 +695,33 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
     });
 
+    it('should still compact when the triggering write decrements the counter on lock release (guard position)', async () => {
+      // Liveness regression. triggerCompaction() fires from INSIDE the write
+      // path, so the triggering action is still counted pending when compact()
+      // is called; it is decremented on a microtask chain once the write
+      // releases the op-log lock. The guard therefore only ever observes a
+      // drained counter because it runs AFTER an await (getPendingRemoteOps).
+      // Hoisting it above that await — a natural "check the cheap guard first"
+      // refactor — makes it observe the still-pending write and skip on EVERY
+      // attempt, permanently starving compaction. The other specs here pin
+      // getPendingCount to a constant and cannot catch that.
+      let pendingCount = 1;
+      mockOperationCaptureService.getPendingCount.and.callFake(() => pendingCount);
+      mockOpLogStore.getPendingRemoteOps.and.callFake(async () => {
+        // Stand in for writeOperationFromEffect's `finally`: queued before the
+        // guard's continuation, so it lands first at any correct guard position.
+        void Promise.resolve().then(() => {
+          pendingCount = 0;
+        });
+        return [];
+      });
+
+      const result = await service.compact();
+
+      expect(result).toBeTrue();
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
+    });
+
     it('should not even acquire the lock once the sticky failure flag is set (fast-path)', async () => {
       mockOperationCaptureService.hasUnrecoveredPersistFailure.and.returnValue(true);
 
