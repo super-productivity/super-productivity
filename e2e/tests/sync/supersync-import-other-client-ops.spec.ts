@@ -238,7 +238,7 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       // CRITICAL: OperationLogStoreService has an in-memory _vectorClockCache that
       // bypasses IndexedDB reads. Without reloading, the injected entries never reach
       // the ops' vector clocks — getVectorClock() returns the stale cached value,
-      // and appendWithVectorClockUpdate() overwrites the injected IDB data.
+      // and appendWithVectorClockOverwrite() overwrites the injected IDB data.
       // Reloading destroys the Angular service, forcing a fresh read from IndexedDB.
       console.log(
         '[Other-Client Import] Phase 6b: Reloading Client B to pick up injected clock',

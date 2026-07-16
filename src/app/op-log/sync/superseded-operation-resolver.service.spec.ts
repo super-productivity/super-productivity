@@ -51,7 +51,7 @@ describe('SupersededOperationResolverService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'markRejected',
       'appendMixedSourceBatchSkipDuplicates',
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -73,13 +73,13 @@ describe('SupersededOperationResolverService', () => {
     // Default mocks
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockOpLogStore.markRejected.and.returnValue(Promise.resolve());
-    mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
+    mockOpLogStore.appendWithVectorClockOverwrite.and.returnValue(Promise.resolve(1));
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => {
       const written: MixedSourceWrittenOperation[] = [];
       let seq = 1;
       for (const batch of batches) {
         for (const op of batch.ops) {
-          await mockOpLogStore.appendWithVectorClockUpdate(op, batch.source);
+          await mockOpLogStore.appendWithVectorClockOverwrite(op, batch.source);
           written.push({ seq: seq++, op, source: batch.source });
         }
       }
@@ -184,8 +184,8 @@ describe('SupersededOperationResolverService', () => {
       mockOpLogStore.markRejected.and.callFake(async () => {
         callOrder.push('markRejected');
       });
-      mockOpLogStore.appendWithVectorClockUpdate.and.callFake(async () => {
-        callOrder.push('appendWithVectorClockUpdate');
+      mockOpLogStore.appendWithVectorClockOverwrite.and.callFake(async () => {
+        callOrder.push('appendWithVectorClockOverwrite');
         return 1;
       });
 
@@ -194,7 +194,7 @@ describe('SupersededOperationResolverService', () => {
       // Verify write operations happen inside the lock
       expect(callOrder).toEqual([
         'lock-start',
-        'appendWithVectorClockUpdate',
+        'appendWithVectorClockOverwrite',
         'markRejected',
         'lock-end',
       ]);
@@ -224,7 +224,7 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(0);
       expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-      expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -251,7 +251,7 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(0);
       expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-      expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
     });
 
     it('should create LWW Update op for a single superseded op', async () => {
@@ -286,9 +286,9 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(1);
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       expect(appendedOp.actionType).toBe('[TASK] LWW Update');
       expect(appendedOp.opType).toBe(OpType.Update);
@@ -371,7 +371,7 @@ describe('SupersededOperationResolverService', () => {
       expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
         1,
       );
-      const appendedOps = mockOpLogStore.appendWithVectorClockUpdate.calls
+      const appendedOps = mockOpLogStore.appendWithVectorClockOverwrite.calls
         .allArgs()
         .map(([op]) => op);
       expect(
@@ -401,7 +401,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       expect(appendedOp.entityIds).toBeUndefined();
     });
@@ -430,7 +430,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       // The footprint is derived from the authenticated payload and passed to
       // createLWWUpdateOp (which embeds it in both entityIds and the payload;
@@ -512,9 +512,9 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(1); // Only ONE new op for all 3 superseded ops
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2', 'op-3']);
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       // Timestamp should be max of all superseded ops (2000)
       expect(appendedOp.timestamp).toBe(2000);
@@ -551,7 +551,7 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(2);
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2']);
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(2);
     });
 
     it('should mark ops as rejected but not create new op when entity not found', async () => {
@@ -570,7 +570,7 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(0);
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
-      expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
       // Should notify user that local changes were discarded
       expect(mockSnackService.open).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({
@@ -597,7 +597,7 @@ describe('SupersededOperationResolverService', () => {
         snapshotVectorClock,
       );
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       // Clock should include entries from global clock, snapshot clock, superseded op clock, and be incremented
       expect(appendedOp.vectorClock['clientX']).toBe(100);
@@ -621,7 +621,7 @@ describe('SupersededOperationResolverService', () => {
         extraClocks,
       );
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       // Should have max of all merged clocks
       expect(appendedOp.vectorClock['clientP']).toBe(25); // max(20, 25)
@@ -646,7 +646,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       expect(appendedOp.timestamp).toBe(oldTimestamp);
       // Verify it's NOT a recent timestamp
@@ -669,7 +669,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       // New clock should be incremented and dominate all known clocks
       expect(appendedOp.vectorClock['clientA']).toBeGreaterThanOrEqual(10); // max of 10 and 8
@@ -691,7 +691,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
         .args[0] as Operation;
       expect(appendedOp.actionType).toBe('[PROJECT] LWW Update');
     });
@@ -758,7 +758,7 @@ describe('SupersededOperationResolverService', () => {
 
       expect(result).toBe(2); // Only 2 new ops (for existing entities)
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2', 'op-3']); // All 3 rejected
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(2);
     });
 
     it('should append ops with local source', async () => {
@@ -772,7 +772,7 @@ describe('SupersededOperationResolverService', () => {
 
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+      expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledWith(
         jasmine.any(Object),
         'local',
       );
@@ -792,7 +792,7 @@ describe('SupersededOperationResolverService', () => {
         { opId: 'op-2', op: supersededOp2 },
       ]);
 
-      const calls = mockOpLogStore.appendWithVectorClockUpdate.calls.all();
+      const calls = mockOpLogStore.appendWithVectorClockOverwrite.calls.all();
       const op1 = calls[0].args[0] as Operation;
       const op2 = calls[1].args[0] as Operation;
 
@@ -844,9 +844,9 @@ describe('SupersededOperationResolverService', () => {
 
         expect(result).toBe(1);
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-archive-1']);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
         expect(appendedOp.opType).toBe(OpType.Update);
@@ -867,7 +867,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.payload).toEqual(archiveOp.payload);
       });
@@ -886,7 +886,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.entityId).toBe('task-1');
         expect(appendedOp.entityIds).toEqual(['task-1', 'task-2', 'task-3']);
@@ -908,7 +908,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.vectorClock['clientA']).toBeGreaterThanOrEqual(10);
         expect(appendedOp.vectorClock['clientB']).toBeGreaterThanOrEqual(5);
@@ -930,7 +930,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.timestamp).toBe(1609459200000);
       });
@@ -981,9 +981,9 @@ describe('SupersededOperationResolverService', () => {
           'op-archive',
           'op-regular',
         ]);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(2);
 
-        const calls = mockOpLogStore.appendWithVectorClockUpdate.calls.all();
+        const calls = mockOpLogStore.appendWithVectorClockOverwrite.calls.all();
         const ops = calls.map((c) => c.args[0] as Operation);
 
         const archiveResult = ops.find(
@@ -1015,7 +1015,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
         expect(appendedOp.clientId).not.toBe('original-client');
@@ -1039,7 +1039,7 @@ describe('SupersededOperationResolverService', () => {
           snapshotVectorClock,
         );
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // Clock should include entries from snapshot, extra, archive op, and be incremented
         expect(appendedOp.vectorClock['snapshot']).toBe(5);
@@ -1059,7 +1059,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive-1', op: archiveOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       });
@@ -1090,9 +1090,9 @@ describe('SupersededOperationResolverService', () => {
           'op-archive-1',
           'op-archive-2',
         ]);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(2);
 
-        const calls = mockOpLogStore.appendWithVectorClockUpdate.calls.all();
+        const calls = mockOpLogStore.appendWithVectorClockOverwrite.calls.all();
         const ops = calls.map((c) => c.args[0] as Operation);
 
         expect(ops[0].entityIds).toEqual(['task-1']);
@@ -1146,9 +1146,9 @@ describe('SupersededOperationResolverService', () => {
 
         expect(result).toBe(1);
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.opType).toBe(OpType.Delete);
         expect(appendedOp.actionType).toBe('[TASK] Delete Task');
@@ -1190,9 +1190,9 @@ describe('SupersededOperationResolverService', () => {
 
         expect(result).toBe(1); // Only ONE new op for both superseded DELETE ops
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2']);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.opType).toBe(OpType.Delete);
         // Timestamp should be max of all superseded ops (2000)
@@ -1224,7 +1224,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-1', op: supersededDeleteOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.actionType).toBe('[TASK] Delete Task');
         expect(appendedOp.payload).toEqual(customPayload);
@@ -1244,7 +1244,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-1', op: supersededDeleteOp },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // New clock should dominate all known clocks
         expect(appendedOp.vectorClock['clientA']).toBeGreaterThanOrEqual(10);
@@ -1281,9 +1281,9 @@ describe('SupersededOperationResolverService', () => {
 
         expect(result).toBe(2); // One DELETE op + one UPDATE op
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2']);
-        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+        expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(2);
 
-        const calls = mockOpLogStore.appendWithVectorClockUpdate.calls.all();
+        const calls = mockOpLogStore.appendWithVectorClockOverwrite.calls.all();
         const ops = calls.map((c) => c.args[0] as Operation);
 
         const deleteOp = ops.find((op) => op.entityId === 'deleted-task');
@@ -1342,7 +1342,7 @@ describe('SupersededOperationResolverService', () => {
 
         await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // Client sends unpruned merged clock; server prunes after conflict detection
         expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
@@ -1377,7 +1377,7 @@ describe('SupersededOperationResolverService', () => {
 
         await service.resolveSupersededLocalOps([{ opId: 'op-archive', op: archiveOp }]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // Client sends unpruned merged clock; server prunes after conflict detection
         expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
@@ -1408,7 +1408,7 @@ describe('SupersededOperationResolverService', () => {
 
         await service.resolveSupersededLocalOps([{ opId: 'op-delete', op: deleteOp }]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // Client sends unpruned merged clock; server prunes after conflict detection
         expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
@@ -1436,7 +1436,7 @@ describe('SupersededOperationResolverService', () => {
 
         await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
         // All keys preserved — no client-side pruning (server handles it)
@@ -1467,7 +1467,7 @@ describe('SupersededOperationResolverService', () => {
 
         await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         expect(appendedOp.vectorClock[protectedId]).toBeDefined();
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
@@ -1510,7 +1510,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-1', op: supersededOp, existingClock },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // No client-side pruning — all keys preserved including server entity client
         expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);
@@ -1559,7 +1559,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-archive', op: archiveOp, existingClock },
         ]);
 
-        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
           .args[0] as Operation;
         // No client-side pruning — all keys preserved including server entity client
         expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);

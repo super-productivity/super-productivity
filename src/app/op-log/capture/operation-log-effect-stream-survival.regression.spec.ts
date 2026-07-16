@@ -81,11 +81,11 @@ describe('regression #8306: persistOperation$ stream survives write failures', (
     actions$ = new ReplaySubject<Action>(1);
 
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'getCompactionCounter',
       'clearVectorClockCache',
     ]);
-    opLogStoreSpy.appendWithVectorClockUpdate.and.resolveTo(1);
+    opLogStoreSpy.appendWithVectorClockOverwrite.and.resolveTo(1);
     opLogStoreSpy.getCompactionCounter.and.resolveTo(0);
 
     const vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
@@ -176,8 +176,8 @@ describe('regression #8306: persistOperation$ stream survives write failures', (
     // The stream survived the first failure...
     expect(streamErrored).toBe(false);
     // ...the failed action was NOT written, the later one WAS.
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
-    const writtenOp = opLogStoreSpy.appendWithVectorClockUpdate.calls.mostRecent()
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
+    const writtenOp = opLogStoreSpy.appendWithVectorClockOverwrite.calls.mostRecent()
       .args[0] as Operation;
     expect(writtenOp.entityId).toBe('task-ok');
     // The user was told the failed write needs a reload.
@@ -211,7 +211,7 @@ describe('regression #8306: persistOperation$ stream survives write failures', (
     await waitFor(() => captureService.getPendingCount() === 0);
 
     expect(captureService.getPendingCount()).toBe(0);
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
 
     sub.unsubscribe();
   });
@@ -249,8 +249,8 @@ describe('regression #8306: persistOperation$ stream survives write failures', (
     await waitFor(() => captureService.getPendingCount() === 0);
 
     expect(streamErrored).toBe(false);
-    expect(opLogStoreSpy.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
-    const writtenOp = opLogStoreSpy.appendWithVectorClockUpdate.calls.mostRecent()
+    expect(opLogStoreSpy.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
+    const writtenOp = opLogStoreSpy.appendWithVectorClockOverwrite.calls.mostRecent()
       .args[0] as Operation;
     expect(writtenOp.entityId).toBe('survivor');
 
