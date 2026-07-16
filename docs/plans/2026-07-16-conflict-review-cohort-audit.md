@@ -6,11 +6,11 @@
 
 ## Decision summary
 
-| Question                                             | Decision                                                                                                             |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Producer freeze before the next release cut?         | **Yes** — freeze both producers now (landed with this document).                                                     |
-| Are Snap `edge` / Play `internal` supported cohorts? | **No** — dogfood/pre-release. No export or migration obligation.                                                     |
-| Journal retention / export / deletion policy         | **No export.** Rely on the existing 14-day / 200-row expiry; delete store, reader, UI and marker together in Task 6. |
+| Question                                              | Decision                                                                                            |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Producer freeze before the next release cut?          | **Yes** — freeze both producers now (landed with this document).                                     |
+| Are Snap `edge` / Play `internal` supported cohorts?  | **No** — dogfood/pre-release. No export or migration obligation.                                     |
+| Journal retention / export / deletion policy          | **No export.** Rely on the existing 14-day / 200-row expiry; delete store, reader, UI and marker together in Task 6. |
 
 These are product decisions, recorded explicitly rather than inferred from release tags, per the Task 1 acceptance criteria.
 
@@ -18,21 +18,21 @@ These are product decisions, recorded explicitly rather than inferred from relea
 
 `git tag --contains 962c5bbeb1` matches no release tag (only the `issue-8983-verbose` working tag). It is on `master`. v18.14.0 was cut 2026-07-10 and does not contain it.
 
-| Channel                        | Trigger                              | From master? | Public?                           | Evidence                                         |
-| ------------------------------ | ------------------------------------ | ------------ | --------------------------------- | ------------------------------------------------ |
-| **Snap Store `edge`**          | every push to `master`               | **Yes**      | **Yes — unauthenticated**         | `.github/workflows/build.yml:2-6`, `:174-191`    |
-| **Google Play `internal`**     | every push to `master`               | **Yes**      | Opt-in testers (Play caps at 100) | `.github/workflows/build-android.yml:135-150`    |
-| GHCR `supersync:latest`        | push to `master`                     | Yes          | Server image only — no review UI  | `.github/workflows/supersync-docker.yml:3-14`    |
-| GitHub Release (desktop)       | tag `v*`                             | No           | Yes                               | `build.yml:136-141`, `:515-524`                  |
-| Web app                        | `release: published`, non-prerelease | No           | Yes                               | `build-update-web-app-on-release.yml:3-4`, `:11` |
-| Play production / iOS / stores | tag `v*`                             | No           | Yes                               | `build-android.yml:190-198`, `build-ios.yml:2-7` |
-| Cloudflare Pages preview       | `pull_request`                       | No           | Yes (URL in PR)                   | `pr-preview-build.yml:3-6`                       |
+| Channel                        | Trigger                | From master? | Public?                  | Evidence                                                    |
+| ------------------------------ | ---------------------- | ------------ | ------------------------ | ----------------------------------------------------------- |
+| **Snap Store `edge`**          | every push to `master` | **Yes**      | **Yes — unauthenticated** | `.github/workflows/build.yml:2-6`, `:174-191`               |
+| **Google Play `internal`**     | every push to `master` | **Yes**      | Opt-in testers (Play caps at 100) | `.github/workflows/build-android.yml:135-150`      |
+| GHCR `supersync:latest`        | push to `master`       | Yes          | Server image only — no review UI | `.github/workflows/supersync-docker.yml:3-14`      |
+| GitHub Release (desktop)       | tag `v*`               | No           | Yes                      | `build.yml:136-141`, `:515-524`                             |
+| Web app                        | `release: published`, non-prerelease | No | Yes            | `build-update-web-app-on-release.yml:3-4`, `:11`            |
+| Play production / iOS / stores | tag `v*`               | No           | Yes                      | `build-android.yml:190-198`, `build-ios.yml:2-7`            |
+| Cloudflare Pages preview       | `pull_request`         | No           | Yes (URL in PR)          | `pr-preview-build.yml:3-6`                                  |
 
 **Two cohorts already run the feature today.** Snap `edge` is the material one: it is public, requires no invitation, and snapd auto-refreshes subscribers. The Play `internal` track auto-updates its testers on-device by design (`build-android.yml:129-134`). Subscriber counts for both live in Snap Store / Play Console telemetry and are not knowable from the repo.
 
 **Not exposed:** Electron desktop ships **no auto-updater** (`electron-builder.yaml:65-70`; the `autoUpdater` block in `electron/start-app.ts:474-486` is commented out) and master builds use `--publish never`; the web app deploys only on published non-prerelease releases; there is no nightly/canary release channel.
 
-**Consequence:** the persisted-data obligation began at the first master push after `962c5bbeb1`, not at a future tag. The next release cut does not _create_ the obligation — it expands it from these two pre-release cohorts to the entire stable fleet, which is what the freeze prevents.
+**Consequence:** the persisted-data obligation began at the first master push after `962c5bbeb1`, not at a future tag. The next release cut does not *create* the obligation — it expands it from these two pre-release cohorts to the entire stable fleet, which is what the freeze prevents.
 
 ## 2. Stable baseline vs master
 

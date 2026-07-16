@@ -15,10 +15,10 @@ stays `YYYY-MM-DD` and 24h is preserved).
 
 There are two branches:
 
-| Branch                                               | PR             | Scope                                                                                                  | State                                             |
-| ---------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| `feat/https-github-com-super-productivity-su-726a40` | **#9055**      | Recurring-task cluster (start-date value, quick-setting weekday, repeat-info util, add-task-bar chips) | Pushed, browser-verified, **awaiting CI + merge** |
-| `fix/iso-spelled-out-date-leaks` (**current**)       | not opened yet | 5 more leak sites found during #9055 verification                                                      | Committed locally, **needs push + PR + verify**   |
+| Branch | PR | Scope | State |
+| --- | --- | --- | --- |
+| `feat/https-github-com-super-productivity-su-726a40` | **#9055** | Recurring-task cluster (start-date value, quick-setting weekday, repeat-info util, add-task-bar chips) | Pushed, browser-verified, **awaiting CI + merge** |
+| `fix/iso-spelled-out-date-leaks` (**current**) | not opened yet | 5 more leak sites found during #9055 verification | Committed locally, **needs push + PR + verify** |
 
 ## Background: the fix chain
 
