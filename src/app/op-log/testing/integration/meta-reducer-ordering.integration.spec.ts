@@ -14,6 +14,7 @@ import {
   operationCaptureMetaReducer,
   setOperationCaptureService,
   setIsApplyingRemoteOps,
+  clearDeferredActions,
 } from '../../capture/operation-capture.meta-reducer';
 import { OperationCaptureService } from '../../capture/operation-capture.service';
 import { EntityType, OpType } from '../../core/operation.types';
@@ -118,6 +119,11 @@ describe('Meta-reducer ordering integration', () => {
     captureService.clear();
     // Ensure sync state is reset after each test
     setIsApplyingRemoteOps(false);
+    // The sync-window tests buffer persistent actions into the MODULE-LEVEL
+    // deferred buffer; without this, they leak into every later spec in the
+    // bundle (order-dependent under jasmine's random order — see #8469's
+    // compaction bail, which reads that buffer).
+    clearDeferredActions();
   });
 
   describe('action capture with meta-reducer chain', () => {

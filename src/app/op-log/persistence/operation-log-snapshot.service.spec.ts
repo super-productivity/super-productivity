@@ -100,6 +100,10 @@ describe('OperationLogSnapshotService', () => {
     });
     service = TestBed.inject(OperationLogSnapshotService);
     captureService = TestBed.inject(OperationCaptureService);
+    // The save bails on a non-empty MODULE-LEVEL deferred buffer (#8469);
+    // start clean so a leak from another spec can't fail these tests
+    // order-dependently under jasmine's random order.
+    clearDeferredActions();
   });
 
   describe('isValidSnapshot', () => {

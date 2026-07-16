@@ -106,6 +106,10 @@ describe('OperationLogCompactionService', () => {
 
     service = TestBed.inject(OperationLogCompactionService);
     captureService = TestBed.inject(OperationCaptureService);
+    // The compaction bail reads the MODULE-LEVEL deferred buffer (#8469);
+    // start clean so a leak from another spec can't fail these tests
+    // order-dependently under jasmine's random order.
+    clearDeferredActions();
   });
 
   describe('compact', () => {
