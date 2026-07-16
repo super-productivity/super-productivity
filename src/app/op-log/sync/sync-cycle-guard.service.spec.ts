@@ -40,22 +40,29 @@ describe('SyncCycleGuardService', () => {
     expect(guard.tryBegin()).toBe(true);
   });
 
-  describe('released$', () => {
-    let emissions: number;
+  describe('isActive$', () => {
+    let seen: boolean[];
     let sub: { unsubscribe: () => void };
 
     beforeEach(() => {
-      emissions = 0;
-      sub = guard.released$.subscribe(() => emissions++);
+      seen = [];
+      sub = guard.isActive$.subscribe((v) => seen.push(v));
     });
 
     afterEach(() => sub.unsubscribe());
 
-    it('emits when an active cycle is released', () => {
+    it('emits the current state on subscribe', () => {
+      expect(seen).toEqual([false]);
+    });
+
+    it('emits on claim and on release', () => {
+      // The claim edge is load-bearing: the side channels claim a cycle without
+      // touching any other sync signal, so a busy definition watching only the
+      // release would report those cycles as idle for their whole duration.
       guard.tryBegin();
-      expect(emissions).toBe(0);
+      expect(seen).toEqual([false, true]);
       guard.end();
-      expect(emissions).toBe(1);
+      expect(seen).toEqual([false, true, false]);
     });
 
     it('does not emit for an end() that released nothing', () => {
@@ -63,14 +70,13 @@ describe('SyncCycleGuardService', () => {
       // caller whose tryBegin() returned false). A busy definition must not see
       // an idle edge that never happened.
       guard.end();
-      expect(emissions).toBe(0);
+      expect(seen).toEqual([false]);
     });
 
-    it('emits once per release, not once per end() call', () => {
+    it('does not emit for a tryBegin() that claimed nothing', () => {
       guard.tryBegin();
-      guard.end();
-      guard.end();
-      expect(emissions).toBe(1);
+      guard.tryBegin();
+      expect(seen).toEqual([false, true]);
     });
 
     it('emits on the _resetForTest release path', () => {
@@ -78,33 +84,36 @@ describe('SyncCycleGuardService', () => {
       // would otherwise never see the reset.
       guard.tryBegin();
       guard._resetForTest();
-      expect(emissions).toBe(1);
+      expect(seen).toEqual([false, true, false]);
     });
 
-    it('emits again for each subsequent cycle', () => {
+    it('emits across repeated cycles', () => {
       guard.tryBegin();
       guard.end();
       guard.tryBegin();
       guard.end();
-      expect(emissions).toBe(2);
+      expect(seen).toEqual([false, true, false, true, false]);
     });
 
     it('carries no claim — a subscriber must still win tryBegin()', () => {
-      // released$ is a re-check hint, not a lock hand-off. Two subscribers
-      // racing on the same edge: only one can claim.
+      // Observing activity is not holding it. Two subscribers racing the same
+      // release edge: only one can claim.
       guard.tryBegin();
       const claims: boolean[] = [];
-      const raceSub = guard.released$.subscribe(() => {
-        claims.push(guard.tryBegin());
-      });
-      guard.released$.subscribe(() => {
-        claims.push(guard.tryBegin());
-      });
+      const a = guard.isActive$
+        .pipe()
+        .subscribe((isActive) => !isActive && claims.push(guard.tryBegin()));
+      const b = guard.isActive$
+        .pipe()
+        .subscribe((isActive) => !isActive && claims.push(guard.tryBegin()));
 
       guard.end();
 
-      expect(claims).toEqual([true, false]);
-      raceSub.unsubscribe();
+      // Each subscriber replays the current value on subscribe, so filter to the
+      // claims made on the release edge itself.
+      expect(claims.slice(-2)).toEqual([true, false]);
+      a.unsubscribe();
+      b.unsubscribe();
     });
   });
 });

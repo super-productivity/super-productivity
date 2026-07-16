@@ -1,12 +1,5 @@
 import { Injectable } from '@angular/core';
-import {
-  BehaviorSubject,
-  distinctUntilChanged,
-  filter,
-  map,
-  Observable,
-  pairwise,
-} from 'rxjs';
+import { BehaviorSubject, distinctUntilChanged, Observable } from 'rxjs';
 
 /**
  * In-tab mutual-exclusion guard for the three top-level sync entry points:
@@ -34,13 +27,13 @@ import {
  *   guard itself: immediate/user-triggered flows skip, while the WebSocket
  *   high-watermark queue retries later. Therefore the guard cannot deadlock.
  *
- * {@link released$} does NOT weaken that: it is a re-check *hint*, never a wait
- * primitive. A subscriber may use it to retry `tryBegin()` at a moment when the
- * claim is likelier to succeed, but must still treat a `false` return as
- * "skip/retry later" and must never block on the notification. Waiting for
- * `released$` as if it were a lock hand-off would reintroduce exactly the
- * deadlock this design rules out — the emission carries no claim, and any
- * number of subscribers may race for the next `tryBegin()`.
+ * {@link isActive$} does NOT weaken that: it reports activity, it does not grant
+ * it. A subscriber may use it to retry `tryBegin()` at a moment when the claim
+ * is likelier to succeed, but must still treat a `false` return as "skip/retry
+ * later" and must never block on the notification. Awaiting an emission as if it
+ * were a lock hand-off would reintroduce exactly the deadlock this design rules
+ * out — it carries no claim, and any number of subscribers may race for the next
+ * `tryBegin()`.
  *
  * Cross-tab apply-phase serialization remains the job of the existing Web
  * Locks; cross-tab gate/seq staleness is out of scope for this guard.
@@ -61,24 +54,6 @@ export class SyncCycleGuardService {
   readonly isActive$: Observable<boolean> = this._isActive$
     .asObservable()
     .pipe(distinctUntilChanged());
-
-  /**
-   * Sugar for the release edge of {@link isActive$}, for callers that want to
-   * re-attempt {@link tryBegin} when a claim is likelier to succeed.
-   *
-   * A re-check hint, NOT a lock hand-off — see the class docblock. It carries no
-   * claim: subscribers must still call {@link tryBegin} and handle `false`.
-   *
-   * Keys off the active→inactive transition, not merely on `isActive === false`:
-   * `isActive$` replays its current value to each subscriber, so filtering on
-   * the value alone would fire a phantom release at subscribe time on an idle
-   * guard.
-   */
-  readonly released$: Observable<void> = this.isActive$.pipe(
-    pairwise(),
-    filter(([wasActive, isActive]) => wasActive && !isActive),
-    map(() => undefined),
-  );
 
   get isActive(): boolean {
     return this._isActive$.getValue();
