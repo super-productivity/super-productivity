@@ -24,8 +24,8 @@ import {
   SYNC_INITIAL_SYNC_TRIGGER,
 } from '../../imex/sync/sync.const';
 import { SyncProviderId } from '../../op-log/sync-exports';
-import { asyncScheduler, combineLatest, EMPTY, merge, Observable, of } from 'rxjs';
-import { isOnline$ } from '../../util/is-online';
+import { asyncScheduler, combineLatest, defer, EMPTY, merge, Observable, of } from 'rxjs';
+import { IS_ONLINE$ } from '../../util/is-online.token';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
@@ -45,6 +45,7 @@ export class SyncEffects {
   private _syncWrapperService = inject(SyncWrapperService);
   private _syncTriggerService = inject(SyncTriggerService);
   private _backgroundSyncScheduler = inject(BackgroundSyncSchedulerService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _simpleCounterService = inject(SimpleCounterService);
@@ -55,7 +56,14 @@ export class SyncEffects {
   syncBeforeQuit$ = createEffect(
     () =>
       !IS_ELECTRON
-        ? EMPTY
+        ? // NOT the bare `EMPTY` singleton: createEffect stamps a
+          // non-configurable marker onto whatever object it is handed, so
+          // returning the module-wide instance brands it process-wide and every
+          // later construction of this class dies with "Cannot redefine property
+          // __@ngrx/effects_create__" — which is why this class had no
+          // behavioural tests. `defer` hands over a fresh instance per
+          // construction; the subscribed behaviour is unchanged.
+          defer(() => EMPTY)
         : this._dataInitStateService.isAllDataLoadedInitially$.pipe(
             concatMap(() => this._syncWrapperService.isEnabledAndReady$),
             distinctUntilChanged(),
@@ -178,7 +186,7 @@ export class SyncEffects {
         // E2E tests set this flag after setup to prevent auto-sync from interfering
         // with controlled, sequential sync via the sync button click
         filter(() => !(globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC),
-        withLatestFrom(isOnline$),
+        withLatestFrom(this._isOnline$),
         // Offline background triggers were already no-ops; requesting here would
         // only queue work that fails. I_IS_ONLINE re-triggers on reconnect.
         filter(([, isOnline]) => !!isOnline),
@@ -236,7 +244,7 @@ export class SyncEffects {
         // E2E tests set this flag after setup to prevent auto-sync from interfering
         // with controlled, sequential sync via the sync button click
         filter(() => !(globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC),
-        withLatestFrom(isOnline$),
+        withLatestFrom(this._isOnline$),
         // don't run multiple after each other when dialog is open
         exhaustMap(([trigger, isOnline]) => {
           if (!isOnline) {
