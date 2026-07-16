@@ -681,54 +681,32 @@ describe('ConflictResolutionService', () => {
       });
     });
 
-    describe('disableConflictJournal (producer freeze)', () => {
-      // Callee half of the freeze. remote-ops-processing.service.spec.ts asserts
-      // the production caller PASSES the flag; without these, deleting the gate
-      // in autoResolveConflictsLWW leaves every spec green while the fleet
-      // silently resumes persisting the discarded side of every conflict.
-      const buildConflicts = (): EntityConflict[] => {
-        const now = Date.now();
-        return [
-          createConflict(
-            'task-1',
-            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
-            [createOpWithTimestamp('remote-1', 'client-b', now)],
-          ),
-        ];
-      };
-
-      const getRecordSpy = (): jasmine.Spy => {
-        const journal = (
-          service as unknown as { conflictJournal: ConflictJournalService }
-        ).conflictJournal;
-        return spyOn(journal, 'record').and.resolveTo();
-      };
-
-      it('journals resolutions by default', async () => {
-        const recordSpy = getRecordSpy();
-        const conflicts = buildConflicts();
-        mockOperationApplier.applyOperations.and.resolveTo({
-          appliedOps: conflicts[0].remoteOps,
-        });
-
-        await service.autoResolveConflictsLWW(conflicts);
-
-        expect(recordSpy).toHaveBeenCalled();
+    // Callee half of the producer freeze: remote-ops-processing.service.spec.ts
+    // asserts the production caller PASSES the flag, but without this, deleting
+    // the gate inside autoResolveConflictsLWW leaves every spec green while the
+    // fleet silently resumes persisting the discarded side of every conflict.
+    // The journal-ON default is already covered by the #8956 multi-entity test.
+    it('records nothing when disableConflictJournal is set (producer freeze)', async () => {
+      const journal = (service as unknown as { conflictJournal: ConflictJournalService })
+        .conflictJournal;
+      const recordSpy = spyOn(journal, 'record').and.resolveTo();
+      const now = Date.now();
+      const conflicts = [
+        createConflict(
+          'task-1',
+          [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+          [createOpWithTimestamp('remote-1', 'client-b', now)],
+        ),
+      ];
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: conflicts[0].remoteOps,
       });
 
-      it('records nothing when disableConflictJournal is set', async () => {
-        const recordSpy = getRecordSpy();
-        const conflicts = buildConflicts();
-        mockOperationApplier.applyOperations.and.resolveTo({
-          appliedOps: conflicts[0].remoteOps,
-        });
-
-        await service.autoResolveConflictsLWW(conflicts, [], {
-          disableConflictJournal: true,
-        });
-
-        expect(recordSpy).not.toHaveBeenCalled();
+      await service.autoResolveConflictsLWW(conflicts, [], {
+        disableConflictJournal: true,
       });
+
+      expect(recordSpy).not.toHaveBeenCalled();
     });
 
     it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {
