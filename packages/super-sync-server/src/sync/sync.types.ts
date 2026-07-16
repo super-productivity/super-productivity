@@ -316,6 +316,12 @@ export interface ProcessOperationResult {
   result: UploadResult;
   storageBytes: number;
   fallback: boolean;
+  /**
+   * Extra queries this call issued beyond the caller's own accounting. Selective,
+   * like the batch path's counter — it exists so the upload summary can surface
+   * per-op lookups instead of hiding them.
+   */
+  dbRoundtrips: number;
 }
 
 export interface UploadOpsResponse {

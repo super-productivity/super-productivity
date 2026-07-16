@@ -292,6 +292,13 @@ export const isSameDuplicateOperation = (
   // a low-counter causal full-state author in addition to the uploader, so use
   // the stored clock's IDs as the authoritative protected set. Otherwise a
   // genuine retry of an oversized post-import op compares as an ID collision.
+  //
+  // Tradeoff, deliberate: for an oversized incoming clock this projects onto the
+  // stored key set, so an id collision that ALSO differs only by an extra clock
+  // entry now reads as a duplicate instead of being caught. Accepted because
+  // every other structural field below (clientId, payload, entity, timestamp)
+  // must still match — and when they all do, acking beats rejecting a retry
+  // whose only sin is having learned about one more client.
   const storedClockClientIds =
     existingOp.vectorClock !== null &&
     typeof existingOp.vectorClock === 'object' &&

@@ -82,6 +82,19 @@ vi.mock('../src/db', async () => {
         return { count };
       }),
       findFirst: vi.fn().mockImplementation(async (args: any) => {
+        // Shape of the full-state author query — counted so tests can pin that it
+        // stays one-per-upload rather than one-per-op. Selecting clientId ALONE is
+        // what separates it from the entity-conflict lookup, which also filters on
+        // OR + orders by serverSeq but selects the whole row.
+        if (
+          Array.isArray(args.where?.OR) &&
+          args.where?.entityType === undefined &&
+          args.orderBy?.serverSeq === 'desc' &&
+          args.select?.clientId === true &&
+          Object.keys(args.select).length === 1
+        ) {
+          state.fullStateAuthorLookupCount++;
+        }
         if (args.where?.id) {
           return (
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
@@ -1071,6 +1084,62 @@ describe('SyncService', () => {
             errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
           }),
         );
+      },
+    );
+
+    it.each([
+      ['legacy serial', false],
+      ['batch', true],
+    ])(
+      'looks the full-state author up at most once per upload in the %s path',
+      async (_label, batchUpload) => {
+        // The answer cannot change mid-transaction unless this upload itself
+        // accepts a full-state op, so one oversized op must not become one query.
+        const service = new SyncService({ batchUpload });
+        const fullStateAuthor = 'import-author';
+        const uploadClient = 'post-import-client';
+        const fullStateOp = makeOp({
+          clientId: fullStateAuthor,
+          actionType: '[SP_ALL] Load(import) all data',
+          opType: 'SYNC_IMPORT',
+          entityType: 'ALL',
+          entityId: undefined,
+          payload: { TASK: {} },
+          vectorClock: { [fullStateAuthor]: 1 },
+        });
+        expect(
+          (await service.uploadOps(userId, fullStateAuthor, [fullStateOp]))[0].accepted,
+        ).toBe(true);
+
+        const oversizedDeltas = Array.from({ length: 5 }, (_, index) =>
+          makeOp({
+            clientId: uploadClient,
+            entityId: `post-import-task-${index}`,
+            vectorClock: {
+              [fullStateAuthor]: 1,
+              [uploadClient]: 2 + index,
+              ...Object.fromEntries(
+                Array.from({ length: 25 }, (_, old) => [`old-client-${old}`, 100 + old]),
+              ),
+            },
+            timestamp: fullStateOp.timestamp + 1 + index,
+          }),
+        );
+
+        testState.fullStateAuthorLookupCount = 0;
+
+        const results = await service.uploadOps(userId, uploadClient, oversizedDeltas);
+        expect(results.every(({ accepted }) => accepted)).toBe(true);
+
+        expect(testState.fullStateAuthorLookupCount).toBe(1);
+        // The saved query must not cost the protection it exists for.
+        for (const delta of oversizedDeltas) {
+          const storedClock = testState.operations.get(delta.id)?.vectorClock as
+            | Record<string, number>
+            | undefined;
+          expect(Object.keys(storedClock ?? {})).toHaveLength(20);
+          expect(storedClock?.[fullStateAuthor]).toBe(1);
+        }
       },
     );
 
