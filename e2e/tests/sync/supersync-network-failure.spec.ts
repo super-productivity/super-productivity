@@ -4,6 +4,10 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  parseSuperSyncRequestBody,
+  routeSuperSyncOps,
+  SUPERSYNC_BASE_URL,
+  unrouteSuperSyncOps,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -43,6 +47,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     let failNextUpload = true;
+    let failedUploadAttempts = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -57,9 +62,10 @@ test.describe('@supersync Network Failure Recovery', () => {
       await clientA.workView.addTask(taskName);
 
       // Set up route interception to fail first upload
-      await clientA.page.route('**/api/sync/ops/**', async (route) => {
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (failNextUpload && route.request().method() === 'POST') {
           failNextUpload = false;
+          failedUploadAttempts++;
           console.log('[Test] Simulating upload failure');
           await route.abort('failed');
         } else {
@@ -77,8 +83,10 @@ test.describe('@supersync Network Failure Recovery', () => {
         console.log('[Test] First sync failed as expected');
       }
 
+      expect(failedUploadAttempts).toBe(1);
+
       // Remove the failing route
-      await clientA.page.unroute('**/api/sync/ops/**');
+      await unrouteSuperSyncOps(clientA.page);
 
       // Second sync attempt - should succeed
       await clientA.sync.syncAndWait();
@@ -99,6 +107,7 @@ test.describe('@supersync Network Failure Recovery', () => {
       const taskLocatorB = clientB.page.locator(`task:has-text("${taskName}")`);
       await expect(taskLocatorB).toBeVisible();
     } finally {
+      if (clientA) await unrouteSuperSyncOps(clientA.page).catch(() => {});
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
     }
@@ -115,7 +124,7 @@ test.describe('@supersync Network Failure Recovery', () => {
   test('recovers from download failure', async ({ browser, baseURL, testRunId }) => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    let failNextDownload = true;
+    let failedDownloadAttempts = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -132,19 +141,21 @@ test.describe('@supersync Network Failure Recovery', () => {
       // Verify Client A has the task
       await waitForTask(clientA.page, taskName);
 
-      // Set up Client B
+      // Install the failure before setup so automatic initial sync cannot race
+      // past the interception.
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Set up route interception to fail first download
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (failNextDownload && route.request().method() === 'GET') {
-          failNextDownload = false;
+      await routeSuperSyncOps(clientB.page, async (route) => {
+        if (route.request().method() === 'GET') {
+          failedDownloadAttempts++;
           console.log('[Test] Simulating download failure');
           await route.abort('failed');
         } else {
           await route.continue();
         }
+      });
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
       });
 
       // First sync attempt - download should fail
@@ -155,16 +166,14 @@ test.describe('@supersync Network Failure Recovery', () => {
         console.log('[Test] First download failed as expected');
       }
 
+      expect(failedDownloadAttempts).toBeGreaterThan(0);
+
       // Verify task NOT present (download failed)
       const taskLocatorBeforeRetry = clientB.page.locator(`task:has-text("${taskName}")`);
-      await expect(taskLocatorBeforeRetry)
-        .not.toBeVisible({ timeout: 1000 })
-        .catch(() => {
-          // Task might or might not be visible depending on partial state
-        });
+      await expect(taskLocatorBeforeRetry).not.toBeVisible({ timeout: 1000 });
 
       // Remove the failing route
-      await clientB.page.unroute('**/api/sync/ops/**');
+      await unrouteSuperSyncOps(clientB.page);
 
       // Retry sync - should succeed
       await clientB.sync.syncAndWait();
@@ -175,7 +184,10 @@ test.describe('@supersync Network Failure Recovery', () => {
       await expect(taskLocatorAfterRetry).toBeVisible();
     } finally {
       if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
+      if (clientB) {
+        await unrouteSuperSyncOps(clientB.page).catch(() => {});
+        await closeClient(clientB);
+      }
     }
   });
 
@@ -195,8 +207,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
-    // Use object to ensure mutable reference is captured correctly
-    const state = { returnServerError: true };
+    let serverErrorResponses = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -205,15 +216,11 @@ test.describe('@supersync Network Failure Recovery', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `Task-${testRunId}-server-error`;
-      await clientA.workView.addTask(taskName);
-      // Wait for task to be fully created in store
-      await waitForTask(clientA.page, taskName);
-
-      // Intercept and return 500 error on first request
-      await clientA.page.route('**/api/sync/ops/**', async (route) => {
-        if (state.returnServerError && route.request().method() === 'POST') {
-          state.returnServerError = false;
+      // Intercept before creating the task so an automatic upload cannot race
+      // past the failure.
+      await routeSuperSyncOps(clientA.page, async (route) => {
+        if (route.request().method() === 'POST') {
+          serverErrorResponses++;
           console.log('[Test] Simulating 500 server error');
           await route.fulfill({
             status: 500,
@@ -225,6 +232,10 @@ test.describe('@supersync Network Failure Recovery', () => {
         }
       });
 
+      const taskName = `Task-${testRunId}-server-error`;
+      await clientA.workView.addTask(taskName);
+      await waitForTask(clientA.page, taskName);
+
       // First sync - server error
       try {
         await clientA.sync.triggerSync();
@@ -234,8 +245,10 @@ test.describe('@supersync Network Failure Recovery', () => {
         console.log('[Test] First sync got server error as expected');
       }
 
+      expect(serverErrorResponses).toBeGreaterThan(0);
+
       // Remove interception before retry
-      await clientA.page.unroute('**/api/sync/ops/**');
+      await unrouteSuperSyncOps(clientA.page);
       // Give time for route to be fully removed
       await clientA.page.waitForTimeout(500);
 
@@ -254,7 +267,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     } finally {
       // Ensure routes are cleaned up
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
       }
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -355,18 +368,15 @@ test.describe('@supersync Network Failure Recovery', () => {
   });
 
   /**
-   * Test: Partial batch upload failure followed by successful retry
+   * Test: Server accepts an upload but the response is lost before local commit
    *
-   * This tests a more realistic failure scenario where:
    * 1. Client A creates 10 tasks rapidly
-   * 2. First sync starts - first few ops may succeed, then failure
-   * 3. Retry sync - all remaining ops should upload
-   * 4. Client B receives ALL 10 tasks (no duplicates, no missing)
-   *
-   * This verifies that the operation log correctly tracks which ops
-   * have been synced vs pending, and retry doesn't create duplicates.
+   * 2. Server commits the upload but the response is dropped
+   * 3. Client A reloads with the operations still locally pending
+   * 4. Retry deduplicates the already-stored operations
+   * 5. Client B receives all 10 tasks exactly once
    */
-  test('partial batch upload failure followed by retry uploads all without duplicates', async ({
+  test('accepted upload survives response loss and restart without duplicates', async ({
     browser,
     baseURL,
     testRunId,
@@ -375,10 +385,13 @@ test.describe('@supersync Network Failure Recovery', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
-    // Track how many POST requests we've seen
     const state = {
-      requestCount: 0,
-      failAfter: 2, // Fail after 2 successful requests
+      phase: 'fault' as 'fault' | 'recovery',
+      committedUpload: false,
+      responseDropped: false,
+      acceptedOperationCount: 0,
+      committedOperationIds: [] as string[],
+      recoveryUploadIds: [] as string[][],
     };
 
     try {
@@ -405,48 +418,88 @@ test.describe('@supersync Network Failure Recovery', () => {
         await expect(taskLocator).toBeVisible();
       }
 
-      // Set up route interception to fail after first few requests
-      await clientA.page.route('**/api/sync/ops/**', async (route) => {
+      // Let the first upload reach the real server, then hide its successful
+      // response from the client. Later attempts remain offline until reload.
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (route.request().method() === 'POST') {
-          state.requestCount++;
-          if (state.requestCount > state.failAfter) {
-            console.log(
-              `[PartialBatch] Failing request #${state.requestCount} (after ${state.failAfter} successes)`,
-            );
+          const upload = parseSuperSyncRequestBody<{ ops: Array<{ id: string }> }>(
+            route.request(),
+          );
+          if (state.phase === 'fault') {
+            if (!state.committedUpload) {
+              state.committedOperationIds = upload.ops.map((operation) => operation.id);
+              const response = await route.fetch();
+              const body = (await response.json()) as {
+                results?: Array<{ accepted?: boolean }>;
+              };
+              state.acceptedOperationCount =
+                body.results?.filter((result) => result.accepted === true).length ?? 0;
+              state.committedUpload = true;
+            }
             await route.abort('failed');
-          } else {
-            console.log(`[PartialBatch] Allowing request #${state.requestCount}`);
-            await route.continue();
+            state.responseDropped = true;
+            return;
           }
+          state.recoveryUploadIds.push(upload.ops.map((operation) => operation.id));
+          await route.continue();
         } else {
           await route.continue();
         }
       });
 
-      // First sync attempt - will partially succeed then fail
-      console.log('[PartialBatch] Starting first sync (will partially fail)');
+      console.log('[ResponseLoss] Starting upload whose response will be dropped');
       try {
         await clientA.sync.triggerSync();
-        await clientA.page.waitForTimeout(3000);
       } catch {
-        console.log('[PartialBatch] First sync failed as expected');
+        console.log('[ResponseLoss] Client observed the dropped upload response');
       }
 
-      // Remove the failing route and reset counter
-      await clientA.page.unroute('**/api/sync/ops/**');
-      await clientA.page.waitForTimeout(500);
-      console.log('[PartialBatch] Route interception removed');
+      expect(state.responseDropped).toBe(true);
+      expect(state.committedUpload).toBe(true);
+      expect(state.committedOperationIds).toHaveLength(taskCount);
+      expect(state.acceptedOperationCount).toBe(taskCount);
 
-      // Retry sync - should succeed and upload remaining ops
-      console.log('[PartialBatch] Retrying sync');
+      const serverOpsAfterCommit = (await (
+        await fetch(`${SUPERSYNC_BASE_URL}/api/test/user/${user.userId}/ops?limit=100`)
+      ).json()) as { ops: Array<{ id: string }> };
+      for (const operationId of state.committedOperationIds) {
+        expect(
+          serverOpsAfterCommit.ops.filter((operation) => operation.id === operationId),
+        ).toHaveLength(1);
+      }
+
+      // Reload before acknowledging the accepted response. IndexedDB pending
+      // operations must retry idempotently after hydration.
+      state.phase = 'recovery';
+      await clientA.page.reload({ waitUntil: 'domcontentloaded' });
+      await clientA.workView.waitForTaskList();
+
+      console.log('[ResponseLoss] Retrying after reload');
       await clientA.sync.syncAndWait();
-      console.log('[PartialBatch] Retry sync completed');
+      console.log('[ResponseLoss] Retry completed');
+
+      const committedIdSet = new Set(state.committedOperationIds);
+      expect(
+        state.recoveryUploadIds.some(
+          (ids) =>
+            ids.length === committedIdSet.size &&
+            ids.every((operationId) => committedIdSet.has(operationId)),
+        ),
+      ).toBe(true);
+      const serverOpsAfterRetry = (await (
+        await fetch(`${SUPERSYNC_BASE_URL}/api/test/user/${user.userId}/ops?limit=100`)
+      ).json()) as { ops: Array<{ id: string }> };
+      for (const operationId of state.committedOperationIds) {
+        expect(
+          serverOpsAfterRetry.ops.filter((operation) => operation.id === operationId),
+        ).toHaveLength(1);
+      }
 
       // Verify all tasks still exist on Client A (no data loss)
       for (const taskName of taskNames) {
         await waitForTask(clientA.page, taskName);
       }
-      console.log('[PartialBatch] All tasks still present on Client A');
+      console.log('[ResponseLoss] All tasks still present on Client A');
 
       // Set up Client B
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
@@ -466,14 +519,14 @@ test.describe('@supersync Network Failure Recovery', () => {
         .count();
       expect(countB).toBe(taskCount);
       console.log(
-        `[PartialBatch] ✓ Client B has exactly ${taskCount} tasks (no duplicates)`,
+        `[ResponseLoss] ✓ Client B has exactly ${taskCount} tasks (no duplicates)`,
       );
 
-      console.log('[PartialBatch] ✓ Partial batch failure + retry test PASSED!');
+      console.log('[ResponseLoss] ✓ Accepted upload retry remained idempotent');
     } finally {
       // Ensure routes are cleaned up
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
       }
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -501,7 +554,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
-    const state = { returnRateLimitError: true };
+    let rateLimitResponses = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -510,14 +563,10 @@ test.describe('@supersync Network Failure Recovery', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `Task-${testRunId}-rate-limit`;
-      await clientA.workView.addTask(taskName);
-      await waitForTask(clientA.page, taskName);
-
       // Intercept and return 429 rate limit error on first request
-      await clientA.page.route('**/api/sync/ops/**', async (route) => {
-        if (state.returnRateLimitError && route.request().method() === 'POST') {
-          state.returnRateLimitError = false;
+      await routeSuperSyncOps(clientA.page, async (route) => {
+        if (rateLimitResponses === 0 && route.request().method() === 'POST') {
+          rateLimitResponses++;
           console.log('[Test] Simulating 429 rate limit exceeded');
           // eslint-disable-next-line @typescript-eslint/naming-convention
           const headers = { 'Retry-After': '1' }; // Suggest retry after 1 second
@@ -536,6 +585,10 @@ test.describe('@supersync Network Failure Recovery', () => {
         }
       });
 
+      const taskName = `Task-${testRunId}-rate-limit`;
+      await clientA.workView.addTask(taskName);
+      await waitForTask(clientA.page, taskName);
+
       // First sync - rate limited
       try {
         await clientA.sync.triggerSync();
@@ -544,8 +597,10 @@ test.describe('@supersync Network Failure Recovery', () => {
         console.log('[Test] First sync got rate limit error as expected');
       }
 
+      expect(rateLimitResponses).toBe(1);
+
       // Remove interception before retry
-      await clientA.page.unroute('**/api/sync/ops/**');
+      await unrouteSuperSyncOps(clientA.page);
       await clientA.page.waitForTimeout(1500); // Wait longer than Retry-After
 
       // Retry - should succeed now
@@ -564,7 +619,7 @@ test.describe('@supersync Network Failure Recovery', () => {
       console.log('[RateLimit] ✓ Rate limit handling test PASSED');
     } finally {
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
       }
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -800,7 +855,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
 
-    const state = { returnMalformedJson: true };
+    let malformedResponses = 0;
 
     try {
       const user = await createTestUser(testRunId);
@@ -815,14 +870,12 @@ test.describe('@supersync Network Failure Recovery', () => {
       await clientA.sync.syncAndWait();
       await waitForTask(clientA.page, taskName);
 
-      // Client B setup
+      // Install the malformed response before setup so initial auto-sync cannot
+      // download the task first.
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Intercept and return malformed JSON on first GET
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (state.returnMalformedJson && route.request().method() === 'GET') {
-          state.returnMalformedJson = false;
+      await routeSuperSyncOps(clientB.page, async (route) => {
+        if (route.request().method() === 'GET') {
+          malformedResponses++;
           console.log('[Test] Simulating malformed JSON response');
           await route.fulfill({
             status: 200,
@@ -833,6 +886,10 @@ test.describe('@supersync Network Failure Recovery', () => {
           await route.continue();
         }
       });
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+      });
 
       // First sync - should fail due to JSON parse error
       try {
@@ -842,8 +899,13 @@ test.describe('@supersync Network Failure Recovery', () => {
         console.log('[Test] First sync failed due to malformed JSON as expected');
       }
 
+      expect(malformedResponses).toBeGreaterThan(0);
+      await expect(
+        clientB.page.locator(`task:has-text("${taskName}")`),
+      ).not.toBeVisible();
+
       // Remove interception and retry
-      await clientB.page.unroute('**/api/sync/ops/**');
+      await unrouteSuperSyncOps(clientB.page);
       await clientB.page.waitForTimeout(500);
 
       // Retry - should succeed
@@ -858,121 +920,7 @@ test.describe('@supersync Network Failure Recovery', () => {
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
-        await closeClient(clientB);
-      }
-    }
-  });
-
-  /**
-   * Test: Invalid operation structure from server
-   *
-   * Scenario:
-   * 1. Client A creates a task
-   * 2. Server returns operations with missing required fields
-   * 3. Client should skip invalid operations and continue
-   * 4. Verify local state remains intact
-   *
-   * This tests that invalid/corrupted operations from the server
-   * are gracefully skipped without crashing the sync process.
-   */
-  test('skips corrupted operations from server without crashing', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(120000);
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    const state = { injectCorruptedOps: true };
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Client A creates and syncs a task
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `Task-${testRunId}-corrupted-test`;
-      await clientA.workView.addTask(taskName);
-      await clientA.sync.syncAndWait();
-
-      // Setup Client B
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Intercept and inject corrupted operations
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (route.request().method() === 'GET' && state.injectCorruptedOps) {
-          state.injectCorruptedOps = false;
-          console.log('[Test] Injecting corrupted operations into response');
-
-          // Get real response then modify it
-          const response = await route.fetch();
-          const json = await response.json();
-
-          // Add corrupted operations to the response
-          if (json.ops) {
-            json.ops.push(
-              // Missing required fields
-              {
-                id: 'corrupt-1',
-                opType: 'UPD' /* missing entityType, payload, etc. */,
-              },
-              // Null payload
-              {
-                id: 'corrupt-2',
-                opType: 'UPD',
-                entityType: 'TASK',
-                entityId: 'bad-entity',
-                payload: null,
-                vectorClock: { bad: 1 },
-                timestamp: Date.now(),
-              },
-              // Invalid opType
-              {
-                id: 'corrupt-3',
-                opType: 'INVALID_TYPE',
-                entityType: 'TASK',
-                entityId: 'bad-entity',
-                payload: {},
-                vectorClock: { bad: 1 },
-                timestamp: Date.now(),
-              },
-            );
-          }
-
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(json),
-          });
-        } else {
-          await route.continue();
-        }
-      });
-
-      // Sync - should handle corrupted ops gracefully
-      await clientB.sync.syncAndWait();
-
-      // Verify valid task was still received (corrupted ops didn't break sync)
-      await waitForTask(clientB.page, taskName);
-      const taskLocator = clientB.page.locator(`task:has-text("${taskName}")`);
-      await expect(taskLocator).toBeVisible();
-
-      // Remove interception
-      await clientB.page.unroute('**/api/sync/ops/**');
-
-      // Final sync should work normally
-      await clientB.sync.syncAndWait();
-
-      console.log('[CorruptedOps] ✓ Corrupted operation handling test PASSED');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientB.page).catch(() => {});
         await closeClient(clientB);
       }
     }

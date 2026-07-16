@@ -3,8 +3,11 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
+  type Request,
+  type Route,
   expect,
 } from '@playwright/test';
+import { gunzipSync } from 'zlib';
 import { SuperSyncPage, type SuperSyncConfig } from '../pages/supersync.page';
 import { WorkViewPage } from '../pages/work-view.page';
 import { waitForAppReady } from './waits';
@@ -36,6 +39,37 @@ import {
  */
 export const SUPERSYNC_BASE_URL =
   process.env.SUPERSYNC_E2E_URL || 'http://localhost:1901';
+
+/**
+ * Matches both `/api/sync/ops` uploads and `/api/sync/ops?...` downloads.
+ * Do not add a trailing slash: the production endpoint has none.
+ */
+const SUPERSYNC_OPS_ROUTE = '**/api/sync/ops*';
+
+export const routeSuperSyncOps = async (
+  page: Page,
+  handler: (route: Route) => Promise<void>,
+): Promise<void> => page.route(SUPERSYNC_OPS_ROUTE, handler);
+
+export const unrouteSuperSyncOps = async (page: Page): Promise<void> =>
+  page.unroute(SUPERSYNC_OPS_ROUTE);
+
+/** Parse a SuperSync upload body regardless of whether the browser gzipped it. */
+export const parseSuperSyncRequestBody = <T>(request: Request): T => {
+  try {
+    return request.postDataJSON() as T;
+  } catch {
+    const rawBody = request.postDataBuffer();
+    if (!rawBody) {
+      throw new Error('SuperSync request did not contain a body');
+    }
+    try {
+      return JSON.parse(gunzipSync(rawBody).toString('utf-8')) as T;
+    } catch (error) {
+      throw new Error('Failed to parse SuperSync request body', { cause: error });
+    }
+  }
+};
 
 /**
  * Test user credentials returned from the server.

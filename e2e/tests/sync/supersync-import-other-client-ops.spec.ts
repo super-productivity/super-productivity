@@ -4,6 +4,10 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  parseSuperSyncRequestBody,
+  routeSuperSyncOps,
+  SUPERSYNC_BASE_URL,
+  unrouteSuperSyncOps,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -14,47 +18,70 @@ import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
 import { waitForAppReady } from '../../utils/waits';
 
 /**
- * SuperSync: Other Client's Post-Import Operations (Vector Clock Bloat Bug)
+ * SuperSync: Other Client's Post-Import Operations Across Clock Pruning
  *
  * These tests verify that operations created by a DIFFERENT client than the one
  * that performed a SYNC_IMPORT are correctly synced back to the importing client.
  *
- * BUG SCENARIO (vector clock merge-vs-replace):
+ * PRUNING SCENARIO:
  * 1. Client B has accumulated a large vector clock from long history (many old devices)
  * 2. Client A does SYNC_IMPORT with a fresh clock
  * 3. Client B receives the SYNC_IMPORT — mergeRemoteOpClocks() MERGES the import's
  *    fresh clock into B's old accumulated clock instead of REPLACING it
- * 4. B's clock now has 13+ entries (old entries + import's entry)
- * 5. B creates new ops — their clocks carry all 13+ entries
- * 6. Server prunes B's ops to MAX=20, dropping import's entry (lowest counter)
- * 7. Client A receives B's pruned ops — compareVectorClocks returns CONCURRENT
- *    (B has old entries A doesn't know, A has import entry B lost to pruning)
- * 8. SyncImportFilterService filters B's ops as "concurrent with import"
- * 9. Client A never sees Client B's new tasks
+ * 4. B's clock now has 21+ entries (old entries + import's entry)
+ * 5. B creates new ops — their clocks carry all 21+ entries
+ * 6. Server prunes B's ops to MAX=20 while retaining the active import author
+ * 7. Client A receives B's pruned ops and applies them after its import
  *
- * IMPORTANT LIMITATION:
- * With only 2 fresh E2E clients, vector clocks have ~3 entries — well below the
- * MAX=20 pruning threshold. Without pruning, compareVectorClocks returns GREATER_THAN
- * (correct!) even with the merge bug. The bug ONLY manifests when accumulated entries
- * exceed MAX and pruning removes the import entry.
- *
- * SOLUTION: After Client B receives the SYNC_IMPORT, we inject 12 extra old-device
- * entries into Client B's IndexedDB vector_clock store via page.evaluate(). This
- * simulates real-world accumulated history from many past devices.
+ * TEST SETUP: We augment Client B's real upload with 25 old-device clock entries.
+ * This models a long-lived client and deliberately crosses the server's
+ * MAX_VECTOR_CLOCK_SIZE=20 boundary without manufacturing operations or responses.
+ * The historical counters deliberately outrank the import author. This proves
+ * the server preserves the active full-state boundary rather than merely keeping
+ * whichever entries have the highest counters.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-import-other-client-ops.spec.ts
  */
 
 test.describe.configure({ mode: 'serial' });
 
+interface StoredServerOperation {
+  id: string;
+  clientId: string;
+  vectorClock: Record<string, number>;
+}
+
+interface MutableUploadOperation {
+  id: string;
+  vectorClock: Record<string, number>;
+}
+
+interface MutableUploadBody {
+  ops: MutableUploadOperation[];
+}
+
+const getStoredOperations = async (
+  userId: number,
+  opType: string,
+  limit: number,
+): Promise<StoredServerOperation[]> => {
+  const response = await fetch(
+    `${SUPERSYNC_BASE_URL}/api/test/user/${userId}/ops?opType=${opType}&limit=${limit}`,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Failed to inspect stored operation clocks: ${response.status} ${await response.text()}`,
+    );
+  }
+  const body = (await response.json()) as { ops: StoredServerOperation[] };
+  return body.ops;
+};
+
 test.describe('@supersync @pruning Other client post-import ops sync correctly', () => {
   /**
    * Scenario: Client B creates tasks after receiving Client A's SYNC_IMPORT
-   * with a bloated vector clock — tasks should sync to Client A
-   *
-   * This test injects old vector clock entries into Client B's IndexedDB to simulate
-   * real-world accumulated history. After pruning, the import's entry gets dropped,
-   * causing Client A to incorrectly filter Client B's ops as CONCURRENT.
+   * with an oversized vector clock — the server should prune it and the tasks
+   * should still sync to Client A.
    */
   test('Other client post-import tasks with bloated clock sync to importing client', async ({
     browser,
@@ -156,109 +183,48 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
       console.log('[Other-Client Import] Client B received SYNC_IMPORT');
 
-      // ============ PHASE 6: Inject bloated vector clock into Client B ============
-      // This simulates real-world accumulated history from many old devices.
-      // Without this injection, the vector clock only has ~3 entries (well below MAX=20)
-      // and pruning never happens, so the bug doesn't manifest.
+      const [fullStateOperation] = await getStoredOperations(
+        user.userId,
+        'SYNC_IMPORT',
+        1,
+      );
+      expect(fullStateOperation).toBeDefined();
+      const fullStateAuthor = fullStateOperation.clientId;
+
+      // ============ PHASE 6: Inflate Client B's real upload clock ============
       console.log(
-        '[Other-Client Import] Phase 6: Injecting old device entries into Client B vector clock',
+        '[Other-Client Import] Phase 6: Installing oversized-clock upload route',
       );
 
-      await clientB.page.evaluate(async () => {
-        interface VectorClockEntry {
-          clock: Record<string, number>;
-          lastUpdate: number;
+      const uploadedClockSizes: number[] = [];
+      const uploadedOperationIds: string[] = [];
+      await routeSuperSyncOps(clientB.page, async (route) => {
+        if (route.request().method() !== 'POST') {
+          await route.continue();
+          return;
         }
 
-        const DB_NAME = 'SUP_OPS';
-        const VECTOR_CLOCK_STORE = 'vector_clock';
-        const SINGLETON_KEY = 'current';
-
-        // Open the database
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open(DB_NAME);
-          request.onsuccess = (): void => resolve(request.result);
-          request.onerror = (): void => reject(request.error);
-        });
-
-        // Read current vector clock entry
-        const currentEntry = await new Promise<VectorClockEntry | undefined>(
-          (resolve, reject) => {
-            const tx = db.transaction(VECTOR_CLOCK_STORE, 'readonly');
-            const store = tx.objectStore(VECTOR_CLOCK_STORE);
-            const request = store.get(SINGLETON_KEY);
-            request.onsuccess = (): void =>
-              resolve(request.result as VectorClockEntry | undefined);
-            request.onerror = (): void => reject(request.error);
-          },
-        );
-
-        const existingClock = currentEntry?.clock ?? {};
-        console.log(
-          '[Injected] Existing clock entries:',
-          Object.keys(existingClock).length,
-        );
-
-        // Add 12 old-device entries with high counters to simulate long history
-        // These represent old devices that were once part of the sync network
-        const bloatedClock = { ...existingClock };
-        for (let i = 0; i < 12; i++) {
-          const deviceId = `old-device-${String(i).padStart(5, '0')}`;
-          bloatedClock[deviceId] = 100 + i;
+        const body = parseSuperSyncRequestBody<MutableUploadBody>(route.request());
+        for (const operation of body.ops) {
+          for (let i = 0; i < 25; i++) {
+            operation.vectorClock[`old-device-${String(i).padStart(5, '0')}`] = 100 + i;
+          }
+          uploadedClockSizes.push(Object.keys(operation.vectorClock).length);
+          uploadedOperationIds.push(operation.id);
         }
 
-        console.log(
-          '[Injected] Bloated clock entries:',
-          Object.keys(bloatedClock).length,
-        );
-
-        // Write back the bloated vector clock
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(VECTOR_CLOCK_STORE, 'readwrite');
-          const store = tx.objectStore(VECTOR_CLOCK_STORE);
-          const entry = {
-            ...currentEntry,
-            clock: bloatedClock,
-            lastUpdate: Date.now(),
-          };
-          const request = store.put(entry, SINGLETON_KEY);
-          request.onsuccess = (): void => resolve();
-          request.onerror = (): void => reject(request.error);
+        // Send the modified body as plain JSON even when the original browser
+        // request was gzip encoded.
+        const headers = { ...route.request().headers() };
+        delete headers['content-encoding'];
+        delete headers['content-transfer-encoding'];
+        delete headers['content-length'];
+        const response = await route.fetch({
+          headers,
+          postData: JSON.stringify(body),
         });
-
-        db.close();
-        console.log('[Injected] Vector clock bloated successfully');
+        await route.fulfill({ response });
       });
-
-      console.log(
-        '[Other-Client Import] Client B vector clock bloated with 12 old device entries',
-      );
-
-      // ============ PHASE 6b: Reload Client B to pick up injected clock ============
-      // CRITICAL: OperationLogStoreService has an in-memory _vectorClockCache that
-      // bypasses IndexedDB reads. Without reloading, the injected entries never reach
-      // the ops' vector clocks — getVectorClock() returns the stale cached value,
-      // and appendWithVectorClockUpdate() overwrites the injected IDB data.
-      // Reloading destroys the Angular service, forcing a fresh read from IndexedDB.
-      console.log(
-        '[Other-Client Import] Phase 6b: Reloading Client B to pick up injected clock',
-      );
-
-      // Close the page and open a new one in the same context (preserves IndexedDB).
-      // Using page.reload() or page.goto() can hang when active sync connections
-      // prevent navigation lifecycle events from completing.
-      await clientB.page.close();
-      clientB.page = await clientB.context.newPage();
-      await clientB.page.goto('/');
-      await waitForAppReady(clientB.page, { ensureRoute: false });
-      // Re-create page objects for the new page
-      clientB.workView = new WorkViewPage(clientB.page, `B-${testRunId}`);
-      clientB.sync = new SuperSyncPage(clientB.page);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.page.goto('/#/work-view');
-      await clientB.page.waitForLoadState('networkidle');
-      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[Other-Client Import] Client B reloaded with bloated clock');
 
       // ============ PHASE 7: Client B creates new tasks ============
       // These ops will carry B's bloated vector clock with old entries
@@ -276,13 +242,25 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       console.log(`[Other-Client Import] Client B created: ${taskB2}`);
 
       // ============ PHASE 8: Client B syncs (uploads ops with post-import clock) ============
-      // Validates that B's ops (with clock from REPLACE, not MERGE) sync correctly
       console.log(
         '[Other-Client Import] Phase 8: Client B syncing (uploads ops with bloated clock)',
       );
 
       await clientB.sync.syncAndWait();
       console.log('[Other-Client Import] Client B synced (ops uploaded)');
+
+      expect(uploadedClockSizes).toHaveLength(2);
+      expect(uploadedClockSizes.every((size) => size > 20)).toBe(true);
+      await unrouteSuperSyncOps(clientB.page);
+
+      const storedCreateOperations = (
+        await getStoredOperations(user.userId, 'CRT', 10)
+      ).filter((operation) => uploadedOperationIds.includes(operation.id));
+      expect(storedCreateOperations).toHaveLength(2);
+      for (const operation of storedCreateOperations) {
+        expect(Object.keys(operation.vectorClock)).toHaveLength(20);
+        expect(operation.vectorClock[fullStateAuthor]).toBeDefined();
+      }
 
       // ============ PHASE 9: Client A syncs (downloads B's pruned ops) ============
       console.log('[Other-Client Import] Phase 9: Client A syncing (downloads B ops)');
@@ -295,8 +273,6 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       await clientA.page.waitForLoadState('networkidle');
 
       // ============ PHASE 10: Verify Client A sees B's tasks ============
-      // BUG: Client A filters B's ops as CONCURRENT with the import
-      // because B's pruned op clocks are missing the import's entry
       console.log(
         '[Other-Client Import] Phase 10: Verifying Client A has B post-import tasks',
       );
@@ -304,9 +280,7 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       // Both clients should have the imported task
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
-      // CRITICAL: Client A should have B's post-import tasks
-      // This is where the bug manifests — these tasks are missing on A
-      // because SyncImportFilterService filters them as CONCURRENT
+      // Client A should have B's post-import tasks after server-side pruning.
       await waitForTask(clientA.page, taskB1);
       await waitForTask(clientA.page, taskB2);
       console.log('[Other-Client Import] Client A has B post-import tasks');
@@ -331,7 +305,10 @@ test.describe('@supersync @pruning Other client post-import ops sync correctly',
       console.log('[Other-Client Import] Other client post-import ops test PASSED!');
     } finally {
       if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
+      if (clientB) {
+        await unrouteSuperSyncOps(clientB.page).catch(() => {});
+        await closeClient(clientB);
+      }
     }
   });
 });
