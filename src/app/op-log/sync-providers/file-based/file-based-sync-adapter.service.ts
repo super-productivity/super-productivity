@@ -186,7 +186,15 @@ export class FileBasedSyncAdapterService {
    */
   private _splitOpsCache = new Map<
     string,
-    { data: FileBasedOpsFile; rev: string; timestamp: number }
+    {
+      data: FileBasedOpsFile;
+      rev: string;
+      timestamp: number;
+      // True when `data` came from .bak recovery and `rev` is the CORRUPT
+      // primary's rev. This cycle's upload MUST still perform its conditional
+      // overwrite to heal the primary — see _stageOrDropDownloadedRev.
+      isPrimaryCorrupt: boolean;
+    }
   >();
 
   /** Tracks whether we've loaded persisted state from localStorage */
@@ -1380,22 +1388,32 @@ export class FileBasedSyncAdapterService {
 
   private _getCachedOpsData(
     providerKey: string,
-  ): { data: FileBasedOpsFile; rev: string } | null {
+  ): { data: FileBasedOpsFile; rev: string; isPrimaryCorrupt: boolean } | null {
     const cached = this._splitOpsCache.get(providerKey);
     if (!cached) return null;
     if (Date.now() - cached.timestamp > this._CACHE_TTL_MS) {
       this._splitOpsCache.delete(providerKey);
       return null;
     }
-    return { data: cached.data, rev: cached.rev };
+    return {
+      data: cached.data,
+      rev: cached.rev,
+      isPrimaryCorrupt: cached.isPrimaryCorrupt,
+    };
   }
 
   private _setCachedOpsData(
     providerKey: string,
     data: FileBasedOpsFile,
     rev: string,
+    isPrimaryCorrupt = false,
   ): void {
-    this._splitOpsCache.set(providerKey, { data, rev, timestamp: Date.now() });
+    this._splitOpsCache.set(providerKey, {
+      data,
+      rev,
+      timestamp: Date.now(),
+      isPrimaryCorrupt,
+    });
   }
 
   private _clearCachedOpsData(providerKey: string): void {
@@ -2048,11 +2066,16 @@ export class FileBasedSyncAdapterService {
   ): Promise<OpUploadResponse> {
     let opsFile: FileBasedOpsFile | null = null;
     let opsRev: string | null = null;
+    // When the cached ops file came from .bak recovery, the primary is corrupt and
+    // only a conditional overwrite from this cycle heals it. Never short-circuit
+    // that write, however little there is to append.
+    let isPrimaryCorrupt = false;
 
     const cached = this._getCachedOpsData(providerKey);
     if (cached) {
       opsFile = cached.data;
       opsRev = cached.rev;
+      isPrimaryCorrupt = cached.isPrimaryCorrupt;
     } else {
       try {
         const r = await this._downloadOpsFile(provider, cfg, encryptKey);
@@ -2103,13 +2126,16 @@ export class FileBasedSyncAdapterService {
     // then remains pending and is retried after restart. Acknowledge IDs already
     // present in the remote buffer without advancing syncVersion or appending a
     // second copy.
-    if (newOps.length === 0 && opsFile) {
+    //
+    // Skipped while the primary is corrupt: the ops below were read from .bak, and
+    // this cycle's conditional overwrite is what heals the primary. Falling through
+    // rewrites the file (appending nothing) and repairs it.
+    if (newOps.length === 0 && opsFile && !isPrimaryCorrupt) {
+      // serverSeq is omitted (it is optional): an op already in the buffer was
+      // numbered by a previous upload, and inventing a value here would mix two
+      // numbering schemes. The caller acknowledges on `opId` + `accepted`.
       return {
-        results: ops.map((operation) => ({
-          opId: operation.id,
-          accepted: true,
-          serverSeq: (existingOpIndexById.get(operation.id) ?? 0) + 1,
-        })),
+        results: ops.map((operation) => ({ opId: operation.id, accepted: true })),
         latestSeq: opsFile.syncVersion,
       };
     }
@@ -2273,14 +2299,11 @@ export class FileBasedSyncAdapterService {
     const startingSeq = Math.max(0, latestSeq - newOps.length);
     let newOperationIndex = 0;
     return {
+      // Already-committed ops are acknowledged without a serverSeq — see the
+      // all-duplicates return above.
       results: ops.map((op) => {
-        const existingIndex = existingOpIndexById.get(op.id);
-        if (existingIndex !== undefined) {
-          return {
-            opId: op.id,
-            accepted: true,
-            serverSeq: existingIndex + 1,
-          };
+        if (existingOpIndexById.has(op.id)) {
+          return { opId: op.id, accepted: true };
         }
         const serverSeq = startingSeq + newOperationIndex + 1;
         newOperationIndex++;
@@ -2369,7 +2392,7 @@ export class FileBasedSyncAdapterService {
         );
         opsFile = recovered.data;
         opsRev = (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
-        this._setCachedOpsData(providerKey, opsFile, opsRev);
+        this._setCachedOpsData(providerKey, opsFile, opsRev, true);
         this._notifyRecoveredCorruptPrimaryOnce(providerKey, opsRev);
       } else {
         throw e;

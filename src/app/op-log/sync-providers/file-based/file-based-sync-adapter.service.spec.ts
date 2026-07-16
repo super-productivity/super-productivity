@@ -3202,10 +3202,33 @@ describe('FileBasedSyncAdapterService', () => {
       const result = await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       expect(result).toEqual({
-        results: [{ opId: 'op-123', accepted: true, serverSeq: 1 }],
+        results: [{ opId: 'op-123', accepted: true }],
         latestSeq: 3,
       });
       expect(uploadedPaths()).toEqual([]);
+    });
+
+    it('(a) still heals a corrupt primary when every op is already in the recovered .bak', async () => {
+      // .bak recovery hands back an ops file that ALREADY contains the pending op
+      // (its PUT committed, then the response was lost). The all-duplicates
+      // short-circuit must NOT fire here: this cycle's conditional overwrite is
+      // the only thing that repairs the corrupt primary.
+      const recovered = makeOpsFile({
+        syncVersion: 3,
+        recentOps: [makeCompactOp({ id: 'op-123', sv: 3 })],
+      });
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_BACKUP_FILE) {
+          return { dataStr: addPrefix(recovered, 3), rev: 'ops-bak-rev' };
+        }
+        throw new SyncDataCorruptedError('corrupt', C.OPS_FILE);
+      });
+
+      // Seeds the sync-cycle cache with the CORRUPT primary's rev.
+      await adapter.downloadOps(0);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(uploadedPaths()).toContain(C.OPS_FILE);
     });
 
     it('(a) op-only download reads ONLY sync-ops.json (no sync-state.json fetch)', async () => {
