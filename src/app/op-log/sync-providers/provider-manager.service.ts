@@ -83,6 +83,12 @@ export class SyncProviderManager {
   /** Counter to detect stale provider activations */
   private _activeProviderSetupId = 0;
 
+  /**
+   * Monotonic in-tab counter over authoritative sync-target/configuration
+   * transitions. See {@link configEpoch}.
+   */
+  private _configEpoch = 0;
+
   // Current active provider
   private _activeProvider: SyncProviderBase<SyncProviderId> | null = null;
   private _activeProviderId$ = new BehaviorSubject<SyncProviderId | null>(null);
@@ -122,6 +128,29 @@ export class SyncProviderManager {
    */
   public readonly activeProviderId$: Observable<SyncProviderId | null> =
     this._activeProviderId$.pipe(distinctUntilChanged(), shareReplay(1));
+
+  /**
+   * Monotonic counter over authoritative sync-target/configuration transitions.
+   * Deferred work captures it and revalidates before I/O, so a request queued
+   * against one target cannot be executed against another.
+   *
+   * Bumped on: any provider-config write (`setProviderConfig`), a target move
+   * reported by a bypass ingress (`notifyProviderTargetChanged`), an active
+   * provider switch, and a credential revoke. The switch and revoke cases are
+   * why this is not derived from `providerConfigChanged$`: neither emits on that
+   * stream, so an epoch built on it alone would silently miss both.
+   *
+   * Deliberately NOT bumped by machine-only OAuth access-token refresh for an
+   * unchanged account — that goes through the credential store and moves no
+   * target, so bumping would invalidate healthy queued work.
+   *
+   * In-tab, not persisted, not a cross-tab protocol, and not a security input:
+   * it is a staleness heuristic over local UI/config actions. Never derive it
+   * from, or let it carry, secrets — compare epochs, never configuration.
+   */
+  get configEpoch(): number {
+    return this._configEpoch;
+  }
 
   /**
    * Observable for sync status
@@ -296,6 +325,7 @@ export class SyncProviderManager {
     await provider.setPrivateCfg(config);
 
     // Notify subscribers (e.g., WrappedProviderService) that config changed
+    this._configEpoch++;
     this._providerConfigChanged$.next({
       isTargetChanged: isSyncTargetChanged(prevCfg, config),
     });
@@ -325,6 +355,7 @@ export class SyncProviderManager {
    * already persisted the new target). See `notifyFileProviderTargetChanged()`.
    */
   notifyProviderTargetChanged(): void {
+    this._configEpoch++;
     this._providerConfigChanged$.next({ isTargetChanged: true });
   }
 
@@ -338,6 +369,10 @@ export class SyncProviderManager {
       return;
     }
     await provider.clearAuthCredentials();
+
+    // Revoking credentials invalidates the authority a queued request captured,
+    // even though this path emits no providerConfigChanged$.
+    this._configEpoch++;
 
     if (this._activeProvider?.id === providerId) {
       const ready = await provider.isReady();
@@ -366,6 +401,11 @@ export class SyncProviderManager {
     if (providerId === this._activeProviderId$.getValue()) {
       return;
     }
+
+    // A provider SWITCH deliberately does not emit providerConfigChanged$ (see
+    // that observable's doc), so the epoch must be bumped here or work captured
+    // against the previous provider would survive the switch.
+    this._configEpoch++;
 
     const setupId = ++this._activeProviderSetupId;
     this._activeProviderId$.next(providerId);
