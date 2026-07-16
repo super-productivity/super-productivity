@@ -156,16 +156,12 @@ export class WsTriggeredDownloadService implements OnDestroy {
       return;
     }
 
-    // #9074: capture the sync epoch synchronously with the cycle claim; the
-    // provider delegate and the local-write fences re-assert it so a provider
-    // switch/encryption op mid-download aborts this cycle benignly.
-    const fenceEpoch = this._providerManager.syncEpoch;
     const latestSeq = this._pendingLatestSeq;
     this._pendingLatestSeq = undefined;
     this._isDraining = true;
     let retryDelayMs = 0;
     try {
-      const shouldRetry = await this._downloadOpsInner(latestSeq, fenceEpoch);
+      const shouldRetry = await this._downloadOpsInner(latestSeq);
       if (shouldRetry && this._subscription) {
         if (this._downloadRetryCount < WS_DOWNLOAD_MAX_RETRIES) {
           this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
@@ -189,10 +185,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
     }
   }
 
-  private async _downloadOpsInner(
-    latestSeq: number,
-    fenceEpoch: number,
-  ): Promise<boolean> {
+  private async _downloadOpsInner(latestSeq: number): Promise<boolean> {
     // WS-triggered downloads are their own session boundary. The session
     // wrapper resets the latch up-front so the read at the end reflects
     // only this session, and a leaked-failed latch from a prior path can't
@@ -201,7 +194,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
     // dropped before the next user-initiated sync() reset the latch.)
     return this._sessionValidation.withSession(async () => {
       try {
+        // #9074: the (provider, epoch) pair MUST be read in one synchronous
+        // block — see the matching note in SyncWrapperService._syncBody.
         const rawProvider = this._providerManager.getActiveProvider();
+        const fenceEpoch = this._providerManager.syncEpoch;
         if (!rawProvider) {
           SyncLog.log(
             'WsTriggeredDownloadService: No active provider, skipping WS download',

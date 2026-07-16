@@ -206,17 +206,18 @@ export class ImmediateUploadService implements OnDestroy {
       );
       return;
     }
-    // #9074: capture the sync epoch synchronously with the cycle claim.
-    const fenceEpoch = this._providerManager.syncEpoch;
     try {
-      await this._performUploadInner(fenceEpoch);
+      await this._performUploadInner();
     } finally {
       this._syncCycleGuard.end();
     }
   }
 
-  private async _performUploadInner(fenceEpoch: number): Promise<void> {
+  private async _performUploadInner(): Promise<void> {
+    // #9074: the (provider, epoch) pair MUST be read in one synchronous block
+    // — see the matching note in SyncWrapperService._syncBody.
     const provider = this._providerManager.getActiveProvider();
+    const fenceEpoch = this._providerManager.syncEpoch;
     if (!provider) {
       return;
     }

@@ -108,8 +108,12 @@ cursor against the new target/epoch afterwards.
   setup (no previous config / first provider activation) does NOT bump — there
   is no old target to fence, and the bump would race the fresh config's first
   sync into a spurious abort.
-- Every cycle entry point captures the epoch **synchronously with its
-  `SyncCycleGuardService.tryBegin()` claim** and threads it as `fenceEpoch`.
+- Every cycle reads the **(provider, epoch) pair in one synchronous block**
+  (a switch swaps the object and bumps the epoch in one synchronous block on
+  its side, so a same-block read is always consistent) and threads the epoch
+  as `fenceEpoch`. Capturing earlier — e.g. at the cycle claim — lets a switch
+  complete in the awaits between and hands the cycle the new provider with a
+  stale epoch: a spurious abort of the first post-switch sync.
 - Provider I/O is fenced in one place: `getOperationSyncCapable(provider,
 { fenceEpoch })` returns a per-cycle delegate that re-asserts the epoch before
   every provider call. Local writes (apply inside the lock closures, ack

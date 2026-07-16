@@ -307,10 +307,6 @@ export class SyncWrapperService {
       SyncLog.log('Sync skipped: another sync cycle is in progress');
       return 'HANDLED_ERROR';
     }
-    // #9074: capture the sync epoch synchronously with the cycle claim; every
-    // fenced write in this cycle re-asserts it so a destructive config change
-    // (provider/target switch, encryption op) mid-cycle aborts us benignly.
-    const fenceEpoch = this._providerManager.syncEpoch;
     // Open before any async work — see `HydrationStateService.isInSyncWindow`.
     // Pass 0 to disable the failsafe: the `finally` block below is the
     // authoritative close, and a slow sync (provider I/O > 2s) would
@@ -318,7 +314,7 @@ export class SyncWrapperService {
     this._hydrationState.openSyncWindow(0);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
-    const result = await this._sync(isUserTriggered, fenceEpoch).finally(() => {
+    const result = await this._sync(isUserTriggered).finally(() => {
       this._isSyncInProgress$.next(false);
       this._hydrationState.closeSyncWindow();
       this._syncCycleGuard.end();
@@ -471,10 +467,7 @@ export class SyncWrapperService {
     this._superSyncWsService.disconnect();
   }
 
-  private async _sync(
-    isUserTriggered: boolean,
-    fenceEpoch: number,
-  ): Promise<SyncStatus | 'HANDLED_ERROR'> {
+  private async _sync(isUserTriggered: boolean): Promise<SyncStatus | 'HANDLED_ERROR'> {
     const providerId = await firstValueFrom(this.syncProviderId$);
     if (!providerId) {
       throw new Error('No Sync Provider for sync()');
@@ -485,14 +478,13 @@ export class SyncWrapperService {
     // retry, USE_REMOTE force-download) flips the latch; the wrapper reads
     // it once before claiming IN_SYNC. (#7330)
     return this._sessionValidation.withSession(() =>
-      this._syncBody(providerId, isUserTriggered, fenceEpoch),
+      this._syncBody(providerId, isUserTriggered),
     );
   }
 
   private async _syncBody(
     providerId: SyncProviderId,
     isUserTriggered: boolean,
-    fenceEpoch: number,
   ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     try {
       // PERF: For legacy sync providers (WebDAV, Dropbox, LocalFile), sync the vector clock
@@ -506,7 +498,16 @@ export class SyncWrapperService {
       // Get the sync-capable version of the provider
       // - SuperSync: returned as-is (already implements OperationSyncCapable)
       // - File-based (Dropbox, WebDAV, LocalFile): wrapped with FileBasedSyncAdapterService
+      //
+      // #9074: the (provider, epoch) pair MUST be read in one synchronous block
+      // — a provider switch swaps the object and bumps the epoch in one
+      // synchronous block on its side, so a same-block read is always
+      // consistent. Capturing the epoch earlier (at the cycle claim) let a
+      // switch complete in the awaits between, handing this cycle the NEW
+      // provider with a STALE epoch — a spurious fence abort on the first
+      // post-switch sync.
       const rawProvider = this._providerManager.getActiveProvider();
+      const fenceEpoch = this._providerManager.syncEpoch;
       const syncCapableProvider = await this._wrappedProvider.getOperationSyncCapable(
         rawProvider,
         { fenceEpoch },
