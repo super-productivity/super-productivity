@@ -585,6 +585,22 @@ describe('LocalRestApiHandlerService', () => {
         });
       });
 
+      it('should return 400 with plannedAt in the error path when legacy plannedAt has an invalid type', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should return 400 when an allowed field has an invalid type', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', {
@@ -824,6 +840,23 @@ describe('LocalRestApiHandlerService', () => {
         });
       });
 
+      it('should let dueWithTime override plannedAt when updating a task', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 1, dueWithTime: 2 },
+          }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: 2,
+        });
+      });
+
       it('should map null plannedAt to clearing dueWithTime when updating a task', async () => {
         const mockTask = createMockTask('task-1', { dueWithTime: 1 });
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -839,6 +872,27 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
           dueWithTime: null,
         });
+      });
+
+      it('should return 400 with plannedAt in the error path when legacy plannedAt has an invalid type on PATCH', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       it('should reject parentId in PATCH body with 400', async () => {

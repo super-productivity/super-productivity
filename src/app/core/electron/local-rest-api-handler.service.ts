@@ -47,7 +47,9 @@ const REJECTED_TASK_FIELDS = ['parentId', 'subTaskIds'] as const;
  */
 const SUBTASK_INHERITED_FIELDS = ['projectId', 'tagIds'] as const;
 
-const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
+const pickAllowedFields = (
+  body: Record<string, unknown>,
+): Partial<WritableTaskFields> => {
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(body)) {
     if (ALLOWED_TASK_FIELDS.has(key)) {
@@ -55,6 +57,11 @@ const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
     }
   }
 
+  return result as Partial<WritableTaskFields>;
+};
+
+const mapLegacyPlannedAt = (fields: Partial<WritableTaskFields>): Partial<Task> => {
+  const result: Record<string, unknown> = { ...fields };
   if (
     Object.prototype.hasOwnProperty.call(result, 'plannedAt') &&
     !Object.prototype.hasOwnProperty.call(result, 'dueWithTime')
@@ -96,7 +103,7 @@ type FieldTypeError = { path: string; expected: string };
  * reject bad input with a clean 400 before anything is dispatched.
  */
 const validateWritableFields = (
-  fields: Partial<Task>,
+  fields: Partial<WritableTaskFields>,
 ): { ok: true } | { ok: false; errors: FieldTypeError[] } => {
   const result = typia.validate<WritableTaskFields>(fields);
   if (result.success) {
@@ -401,9 +408,9 @@ export class LocalRestApiHandlerService {
     }
 
     const title = body.title.trim();
-    const additionalFields = pickAllowedFields(body);
+    const writableFields = pickAllowedFields(body);
 
-    const validation = validateWritableFields(additionalFields);
+    const validation = validateWritableFields(writableFields);
     if (!validation.ok) {
       return createErrorResponse(
         requestId,
@@ -413,6 +420,8 @@ export class LocalRestApiHandlerService {
         validation.errors,
       );
     }
+
+    const additionalFields = mapLegacyPlannedAt(writableFields);
 
     if ('parentId' in body) {
       if (typeof body.parentId !== 'string' || !body.parentId) {
@@ -504,8 +513,8 @@ export class LocalRestApiHandlerService {
           );
         }
 
-        const changes = pickAllowedFields(body);
-        const validation = validateWritableFields(changes);
+        const writableFields = pickAllowedFields(body);
+        const validation = validateWritableFields(writableFields);
         if (!validation.ok) {
           return createErrorResponse(
             requestId,
@@ -515,6 +524,8 @@ export class LocalRestApiHandlerService {
             validation.errors,
           );
         }
+
+        const changes = mapLegacyPlannedAt(writableFields);
 
         const task = await this._getTaskById(taskId);
         if (!task) {
