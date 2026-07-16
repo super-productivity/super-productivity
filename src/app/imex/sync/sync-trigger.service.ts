@@ -317,4 +317,28 @@ export class SyncTriggerService {
   isInitialSyncDoneSync(): boolean {
     return this._isInitialSyncDoneSync;
   }
+
+  /**
+   * The initial/after-enable gate as an edge — the exact observable mirror of
+   * {@link isInitialSyncDoneSync}, since `setInitialSyncDone()` is the only
+   * writer of both. For deferred work that must not start before the awaited
+   * initial path has opened the gate, and must be told the moment it does.
+   *
+   * NOT the same thing as the private `_isInitialSyncDone$`, which answers a
+   * different question ("may the UI show data yet?") and short-circuits to true
+   * for SuperSync and when initial sync is disabled.
+   *
+   * Deliberately excludes the `MAX_WAIT_FOR_INITIAL_SYNC` failsafe that
+   * `afterInitialSyncDoneAndDataLoadedInitially$` and `afterInitialSyncDoneStrict$`
+   * merge in: that timer exists so the UI cannot hang forever waiting on a sync
+   * that never lands, which is right for rendering and wrong here — it would
+   * declare the gate open on a schedule rather than on the initial sync actually
+   * having completed.
+   *
+   * Emits only on a real `setInitialSyncDone()` call: replays the latest value
+   * to late subscribers, and emits nothing at all before the first flip (the
+   * gate reads closed via the getter until then).
+   */
+  readonly initialSyncGateOpen$: Observable<boolean> =
+    this._isInitialSyncDoneManual$.asObservable();
 }
