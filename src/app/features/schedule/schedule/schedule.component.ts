@@ -225,15 +225,33 @@ export class ScheduleComponent {
   // Calculate context-aware "now" based on selected date
   // When viewing a future week, use the start of that week as reference time
   private _contextNow = computed(() => {
+    // Date.now() is not reactive and computeds cache, so without a time-varying
+    // dependency the reference would freeze at whatever instant this last ran.
+    // Same 2-min tick currentTimeRow and scheduleDays already refresh on.
+    this.scheduleService.scheduleRefreshTick();
+
     const selectedDate = this._selectedDate();
     if (selectedDate === null) {
       return Date.now();
     }
 
-    // Viewing a different date - use that date's midnight as reference
-    const contextDate = new Date(selectedDate);
-    contextDate.setHours(0, 0, 0, 0);
-    return contextDate.getTime();
+    // contextNow anchors dayDates[0] (`startTime = i == 0 ? now` in
+    // create-schedule-days), so it has to stay inside that day. Testing where the
+    // wall clock sits within the selected day - rather than comparing day strings -
+    // lets the view self-correct once it drifts under a midnight rollover (a day
+    // picked as "tomorrow" becomes today while the view stays put), and can never
+    // hand the mapper a now past day 0's end, which would push every entry out of
+    // the column.
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    // setDate rather than +24h: DST-safe day advancement.
+    const nextDayStart = new Date(dayStart);
+    nextDayStart.setDate(nextDayStart.getDate() + 1);
+
+    const now = Date.now();
+    return now >= dayStart.getTime() && now < nextDayStart.getTime()
+      ? now
+      : dayStart.getTime();
   });
 
   scheduleDays = computed(() => {

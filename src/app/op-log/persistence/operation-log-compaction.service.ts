@@ -18,6 +18,7 @@ import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
+import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -35,6 +36,7 @@ export class OperationLogCompactionService {
   private vectorClockService = inject(VectorClockService);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private operationCapture = inject(OperationCaptureService);
+  private writeFlushService = inject(OperationWriteFlushService);
 
   async compact(): Promise<boolean> {
     return this._doCompact(COMPACTION_RETENTION_MS, false);
@@ -70,7 +72,7 @@ export class OperationLogCompactionService {
       );
       return false;
     }
-    return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+    const compactExclusively = async (): Promise<boolean> => {
       const startTime = Date.now();
       const label = isEmergency ? 'emergency ' : '';
 
@@ -207,7 +209,20 @@ export class OperationLogCompactionService {
       }
 
       return true;
-    });
+    };
+
+    // #8469: drain the capture pipeline before capturing so no action can be
+    // dispatched-but-unsequenced at the state read — otherwise its effect is
+    // baked into the cache while its seq lands after lastAppliedOpSeq, and the
+    // next boot's tail replay double-applies it. Emergency compaction is
+    // invoked from the failing write's own call stack (quota handling), where
+    // that write's pending-counter entry is still elevated — flushing there
+    // would wait on ourselves until the flush timeout and break quota
+    // recovery, so it keeps the bare lock and accepts the residual re-replay
+    // window.
+    return isEmergency
+      ? this.lockService.request(LOCK_NAMES.OPERATION_LOG, compactExclusively)
+      : this.writeFlushService.flushThenRunExclusive(compactExclusively);
   }
 
   /**

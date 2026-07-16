@@ -420,6 +420,12 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _selectedProviderWasConfigured = false;
 
   constructor() {
+    // A pending LocalFile folder pick must never outlive this settings
+    // session (#9075). save() commits it (clearing the main-side slot), so
+    // every other exit — Cancel, Escape, backdrop click, navigation — lands
+    // here with the slot still set and discards it. Runs after a save too,
+    // where it is a no-op.
+    this._destroyRef.onDestroy(() => this._discardPendingLocalFileDir());
     this.syncConfigService.syncSettingsForm$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((v) => {
@@ -721,6 +727,21 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       }
     }
 
+    // Commit a pending Electron LocalFile folder pick (#9075) directly before
+    // the config save and the closing sync(true) — picking is prepare-only
+    // and Save is the commit point. Placed here (after auth checks and the
+    // encryption prompt) so no other save step can throw or dead-end between
+    // the folder going live and the settings being persisted. On failure,
+    // keep the dialog open: the old folder stays live and the user can
+    // re-pick or cancel. Saving a different provider skips this; the
+    // untouched candidate is discarded when the dialog closes.
+    if (providerId === SyncProviderId.LocalFile) {
+      const isCommitOk = await this._commitPendingLocalFileDir();
+      if (!isCommitOk) {
+        return;
+      }
+    }
+
     await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     this._matDialogRef.close();
 
@@ -736,6 +757,62 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     if (isOnline()) {
       this.syncWrapperService.sync(true);
     }
+  }
+
+  /**
+   * Commits the main-side pending LocalFile folder pick (#9075) straight over
+   * the Electron bridge — like the picker itself, the pick lifecycle is
+   * main-owned and never round-trips a path through the renderer (#8228).
+   * Returns false when persisting failed (folder deleted between pick and
+   * Save, EACCES) — the candidate is kept main-side so a retry stays loud.
+   * No-op (true) on platforms without a main-side pending slot (Android/web)
+   * and when nothing was picked this session.
+   */
+  private async _commitPendingLocalFileDir(): Promise<boolean> {
+    if (!window.ea?.commitPickedDirectory) {
+      return true;
+    }
+    try {
+      const committed = await window.ea.commitPickedDirectory();
+      // Main reports persist/validation failure as a safe Error VALUE (same
+      // contract as the other file-sync IPCs) — treat it as the failure path.
+      if (committed instanceof Error) {
+        throw committed;
+      }
+      if (committed?.isChanged) {
+        // The commit persists main-side, bypassing setProviderConfig(), so no
+        // config diff exists to infer the target move from — assert it
+        // explicitly. Gated on isChanged: re-picking the already-configured
+        // folder must not wipe per-target sync state (cursor/rev caches).
+        // On first-ever setup this double-fires (setProviderConfig's !prevCfg
+        // diff also reports a move) — benign, as no per-target state exists
+        // yet to wipe; do not "fix" it by skipping this notify, or an
+        // existing-config folder move would go unsignalled.
+        this._providerManager.notifyProviderTargetChanged();
+      }
+      return true;
+    } catch (e) {
+      SyncLog.err('LocalFile folder commit failed', { name: _redactErrorName(e) });
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.FORM.LOCAL_FILE.S_COMMIT_FOLDER_ERROR,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Fire-and-forget: dropping the candidate must never block dialog close.
+   * Straight over the Electron bridge on purpose — routing through
+   * getProviderById() would lazy-load every provider bundle on each dialog
+   * close just to clear a slot that is usually empty. No-op outside Electron.
+   */
+  private _discardPendingLocalFileDir(): void {
+    window.ea?.discardPickedDirectory?.().catch((e) => {
+      SyncLog.err('LocalFile pending folder discard failed', {
+        name: _redactErrorName(e),
+      });
+    });
   }
 
   /**

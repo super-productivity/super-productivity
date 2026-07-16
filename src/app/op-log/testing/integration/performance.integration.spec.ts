@@ -5,6 +5,7 @@ import { VectorClockService } from '../../sync/vector-clock.service';
 import { OpType } from '../../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
 import { TestClient, resetTestUuidCounter } from './helpers/test-client.helper';
+import { clearDeferredActions } from '../../capture/operation-capture.meta-reducer';
 import {
   createTaskOperation,
   createMinimalTaskPayload,
@@ -66,6 +67,10 @@ describe('Performance Integration', () => {
     await storeService.init();
     await storeService._clearAllDataForTesting();
     resetTestUuidCounter();
+    // The real compaction service bails when the MODULE-LEVEL deferred buffer
+    // is non-empty (#8469). Another spec leaking into it would make these
+    // tests fail order-dependently under jasmine's random order — start clean.
+    clearDeferredActions();
   });
 
   describe('Large operation log handling', () => {

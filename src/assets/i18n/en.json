@@ -1484,7 +1484,8 @@
         "LOCAL_FILE": {
           "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
-          "L_SYNC_FOLDER_PATH": "Sync folder path"
+          "L_SYNC_FOLDER_PATH": "Sync folder path",
+          "S_COMMIT_FOLDER_ERROR": "Could not save the selected sync folder. It may have been moved or deleted — please pick it again."
         },
         "PASSWORD_SET_INFO": "🔒 Encryption password is set.",
         "SUPER_SYNC": {

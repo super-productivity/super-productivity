@@ -60,6 +60,11 @@ const ea: ElectronAPI = {
   checkDirExists: (args) => _invoke('CHECK_DIR_EXISTS', args) as Promise<true | Error>,
 
   pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | Error | undefined>,
+  commitPickedDirectory: () =>
+    _invoke('COMMIT_PICKED_DIRECTORY') as Promise<
+      { path: string; isChanged: boolean } | null | Error
+    >,
+  discardPickedDirectory: () => _invoke('DISCARD_PICKED_DIRECTORY') as Promise<void>,
   getSyncFolderPath: () => _invoke('GET_SYNC_FOLDER_PATH') as Promise<string | null>,
 
   showOpenDialog: (options: {

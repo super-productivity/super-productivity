@@ -50,7 +50,7 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       'markApplied',
       'getOpById',
       'mergeRemoteOpClocks',
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'markFailed',
     ]);
     opLogStoreSpy.getUnsynced.and.resolveTo([]);

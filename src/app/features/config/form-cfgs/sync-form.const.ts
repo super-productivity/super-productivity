@@ -2,7 +2,6 @@
 import { T } from '../../../t.const';
 import { ConfigFormSection, SyncConfig } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
-import { notifyFileProviderTargetChanged } from '../../../op-log/sync-providers/provider-manager.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../../app.constants';
 import {
@@ -227,6 +226,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           // No `key` on purpose: post-#8228 the sync folder path is owned
           // main-side. The picker's return value is for display only and
           // must not write back into the renderer credential store.
+          // Prepare-only (#9075): main holds the pick as a pending candidate;
+          // DialogSyncCfgComponent.save() commits it (and fires the
+          // target-change invalidation there); closing without save discards.
           type: 'btn',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
@@ -236,16 +238,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               const localProvider = providers.find(
                 (p) => p.id === SyncProviderId.LocalFile,
               );
-              const pickedPath = await (
-                localProvider as LocalFileSyncPicker | undefined
-              )?.pickDirectory();
-              // The picker persists the folder main-side (post-#8228) without
-              // going through setProviderConfig, so invalidate file-provider
-              // target state here (Task 2). Only on an actual pick, not cancel.
-              if (pickedPath) {
-                notifyFileProviderTargetChanged();
-              }
-              return pickedPath;
+              return (localProvider as LocalFileSyncPicker | undefined)?.pickDirectory();
             },
           },
         },
@@ -272,21 +265,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
             btnStyle: 'stroked',
             onClick: async () => {
-              // NOTE: this actually sets the value in the model
+              // NOTE: this actually sets the value in the model — and ONLY
+              // the model (#9075). The URI is persisted by settings Save via
+              // setProviderConfig, whose config diff detects the target move
+              // (safFolderUri is identity-affecting), so Cancel abandons the
+              // pick. setupSaf throws on cancel, so a value = success.
               const providers = await loadSyncProviders();
               const localProvider = providers.find(
                 (p) => p.id === SyncProviderId.LocalFile,
               );
-              const safUri = await (
-                localProvider as LocalFileSyncPicker | undefined
-              )?.setupSaf();
-              // setupSaf writes safFolderUri to privateCfg directly (outside
-              // setProviderConfig), so invalidate file-provider target state
-              // here (Task 2). setupSaf throws on cancel, so a value = success.
-              if (safUri) {
-                notifyFileProviderTargetChanged();
-              }
-              return safUri;
+              return (localProvider as LocalFileSyncPicker | undefined)?.setupSaf();
             },
           },
           expressions: {

@@ -95,14 +95,16 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'appendBatchSkipDuplicates',
       'appendMixedSourceBatchSkipDuplicates',
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'markApplied',
       'markRejected',
       'markFailed',
       'getUnsyncedByEntity',
+      'getOpById',
       'mergeRemoteOpClocks',
       'markReducersCommittedAndMergeClocks',
     ]);
+    mockOpLogStore.getOpById.and.resolveTo(undefined);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
@@ -118,7 +120,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
     mockOpLogStore.markRejected.and.resolveTo(undefined);
     mockOpLogStore.markApplied.and.resolveTo(undefined);
-    mockOpLogStore.appendWithVectorClockUpdate.and.resolveTo(1);
+    mockOpLogStore.appendWithVectorClockOverwrite.and.resolveTo(1);
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
         seqs: ops.map((_, i) => i + 1),
@@ -253,9 +255,9 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
 
-    // appendWithVectorClockUpdate REPLACES the durable clock with the caller's
+    // appendWithVectorClockOverwrite REPLACES the durable clock with the caller's
     // clock (built only from the conflict's ops) — the batch rebases instead.
-    expect(mockOpLogStore.appendWithVectorClockUpdate).not.toHaveBeenCalled();
+    expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
     const batches =
       mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0];
     const remoteBatch = batches.find((b) => b.source === 'remote');
@@ -1359,14 +1361,16 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       const opLogStore = jasmine.createSpyObj('OperationLogStoreService', [
         'appendBatchSkipDuplicates',
         'appendMixedSourceBatchSkipDuplicates',
-        'appendWithVectorClockUpdate',
+        'appendWithVectorClockOverwrite',
         'markApplied',
         'markRejected',
         'markFailed',
         'getUnsyncedByEntity',
+        'getOpById',
         'mergeRemoteOpClocks',
         'markReducersCommittedAndMergeClocks',
       ]);
+      opLogStore.getOpById.and.resolveTo(undefined);
       opLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
       opLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
       opLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
@@ -1383,7 +1387,7 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
       opLogStore.markRejected.and.resolveTo(undefined);
       opLogStore.markApplied.and.resolveTo(undefined);
       opLogStore.markFailed.and.resolveTo(undefined);
-      opLogStore.appendWithVectorClockUpdate.and.resolveTo(1);
+      opLogStore.appendWithVectorClockOverwrite.and.resolveTo(1);
       opLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
         Promise.resolve({
           seqs: ops.map((_, i) => i + 1),
