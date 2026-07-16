@@ -224,6 +224,21 @@ module.exports = tseslint.config(
       'local-rules/no-multi-entity-effect': 'warn',
     },
   },
+  // Spelled-out weekday/month names must be formatted with textLocale(), not
+  // currentLocale() (the ISO option's `sv` sentinel) or the implicit browser
+  // locale — see #8987, which recurred across three PRs. Specs are excluded:
+  // computing an expected string against an explicit locale is a legitimate
+  // test technique, and the invariant is about what the product renders.
+  {
+    files: ['src/app/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/require-text-locale': 'error',
+    },
+  },
   // Op-log persistence: inside an adapter.transaction() callback only the tx
   // handle may be used — adapter methods enqueue behind the transaction's own
   // FIFO queue slot on the SQLite backend and deadlock (see
