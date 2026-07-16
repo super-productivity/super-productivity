@@ -511,6 +511,23 @@ describe('ScheduleComponent', () => {
       expect(component['_contextNow']()).toBe(new Date(2026, 0, 19).setHours(0, 0, 0, 0));
     });
 
+    it('should never anchor day 0 with a now that falls outside it', () => {
+      // contextNow anchors dayDates[0], so a now past that day's end would push
+      // every day-0 entry over its boundary and empty the column. Reachable with
+      // a custom start-of-next-day, where the logical "today" is still Jan 20
+      // while the wall clock already reads 02:00 on Jan 21.
+      const clock = new Date(2026, 0, 21, 2, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+
+      const contextNow = component['_contextNow']();
+      expect(contextNow).toBeGreaterThanOrEqual(
+        new Date(2026, 0, 20).setHours(0, 0, 0, 0),
+      );
+      expect(contextNow).toBeLessThan(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
+    });
+
     it('should switch to the real now once the viewed day rolls over into today', () => {
       // Viewing tomorrow at 22:00, then the app is left open past midnight. The
       // view does not move, so the day it shows silently becomes today.
