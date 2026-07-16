@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Action, ActionReducer, Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -242,6 +243,9 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     const conflictJournal = jasmine.createSpyObj<ConflictJournalService>(
       'ConflictJournalService',
       ['record'],
+      // Real signal, not a spy: `unreviewedCount` is a signal on the service, and
+      // the content-conflict banner reads it to decide whether to offer REVIEW.
+      { unreviewedCount: signal(0) },
     );
     conflictJournal.record.and.resolveTo();
     const syncConflictBanner = jasmine.createSpyObj<SyncConflictBannerService>(
