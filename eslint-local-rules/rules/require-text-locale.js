@@ -19,11 +19,11 @@
  *
  * Flagged: `.toLocaleDateString()` / `.toLocaleString()` / `new
  * Intl.DateTimeFormat()` whose options contain a spelled-out field (`weekday`,
- * `month: 'long'|'short'|'narrow'`, `era`, `dayPeriod`) and no clock time, when
- * the locale argument is `currentLocale()` — directly, or via a `const`
- * initialised from it (the shape the original #8987 bug had) — or is
- * absent/`undefined`, which silently uses the browser locale and ignores both
- * the configured locale AND the UI language.
+ * `month: 'long'|'short'|'narrow'`, `dateStyle: 'full'|'long'|'medium'`, `era`,
+ * `dayPeriod`) and no clock time, when the locale argument is `currentLocale()`
+ * — directly, or via a `const` initialised from it (the shape the original
+ * #8987 bug had) — or is absent/`undefined`, which silently uses the browser
+ * locale and ignores both the configured locale AND the UI language.
  *
  * Deliberately NOT detected (pinned as `valid` cases in the spec so the boundary
  * is explicit and a change that starts catching them trips the spec):
@@ -34,18 +34,34 @@
  *   - a non-literal options object (variable or spread)
  *   - `.toLocaleTimeString()`: a clock time, whose locale is pinned by the 24h
  *     rule below
- *   - ANY options object that also formats a clock time (`hour`), whatever else
- *     it renders — `{ hour, minute }`, `{ hour, minute, dayPeriod }`,
- *     `{ weekday, hour }`. See `rendersSpelledOutName` for why the rule cannot
- *     advise on these.
+ *   - ANY options object that also formats a clock time (`hour`, `timeStyle`),
+ *     whatever else it renders — `{ hour, minute }`, `{ hour, minute, dayPeriod }`,
+ *     `{ weekday, hour }`, `{ dateStyle, timeStyle }`. See
+ *     `rendersSpelledOutName` for why the rule cannot advise on these.
  *
  * A clean run does NOT prove a file is free of #8987 — it proves the direct
  * call sites are.
  */
 
-/** Options fields that render a spelled-out name rather than digits. */
+/** Options fields that render a spelled-out name whatever their value. */
 const ALWAYS_SPELLED_OUT = new Set(['weekday', 'era', 'dayPeriod']);
-const SPELLED_OUT_VALUES = new Set(['long', 'short', 'narrow']);
+
+/**
+ * Fields that render a spelled-out name only for certain values — each with its
+ * OWN value set, because the two invert and a shared set would be a bug:
+ * `month: 'short'` is "Jul" (spelled out) but `dateStyle: 'short'` is
+ * "2026-07-15" (numeric). Flagging `dateStyle: 'short'` would push the reader to
+ * route ISO's YYYY-MM-DD through textLocale() and break it — the mirror of the
+ * clock-time trap below. Values not listed are digits and must keep
+ * `currentLocale()` so ISO day-first ordering survives.
+ */
+const SPELLED_OUT_BY_VALUE = new Map([
+  ['month', new Set(['long', 'short', 'narrow'])],
+  ['dateStyle', new Set(['full', 'long', 'medium'])],
+]);
+
+/** Options fields that format a clock time. */
+const CLOCK_TIME_FIELDS = new Set(['hour', 'timeStyle']);
 
 const NAME_FORMATTERS = new Set(['toLocaleDateString', 'toLocaleString']);
 
@@ -57,19 +73,18 @@ const propKey = (prop) => {
 
 /** True for an options object literal that also formats a clock time. */
 const rendersClockTime = (optsNode) =>
-  optsNode.properties.some((prop) => propKey(prop) === 'hour');
+  optsNode.properties.some((prop) => CLOCK_TIME_FIELDS.has(propKey(prop)));
 
 /** True when the property renders a spelled-out name rather than digits. */
 const isSpelledOutProp = (prop) => {
   const key = propKey(prop);
   if (key === null) return false;
   if (ALWAYS_SPELLED_OUT.has(key)) return true;
-  // `month` only counts when spelled out — `month: 'numeric'` is digits, and
-  // those must keep `currentLocale()` so ISO day-first ordering survives.
+  const spelledOutValues = SPELLED_OUT_BY_VALUE.get(key);
   return (
-    key === 'month' &&
+    !!spelledOutValues &&
     prop.value.type === 'Literal' &&
-    SPELLED_OUT_VALUES.has(prop.value.value)
+    spelledOutValues.has(prop.value.value)
   );
 };
 
@@ -77,9 +92,9 @@ const isSpelledOutProp = (prop) => {
  * True for an options object literal that renders at least one spelled-out name
  * and no clock time.
  *
- * An `hour` in the same options object pins the locale: it renders 24h under the
- * ISO `sv` sentinel but 12h under most UI languages, so swapping the whole call
- * to `textLocale()` would trade a Swedish name for a broken clock — "onsdag
+ * A clock time in the same options object pins the locale: it renders 24h under
+ * the ISO `sv` sentinel but 12h under most UI languages, so swapping the whole
+ * call to `textLocale()` would trade a Swedish name for a broken clock — "onsdag
  * 13:05" becomes "Wednesday 1:05 PM", the very ISO regression this rule family
  * exists to prevent. Such a format has no single correct locale; it has to be
  * split (names on `textLocale()`, clock on `currentLocale()` — see
@@ -145,7 +160,7 @@ module.exports = {
     },
     messages: {
       numericLocaleForName:
-        'This formats a spelled-out {{field}} with currentLocale(). Under the ISO 8601 option currentLocale() is the `sv` sentinel, so the name renders in Swedish whatever the UI language (#8987). Use DateTimeFormatService.textLocale() — it equals currentLocale() for every non-ISO option. Numeric-only parts (month: "numeric", day, year) should keep currentLocale().',
+        'This formats a spelled-out {{field}} with currentLocale(). Under the ISO 8601 option currentLocale() is the `sv` sentinel, so the name renders in Swedish whatever the UI language (#8987). Use DateTimeFormatService.textLocale() — it equals currentLocale() for every non-ISO option. Numeric-only parts (month: "numeric", dateStyle: "short", day, year) should keep currentLocale().',
       implicitLocaleForName:
         'This formats a spelled-out {{field}} with no locale, so it follows the *browser* locale and ignores both the configured date locale and the UI language. Use DateTimeFormatService.textLocale().',
     },

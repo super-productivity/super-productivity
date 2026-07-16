@@ -79,6 +79,24 @@ ruleTester.run('require-text-locale', rule, {
         });
       `,
     },
+    // dateStyle: 'short' is NUMERIC ("2026-07-15") — the inversion vs month:
+    // 'short' ("Jul"). It must keep currentLocale() or ISO YYYY-MM-DD breaks.
+    {
+      code: `const s = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), { dateStyle: 'short' });`,
+    },
+    // timeStyle is a clock time, so dateStyle+timeStyle is the mixed case again
+    // ("onsdag 15 juli 2026 kl. 13:05" -> "Wednesday, July 15, 2026 at 1:05 PM").
+    {
+      code: `
+        const s = date.toLocaleString(this._dateTimeFormatService.currentLocale(), {
+          dateStyle: 'full',
+          timeStyle: 'short',
+        });
+      `,
+    },
+    {
+      code: `const t = date.toLocaleString(this._dateTimeFormatService.currentLocale(), { timeStyle: 'short' });`,
+    },
     // A locale threaded through a parameter: the rule cannot see the caller's
     // value, so the obligation sits with the caller (getWeekdaysMin, formatDayStr).
     {
@@ -189,6 +207,21 @@ ruleTester.run('require-text-locale', rule, {
     {
       code: `const f = new Intl.DateTimeFormat(undefined, { month: 'long' });`,
       errors: [{ messageId: 'implicitLocaleForName', data: { field: 'month' } }],
+    },
+    // dateStyle: 'full' renders the canonical #8987 string under the sentinel —
+    // "onsdag 15 juli 2026" — without naming weekday/month at all.
+    {
+      code: `const s = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), { dateStyle: 'full' });`,
+      errors: [{ messageId: 'numericLocaleForName', data: { field: 'dateStyle' } }],
+    },
+    // 'medium' is spelled out too ("15 juli 2026"), unlike 'short'.
+    {
+      code: `const s = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), { dateStyle: 'medium' });`,
+      errors: [{ messageId: 'numericLocaleForName', data: { field: 'dateStyle' } }],
+    },
+    {
+      code: `const f = new Intl.DateTimeFormat(undefined, { dateStyle: 'long' });`,
+      errors: [{ messageId: 'implicitLocaleForName', data: { field: 'dateStyle' } }],
     },
   ],
 });
