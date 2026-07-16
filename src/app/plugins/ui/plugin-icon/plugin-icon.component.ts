@@ -8,6 +8,7 @@ import {
 import { DomSanitizer } from '@angular/platform-browser';
 import { PluginService } from '../../plugin.service';
 import { MatIcon } from '@angular/material/icon';
+import { sanitizeSvgIconContent } from '../../../util/sanitize-svg-icon.util';
 
 @Component({
   selector: 'plugin-icon',
@@ -69,6 +70,7 @@ export class PluginIconComponent {
       return null;
     }
 
-    return this._sanitizer.bypassSecurityTrustHtml(iconContent);
+    const sanitizedSvg = sanitizeSvgIconContent(iconContent);
+    return sanitizedSvg ? this._sanitizer.bypassSecurityTrustHtml(sanitizedSvg) : null;
   });
 }

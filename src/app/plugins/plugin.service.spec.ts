@@ -31,6 +31,11 @@ describe('PluginService', () => {
   let pluginLoader: jasmine.SpyObj<PluginLoaderService>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
   let pluginRunner: jasmine.SpyObj<PluginRunner>;
+  let globalThemeServiceMock: {
+    darkMode$: BehaviorSubject<'light'>;
+    darkMode: () => 'light';
+    registerSvgIconFromContent: jasmine.Spy;
+  };
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -89,6 +94,11 @@ describe('PluginService', () => {
       'pingNodeBridge',
       'sendMessageToPlugin',
     ]);
+    globalThemeServiceMock = {
+      darkMode$: new BehaviorSubject('light'),
+      darkMode: () => 'light',
+      registerSvgIconFromContent: jasmine.createSpy('registerSvgIconFromContent'),
+    };
 
     TestBed.configureTestingModule({
       providers: [
@@ -120,10 +130,7 @@ describe('PluginService', () => {
         },
         {
           provide: GlobalThemeService,
-          useValue: {
-            darkMode$: new BehaviorSubject('light'),
-            darkMode: () => 'light',
-          },
+          useValue: globalThemeServiceMock,
         },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistenceService },
         {
@@ -336,6 +343,34 @@ describe('PluginService', () => {
     expect(result).toBe(true);
     expect(deniedSet.has(pluginId)).toBe(false);
     expect(pluginBridge.clearNodeExecutionConsent).toHaveBeenCalledOnceWith(pluginId);
+  });
+
+  it('sanitizes uploaded plugin SVG icons before registration', () => {
+    const sanitizeSvg = (
+      service as unknown as {
+        _sanitizePluginIconSvg: (iconContent: string, iconPath: string) => string | null;
+      }
+    )._sanitizePluginIconSvg.bind(service);
+
+    const result = sanitizeSvg(
+      '<svg onload="alert(1)"><circle cx="5" cy="5" r="4"></circle></svg>',
+      'icon.svg',
+    );
+
+    expect(result).toContain('<svg');
+    expect(result).not.toContain('onload');
+  });
+
+  it('rejects uploaded plugin icon content that is not SVG', () => {
+    const sanitizeSvg = (
+      service as unknown as {
+        _sanitizePluginIconSvg: (iconContent: string, iconPath: string) => string | null;
+      }
+    )._sanitizePluginIconSvg.bind(service);
+
+    const result = sanitizeSvg('<div>not svg</div>', 'icon.svg');
+
+    expect(result).toBeNull();
   });
 
   it('clearNodeExecutionConsent returns false when the persisted clear fails (caller can fail closed)', async () => {

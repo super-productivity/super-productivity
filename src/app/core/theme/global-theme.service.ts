@@ -61,6 +61,7 @@ import { LS } from '../persistence/storage-keys.const';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { sanitizeIosKeyboardHeight } from './sanitize-ios-keyboard-height.util';
+import { sanitizeSvgIconContent } from '../../util/sanitize-svg-icon.util';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -385,9 +386,18 @@ export class GlobalThemeService {
   registerSvgIconFromContent(iconName: string, svgContent: string): void {
     // Plugin icon is already registered, skip
     if (this._registeredPluginIcons.has(iconName)) return;
+    const sanitizedSvg = sanitizeSvgIconContent(svgContent);
+    if (
+      !sanitizedSvg ||
+      !/<svg[\s>]/i.test(sanitizedSvg) ||
+      !/<\/svg>/i.test(sanitizedSvg)
+    ) {
+      Log.warn(`Skipping invalid SVG icon registration for ${iconName}`);
+      return;
+    }
     this._matIconRegistry.addSvgIconLiteral(
       iconName,
-      this._domSanitizer.bypassSecurityTrustHtml(svgContent),
+      this._domSanitizer.bypassSecurityTrustHtml(sanitizedSvg),
     );
     this._registeredPluginIcons.add(iconName);
   }
