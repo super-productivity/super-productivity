@@ -17,7 +17,6 @@ import {
   UI_VISIBLE_TIMEOUT,
   UI_VISIBLE_TIMEOUT_LONG,
   UI_SETTLE_SMALL,
-  UI_SETTLE_MEDIUM,
   UI_SETTLE_STANDARD,
   UI_SETTLE_EXTENDED,
   RETRY_BASE_DELAY,
@@ -734,7 +733,13 @@ export const renameTask = async (
   await textarea.evaluate((el: HTMLTextAreaElement) => {
     el.dispatchEvent(new Event('blur', { bubbles: true }));
   });
-  await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
+  // Wait for the committed title rather than a fixed delay: blur -> dispatch ->
+  // re-render outruns a 300ms sleep on a loaded machine, and a following sync
+  // then uploads without the rename op — the caller sees a task that was never
+  // renamed. Same reasoning as markTaskDone's done-state wait.
+  await expect(getTaskElement(client, newName).first()).toBeVisible({
+    timeout: UI_VISIBLE_TIMEOUT,
+  });
 };
 
 /**
