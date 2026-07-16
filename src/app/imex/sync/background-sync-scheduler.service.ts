@@ -1,6 +1,6 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { filter, Observable, Subject } from 'rxjs';
+import { filter, Observable, pairwise, Subject } from 'rxjs';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncBusyService } from './sync-busy.service';
 import { SyncTriggerService } from './sync-trigger.service';
@@ -66,8 +66,20 @@ export class BackgroundSyncSchedulerService {
   private _isRunning = false;
   private _pending: PendingRequest | null = null;
   private _settled$ = new Subject<void>();
-  /** 0 = nothing has run yet, so the first request is never spaced. */
-  private _lastSettleAt = 0;
+  /**
+   * When sync work last settled, on a MONOTONIC clock. `null` = nothing has
+   * settled yet, so the first request is never spaced.
+   *
+   * Deliberately not `Date.now()`. A backward wall-clock correction — NTP after
+   * Android Doze, Electron resume, a VM restore, a user clock change — makes the
+   * elapsed calculation negative, which arms a timer of `floor + jump`. A
+   * one-hour correction would arm a one-hour timer, and since this is now the
+   * only automatic sync path, background sync would stall completely until it
+   * fired. Clamping the delay does not fix it: each 5s retry recomputes the same
+   * negative elapsed and re-arms, so it stalls just as hard, in a loop.
+   * `performance.now()` cannot go backwards.
+   */
+  private _lastSettleAt: number | null = null;
   private _spacingTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
@@ -82,12 +94,26 @@ export class BackgroundSyncSchedulerService {
     // Two independent wake-ups, because either alone strands a request.
     //
     // Busy falling: work we deferred can now run.
+    // `pairwise` so this is a real busy→idle TRANSITION, not the seeded `false`
+    // every subscriber receives. Filtering on the value alone would stamp
+    // _lastSettleAt at construction and needlessly delay the session's first
+    // background sync by the whole floor.
     this._busy.isBusy$
       .pipe(
-        filter((isBusy) => !isBusy),
+        pairwise(),
+        filter(([wasBusy, isBusy]) => wasBusy && !isBusy),
         takeUntilDestroyed(this._destroyRef),
       )
-      .subscribe(() => this._scheduleDrain());
+      .subscribe(() => {
+        // Stamp on ANY sync work settling, not just our own runs. The floor must
+        // space a background sync against every other sync — otherwise the first
+        // one of the session fires back-to-back with the initial sync (the exact
+        // "blur right after initial sync" case the old shared throttle guarded,
+        // which the effect split dissolved), and a trigger deferred during the
+        // before-close sync starts fresh I/O at the instant the window closes.
+        this._lastSettleAt = performance.now();
+        this._scheduleDrain();
+      });
 
     // Gate opening: the initial sync's own `finally` releases the busy signals
     // BEFORE SyncEffects flips the gate in its `.then()`. So the busy-falling
@@ -184,10 +210,12 @@ export class BackgroundSyncSchedulerService {
     // always true and skipDuringSyncWindow() would suppress TODAY_TAG repair and
     // day-change effects INDEFINITELY. The floor guarantees a real idle window
     // between runs, in which those effects can fire.
-    const sinceLastSettle = Date.now() - this._lastSettleAt;
-    if (this._lastSettleAt !== 0 && sinceLastSettle < SYNC_MIN_INTERVAL) {
-      this._armSpacingTimer(SYNC_MIN_INTERVAL - sinceLastSettle);
-      return;
+    if (this._lastSettleAt !== null) {
+      const sinceLastSettle = performance.now() - this._lastSettleAt;
+      if (sinceLastSettle < SYNC_MIN_INTERVAL) {
+        this._armSpacingTimer(SYNC_MIN_INTERVAL - sinceLastSettle);
+        return;
+      }
     }
 
     const request = this._pending;
@@ -211,7 +239,7 @@ export class BackgroundSyncSchedulerService {
       SyncLog.err('BackgroundSyncScheduler: background sync threw', err);
     } finally {
       this._isRunning = false;
-      this._lastSettleAt = Date.now();
+      this._lastSettleAt = performance.now();
       this._settled$.next();
     }
 

@@ -7,6 +7,7 @@ import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncCycleGuardService } from '../../op-log/sync/sync-cycle-guard.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+import { SYNC_MIN_INTERVAL } from './sync.const';
 
 /**
  * The scheduler's own spec fakes SyncBusyService, so it proves the state machine
@@ -33,7 +34,22 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     await Promise.resolve();
   };
 
+  /**
+   * The duty-cycle floor spaces a background sync against ANY sync work, so
+   * every drain behind a real cycle release must clear it. It reads
+   * `performance.now()` (monotonic), which jasmine's clock does not fake.
+   */
+  let fakeNow: number;
+  const passFloor = async (): Promise<void> => {
+    fakeNow += SYNC_MIN_INTERVAL + 1;
+    jasmine.clock().tick(SYNC_MIN_INTERVAL + 1);
+    await flush();
+  };
+
   beforeEach(() => {
+    jasmine.clock().install();
+    fakeNow = 10_000;
+    spyOn(performance, 'now').and.callFake(() => fakeNow);
     isSyncInProgress$ = new BehaviorSubject(false);
     isEncryption$ = new BehaviorSubject(false);
     sync = jasmine.createSpy('sync').and.resolveTo('InSync');
@@ -80,6 +96,8 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     scheduler = TestBed.inject(BackgroundSyncSchedulerService);
   });
 
+  afterEach(() => jasmine.clock().uninstall());
+
   it('defers while a real cycle is held, and drains on the real release', async () => {
     // The central claim of the whole branch, end to end through the real busy
     // union: a trigger arriving during other sync work is deferred, not dropped.
@@ -90,7 +108,7 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     expect(sync).not.toHaveBeenCalled();
 
     guard.end();
-    await flush();
+    await passFloor();
 
     expect(sync).toHaveBeenCalledTimes(1);
   });
@@ -106,7 +124,7 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     expect(sync).not.toHaveBeenCalled();
 
     guard.end();
-    await flush();
+    await passFloor();
 
     expect(sync).toHaveBeenCalledTimes(1);
   });
@@ -127,7 +145,7 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     expect(sync).not.toHaveBeenCalled();
 
     guard.end();
-    await flush();
+    await passFloor();
     expect(sync).toHaveBeenCalledTimes(1);
   });
 
@@ -140,7 +158,7 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     expect(sync).not.toHaveBeenCalled();
 
     isEncryption$.next(false);
-    await flush();
+    await passFloor();
 
     expect(sync).toHaveBeenCalledTimes(1);
   });
@@ -154,7 +172,7 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
     await flush();
 
     guard.end();
-    await flush();
+    await passFloor();
 
     expect(sync).toHaveBeenCalledTimes(1);
   });
@@ -168,12 +186,12 @@ describe('BackgroundSyncScheduler + SyncBusyService + SyncCycleGuard (integratio
 
     guard.end();
     guard.tryBegin();
-    await flush();
+    await passFloor();
 
     expect(sync).not.toHaveBeenCalled();
 
     guard.end();
-    await flush();
+    await passFloor();
     expect(sync).toHaveBeenCalledTimes(1);
   });
 });

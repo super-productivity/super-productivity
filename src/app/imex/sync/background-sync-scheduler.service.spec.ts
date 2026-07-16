@@ -63,15 +63,27 @@ describe('BackgroundSyncSchedulerService', () => {
     await Promise.resolve();
   };
 
+  /**
+   * The duty-cycle floor reads `performance.now()` (monotonic — a wall-clock
+   * jump must not strand it), which jasmine's mockDate does NOT fake. Drive it
+   * explicitly and keep the timer clock in step.
+   */
+  let fakeNow: number;
+  const advance = (ms: number): void => {
+    fakeNow += ms;
+    jasmine.clock().tick(ms);
+  };
+
   /** Advances past the duty-cycle floor so a deferred trailing run may proceed. */
   const passFloor = async (): Promise<void> => {
-    jasmine.clock().tick(SYNC_MIN_INTERVAL + 1);
+    advance(SYNC_MIN_INTERVAL + 1);
     await flush();
   };
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(new Date(1_000_000));
+    fakeNow = 10_000;
+    spyOn(performance, 'now').and.callFake(() => fakeNow);
     busy = new FakeBusy();
     trigger = new FakeTrigger();
     providerManager = new FakeProviderManager();
@@ -205,6 +217,10 @@ describe('BackgroundSyncSchedulerService', () => {
 
       busy.set(false);
       await flush();
+      // The floor spaces us against the foreign work that just settled, not only
+      // against our own runs.
+      expect(sync).not.toHaveBeenCalled();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(1);
     });
@@ -217,7 +233,7 @@ describe('BackgroundSyncSchedulerService', () => {
       await flush();
 
       busy.set(false);
-      await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(1);
     });
@@ -258,7 +274,7 @@ describe('BackgroundSyncSchedulerService', () => {
       expect(sync).not.toHaveBeenCalled();
 
       trigger.setInitialSyncDone(true);
-      await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(1);
     });
@@ -301,7 +317,7 @@ describe('BackgroundSyncSchedulerService', () => {
 
       // A live trigger asks again against the new target.
       scheduler.request();
-      await flush();
+      await passFloor();
 
       expect(sync).toHaveBeenCalledTimes(1);
     });
