@@ -1,10 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { provideMockStore } from '@ngrx/store/testing';
-import {
-  SyncProviderManager,
-  notifyFileProviderTargetChanged,
-} from './provider-manager.service';
+import { SyncProviderManager } from './provider-manager.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from './provider.const';
@@ -15,7 +12,7 @@ import { SyncProviderBase } from './provider.interface';
  * and carries `isTargetChanged`: true only when the save moved the TARGET. That
  * flag drives invalidateAllTargets(), which wipes the seq cursor — so a false
  * positive sends the next sync down the sinceSeq===0 snapshot-bootstrap path.
- * The picker / Android setupSaf / OneDrive pre-auth write bypass
+ * The Electron LocalFile folder commit / OneDrive pre-auth write bypass
  * setProviderConfig() entirely and assert a target change directly.
  */
 describe('SyncProviderManager target-change notification', () => {
@@ -69,13 +66,6 @@ describe('SyncProviderManager target-change notification', () => {
   describe('notifyProviderTargetChanged() (bypass ingresses)', () => {
     it('emits isTargetChanged — the caller asserts the move directly', () => {
       service.notifyProviderTargetChanged();
-
-      expect(configSpy).toHaveBeenCalledOnceWith({ isTargetChanged: true });
-    });
-
-    it('routes the module-level notifyFileProviderTargetChanged() to the registered instance', () => {
-      // Injecting the service self-registered it as the module singleton.
-      notifyFileProviderTargetChanged();
 
       expect(configSpy).toHaveBeenCalledOnceWith({ isTargetChanged: true });
     });

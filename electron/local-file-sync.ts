@@ -34,6 +34,41 @@ const getAppPrivateDir = (): string => app.getPath('userData');
 let _cachedSyncFolder: string | null | undefined = undefined;
 let _loadPromise: Promise<string | null> | null = null;
 
+// Folder picked but not yet committed via settings Save (#9075). Memory-only
+// on purpose: a crash or close-without-save must leave the live sync target
+// untouched. Main-owned so the renderer never round-trips an absolute path
+// (#8228) — commit/discard reference this slot, they don't carry a path.
+let _pendingSyncFolder: string | null = null;
+
+// Bumped by every discard (IPC or renderer-death reset below). A pick
+// snapshots it before opening the native dialog and refuses to arm the slot
+// if it moved meanwhile: a discard during an open picker means the owning
+// settings UI is gone (closeAllDialogs(), reload, non-modal WM quirks), and
+// arming anyway would orphan a candidate that a later unrelated Save would
+// silently commit.
+let _discardGeneration = 0;
+
+const _discardPendingSyncFolder = (): void => {
+  _pendingSyncFolder = null;
+  _discardGeneration++;
+};
+
+// A renderer reload/crash destroys the settings dialog without running its
+// discard hook, which would leave a picked-but-never-saved folder armed to
+// commit on an unrelated Save much later. Drop the candidate whenever the
+// renderer navigates away or dies (in-app Angular routing is same-document
+// and does not fire did-navigate). Installed lazily on first pick — the main
+// window is guaranteed to exist there.
+let _isPendingResetHookInstalled = false;
+const _installPendingResetHook = (win: ReturnType<typeof getWin>): void => {
+  if (_isPendingResetHookInstalled || !win?.webContents?.on) {
+    return;
+  }
+  win.webContents.on('did-navigate', _discardPendingSyncFolder);
+  win.webContents.on('render-process-gone', _discardPendingSyncFolder);
+  _isPendingResetHookInstalled = true;
+};
+
 const _loadSyncFolderFromDisk = async (): Promise<string | null> => {
   const all = await loadSimpleStoreAll();
   const raw = all[SimpleStoreKey.SYNC_FOLDER_PATH];
@@ -287,7 +322,10 @@ export const initLocalFileSyncAdapter = (): void => {
 
   ipcMain.handle(IPC.PICK_DIRECTORY, async (): Promise<string | Error | undefined> => {
     try {
-      const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
+      const win = getWin();
+      _installPendingResetHook(win);
+      const discardGenAtOpen = _discardGeneration;
+      const { canceled, filePaths } = (await dialog.showOpenDialog(win, {
         title: 'Select sync folder',
         buttonLabel: 'Select Folder',
         properties: [
@@ -300,17 +338,67 @@ export const initLocalFileSyncAdapter = (): void => {
       if (canceled || !filePaths[0]) {
         return undefined;
       }
-      // Persist main-side BEFORE returning the display string. If
-      // canonicalization or persistence fails (deleted between pick and
-      // commit, EACCES on userData, etc.), surface a safe error rather than
-      // a silent undefined — otherwise the renderer cannot distinguish
-      // failure from user-cancel and the user is left wondering why their
-      // pick didn't take.
-      return await setSyncFolderPath(filePaths[0]);
+      if (_discardGeneration !== discardGenAtOpen) {
+        // The settings UI that owned this pick was torn down (its discard
+        // already ran) while the native dialog was open — nobody is left to
+        // commit or discard the result. Treat as cancel instead of arming an
+        // ownerless candidate.
+        return undefined;
+      }
+      // Prepare-only (#9075): validate NOW so a bad pick errors at pick time,
+      // but do NOT persist or swap the live root — a sync firing between pick
+      // and settings Save must still hit the old folder, and Cancel must be
+      // able to abandon the pick. COMMIT_PICKED_DIRECTORY makes it live.
+      // Surfacing validation failures as a safe error (not undefined) keeps
+      // them distinguishable from user-cancel.
+      const canonical = realpathSync.native(filePaths[0]);
+      assertPathOutside(getAppPrivateDir(), canonical);
+      _pendingSyncFolder = canonical;
+      return canonical;
     } catch (e) {
-      error('PICK_DIRECTORY failed to persist sync folder', getSafeErrorMeta(e));
+      error('PICK_DIRECTORY failed to validate picked folder', getSafeErrorMeta(e));
       return createSafeIpcError(IPC.PICK_DIRECTORY, e);
     }
+  });
+
+  ipcMain.handle(
+    IPC.COMMIT_PICKED_DIRECTORY,
+    async (): Promise<{ path: string; isChanged: boolean } | null | Error> => {
+      try {
+        // Capture the slot before any await: a DISCARD or PICK landing while
+        // `prev` loads must not turn this commit into a null-deref or swap
+        // the path under it mid-flight.
+        const pending = _pendingSyncFolder;
+        if (pending === null) {
+          // Nothing picked this session (or already committed/discarded) —
+          // a routine settings Save without a pick. Not an error.
+          return null;
+        }
+        const prev = await getSyncFolderPath();
+        // Re-canonicalize + re-validate at commit time: the folder can be
+        // deleted or symlink-swapped between pick and Save. On failure the
+        // pending slot is kept so a retry stays loud (errors again) instead
+        // of silently saving without the folder change; the user re-picks
+        // or cancels.
+        const committed = await setSyncFolderPath(pending);
+        // Only clear the slot if it still holds what we committed — a newer
+        // pick that raced in must survive for its own commit.
+        if (_pendingSyncFolder === pending) {
+          _pendingSyncFolder = null;
+        }
+        // isChanged lets the renderer fire its target-change invalidation
+        // only on a real move — re-picking the same folder must not wipe
+        // per-target sync state (see notifyProviderTargetChanged docs).
+        return { path: committed, isChanged: committed !== prev };
+      } catch (e) {
+        error('COMMIT_PICKED_DIRECTORY failed to persist', getSafeErrorMeta(e));
+        return createSafeIpcError(IPC.COMMIT_PICKED_DIRECTORY, e);
+      }
+    },
+  );
+
+  ipcMain.handle(IPC.DISCARD_PICKED_DIRECTORY, async (): Promise<void> => {
+    _discardPendingSyncFolder();
   });
 
   ipcMain.handle(IPC.GET_SYNC_FOLDER_PATH, async (): Promise<string | null> => {

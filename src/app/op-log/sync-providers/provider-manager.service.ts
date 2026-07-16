@@ -39,31 +39,6 @@ export interface ProviderConfigChange {
   isTargetChanged: boolean;
 }
 
-// Module-level reference so static sync-form handlers can signal a target
-// change without an injector (mirrors the encryption-dialog-opener pattern).
-let providerManagerInstance: SyncProviderManager | null = null;
-
-const setProviderManagerInstance = (instance: SyncProviderManager): void => {
-  providerManagerInstance = instance;
-};
-
-/**
- * Signal that the active file-provider target changed through an ingress that
- * bypasses `setProviderConfig()` — the Electron LocalFile folder picker (which
- * persists the folder main-side, post-#8228) and Android `setupSaf()` (which
- * writes `safFolderUri` straight to the credential store). Both mutate the
- * target without firing `providerTargetChanged$`, so the file adapter would keep
- * the previous folder's revs/clocks/caches keyed by the (unchanged) `LocalFile`
- * provider id. Both ingresses are unambiguous target moves (the user picked a
- * different folder), so this asserts a target change directly rather than
- * inferring one from a config diff. It no-ops if the manager was never
- * instantiated — nothing is cached to leak.
- * (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
- */
-export const notifyFileProviderTargetChanged = (): void => {
-  providerManagerInstance?.notifyProviderTargetChanged();
-};
-
 /**
  * Service for managing sync providers.
  *
@@ -173,10 +148,6 @@ export class SyncProviderManager {
     );
 
   constructor() {
-    // Self-register so the module-level notifyFileProviderTargetChanged() can
-    // reach this singleton from static form config handlers.
-    setProviderManagerInstance(this);
-
     // Listen to sync config changes and update active provider
     this._syncConfig$.subscribe((cfg) => {
       try {
@@ -315,14 +286,15 @@ export class SyncProviderManager {
 
   /**
    * Asserts a target change for a write that bypassed `setProviderConfig()`, so
-   * no config diff is available to infer it from. Three such ingresses exist: the
-   * Electron LocalFile folder picker, Android `setupSaf()`, and the OneDrive
-   * pre-auth cfg write in `dialog-sync-cfg.component`. Callers that fire on every
-   * save (OneDrive) MUST gate this on `isSyncTargetChanged` — an unconditional
-   * notify reintroduces the cursor wipe this signal exists to avoid.
+   * no config diff is available to infer it from. Two such ingresses exist,
+   * both in `dialog-sync-cfg.component`: the Electron LocalFile folder commit
+   * (main-side store, post-#8228/#9075) and the OneDrive pre-auth cfg write.
+   * Callers MUST gate this on an actual move (`isSyncTargetChanged` for
+   * OneDrive, `isChanged` from the LocalFile commit) — an unconditional notify
+   * reintroduces the cursor wipe this signal exists to avoid.
    *
    * Kept minimal on purpose: it does not reload provider config (the caller
-   * already persisted the new target). See `notifyFileProviderTargetChanged()`.
+   * already persisted the new target).
    */
   notifyProviderTargetChanged(): void {
     this._providerConfigChanged$.next({ isTargetChanged: true });
