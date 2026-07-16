@@ -772,7 +772,12 @@ describe('OperationLogEffects', () => {
     });
 
     it('should NOT mark a divergence when a quota failure recovers via emergency compaction', fakeAsync(() => {
-      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
+      // Firefox's spelling on purpose: the store wraps the standard
+      // 'QuotaExceededError' name into StorageQuotaExceededError (a plain
+      // Error), which never matches isQuotaExceededError's DOMException check,
+      // so only the legacy spellings actually reach the quota-recovery path
+      // this test covers. See isQuotaExceededError's docblock.
+      const quotaError = new DOMException('Quota exceeded', 'NS_ERROR_DOM_QUOTA_REACHED');
       let callCount = 0;
       mockOpLogStore.appendWithVectorClockOverwrite.and.callFake(() => {
         callCount++;
