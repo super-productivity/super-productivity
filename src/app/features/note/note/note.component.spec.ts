@@ -165,15 +165,26 @@ describe('NoteComponent editFullscreen', () => {
     expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
   });
 
-  it('should update the note and rewrite the draft with the final content on save', async () => {
+  it('should persist the draft BEFORE dispatching the note update on save (durability ordering)', async () => {
+    const callOrder: string[] = [];
+    localDraftService.saveDraft.and.callFake(() => {
+      callOrder.push('saveDraft');
+      return Promise.resolve();
+    });
+    noteService.update.and.callFake(() => {
+      callOrder.push('update');
+    });
+
     await editFullscreen();
 
     afterClosed$.next('final content');
+    // The subscriber awaits saveDraft before dispatching, so let the microtask
+    // queue drain before asserting the update landed.
+    await Promise.resolve();
+    await Promise.resolve();
 
-    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
-      content: 'final content',
-    });
-    // The rewrite covers the debounce gap: the next open either lazily clears
+    // The draft (with the about-to-be-saved content, baseContent still the
+    // current note) is written durably first; the next open either lazily clears
     // it (persisted) or crash-recovers it (baseContent still matches).
     expect(localDraftService.saveDraft).toHaveBeenCalledWith({
       entityType: 'NOTE',
@@ -181,6 +192,20 @@ describe('NoteComponent editFullscreen', () => {
       content: 'final content',
       baseContent: 'saved content',
     });
+    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
+      content: 'final content',
+    });
+    // Ordering is the crash-safety guarantee: draft durable before dispatch.
+    expect(callOrder).toEqual(['saveDraft', 'update']);
+  });
+
+  it('should remove the note and clear its draft when deleted from the note menu', () => {
+    component.removeNote();
+
+    expect(noteService.remove).toHaveBeenCalledWith(NOTE);
+    // The fullscreen DELETE path already clears; this covers menu-deletion, which
+    // otherwise left the draft behind to recover onto a note that no longer exists.
+    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
   });
 
   it('should keep the draft on a force-close (undefined result)', async () => {

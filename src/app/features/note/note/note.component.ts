@@ -166,7 +166,12 @@ export class NoteComponent implements OnChanges {
     if (!this.note) {
       throw new Error('No note');
     }
+    const noteId = this.note.id;
     this._noteService.remove(this.note);
+    // The note is gone, so its crash-safe draft can never be recovered onto it
+    // again — drop it best-effort. The fullscreen DELETE path already clears its
+    // draft; this covers deletion straight from the note menu (#8982 review).
+    this._localDraftService.clearDraft('NOTE', noteId);
   }
 
   togglePinToToday(): void {
@@ -236,6 +241,8 @@ export class NoteComponent implements OnChanges {
     const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
       content: contentToOpen,
       ...(contentToOpen !== note.content ? { originalContent: note.content } : {}),
+      // Project notes keep a crash-safe draft, so confirm before discarding.
+      isConfirmDiscardOnClose: true,
     });
     // Checkpoint the editor contents locally so they survive a crash.
     const contentChangedSub = isDraftUnreadable
@@ -248,7 +255,7 @@ export class NoteComponent implements OnChanges {
             baseContent: note.content,
           }),
         );
-    dialogRef.afterClosed().subscribe((res) => {
+    dialogRef.afterClosed().subscribe(async (res) => {
       contentChangedSub?.unsubscribe();
       if (!this.note) {
         throw new Error('No note');
@@ -259,21 +266,26 @@ export class NoteComponent implements OnChanges {
         if (!isDraftUnreadable) {
           this._localDraftService.clearDraft('NOTE', note.id);
         }
-        // This updates the note, when the user clicks the "Save" button. The draft
-        // is rewritten with the saved content: if the update persists, the next
-        // open sees draft.content === note.content and lazily clears it; if it
-        // crashes before persisting, baseContent === note.content and the
-        // crash-recovery branch restores it.
+        // Save ("Save" button, non-empty). Persist the draft (rewritten with the
+        // about-to-be-saved content, baseContent = the still-current note content)
+        // and AWAIT it BEFORE dispatching the note update, so a crash in the
+        // window between the two finds a durable draft: the next open restores it
+        // via the baseContent === note.content branch. The draft is not cleared
+        // here — a later open clears it lazily once draft.content === note.content
+        // proves the update persisted (the durable-persistence acknowledgement).
       } else if (typeof res === 'string') {
-        this._noteService.update(this.note.id, { content: res });
         if (!isDraftUnreadable) {
-          this._localDraftService.saveDraft({
+          await this._localDraftService.saveDraft({
             entityType: 'NOTE',
             entityId: note.id,
             content: res,
             baseContent: note.content,
           });
         }
+        // Uses the captured `note`, not `this.note`: the guard above ran before
+        // the await, so re-reading the instance field here would be reading it
+        // across the suspension point.
+        this._noteService.update(note.id, { content: res });
         // Discard — confirmed by the user in the dialog, so the draft goes too. Any
         // other result (undefined from a force-close) keeps the draft recoverable.
       } else if (res?.action === 'DISCARD' && !isDraftUnreadable) {

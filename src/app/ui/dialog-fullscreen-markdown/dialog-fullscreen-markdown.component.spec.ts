@@ -13,7 +13,12 @@ import { MOD, shortcutLabels } from './markdown-shortcuts.const';
 describe('DialogFullscreenMarkdownComponent', () => {
   let component: DialogFullscreenMarkdownComponent;
   let fixture: ComponentFixture<DialogFullscreenMarkdownComponent>;
-  let dialogData: { content: string; taskId?: string; originalContent?: string };
+  let dialogData: {
+    content: string;
+    taskId?: string;
+    originalContent?: string;
+    isConfirmDiscardOnClose?: boolean;
+  };
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
 
   beforeEach(async () => {
@@ -363,6 +368,7 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
   describe('close with discard', () => {
     it('should close without confirmation when the content is unmodified', () => {
+      component.data.isConfirmDiscardOnClose = true;
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
 
       component.close(true);
@@ -372,6 +378,7 @@ describe('DialogFullscreenMarkdownComponent', () => {
     });
 
     it('should ask for confirmation and close when the user confirms discarding', () => {
+      component.data.isConfirmDiscardOnClose = true;
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
         afterClosed: () => of(true),
       } as any);
@@ -384,6 +391,7 @@ describe('DialogFullscreenMarkdownComponent', () => {
     });
 
     it('should keep the dialog open when the user does not confirm discarding', () => {
+      component.data.isConfirmDiscardOnClose = true;
       spyOn(component['_matDialog'], 'open').and.returnValue({
         afterClosed: () => of(false),
       } as any);
@@ -396,6 +404,7 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
     it('should use originalContent as the modification reference when provided', () => {
       dialogData.originalContent = 'persisted content that differs';
+      dialogData.isConfirmDiscardOnClose = true;
       const recoveredFixture = TestBed.createComponent(DialogFullscreenMarkdownComponent);
       const recoveredComponent = recoveredFixture.componentInstance;
       const confirmDialogSpy = spyOn(
@@ -410,6 +419,18 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
       expect(confirmDialogSpy).toHaveBeenCalled();
       expect(recoveredComponent._matDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it('should discard immediately WITHOUT confirmation when the flag is unset (task notes / inline markdown)', () => {
+      // No isConfirmDiscardOnClose: these flows keep no crash-safe draft, so a
+      // Discard must close right away even with modified content (#8982 review).
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({ action: 'DISCARD' });
     });
   });
 

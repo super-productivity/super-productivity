@@ -26,6 +26,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { BackupService } from '../../op-log/backup/backup.service';
+import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { first } from 'rxjs/operators';
@@ -58,6 +59,7 @@ export class FileImexComponent implements OnInit {
   private _snackService = inject(SnackService);
   private _router = inject(Router);
   private _backupService = inject(BackupService);
+  private _localDraftService = inject(LocalDraftService);
   private _activatedRoute = inject(ActivatedRoute);
   private _matDialog = inject(MatDialog);
   private _http = inject(HttpClient);
@@ -236,6 +238,11 @@ export class FileImexComponent implements OnInit {
         true,
         true,
       );
+
+      // This profile's notes were just replaced wholesale, so every draft's
+      // baseContent refers to content that no longer exists. Swallows its own
+      // errors — a draft cleanup must never fail a completed import.
+      await this._localDraftService.deleteDraftsForActiveProfile();
 
       // Handle encryption state change if needed (e.g., import has different encryption settings)
       // This ensures server data is wiped and fresh snapshot is uploaded with correct encryption

@@ -13,6 +13,10 @@ type FullscreenMarkdownData = {
   // Persisted content when `content` is a recovered draft — used as the
   // reference for the discard confirmation.
   originalContent?: string;
+  // Set by project-note editing (which keeps a crash-safe draft) to confirm
+  // before discarding. Task notes and inline markdown leave it unset and close
+  // immediately (#8982 review).
+  isConfirmDiscardOnClose?: boolean;
 };
 
 const FULLSCREEN_MARKDOWN_DIALOG_CONFIG: MatDialogConfig = {

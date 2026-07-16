@@ -227,6 +227,85 @@ describe('LocalDraftService', () => {
     await service.clearDraft('NOTE', idA);
   });
 
+  it('should delete only the active profiles drafts on deleteDraftsForActiveProfile', async () => {
+    const idA = uniqueId();
+    const idB = uniqueId();
+
+    activeProfileId = 'profile-a';
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: idA,
+      content: 'a',
+      baseContent: 'base',
+    });
+    activeProfileId = 'profile-b';
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: idB,
+      content: 'b',
+      baseContent: 'base',
+    });
+
+    // Only profile-b's dataset was replaced (import/restore runs against the
+    // active profile), so profile-a's drafts must survive.
+    await service.deleteDraftsForActiveProfile();
+
+    activeProfileId = 'profile-b';
+    expect(await service.loadDraft('NOTE', idB)).toBeUndefined();
+    activeProfileId = 'profile-a';
+    const survivor = await loadDraft(idA);
+    expect(survivor?.content).toBe('a');
+    await service.clearDraft('NOTE', idA);
+  });
+
+  it('should prune drafts past the retention window on open, keeping fresh ones', async () => {
+    activeProfileId = 'profile-a';
+    const freshId = uniqueId();
+    const staleId = uniqueId();
+
+    // Fresh draft via the normal path (updatedAt = now).
+    await service.saveDraft({
+      entityType: 'NOTE',
+      entityId: freshId,
+      content: 'fresh',
+      baseContent: 'base',
+    });
+
+    // Stale draft written directly with an updatedAt older than the 14-day
+    // retention window (saveDraft always stamps now, so it cannot create one).
+    const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+    await (service as any)._withRetryOnClose((db: any) =>
+      db.put('drafts', {
+        key: `profile-a:NOTE:${staleId}`,
+        entityType: 'NOTE',
+        entityId: staleId,
+        profileId: 'profile-a',
+        content: 'stale',
+        baseContent: 'base',
+        updatedAt: Date.now() - fifteenDaysMs,
+      }),
+    );
+
+    // Trigger the once-per-session prune and let it finish (loadDraft fires it
+    // fire-and-forget; here we await it deterministically).
+    await (service as any)._pruneStaleDraftsOnce();
+
+    expect(await service.loadDraft('NOTE', staleId)).toBeUndefined();
+    const survivor = await loadDraft(freshId);
+    expect(survivor?.content).toBe('fresh');
+    await service.clearDraft('NOTE', freshId);
+  });
+
+  it('should prune at most once per session', async () => {
+    activeProfileId = 'profile-a';
+    const pruneSpy = spyOn(service as any, '_pruneStaleDrafts').and.callThrough();
+
+    await (service as any)._pruneStaleDraftsOnce();
+    await (service as any)._pruneStaleDraftsOnce();
+
+    expect(pruneSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('should retry once and succeed when the connection closes mid-operation (iOS #6643)', async () => {
     // Seed a draft, then simulate the iOS "connection is closing" DOMException
     // on the first read; the retry-once wrapper must re-open and succeed.

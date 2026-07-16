@@ -92,9 +92,15 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _dateService = inject(DateService);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
-  data: { content: string; taskId?: string; originalContent?: string } = inject(
-    MAT_DIALOG_DATA,
-  ) || { content: '' };
+  data: {
+    content: string;
+    taskId?: string;
+    originalContent?: string;
+    // Only set by flows that keep a crash-safe draft (project notes): when true,
+    // the Discard button asks for confirmation before closing. Task notes and
+    // inline markdown leave it unset and close immediately (#8982 review).
+    isConfirmDiscardOnClose?: boolean;
+  } = inject(MAT_DIALOG_DATA) || { content: '' };
   // Reference for the discard confirmation. `originalContent` wins when the
   // dialog is seeded with recovered draft content that differs from the
   // persisted entity content.
@@ -318,7 +324,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     // callers tell a user-confirmed discard from the dialog being disposed some
     // other way (e.g. MatDialog.closeAll()), which emits undefined.
     if (isSkipSave) {
-      this._confirmDiscardIfNeeded(() => this._matDialogRef.close({ action: 'DISCARD' }));
+      // Only flows that keep a crash-safe draft (project notes) confirm before
+      // discarding — there is unsynced work that would be lost. Task notes and
+      // inline markdown have no draft, so they close immediately (#8982 review).
+      if (this.data?.isConfirmDiscardOnClose) {
+        this._confirmDiscardIfNeeded(() =>
+          this._matDialogRef.close({ action: 'DISCARD' }),
+        );
+      } else {
+        this._matDialogRef.close({ action: 'DISCARD' });
+      }
       // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
     } else if (!this.data?.content && this.data.content.trim().length < 1) {
       this._matDialogRef.close({ action: 'DELETE' });

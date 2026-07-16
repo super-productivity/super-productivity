@@ -33,6 +33,16 @@ const DB_NAME = 'sp-local-drafts';
 const DB_STORE_NAME = 'drafts';
 const DB_VERSION = 1;
 
+// Reclaim policy for abandoned drafts, mirroring the conflict journal's
+// retention (JOURNAL_RETENTION_DAYS / JOURNAL_MAX_ENTRIES in
+// op-log/sync/conflict-journal.model.ts). A draft is device-local transient
+// state: once its entity is gone or the edit is long abandoned there is nothing
+// left to recover, so it should not accumulate forever. Kept as local consts
+// (not imported from the sync module) to avoid a core -> sync layering edge.
+const DRAFT_RETENTION_DAYS = 14;
+const DRAFT_RETENTION_MS = DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const DRAFT_MAX_ENTRIES = 200;
+
 interface DraftsDb extends DBSchema {
   [DB_STORE_NAME]: {
     key: string;
@@ -53,6 +63,7 @@ export class LocalDraftService {
   private _db: IDBPDatabase<DraftsDb> | undefined;
   private _initPromise: Promise<IDBPDatabase<DraftsDb>> | undefined;
   private _persistedProfileIdPromise: Promise<string> | undefined;
+  private _prunePromise: Promise<void> | undefined;
 
   async saveDraft({
     entityType,
@@ -87,6 +98,13 @@ export class LocalDraftService {
     entityType: LocalDraftEntityType,
     entityId: string,
   ): Promise<LocalDraft | undefined | typeof DRAFT_LOAD_ERROR> {
+    // Reclaim long-abandoned drafts lazily on the open path (fire-and-forget, at
+    // most once per session) so they do not accumulate forever. Age/cap only —
+    // it cannot know whether an entity still exists. It never blocks or fails
+    // this load; it runs in its own transactions, so a draft sitting exactly on
+    // the retention boundary may or may not still be here by the get() below —
+    // either outcome is fine for a draft that old.
+    void this._pruneStaleDraftsOnce();
     try {
       const profileId = await this._activeProfileId();
       return await this._withRetryOnClose((db) =>
@@ -132,6 +150,61 @@ export class LocalDraftService {
     }
   }
 
+  /**
+   * Deletes the active profile's drafts. Called where that profile's dataset is
+   * replaced wholesale (JSON import, SuperSync "Use Server Data"): every draft's
+   * baseContent then refers to note content that no longer exists, so keeping
+   * them would only offer stale, misleading recovery.
+   *
+   * Deliberately called from those two call sites rather than from
+   * BackupService.importCompleteBackup, where the conflict journal clears: a
+   * profile SWITCH also funnels through that method, and unlike the (profile-
+   * agnostic) journal, drafts are profile-keyed — profile A's drafts still refer
+   * to profile A's notes, which a switch only unloads, never replaces. Clearing
+   * there would silently destroy the recovery draft this feature exists for.
+   */
+  async deleteDraftsForActiveProfile(): Promise<void> {
+    try {
+      await this.deleteDraftsForProfile(await this._activeProfileId());
+    } catch (e) {
+      Log.err('LocalDraftService: Failed to delete drafts for the active profile', e);
+    }
+  }
+
+  /**
+   * Prunes drafts by `updatedAt`: drops anything older than the retention window
+   * and, if still over the entry cap, the oldest remaining entries. Runs at most
+   * once per session (guarded by `_prunePromise`) and is best-effort — a failure
+   * is logged and swallowed so it can never break the load that triggered it.
+   */
+  private _pruneStaleDraftsOnce(): Promise<void> {
+    if (!this._prunePromise) {
+      this._prunePromise = this._pruneStaleDrafts().catch((e) => {
+        Log.err('LocalDraftService: Failed to prune stale drafts', e);
+      });
+    }
+    return this._prunePromise;
+  }
+
+  /**
+   * `now` is a parameter (rather than read inside) so the policy stays
+   * deterministic under test, mirroring ConflictJournalService.pruneOnStart.
+   */
+  private async _pruneStaleDrafts(now: number = Date.now()): Promise<void> {
+    await this._withRetryOnClose(async (db) => {
+      const all = await db.getAll(DB_STORE_NAME);
+      const cutoff = now - DRAFT_RETENTION_MS;
+      const expiredKeys = all.filter((d) => d.updatedAt < cutoff).map((d) => d.key);
+      const survivors = all
+        .filter((d) => d.updatedAt >= cutoff)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      const overflowKeys = survivors.slice(DRAFT_MAX_ENTRIES).map((d) => d.key);
+      await Promise.all(
+        [...expiredKeys, ...overflowKeys].map((key) => db.delete(DB_STORE_NAME, key)),
+      );
+    });
+  }
+
   private async _activeProfileId(): Promise<string> {
     const active = this._userProfileService.activeProfile()?.id;
     if (active) {
@@ -144,16 +217,12 @@ export class LocalDraftService {
     // of a wrong DEFAULT_PROFILE_ID. The persisted id is stable for the session
     // (switching profiles reloads the app), so it is read at most once.
     if (!this._persistedProfileIdPromise) {
+      // loadProfileMetadata() catches internally and resolves to null on any
+      // failure (never rejects), and null falls through to DEFAULT_PROFILE_ID
+      // here — so no .catch is needed on this chain.
       this._persistedProfileIdPromise = this._userProfileStorageService
         .loadProfileMetadata()
-        .then((meta) => meta?.activeProfileId || DEFAULT_PROFILE_ID)
-        .catch((e) => {
-          Log.err(
-            'LocalDraftService: Failed to load persisted profile id, using default',
-            e,
-          );
-          return DEFAULT_PROFILE_ID;
-        });
+        .then((meta) => meta?.activeProfileId || DEFAULT_PROFILE_ID);
     }
     return this._persistedProfileIdPromise;
   }
@@ -169,9 +238,11 @@ export class LocalDraftService {
   private async _withRetryOnClose<T>(
     fn: (db: IDBPDatabase<DraftsDb>) => Promise<T>,
   ): Promise<T> {
-    const db = await this._ensureDb();
+    // _ensureDb() must be inside the try so a "connection is closing" error
+    // thrown while (re)opening the DB is caught and retried too, not just one
+    // thrown by fn(). Mirrors ArchiveStoreService._withRetryOnClose.
     try {
-      return await fn(db);
+      return await fn(await this._ensureDb());
     } catch (e) {
       if (isConnectionClosingError(e)) {
         Log.warn('LocalDraftService: Connection closing error detected, re-opening', e);
