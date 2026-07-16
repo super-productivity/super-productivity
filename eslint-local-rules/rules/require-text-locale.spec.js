@@ -36,13 +36,46 @@ ruleTester.run('require-text-locale', rule, {
     {
       code: `const raw = date.toLocaleDateString(this._dateTimeFormatService.currentLocale());`,
     },
-    // toLocaleTimeString: dayPeriod (AM/PM) must follow currentLocale so the ISO
-    // 24h clock is preserved. Deliberately out of scope.
+    // toLocaleTimeString: a clock time, which must follow currentLocale so the
+    // ISO 24h clock is preserved. Deliberately out of scope.
     {
       code: `
         const t = date.toLocaleTimeString(this._dateTimeFormatService.currentLocale(), {
           hour: 'numeric',
           minute: 'numeric',
+        });
+      `,
+    },
+    // A spelled-out dayPeriod in a clock time still keeps currentLocale: routing
+    // it to textLocale() would flip the ISO 24h clock to 12h ("13:05" -> "1:05
+    // in the afternoon"). dayPeriod only renders under a 12h clock at all.
+    {
+      code: `
+        const t = date.toLocaleString(this._dateTimeFormatService.currentLocale(), {
+          hour: 'numeric',
+          minute: '2-digit',
+          dayPeriod: 'short',
+        });
+      `,
+    },
+    {
+      code: `
+        const f = new Intl.DateTimeFormat(this._dateTimeFormatService.currentLocale(), {
+          hour: 'numeric',
+          minute: '2-digit',
+          dayPeriod: 'short',
+        });
+      `,
+    },
+    // A mixed date+time format has no single correct locale — textLocale() would
+    // fix the weekday but break the clock ("onsdag 13:05" -> "Wednesday 1:05
+    // PM"). It must be split instead, so the rule stays out of it (blind spot).
+    {
+      code: `
+        const s = date.toLocaleString(this._dateTimeFormatService.currentLocale(), {
+          weekday: 'long',
+          hour: 'numeric',
+          minute: '2-digit',
         });
       `,
     },

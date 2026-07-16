@@ -19,11 +19,11 @@
  *
  * Flagged: `.toLocaleDateString()` / `.toLocaleString()` / `new
  * Intl.DateTimeFormat()` whose options contain a spelled-out field (`weekday`,
- * `month: 'long'|'short'|'narrow'`, `era`, `dayPeriod`) when the locale argument
- * is `currentLocale()` — directly, or via a `const` initialised from it (the
- * shape the original #8987 bug had) — or is absent/`undefined`, which silently
- * uses the browser locale and ignores both the configured locale AND the UI
- * language.
+ * `month: 'long'|'short'|'narrow'`, `era`, `dayPeriod`) and no clock time, when
+ * the locale argument is `currentLocale()` — directly, or via a `const`
+ * initialised from it (the shape the original #8987 bug had) — or is
+ * absent/`undefined`, which silently uses the browser locale and ignores both
+ * the configured locale AND the UI language.
  *
  * Deliberately NOT detected (pinned as `valid` cases in the spec so the boundary
  * is explicit and a change that starts catching them trips the spec):
@@ -32,10 +32,12 @@
  *     the obligation sits with the caller
  *   - a reassigned locale variable, or one built by a helper/ternary
  *   - a non-literal options object (variable or spread)
- *   - `.toLocaleTimeString()`: its options are hour/minute and `dayPeriod`
- *     (AM/PM) must follow `currentLocale()` so the ISO 24h clock is preserved
- *   - `new Intl.DateTimeFormat(currentLocale(), { hour, minute })`: clock times,
- *     same reason — only a spelled-out field trips the rule
+ *   - `.toLocaleTimeString()`: a clock time, whose locale is pinned by the 24h
+ *     rule below
+ *   - ANY options object that also formats a clock time (`hour`), whatever else
+ *     it renders — `{ hour, minute }`, `{ hour, minute, dayPeriod }`,
+ *     `{ weekday, hour }`. See `rendersSpelledOutName` for why the rule cannot
+ *     advise on these.
  *
  * A clean run does NOT prove a file is free of #8987 — it proves the direct
  * call sites are.
@@ -47,22 +49,48 @@ const SPELLED_OUT_VALUES = new Set(['long', 'short', 'narrow']);
 
 const NAME_FORMATTERS = new Set(['toLocaleDateString', 'toLocaleString']);
 
+/** The key of a statically-readable options property, or `null`. */
+const propKey = (prop) => {
+  if (prop.type !== 'Property' || prop.computed) return null;
+  return prop.key.name || prop.key.value;
+};
+
+/** True for an options object literal that also formats a clock time. */
+const rendersClockTime = (optsNode) =>
+  optsNode.properties.some((prop) => propKey(prop) === 'hour');
+
+/** True when the property renders a spelled-out name rather than digits. */
+const isSpelledOutProp = (prop) => {
+  const key = propKey(prop);
+  if (key === null) return false;
+  if (ALWAYS_SPELLED_OUT.has(key)) return true;
+  // `month` only counts when spelled out — `month: 'numeric'` is digits, and
+  // those must keep `currentLocale()` so ISO day-first ordering survives.
+  return (
+    key === 'month' &&
+    prop.value.type === 'Literal' &&
+    SPELLED_OUT_VALUES.has(prop.value.value)
+  );
+};
+
 /**
- * True for an options object literal that renders at least one spelled-out name.
- * `month` only counts when spelled out — `month: 'numeric'` is digits, and those
- * must keep `currentLocale()` so ISO day-first ordering survives.
+ * True for an options object literal that renders at least one spelled-out name
+ * and no clock time.
+ *
+ * An `hour` in the same options object pins the locale: it renders 24h under the
+ * ISO `sv` sentinel but 12h under most UI languages, so swapping the whole call
+ * to `textLocale()` would trade a Swedish name for a broken clock — "onsdag
+ * 13:05" becomes "Wednesday 1:05 PM", the very ISO regression this rule family
+ * exists to prevent. Such a format has no single correct locale; it has to be
+ * split (names on `textLocale()`, clock on `currentLocale()` — see
+ * `plannedStartDateStr`), which is more than a one-locale message can advise.
+ * Staying silent costs a blind spot on `{ weekday, hour }`; firing would cost
+ * confidently wrong advice at `error` severity.
  */
 const rendersSpelledOutName = (optsNode) => {
   if (!optsNode || optsNode.type !== 'ObjectExpression') return false;
-  return optsNode.properties.some((prop) => {
-    if (prop.type !== 'Property' || prop.computed) return false;
-    const key = prop.key.name || prop.key.value;
-    if (ALWAYS_SPELLED_OUT.has(key)) return true;
-    if (key === 'month') {
-      return prop.value.type === 'Literal' && SPELLED_OUT_VALUES.has(prop.value.value);
-    }
-    return false;
-  });
+  if (rendersClockTime(optsNode)) return false;
+  return optsNode.properties.some(isSpelledOutProp);
 };
 
 /** True for `<anything>.currentLocale()`. */
@@ -129,17 +157,8 @@ module.exports = {
 
     /** Name the offending field so the message points at the actual culprit. */
     const spelledOutField = (optsNode) => {
-      const prop = optsNode.properties.find((p) => {
-        if (p.type !== 'Property' || p.computed) return false;
-        const key = p.key.name || p.key.value;
-        return (
-          ALWAYS_SPELLED_OUT.has(key) ||
-          (key === 'month' &&
-            p.value.type === 'Literal' &&
-            SPELLED_OUT_VALUES.has(p.value.value))
-        );
-      });
-      return prop ? prop.key.name || prop.key.value : 'name';
+      const prop = optsNode.properties.find(isSpelledOutProp);
+      return prop ? propKey(prop) : 'name';
     };
 
     /** Both `d.toLocaleDateString(locale, opts)` and `new Intl.DateTimeFormat(locale, opts)`. */
