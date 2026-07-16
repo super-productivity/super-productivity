@@ -17,14 +17,15 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { SyncTriggerService } from './sync-trigger.service';
+import { BackgroundSyncSchedulerService } from './background-sync-scheduler.service';
 import {
   INITIAL_SYNC_DELAY_MS,
   SYNC_BEFORE_CLOSE_ID,
   SYNC_INITIAL_SYNC_TRIGGER,
 } from '../../imex/sync/sync.const';
 import { SyncProviderId } from '../../op-log/sync-exports';
-import { asyncScheduler, combineLatest, EMPTY, merge, Observable, of } from 'rxjs';
-import { isOnline$ } from '../../util/is-online';
+import { asyncScheduler, combineLatest, defer, EMPTY, merge, Observable, of } from 'rxjs';
+import { IS_ONLINE$ } from '../../util/is-online.token';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
@@ -43,6 +44,8 @@ import { vectorClockPruned$ } from '../../core/util/vector-clock';
 export class SyncEffects {
   private _syncWrapperService = inject(SyncWrapperService);
   private _syncTriggerService = inject(SyncTriggerService);
+  private _backgroundSyncScheduler = inject(BackgroundSyncSchedulerService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _simpleCounterService = inject(SimpleCounterService);
@@ -53,7 +56,14 @@ export class SyncEffects {
   syncBeforeQuit$ = createEffect(
     () =>
       !IS_ELECTRON
-        ? EMPTY
+        ? // NOT the bare `EMPTY` singleton: createEffect stamps a
+          // non-configurable marker onto whatever object it is handed, so
+          // returning the module-wide instance brands it process-wide and every
+          // later construction of this class dies with "Cannot redefine property
+          // __@ngrx/effects_create__" — which is why this class had no
+          // behavioural tests. `defer` hands over a fresh instance per
+          // construction; the subscribed behaviour is unchanged.
+          defer(() => EMPTY)
         : this._dataInitStateService.isAllDataLoadedInitially$.pipe(
             concatMap(() => this._syncWrapperService.isEnabledAndReady$),
             distinctUntilChanged(),
@@ -135,27 +145,73 @@ export class SyncEffects {
       shareReplay(),
     );
 
+  /**
+   * The dynamic background branch — interval, resume, visibility, idle/activity,
+   * online-regained, and the trailing settle timer.
+   *
+   * Split out of {@link triggerSync$} and routed through the scheduler, which
+   * defers a trigger that arrives while other sync work is running instead of
+   * dropping it. Under the old shared `exhaustMap` these triggers were silently
+   * discarded whenever a sync was already in flight, so the work they asked for
+   * was lost until something else happened to trigger again.
+   *
+   * The gate is NOT checked here: the scheduler owns it, so a trigger arriving
+   * before the initial sync completes marks dirty and drains afterwards rather
+   * than being dropped or starting a shadow initial sync.
+   */
+  scheduleBackgroundSync$ = createEffect(
+    () =>
+      this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+        switchMap(() =>
+          combineLatest([
+            this._syncWrapperService.isEnabledAndReady$,
+            this._syncWrapperService.syncInterval$,
+            this._syncWrapperService.syncProviderId$,
+          ]).pipe(
+            switchMap(([isEnabledAndReady, syncInterval, providerId]) =>
+              isEnabledAndReady && syncInterval
+                ? this._syncTriggerService.getSyncTrigger$(
+                    syncInterval,
+                    providerId !== SyncProviderId.SuperSync,
+                  )
+                : EMPTY,
+            ),
+          ),
+        ),
+        tap((x) => SyncLog.log('sync(effect) background trigger.....', x)),
+        // Unchanged frequency limit. The scheduler collapses a burst into one
+        // rerun anyway, but this keeps the pre-existing rate ceiling rather than
+        // quietly raising it as a side effect of the split.
+        throttleTime(2000, asyncScheduler, { leading: true, trailing: false }),
+        // E2E tests set this flag after setup to prevent auto-sync from interfering
+        // with controlled, sequential sync via the sync button click
+        filter(() => !(globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC),
+        withLatestFrom(this._isOnline$),
+        // Offline background triggers were already no-ops; requesting here would
+        // only queue work that fails. I_IS_ONLINE re-triggers on reconnect.
+        filter(([, isOnline]) => !!isOnline),
+        tap(() => this._backgroundSyncScheduler.request()),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * The two directly-awaited gate-openers: initial sync and after-enable.
+   *
+   * These deliberately do NOT go through the scheduler. They own opening the
+   * initial gate — the scheduler refuses to run until they have — and they are
+   * the only sync callers here whose completion other code waits on.
+   *
+   * Both are one-shot, so the retained `exhaustMap` now only guards these two
+   * against each other. Background triggers used to share it; their exclusion
+   * against a running sync is now the scheduler's busy check plus
+   * `SyncCycleGuard.tryBegin()`, which is the authority either way.
+   */
   triggerSync$ = createEffect(
     () =>
       this._dataInitStateService.isAllDataLoadedInitially$.pipe(
         switchMap(() =>
           merge(
-            // dynamic
-            combineLatest([
-              this._syncWrapperService.isEnabledAndReady$,
-              this._syncWrapperService.syncInterval$,
-              this._syncWrapperService.syncProviderId$,
-            ]).pipe(
-              switchMap(([isEnabledAndReady, syncInterval, providerId]) =>
-                isEnabledAndReady && syncInterval
-                  ? this._syncTriggerService.getSyncTrigger$(
-                      syncInterval,
-                      providerId !== SyncProviderId.SuperSync,
-                    )
-                  : EMPTY,
-              ),
-            ),
-
             // initial after starting app — wait for provider to actually be ready
             this._initialPwaUpdateCheckService.afterInitialUpdateCheck$.pipe(
               concatMap(() =>
@@ -188,7 +244,7 @@ export class SyncEffects {
         // E2E tests set this flag after setup to prevent auto-sync from interfering
         // with controlled, sequential sync via the sync button click
         filter(() => !(globalThis as any).__SP_E2E_BLOCK_AUTO_SYNC),
-        withLatestFrom(isOnline$),
+        withLatestFrom(this._isOnline$),
         // don't run multiple after each other when dialog is open
         exhaustMap(([trigger, isOnline]) => {
           if (!isOnline) {

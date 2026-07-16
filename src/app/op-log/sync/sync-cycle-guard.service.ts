@@ -1,5 +1,12 @@
 import { Injectable } from '@angular/core';
-import { firstValueFrom, Subject, timer } from 'rxjs';
+import {
+  BehaviorSubject,
+  distinctUntilChanged,
+  filter,
+  firstValueFrom,
+  Observable,
+  timer,
+} from 'rxjs';
 
 /**
  * In-tab mutual-exclusion guard for the three top-level sync entry points:
@@ -36,16 +43,36 @@ import { firstValueFrom, Subject, timer } from 'rxjs';
  * epoch's remote state. Such callers must have blocked new cycles first (the
  * encryption-operation flag), or the wait result is stale immediately.
  *
+ * {@link isActive$} does NOT weaken that: it reports activity, it does not grant
+ * it. A subscriber may use it to retry `tryBegin()` at a moment when the claim
+ * is likelier to succeed, but must still treat a `false` return as "skip/retry
+ * later" and must never block on the notification. Awaiting an emission as if it
+ * were a lock hand-off would reintroduce exactly the deadlock this design rules
+ * out — it carries no claim, and any number of subscribers may race for the next
+ * `tryBegin()`.
+ *
  * Cross-tab apply-phase serialization remains the job of the existing Web
  * Locks; cross-tab gate/seq staleness is out of scope for this guard.
  */
 @Injectable({ providedIn: 'root' })
 export class SyncCycleGuardService {
-  private _isActive = false;
-  private _released$ = new Subject<void>();
+  private _isActive$ = new BehaviorSubject(false);
+
+  /**
+   * Cycle activity as an edge, for busy definitions built on {@link isActive}
+   * (the getter alone cannot tell a subscriber when it changes). Emits on BOTH
+   * transitions: the side channels claim a cycle without touching any other
+   * sync signal, so a claim-only-visible-on-release stream would report those
+   * cycles as idle for their whole duration.
+   *
+   * Observing activity is NOT holding it — see the class docblock.
+   */
+  readonly isActive$: Observable<boolean> = this._isActive$
+    .asObservable()
+    .pipe(distinctUntilChanged());
 
   get isActive(): boolean {
-    return this._isActive;
+    return this._isActive$.getValue();
   }
 
   /**
@@ -54,17 +81,16 @@ export class SyncCycleGuardService {
    * so the check-and-set is atomic within the single-threaded event loop.
    */
   tryBegin(): boolean {
-    if (this._isActive) {
+    if (this.isActive) {
       return false;
     }
-    this._isActive = true;
+    this._isActive$.next(true);
     return true;
   }
 
   /** Release the cycle. Always call from a `finally` block. */
   end(): void {
-    this._isActive = false;
-    this._released$.next();
+    this._setInactive();
   }
 
   /**
@@ -74,13 +100,13 @@ export class SyncCycleGuardService {
    */
   async waitUntilFree(timeoutMs: number): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
-    while (this._isActive) {
+    while (this.isActive) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
         return false;
       }
       await Promise.race([
-        firstValueFrom(this._released$),
+        firstValueFrom(this._isActive$.pipe(filter((isActive) => !isActive))),
         firstValueFrom(timer(remaining)),
       ]);
     }
@@ -89,6 +115,19 @@ export class SyncCycleGuardService {
 
   /** @internal Test-only reset for the root singleton between unit tests. */
   _resetForTest(): void {
-    this._isActive = false;
+    this._setInactive();
+  }
+
+  /**
+   * Single active→inactive transition point, so every release site notifies.
+   * `end()` is called unconditionally from `finally` blocks that may not hold
+   * the cycle, so the guard suppresses no-op releases rather than emitting a
+   * spurious edge for a cycle that was never active.
+   */
+  private _setInactive(): void {
+    if (!this.isActive) {
+      return;
+    }
+    this._isActive$.next(false);
   }
 }

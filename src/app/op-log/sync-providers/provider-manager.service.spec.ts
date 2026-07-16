@@ -200,4 +200,99 @@ describe('SyncProviderManager target-change notification', () => {
       expect(service.syncEpoch).toBe(before);
     });
   });
+
+  /**
+   * Task 3. Deferred background work captures the epoch and revalidates it
+   * before I/O, so a request queued against one target cannot execute against
+   * another. Anything that moves the target or the authority to reach it must
+   * tick, or stale work runs against the wrong remote.
+   */
+  describe('configEpoch', () => {
+    /**
+     * Drives the real switch path. It is private because nothing outside the
+     * constructor's config subscription may choose the active provider; the
+     * async tail is inert here because getProviderById is stubbed.
+     */
+    const setActiveProvider = (id: SyncProviderId | null): void =>
+      (
+        service as unknown as { _setActiveProvider: (i: SyncProviderId | null) => void }
+      )._setActiveProvider(id);
+
+    it('starts at a stable value and does not drift on its own', () => {
+      const first = service.configEpoch;
+
+      expect(service.configEpoch).toBe(first);
+    });
+
+    it('advances on every provider-config write', async () => {
+      stubProvider(webdavCfg);
+      const before = service.configEpoch;
+
+      await service.setProviderConfig(SyncProviderId.WebDAV, { ...webdavCfg } as never);
+
+      expect(service.configEpoch).toBeGreaterThan(before);
+    });
+
+    it('advances on a target move asserted by a bypass ingress', () => {
+      const before = service.configEpoch;
+
+      service.notifyProviderTargetChanged();
+
+      expect(service.configEpoch).toBeGreaterThan(before);
+    });
+
+    it('advances on an active provider switch', () => {
+      // A switch emits NO providerConfigChanged$ by design, so an epoch derived
+      // from that stream would miss it and let work captured against the old
+      // provider survive.
+      stubProvider(webdavCfg);
+      const before = service.configEpoch;
+
+      setActiveProvider(SyncProviderId.WebDAV);
+
+      expect(service.configEpoch).toBeGreaterThan(before);
+      expect(configSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not advance when the provider is set to what it already was', () => {
+      stubProvider(webdavCfg);
+      setActiveProvider(SyncProviderId.WebDAV);
+      const before = service.configEpoch;
+
+      setActiveProvider(SyncProviderId.WebDAV);
+
+      expect(service.configEpoch).toBe(before);
+    });
+
+    it('advances on a credential revoke', async () => {
+      // Also emits no providerConfigChanged$, but revokes the authority a queued
+      // request captured.
+      const provider = {
+        id: SyncProviderId.WebDAV,
+        clearAuthCredentials: jasmine.createSpy('clear').and.resolveTo(undefined),
+        isReady: jasmine.createSpy('isReady').and.resolveTo(false),
+        privateCfg: { load: jasmine.createSpy('load').and.resolveTo(webdavCfg) },
+      } as unknown as SyncProviderBase<SyncProviderId>;
+      spyOn(service, 'getProviderById').and.resolveTo(provider);
+      const before = service.configEpoch;
+
+      await service.clearAuthCredentials(SyncProviderId.WebDAV);
+
+      expect(service.configEpoch).toBeGreaterThan(before);
+    });
+
+    it('is monotonic across a burst of transitions', () => {
+      stubProvider(webdavCfg);
+      const seen: number[] = [service.configEpoch];
+      service.notifyProviderTargetChanged();
+      seen.push(service.configEpoch);
+      setActiveProvider(SyncProviderId.WebDAV);
+      seen.push(service.configEpoch);
+      service.notifyProviderTargetChanged();
+      seen.push(service.configEpoch);
+
+      const isStrictlyIncreasing = seen.every((v, i) => i === 0 || v > seen[i - 1]);
+      expect(isStrictlyIncreasing).toBeTrue();
+    });
+  });
 });
