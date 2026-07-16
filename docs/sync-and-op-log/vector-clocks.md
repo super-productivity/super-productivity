@@ -77,7 +77,7 @@ interface VectorClockEntry {
 }
 ```
 
-The global clock is the **single source of truth** for the client's current causal knowledge. During local operation capture, it is updated atomically with operation writes (single IndexedDB transaction via `appendWithVectorClockUpdate`). The remote merge path (`mergeRemoteOpClocks`) updates the clock in a separate write after reading the current state.
+The global clock is the **single source of truth** for the client's current causal knowledge. During local operation capture, it is updated atomically with operation writes (single IndexedDB transaction via `appendWithVectorClockOverwrite`). The remote merge path (`mergeRemoteOpClocks`) updates the clock in a separate write after reading the current state.
 
 ### Snapshot Clock
 
@@ -98,7 +98,7 @@ In `operation-log.effects.ts`:
 1. `VectorClockService.getCurrentVectorClock()` reads the global clock from the `vector_clock` store
 2. `incrementVectorClock(currentClock, clientId)` creates a new clock with the client's counter incremented
 3. The operation is created with this **full, unpruned** clock
-4. `appendWithVectorClockUpdate(op, 'local')` writes the operation AND updates the global clock in a **single atomic IndexedDB transaction**
+4. `appendWithVectorClockOverwrite(op, 'local')` writes the operation AND updates the global clock in a **single atomic IndexedDB transaction**
 
 **Key invariant: Normal operations carry full (unpruned) vector clocks. No client-side pruning happens during capture.**
 

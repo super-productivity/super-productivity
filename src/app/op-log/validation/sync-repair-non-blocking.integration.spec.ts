@@ -3,7 +3,10 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { ValidateStateService } from './validate-state.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
-import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import {
+  MixedSourceOperationBatch,
+  OperationLogStoreService,
+} from '../persistence/operation-log-store.service';
 import { LockService } from '../sync/lock.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -92,10 +95,17 @@ describe('#9026 background-sync repair is non-blocking (stitched)', () => {
     );
 
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
-      'appendWithVectorClockUpdate',
+      'appendMixedSourceBatchSkipDuplicates',
       'saveStateCache',
     ]);
-    mockOpLogStore.appendWithVectorClockUpdate.and.resolveTo(1);
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+      async (batches: readonly MixedSourceOperationBatch[]) => ({
+        written: batches.flatMap((batch) =>
+          batch.ops.map((op) => ({ seq: 1, op, source: batch.source })),
+        ),
+        skippedCount: 0,
+      }),
+    );
     mockOpLogStore.saveStateCache.and.resolveTo();
 
     const mockLockService = jasmine.createSpyObj('LockService', ['request']);
@@ -174,7 +184,7 @@ describe('#9026 background-sync repair is non-blocking (stitched)', () => {
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(alertSpy).not.toHaveBeenCalled();
     // A REPAIR op was actually created (real createRepairOperation ran).
-    expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+    expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     // ...and the non-blocking awareness snack was surfaced.
     expect(mockSnackService.open).toHaveBeenCalledWith(
       jasmine.objectContaining({ msg: T.F.SYNC.D_DATA_REPAIRED.MSG }),

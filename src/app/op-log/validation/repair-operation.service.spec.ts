@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { RepairOperationService } from './repair-operation.service';
-import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import {
+  MixedSourceOperationBatch,
+  OperationLogStoreService,
+} from '../persistence/operation-log-store.service';
 import { LockService } from '../sync/lock.service';
 import { VectorClockService } from '../sync/vector-clock.service';
-import { ActionType, RepairSummary, OpType } from '../core/operation.types';
+import { ActionType, Operation, OpType, RepairSummary } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { TranslateService } from '@ngx-translate/core';
 import { RepairSyncContextService } from './repair-sync-context.service';
@@ -40,9 +43,26 @@ describe('RepairOperationService', () => {
     ...overrides,
   });
 
+  /** The operation passed to the mixed-source batch in the most recent call. */
+  const getAppendedOp = (): Operation =>
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0][0]
+      .ops[0];
+
+  /** Makes the batch mock echo its input ops back as written, with the given seq. */
+  const mockBatchAppendWithSeq = (seq: number): void => {
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+      async (batches: readonly MixedSourceOperationBatch[]) => ({
+        written: batches.flatMap((batch) =>
+          batch.ops.map((op) => ({ seq, op, source: batch.source })),
+        ),
+        skippedCount: 0,
+      }),
+    );
+  };
+
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
-      'appendWithVectorClockUpdate',
+      'appendMixedSourceBatchSkipDuplicates',
       'replaceRejectedRepair',
       'saveStateCache',
     ]);
@@ -60,8 +80,7 @@ describe('RepairOperationService', () => {
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
       fn(),
     );
-    // appendWithVectorClockUpdate returns the sequence number
-    mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(100));
+    mockBatchAppendWithSeq(100);
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
     mockOpLogStore.replaceRejectedRepair.and.resolveTo(101);
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
@@ -146,26 +165,30 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          actionType: '[Repair] Auto Repair' as ActionType,
-          opType: OpType.Repair,
-          entityType: 'ALL',
-          clientId: 'test-client',
-          schemaVersion: CURRENT_SCHEMA_VERSION,
-        }),
-        'local',
-      );
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledWith([
+        {
+          ops: [
+            jasmine.objectContaining({
+              actionType: '[Repair] Auto Repair' as ActionType,
+              opType: OpType.Repair,
+              entityType: 'ALL',
+              clientId: 'test-client',
+              schemaVersion: CURRENT_SCHEMA_VERSION,
+            }),
+          ],
+          source: 'local',
+        },
+      ]);
     });
 
-    it('should use appendWithVectorClockUpdate to ensure vector clock is updated atomically', async () => {
+    it('should use the mixed-source batch so the clock is rebased on the durable clock', async () => {
       const summary = createRepairSummary({ entityStateFixed: 1 });
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      // Verify appendWithVectorClockUpdate is called (not plain append)
-      // This ensures the vector clock store is updated atomically with the operation
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+      // The batch's in-transaction rebase is what prevents a stale in-memory
+      // clock cache from regressing the durable clock (#8939).
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
 
     it('should include repaired state and summary in payload', async () => {
@@ -173,10 +196,7 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      const appendCall = mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent();
-      const operation = appendCall.args[0];
-
-      expect(operation.payload).toEqual({
+      expect(getAppendedOp().payload).toEqual({
         appDataComplete: mockRepairedState,
         repairSummary: summary,
       });
@@ -189,9 +209,7 @@ describe('RepairOperationService', () => {
         service.createRepairOperation(mockRepairedState, summary, 'test-client'),
       );
 
-      const operation =
-        mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
-      expect(operation.payload).toEqual(
+      expect(getAppendedOp().payload).toEqual(
         jasmine.objectContaining({ repairBaseServerSeq: 17 }),
       );
     });
@@ -207,7 +225,7 @@ describe('RepairOperationService', () => {
       );
     });
 
-    it('should increment vector clock for the client', async () => {
+    it('should propose an incremented vector clock for the client', async () => {
       mockVectorClockService.getCurrentVectorClock.and.returnValue(
         Promise.resolve({ clientA: 10, clientB: 5 }),
       );
@@ -215,9 +233,7 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      const appendCall = mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent();
-      const operation = appendCall.args[0];
-
+      const operation = getAppendedOp();
       // Should have incremented the test-client entry
       expect(operation.vectorClock['test-client']).toBe(1);
       // Should preserve existing entries
@@ -225,9 +241,21 @@ describe('RepairOperationService', () => {
       expect(operation.vectorClock['clientB']).toBe(5);
     });
 
-    it('should save state cache after appending operation', async () => {
-      // appendWithVectorClockUpdate returns the sequence number directly
-      mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(42));
+    it('should save state cache with the seq and clock that were actually written', async () => {
+      const rebasedClock = { rebasedClient: 9, otherClient: 3 };
+      mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+        async (batches: readonly MixedSourceOperationBatch[]) => ({
+          // Simulate the in-transaction rebase changing the proposed clock.
+          written: batches.flatMap((batch) =>
+            batch.ops.map((op) => ({
+              seq: 42,
+              op: { ...op, vectorClock: rebasedClock },
+              source: batch.source,
+            })),
+          ),
+          skippedCount: 0,
+        }),
+      );
       const summary = createRepairSummary();
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
@@ -236,14 +264,14 @@ describe('RepairOperationService', () => {
         jasmine.objectContaining({
           state: mockRepairedState,
           lastAppliedOpSeq: 42,
+          vectorClock: rebasedClock,
           schemaVersion: CURRENT_SCHEMA_VERSION,
         }),
       );
     });
 
     it('should return the sequence number of the created operation', async () => {
-      // appendWithVectorClockUpdate returns the sequence number directly
-      mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(77));
+      mockBatchAppendWithSeq(77);
       const summary = createRepairSummary();
 
       const seq = await service.createRepairOperation(
@@ -296,7 +324,7 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
       // translateService.instant + alert() are only reached by the blocking path.
       expect(mockTranslateService.instant).not.toHaveBeenCalled();
       expect(alertSpy).not.toHaveBeenCalled();
@@ -330,14 +358,12 @@ describe('RepairOperationService', () => {
       const summary = createRepairSummary();
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
-      const firstCall = mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent();
-      const firstId = firstCall.args[0].id;
+      const firstId = getAppendedOp().id;
 
-      mockOpLogStore.appendWithVectorClockUpdate.calls.reset();
+      mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.reset();
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
-      const secondCall = mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent();
-      const secondId = secondCall.args[0].id;
+      const secondId = getAppendedOp().id;
 
       expect(firstId).not.toBe(secondId);
     });
@@ -349,8 +375,7 @@ describe('RepairOperationService', () => {
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
       const afterTime = Date.now();
-      const appendCall = mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent();
-      const operation = appendCall.args[0];
+      const operation = getAppendedOp();
 
       expect(operation.timestamp).toBeGreaterThanOrEqual(beforeTime);
       expect(operation.timestamp).toBeLessThanOrEqual(afterTime);

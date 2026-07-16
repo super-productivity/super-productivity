@@ -13,7 +13,7 @@
 >   and no spec breakage.
 > - ✅ **`OperationLogStoreService` fully migrated** — every method routes
 >   through the adapter, including the two flagship atomic flows
->   (`appendWithVectorClockUpdate`, `runDestructiveStateReplacement`). No direct
+>   (`appendWithVectorClockOverwrite`, `runDestructiveStateReplacement`). No direct
 >   `this.db` calls remain.
 > - ✅ **`ArchiveStoreService` fully migrated** (own adopted connection +
 >   `_withRetryOnClose` re-adopt path).
@@ -102,7 +102,7 @@ non-evictable; only a full _Clear storage_ or uninstall removes it.
   read-only-migration and are out of scope for the data-loss fix.
 - **Atomicity is the hard part**, not CRUD. Two methods need single-transaction
   multi-store writes that MUST stay atomic:
-  - `appendWithVectorClockUpdate()` — OPS + VECTOR_CLOCK in one tx.
+  - `appendWithVectorClockOverwrite()` — OPS + VECTOR_CLOCK in one tx.
   - `runDestructiveStateReplacement()` — OPS + STATE*CACHE + VECTOR_CLOCK +
     CLIENT_ID (+ ARCHIVE*\*) in one tx (crash-safety, issues #7709, #7732).
     Plus: auto-increment `seq` keypath, a **unique** `byId` index, and a compound
