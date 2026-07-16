@@ -250,15 +250,14 @@ export class OperationUploadService {
    * at the boundary classify the operation as concurrent and filter it out.
    *
    * Resolved lazily: only an op whose clock actually overflows pays for it.
-   * `didQuery` lets callers keep their db-roundtrip accounting honest.
    */
   private async resolveFullStateAuthor(
     tx: Prisma.TransactionClient,
     userId: number,
-  ): Promise<{ author: string | undefined; didQuery: boolean }> {
+  ): Promise<string | undefined> {
     const memoized = this.fullStateAuthorByTx.get(tx);
     if (memoized) {
-      return { author: memoized.author, didQuery: false };
+      return memoized.author;
     }
     const latestFullStateOp = await tx.operation.findFirst({
       where: { userId, ...CAUSAL_FULL_STATE_OPERATION_WHERE },
@@ -267,7 +266,7 @@ export class OperationUploadService {
     });
     const author = latestFullStateOp?.clientId;
     this.fullStateAuthorByTx.set(tx, { author });
-    return { author, didQuery: true };
+    return author;
   }
 
   /**
@@ -288,12 +287,12 @@ export class OperationUploadService {
     tx: Prisma.TransactionClient,
     userId: number,
     op: Operation,
-  ): Promise<{ preserveClientIds: string[]; didQuery: boolean }> {
+  ): Promise<string[]> {
     if (Object.keys(op.vectorClock).length <= MAX_VECTOR_CLOCK_SIZE) {
-      return { preserveClientIds: [], didQuery: false };
+      return [];
     }
-    const { author, didQuery } = await this.resolveFullStateAuthor(tx, userId);
-    return { preserveClientIds: author ? [author] : [], didQuery };
+    const author = await this.resolveFullStateAuthor(tx, userId);
+    return author ? [author] : [];
   }
 
   async processOperationBatch(
@@ -557,7 +556,7 @@ export class OperationUploadService {
     dbRoundtrips: number;
   }> {
     const entityPairs = getBatchConflictEntityPairs(duplicateFreeCandidates);
-    let dbRoundtrips = Math.ceil(
+    const dbRoundtrips = Math.ceil(
       entityPairs.length / CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
     const latestOpByEntity = await prefetchLatestEntityOpsForBatch(
@@ -609,8 +608,7 @@ export class OperationUploadService {
         this.noteFullStateAuthor(tx, op.clientId);
       }
       const protectedIds = await this.getPruneProtectedIds(tx, userId, op);
-      if (protectedIds.didQuery) dbRoundtrips++;
-      pruneVectorClockForStorage(op, protectedIds.preserveClientIds);
+      pruneVectorClockForStorage(op, protectedIds);
       // Reuse the payload byte size measured during validation; the clock is
       // (re)measured inside computeOpStorageBytes because it was just pruned.
       const sized = computeOpStorageBytes(op, candidate.payloadBytes);
@@ -741,14 +739,12 @@ export class OperationUploadService {
     wasOccupiedAtRequestStart?: boolean,
     firstRequestOperation?: { op: Operation; originalTimestamp: number },
   ): Promise<ProcessOperationResult> {
-    let dbRoundtrips = 0;
     // Rejected ops have no storage cost; the caller only reads storageBytes when
     // result.accepted is true.
     const reject = (result: UploadResult): ProcessOperationResult => ({
       result,
       storageBytes: 0,
       fallback: false,
-      dbRoundtrips,
     });
 
     // Clamp future timestamps instead of rejecting them (prevents silent data
@@ -923,11 +919,7 @@ export class OperationUploadService {
       this.noteFullStateAuthor(tx, op.clientId);
     }
     const protectedIds = await this.getPruneProtectedIds(tx, userId, op);
-    if (protectedIds.didQuery) dbRoundtrips++;
-    op.vectorClock = limitVectorClockSize(op.vectorClock, [
-      op.clientId,
-      ...protectedIds.preserveClientIds,
-    ]);
+    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId, ...protectedIds]);
     const afterSize = Object.keys(op.vectorClock).length;
     if (afterSize < beforeSize) {
       Logger.debug(
@@ -1039,7 +1031,6 @@ export class OperationUploadService {
       result: { opId: op.id, accepted: true, serverSeq },
       storageBytes: sized.bytes,
       fallback: sized.fallback,
-      dbRoundtrips,
     };
   }
 }

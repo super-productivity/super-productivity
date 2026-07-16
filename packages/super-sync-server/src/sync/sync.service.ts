@@ -332,7 +332,7 @@ export class SyncService {
                 this.validationService.validateOp(op, clientId);
               prevalidatedResults.set(op, validation);
 
-              const { result, storageBytes, fallback, dbRoundtrips } =
+              const { result, storageBytes, fallback } =
                 await this.operationUploadService.processOperation(
                   userId,
                   clientId,
@@ -343,7 +343,6 @@ export class SyncService {
                   requestStartOccupiedIds?.has(op.id),
                   firstRequestOperation,
                 );
-              uploadDbRoundtrips += dbRoundtrips;
               results.push(result);
               if (result.accepted) {
                 // Reuse the size computed in processOperation instead of
