@@ -1,8 +1,8 @@
 <div class="schedule-nav-controls">
-  <div class="week-month-selector">
+  <div class="time-view-selector">
     <button
       mat-icon-button
-      class="week-month-btn e2e-day-view-btn"
+      class="time-view-btn e2e-day-view-btn"
       [class.active]="isDayView()"
       [attr.aria-pressed]="isDayView()"
       (click)="selectTimeView('day')"
@@ -13,7 +13,7 @@
     </button>
     <button
       mat-icon-button
-      class="week-month-btn"
+      class="time-view-btn"
       [class.active]="isWeekView()"
       [attr.aria-pressed]="isWeekView()"
       (click)="selectTimeView('week')"
@@ -24,7 +24,7 @@
     </button>
     <button
       mat-icon-button
-      class="week-month-btn"
+      class="time-view-btn"
       [class.active]="isMonthView()"
       [attr.aria-pressed]="isMonthView()"
       (click)="selectTimeView('month')"

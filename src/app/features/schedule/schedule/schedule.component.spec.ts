@@ -982,7 +982,7 @@ describe('ScheduleComponent', () => {
     it('has a day-view toggle button that selects day mode', () => {
       const el: HTMLElement = fixture.nativeElement;
       const dayBtn = el.querySelector<HTMLButtonElement>(
-        '.week-month-btn.e2e-day-view-btn',
+        '.time-view-btn.e2e-day-view-btn',
       );
       expect(dayBtn).toBeTruthy();
       dayBtn!.click();
