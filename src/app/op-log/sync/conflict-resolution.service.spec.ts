@@ -11,6 +11,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
+import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import {
@@ -598,6 +599,136 @@ describe('ConflictResolutionService', () => {
       );
       // The generic "N local/remote wins" count snack must NOT fire for content loss.
       expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
+    describe('content-conflict banner REVIEW action', () => {
+      // This banner fires off the resolutions, NOT off the journal, so its
+      // REVIEW action has to be gated on the journal actually holding rows —
+      // otherwise the producer freeze (or a swallowed record() failure) sends
+      // the user to an empty review page at the exact moment they are worried
+      // about a discarded edit.
+      const buildContentLossConflicts = (): EntityConflict[] => {
+        const now = Date.now();
+        return [
+          createConflict(
+            'task-1',
+            [
+              {
+                ...createOpWithTimestamp('local-1', 'client-a', now - 1000),
+                payload: {
+                  actionPayload: {
+                    task: { id: 'task-1', changes: { title: 'My local title' } },
+                  },
+                  entityChanges: [],
+                },
+              },
+            ],
+            [
+              {
+                ...createOpWithTimestamp('remote-1', 'client-b', now),
+                payload: {
+                  actionPayload: {
+                    task: { id: 'task-1', changes: { title: 'Remote title' } },
+                  },
+                  entityChanges: [],
+                },
+              },
+            ],
+          ),
+        ];
+      };
+
+      const getJournal = (): ConflictJournalService =>
+        (service as unknown as { conflictJournal: ConflictJournalService })
+          .conflictJournal;
+
+      const openContentBanner = async (): Promise<jasmine.Spy<BannerService['open']>> => {
+        const openBannerSpy = spyOn(TestBed.inject(BannerService), 'open');
+        mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Remote title' }));
+        const conflicts = buildContentLossConflicts();
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+        await service.autoResolveConflictsLWW(conflicts);
+        return openBannerSpy;
+      };
+
+      it('omits the REVIEW action when the journal has nothing to review', async () => {
+        // record() no-ops, so the unreviewed count stays 0 — the state produced
+        // both by the producer freeze and by a swallowed record() failure.
+        spyOn(getJournal(), 'record').and.resolveTo();
+
+        const openBannerSpy = await openContentBanner();
+
+        const banner = openBannerSpy.calls.mostRecent().args[0];
+        expect(banner.id).toBe(BannerId.SyncConflictContentResolved);
+        // Message + built-in dismiss = exactly the released v18.14.0 banner.
+        expect(banner.action).toBeUndefined();
+      });
+
+      it('keeps the REVIEW action when the journal holds unreviewed entries', async () => {
+        spyOn(getJournal(), 'record').and.resolveTo();
+        (
+          getJournal() as unknown as {
+            _unreviewedCount: { set: (v: number) => void };
+          }
+        )._unreviewedCount.set(2);
+
+        const openBannerSpy = await openContentBanner();
+
+        const banner = openBannerSpy.calls.mostRecent().args[0];
+        expect(banner.action?.label).toBe(T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW);
+      });
+    });
+
+    describe('disableConflictJournal (producer freeze)', () => {
+      // Callee half of the freeze. remote-ops-processing.service.spec.ts asserts
+      // the production caller PASSES the flag; without these, deleting the gate
+      // in autoResolveConflictsLWW leaves every spec green while the fleet
+      // silently resumes persisting the discarded side of every conflict.
+      const buildConflicts = (): EntityConflict[] => {
+        const now = Date.now();
+        return [
+          createConflict(
+            'task-1',
+            [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
+            [createOpWithTimestamp('remote-1', 'client-b', now)],
+          ),
+        ];
+      };
+
+      const getRecordSpy = (): jasmine.Spy => {
+        const journal = (
+          service as unknown as { conflictJournal: ConflictJournalService }
+        ).conflictJournal;
+        return spyOn(journal, 'record').and.resolveTo();
+      };
+
+      it('journals resolutions by default', async () => {
+        const recordSpy = getRecordSpy();
+        const conflicts = buildConflicts();
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+
+        await service.autoResolveConflictsLWW(conflicts);
+
+        expect(recordSpy).toHaveBeenCalled();
+      });
+
+      it('records nothing when disableConflictJournal is set', async () => {
+        const recordSpy = getRecordSpy();
+        const conflicts = buildConflicts();
+        mockOperationApplier.applyOperations.and.resolveTo({
+          appliedOps: conflicts[0].remoteOps,
+        });
+
+        await service.autoResolveConflictsLWW(conflicts, [], {
+          disableConflictJournal: true,
+        });
+
+        expect(recordSpy).not.toHaveBeenCalled();
+      });
     });
 
     it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {

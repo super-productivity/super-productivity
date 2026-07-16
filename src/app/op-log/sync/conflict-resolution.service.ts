@@ -1834,16 +1834,31 @@ export class ConflictResolutionService {
     const named = labels.join(', ');
     const taskList = contentConflicts.length > MAX_NAMED ? `${named} …` : named;
 
+    // SPAP-15: REVIEW opens the conflicts page; DISMISS auto-renders (no action2).
+    // Only offered when the journal actually holds something to review, because
+    // this banner fires off the resolutions, not off the journal: under the
+    // producer freeze (or a swallowed `record()` failure, which is observe-only
+    // by contract) it would otherwise promise a review and land the user on an
+    // empty page. Dropping the action leaves exactly the released v18.14.0
+    // banner — message + built-in dismiss — which is the shape the freeze is
+    // meant to preserve. Mirrors `maybeShowSummaryBanner`, which already stays
+    // silent on an empty journal. Reads fresh: the journal loop awaits
+    // `record()` (which refreshes the count) before this notification step.
+    const hasEntriesToReview = this.conflictJournal.unreviewedCount() > 0;
+
     this.bannerService.open({
       id: BannerId.SyncConflictContentResolved,
       ico: 'sync_problem',
       msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
       translateParams: { taskList },
-      // SPAP-15: REVIEW opens the conflicts page; DISMISS auto-renders (no action2).
-      action: {
-        label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
-        fn: () => this.syncConflictBanner.navigateToReview(),
-      },
+      ...(hasEntriesToReview
+        ? {
+            action: {
+              label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
+              fn: () => this.syncConflictBanner.navigateToReview(),
+            },
+          }
+        : {}),
     });
   }
 
