@@ -2,10 +2,10 @@
 <mat-dialog-content>
   <form [formGroup]="form">
     <formly-form
-      [fields]="fields()"
+      [fields]="fields"
       [form]="form"
-      [model]="model()"
-      (modelChange)="model.set($event)"
+      [model]="model"
+      (modelChange)="model = $event"
     ></formly-form>
   </form>
   <div class="dialog-actions">

@@ -41,7 +41,13 @@ export class RepeatSectionTypeComponent extends FieldArrayType {
     const initialValue =
       this.field?.templateOptions?.defaultValue || (fn && fn(this.field));
 
-    super.add(undefined, initialValue);
+    // Clone so Formly does not push/mutate the shared props.defaultValue object.
+    const valueToAdd =
+      initialValue != null && typeof initialValue === 'object'
+        ? { ...initialValue }
+        : initialValue;
+
+    super.add(undefined, valueToAdd);
   }
 
   trackByFn(i: number, item: any): number | string {
