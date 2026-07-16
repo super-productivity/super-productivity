@@ -86,7 +86,7 @@ describe('WorklogService context-aware loading', () => {
         },
         {
           provide: DateTimeFormatService,
-          useValue: { currentLocale: () => 'en-US', isoTextLocale: () => null },
+          useValue: { textLocale: () => 'en-US' },
         },
       ],
     });

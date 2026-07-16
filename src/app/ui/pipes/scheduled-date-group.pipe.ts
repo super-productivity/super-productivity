@@ -47,9 +47,7 @@ export class ScheduledDateGroupPipe implements PipeTransform {
     // This is a compact group-header label, so the whole (short) format follows
     // the UI language when ISO is active rather than splitting weekday vs numeric
     // and losing the locale-native separator. #8987 follow-up.
-    const locale =
-      this._dateTimeFormatService.isoTextLocale() ??
-      this._dateTimeFormatService.currentLocale();
+    const locale = this._dateTimeFormatService.textLocale();
 
     // Format with weekday and date: "Wed 1/15"
     const formatter = new Intl.DateTimeFormat(locale, {

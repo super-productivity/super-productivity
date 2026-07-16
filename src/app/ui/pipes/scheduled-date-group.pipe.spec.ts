@@ -11,9 +11,9 @@ describe('ScheduledDateGroupPipe', () => {
 
   beforeEach(() => {
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: () => 'en-US',
-      // null = non-ISO option: the pipe falls back to currentLocale.
-      isoTextLocale: () => null,
+      // The pipe formats a spelled-out weekday, so it reads textLocale() —
+      // which the real service resolves to isoTextLocale() ?? currentLocale().
+      textLocale: () => 'en-US',
     });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => {
@@ -103,7 +103,7 @@ describe('ScheduledDateGroupPipe', () => {
 
   it('should respect configured locale for weekday names', () => {
     // Change locale to German
-    Object.defineProperty(mockDateTimeFormatService, 'currentLocale', {
+    Object.defineProperty(mockDateTimeFormatService, 'textLocale', {
       get: () => () => 'de-DE',
     });
 
@@ -112,13 +112,10 @@ describe('ScheduledDateGroupPipe', () => {
     expect(result).toMatch(/Mi/i);
   });
 
-  it('should follow the UI language (isoTextLocale) for the weekday under the ISO option (#8987)', () => {
-    // ISO 8601 option: currentLocale is the sv sentinel, but isoTextLocale
+  it('should follow the UI language for the weekday under the ISO option (#8987)', () => {
+    // ISO 8601 option: currentLocale would be the sv sentinel, but textLocale
     // carries the UI language ('de-DE'); the weekday must not leak Swedish.
-    Object.defineProperty(mockDateTimeFormatService, 'currentLocale', {
-      get: () => () => 'sv',
-    });
-    Object.defineProperty(mockDateTimeFormatService, 'isoTextLocale', {
+    Object.defineProperty(mockDateTimeFormatService, 'textLocale', {
       get: () => () => 'de-DE',
     });
 

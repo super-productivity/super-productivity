@@ -51,6 +51,8 @@ describe('HabitTrackerComponent', () => {
           useValue: {
             currentLocale: () => 'sv',
             isoTextLocale: () => 'en-US',
+            // Mirrors the real service: isoTextLocale() ?? currentLocale().
+            textLocale: () => 'en-US',
           },
         },
       ],

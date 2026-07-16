@@ -226,8 +226,7 @@ export class WorklogService {
         // Only feeds formatDayStr's spelled-out weekday, which must follow the UI
         // language under the ISO 8601 option (the `sv` sentinel would otherwise
         // leak Swedish weekday names in worklog day headers). #8987 follow-up.
-        this._dateTimeFormatService.isoTextLocale() ??
-          this._dateTimeFormatService.currentLocale(),
+        this._dateTimeFormatService.textLocale(),
       );
       return {
         worklog,

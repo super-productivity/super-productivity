@@ -71,11 +71,7 @@ export class ScheduledListPageComponent {
   // so under the ISO 8601 option we follow the UI language (isoTextLocale) rather
   // than the `sv` sentinel — which would otherwise leak Swedish ("ons, 15 juli").
   // #8987 follow-up.
-  readonly locale = computed(
-    () =>
-      this._dateTimeFormatService.isoTextLocale() ??
-      this._dateTimeFormatService.currentLocale(),
-  );
+  readonly locale = computed(() => this._dateTimeFormatService.textLocale());
   T: typeof T = T;
   TODAY_TAG: Tag = TODAY_TAG;
   taskRepeatCfgs$ = this._store.select(selectTaskRepeatCfgsSortedByTitleAndProject);
