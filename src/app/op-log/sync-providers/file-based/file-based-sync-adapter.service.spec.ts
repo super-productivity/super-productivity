@@ -3192,6 +3192,22 @@ describe('FileBasedSyncAdapterService', () => {
       });
     });
 
+    it('(a) acknowledges an already-committed op retry without appending it again', async () => {
+      const opsFile = makeOpsFile({
+        syncVersion: 3,
+        recentOps: [makeCompactOp({ id: 'op-123', sv: 3 })],
+      });
+      routeDownloads({ [C.OPS_FILE]: addPrefix(opsFile, 3) });
+
+      const result = await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      expect(result).toEqual({
+        results: [{ opId: 'op-123', accepted: true, serverSeq: 1 }],
+        latestSeq: 3,
+      });
+      expect(uploadedPaths()).toEqual([]);
+    });
+
     it('(a) op-only download reads ONLY sync-ops.json (no sync-state.json fetch)', async () => {
       const opsFile = makeOpsFile({
         syncVersion: 5,

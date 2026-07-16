@@ -47,6 +47,7 @@ export class SyncPage extends BasePage {
       syncFolderPath: string;
       isEncryptionEnabled?: boolean;
       encryptionPassword?: string;
+      isUseSplitSyncFiles?: boolean;
       /**
        * Set the encryption password in the setup-time "Encrypt before first
        * upload?" dialog (instead of the post-setup Enable Encryption button), so
@@ -210,6 +211,17 @@ export class SyncPage extends BasePage {
         await this.userNameInput.fill(config.username);
         await this.passwordInput.fill(config.password);
         await this.syncFolderInput.fill(config.syncFolderPath);
+
+        if (config.isUseSplitSyncFiles !== undefined) {
+          await this.expandAdvancedSettings();
+          const splitSyncCheckbox = dialog.getByRole('checkbox', {
+            name: /Surgical sync/i,
+          });
+          await splitSyncCheckbox.setChecked(config.isUseSplitSyncFiles);
+          await expect(splitSyncCheckbox).toBeChecked({
+            checked: config.isUseSplitSyncFiles,
+          });
+        }
 
         // Save the configuration
         await this.saveBtn.click();

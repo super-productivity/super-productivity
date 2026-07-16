@@ -2093,21 +2093,41 @@ export class FileBasedSyncAdapterService {
       return { results: [], latestSeq: this._localSeqCounters.get(providerKey) || 0 };
     }
 
+    const existingOps: SyncFileCompactOp[] = opsFile?.recentOps || [];
+    const existingOpIndexById = new Map(
+      existingOps.map((operation, index) => [operation.id, index]),
+    );
+    const newOps = ops.filter((operation) => !existingOpIndexById.has(operation.id));
+
+    // A successful PUT may commit even when its response is lost. The local op
+    // then remains pending and is retried after restart. Acknowledge IDs already
+    // present in the remote buffer without advancing syncVersion or appending a
+    // second copy.
+    if (newOps.length === 0 && opsFile) {
+      return {
+        results: ops.map((operation) => ({
+          opId: operation.id,
+          accepted: true,
+          serverSeq: (existingOpIndexById.get(operation.id) ?? 0) + 1,
+        })),
+        latestSeq: opsFile.syncVersion,
+      };
+    }
+
     const currentSyncVersion = opsFile?.syncVersion ?? 0;
     const newSyncVersion = currentSyncVersion + 1;
 
-    const compactOps: SyncFileCompactOp[] = ops.map((op) => ({
+    const compactOps: SyncFileCompactOp[] = newOps.map((op) => ({
       ...this._syncOpToCompact(op),
       sv: newSyncVersion,
     }));
 
     let mergedClock: VectorClock = opsFile?.vectorClock || {};
-    for (const op of ops) {
+    for (const op of newOps) {
       mergedClock = mergeVectorClocks(mergedClock, op.vectorClock);
     }
-    const schemaVersion = ops[0]?.schemaVersion || opsFile?.schemaVersion || 1;
+    const schemaVersion = newOps[0]?.schemaVersion || opsFile?.schemaVersion || 1;
 
-    const existingOps: SyncFileCompactOp[] = opsFile?.recentOps || [];
     const combinedOps = [...existingOps, ...compactOps];
 
     // Compaction is required when the folder has no snapshot yet (fresh/first
@@ -2250,13 +2270,22 @@ export class FileBasedSyncAdapterService {
     this._persistState();
 
     const latestSeq = newSyncVersion;
-    const startingSeq = Math.max(0, latestSeq - ops.length);
+    const startingSeq = Math.max(0, latestSeq - newOps.length);
+    let newOperationIndex = 0;
     return {
-      results: ops.map((op, i) => ({
-        opId: op.id,
-        accepted: true,
-        serverSeq: startingSeq + i + 1,
-      })),
+      results: ops.map((op) => {
+        const existingIndex = existingOpIndexById.get(op.id);
+        if (existingIndex !== undefined) {
+          return {
+            opId: op.id,
+            accepted: true,
+            serverSeq: existingIndex + 1,
+          };
+        }
+        const serverSeq = startingSeq + newOperationIndex + 1;
+        newOperationIndex++;
+        return { opId: op.id, accepted: true, serverSeq };
+      }),
       latestSeq,
     };
   }

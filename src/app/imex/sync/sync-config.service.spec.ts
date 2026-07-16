@@ -87,6 +87,7 @@ describe('SyncConfigService', () => {
         syncProvider: SyncProviderId.WebDAV,
         syncInterval: 300000,
         isEncryptionEnabled: true,
+        isUseSplitSyncFiles: true,
         encryptKey: 'secret-key',
         webDav: {
           baseUrl: 'https://example.com',
@@ -104,6 +105,7 @@ describe('SyncConfigService', () => {
       expect(globalConfigService.updateSection).toHaveBeenCalledWith('sync', {
         isEnabled: true,
         isEncryptionEnabled: true,
+        isUseSplitSyncFiles: true,
         syncProvider: SyncProviderId.WebDAV,
         syncInterval: 300000,
       });
