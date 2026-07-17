@@ -45,6 +45,7 @@ import {
   IDB_OPEN_RETRIES_NON_LOCK,
   IDB_OPEN_RETRY_BASE_DELAY_MS,
   LOCK_NAMES,
+  MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
@@ -890,6 +891,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
     await this._ensureInit();
 
+    // Pruned OUTSIDE the transaction (foreign awaits inside would break it);
+    // a stale author cannot be committed here — any interleaving append moves
+    // the op-log tail and the tail check below aborts the transaction (#9096).
+    const prunedVectorClock = await this.pruneClockForStorage(opts.vectorClock);
+
     const storeNames: OpLogStoreName[] = [
       STORE_NAMES.OPS,
       STORE_NAMES.STATE_CACHE,
@@ -974,12 +980,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             id: SINGLETON_KEY,
             state: opts.state,
             lastAppliedOpSeq: snapshotFrontier,
-            vectorClock: opts.vectorClock,
+            vectorClock: prunedVectorClock,
             compactedAt: opts.compactedAt,
           } satisfies StateCacheEntry);
           await tx.put(
             STORE_NAMES.VECTOR_CLOCK,
-            { clock: opts.vectorClock, lastUpdate: opts.compactedAt },
+            { clock: prunedVectorClock, lastUpdate: opts.compactedAt },
             SINGLETON_KEY,
           );
           if (opts.archiveYoung !== undefined) {
@@ -1001,7 +1007,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         }),
       );
 
-      this._vectorClockCache = { ...opts.vectorClock };
+      this._vectorClockCache = { ...prunedVectorClock };
       this._invalidateAppliedAndUnsyncedCaches();
       return result;
     } catch (e) {
@@ -1948,9 +1954,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     snapshotEntityKeys?: string[];
   }): Promise<void> {
     await this._ensureInit();
+    // The cached clock is restored as the DURABLE clock at hydration — prune
+    // with the same preserve set as every other durable write (#9096).
+    const vectorClock = await this.pruneClockForStorage(snapshot.vectorClock);
     await this._adapter.put(STORE_NAMES.STATE_CACHE, {
       id: SINGLETON_KEY,
       ...snapshot,
+      vectorClock,
     });
   }
 
@@ -2537,18 +2547,50 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
+   * Prunes a vector clock for durable storage — the single choke point for
+   * client-side pruning (#9096). Preserves the current client and the latest
+   * full-state author: the author's counter is low after the post-import
+   * reset, so uploader-only pruning would evict exactly the entry the
+   * sync-import filter's rescue predicate reads, and the server never
+   * re-invents absent entries.
+   *
+   * Every durable-clock write in this store routes through this method, so
+   * callers never prune; importing `limitVectorClockSize` outside this service
+   * is lint-restricted. No-op for clocks within MAX_VECTOR_CLOCK_SIZE and when
+   * no client id is available.
+   */
+  async pruneClockForStorage(clock: VectorClock): Promise<VectorClock> {
+    if (Object.keys(clock).length <= MAX_VECTOR_CLOCK_SIZE) {
+      return clock;
+    }
+    const currentClientId = await this.clientIdProvider.loadClientId();
+    if (!currentClientId) {
+      return clock;
+    }
+    const importAuthorId = (await this.getLatestFullStateOp())?.clientId;
+    return limitVectorClockSize(
+      clock,
+      importAuthorId ? [currentClientId, importAuthorId] : [currentClientId],
+    );
+  }
+
+  /**
    * Sets the vector clock directly. Used for:
    * - Migration from pf.META_MODEL on upgrade
    * - Sync import when receiving full state
+   * - Restoring the snapshot clock at hydration
+   *
+   * Prunes internally via {@link pruneClockForStorage} (#9096).
    */
   async setVectorClock(clock: VectorClock): Promise<void> {
     await this._ensureInit();
+    const clockToStore = await this.pruneClockForStorage(clock);
     await this._adapter.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock, lastUpdate: Date.now() },
+      { clock: clockToStore, lastUpdate: Date.now() },
       SINGLETON_KEY,
     );
-    this._vectorClockCache = clock;
+    this._vectorClockCache = clockToStore;
   }
 
   /**
@@ -2589,22 +2631,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * Full-state ops reset the clock at their position in the batch. Operations
    * after the final reset are merged onto that new epoch in order.
    *
+   * Runs as ONE readwrite transaction with a fresh in-transaction read of the
+   * durable clock (never the per-tab cache) — a read-compute-put across
+   * separate transactions loses entries when another tab writes in between.
+   *
    * @param ops Remote operations whose clocks should be merged into local clock
    */
   async mergeRemoteOpClocks(ops: Operation[]): Promise<void> {
     if (ops.length === 0) return;
 
     await this._ensureInit();
-
-    // Get current local clock
-    const currentClock = (await this.getVectorClock()) ?? {};
-
-    // DIAGNOSTIC LOGGING: Log current clock before merge
-    Log.debug(
-      `[OpLogStore] mergeRemoteOpClocks: BEFORE merge\n` +
-        `  Current clock: ${vectorClockToString(currentClock)}\n` +
-        `  Merging ${ops.length} remote ops`,
-    );
 
     let fullStateOp: Operation | undefined;
     for (const op of ops) {
@@ -2613,16 +2649,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       }
     }
 
-    if (fullStateOp) {
-      Log.log(
-        `[OpLogStore] mergeRemoteOpClocks: REPLACING clock for FULL-STATE op ${fullStateOp.opType}\n` +
-          `  Op ID:         ${fullStateOp.id}\n` +
-          `  Op clientId:   ${fullStateOp.clientId}\n` +
-          `  Old clock (${Object.keys(currentClock).length} entries): ${vectorClockToString(currentClock)}\n` +
-          `  New base clock: ${vectorClockToString(fullStateOp.vectorClock)}`,
-      );
-    }
-
+    // Foreign awaits must stay OUTSIDE the transaction (IDB auto-commits,
+    // SQLite would deadlock on the connection queue).
     const currentClientId = await this.clientIdProvider.loadClientId();
     if (!currentClientId) {
       Log.warn(
@@ -2631,32 +2659,45 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       );
     }
 
-    const storedImportAuthorId = (await this.getLatestFullStateOp())?.clientId;
-    const clockToStore = calculateRemoteClockMerge(currentClock, ops, {
-      currentClientId,
-      storedImportAuthorId,
-    });
-
-    if (fullStateOp && currentClientId) {
-      Log.log(
-        `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +
-          `  Minimal clock (${Object.keys(clockToStore).length} entries): ${vectorClockToString(clockToStore)}`,
-      );
-    }
-
-    // DIAGNOSTIC LOGGING: Log merged clock after merge
-    Log.debug(
-      `[OpLogStore] mergeRemoteOpClocks: AFTER merge\n` +
-        `  Merged clock: ${vectorClockToString(clockToStore)}`,
-    );
-
-    // Update the vector clock store
-    await this._adapter.put(
-      STORE_NAMES.VECTOR_CLOCK,
-      { clock: clockToStore, lastUpdate: Date.now() },
-      SINGLETON_KEY,
+    let clockBefore: VectorClock = {};
+    let clockToStore: VectorClock = {};
+    await this._adapter.transaction(
+      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK, STORE_NAMES.META],
+      'readwrite',
+      async (tx) => {
+        const currentEntry = await tx.get<VectorClockEntry>(
+          STORE_NAMES.VECTOR_CLOCK,
+          SINGLETON_KEY,
+        );
+        clockBefore = currentEntry?.clock ?? {};
+        const storedImportAuthorId = await this._getLatestFullStateAuthorInTx(tx);
+        clockToStore = calculateRemoteClockMerge(clockBefore, ops, {
+          currentClientId,
+          storedImportAuthorId,
+        });
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          { clock: clockToStore, lastUpdate: Date.now() } satisfies VectorClockEntry,
+          SINGLETON_KEY,
+        );
+      },
     );
     this._vectorClockCache = clockToStore;
+
+    if (fullStateOp) {
+      Log.log(
+        `[OpLogStore] mergeRemoteOpClocks: REPLACED clock for FULL-STATE op ${fullStateOp.opType}\n` +
+          `  Op ID:         ${fullStateOp.id}\n` +
+          `  Op clientId:   ${fullStateOp.clientId}\n` +
+          `  Old clock (${Object.keys(clockBefore).length} entries): ${vectorClockToString(clockBefore)}\n` +
+          `  New clock (${Object.keys(clockToStore).length} entries): ${vectorClockToString(clockToStore)}`,
+      );
+    }
+    Log.debug(
+      `[OpLogStore] mergeRemoteOpClocks: merged ${ops.length} remote ops\n` +
+        `  Clock before: ${vectorClockToString(clockBefore)}\n` +
+        `  Clock after:  ${vectorClockToString(clockToStore)}`,
+    );
   }
 
   /**

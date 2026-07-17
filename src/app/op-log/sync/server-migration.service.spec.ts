@@ -94,7 +94,10 @@ describe('ServerMigrationService', () => {
       'hasSyncedOps',
       'append',
       'getOpsAfterSeq',
+      'pruneClockForStorage',
     ]);
+    // Store-owned pruning (#9096): pass-through by default.
+    opLogStoreSpy.pruneClockForStorage.and.callFake(async (clock) => clock);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
     ]);

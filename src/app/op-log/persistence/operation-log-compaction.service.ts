@@ -13,8 +13,6 @@ import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
-import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
@@ -34,7 +32,6 @@ export class OperationLogCompactionService {
   private lockService = inject(LockService);
   private stateSnapshot = inject(StateSnapshotService);
   private vectorClockService = inject(VectorClockService);
-  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
 
@@ -144,23 +141,10 @@ export class OperationLogCompactionService {
         return false;
       }
 
-      // 2. Get current vector clock (max of all ops)
+      // 2. Get current vector clock (max of all ops); pruning happens inside
+      // saveStateCache (store-owned, #9096)
       const currentVectorClock = await this.vectorClockService.getCurrentVectorClock();
       this.checkCompactionTimeout(startTime, `${label}vector clock`);
-
-      // Prune vector clock before persisting to prevent bloat (max 20 entries).
-      // Without this, clocks can grow unbounded across sync cycles. The latest
-      // full-state author is preserved alongside the current client — this
-      // clock is restored as the durable clock at hydration, so evicting the
-      // author would make later ops CONCURRENT with the import on peers (#9096).
-      const clientId = await this.clientIdProvider.loadClientId();
-      const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
-      const prunedClock = clientId
-        ? limitVectorClockSize(
-            currentVectorClock,
-            importAuthorId ? [clientId, importAuthorId] : [clientId],
-          )
-        : currentVectorClock;
 
       // 3. Get lastSeq IMMEDIATELY before writing cache to minimize race window
       // This ensures new ops written after this point have seq > lastSeq
@@ -175,7 +159,7 @@ export class OperationLogCompactionService {
       await this.opLogStore.saveStateCache({
         state: currentState,
         lastAppliedOpSeq: lastSeq,
-        vectorClock: prunedClock,
+        vectorClock: currentVectorClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
         snapshotEntityKeys,

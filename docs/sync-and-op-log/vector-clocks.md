@@ -77,7 +77,7 @@ interface VectorClockEntry {
 }
 ```
 
-The global clock is the **single source of truth** for the client's current causal knowledge. During local operation capture, it is updated atomically with operation writes (single IndexedDB transaction via `appendWithVectorClockOverwrite`). The remote merge path (`mergeRemoteOpClocks`) updates the clock in a separate write after reading the current state.
+The global clock is the **single source of truth** for the client's current causal knowledge. During local operation capture, it is updated atomically with operation writes (single IndexedDB transaction via `appendWithVectorClockOverwrite`). The remote merge path (`mergeRemoteOpClocks`) is likewise a single read-merge-write transaction with a fresh in-transaction read of the durable clock — never the per-tab cache — so concurrent tabs cannot lose entries to a stale read.
 
 ### Snapshot Clock
 
@@ -142,23 +142,21 @@ Otherwise:
   3. Return clock with exactly MAX entries
 ```
 
-Implemented in `packages/sync-core/src/vector-clock.ts`. The client wrapper in `src/app/core/util/vector-clock.ts` adds logging and takes a caller-supplied preserve list — the current client plus, where a full-state baseline exists, the latest full-state author (#9096).
+Implemented in `packages/sync-core/src/vector-clock.ts`. Client-side pruning is **store-owned** (#9096): `OperationLogStoreService.pruneClockForStorage` assembles the preserve set — current client + latest full-state author — and every durable-clock write routes through it. Importing `limitVectorClockSize` anywhere else in `src/app` fails lint (`no-restricted-imports`); the wrapper in `src/app/core/util/vector-clock.ts` (adds logging) is importable only by the store.
 
 ### When Pruning Happens (Exhaustive List)
 
-| Location                                                            | When                                                                                | What's Preserved                            |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------- |
-| **Server** `processOperation()`                                     | After conflict detection, before storage                                            | Uploading client + active full-state author |
-| **Server** `getOpsSinceWithSeq()`                                   | Aggregating snapshot vector clock                                                   | Requesting client                           |
-| **Client** `calculateRemoteClockMerge` (`OperationLogStoreService`) | Durable clock after a remote batch (merge + reducer checkpoint)                     | Current client + latest full-state author   |
-| **Client** `SyncHydrationService`                                   | Creating SYNC_IMPORT / committing file-snapshot bootstrap baseline                  | Current client + latest full-state author   |
-| **Client** `ServerMigrationService`                                 | Creating SYNC_IMPORT during migration                                               | Current client (the new import author)      |
-| **Client** `OperationLogSnapshotService`                            | Saving snapshot to state cache                                                      | Current client + latest full-state author   |
-| **Client** `OperationLogCompactionService`                          | Compaction (saving snapshot + deleting old ops)                                     | Current client + latest full-state author   |
-| **Client** `OperationLogHydratorService`                            | Restoring snapshot clock into the durable clock at hydration                        | Current client + latest full-state author   |
-| **Client** `RepairOperationService`                                 | **NEVER** — REPAIR ships the full clock; the server prunes after conflict detection | N/A                                         |
-| **Client** normal op capture                                        | **NEVER**                                                                           | N/A                                         |
-| **Client** `SupersededOperationResolverService`                     | **NEVER** (conflict resolution)                                                     | N/A                                         |
+| Location                                                                                                                                                                                                                             | When                                                                                                             | What's Preserved                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| **Server** `processOperation()`                                                                                                                                                                                                      | After conflict detection, before storage                                                                         | Uploading client + active full-state author |
+| **Server** `getOpsSinceWithSeq()`                                                                                                                                                                                                    | Aggregating snapshot vector clock                                                                                | Requesting client                           |
+| **Client** `OperationLogStoreService` — `calculateRemoteClockMerge` (remote merge + reducer checkpoint, in-transaction)                                                                                                              | Durable clock after a remote batch                                                                               | Current client + latest full-state author   |
+| **Client** `OperationLogStoreService.pruneClockForStorage` — inside `setVectorClock`, `saveStateCache`, `commitFileSnapshotBaseline`; called directly by `SyncHydrationService` / `ServerMigrationService` for SYNC_IMPORT op clocks | Every other durable-clock write (snapshot save, compaction, hydration restore, sync-hydration baseline, imports) | Current client + latest full-state author   |
+| **Client** callers (snapshot, compaction, hydrator, sync-hydration, server-migration)                                                                                                                                                | **NEVER** — they pass raw clocks; the store prunes (lint-enforced)                                               | N/A                                         |
+| **Client** in-store direct clock writes (`appendWithVectorClockOverwrite`, `runRemoteStateReplacement`, `runDestructiveStateReplacement`, `appendRecoveryOperationAndSnapshot`)                                                      | **NEVER** — write full, minimal, or already-server-pruned clocks by design                                       | N/A                                         |
+| **Client** `RepairOperationService`                                                                                                                                                                                                  | **NEVER** — REPAIR ships the full clock; the server prunes after conflict detection                              | N/A                                         |
+| **Client** normal op capture                                                                                                                                                                                                         | **NEVER**                                                                                                        | N/A                                         |
+| **Client** `SupersededOperationResolverService`                                                                                                                                                                                      | **NEVER** (conflict resolution)                                                                                  | N/A                                         |
 
 ### Pruning is Rare
 

@@ -9,8 +9,6 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OpLog } from '../../core/log';
 import { extractEntityKeysFromState } from './extract-entity-keys';
-import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { OperationCaptureService } from '../capture/operation-capture.service';
@@ -37,7 +35,6 @@ export class OperationLogSnapshotService {
   private stateSnapshotService = inject(StateSnapshotService);
   private schemaMigrationService = inject(SchemaMigrationService);
   private validateStateService = inject(ValidateStateService);
-  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
 
@@ -149,23 +146,9 @@ export class OperationLogSnapshotService {
           return;
         }
 
-        // Get current vector clock
+        // Get current vector clock; pruning happens inside saveStateCache
+        // (store-owned, #9096).
         const vectorClock = await this.vectorClockService.getCurrentVectorClock();
-
-        // Prune vector clock before persisting to prevent bloat (max 20 entries).
-        // Without this, clocks can grow unbounded across sync cycles and cause
-        // repeated conflict dialogs on every sync. The latest full-state author
-        // is preserved alongside the current client — the hydrator restores
-        // this clock as the durable clock, so evicting the author here would
-        // make every later op CONCURRENT with the import on peers (#9096).
-        const clientId = await this.clientIdProvider.loadClientId();
-        const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
-        const prunedClock = clientId
-          ? limitVectorClockSize(
-              vectorClock,
-              importAuthorId ? [clientId, importAuthorId] : [clientId],
-            )
-          : vectorClock;
 
         // Extract entity keys for conflict detection after compaction
         const snapshotEntityKeys = extractEntityKeysFromState(currentState);
@@ -174,7 +157,7 @@ export class OperationLogSnapshotService {
         await this.opLogStore.saveStateCache({
           state: currentState,
           lastAppliedOpSeq: lastSeq,
-          vectorClock: prunedClock,
+          vectorClock,
           compactedAt: Date.now(),
           schemaVersion: CURRENT_SCHEMA_VERSION,
           snapshotEntityKeys,

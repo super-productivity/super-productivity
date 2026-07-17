@@ -65,6 +65,33 @@ describe('OperationLogStoreService', () => {
     ...overrides,
   });
 
+  const createImportOp = (clientId: string, counter: number): Operation =>
+    createTestOperation({
+      opType: OpType.SyncImport,
+      entityType: 'ALL' as EntityType,
+      entityId: undefined,
+      clientId,
+      vectorClock: { [clientId]: counter },
+    });
+
+  const createBusyClientOps = (count: number): Operation[] =>
+    Array.from({ length: count }, (_, i) =>
+      createTestOperation({
+        clientId: `busyClient_${i}`,
+        vectorClock: { [`busyClient_${i}`]: 100 + i },
+      }),
+    );
+
+  // A >MAX clock whose lowest counters belong to the ids under test — the
+  // shape where uploader/author protection is load-bearing (#9096).
+  const createBloatedClock = (lowCounterEntries: VectorClock): VectorClock => {
+    const clock: VectorClock = { ...lowCounterEntries };
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 5; i++) {
+      clock[`bloatClient_${i}`] = 100 + i;
+    }
+    return clock;
+  };
+
   beforeEach(async () => {
     TestBed.configureTestingModule({
       providers: [
@@ -3966,23 +3993,6 @@ describe('OperationLogStoreService', () => {
   });
 
   describe('import author protection during clock pruning (#9096)', () => {
-    const createImportOp = (clientId: string, counter: number): Operation =>
-      createTestOperation({
-        opType: OpType.SyncImport,
-        entityType: 'ALL' as EntityType,
-        entityId: undefined,
-        clientId,
-        vectorClock: { [clientId]: counter },
-      });
-
-    const createBusyClientOps = (count: number): Operation[] =>
-      Array.from({ length: count }, (_, i) =>
-        createTestOperation({
-          clientId: `busyClient_${i}`,
-          vectorClock: { [`busyClient_${i}`]: 100 + i },
-        }),
-      );
-
     it('should keep the stored import author when a remote batch overflows the clock', async () => {
       // Durable baseline after receiving an import from another client: the
       // author's counter is LOW, so uploader-only pruning would evict it first.
@@ -4052,6 +4062,93 @@ describe('OperationLogStoreService', () => {
       expect((await service.getLatestFullStateOpEntry())?.op.clientId).toBe(
         'olderAuthor',
       );
+    });
+  });
+
+  describe('store-owned durable-clock pruning (pruneClockForStorage)', () => {
+    it('should prune an over-MAX clock in setVectorClock, keeping the latest import author', async () => {
+      await service.append(createImportOp('importAuthor', 1), 'remote');
+
+      await service.setVectorClock(
+        createBloatedClock({ importAuthor: 1, testClient: 999 }),
+      );
+
+      const clock = await service.getVectorClock();
+      expect(Object.keys(clock!).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(clock!['importAuthor']).toBe(1);
+      expect(clock!['testClient']).toBe(999);
+    });
+
+    it('should preserve only the current client in setVectorClock when no full-state baseline exists', async () => {
+      // Shape of the USE_REMOTE raw-rebuild resume (_restorePreservedLocalOps):
+      // ops store cleared, no import — self must survive on its own.
+      await service.setVectorClock(createBloatedClock({ testClient: 1 }));
+
+      const clock = await service.getVectorClock();
+      expect(Object.keys(clock!).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(clock!['testClient']).toBe(1);
+    });
+
+    it('should prune the snapshot clock in saveStateCache, keeping the latest import author', async () => {
+      await service.append(createImportOp('importAuthor', 1), 'remote');
+
+      await service.saveStateCache({
+        state: { some: 'state' },
+        lastAppliedOpSeq: 1,
+        vectorClock: createBloatedClock({ importAuthor: 1, testClient: 999 }),
+        compactedAt: Date.now(),
+      });
+
+      const cache = await service.loadStateCache();
+      expect(Object.keys(cache!.vectorClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(cache!.vectorClock['importAuthor']).toBe(1);
+      expect(cache!.vectorClock['testClient']).toBe(999);
+    });
+
+    it('should prune the baseline clock in commitFileSnapshotBaseline for cache AND durable clock', async () => {
+      await service.append(createImportOp('importAuthor', 1), 'remote');
+      const lastSeq = await service.getLastSeq();
+
+      await service.commitFileSnapshotBaseline({
+        state: { some: 'state' },
+        lastAppliedOpSeq: lastSeq,
+        vectorClock: createBloatedClock({ importAuthor: 1, testClient: 999 }),
+        compactedAt: Date.now(),
+        snapshotIncludedOps: [],
+      });
+
+      const cacheClock = (await service.loadStateCache())!.vectorClock;
+      const durableClock = (await service.getVectorClock())!;
+      for (const clock of [cacheClock, durableClock]) {
+        expect(Object.keys(clock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+        expect(clock['importAuthor']).toBe(1);
+        expect(clock['testClient']).toBe(999);
+      }
+    });
+
+    it('should merge onto the durable clock, not the per-tab cache (multi-tab lost update)', async () => {
+      await service.setVectorClock({ a: 1 });
+      await service.getVectorClock(); // populate this tab's in-memory cache
+
+      // Another tab advances the durable clock behind this tab's cache.
+      await (
+        service as unknown as {
+          _adapter: {
+            put: (store: string, value: unknown, key: string) => Promise<unknown>;
+          };
+        }
+      )._adapter.put(
+        STORE_NAMES.VECTOR_CLOCK,
+        { clock: { a: 5 }, lastUpdate: Date.now() },
+        SINGLETON_KEY,
+      );
+
+      await service.mergeRemoteOpClocks([
+        createTestOperation({ clientId: 'b', vectorClock: { b: 1 } }),
+      ]);
+
+      const clock = await service.getVectorClock();
+      expect(clock).toEqual({ a: 5, b: 1 });
     });
   });
 

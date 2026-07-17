@@ -189,12 +189,15 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         'append',
         'loadStateCache',
         'commitFileSnapshotBaseline',
-        'getLatestFullStateOp',
+        'pruneClockForStorage',
       ]);
       opLogStoreHydrationSpy.getLastSeq.and.resolveTo(0);
       opLogStoreHydrationSpy.getUnsynced.and.resolveTo([]);
       opLogStoreHydrationSpy.loadStateCache.and.resolveTo(null);
-      opLogStoreHydrationSpy.getLatestFullStateOp.and.resolveTo(undefined);
+      // Store-owned pruning (#9096): pass-through by default.
+      opLogStoreHydrationSpy.pruneClockForStorage.and.callFake(
+        async (clock: Record<string, number>) => clock,
+      );
       opLogStoreHydrationSpy.commitFileSnapshotBaseline.and.resolveTo({
         seqs: [],
         writtenOps: [],

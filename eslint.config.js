@@ -263,6 +263,37 @@ module.exports = tseslint.config(
       'no-console': 'error',
     },
   },
+  // Durable-clock pruning is store-owned (#9096): every clock persisted by
+  // the client must be pruned with the full preserve set (current client +
+  // latest full-state author), which OperationLogStoreService assembles in
+  // pruneClockForStorage. Caller-site pruning is how the import author got
+  // silently evicted (#9089/#9096), so importing limitVectorClockSize outside
+  // the store (from the client wrapper or @sp/sync-core) is fenced off.
+  // Exempt: the wrapper itself (re-exports the shared impl), the store
+  // service (the choke point), and specs (simulate server-side pruning).
+  {
+    files: ['src/app/**/*.ts'],
+    ignores: [
+      'src/app/**/*.spec.ts',
+      'src/app/core/util/vector-clock.ts',
+      'src/app/op-log/persistence/operation-log-store.service.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/core/util/vector-clock', '@sp/sync-core'],
+              importNamePattern: '^limitVectorClockSize$',
+              message:
+                'Durable-clock pruning is store-owned (#9096): use OperationLogStoreService.pruneClockForStorage instead of pruning at the call site.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Service size cap (AGENTS.md → Project rules): no service may exceed 1200
   // lines. 'error' so a new service crossing the cap fails CI on the PR that
   // introduces it — 'warn' would be inert, since `ng lint` defaults to

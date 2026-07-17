@@ -33,7 +33,6 @@ import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { limitVectorClockSize } from '../../core/util/vector-clock';
 import { IS_ELECTRON } from '../../app.constants';
 import {
   BulkReplayReducerFailure,
@@ -205,23 +204,12 @@ export class OperationLogHydratorService {
         // 3. Without this, new ops would have clocks missing entries from the SYNC_IMPORT
         // 4. Those ops would be CONCURRENT with the SYNC_IMPORT and get filtered on sync
         if (snapshot.vectorClock && Object.keys(snapshot.vectorClock).length > 0) {
-          // Prune vector clock before restoring to prevent bloat from old snapshots
-          // that were saved before pruning was added to saveCurrentStateAsSnapshot().
-          // Preserve the latest full-state author alongside the current client:
-          // this write becomes the durable clock, and evicting the author would
-          // make every later op CONCURRENT with the import on peers (#9096).
-          const clientId = await this.clientIdProvider.loadClientId();
-          const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
-          const clockToRestore = clientId
-            ? limitVectorClockSize(
-                snapshot.vectorClock,
-                importAuthorId ? [clientId, importAuthorId] : [clientId],
-              )
-            : snapshot.vectorClock;
-          await this.opLogStore.setVectorClock(clockToRestore);
+          // setVectorClock prunes internally (store-owned, #9096) — this also
+          // bounds legacy snapshot clocks saved before pruning existed.
+          await this.opLogStore.setVectorClock(snapshot.vectorClock);
           OpLog.normal(
             'OperationLogHydratorService: Restored vector clock from snapshot',
-            { clockSize: Object.keys(clockToRestore).length },
+            { clockSize: Object.keys(snapshot.vectorClock).length },
           );
         }
 

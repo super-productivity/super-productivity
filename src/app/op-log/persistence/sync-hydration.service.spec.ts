@@ -8,19 +8,14 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import {
-  ActionType,
-  Operation,
-  OperationLogEntry,
-  OpType,
-} from '../core/operation.types';
+import { ActionType, OperationLogEntry, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { SnackService } from '../../core/snack/snack.service';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { LockService } from '../sync/lock.service';
-import { LOCK_NAMES, MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
 describe('SyncHydrationService', () => {
@@ -58,12 +53,13 @@ describe('SyncHydrationService', () => {
       'loadStateCache',
       'getUnsynced',
       'markRejected',
-      'getLatestFullStateOp',
+      'pruneClockForStorage',
     ]);
     // Default: no unsynced ops (for tests that don't care about this)
     mockOpLogStore.getUnsynced.and.resolveTo([]);
     mockOpLogStore.markRejected.and.resolveTo();
-    mockOpLogStore.getLatestFullStateOp.and.resolveTo(undefined);
+    // Store-owned pruning (#9096): pass-through by default.
+    mockOpLogStore.pruneClockForStorage.and.callFake(async (clock) => clock);
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getAllSyncModelDataFromStoreAsync',
     ]);
@@ -629,26 +625,22 @@ describe('SyncHydrationService', () => {
         expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
       });
 
-      it('should keep the stored import author when pruning the bootstrap baseline clock (#9096)', async () => {
+      it('should route the bootstrap baseline clock through store-owned pruning (#9096)', async () => {
         // No SYNC_IMPORT is created on this branch, so a previously stored
-        // full-state op stays the filter baseline — its author must survive
-        // pruning of the durable clock committed here.
-        const bloatedClock: Record<string, number> = { importAuthor: 1, localClient: 5 };
-        for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 5; i++) {
-          bloatedClock[`client-${i}`] = i + 100;
-        }
-        mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
-        mockOpLogStore.getLatestFullStateOp.and.resolveTo({
-          clientId: 'importAuthor',
-        } as Operation);
+        // full-state op stays the filter baseline — the durable clock
+        // committed here must go through pruneClockForStorage (which
+        // preserves the import author; behavior covered in the store spec).
+        mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
+        const prunedSentinel = { localClient: 6, importAuthor: 1 };
+        mockOpLogStore.pruneClockForStorage.and.resolveTo(prunedSentinel);
 
         await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
 
+        const pruneArg = mockOpLogStore.pruneClockForStorage.calls.mostRecent().args[0];
+        expect(pruneArg['localClient']).toBe(6); // incremented BEFORE pruning
         const commitArg =
           mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent().args[0];
-        expect(Object.keys(commitArg.vectorClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
-        expect(commitArg.vectorClock['importAuthor']).toBe(1);
-        expect(commitArg.vectorClock['localClient']).toBe(6);
+        expect(commitArg.vectorClock).toBe(prunedSentinel);
       });
 
       it('should still dispatch loadAllData when createSyncImportOp is false', async () => {
