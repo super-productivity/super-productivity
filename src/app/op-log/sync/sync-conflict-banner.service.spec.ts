@@ -43,6 +43,24 @@ describe('SyncConflictBannerService', () => {
   const flushAsync = (): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, 160));
 
+  /**
+   * Polls until `predicate` holds instead of sleeping a fixed window. The live
+   * refresh runs on a real 100ms `auditTime` timer plus an async journal read;
+   * a fixed sleep leaves only a few ms of slack and flakes on the slow/contended
+   * macOS CI runner (the trailing refresh hasn't fired yet when the assertion
+   * runs). Polling waits for the actual outcome, so it is robust regardless of
+   * runner speed.
+   */
+  const waitFor = async (predicate: () => boolean, timeoutMs = 3000): Promise<void> => {
+    const start = performance.now();
+    while (!predicate()) {
+      if (performance.now() - start > timeoutMs) {
+        throw new Error('waitFor: timed out waiting for condition');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
+
   beforeEach(() => {
     bannerService = jasmine.createSpyObj('BannerService', ['open', 'dismiss', 'isShown']);
     bannerService.isShown.and.returnValue(false);
@@ -113,7 +131,7 @@ describe('SyncConflictBannerService', () => {
 
     bannerService.isShown.and.returnValue(true); // banner still on screen
     await journal.markKept(a.id);
-    await flushAsync();
+    await waitFor(() => bannerService.open.calls.count() >= 2);
 
     expect(bannerService.open.calls.mostRecent().args[0].translateParams).toEqual({
       count: 1,
@@ -130,7 +148,7 @@ describe('SyncConflictBannerService', () => {
 
     bannerService.isShown.and.returnValue(true);
     await journal.markKept(a.id);
-    await flushAsync();
+    await waitFor(() => bannerService.dismiss.calls.count() >= 1);
 
     expect(bannerService.dismiss).toHaveBeenCalledWith(
       BannerId.SyncConflictsAutoResolved,
