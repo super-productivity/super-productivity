@@ -10,6 +10,7 @@ import {
   updateTimeEstimateForTask,
   updateTimeSpentForTask,
 } from './task.reducer.util';
+import { _resetDevErrorState } from '../../../util/dev-error';
 
 describe('task.reducer.util', () => {
   const DAY_1 = '2026-07-10';
@@ -113,16 +114,18 @@ describe('task.reducer.util', () => {
         'child',
         {
           [DAY_1]: 90,
-          [DAY_3]: 60,
+          [DAY_3]: 90,
         },
         state,
       );
 
-      expect(result.entities['child']!.timeSpent).toBe(150);
-      expect(result.entities['parent']!.timeSpent).toBe(150);
+      // net delta: -30 (DAY_1 down) -30 (DAY_2 zeroed) +90 (DAY_3 added) = +30
+      // parent timeSpent must move off its starting 150 so the accumulator matters
+      expect(result.entities['child']!.timeSpent).toBe(180);
+      expect(result.entities['parent']!.timeSpent).toBe(180);
       expect(result.entities['parent']!.timeSpentOnDay).toEqual({
         [DAY_1]: 90,
-        [DAY_3]: 60,
+        [DAY_3]: 90,
       });
     });
 
@@ -212,8 +215,13 @@ describe('task.reducer.util', () => {
 
   describe('deleteTaskHelper', () => {
     it('should remove state-discovered orphan subtasks when deleting a parent task', () => {
+      // `isShowAlert` latches off after the first devError of the whole Karma run,
+      // and test.ts creates the window.alert spy once and never resets its call
+      // history — so we must reset both before asserting devError fired.
+      _resetDevErrorState();
       if (jasmine.isSpy(window.alert)) {
         (window.alert as jasmine.Spy).and.stub();
+        (window.alert as jasmine.Spy).calls.reset();
       } else {
         spyOn(window, 'alert').and.stub();
       }

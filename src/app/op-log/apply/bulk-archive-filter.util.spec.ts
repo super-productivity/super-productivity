@@ -230,4 +230,23 @@ describe('bulk-archive-filter.util', () => {
       title: 'Tag',
     });
   });
+
+  it('should return the operation unchanged when isLww is false', () => {
+    const op = createOperation({
+      entityType: 'TAG',
+      entityId: 'tag-1',
+      actionType: toLwwUpdateActionType('TAG'),
+      payload: {
+        taskIds: ['remove-me'],
+      },
+    });
+
+    const result = stripBatchArchivedTaskIdsFromLwwPayload(
+      op,
+      false,
+      new Set(['remove-me']),
+    );
+
+    expect(result).toBe(op);
+  });
 });
