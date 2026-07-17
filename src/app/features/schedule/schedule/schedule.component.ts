@@ -103,6 +103,8 @@ export class ScheduleComponent {
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
+  isDayView = computed(() => this._currentTimeViewMode() === 'day');
+  isWeekView = computed(() => this._currentTimeViewMode() === 'week');
 
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
@@ -140,6 +142,8 @@ export class ScheduleComponent {
     const selectedView = this._currentTimeViewMode();
     const width = size.width;
     const height = size.height;
+
+    if (selectedView === 'day') return 1;
 
     if (selectedView === 'month') {
       const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
@@ -189,11 +193,23 @@ export class ScheduleComponent {
   private _isVeryCompact = computed(
     () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XXS,
   );
+  private _isTablet = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET,
+  );
 
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
     const locale = this._dateTimeFormatService.currentLocale();
+
+    if (this.isDayView()) {
+      // On tablet width and below the full date clips, so drop to month + day
+      // (the weekday still shows in the day-column header).
+      const dayOpts: Intl.DateTimeFormatOptions = this._isTablet()
+        ? { month: 'short', day: 'numeric' }
+        : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      return new Intl.DateTimeFormat(locale, dayOpts).format(parseDbDateStr(days[0]));
+    }
 
     if (this.isMonthView()) {
       const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
@@ -404,14 +420,16 @@ export class ScheduleComponent {
     });
   }
 
-  selectTimeView(view: 'week' | 'month'): void {
+  selectTimeView(view: 'week' | 'month' | 'day'): void {
     this.layoutService.selectedTimeView.set(view);
     localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
   }
 
-  private getTimeView(): 'week' | 'month' {
+  private getTimeView(): 'week' | 'month' | 'day' {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
-    return preservedView === 'month' ? 'month' : 'week';
+    if (preservedView === 'month') return 'month';
+    if (preservedView === 'day') return 'day';
+    return 'week';
   }
 
   constructor() {

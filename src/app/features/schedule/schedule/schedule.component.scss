@@ -85,7 +85,7 @@
     align-items: center;
   }
 
-  .week-month-selector {
+  .time-view-selector {
     display: flex;
     margin-left: var(--s);
     border-radius: var(--card-border-radius);
@@ -94,7 +94,7 @@
     background: var(--bg-lighter);
   }
 
-  .week-month-btn {
+  .time-view-btn {
     border: none;
     border-radius: 0;
     transition: var(--transition-standard);
@@ -111,7 +111,7 @@
       color: white;
     }
 
-    &:first-child {
+    &:not(:last-child) {
       border-right: 1px solid var(--extra-border-color);
     }
   }

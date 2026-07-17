@@ -399,7 +399,7 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun updateWidget() {
-        TaskListWidgetProvider.notifyDataChanged(activity)
+        TaskListWidgetProvider.refreshAll(activity)
     }
 
     /**

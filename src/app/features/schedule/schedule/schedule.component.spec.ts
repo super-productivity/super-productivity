@@ -92,7 +92,9 @@ describe('ScheduleComponent', () => {
     );
 
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      localization: signal({ firstDayOfWeek: 1 }),
+      // Pin the date locale so Intl-formatted headers are deterministic across
+      // runners (an en-GB runner would render "20 Jan", not "Jan 20").
+      localization: signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' }),
       cfg: signal(undefined),
     });
 
@@ -274,6 +276,22 @@ describe('ScheduleComponent', () => {
   });
 
   describe('goToPreviousPeriod', () => {
+    it('should go back exactly one day in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
+      component['_selectedDate'].set(new Date(2027, 5, 15)); // Jun 15, 2027 (future → no snap-to-today)
+      fixture.detectChanges();
+      expect(component.daysToShow().length).toBe(1);
+
+      component.goToPreviousPeriod();
+
+      const d = component['_selectedDate']();
+      expect(d?.getFullYear()).toBe(2027);
+      expect(d?.getMonth()).toBe(5);
+      expect(d?.getDate()).toBe(14); // back by exactly one day
+      expect(d?.getHours()).toBe(0); // normalized to midnight
+    });
+
     it('should navigate backward by the number of days currently shown', () => {
       // Arrange - view a future range that doesn't contain today
       mockScheduleService.getDaysToShow.and.returnValue([
@@ -343,6 +361,22 @@ describe('ScheduleComponent', () => {
   });
 
   describe('goToNextPeriod', () => {
+    it('should advance exactly one day in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
+      component['_selectedDate'].set(new Date(2027, 5, 15)); // Jun 15, 2027
+      fixture.detectChanges();
+      expect(component.daysToShow().length).toBe(1);
+
+      component.goToNextPeriod();
+
+      const d = component['_selectedDate']();
+      expect(d?.getFullYear()).toBe(2027);
+      expect(d?.getMonth()).toBe(5);
+      expect(d?.getDate()).toBe(16); // advanced by exactly one day
+      expect(d?.getHours()).toBe(0); // normalized to midnight
+    });
+
     it('should navigate forward by the number of days currently shown', () => {
       // Arrange
       const startDate = new Date(2026, 0, 20); // Jan 20, 2026
@@ -786,6 +820,12 @@ describe('ScheduleComponent', () => {
   });
 
   describe('shouldEnableHorizontalScroll computed', () => {
+    it('should return false in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect(component.shouldEnableHorizontalScroll()).toBe(false);
+    });
+
     it('should return false in month view regardless of window size', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
@@ -913,6 +953,101 @@ describe('ScheduleComponent', () => {
 
       // Assert - 10 days should round up to 2 weeks
       expect(weeks).toBe(2);
+    });
+  });
+
+  describe('day view persistence', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('persists the day view and reads it back', () => {
+      component.selectTimeView('day');
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect(localStorage.getItem('SELECTED_TIME_VIEW')).toBe('day');
+      // getTimeView is private; cast to reach it
+      expect((component as any).getTimeView()).toBe('day');
+    });
+
+    it('reads back month, and defaults to week for absent or unknown values', () => {
+      localStorage.setItem('SELECTED_TIME_VIEW', 'month');
+      expect((component as any).getTimeView()).toBe('month');
+
+      localStorage.removeItem('SELECTED_TIME_VIEW');
+      expect((component as any).getTimeView()).toBe('week');
+
+      localStorage.setItem('SELECTED_TIME_VIEW', 'not-a-view');
+      expect((component as any).getTimeView()).toBe('week');
+    });
+  });
+
+  describe('day view mode logic', () => {
+    it('shows exactly one day in day mode', () => {
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect((component as any)._daysToShowCount()).toBe(1);
+      // Verify the count is actually wired into the day range (the mock returns
+      // a fixed 1-element array regardless of args, so length alone is not proof).
+      expect(mockScheduleService.getDaysToShow).toHaveBeenCalledWith(1, null);
+      expect(component.daysToShow().length).toBe(1);
+      expect(component.isDayView()).toBe(true);
+      expect(component.isMonthView()).toBe(false);
+    });
+
+    it('renders the full single-date header when roomy', () => {
+      // Force the roomy (non-tablet) state so the full form is deterministic
+      // regardless of the test runner's window width.
+      component['_isTablet'] = signal(false);
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      // 2026-01-20 is a Tuesday (en-US locale pinned in beforeEach).
+      expect(component.headerTitle()).toBe('Tue, Jan 20, 2026');
+    });
+
+    it('compacts the day header to month and day when tight', () => {
+      component['_isTablet'] = signal(true);
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      // Compact form is month + day only (no weekday, no year).
+      expect(component.headerTitle()).toBe('Jan 20');
+    });
+
+    it('exposes mutually exclusive view-mode flags', () => {
+      mockLayoutService.selectedTimeView.set('week');
+      fixture.detectChanges();
+      expect(component.isWeekView()).toBe(true);
+      expect(component.isDayView()).toBe(false);
+      expect(component.isMonthView()).toBe(false);
+
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect(component.isDayView()).toBe(true);
+      expect(component.isWeekView()).toBe(false);
+      expect(component.isMonthView()).toBe(false);
+    });
+  });
+
+  describe('day view toggle rendering', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('renders a schedule-week (not schedule-month) with one day when in day view', () => {
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('schedule-week')).toBeTruthy();
+      expect(el.querySelector('schedule-month')).toBeFalsy();
+    });
+
+    it('has a day-view toggle button that selects day mode', () => {
+      const el: HTMLElement = fixture.nativeElement;
+      const dayBtn = el.querySelector<HTMLButtonElement>(
+        '.time-view-btn.e2e-day-view-btn',
+      );
+      expect(dayBtn).toBeTruthy();
+      dayBtn!.click();
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
     });
   });
 });

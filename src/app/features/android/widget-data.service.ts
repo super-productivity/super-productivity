@@ -19,6 +19,12 @@ export class WidgetDataService {
   async pushCurrent(): Promise<void> {
     const data = await firstValueFrom(this._store.select(selectAndroidWidgetData));
     const json = JSON.stringify(data);
+    // Compare the WHOLE blob, not just the tasks: at day rollover the list is often
+    // byte-identical and only the staleness stamp moves, and that push is the single
+    // thing that un-outdates the widget. Narrowing this key would silently restore
+    // #9098. (Not unit-tested — androidInterface is a module-level window capture, so
+    // this method is unreachable from Karma; see android-widget.effects.ts for the
+    // codebase's export-the-pure-logic pattern.)
     if (json === this._lastPushedJson) {
       return;
     }

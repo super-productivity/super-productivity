@@ -88,9 +88,9 @@ The Operation Log serves **four distinct purposes**:
 | **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅ (single-version)¹ |
 | **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅                   |
 
-> ¹ **Cross-version sync limitation**: Part C is complete for clients on the same schema version. Cross-version sync (A.7.11) is not yet implemented—see [A.7.11 Conflict-Aware Migration](#a711-conflict-aware-migration-strategy) for guardrails.
+> ¹ **Cross-version sync**: receiver-side op migration (A.7.11) runs before conflict detection. The remaining caveat is the released fleet: v17.0.0–v18.14.0 clients apply newer-schema ops (up to schema 5) unmigrated — see the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet).
 
-> **✅ Migration Ready**: Migration safety (A.7.12), tail ops consistency (A.7.13), and unified migration interface (A.7.15) are now implemented. The system is ready for schema migrations when `CURRENT_SCHEMA_VERSION > 1`.
+> **✅ Migrations Active**: Migration safety (A.7.12), tail ops consistency (A.7.13), and unified migration interface (A.7.15) are implemented, and real migrations exist — `CURRENT_SCHEMA_VERSION = 4` (v1→v2 misc-to-tasks-settings split; v2→v3 and v3→v4 are semantic compatibility barriers). See A.7 and the A.7.11 Bump Policy.
 
 This document is structured around these four purposes. Most complexity lives in **Part A** (local persistence). **Part B** handles file-based sync via the `FileBasedSyncAdapter`. **Part C** handles operation-based sync with SuperSync server. **Part D** integrates validation and automatic repair.
 
@@ -647,16 +647,19 @@ private async attemptRecovery(): Promise<void> {
 
 When Super Productivity's data model changes (new fields, renamed properties, restructured entities), schema migrations ensure existing data remains usable after app updates.
 
-> **Current Status:** Migration infrastructure is implemented, but no actual migrations exist yet. The `MIGRATIONS` array is empty and `CURRENT_SCHEMA_VERSION = 1`. This section documents the designed behavior for when migrations are needed.
+> **Current Status (2026-07):** `CURRENT_SCHEMA_VERSION = 4`. Three migrations exist: v1→v2 (misc-to-tasks-settings split, a real payload transformation) and two no-op semantic barriers — v2→v3 (replacement-mode LWW envelopes) and v3→v4 (marked project delete-wins). The barriers change no stored shapes; they gate conflict semantics for receivers that understand them. Read the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet) before adding version 5.
 
 ### Configuration
 
-`CURRENT_SCHEMA_VERSION` is defined in `src/app/op-log/store/schema-migration.service.ts`:
+`CURRENT_SCHEMA_VERSION` is defined in `packages/shared-schema/src/schema-version.ts` (shared by client and server) and re-exported through `src/app/op-log/persistence/schema-migration.service.ts`:
 
 ```typescript
-export const CURRENT_SCHEMA_VERSION = 1;
+export const PROJECT_DELETE_WINS_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = PROJECT_DELETE_WINS_SCHEMA_VERSION;
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
-export const MAX_VERSION_SKIP = 5; // Max versions ahead we'll attempt to load
+// MAX_VERSION_SKIP was removed: current receivers block any newer-schema op
+// outright. Released v17.0.0–v18.14.0 clients still ship the old +3 band and
+// apply ops up to schema 5 UNMIGRATED — see the A.7.11 Bump Policy.
 ```
 
 ### Core Concepts
@@ -759,6 +762,10 @@ Client v2 ◄─── ops from v1 client
 
 Scenario 2: Older client receives newer ops
 ──────────────────────────────────────────
+[OUTDATED design sketch — actual behavior differs. Current (post-v18.14.0)
+receivers BLOCK any newer-schema op outright (cursor frozen, update prompt).
+Released v17–v18.14 receivers apply newer ops UNMIGRATED — unknown fields are
+NOT ignored; reducers write them into state. See the A.7.11 Bump Policy.]
 Client v1 ◄─── ops from v2 client
     │
     ├── Individual ops: Unknown fields ignored (graceful degradation)
@@ -779,6 +786,8 @@ Client v1 conflicts with Client v2
 ### A.7.4 Full State Imports (SYNC_IMPORT/BACKUP_IMPORT)
 
 When receiving full state from remote (e.g., SYNC_IMPORT from another client):
+
+> **Note (2026-07):** the pseudo-code below predates the removal of the forward-compat band (`MAX_VERSION_SKIP` no longer exists; current receivers block any newer-versioned data outright). Kept as design context only.
 
 ```typescript
 async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Promise<void> {
@@ -825,7 +834,7 @@ async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Prom
 
 ### A.7.5 Migration Implementation
 
-Migrations are defined in `src/app/op-log/store/schema-migration.service.ts`.
+Migrations are defined in `packages/shared-schema/src/migrations/` (registered in its `index.ts`); the Angular wrapper is `src/app/op-log/persistence/schema-migration.service.ts`.
 
 **How to Create a New Migration:**
 
@@ -890,22 +899,20 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 **Rule of thumb:** Additive changes (new optional fields, new entities) don't need operation migration. Field renames/removals require it.
 
-### A.7.8 Cross-Version Sync (Not Yet Implemented)
+### A.7.8 Cross-Version Sync
 
-**Status:** Design ready, not implemented. Safe while `CURRENT_SCHEMA_VERSION = 1`.
+**Status:** Implemented receiver-side: every remote op passes `SchemaMigrationService.migrateOperation()` before conflict detection (`RemoteOpsProcessingService`, STEP 1). Sender uploads ops as-is.
 
-**Strategy:** Receiver migrates incoming ops before conflict detection. Sender uploads ops as-is.
+**Guardrails for newer-schema ops:**
 
-**Interim guardrails:**
-
-- Reject ops with `schemaVersion > CURRENT + MAX_VERSION_SKIP`
-- Prompt user to update app when receiving newer-version ops
+- Current receivers (post-v18.14.0): block any op with `schemaVersion > CURRENT_SCHEMA_VERSION` outright, freeze the download cursor, and prompt for an app update.
+- Released receivers (v17.0.0–v18.14.0): tolerate up to `CURRENT + 3` (their `MAX_VERSION_SKIP`) and apply those ops UNMIGRATED after a once-per-session warning — and they advance the cursor even when blocking, permanently skipping blocked ops. This fleet reality drives the A.7.11 Bump Policy.
 
 **Required before:** Any schema migration that renames/removes fields.
 
 ### A.7.11 Cross-Version Sync Implementation Guide
 
-> **Status:** Not yet implemented. This section documents the design for when `CURRENT_SCHEMA_VERSION > 1`.
+> **Status:** The receiver-side migration pipeline is implemented and `CURRENT_SCHEMA_VERSION = 4` (two of the three existing migrations are no-op semantic barriers). The Bump Policy below is normative.
 
 This guide provides the implementation roadmap for supporting sync between clients on different schema versions.
 
@@ -924,6 +931,18 @@ Bump the schema version when:
 | Bug fix in reducer              | ❌ No         | Not a schema change                                                  |
 
 **Decision rule:** If the change affects how `state_cache` snapshots or operation payloads are structured, bump the version.
+
+#### Bump Policy — a bump does NOT protect the released fleet
+
+A version bump only fences receivers that ship AFTER the bump. As of 2026-07:
+
+- Every released client from v17.0.0 through v18.14.0 runs schema 2 with a forward-compat band (`MAX_VERSION_SKIP = 3`): it APPLIES ops up to schema 5 unmigrated after a once-per-session warning snack, and blocks schema ≥ 6 — but these clients advance the server cursor even while blocking, permanently skipping the blocked ops (loss that survives the later app update).
+- Post-v18.14.0 receivers block any newer-schema op outright and freeze the cursor (loud and lossless).
+
+Therefore:
+
+1. New op semantics MUST degrade gracefully on older clients — see the `LwwUpdatePayload` envelope pattern in `packages/sync-core` ('patch' ops apply correctly on pre-v3 clients via `updateOne`; the v4 delete-wins marker is inert for them). If they degrade, bumping is safe at any fleet share: the stamp is a fence for future receivers, not a protection for current ones.
+2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
 
 #### Operation Transformation Strategy
 
@@ -988,14 +1007,15 @@ Remote Op (v1)          Local Op (v2)
 
 #### Backward Compatibility Guarantees
 
-| Scenario                                   | Behavior                                             | User Experience           |
-| ------------------------------------------ | ---------------------------------------------------- | ------------------------- |
-| Newer client → Older client                | Ops uploaded as-is; older client migrates on receive | Seamless                  |
-| Older client → Newer client                | Newer client migrates incoming ops                   | Seamless                  |
-| Client too old (> MAX_VERSION_SKIP behind) | Reject ops, prompt update                            | "Please update app" modal |
-| Client too new (server rejects)            | N/A - server doesn't validate schema                 | No issue                  |
+| Scenario                                      | Behavior                                                                                                                                      | User Experience                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Older client → Newer client                   | Newer client migrates incoming ops                                                                                                            | Seamless                                        |
+| Newer client → post-v18.14.0 receiver         | Receiver blocks the op outright, freezes the cursor, prompts update                                                                           | Sync pauses loudly, lossless                    |
+| Newer client → released receiver (v17–v18.14) | Applies ops up to schema 5 UNMIGRATED (once-per-session warning); at ≥ 6 blocks but advances the cursor, permanently skipping the blocked ops | Silent misapply / silent loss — see Bump Policy |
+| Op below `MIN_SUPPORTED_SCHEMA_VERSION`       | Reject ops, prompt update                                                                                                                     | "Please update app" error                       |
+| Client too new (server rejects)               | N/A - server doesn't validate schema semantics (bounds check only)                                                                            | No issue                                        |
 
-**MAX_VERSION_SKIP = 5**: Clients more than 5 versions behind cannot sync until updated. This bounds the migration chain complexity.
+There is no forward-migration path: an older client can never migrate a newer op. Cross-version safety toward older clients rests entirely on payload-level graceful degradation (see Bump Policy above). `MAX_VERSION_SKIP` no longer exists in current code; released v17–v18.14 clients shipped it as `3`.
 
 #### Migration Rollout Strategy
 
@@ -2273,7 +2293,7 @@ When adding new entities or relationships:
 | ------------------------------- | ------- | ---------------------------------------- | ------------------------------------------------------- |
 | **Conflict-aware op migration** | A.7.11  | Conflicts may compare mismatched schemas | Before any schema migration that renames/removes fields |
 
-> **Note**: A.7.11 is required for cross-version sync. Currently safe because `CURRENT_SCHEMA_VERSION = 1` (all clients on same version). See [A.7.11 Interim Guardrails](#interim-guardrails-until-implementation) for pre-release checklist.
+> **Note**: receiver-side op migration (A.7.11) runs before conflict detection. `CURRENT_SCHEMA_VERSION = 4`; released v17–v18.14 clients apply v3/v4 ops unmigrated and rely on payload-level graceful degradation — see the A.7.11 Bump Policy. What remains unimplemented is a _transforming_ migration for field renames/removals.
 
 ## Part B: Legacy Sync Bridge
 
@@ -2322,7 +2342,7 @@ When adding new entities or relationships:
   - Batch cleanup queries (replaced N+1 pattern)
   - Database index on `(user_id, received_at)` for cleanup queries
 
-> **Cross-version limitation**: Part C is complete for clients on the same schema version. When `CURRENT_SCHEMA_VERSION > 1` and clients run different versions, A.7.11 (conflict-aware op migration) is required to ensure correct conflict detection.
+> **Cross-version note**: incoming ops are migrated (A.7.11) before conflict detection. `CURRENT_SCHEMA_VERSION = 4` since 2026-07; cross-version safety against released v17–v18.14 clients rests on payload-level graceful degradation, not on the version fence — see the A.7.11 Bump Policy.
 
 ## Part D: Validation & Repair
 
@@ -2338,12 +2358,12 @@ When adding new entities or relationships:
 
 ## Future Enhancements 🔮
 
-| Component  | Description                                | Priority | Notes                                                                          |
-| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------ |
-| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                |
-| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                |
-| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation) |
-| A.7.11     | Conflict-aware operation migration         | High     | Required before `CURRENT_SCHEMA_VERSION > 1` for cross-version sync            |
+| Component  | Description                                | Priority | Notes                                                                                             |
+| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                                   |
+| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                                   |
+| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation)                    |
+| A.7.11     | Transforming operation migrations          | High     | Receiver-side pipeline exists; a rename/remove-field migration must follow the A.7.11 Bump Policy |
 
 > **Recently Completed (December 2025):**
 >
@@ -2381,11 +2401,10 @@ src/app/op-log/
 ├── operation-converter.util.ts           # Op ↔ Action conversion
 ├── persistent-action.interface.ts        # PersistentAction type + isPersistentAction guard
 ├── entity-key.util.ts                    # Entity key generation utilities
-├── store/
+├── persistence/
 │   ├── operation-log-store.service.ts        # SUP_OPS IndexedDB wrapper
 │   ├── operation-log-hydrator.service.ts     # Startup hydration + crash recovery
 │   ├── operation-log-compaction.service.ts   # Snapshot + cleanup + emergency mode
-│   ├── operation-log-manifest.service.ts     # File-based sync manifest management
 │   ├── operation-log-migration.service.ts    # Genesis migration from legacy
 │   └── schema-migration.service.ts           # State schema migrations
 ├── sync/

@@ -8,11 +8,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * config backfill.
  *
  * Schema v3 introduces replacement-mode LWW envelopes whose omitted fields
- * are intentionally cleared. A v2 client ignores the mode and applies those
- * payloads as patches, which can silently diverge. Stamping all newly produced
- * operations as v3 makes v2 clients stop at the existing newer-schema gate
- * instead of misapplying them. Historical v2 operations retain their patch
- * semantics when migrated.
+ * are intentionally cleared. NOTE: this stamp does NOT stop released clients.
+ * Every v17.0.0–v18.14.0 receiver tolerates ops up to schema 5 (old
+ * MAX_VERSION_SKIP band) and applies them unmigrated: it ignores
+ * `lwwUpdateMode` and applies the envelope's actionPayload via updateOne —
+ * correct for 'patch' ops, and a near-replacement for 'replace' ops where
+ * only omitted-to-clear fields fail to propagate. The stamp is a fence for
+ * post-v18.14.0 receivers only, which block any newer-schema op outright. See the
+ * bump policy in schema-version.ts before relying on a version fence.
+ * Historical v2 operations retain their patch semantics when migrated.
  *
  * State transform: v2 snapshots (v18.14 and earlier) can lack
  * `globalConfig.idle.isSuppressIdleDuringFocusMode`, which #8965 added as a

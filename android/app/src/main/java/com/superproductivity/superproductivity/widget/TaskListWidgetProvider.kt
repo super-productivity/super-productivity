@@ -7,9 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.text.format.DateUtils
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.CapacitorMainActivity
 import com.superproductivity.superproductivity.R
 
@@ -26,9 +28,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        for (appWidgetId in appWidgetIds) {
-            updateWidget(context, appWidgetManager, appWidgetId)
-        }
+        updateAll(context, appWidgetManager, appWidgetIds)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -46,8 +46,12 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 val setDone = intent.getBooleanExtra(EXTRA_SET_DONE, true)
                 Log.d(TAG, "Toggle done from widget: taskId=$taskId setDone=$setDone")
                 WidgetDoneQueue.setTarget(context, taskId, setDone)
-                // Re-render so the pending-done overlay shows the checked box
-                notifyDataChanged(context)
+                // Re-render so the pending-done overlay shows the checked box. Full
+                // refresh, not rows-only: the tap cannot change the blob, but the
+                // verdict is a function of *now*, and this is the one interaction that
+                // reaches our code while the app process is dead — so a tap on a new
+                // day must not redraw rows under a header still claiming "Today".
+                refreshAll(context)
                 // Contentless "drain now" signal for a live app; Angular always
                 // pulls the IDs from the queue itself (single delivery path).
                 LocalBroadcastManager.getInstance(context)
@@ -81,20 +85,103 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         const val EXTRA_SET_DONE = "WIDGET_SET_DONE"
         const val EXTRA_OPEN_APP = "WIDGET_OPEN_APP"
 
-        fun notifyDataChanged(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val widgetIds = appWidgetManager.getAppWidgetIds(
+        private fun widgetIds(context: Context, appWidgetManager: AppWidgetManager): IntArray =
+            appWidgetManager.getAppWidgetIds(
                 ComponentName(context, TaskListWidgetProvider::class.java)
             )
-            appWidgetManager.notifyAppWidgetViewDataChanged(widgetIds, R.id.widget_task_list)
+
+        /**
+         * "Today" while the snapshot still describes the current logical day,
+         * otherwise the snapshot's own date. Only Angular can compute today's list —
+         * today's repeat instances do not exist as entities until its day-change
+         * effects have run, and overdue tasks are carried over there too — so a
+         * process that stayed dead across midnight leaves yesterday's blob in place.
+         * Name the day actually on screen rather than mislabelling it "Today" (#9098).
+         *
+         * Reads the blob itself: the header lives in the provider's RemoteViews while
+         * the rows are built in a separate RemoteViewsFactory, with no shared lifetime
+         * to hand it down. Call once per refresh — the result is the same for every
+         * widget id.
+         */
+        private fun headerTitle(context: Context): CharSequence {
+            val meta = try {
+                WidgetData.parseMeta(
+                    (context.applicationContext as App).keyValStore
+                        .get(WidgetData.KEYVAL_KEY, "{}")
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read widget data for header", e)
+                // Unknown stamp: keep the pre-#9098 behaviour rather than cry stale.
+                return context.getString(R.string.widget_header_title)
+            }
+            // The verdict lives in WidgetData.headerFor (pure, tested); this only renders it.
+            return when (val header = WidgetData.headerFor(meta, System.currentTimeMillis())) {
+                is WidgetHeader.Today -> context.getString(R.string.widget_header_title)
+                is WidgetHeader.Outdated -> header.dayMs?.let { dayMs ->
+                    context.getString(
+                        R.string.widget_header_outdated,
+                        DateUtils.formatDateTime(
+                            context,
+                            dayMs,
+                            DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_WEEKDAY or
+                                DateUtils.FORMAT_ABBREV_MONTH or DateUtils.FORMAT_ABBREV_WEEKDAY
+                        )
+                    )
+                } ?: context.getString(R.string.widget_header_outdated_unknown)
+            }
+        }
+
+        /**
+         * Refreshes rows and header — every caller needs both. A push can change the day
+         * the blob describes (it is how a widget stops being outdated), and a tap, though
+         * it cannot change the blob, still re-renders at a later *now* than the last
+         * verdict was computed at. The header is not part of the collection, so neither
+         * can be a rows-only reload.
+         *
+         * A full update is deliberate, not lazy. It costs a few PendingIntents on a
+         * debounced-and-deduped path, and it does NOT cost scroll position: the host
+         * reapplies onto the recycled view (same layout id) and AbsListView keeps the
+         * bound adapter when the adapter intent is unchanged, which it always is here.
+         * The obvious "cheaper" partiallyUpdateAppWidget is a trap — despite its docs it
+         * does not ignore a widget with no cached views, it *replaces* them, so it would
+         * install a header with no adapter and no click targets on any widget whose views
+         * the system has dropped (an app upgrade clears them explicitly).
+         */
+        fun refreshAll(context: Context) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val ids = widgetIds(context, appWidgetManager)
+            // Every push reaches here; without a widget there is nothing to read for.
+            if (ids.isEmpty()) {
+                return
+            }
+            updateAll(context, appWidgetManager, ids)
+        }
+
+        /** Rebuilds each passed widget, reading the header once for all of them. */
+        private fun updateAll(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetIds: IntArray
+        ) {
+            val header = headerTitle(context)
+            for (appWidgetId in appWidgetIds) {
+                updateWidget(context, appWidgetManager, appWidgetId, header)
+            }
+            // setRemoteAdapter alone does not re-invoke the factory's onDataSetChanged()
+            // when the adapter intent is unchanged (it always is — same widget id, same
+            // Uri), so the rows would otherwise be whatever the adapter last built.
+            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_task_list)
         }
 
         private fun updateWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
+            appWidgetId: Int,
+            header: CharSequence
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
+
+            views.setTextViewText(R.id.widget_header_title, header)
 
             val serviceIntent = Intent(context, TaskListWidgetService::class.java).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)

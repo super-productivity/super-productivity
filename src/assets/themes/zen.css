@@ -257,17 +257,17 @@ body.isDarkTheme.hasBgImage schedule {
   --bg-lighter: rgba(19, 19, 20, 0.85);
 }
 
-/* Flatten week/month selector in main header */
-body .week-month-selector {
+/* Flatten day/week/month selector in main header */
+body .time-view-selector {
   box-shadow: none !important;
   border: 1px solid rgba(128, 128, 128, 0.2);
 }
 
-body.isDarkTheme .week-month-selector {
+body.isDarkTheme .time-view-selector {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-body .week-month-btn:not(.active) {
+body .time-view-btn:not(.active) {
   background: transparent !important;
 }
 

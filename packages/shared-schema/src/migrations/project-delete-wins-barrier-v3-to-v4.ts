@@ -7,6 +7,12 @@ import type { SchemaMigration } from '../migration.types';
  * deleteProject operations carry an explicit payload marker; leaving older
  * operations untouched ensures they retain their original timestamp-based LWW
  * semantics after receiver-side migration.
+ *
+ * NOTE: released pre-v4 clients (v17.0.0–v18.14.0) apply v4 ops unmigrated
+ * and treat the marker as an inert actionPayload key — they keep resolving
+ * project-delete conflicts by timestamp LWW. The version stamp fences only
+ * post-v18.14.0 receivers, which block newer-schema ops outright. See the bump
+ * policy in schema-version.ts.
  */
 export const ProjectDeleteWinsBarrierMigration_v3v4: SchemaMigration = {
   fromVersion: 3,

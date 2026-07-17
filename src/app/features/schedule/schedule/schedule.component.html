@@ -1,10 +1,21 @@
 <div class="schedule-nav-controls">
-  <div class="week-month-selector">
+  <div class="time-view-selector">
     <button
       mat-icon-button
-      class="week-month-btn"
-      [class.active]="!isMonthView()"
-      [attr.aria-pressed]="!isMonthView()"
+      class="time-view-btn e2e-day-view-btn"
+      [class.active]="isDayView()"
+      [attr.aria-pressed]="isDayView()"
+      (click)="selectTimeView('day')"
+      [matTooltip]="T.F.SCHEDULE.VIEW_DAY | translate"
+      [attr.aria-label]="T.F.SCHEDULE.VIEW_DAY | translate"
+    >
+      <mat-icon>calendar_view_day</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      class="time-view-btn"
+      [class.active]="isWeekView()"
+      [attr.aria-pressed]="isWeekView()"
       (click)="selectTimeView('week')"
       [matTooltip]="T.F.SCHEDULE.VIEW_WEEK | translate"
       [attr.aria-label]="T.F.SCHEDULE.VIEW_WEEK | translate"
@@ -13,7 +24,7 @@
     </button>
     <button
       mat-icon-button
-      class="week-month-btn"
+      class="time-view-btn"
       [class.active]="isMonthView()"
       [attr.aria-pressed]="isMonthView()"
       (click)="selectTimeView('month')"
@@ -68,12 +79,20 @@
       (click)="goToPreviousPeriod()"
       [disabled]="isViewingToday()"
       [attr.aria-label]="
-        (isMonthView() ? T.F.SCHEDULE.PREVIOUS_MONTH : T.F.SCHEDULE.PREVIOUS_WEEK)
-          | translate
+        (isMonthView()
+          ? T.F.SCHEDULE.PREVIOUS_MONTH
+          : isDayView()
+            ? T.F.SCHEDULE.PREVIOUS_DAY
+            : T.F.SCHEDULE.PREVIOUS_WEEK
+        ) | translate
       "
       [matTooltip]="
-        (isMonthView() ? T.F.SCHEDULE.PREVIOUS_MONTH : T.F.SCHEDULE.PREVIOUS_WEEK)
-          | translate
+        (isMonthView()
+          ? T.F.SCHEDULE.PREVIOUS_MONTH
+          : isDayView()
+            ? T.F.SCHEDULE.PREVIOUS_DAY
+            : T.F.SCHEDULE.PREVIOUS_WEEK
+        ) | translate
       "
     >
       <mat-icon>chevron_left</mat-icon>
@@ -94,10 +113,20 @@
       mat-icon-button
       (click)="goToNextPeriod()"
       [attr.aria-label]="
-        (isMonthView() ? T.F.SCHEDULE.NEXT_MONTH : T.F.SCHEDULE.NEXT_WEEK) | translate
+        (isMonthView()
+          ? T.F.SCHEDULE.NEXT_MONTH
+          : isDayView()
+            ? T.F.SCHEDULE.NEXT_DAY
+            : T.F.SCHEDULE.NEXT_WEEK
+        ) | translate
       "
       [matTooltip]="
-        (isMonthView() ? T.F.SCHEDULE.NEXT_MONTH : T.F.SCHEDULE.NEXT_WEEK) | translate
+        (isMonthView()
+          ? T.F.SCHEDULE.NEXT_MONTH
+          : isDayView()
+            ? T.F.SCHEDULE.NEXT_DAY
+            : T.F.SCHEDULE.NEXT_WEEK
+        ) | translate
       "
     >
       <mat-icon>chevron_right</mat-icon>
