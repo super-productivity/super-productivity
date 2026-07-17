@@ -106,8 +106,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test Unit
-        run: npm run test
+      # Unit tests are the platform-independent Angular/Karma suite; they already
+      # gate every PR on Linux (ci.yml → test-on-linux) and run in headless Chrome,
+      # whose JS behavior is identical across OSes. Re-running them on the slow,
+      # expensive macOS runner adds no coverage and only surfaces timing-sensitive
+      # flakes. This Mac job's value is the signed DMG build, not the unit suite.
 
       #      - uses: browser-actions/setup-chrome@v1
       #        id: setup-chrome
