@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Locks the native end of the `widget_data` v:1 contract. The writer-side shape is
- * locked by android-widget.selectors.spec.ts — if one changes, the other must too.
+ * locked by widget.selectors.spec.ts — if one changes, the other must too.
  */
 class WidgetDataTest {
 

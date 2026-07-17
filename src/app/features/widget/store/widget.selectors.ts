@@ -2,19 +2,19 @@ import { createSelector } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTaskEntities } from '../../tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../../project/store/project.selectors';
-import { AndroidWidgetData, AndroidWidgetTask } from '../android-widget.model';
+import { WidgetData, WidgetTask } from '../widget-data.model';
 
 /**
  * Projects today's tasks into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
  */
-export const selectAndroidWidgetData = createSelector(
+export const selectWidgetData = createSelector(
   selectTodayTaskIds,
   selectTaskEntities,
   selectProjectFeatureState,
-  (todayTaskIds, taskEntities, projectState): AndroidWidgetData => {
-    const tasks: AndroidWidgetTask[] = [];
+  (todayTaskIds, taskEntities, projectState): WidgetData => {
+    const tasks: WidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
 
     for (const taskId of todayTaskIds) {
@@ -22,7 +22,7 @@ export const selectAndroidWidgetData = createSelector(
       if (!task) {
         continue;
       }
-      const widgetTask: AndroidWidgetTask = {
+      const widgetTask: WidgetTask = {
         id: task.id,
         title: task.title,
         isDone: task.isDone,

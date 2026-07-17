@@ -1,0 +1,72 @@
+name: iOS PR
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'ios/**'
+      - 'src/app/features/widget/**'
+      - '.github/workflows/ios-pr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build app and test widget
+    runs-on: macos-26
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+      # Root dependencies include a git SSH URL; PR runners fetch it anonymously.
+      - name: Reconfigure git dependencies to use HTTPS
+        run: >-
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Install npm packages
+        run: npm i
+      - name: Generate environment
+        run: npm run env
+      - name: Build Angular frontend
+        run: npm run buildFrontend:prodWeb
+      - name: Sync Capacitor iOS
+        run: npm run sync:ios
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: pod install
+      - name: Build iOS app and widget
+        working-directory: ios/App
+        run: >-
+          xcodebuild build
+          -workspace App.xcworkspace
+          -scheme App
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_ALLOWED=NO
+      - name: Run widget unit tests
+        working-directory: ios/App
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator found"
+            exit 1
+          fi
+          xcodebuild test \
+            -workspace App.xcworkspace \
+            -scheme SupWidgetTests \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO

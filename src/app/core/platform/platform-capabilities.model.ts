@@ -28,7 +28,7 @@ export interface PlatformCapabilities {
 
   /**
    * Whether the platform supports home screen widgets.
-   * Android only for MVP.
+   * Android (AppWidgetProvider) and iOS (WidgetKit extension, iOS 17+).
    */
   readonly homeWidget: boolean;
 
@@ -115,7 +115,7 @@ export const IOS_CAPABILITIES: PlatformCapabilities = {
   backgroundTracking: false, // Not supported in MVP
   backgroundFocusTimer: false, // Not supported in MVP
   localFileSync: false, // Not supported in MVP
-  homeWidget: false, // Not supported in MVP
+  homeWidget: true, // WidgetKit extension (widget itself requires iOS 17+)
   scheduledNotifications: true, // LocalNotifications plugin
   webdavSync: true, // CapacitorHttp
   shareOut: true, // Share plugin
