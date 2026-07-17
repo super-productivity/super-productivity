@@ -15,6 +15,11 @@ set -eu
 # names: the failing migration is read from Prisma's own output and its SQL is
 # read from prisma/migrations/<name>/migration.sql.
 #
+# A P1002 advisory-lock timeout (another session holds Prisma's migration lock,
+# usually a migrator container orphaned by a prior interrupted deploy) is NOT a
+# migration failure: it is detected separately and printed with cleanup steps,
+# never auto-resolved.
+#
 # This script is COPYed into the image next to prisma/migrations in the same
 # build, so it is always version-locked to the migrations it must handle. All
 # three call sites (host deploy.sh, image startup CMD, helm initContainer)
@@ -127,6 +132,14 @@ is_stuck_failed_migration() {
   log_has 'P3009'
 }
 
+# A P1002 whose message names the advisory lock: another DB session holds
+# Prisma's migration advisory lock, so `migrate deploy` never began applying
+# migrations. Distinct from every migration-level failure below — nothing was
+# applied, so there is no failing migration to recover; only the holder to clear.
+is_advisory_lock_timeout() {
+  log_has 'P1002' && log_has 'advisory lock'
+}
+
 migration_sql_path() {
   printf '%s/%s/migration.sql' "$MIGRATIONS_DIR" "$1"
 }
@@ -226,6 +239,31 @@ emit_interrupted_recovery_hint() {
   fi
 }
 
+# Copy-paste diagnosis + cleanup for a P1002 advisory-lock timeout. Another DB
+# session holds Prisma's migration advisory lock — almost always a one-off
+# migrator container orphaned by a previous interrupted deploy (a timed-out
+# `docker compose run` can leave its container, and thus its DB connection,
+# alive). This only ever prints guidance; it NEVER terminates a backend, because
+# an active CREATE INDEX CONCURRENTLY build legitimately holds the lock and must
+# not be killed. The operator decides.
+emit_advisory_lock_recovery() {
+  echo ""
+  echo "Another database session holds Prisma's migration advisory lock, so"
+  echo "migrate deploy could not start. This is usually a migrator container"
+  echo "orphaned by a previous interrupted deploy. Diagnose and clear it:"
+  echo ""
+  echo "  1. Remove any orphaned one-off migrator containers:"
+  echo "       docker ps -aq --filter name=supersync-migrator | xargs -r docker rm -f"
+  echo "       docker ps -aq --filter name=supersync-run       | xargs -r docker rm -f"
+  echo "  2. If the lock is still held, find who holds it (against your Postgres):"
+  echo "       SELECT a.pid, a.state, now() - a.state_change AS idle_for, left(a.query, 80)"
+  echo "         FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid"
+  echo "        WHERE l.locktype = 'advisory' AND l.granted;"
+  echo "  3. If that session is idle (NOT actively building an index), release it:"
+  echo "       SELECT pg_terminate_backend(<pid>);"
+  echo "  4. Re-run the deploy. Never terminate a live CREATE INDEX CONCURRENTLY build."
+}
+
 fail_loudly() {
   echo ""
   echo "ERROR: $1"
@@ -293,6 +331,12 @@ while :; do
   fi
 
   if ! is_transaction_block_failure && ! is_stuck_failed_migration; then
+    if is_advisory_lock_timeout; then
+      # Not a migration failure (nothing was applied) — print cleanup guidance
+      # and fail loudly. Rationale is on is_advisory_lock_timeout / the emitter.
+      emit_advisory_lock_recovery
+      fail_loudly "prisma migrate deploy could not acquire the migration advisory lock (P1002) within 10s; another migrator session holds it." 1
+    fi
     # A non-P3018/P3009 exit is usually a genuine error (bad SQL, unreachable
     # DB), but OOM (137) or another non-timeout kill can also abort an in-flight
     # CONCURRENTLY build before Prisma records the failure. (A timeout SIGTERM is

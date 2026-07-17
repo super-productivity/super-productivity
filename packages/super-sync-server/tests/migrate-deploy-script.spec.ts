@@ -85,6 +85,15 @@ case "$sub" in
                 echo "Terminated"
                 exit 137
                 ;;
+              P1002)
+                # Another session holds Prisma's migration advisory lock, so
+                # deploy times out before applying anything. No migration name
+                # or gate marker is emitted — the script must recognize this
+                # from the P1002 + advisory-lock text, not a failing migration.
+                echo "Error: P1002"
+                echo "The database server was reached but timed out."
+                echo "Context: Timed out trying to acquire a postgres advisory lock (SELECT pg_advisory_lock(72707369)). Elapsed: 10000ms."
+                ;;
               *)
                 echo "Error: P1001"
                 echo "Can't reach database server"
@@ -356,6 +365,23 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     expect(r.status).not.toBe(0);
     expect(r.stdout).toContain('Not auto-recovered');
     expect(r.resolveApplied).toEqual([]);
+  });
+
+  it('prints advisory-lock recovery on a P1002 lock timeout, without resolving anything', () => {
+    // Another session holds Prisma's migration advisory lock (e.g. a migrator
+    // container orphaned by a prior interrupted deploy), so migrate deploy
+    // times out before applying anything. This is NOT a migration failure:
+    // print cleanup guidance, never mark a migration applied or rolled-back.
+    writeMigration(ENCRYPTED_OPS, ENCRYPTED_OPS_SQL);
+    const r = run({ FAKE_FAIL: ENCRYPTED_OPS, FAKE_CODE: 'P1002' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain('advisory lock');
+    expect(r.stdout).toContain('supersync-migrator');
+    expect(r.stdout).toContain('pg_terminate_backend');
+    // The lock timeout is not a failing migration — nothing gets resolved.
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.resolveRolledBack).toEqual([]);
   });
 
   it('targets the failed migration in a P3009 log that also backticks others', () => {

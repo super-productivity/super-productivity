@@ -217,9 +217,20 @@ describe('performance migrations', () => {
     expect(deployScript).toContain('jq is required');
     expect(deployScript).toContain('docker compose config --format json failed');
     expect(deployScript).toContain('docker image inspect');
-    expect(deployScript).toContain(
-      'run --rm --no-deps --interactive=false -T -e MIGRATE_STEP_TIMEOUT=$MIGRATE_STEP_TIMEOUT supersync',
-    );
+    expect(deployScript).toContain('run --rm --no-deps --interactive=false -T');
+    expect(deployScript).toContain('-e "MIGRATE_STEP_TIMEOUT=$MIGRATE_STEP_TIMEOUT"');
+    // One-off migrator containers are named per-deploy and force-removed (inline
+    // + an EXIT trap) so a timed-out `docker compose run` cannot orphan the
+    // container and leak Prisma's advisory lock into the next deploy (P1002).
+    expect(deployScript).toContain('run_migrator()');
+    expect(deployScript).toContain('--name "$name"');
+    // Container name and EXIT-sweep filter must derive from ONE prefix, else a
+    // rename in one spot silently breaks the sweep backstop this PR relies on.
+    expect(deployScript).toContain('MIGRATOR_NAME_PREFIX="supersync-migrator-$$"');
+    expect(deployScript).toContain('local name="${MIGRATOR_NAME_PREFIX}-$RANDOM"');
+    expect(deployScript).toContain('--filter "name=${MIGRATOR_NAME_PREFIX}-"');
+    expect(deployScript).toContain('docker rm -f "$name"');
+    expect(deployScript).toContain('trap cleanup_migrator_containers EXIT');
     // The host forwards its migration budget into the image so the in-image
     // per-step timeout can't silently cap a large MIGRATION_TIMEOUT at the
     // image default (1800s) and kill a slow CREATE INDEX CONCURRENTLY early.
@@ -236,8 +247,11 @@ describe('performance migrations', () => {
     expect(deployScript).not.toMatch(/_INDEX_MIGRATION=/);
     expect(deployScript).not.toContain('run_concurrent_index_sql');
     expect(deployScript).not.toContain('CREATE INDEX CONCURRENTLY "operations');
-    // Host still owns the timeout + exit-code policy around the migrator.
-    expect(deployScript).toContain('timeout "$MIGRATION_TIMEOUT"');
+    // Host still owns the timeout + exit-code policy around the migrator: it
+    // passes MIGRATION_TIMEOUT into run_migrator, which wraps the container run
+    // in `timeout` and force-removes the container afterward.
+    expect(deployScript).toContain('run_migrator "$MIGRATION_TIMEOUT"');
+    expect(deployScript).toContain('timeout -k 30 "$run_timeout"');
     expect(deployScript).toContain('prisma migrate deploy timed out');
     expect(deployScript).toContain('database migrations failed (exit $MIGRATE_STATUS)');
     expect(deployScript).toContain(externalDbStartCommand);
