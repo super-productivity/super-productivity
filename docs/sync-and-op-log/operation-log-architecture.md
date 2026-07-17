@@ -762,6 +762,10 @@ Client v2 ◄─── ops from v1 client
 
 Scenario 2: Older client receives newer ops
 ──────────────────────────────────────────
+[OUTDATED design sketch — actual behavior differs. Current (post-v18.14.0)
+receivers BLOCK any newer-schema op outright (cursor frozen, update prompt).
+Released v17–v18.14 receivers apply newer ops UNMIGRATED — unknown fields are
+NOT ignored; reducers write them into state. See the A.7.11 Bump Policy.]
 Client v1 ◄─── ops from v2 client
     │
     ├── Individual ops: Unknown fields ignored (graceful degradation)
@@ -901,8 +905,8 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 **Guardrails for newer-schema ops:**
 
-- Current receivers (v18.15+): block any op with `schemaVersion > CURRENT_SCHEMA_VERSION` outright, freeze the download cursor, and prompt for an app update.
-- Released receivers (v17.0.0–v18.14.0): tolerate up to `CURRENT + 3` (their `MAX_VERSION_SKIP`) and apply those ops UNMIGRATED after a one-time warning — and they advance the cursor even when blocking, permanently skipping blocked ops. This fleet reality drives the A.7.11 Bump Policy.
+- Current receivers (post-v18.14.0): block any op with `schemaVersion > CURRENT_SCHEMA_VERSION` outright, freeze the download cursor, and prompt for an app update.
+- Released receivers (v17.0.0–v18.14.0): tolerate up to `CURRENT + 3` (their `MAX_VERSION_SKIP`) and apply those ops UNMIGRATED after a once-per-session warning — and they advance the cursor even when blocking, permanently skipping blocked ops. This fleet reality drives the A.7.11 Bump Policy.
 
 **Required before:** Any schema migration that renames/removes fields.
 
@@ -932,13 +936,13 @@ Bump the schema version when:
 
 A version bump only fences receivers that ship AFTER the bump. As of 2026-07:
 
-- Every released client from v17.0.0 through v18.14.0 runs schema 2 with a forward-compat band (`MAX_VERSION_SKIP = 3`): it APPLIES ops up to schema 5 unmigrated after a single warning snack, and blocks schema ≥ 6 — but these clients advance the server cursor even while blocking, permanently skipping the blocked ops (loss that survives the later app update).
-- v18.15+ receivers block any newer-schema op outright and freeze the cursor (loud and lossless).
+- Every released client from v17.0.0 through v18.14.0 runs schema 2 with a forward-compat band (`MAX_VERSION_SKIP = 3`): it APPLIES ops up to schema 5 unmigrated after a once-per-session warning snack, and blocks schema ≥ 6 — but these clients advance the server cursor even while blocking, permanently skipping the blocked ops (loss that survives the later app update).
+- Post-v18.14.0 receivers block any newer-schema op outright and freeze the cursor (loud and lossless).
 
 Therefore:
 
 1. New op semantics MUST degrade gracefully on older clients — see the `LwwUpdatePayload` envelope pattern in `packages/sync-core` ('patch' ops apply correctly on pre-v3 clients via `updateOne`; the v4 delete-wins marker is inert for them). If they degrade, bumping is safe at any fleet share: the stamp is a fence for future receivers, not a protection for current ones.
-2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while pre-v18.15 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until pre-v18.15 sync clients are effectively extinct — or redesign them to degrade (option 1).
+2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
 
 #### Operation Transformation Strategy
 
@@ -1003,14 +1007,15 @@ Remote Op (v1)          Local Op (v2)
 
 #### Backward Compatibility Guarantees
 
-| Scenario                                   | Behavior                                             | User Experience           |
-| ------------------------------------------ | ---------------------------------------------------- | ------------------------- |
-| Newer client → Older client                | Ops uploaded as-is; older client migrates on receive | Seamless                  |
-| Older client → Newer client                | Newer client migrates incoming ops                   | Seamless                  |
-| Client too old (> MAX_VERSION_SKIP behind) | Reject ops, prompt update                            | "Please update app" modal |
-| Client too new (server rejects)            | N/A - server doesn't validate schema                 | No issue                  |
+| Scenario                                      | Behavior                                                                                                                                      | User Experience                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Older client → Newer client                   | Newer client migrates incoming ops                                                                                                            | Seamless                                        |
+| Newer client → post-v18.14.0 receiver         | Receiver blocks the op outright, freezes the cursor, prompts update                                                                           | Sync pauses loudly, lossless                    |
+| Newer client → released receiver (v17–v18.14) | Applies ops up to schema 5 UNMIGRATED (once-per-session warning); at ≥ 6 blocks but advances the cursor, permanently skipping the blocked ops | Silent misapply / silent loss — see Bump Policy |
+| Op below `MIN_SUPPORTED_SCHEMA_VERSION`       | Reject ops, prompt update                                                                                                                     | "Please update app" error                       |
+| Client too new (server rejects)               | N/A - server doesn't validate schema semantics (bounds check only)                                                                            | No issue                                        |
 
-**MAX_VERSION_SKIP = 5**: Clients more than 5 versions behind cannot sync until updated. This bounds the migration chain complexity.
+There is no forward-migration path: an older client can never migrate a newer op. Cross-version safety toward older clients rests entirely on payload-level graceful degradation (see Bump Policy above). `MAX_VERSION_SKIP` no longer exists in current code; released v17–v18.14 clients shipped it as `3`.
 
 #### Migration Rollout Strategy
 
@@ -2400,7 +2405,6 @@ src/app/op-log/
 │   ├── operation-log-store.service.ts        # SUP_OPS IndexedDB wrapper
 │   ├── operation-log-hydrator.service.ts     # Startup hydration + crash recovery
 │   ├── operation-log-compaction.service.ts   # Snapshot + cleanup + emergency mode
-│   ├── operation-log-manifest.service.ts     # File-based sync manifest management
 │   ├── operation-log-migration.service.ts    # Genesis migration from legacy
 │   └── schema-migration.service.ts           # State schema migrations
 ├── sync/

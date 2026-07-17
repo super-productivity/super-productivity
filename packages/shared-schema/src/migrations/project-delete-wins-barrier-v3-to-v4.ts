@@ -11,7 +11,7 @@ import type { SchemaMigration } from '../migration.types';
  * NOTE: released pre-v4 clients (v17.0.0–v18.14.0) apply v4 ops unmigrated
  * and treat the marker as an inert actionPayload key — they keep resolving
  * project-delete conflicts by timestamp LWW. The version stamp fences only
- * v18.15+ receivers, which block newer-schema ops outright. See the bump
+ * post-v18.14.0 receivers, which block newer-schema ops outright. See the bump
  * policy in schema-version.ts.
  */
 export const ProjectDeleteWinsBarrierMigration_v3v4: SchemaMigration = {

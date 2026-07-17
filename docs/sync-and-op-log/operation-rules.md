@@ -78,8 +78,13 @@ This document establishes the core rules and principles for designing the Operat
 - **Purpose:** To allow future versions of the app to migrate or interpret old operations correctly.
 - **Default:** Use `CURRENT_SCHEMA_VERSION` from `SchemaMigrationService` at the time of creation.
 - **Compatibility barrier:** Bump the schema version when an old reducer would
-  silently misinterpret a new payload semantic. The existing newer-schema gate
-  must stop the old client instead of allowing divergent replay.
+  silently misinterpret a new payload semantic — but a bump alone does NOT stop
+  released clients: v17.0.0–v18.14.0 receivers apply ops up to schema 5
+  unmigrated, and at ≥ 6 block them while still advancing the server cursor
+  (permanent silent skip). Only post-v18.14.0 receivers block newer ops safely.
+  New payload semantics must therefore degrade gracefully on old clients; see
+  the Bump Policy in
+  [operation-log-architecture.md](operation-log-architecture.md) §A.7.11.
 
 ### 2.6 Explicit Intent (OpType)
 

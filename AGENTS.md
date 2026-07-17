@@ -71,7 +71,7 @@ Touched on most state-related PRs. Read the linked source/doc for full reasoning
 7. **`SYNC_IMPORT` / `BACKUP_IMPORT`** replace state and intentionally drop concurrent ops (CONCURRENT or LESS_THAN by vector clock) — by design, not a bug. → `SyncImportFilterService`.
 8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`. Server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
 9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or `Log.log(title)` — log history is exportable, never log user content.
-10. **A schema bump never protects the released fleet.** v17.0.0–v18.14.0 clients apply ops up to schema 5 UNMIGRATED (their old `+3` skip band) and, at schema ≥ 6, block them but still advance the server cursor — those ops are skipped permanently, even after updating. Only v18.15+ receivers block newer ops safely. So new op semantics MUST degrade gracefully on older clients (`LwwUpdatePayload` envelope pattern); a change old clients would misapply must not ship behind a bump alone. → `packages/shared-schema/src/schema-version.ts`, [operation-log-architecture.md](docs/sync-and-op-log/operation-log-architecture.md) §A.7.11 "Bump Policy".
+10. **A schema bump never protects the released fleet.** v17.0.0–v18.14.0 clients apply ops up to schema 5 UNMIGRATED (their old `+3` skip band) and, at schema ≥ 6, block them but still advance the server cursor — those ops are skipped permanently, even after updating. Only post-v18.14.0 receivers block newer ops safely. So new op semantics MUST degrade gracefully on older clients (`LwwUpdatePayload` envelope pattern); a change old clients would misapply must not ship behind a bump alone. → `packages/shared-schema/src/schema-version.ts`, [operation-log-architecture.md](docs/sync-and-op-log/operation-log-architecture.md) §A.7.11 "Bump Policy".
 
 ## Judging sync severity
 
@@ -83,12 +83,12 @@ here because getting it wrong already produced a confidently wrong conclusion.
    `tracks: internal` + `status: completed` → testers' phones auto-update within minutes, on their
    real data). `ghcr.io/super-productivity/supersync:latest` **is** master and has no
    release-tagged build at all — it is the default in `packages/super-sync-server/docker-compose.yml`,
-   so self-hosters on `docker compose pull` run master HEAD. Only desktop/web/F-Droid/Play-production
-   are release-gated.
+   so self-hosters on `docker compose pull` run master HEAD. Snap `edge` is also published from
+   every master push. Only desktop/web/F-Droid/Play-production/Snap-stable are release-gated.
 2. **Never infer "shipped" from dates or the latest tag — prove it.** Use
    `git merge-base --is-ancestor <commit> v<tag>` / `git tag --contains <commit>`. Tags are cut from
    a point in time, and sync features routinely land just after: **#8874's disjoint-field merge
-   landed ~18h after v18.14.0 was tagged and is in no release**, so whole-entity-LWW field loss
+   landed ~24h after v18.14.0 was tagged and is in no release**, so whole-entity-LWW field loss
    (rename dies when another device marks the task done, #9095) is live in **every shipped version**.
 3. **"Restores released behavior" ≠ safe. The released behavior can be the bug.** #9061 froze the
    disjoint merge on exactly that reasoning and silently re-armed shipped data loss (#9095).

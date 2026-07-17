@@ -10,7 +10,7 @@ import type { SchemaMigration } from '../migration.types';
  * `lwwUpdateMode` and applies the envelope's actionPayload via updateOne —
  * correct for 'patch' ops, and a near-replacement for 'replace' ops where
  * only omitted-to-clear fields fail to propagate. The stamp is a fence for
- * v18.15+ receivers only, which block any newer-schema op outright. See the
+ * post-v18.14.0 receivers only, which block any newer-schema op outright. See the
  * bump policy in schema-version.ts before relying on a version fence.
  * Historical v2 operations retain their patch semantics when migrated.
  */
