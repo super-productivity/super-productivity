@@ -76,6 +76,7 @@ import { readableUrl } from './util/readable-url';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
+import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
@@ -158,6 +159,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
+  // Injected only to trigger its constructor eagerly at app start, so a
+  // cold-launch add-task/complete-task URL action is never missed.
+  private _appUriTaskActionsService = inject(AppUriTaskActionsService);
   readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);

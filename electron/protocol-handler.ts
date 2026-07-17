@@ -68,18 +68,41 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
           showOrFocus(mainWin);
         }
         break;
-      case 'create-task':
-        if (pathParts.length > 0) {
-          const taskTitle = decodeURIComponent(pathParts[0]);
+      case 'create-task': {
+        // Title may come from the path segment (legacy/existing form,
+        // `create-task/<title>`) or a `title` query param — either works.
+        const taskTitle =
+          pathParts.length > 0
+            ? decodeURIComponent(pathParts[0])
+            : urlObj.searchParams.get('title');
+        if (taskTitle) {
           // Don't log the title — the log is exportable and must not contain user content.
           log('Creating task from protocol URL');
 
-          // Send IPC message to create task
           if (mainWin && mainWin.webContents) {
-            mainWin.webContents.send(IPC.ADD_TASK_FROM_APP_URI, { title: taskTitle });
+            mainWin.webContents.send(IPC.ADD_TASK_FROM_APP_URI, {
+              title: taskTitle,
+              notes: urlObj.searchParams.get('notes') ?? undefined,
+              projectId: urlObj.searchParams.get('projectId') ?? undefined,
+            });
           }
         }
         break;
+      }
+      case 'complete-task': {
+        const taskTitle = urlObj.searchParams.get('title');
+        if (taskTitle) {
+          // Don't log the title — see note above.
+          log('Completing task from protocol URL');
+
+          if (mainWin && mainWin.webContents) {
+            mainWin.webContents.send(IPC.COMPLETE_TASK_FROM_APP_URI, {
+              title: taskTitle,
+            });
+          }
+        }
+        break;
+      }
       case 'task-toggle-start':
         // Send IPC message to toggle task start
         if (mainWin && mainWin.webContents) {

@@ -94,6 +94,8 @@ import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapt
 import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translate-mat-datepicker-intl';
 import { suspendAudioContext, unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
+import { parseAppUriTaskAction } from './app/features/tasks/util/parse-app-uri-task-action';
+import { pendingCapacitorAppUriAction$ } from './app/features/tasks/app-uri-actions/pending-capacitor-app-uri-action';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -541,9 +543,17 @@ if (IS_IOS_NATIVE) {
   });
 
   // Handle app URL open (for OAuth callbacks, deep links, etc.)
+  // OAuth callbacks are handled separately by OAuthCallbackHandlerService's
+  // own `appUrlOpen` listener (Capacitor supports multiple listeners on the
+  // same event). This one only recognizes add-task/complete-task actions
+  // (e.g. from an iOS Shortcut's "Open URLs" action) and hands them off to
+  // AppUriTaskActionsService via the pending-action ReplaySubject, since
+  // Angular's DI (and app data) may not exist yet on a cold launch.
   CapacitorApp.addListener('appUrlOpen', (event) => {
     Log.log('iOS app URL open', event.url);
-    // Handle OAuth callbacks or deep links here
-    // The URL will be passed to the app when opened via custom scheme
+    const action = parseAppUriTaskAction(event.url);
+    if (action) {
+      pendingCapacitorAppUriAction$.next(action);
+    }
   });
 }

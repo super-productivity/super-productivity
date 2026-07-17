@@ -1961,7 +1961,9 @@
         "ESTIMATE_EXCEEDED_BODY": "You exceeded your estimated time for \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Added task \"{{title}}\"",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
+        "COMPLETED_VIA_APP_URI": "Completed task \"{{title}}\"",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
         "DEADLINE_REMOVED": "Deadline removed",
         "DEADLINE_SET": "Deadline set for {{date}}",
@@ -1972,6 +1974,7 @@
         "GO_TO_TASK": "Go to Task",
         "MOVED_TO_ARCHIVE": "Moved {{nr}} tasks to archive",
         "MOVED_TO_PROJECT": "Moved task \"{{taskTitle}}\" to project \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "No matching task found for \"{{title}}\"",
         "REMINDER_ADDED": "Scheduled <strong>\"{{title}}\"</strong> at <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",

@@ -93,15 +93,64 @@ test('toggle-visibility delegates to the shared toggle helper without sending IP
   assert.deepEqual(win.sent, []);
 });
 
-test('create-task forwards the decoded title', () => {
+test('create-task forwards the decoded title from the path segment', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
 
   processProtocolUrl('superproductivity://create-task/Buy%20milk', win);
 
   assert.deepEqual(win.sent, [
-    { channel: 'ADD_TASK_FROM_APP_URI', payload: { title: 'Buy milk' } },
+    {
+      channel: 'ADD_TASK_FROM_APP_URI',
+      payload: { title: 'Buy milk', notes: undefined, projectId: undefined },
+    },
   ]);
+});
+
+test('create-task forwards title, notes, and projectId from query params', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl(
+    'superproductivity://create-task?title=Buy%20milk&notes=2%25%20fat&projectId=proj-1',
+    win,
+  );
+
+  assert.deepEqual(win.sent, [
+    {
+      channel: 'ADD_TASK_FROM_APP_URI',
+      payload: { title: 'Buy milk', notes: '2% fat', projectId: 'proj-1' },
+    },
+  ]);
+});
+
+test('create-task with neither a path segment nor a title query param sends nothing', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://create-task', win);
+
+  assert.deepEqual(win.sent, []);
+});
+
+test('complete-task forwards the title query param', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://complete-task?title=Buy%20milk', win);
+
+  assert.deepEqual(win.sent, [
+    { channel: 'COMPLETE_TASK_FROM_APP_URI', payload: { title: 'Buy milk' } },
+  ]);
+});
+
+test('complete-task without a title query param sends nothing', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://complete-task', win);
+
+  assert.deepEqual(win.sent, []);
 });
 
 test('does not log user content (the task title) to the exportable log', () => {
@@ -112,7 +161,10 @@ test('does not log user content (the task title) to the exportable log', () => {
 
   // The task itself is still dispatched with the real title...
   assert.deepEqual(win.sent, [
-    { channel: 'ADD_TASK_FROM_APP_URI', payload: { title: 'My Secret Title' } },
+    {
+      channel: 'ADD_TASK_FROM_APP_URI',
+      payload: { title: 'My Secret Title', notes: undefined, projectId: undefined },
+    },
   ]);
   // ...but the title must never reach the (exportable) log.
   assert.ok(

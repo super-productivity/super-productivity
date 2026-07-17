@@ -4,9 +4,15 @@ import { map, filter } from 'rxjs/operators';
 import { EMPTY, Observable } from 'rxjs';
 import { IS_ELECTRON } from '../app.constants';
 
+export interface AddTaskFromAppUriPayload {
+  title: string;
+  notes?: string;
+  projectId?: string;
+}
+
 export const parseAddTaskFromAppUriPayload = (
   data: unknown,
-): { title: string } | null => {
+): AddTaskFromAppUriPayload | null => {
   if (
     !data ||
     typeof data !== 'object' ||
@@ -14,7 +20,33 @@ export const parseAddTaskFromAppUriPayload = (
   ) {
     return null;
   }
-  return data as { title: string };
+  const { title, notes, projectId } = data as {
+    title: string;
+    notes?: unknown;
+    projectId?: unknown;
+  };
+  return {
+    title,
+    ...(typeof notes === 'string' ? { notes } : {}),
+    ...(typeof projectId === 'string' ? { projectId } : {}),
+  };
+};
+
+export interface CompleteTaskFromAppUriPayload {
+  title: string;
+}
+
+export const parseCompleteTaskFromAppUriPayload = (
+  data: unknown,
+): CompleteTaskFromAppUriPayload | null => {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof (data as { title?: unknown }).title !== 'string'
+  ) {
+    return null;
+  }
+  return { title: (data as { title: string }).title };
 };
 
 export const parseBeforeCloseIdsPayload = (data: unknown): string[] =>
@@ -50,9 +82,17 @@ export const ipcShowAddTaskBar$: Observable<unknown> = IS_ELECTRON
   ? ipcEvent$(IPC.SHOW_ADD_TASK_BAR).pipe()
   : EMPTY;
 
-export const ipcAddTaskFromAppUri$: Observable<{ title: string } | null> = IS_ELECTRON
+export const ipcAddTaskFromAppUri$: Observable<AddTaskFromAppUriPayload> = IS_ELECTRON
   ? ipcEvent$(IPC.ADD_TASK_FROM_APP_URI).pipe(
       map(([data]) => parseAddTaskFromAppUriPayload(data)),
-      filter((data): data is { title: string } => data !== null),
+      filter((data): data is AddTaskFromAppUriPayload => data !== null),
     )
   : EMPTY;
+
+export const ipcCompleteTaskFromAppUri$: Observable<CompleteTaskFromAppUriPayload> =
+  IS_ELECTRON
+    ? ipcEvent$(IPC.COMPLETE_TASK_FROM_APP_URI).pipe(
+        map(([data]) => parseCompleteTaskFromAppUriPayload(data)),
+        filter((data): data is CompleteTaskFromAppUriPayload => data !== null),
+      )
+    : EMPTY;
