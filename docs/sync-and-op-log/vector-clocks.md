@@ -432,3 +432,46 @@ via **Dotted Version Vectors** (bound to server vnodes, not devices),
 **bounded reclaimable client IDs** (needs a registration/retirement protocol),
 or **periodic stable-cut GC** (needs all-to-all clock reporting). None apply to
 the current dumb-relay model.
+
+### Future option: staleness-informed eviction (issue #9105 — works in the dumb-relay model)
+
+Pruning today evicts the **lowest-counter** entries, but a low counter
+correlates with _importance_ (a fresh import author has counter 1), not with
+_deadness_ — the heuristic behind the #9089/#9096 preserve-set bugs. Issue
+#9105 tracks the root cause: client IDs are minted per install/profile and
+retired almost never, so clocks only grow toward MAX. The decision on #9105
+was to **park** the fix — post #9089/#9102 the worst case is the benign extra
+round-trip of §5 — and record the agreed direction here.
+
+If pruning stops being rare in practice, evict the **stalest** entries instead
+of the lowest-counter ones. Unlike the coordinator options above, this fits
+the dumb-relay model with no wire-format change:
+
+- **Server:** the `sync_devices` table already stores `lastSeenAt` per
+  `(userId, clientId)`, updated on every upload — and uploads are the only
+  path that creates clock entries. A daily job already GCs rows unseen for
+  `retentionMs` (45 days), so absence from the registry reads as "stalest".
+- **Client (all providers):** keep a small durable `clientId → last-merged-op
+time` map, updated where remote clocks are merged (`mergeRemoteOpClocks`) —
+  every merged op carries its author's ID. Needs no server support, so it
+  covers WebDAV / LocalFile / Dropbox too.
+
+The safety profile is identical to today's pruning (entries are dropped either
+way; a dropped ID that returns costs at most the extra round-trip of §5), but
+victim selection is strictly better: a recently-seen ID — e.g. a fresh import
+author — survives by definition, making the preserve-set invariant of
+#9089/#9096 _emergent_ instead of hand-maintained at each prune site (the
+explicit preserve sets stay as belt-and-braces). Staleness knowledge differs
+per node, so nodes may evict different victims; that adds clock asymmetry but
+no new failure class — comparison treats missing keys as zero, and clients
+already prune with differing preserve sets.
+
+The supported GC today is a **full-state import**: the clock reset keeps only
+`{import author, self}` (§7), and the once-per-session pruning snack points
+users at it (sync all devices first — imports intentionally drop concurrent
+ops, see `SyncImportFilterService`).
+
+**Revisit trigger:** client pruning WARN-logs `prunedIds` / `survivingIds`
+into the exportable log history. If prune warnings appear in real bug
+reports — especially ones evicting _live_ IDs — promote this from parked to
+scheduled.

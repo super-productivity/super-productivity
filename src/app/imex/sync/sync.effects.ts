@@ -119,15 +119,15 @@ export class SyncEffects {
           this._snackService.open({
             msg: T.F.SYNC.S.VECTOR_CLOCK_LIMIT_REACHED,
             // CUSTOM (not WARNING): this is a benign, self-healing cleanup, not
-            // an alert the user must act on. Neutral icon, auto-dismiss — but a
-            // touch longer than the 3s default so the sentence is readable.
+            // an alert the user must act on. Neutral icon, auto-dismiss — long
+            // enough to read the optional clear-for-good remedy (#9105).
             type: 'CUSTOM',
             ico: 'sync',
             translateParams: {
               originalSize,
               maxSize,
             },
-            config: { duration: 5000 },
+            config: { duration: 8000 },
           });
         }),
       ),
