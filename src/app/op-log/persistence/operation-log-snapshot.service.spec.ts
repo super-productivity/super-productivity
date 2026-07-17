@@ -55,7 +55,9 @@ describe('OperationLogSnapshotService', () => {
       'clearStateCacheBackup',
       'restoreStateCacheFromBackup',
       'getLastSeq',
+      'getLatestFullStateOp',
     ]);
+    mockOpLogStore.getLatestFullStateOp.and.resolveTo(undefined);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
     ]);

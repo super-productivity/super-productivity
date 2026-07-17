@@ -10,7 +10,7 @@ import {
   SLOW_COMPACTION_THRESHOLD_MS,
 } from '../core/operation-log.const';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
-import { OperationLogEntry, OpType } from '../core/operation.types';
+import { Operation, OperationLogEntry, OpType } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { MODEL_CONFIGS } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
@@ -57,7 +57,9 @@ describe('OperationLogCompactionService', () => {
       'resetCompactionCounter',
       'deleteOpsWhere',
       'getPendingRemoteOps',
+      'getLatestFullStateOp',
     ]);
+    mockOpLogStore.getLatestFullStateOp.and.resolveTo(undefined);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockStateSnapshot = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
@@ -208,6 +210,27 @@ describe('OperationLogCompactionService', () => {
       expect(Object.keys(savedCache.vectorClock).length).toBeLessThanOrEqual(
         MAX_VECTOR_CLOCK_SIZE,
       );
+      expect(savedCache.vectorClock['test-client']).toBe(999);
+    });
+
+    it('should keep the latest import author when pruning the snapshot clock (#9096)', async () => {
+      // The author's counter is the lowest, so it survives only through the
+      // preserve list; this clock becomes the durable clock at hydration.
+      const bloatedClock: Record<string, number> = { importAuthor: 1 };
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
+        bloatedClock[`client-${i}`] = i + 100;
+      }
+      bloatedClock['test-client'] = 999;
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(bloatedClock);
+      mockOpLogStore.getLatestFullStateOp.and.resolveTo({
+        clientId: 'importAuthor',
+      } as Operation);
+
+      await service.compact();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(Object.keys(savedCache.vectorClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(savedCache.vectorClock['importAuthor']).toBe(1);
       expect(savedCache.vectorClock['test-client']).toBe(999);
     });
 

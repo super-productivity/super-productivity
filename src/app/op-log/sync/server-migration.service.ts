@@ -297,10 +297,11 @@ export class ServerMigrationService {
       for (const entry of allLocalOps) {
         mergedClock = mergeVectorClocks(mergedClock, entry.op.vectorClock);
       }
-      const newClock = limitVectorClockSize(
-        incrementVectorClock(mergedClock, clientId),
+      // Self is the SYNC_IMPORT author here, so preserving it keeps the entry
+      // the sync-import filter's rescue predicate reads on peers.
+      const newClock = limitVectorClockSize(incrementVectorClock(mergedClock, clientId), [
         clientId,
-      );
+      ]);
 
       OpLog.normal(
         `ServerMigrationService: Merged ${allLocalOps.length} local op clocks into SYNC_IMPORT vector clock.`,

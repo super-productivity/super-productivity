@@ -142,26 +142,27 @@ Otherwise:
   3. Return clock with exactly MAX entries
 ```
 
-Implemented in `packages/sync-core/src/vector-clock.ts`. The client wrapper in `src/app/core/util/vector-clock.ts` adds logging and passes `[currentClientId]` as the preserve list.
+Implemented in `packages/sync-core/src/vector-clock.ts`. The client wrapper in `src/app/core/util/vector-clock.ts` adds logging and takes a caller-supplied preserve list — the current client plus, where a full-state baseline exists, the latest full-state author (#9096).
 
 ### When Pruning Happens (Exhaustive List)
 
-| Location                                        | When                                            | What's Preserved                            |
-| ----------------------------------------------- | ----------------------------------------------- | ------------------------------------------- |
-| **Server** `processOperation()`                 | After conflict detection, before storage        | Uploading client + active full-state author |
-| **Server** `getOpsSinceWithSeq()`               | Aggregating snapshot vector clock               | Requesting client                           |
-| **Client** `SyncHydrationService`               | Creating SYNC_IMPORT during conflict resolution | Current client only                         |
-| **Client** `ServerMigrationService`             | Creating SYNC_IMPORT during migration           | Current client only                         |
-| **Client** `RepairOperationService`             | Creating REPAIR operation                       | Current client only                         |
-| **Client** `OperationLogSnapshotService`        | Saving snapshot to state cache                  | Current client only                         |
-| **Client** `OperationLogCompactionService`      | Compaction (saving snapshot + deleting old ops) | Current client only                         |
-| **Client** `OperationLogHydratorService`        | Restoring snapshot during hydration             | Current client only                         |
-| **Client** normal op capture                    | **NEVER**                                       | N/A                                         |
-| **Client** `SupersededOperationResolverService` | **NEVER** (conflict resolution)                 | N/A                                         |
+| Location                                                            | When                                                                                | What's Preserved                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| **Server** `processOperation()`                                     | After conflict detection, before storage                                            | Uploading client + active full-state author |
+| **Server** `getOpsSinceWithSeq()`                                   | Aggregating snapshot vector clock                                                   | Requesting client                           |
+| **Client** `calculateRemoteClockMerge` (`OperationLogStoreService`) | Durable clock after a remote batch (merge + reducer checkpoint)                     | Current client + latest full-state author   |
+| **Client** `SyncHydrationService`                                   | Creating SYNC_IMPORT / committing file-snapshot bootstrap baseline                  | Current client + latest full-state author   |
+| **Client** `ServerMigrationService`                                 | Creating SYNC_IMPORT during migration                                               | Current client (the new import author)      |
+| **Client** `OperationLogSnapshotService`                            | Saving snapshot to state cache                                                      | Current client + latest full-state author   |
+| **Client** `OperationLogCompactionService`                          | Compaction (saving snapshot + deleting old ops)                                     | Current client + latest full-state author   |
+| **Client** `OperationLogHydratorService`                            | Restoring snapshot clock into the durable clock at hydration                        | Current client + latest full-state author   |
+| **Client** `RepairOperationService`                                 | **NEVER** — REPAIR ships the full clock; the server prunes after conflict detection | N/A                                         |
+| **Client** normal op capture                                        | **NEVER**                                                                           | N/A                                         |
+| **Client** `SupersededOperationResolverService`                     | **NEVER** (conflict resolution)                                                     | N/A                                         |
 
 ### Pruning is Rare
 
-With MAX=20, a user needs 21+ unique client IDs before pruning triggers. The server preserves both the uploader and the latest causal full-state author when they are present in the incoming clock. Preserving that boundary edge prevents high-counter historical clients from making a post-import operation appear concurrent to the importing client. Other pruned edges can still cause one extra server round-trip (false CONCURRENT → client resolves → re-uploads with >MAX clock → GREATER_THAN → accepted).
+With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both sides preserve the latest causal full-state author alongside their own id: the server when storing uploaded ops, the client at every site that prunes the durable clock (#9096). Preserving that boundary edge matters because `classifyOpAgainstSyncImport` rescues a post-import op from a different client via exactly one predicate — `op.vectorClock[importAuthor] >= importCounter` — and `limitVectorClockSize` never re-invents an absent entry, so an author dropped from the client's durable clock would be missing from every subsequent op permanently. Other pruned edges can still cause one extra server round-trip (false CONCURRENT → client resolves → re-uploads with >MAX clock → GREATER_THAN → accepted).
 
 ---
 
@@ -221,7 +222,7 @@ An import is an explicit user action to restore **all clients** to a specific st
 | `BACKUP_IMPORT` (clean slate)        | `BackupService`          | Fresh clock `{newClientId: 1}` — small, no pruning issues                                |
 | Server migration                     | `ServerMigrationService` | Merge all local op clocks + global clock → increment → prune to MAX                      |
 | Sync hydration (conflict resolution) | `SyncHydrationService`   | Merge local clock + state cache clock + remote snapshot clock → increment → prune to MAX |
-| Auto-repair                          | `RepairOperationService` | Get current global clock → increment → prune to MAX                                      |
+| Auto-repair                          | `RepairOperationService` | Get current global clock → increment; ships the full clock unpruned (server prunes)      |
 
 ### Full-State Operations Skip Server Conflict Detection
 

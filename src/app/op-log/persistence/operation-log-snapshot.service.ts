@@ -154,10 +154,17 @@ export class OperationLogSnapshotService {
 
         // Prune vector clock before persisting to prevent bloat (max 20 entries).
         // Without this, clocks can grow unbounded across sync cycles and cause
-        // repeated conflict dialogs on every sync.
+        // repeated conflict dialogs on every sync. The latest full-state author
+        // is preserved alongside the current client — the hydrator restores
+        // this clock as the durable clock, so evicting the author here would
+        // make every later op CONCURRENT with the import on peers (#9096).
         const clientId = await this.clientIdProvider.loadClientId();
+        const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
         const prunedClock = clientId
-          ? limitVectorClockSize(vectorClock, clientId)
+          ? limitVectorClockSize(
+              vectorClock,
+              importAuthorId ? [clientId, importAuthorId] : [clientId],
+            )
           : vectorClock;
 
         // Extract entity keys for conflict detection after compaction

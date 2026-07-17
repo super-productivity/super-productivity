@@ -189,10 +189,12 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         'append',
         'loadStateCache',
         'commitFileSnapshotBaseline',
+        'getLatestFullStateOp',
       ]);
       opLogStoreHydrationSpy.getLastSeq.and.resolveTo(0);
       opLogStoreHydrationSpy.getUnsynced.and.resolveTo([]);
       opLogStoreHydrationSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreHydrationSpy.getLatestFullStateOp.and.resolveTo(undefined);
       opLogStoreHydrationSpy.commitFileSnapshotBaseline.and.resolveTo({
         seqs: [],
         writtenOps: [],

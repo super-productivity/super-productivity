@@ -181,16 +181,28 @@ const getStoredOpType = (op: Operation | CompactOperation): string =>
  *
  * Kept pure so both the standalone merge path and the atomic reducer checkpoint
  * use exactly the same full-state reset and pruning semantics.
+ *
+ * Pruning preserves the latest full-state author alongside the current client
+ * (#9096): the import author's counter is low after the post-import reset, so
+ * uploader-only pruning would evict exactly the entry the sync-import filter's
+ * `knows-import-counter` rescue reads — and the server never re-invents absent
+ * entries. A full-state op inside `ops` supersedes `storedImportAuthorId`.
  */
 const calculateRemoteClockMerge = (
   currentClock: VectorClock,
   ops: readonly Operation[],
-  currentClientId: string | null,
+  opts: {
+    currentClientId: string | null;
+    storedImportAuthorId: string | undefined;
+  },
 ): VectorClock => {
+  const { currentClientId } = opts;
+  let importAuthorId = opts.storedImportAuthorId;
   let mergedClock: VectorClock = { ...currentClock };
 
   for (const op of ops) {
     if (FULL_STATE_OP_TYPES.has(op.opType)) {
+      importAuthorId = op.clientId;
       const clockBeforeReset = mergedClock;
       if (!currentClientId) {
         mergedClock = { ...op.vectorClock };
@@ -218,9 +230,14 @@ const calculateRemoteClockMerge = (
     }
   }
 
-  return currentClientId
-    ? limitVectorClockSize(mergedClock, currentClientId)
-    : mergedClock;
+  // No client ID → no pruning at all (never prune with the author id alone).
+  if (!currentClientId) {
+    return mergedClock;
+  }
+  return limitVectorClockSize(
+    mergedClock,
+    importAuthorId ? [currentClientId, importAuthorId] : [currentClientId],
+  );
 };
 
 // Note: DBSchema requires literal string keys matching STORE_NAMES values
@@ -653,6 +670,29 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       this._withFullStateRef(meta, ref),
       FULL_STATE_OPS_META_KEY,
     );
+  }
+
+  /**
+   * Resolves the author of the latest non-rejected full-state op inside an
+   * open transaction, seeing rejections written earlier in the same
+   * transaction. Used to build the pruning preserve set (#9096).
+   */
+  private async _getLatestFullStateAuthorInTx(tx: OpLogTx): Promise<string | undefined> {
+    const meta = await this._getFullStateOpsMetaInTxOrRebuild(tx);
+    const refsNewestFirst = [...meta.refs].sort((a, b) => b.seq - a.seq);
+    for (const ref of refsNewestFirst) {
+      const stored = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, ref.seq);
+      if (
+        !stored ||
+        stored.rejectedAt !== undefined ||
+        getOpId(stored.op) !== ref.opId ||
+        !isFullStateOpType(getStoredOpType(stored.op))
+      ) {
+        continue;
+      }
+      return decodeStoredEntry(stored).op.clientId;
+    }
+    return undefined;
   }
 
   private async _rebuildFullStateOpsMeta(): Promise<FullStateOpsMetaEntry> {
@@ -1214,11 +1254,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           STORE_NAMES.VECTOR_CLOCK,
           SINGLETON_KEY,
         );
-        committedClock = calculateRemoteClockMerge(
-          currentEntry?.clock ?? {},
-          ops,
-          currentClientId,
-        );
 
         for (const seq of seqs) {
           const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
@@ -1256,6 +1291,14 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             FULL_STATE_OPS_META_KEY,
           );
         }
+
+        // Resolved AFTER the rejection writes so a full-state op rejected in
+        // this very checkpoint can no longer name the protected author (#9096).
+        const storedImportAuthorId = await this._getLatestFullStateAuthorInTx(tx);
+        committedClock = calculateRemoteClockMerge(currentEntry?.clock ?? {}, ops, {
+          currentClientId,
+          storedImportAuthorId,
+        });
 
         await tx.put(
           STORE_NAMES.VECTOR_CLOCK,
@@ -2588,7 +2631,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       );
     }
 
-    const clockToStore = calculateRemoteClockMerge(currentClock, ops, currentClientId);
+    const storedImportAuthorId = (await this.getLatestFullStateOp())?.clientId;
+    const clockToStore = calculateRemoteClockMerge(currentClock, ops, {
+      currentClientId,
+      storedImportAuthorId,
+    });
 
     if (fullStateOp && currentClientId) {
       Log.log(

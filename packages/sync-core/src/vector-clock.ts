@@ -55,8 +55,11 @@ export const MAX_VECTOR_CLOCK_SIZE = 20;
  * ensure consistency.
  *
  * Standard vector clock comparison: missing keys mean "genuinely zero".
- * With MAX_VECTOR_CLOCK_SIZE=20, pruning is extremely rare (needs 21+ unique
- * client IDs), so pruning-aware comparison is unnecessary.
+ * Comparison stays pruning-unaware by design. Pruning is rare (needs 21+
+ * unique client IDs) but real; when it fires, correctness rests on the
+ * preserve set — both server and client keep their own id plus the active
+ * full-state author (#9089, #9096) — and on the counter-based rescue
+ * predicates in sync-import-filter.ts absorbing residual pruning artifacts.
  *
  * @param a First vector clock
  * @param b Second vector clock

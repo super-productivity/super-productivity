@@ -207,9 +207,16 @@ export class OperationLogHydratorService {
         if (snapshot.vectorClock && Object.keys(snapshot.vectorClock).length > 0) {
           // Prune vector clock before restoring to prevent bloat from old snapshots
           // that were saved before pruning was added to saveCurrentStateAsSnapshot().
+          // Preserve the latest full-state author alongside the current client:
+          // this write becomes the durable clock, and evicting the author would
+          // make every later op CONCURRENT with the import on peers (#9096).
           const clientId = await this.clientIdProvider.loadClientId();
+          const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
           const clockToRestore = clientId
-            ? limitVectorClockSize(snapshot.vectorClock, clientId)
+            ? limitVectorClockSize(
+                snapshot.vectorClock,
+                importAuthorId ? [clientId, importAuthorId] : [clientId],
+              )
             : snapshot.vectorClock;
           await this.opLogStore.setVectorClock(clockToRestore);
           OpLog.normal(

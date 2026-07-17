@@ -149,10 +149,17 @@ export class OperationLogCompactionService {
       this.checkCompactionTimeout(startTime, `${label}vector clock`);
 
       // Prune vector clock before persisting to prevent bloat (max 20 entries).
-      // Without this, clocks can grow unbounded across sync cycles.
+      // Without this, clocks can grow unbounded across sync cycles. The latest
+      // full-state author is preserved alongside the current client — this
+      // clock is restored as the durable clock at hydration, so evicting the
+      // author would make later ops CONCURRENT with the import on peers (#9096).
       const clientId = await this.clientIdProvider.loadClientId();
+      const importAuthorId = (await this.opLogStore.getLatestFullStateOp())?.clientId;
       const prunedClock = clientId
-        ? limitVectorClockSize(currentVectorClock, clientId)
+        ? limitVectorClockSize(
+            currentVectorClock,
+            importAuthorId ? [clientId, importAuthorId] : [clientId],
+          )
         : currentVectorClock;
 
       // 3. Get lastSeq IMMEDIATELY before writing cache to minimize race window

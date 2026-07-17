@@ -518,7 +518,7 @@ describe('Vector Clock Import Reset Integration', () => {
 
       // Server prunes using limitVectorClockSize, preserving the uploading
       // client's ID (this is what the real server does).
-      const prunedClock = limitVectorClockSize(newClientClock, newClientId);
+      const prunedClock = limitVectorClockSize(newClientClock, [newClientId]);
 
       // The pruned clock keeps the new client but drops the lowest import entry
       expect(Object.keys(prunedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);

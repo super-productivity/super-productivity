@@ -543,7 +543,7 @@ describe('Import + Sync Integration', () => {
       };
 
       // Simulate server-side pruning of B's op clock to MAX=20
-      const prunedOpClock = limitVectorClockSize(postImportClock, clientBId);
+      const prunedOpClock = limitVectorClockSize(postImportClock, [clientBId]);
 
       // BUG: After pruning, import-fresh:1 gets dropped
       // (it has the lowest counter). Now compareVectorClocks returns CONCURRENT

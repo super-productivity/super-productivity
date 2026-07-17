@@ -204,9 +204,16 @@ export class SyncHydrationService {
         });
       }
 
+      // On the file-snapshot bootstrap branch (no SYNC_IMPORT created below)
+      // this clock is committed as the DURABLE clock while a previously stored
+      // full-state op stays the filter baseline — its author must survive
+      // pruning (#9096). On the import branch self becomes the new author and
+      // is preserved either way.
+      const storedImportAuthorId = (await this.opLogStore.getLatestFullStateOp())
+        ?.clientId;
       const newClock = limitVectorClockSize(
         incrementVectorClock(mergedClock, clientId),
-        clientId,
+        storedImportAuthorId ? [clientId, storedImportAuthorId] : [clientId],
       );
 
       let lastSeq: number;

@@ -358,6 +358,29 @@ describe('OperationLogHydratorService', () => {
         expect(restoredClock['test-client']).toBe(999);
       });
 
+      it('should keep the latest import author when pruning the restored clock (#9096)', async () => {
+        // The restored clock becomes the DURABLE clock; evicting the import
+        // author here would make every later op CONCURRENT with the import.
+        const bloatedClock: Record<string, number> = { importAuthor: 1 };
+        for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 10; i++) {
+          bloatedClock[`client-${i}`] = i + 100;
+        }
+        bloatedClock['test-client'] = 999;
+
+        const snapshot = createMockSnapshot({ vectorClock: bloatedClock });
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getLatestFullStateOp.and.returnValue(
+          Promise.resolve({ clientId: 'importAuthor' } as Operation),
+        );
+
+        await service.hydrateStore();
+
+        const restoredClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+        expect(Object.keys(restoredClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+        expect(restoredClock['importAuthor']).toBe(1);
+        expect(restoredClock['test-client']).toBe(999);
+      });
+
       it('should not prune vector clock when within MAX_VECTOR_CLOCK_SIZE', async () => {
         const smallClock = { clientA: 5, clientB: 3 };
         const snapshot = createMockSnapshot({ vectorClock: smallClock });

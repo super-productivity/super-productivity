@@ -3965,6 +3965,96 @@ describe('OperationLogStoreService', () => {
     });
   });
 
+  describe('import author protection during clock pruning (#9096)', () => {
+    const createImportOp = (clientId: string, counter: number): Operation =>
+      createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+        clientId,
+        vectorClock: { [clientId]: counter },
+      });
+
+    const createBusyClientOps = (count: number): Operation[] =>
+      Array.from({ length: count }, (_, i) =>
+        createTestOperation({
+          clientId: `busyClient_${i}`,
+          vectorClock: { [`busyClient_${i}`]: 100 + i },
+        }),
+      );
+
+    it('should keep the stored import author when a remote batch overflows the clock', async () => {
+      // Durable baseline after receiving an import from another client: the
+      // author's counter is LOW, so uploader-only pruning would evict it first.
+      await service.append(createImportOp('importAuthor', 1), 'remote');
+      await service.setVectorClock({ importAuthor: 1, testClient: 50 });
+
+      await service.mergeRemoteOpClocks(createBusyClientOps(MAX_VECTOR_CLOCK_SIZE));
+
+      const clock = await service.getVectorClock();
+      expect(Object.keys(clock!).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(clock!['importAuthor']).toBe(1);
+      expect(clock!['testClient']).toBe(50);
+    });
+
+    it('should keep an in-batch import author when later ops in the same batch overflow the clock', async () => {
+      await service.setVectorClock({ testClient: 50 });
+
+      await service.mergeRemoteOpClocks([
+        createImportOp('importAuthor', 1),
+        ...createBusyClientOps(MAX_VECTOR_CLOCK_SIZE + 1),
+      ]);
+
+      const clock = await service.getVectorClock();
+      expect(Object.keys(clock!).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(clock!['importAuthor']).toBe(1);
+    });
+
+    it('should keep the stored import author when the reducer checkpoint prunes the merged clock', async () => {
+      await service.append(createImportOp('importAuthor', 1), 'remote');
+      await service.setVectorClock({ importAuthor: 1, testClient: 50 });
+
+      const busyOps = createBusyClientOps(MAX_VECTOR_CLOCK_SIZE);
+      const seqs: number[] = [];
+      for (const op of busyOps) {
+        seqs.push(await service.append(op, 'remote', { pendingApply: true }));
+      }
+
+      await service.markReducersCommittedAndMergeClocks(seqs, busyOps);
+
+      const clock = await service.getVectorClock();
+      expect(Object.keys(clock!).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(clock!['importAuthor']).toBe(1);
+    });
+
+    it('should protect the previous active import author when the latest import is rejected in the same checkpoint', async () => {
+      // The author must be resolved INSIDE the checkpoint transaction, after
+      // rejections are written — a pre-transaction read would still name the
+      // about-to-be-rejected import's author and let the real baseline's
+      // author be evicted.
+      await service.append(createImportOp('olderAuthor', 1), 'remote');
+      const rejectedImport = createImportOp('rejectedAuthor', 2);
+      await service.append(rejectedImport, 'remote', { pendingApply: true });
+      await service.setVectorClock({ olderAuthor: 1, rejectedAuthor: 2, testClient: 50 });
+
+      const busyOps = createBusyClientOps(MAX_VECTOR_CLOCK_SIZE);
+      const seqs: number[] = [];
+      for (const op of busyOps) {
+        seqs.push(await service.append(op, 'remote', { pendingApply: true }));
+      }
+
+      await service.markReducersCommittedAndMergeClocks(seqs, busyOps, [
+        rejectedImport.id,
+      ]);
+
+      const clock = await service.getVectorClock();
+      expect(clock!['olderAuthor']).toBe(1);
+      expect((await service.getLatestFullStateOpEntry())?.op.clientId).toBe(
+        'olderAuthor',
+      );
+    });
+  });
+
   describe('mergeRemoteOpClocks', () => {
     it('should merge remote ops clocks into local clock', async () => {
       // Set initial local clock
@@ -4147,7 +4237,7 @@ describe('OperationLogStoreService', () => {
       const newOpClock = incrementVectorClock(storedClock, 'localClient');
 
       // Simulate server-side pruning (server prunes to MAX_VECTOR_CLOCK_SIZE)
-      const prunedClock = limitVectorClockSize(newOpClock, 'localClient');
+      const prunedClock = limitVectorClockSize(newOpClock, ['localClient']);
 
       // importClient must survive pruning
       expect(prunedClock['importClient']).toBe(1);
