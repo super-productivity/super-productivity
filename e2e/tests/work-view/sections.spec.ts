@@ -304,7 +304,7 @@ test.describe('Sections', () => {
     await expect(sectionByTitle(page, 'Doomed')).toHaveCount(0);
   });
 
-  test('drops a task into a section via drag and drop', async ({
+  test('drops a task into a section and updates its task count', async ({
     page,
     workViewPage,
     projectPage,
@@ -322,6 +322,8 @@ test.describe('Sections', () => {
 
     const section = sectionByTitle(page, 'Target');
     await expect(section).toBeVisible();
+    const sectionTitle = section.locator('.collapsible-title');
+    await expect(sectionTitle).toHaveText('Target (0)');
     // The section's inner task-list is the drop target.
     const sectionTaskList = section.locator('task-list').first();
     const noSectionTaskList = page.locator('.no-section task-list').first();
@@ -336,6 +338,7 @@ test.describe('Sections', () => {
     await expect(section.locator('task').filter({ hasText: 'Movable' })).toBeVisible({
       timeout: 5000,
     });
+    await expect(sectionTitle).toHaveText('Target (1)');
     await expect(
       noSectionTaskList.locator('task').filter({ hasText: 'Movable' }),
     ).toHaveCount(0);
