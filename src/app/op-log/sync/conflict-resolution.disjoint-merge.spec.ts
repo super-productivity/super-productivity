@@ -320,6 +320,44 @@ describe('ConflictResolutionService — SPAP-14 disjoint-field merge', () => {
     expect((await journal.list('unreviewed')).length).toBe(0);
   });
 
+  // ── (a0) #9095 regression: rename vs mark-done → merge both ────────────────
+  // With disjoint merge disabled this pair resolves by whole-entity LWW: the
+  // later mark-done side wins a full 'replace' snapshot carrying its stale
+  // title, and the rename is permanently lost on every client.
+  it('(a0) merges a remote rename with a later local mark-done, losing neither (#9095)', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Original title', isDone: true }),
+    );
+
+    const localOp = op({
+      id: 'local-done',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { isDone: true } } },
+    });
+    const remoteOp = op({
+      id: 'remote-rename',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Renamed by A' } } },
+    });
+
+    await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
+
+    const merged = mergedOpArgs();
+    expect(merged).toBeDefined();
+    const payload = extractActionPayload(merged!.payload);
+    expect(payload['title']).toBe('Renamed by A');
+    expect(payload['isDone']).toBe(true);
+    expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
+
+    const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+    expect(rejected).toContain('local-done');
+    expect(rejected).toContain('remote-rename');
+  });
+
   it('(a1) fails closed before mutating the op log for a legacy remote bulk op', async () => {
     mockStore.select.and.returnValue(
       of({ id: 'task-2', title: 'Local title', timeSpent: 0 }),

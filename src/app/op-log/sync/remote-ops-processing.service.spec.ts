@@ -441,11 +441,14 @@ describe('RemoteOpsProcessingService', () => {
       expect(JSON.stringify(summary)).not.toContain('private');
     });
 
-    // Producer freeze for the conflict-review rollback: this is the only
-    // production entry point into autoResolveConflictsLWW, so if these two flags
-    // are ever dropped the stable fleet silently starts persisting the discarded
-    // side of every conflict verbatim again. Delete this test with the freeze.
-    it('should freeze both conflict-review producers on the production resolve path', async () => {
+    // Producer freeze (journal half) for the conflict-review rollback: this is
+    // the only production entry point into autoResolveConflictsLWW, so if the
+    // flag is ever dropped the stable fleet silently starts persisting the
+    // discarded side of every conflict verbatim again. Delete that half of this
+    // test with the freeze. The disjoint-merge half is pinned the OTHER way:
+    // freezing it made concurrent disjoint-field edits lose one side by
+    // whole-entity LWW (#9095), so the merge must stay enabled here.
+    it('should freeze the journal producer but keep disjoint merge enabled on the production resolve path', async () => {
       const localOp = {
         id: 'local-op',
         entityType: 'TASK',
@@ -482,10 +485,12 @@ describe('RemoteOpsProcessingService', () => {
         jasmine.any(Array),
         jasmine.any(Array),
         jasmine.objectContaining({
-          disableDisjointMerge: true,
           disableConflictJournal: true,
         }),
       );
+      const resolveOptions =
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.calls.mostRecent().args[2];
+      expect(resolveOptions?.disableDisjointMerge).toBeFalsy();
     });
 
     it('should drop operations if migrateOperation returns null', async () => {

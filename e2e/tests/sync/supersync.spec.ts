@@ -308,21 +308,14 @@ test.describe('@supersync SuperSync E2E', () => {
    * Actions:
    * 1. Client A creates task, syncs
    * 2. Client B syncs (download)
-   * 3. Client A marks task done (no sync yet)
-   * 4. Client B adds notes to task (no sync yet)
+   * 3. Client A renames the task (no sync yet)
+   * 4. Client B marks the task done (no sync yet)
    * 5. Client A syncs
    * 6. Client B syncs
    *
-   * Expected: Conflict detected or auto-merged, final state consistent
-   *
-   * WEAK — do not trust this as conflict coverage. Both clients change the SAME
-   * field (isDone), so there is no disjoint merge to get wrong, and the only
-   * assertion is that the task still exists. Strengthening it to rename-vs-done
-   * uncovered real data loss: the rename is committed as an op and then lost in
-   * sync. The stronger version lives in #9095 and stays out of this PR because it
-   * fails for a pre-existing reason unrelated to the fixes here.
+   * Expected: The disjoint title and completion changes are both preserved
    */
-  test('3.1 Concurrent edits handled gracefully', async ({
+  test('3.1 Concurrent disjoint task edits merge without field loss', async ({
     browser,
     baseURL,
     testRunId,
@@ -350,10 +343,11 @@ test.describe('@supersync SuperSync E2E', () => {
       await waitForTask(clientA.page, taskName);
       await waitForTask(clientB.page, taskName);
 
-      // Client A marks done (creates local op)
-      await markTaskDone(clientA, taskName);
+      // Client A changes the title while Client B changes a disjoint field.
+      const renamedTaskName = `${taskName}-renamed-by-A`;
+      await renameTask(clientA, taskName, renamedTaskName);
 
-      // Client B marks done too (concurrent edit)
+      // Client B has not seen the rename and marks the original task done.
       await markTaskDone(clientB, taskName);
 
       // Client A syncs first
@@ -365,11 +359,11 @@ test.describe('@supersync SuperSync E2E', () => {
       // Client A syncs again to converge
       await clientA.sync.syncAndWait();
 
-      // Verify both clients have consistent state
+      // Verify both independent fields survived conflict resolution on both clients.
       await expectEqualTaskCount([clientA, clientB]);
-
-      // Task should exist on both
-      await expectTaskOnAllClients([clientA, clientB], taskName);
+      await expectTaskOnAllClients([clientA, clientB], renamedTaskName);
+      await expectTaskDone(clientA, renamedTaskName);
+      await expectTaskDone(clientB, renamedTaskName);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

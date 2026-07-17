@@ -463,23 +463,26 @@ export class RemoteOpsProcessingService {
         // Piggyback non-conflicting ops so they're applied with resolved conflicts.
         // Validation failure is surfaced via the session-validation latch.
         //
-        // PRODUCER FREEZE for the conflict-review rollback. Both flags are set
-        // here, at the only production entry point, so the feature's two
-        // producers stop at the fleet boundary while the service keeps the
-        // capability intact for its own tests and for a one-line revert:
-        //  - disableDisjointMerge: conflicts resolve by whole-entity LWW, which
-        //    is the behaviour of every released version to date, so the stable
-        //    fleet gains nothing it would later have to be migrated off.
+        // PRODUCER FREEZE (journal half) for the conflict-review rollback, set
+        // here at the only production entry point so the producer stops at the
+        // fleet boundary while the service keeps the capability intact:
         //  - disableConflictJournal: stop persisting the discarded side of a
         //    conflict verbatim, so that device-local data obligation does not
         //    expand beyond the edge/internal builds that already carry it.
-        // Reverting the freeze = drop these two lines.
+        // Reverting the freeze = drop that line.
+        //
+        // The disjoint-merge half of the original #9061 freeze was UNFROZEN for
+        // #9095: with the merge disabled, concurrent edits to DIFFERENT fields
+        // of one entity resolve by whole-entity LWW and the earlier side's edit
+        // is silently and permanently lost on every client (a rename dies when
+        // another device marks the task done). The merged op is a standard LWW
+        // Update whose 'patch' payload released clients apply via updateOne, so
+        // re-enabling it ships no wire format they cannot handle.
         const lwwResult = await this.conflictResolutionService.autoResolveConflictsLWW(
           conflicts,
           nonConflicting,
           {
             callerHoldsOperationLogLock: true,
-            disableDisjointMerge: true,
             disableConflictJournal: true,
           },
         );
