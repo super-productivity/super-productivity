@@ -97,11 +97,8 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
           rebuildCommittedLog: REBUILD_COMMITTED_LOG,
         },
       );
-      // Wait only for `domcontentloaded`, not the default `load`: an active
-      // SuperSync WebSocket/sync connection can keep the page "loading" so the
-      // `load` event never fires and `reload()` times out (flaky). `reload()`
-      // preserves sessionStorage (unlike close()+newPage()), which this test
-      // needs, and `waitForAppReady` below is the real readiness gate.
+      // `reload()` preserves sessionStorage (unlike close()+newPage()), which
+      // this test needs; `waitForAppReady` below is the real readiness gate.
       await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
       await waitForAppReady(clientB.page);
 
@@ -136,10 +133,12 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
 
       await clientB.sync.syncImportUseRemoteBtn.click();
       await crashObserved;
-      // domcontentloaded (not the default `load`) — see the note on the first
-      // reload above: an active sync connection can block `load` and hang
-      // `reload()`. sessionStorage survives the reload; the assertion below
-      // depends on it.
+      // This reload races the crashed sync's unwind: while `isSyncInProgress` is
+      // still set, startup.service's beforeunload handler prevents the unload and
+      // Chrome prompts (the click above supplies the required user activation).
+      // installDevErrorDialogHandler accepts that prompt — without it the
+      // navigation never starts and this hangs. sessionStorage survives the
+      // reload; the assertion below depends on it.
       await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
       await waitForAppReady(clientB.page);
       expect(

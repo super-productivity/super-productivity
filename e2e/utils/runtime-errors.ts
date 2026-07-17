@@ -37,6 +37,21 @@ export const attachPageErrorCollector = (
 // explicitly, or it will be vulnerable to the same hang.
 export const installDevErrorDialogHandler = (page: Page, label: string): void => {
   page.on('dialog', async (dialog) => {
+    // Registering ANY 'dialog' listener switches off Playwright's built-in
+    // handling (accept for beforeunload, dismiss for everything else). This
+    // fallback is installed on every page, so it must restore that default for
+    // beforeunload: startup.service raises one whenever a sync is in flight, and
+    // an unanswered prompt blocks the navigation before it starts — reload()
+    // then times out on any waitUntil, however early.
+    if (dialog.type() === 'beforeunload') {
+      try {
+        await dialog.accept();
+      } catch {
+        // Already handled by another listener — ignore.
+      }
+      return;
+    }
+
     const message = dialog.message();
     const isDevErrorAlert = dialog.type() === 'alert' && message.startsWith('devERR:');
     const isDevErrorConfirm =
