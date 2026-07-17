@@ -175,9 +175,14 @@ export class OperationLogSnapshotService {
    * Migrates a snapshot with backup safety (A.7.12).
    * Creates a backup before migration and restores it if migration fails.
    *
+   * State-validation failures are non-fatal: the migrated snapshot is returned
+   * for hydration (unpersisted) rather than throwing. See the step-4 note.
+   *
    * @param snapshot - The snapshot to migrate
    * @returns The migrated snapshot
-   * @throws If migration fails and rollback also fails
+   * @throws On migration failure or metadata-validation failure. The backup is
+   *         rolled back first; if that rollback ALSO fails, a combined error is
+   *         thrown instead. State-validation failure does NOT throw (step 4).
    */
   async migrateSnapshotWithBackup(snapshot: StateCache): Promise<StateCache> {
     OpLog.normal(
@@ -197,16 +202,47 @@ export class OperationLogSnapshotService {
         throw new Error('Migrated snapshot metadata validation failed');
       }
 
-      // 4. Validate migrated snapshot state before persisting or clearing the backup.
-      // Otherwise an invalid current-schema cache could be trusted on next startup.
+      // 4. Validate migrated snapshot state before PERSISTING it — an invalid
+      // current-schema cache must not be trusted on next startup (Checkpoint B
+      // skips validation for a matching schema version). But a validation
+      // failure here is NOT fatal to hydration: many "invalid" shapes are
+      // reducer-healable — e.g. a snapshot from an older release missing a
+      // newly-required config field the loadAllData reducer backfills by
+      // default. Bailing to disaster recovery in that case bricks the app to an
+      // empty store on upgrade, even though the data is fine. So on failure we
+      // roll the on-disk cache back to the pre-migration backup (never persist
+      // the unvalidated migrated snapshot) yet still RETURN it, letting the
+      // hydrator load it through the reducer (which heals defaults) and boot
+      // with correct data.
+      //
+      // Caveat: this non-fatal path does NOT itself persist a clean snapshot.
+      // Re-persist only happens if the hydrator's post-replay Checkpoint C runs
+      // and its save gate is met (tail ops present, not a full-state-op load,
+      // >10 replayed ops) — otherwise the on-disk cache stays at the old version
+      // and the migration re-runs every boot (correct, but a startup tax). For
+      // fields with a migration backfill (below) validation passes and step 5
+      // persists a clean snapshot immediately, so that path is the real fix;
+      // this branch is the safety net for the not-yet-backfilled case.
+      // TODO(followup): persist a fresh snapshot after a migration ran whenever
+      // Checkpoint C validates, regardless of tail-op count, to converge in one
+      // boot instead of every boot.
       const validationResult = await this.validateStateService.validateState(
         migratedSnapshot.state as Record<string, unknown>,
       );
       if (!validationResult.isValid) {
-        throw new Error(
-          `Migrated snapshot validation failed (${validationResult.typiaErrors.length} typia errors` +
-            `${validationResult.crossModelError ? `, cross-model: ${validationResult.crossModelError}` : ''})`,
+        OpLog.warn(
+          'OperationLogSnapshotService: Migrated snapshot failed validation — ' +
+            'restoring backup and hydrating unpersisted so the reducer can heal it.',
+          {
+            typiaErrorCount: validationResult.typiaErrors.length,
+            crossModelError: validationResult.crossModelError,
+          },
         );
+        await this.opLogStore.restoreStateCacheFromBackup();
+        OpLog.normal(
+          'OperationLogSnapshotService: Backup restored; returning migrated snapshot for reducer-healed hydration.',
+        );
+        return migratedSnapshot;
       }
 
       // 5. Save migrated snapshot

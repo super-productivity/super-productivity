@@ -703,7 +703,12 @@ describe('OperationLogSnapshotService', () => {
       );
     });
 
-    it('should restore backup and not save when migrated state fails validation', async () => {
+    it('should restore backup, not save, but still return the migrated snapshot when state fails validation', async () => {
+      // Non-fatal path: a validation failure here is often reducer-healable (e.g.
+      // an older snapshot missing a newly-required config default). Bricking to
+      // recovery would empty the store on upgrade, so we roll the on-disk cache
+      // back to the backup, never persist the unvalidated snapshot, yet return it
+      // for reducer-healed hydration (Checkpoint C re-checks and persists).
       const snapshot = createSnapshot();
       const migratedSnapshot = { ...snapshot, schemaVersion: CURRENT_SCHEMA_VERSION };
       mockOpLogStore.saveStateCacheBackup.and.resolveTo(undefined);
@@ -714,10 +719,9 @@ describe('OperationLogSnapshotService', () => {
       });
       mockOpLogStore.restoreStateCacheFromBackup.and.resolveTo(undefined);
 
-      await expectAsync(
-        service.migrateSnapshotWithBackup(snapshot),
-      ).toBeRejectedWithError(/Migrated snapshot validation failed/);
+      const result = await service.migrateSnapshotWithBackup(snapshot);
 
+      expect(result).toBe(migratedSnapshot);
       expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
       expect(mockOpLogStore.restoreStateCacheFromBackup).toHaveBeenCalled();
       expect(mockOpLogStore.clearStateCacheBackup).not.toHaveBeenCalled();
