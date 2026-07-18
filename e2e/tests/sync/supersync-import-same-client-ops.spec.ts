@@ -20,9 +20,9 @@ import { waitForAppReady } from '../../utils/waits';
  * a SYNC_IMPORT are correctly synced to other clients.
  *
  * This suite covers the adjacent real-browser flow only: an import author's
- * later operations reach peers. It does not claim pruning coverage; that needs
- * more than MAX_VECTOR_CLOCK_SIZE (20) durable client identities and currently
- * exists only in lower-level tests.
+ * later operations reach peers. It does not claim natural MAX+1-client or
+ * compare-before-prune coverage. A separate browser test injects 25 clock
+ * entries and proves server storage pruning (see #9164).
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-import-same-client-ops.spec.ts
  */

@@ -14,9 +14,9 @@ import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
  * SuperSync Post-Import Operation Flow E2E Tests
  *
  * These tests verify ordinary post-import operations across real clients. They
- * deliberately do not claim vector-clock pruning coverage: production pruning
- * requires more than MAX_VECTOR_CLOCK_SIZE (20) durable client identities and
- * is covered only by lower-level tests today.
+ * do not claim natural MAX+1-client or compare-before-prune coverage. A separate
+ * browser test injects 25 clock entries and proves server storage pruning;
+ * lower-level suites own the remaining boundary semantics (see #9164).
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true

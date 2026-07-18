@@ -17,7 +17,7 @@ import {
  * WebDAV TODAY Tag Concurrent Updates E2E Tests
  *
  * TODAY_TAG is a "virtual tag":
- * - Membership determined by task.dueDay === today, NOT task.tagIds
+ * - Membership comes from dueDay or dueWithTime, never task.tagIds
  * - taskIds stores ordering only
  * - Self-healing: selector filters stale entries, repair effect fixes inconsistencies
  *

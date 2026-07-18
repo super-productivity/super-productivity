@@ -13,17 +13,15 @@ import {
 } from '../../utils/sync-helpers';
 
 /**
- * Tests for provider switch scenario where Client B connects to an existing WebDAV
+ * Tests for late-join scenarios where Client B connects to an existing WebDAV
  * sync folder that Client A has been using.
  *
- * This test specifically verifies the fix for the "mutual SYNC_IMPORT discarding" bug:
- * - When Client B joins an existing sync, it creates a SYNC_IMPORT
- * - The SYNC_IMPORT's vector clock must include Client A's clock entries
- * - Otherwise, Client A's ops are CONCURRENT with Client B's SYNC_IMPORT and get discarded
+ * A fresh file-based bootstrap must hydrate the remote snapshot without creating
+ * a local SYNC_IMPORT. Later operations must then converge in both directions.
  *
  * @tags @webdav
  */
-test.describe('@webdav WebDAV Provider Switch', () => {
+test.describe('@webdav WebDAV Late Join', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
 
@@ -35,7 +33,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     syncFolderPath: `/${SYNC_FOLDER_NAME}`,
   };
 
-  test('should sync tasks when Client B connects to existing WebDAV server (provider switch)', async ({
+  test('should sync tasks when Client B joins an existing WebDAV folder', async ({
     browser,
     baseURL,
     request,
@@ -87,7 +85,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Provider Switch Test] Client A: Initial sync complete');
 
-    // === CLIENT B: Fresh client connecting to existing sync (simulates provider switch) ===
+    // === CLIENT B: Fresh client connecting to existing sync ===
     const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
@@ -139,9 +137,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Provider Switch Test] Client A: Synced to receive Client B task');
 
-    // Verify Client A received Client B's task (THIS IS THE KEY ASSERTION)
-    // Before the fix, Client B's ops were CONCURRENT with Client A's SYNC_IMPORT
-    // and would be discarded. With the fix, they should be kept.
+    // Exact bidirectional state is the key bootstrap assertion.
     await expect(pageA.locator('task')).toHaveCount(3);
     await expect(pageA.locator('task', { hasText: taskA1 })).toBeVisible();
     await expect(pageA.locator('task', { hasText: taskA2 })).toBeVisible();
@@ -470,7 +466,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await closeContextsSafely(contextA, contextB, contextC);
   });
 
-  test('should handle bidirectional sync after provider switch', async ({
+  test('should handle bidirectional sync after a late join', async ({
     browser,
     baseURL,
     request,
