@@ -33,6 +33,8 @@ import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-collector';
+import { reportLoadAllDataReducerFailure } from '../apply/load-all-data-failure-guard.meta-reducer';
+import { Action } from '@ngrx/store';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -1721,6 +1723,143 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      });
+    });
+
+    // #9140: a throw on the snapshot MIGRATION path (metadata-validation
+    // failure, migration transform failure) must get the same op-log fallback
+    // the invalid-snapshot path above already has — instead of escalating into
+    // attemptRecovery(), which refuses while a snapshot exists on disk and
+    // bricks to an empty store on every boot.
+    describe('migration failure op-log fallback (#9140)', () => {
+      const arrangeMigrationThrow = (error: Error): void => {
+        const oldSnapshot = createMockSnapshot({ schemaVersion: 1 });
+        mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+        mockSchemaMigrationService.needsMigration.and.returnValue(true);
+        mockSnapshotService.migrateSnapshotWithBackup.and.rejectWith(error);
+      };
+
+      it('should discard the snapshot and replay the op-log when migration throws and replayable ops exist', async () => {
+        arrangeMigrationThrow(new Error('Migrated snapshot metadata validation failed'));
+        const allOps = [
+          createMockEntry(1, createMockOperation('op-1')),
+          createMockEntry(2, createMockOperation('op-2')),
+        ];
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(allOps);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+        expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
+        );
+        // The replay persists a fresh CURRENT_SCHEMA_VERSION snapshot, so the
+        // next boot does not re-hit the poisoned snapshot (breaks the loop).
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
+      });
+
+      it('should escalate to recovery when migration throws and the op-log is empty', async () => {
+        arrangeMigrationThrow(new Error('SchemaMigrationService: migration failed'));
+        mockOpLogStore.getLastSeq.and.resolveTo(0);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+        await service.hydrateStore();
+
+        // No replayable ops → no local source of truth left; the existing
+        // terminal handling (recovery attempt) is all that remains.
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+        expect(mockStore.dispatch).not.toHaveBeenCalled();
+      });
+
+      it('should surface HYDRATION_FAILED when migration throws, the op-log is empty, and recovery refuses', async () => {
+        arrangeMigrationThrow(new Error('SchemaMigrationService: migration failed'));
+        mockOpLogStore.getLastSeq.and.resolveTo(0);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+        mockRecoveryService.attemptRecovery.and.rejectWith(
+          new Error('Refusing legacy recovery because a SUP_OPS snapshot still exists'),
+        );
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      });
+
+      it('should rethrow an IndexedDBOpenError from migration without attempting op-log fallback', async () => {
+        if (!jasmine.isSpy(window.alert)) {
+          spyOn(window, 'alert');
+        }
+        (window.alert as jasmine.Spy).calls.reset();
+        // Non-backing-store error → dialog path, no auto-reload.
+        arrangeMigrationThrow(new IndexedDBOpenError(new Error('QuotaExceededError')));
+        // Fallback WOULD be viable — but a broken IndexedDB means replay would
+        // fail identically, so the tailored IDB dialog must win.
+        mockOpLogStore.getLastSeq.and.resolveTo(5);
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        expect(mockStore.dispatch).not.toHaveBeenCalled();
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+      });
+    });
+
+    // #9140 (mechanism 2): when a feature reducer throws on the snapshot
+    // loadAllData dispatch (e.g. an old snapshot missing a required field no
+    // reducer backfills), the failure-guard meta-reducer keeps the store alive
+    // and reports the failure to the hydrator, which must fall back to op-log
+    // replay. The dispatch spy simulates the guard by reporting to the active
+    // collector, mirroring how reportBulkReplayReducerFailure is driven above.
+    describe('snapshot loadAllData reducer failure fallback (#9140)', () => {
+      const arrangeReducerRejection = (): void => {
+        const snapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockStore.dispatch.and.callFake(((action: Action): void => {
+          if (action.type === loadAllData.type) {
+            reportLoadAllDataReducerFailure(
+              new Error('Cannot read properties of undefined'),
+            );
+          }
+        }) as Store['dispatch']);
+      };
+
+      it('should fall back to op-log replay when a reducer rejects the snapshot state', async () => {
+        arrangeReducerRejection();
+        const allOps = [
+          createMockEntry(1, createMockOperation('op-1')),
+          createMockEntry(2, createMockOperation('op-2')),
+        ];
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(allOps);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+        // Fallback replays the WHOLE log from seq 0, not the snapshot tail.
+        expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: allOps.map((e) => e.op),
+            localClientId: 'test-client',
+          }),
+        );
+      });
+
+      it('should escalate when a reducer rejects the snapshot state and the op-log is empty', async () => {
+        arrangeReducerRejection();
+        mockOpLogStore.getLastSeq.and.resolveTo(0);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+        // Only the failed loadAllData attempt — no bulk replay dispatch.
+        expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
       });
     });
 
