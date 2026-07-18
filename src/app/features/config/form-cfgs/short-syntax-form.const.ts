@@ -28,6 +28,15 @@ export const SHORT_SYNTAX_FORM_CFG: ConfigFormSection<ShortSyntaxConfig> = {
       },
     },
     {
+      key: 'isEnableNaturalLanguageDates',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SHORT_SYNTAX.IS_ENABLE_NATURAL_LANGUAGE_DATES,
+      },
+      // Plain-text detection is a layer on top of the due-date parsing
+      hideExpression: (model: ShortSyntaxConfig) => !model.isEnableDue,
+    },
+    {
       key: 'urlBehavior',
       type: 'select',
       templateOptions: {

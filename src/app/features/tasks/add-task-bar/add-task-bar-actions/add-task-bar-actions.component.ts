@@ -341,6 +341,8 @@ export class AddTaskBarActionsComponent {
       currentInput,
       'repeat',
     );
+    // Same for a natural-language recurrence phrase ("every friday" without @)
+    this._parserService.suppressNaturalLanguageDueIfAny();
     this.stateService.clearRepeatSetting(cleanedInput);
     this.refocus.emit();
   }
@@ -423,6 +425,9 @@ export class AddTaskBarActionsComponent {
       currentInput,
       'date',
     );
+    // A natural-language detection has no '@' text to strip — the word stays
+    // in the title and the dismissal is remembered instead
+    this._parserService.suppressNaturalLanguageDueIfAny();
     this.stateService.clearDate(cleanedInput);
     this.refocus.emit();
   }

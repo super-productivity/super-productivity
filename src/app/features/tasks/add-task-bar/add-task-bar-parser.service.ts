@@ -26,6 +26,9 @@ interface PreviousParseResult {
   isDeadlineFromSyntax: boolean;
   repeatQuickSetting: RepeatQuickSetting | null;
   isRepeatFromSyntax: boolean;
+  // Raw text of the due/recurrence token ('@friday', 'tomorrow', 'every friday');
+  // needed to suppress a natural-language detection when the user dismisses it
+  dueSyntaxText: string | null;
 }
 
 @Injectable()
@@ -82,8 +85,12 @@ export class AddTaskBarParserService {
       allTags,
       allProjects,
       undefined,
-      'replace',
-      true,
+      {
+        mode: 'replace',
+        isParseRepeat: true,
+        isParseNaturalDates: true,
+        suppressedNaturalDateTexts: this._stateService.suppressedNaturalDateTexts(),
+      },
     );
 
     if (parseRunId !== this._parseRunId) {
@@ -145,11 +152,20 @@ export class AddTaskBarParserService {
           ? null
           : currentState.repeatQuickSetting || null,
         isRepeatFromSyntax: false,
+        dueSyntaxText: null,
       };
     } else {
       // Extract parsed values
       const tagIds = parseResult.taskChanges.tagIds || currentState.tagIdsFromTxt;
       const newTagTitles = parseResult.newTagTitles || currentState.newTagTitles;
+
+      // Raw text of the due/recurrence token, for dismiss-suppression. A due
+      // token split by an earlier removal spans several ranges; joining them
+      // restores the working-title phrase ('tomorrow evening')
+      const dueRanges = parseResult.parsedRanges.filter((r) => r.type === 'due');
+      const dueSyntaxText = dueRanges.length
+        ? dueRanges.map((r) => text.slice(r.start, r.end)).join(' ')
+        : null;
 
       let dueDate: string | null = null;
       let dueTime: string | null = null;
@@ -232,6 +248,7 @@ export class AddTaskBarParserService {
         isDeadlineFromSyntax: hasParsedDeadline,
         repeatQuickSetting,
         isRepeatFromSyntax: !!parseResult.repeatQuickSetting,
+        dueSyntaxText: dueSyntaxText,
       };
     }
 
@@ -361,6 +378,16 @@ export class AddTaskBarParserService {
   resetPreviousResult(): void {
     this._parseRunId++;
     this._previousParseResult = null;
+  }
+
+  // When the user dismisses a date/repeat that came from trigger-free natural
+  // language (no '@' in the token), remember its text so it doesn't re-trigger
+  // on the next keystroke — the word intentionally stays in the title.
+  suppressNaturalLanguageDueIfAny(): void {
+    const text = this._previousParseResult?.dueSyntaxText;
+    if (text && !text.startsWith('@')) {
+      this._stateService.suppressNaturalDateText(text);
+    }
   }
 
   removeShortSyntaxFromInput(

@@ -2670,6 +2670,7 @@
     "SHORT_SYNTAX": {
       "HELP": "<p>Here you can control short syntax options when creating a task</p>",
       "IS_ENABLE_DUE": "Enable planned at short syntax (@<planned time>)",
+      "IS_ENABLE_NATURAL_LANGUAGE_DATES": "Detect dates in plain text without @ (e.g. \"Call mom tomorrow\", \"Shopping every friday\")",
       "IS_ENABLE_PROJECT": "Enable project short syntax (+<project>)",
       "IS_ENABLE_TAG": "Enable tag short syntax (#<tag>)",
       "TITLE": "Short Syntax",

@@ -274,17 +274,28 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
 const SHORT_SYNTAX_MARKDOWN_LINK_REG_EX =
   /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
+export interface ShortSyntaxOptions {
+  mode?: 'combine' | 'replace';
+  // Recurrence syntax ("@every friday") is only meaningful where a repeat cfg
+  // can be created for the result — the add-task bar. Title edits of existing
+  // tasks keep parsing it as a plain date.
+  isParseRepeat?: boolean;
+  // Trigger-free natural language ("Call mom tomorrow") is likewise add-task
+  // bar only — a title edit of an existing task must never rewrite the title
+  // based on ordinary words. Also requires config.isEnableNaturalLanguageDates.
+  isParseNaturalDates?: boolean;
+  // Detections the user dismissed in the current composing session; their
+  // matched texts must not re-trigger on the next keystroke.
+  suppressedNaturalDateTexts?: string[];
+}
+
 export const shortSyntax = async (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
   allTags?: Tag[],
   allProjects?: Project[],
   now = new Date(),
-  mode: 'combine' | 'replace' = 'combine',
-  // Recurrence syntax ("@every friday") is only meaningful where a repeat cfg
-  // can be created for the result — the add-task bar. Title edits of existing
-  // tasks keep parsing it as a plain date.
-  isParseRepeat: boolean = false,
+  opts: ShortSyntaxOptions = {},
 ): Promise<
   | {
       taskChanges: Partial<Task> & { hasDeadlineTime?: boolean };
@@ -303,6 +314,8 @@ export const shortSyntax = async (
   if (typeof task.title !== 'string') {
     throw new Error('No str');
   }
+  const mode = opts.mode ?? 'combine';
+  const isParseRepeat = opts.isParseRepeat ?? false;
 
   // TODO clean up this mess
   let taskChanges: Partial<TaskCopy> & { hasDeadlineTime?: boolean } = {};
@@ -338,6 +351,22 @@ export const shortSyntax = async (
       taskChanges = { ...taskChanges, ...deadlineResult.changes };
       pushRanges('deadline', deadlineResult.ranges);
       isTitleChanged = true;
+    }
+
+    // Trigger-free natural language, only when no explicit @ syntax matched
+    if (opts.isParseNaturalDates && config.isEnableNaturalLanguageDates && !dueResult) {
+      const nlResult = await parseNaturalLanguageDue(
+        tracked,
+        now,
+        isParseRepeat,
+        opts.suppressedNaturalDateTexts || [],
+      );
+      if (nlResult) {
+        repeatQuickSetting = nlResult.repeatQuickSetting || null;
+        taskChanges = { ...taskChanges, ...nlResult.changes };
+        pushRanges('due', nlResult.ranges);
+        isTitleChanged = true;
+      }
     }
   }
 
@@ -623,7 +652,8 @@ const parseShortSyntaxDate = async (
     if (!isDeadline && isParseRepeat) {
       const repeatResult = parseRepeatSyntax(rr[0].substring(1));
       if (repeatResult) {
-        return await applyRepeatSyntax(tracked, now, rr[0], repeatResult);
+        const matchIndex = tracked.text.indexOf(rr[0]);
+        return await applyRepeatSyntax(tracked, now, matchIndex + 1, 1, repeatResult);
       }
     }
 
@@ -727,13 +757,17 @@ const parseShortSyntaxDate = async (
 // Resolves a matched recurrence phrase into task changes: the quick-setting
 // repeat plus an optional anchor date/time parsed from what follows the
 // phrase ("@every friday 3pm" → next Friday 15:00), with the consumed syntax
-// stripped from the title.
+// stripped from the title. `phraseStartIndex` is where the phrase begins in
+// the title; `triggerLen` is how many chars before it belong to the token
+// (1 for the "@" form, 0 for trigger-free natural language).
 const applyRepeatSyntax = async (
   tracked: TrackedTitle,
   now: Date,
-  dueMatch: string,
+  phraseStartIndex: number,
+  triggerLen: number,
   repeatResult: RepeatSyntaxResult,
-): Promise<DateStageResult> => {
+  isSuppressed?: (matchedText: string) => boolean,
+): Promise<DateStageResult | null> => {
   const { quickSetting, chronoText, consumedLength, weekday, dayOfMonth } = repeatResult;
   const dateParser = await loadCustomDateParser();
   const parsedDateArr = chronoText
@@ -747,15 +781,18 @@ const applyRepeatSyntax = async (
     parsedDateArr.length && /^\s*$/.test(chronoText.slice(0, parsedDateArr[0].index))
       ? parsedDateArr[0]
       : null;
-  // Chars of the due match consumed in total (incl. the trigger char) — the
-  // recurrence phrase itself plus the adjacent chrono match, if any
-  const consumedTotal =
-    1 +
+  // Chars consumed after the phrase start — the recurrence phrase itself plus
+  // the adjacent chrono match, if any
+  const consumedAfterStart =
     consumedLength +
     (parsedDateResult ? parsedDateResult.index + parsedDateResult.text.length : 0);
-  const textToReplace = dueMatch.substring(0, consumedTotal);
-  const tokenStart = tracked.text.indexOf(textToReplace);
-  const tokenEnd = tokenStart + textToReplace.length;
+  const tokenStart = phraseStartIndex - triggerLen;
+  const tokenEnd = phraseStartIndex + consumedAfterStart;
+  // A suppressed detection must be rejected before any edit so the tracker
+  // stays untouched while the caller keeps scanning for later candidates
+  if (isSuppressed?.(tracked.text.slice(tokenStart, tokenEnd))) {
+    return null;
+  }
   const ranges = tracked.rawRanges(tokenStart, tokenEnd);
   const head = tracked.text.slice(0, tokenStart);
   const tail = tracked.text.slice(tokenEnd);
@@ -886,6 +923,89 @@ const parseTimeSpentTracked = (
     },
     ranges,
   };
+};
+
+// Cheap locator for possible trigger-free recurrence phrases; every candidate
+// is re-validated with the anchored SHORT_SYNTAX_REPEAT_REG_EX from its start
+// position ("every thing" is located here but rejected there)
+const NL_REPEAT_LOCATOR_REG_EX =
+  /(?:^|\s)(?:daily|weekly|monthly|yearly|annually|every\s)/gi;
+
+// A chrono match in plain text must look like an actual date expression:
+// require a letter or a date/time separator so bare small numbers ("buy 5
+// apples") never become due dates
+const NL_DATE_TEXT_GUARD_REG_EX = /[a-z]|[/:-]/i;
+
+// Trigger-free natural language due parsing ("Call mom tomorrow", "Shopping
+// every friday"). Recurrence phrases win over plain dates so "every friday"
+// isn't consumed as just "friday". Dismissed detections (their exact matched
+// text) are skipped so a cleared false positive stays cleared while typing.
+const parseNaturalLanguageDue = async (
+  tracked: TrackedTitle,
+  now: Date,
+  isParseRepeat: boolean,
+  suppressedTexts: string[],
+): Promise<DateStageResult | null> => {
+  const title = tracked.text;
+  if (!title) {
+    return null;
+  }
+
+  // Containment, not equality: dismissing "every friday" must also block the
+  // contained "friday" from popping back up as a plain date detection
+  const isSuppressed = (matchedText: string): boolean =>
+    suppressedTexts.some((s) => s.includes(matchedText));
+
+  if (isParseRepeat) {
+    NL_REPEAT_LOCATOR_REG_EX.lastIndex = 0;
+    let locatorMatch: RegExpExecArray | null;
+    while ((locatorMatch = NL_REPEAT_LOCATOR_REG_EX.exec(title)) !== null) {
+      const phraseStart = locatorMatch.index + (/^\s/.test(locatorMatch[0]) ? 1 : 0);
+      const repeatResult = parseRepeatSyntax(title.slice(phraseStart));
+      // Keep scanning: this candidate may be rejected ("every thing") or
+      // suppressed while a later one is valid
+      if (repeatResult) {
+        const applied = await applyRepeatSyntax(
+          tracked,
+          now,
+          phraseStart,
+          0,
+          repeatResult,
+          isSuppressed,
+        );
+        if (applied) {
+          return applied;
+        }
+      }
+      // Advance past this candidate so zero-length progress is impossible
+      NL_REPEAT_LOCATOR_REG_EX.lastIndex = phraseStart + 1;
+    }
+  }
+
+  const dateParser = await loadCustomDateParser();
+  const parsedDateArr = dateParser.parse(title, now, { forwardDate: true });
+  for (const parsedDateResult of parsedDateArr) {
+    const matchedText = parsedDateResult.text;
+    if (!NL_DATE_TEXT_GUARD_REG_EX.test(matchedText) || isSuppressed(matchedText)) {
+      continue;
+    }
+    const start = parsedDateResult.index;
+    const end = start + matchedText.length;
+    const hasTime = parsedDateResult.start.isCertain('hour');
+    const ranges = tracked.rawRanges(start, end);
+    tracked.remove(start, end);
+    tracked.trim();
+    return {
+      changes: {
+        dueWithTime: parsedDateResult.start.date().getTime(),
+        dueDay: null,
+        ...(hasTime ? {} : { hasPlannedTime: false }),
+      },
+      ranges,
+    };
+  }
+
+  return null;
 };
 
 export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {

@@ -746,7 +746,9 @@ describe('shortSyntax', () => {
         title: 'Fun title #blu #bla',
         tagIds: ['blu_id', 'bla_id', 'hihi_id'],
       };
-      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined, 'replace');
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined, {
+        mode: 'replace',
+      });
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -2282,7 +2284,7 @@ describe('shortSyntax recurrence', () => {
   const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
 
   const parse = async (title: string, now: Date = NOW): ReturnType<typeof shortSyntax> =>
-    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, 'combine', true);
+    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, { isParseRepeat: true });
 
   it('should parse "@every friday" as weekly repeat anchored to next friday', async () => {
     const r = await parse('Water plants @every friday');
@@ -2388,8 +2390,7 @@ describe('shortSyntax recurrence', () => {
       ALL_TAGS,
       [],
       NOW,
-      'combine',
-      true,
+      { isParseRepeat: true },
     );
     expect(r?.repeatQuickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
     expect(r?.taskChanges.tagIds).toEqual(['blu_id']);
@@ -2507,5 +2508,114 @@ describe('shortSyntax recurrence', () => {
     expect(due.getMonth()).toBe(1);
     expect(due.getDate()).toBe(15);
     expect(due.getHours()).toBe(15);
+  });
+});
+
+describe('shortSyntax natural language dates', () => {
+  // Wed Jan 17 2024, 10:00 local time
+  const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
+  const NL_CONFIG = { ...CONFIG, isEnableNaturalLanguageDates: true };
+
+  const parse = async (
+    title: string,
+    optOverrides: object = {},
+  ): ReturnType<typeof shortSyntax> =>
+    shortSyntax({ ...TASK, title }, NL_CONFIG, [], [], NOW, {
+      isParseRepeat: true,
+      isParseNaturalDates: true,
+      ...optOverrides,
+    });
+
+  it('should parse "Call mom tomorrow" without a trigger char', async () => {
+    const r = await parse('Call mom tomorrow');
+    expect(r?.taskChanges.title).toBe('Call mom');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDate()).toBe(18);
+    expect(r?.taskChanges.hasPlannedTime).toBe(false);
+    expect(r?.parsedRanges).toEqual([{ type: 'due', start: 9, end: 17 }]);
+  });
+
+  it('should parse a plain time expression', async () => {
+    const r = await parse('Standup at 9am');
+    expect(r?.taskChanges.title).toBe('Standup');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getHours()).toBe(9);
+  });
+
+  it('should parse "Shopping every friday" as recurrence', async () => {
+    const r = await parse('Shopping every friday');
+    expect(r?.repeatQuickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    expect(r?.taskChanges.title).toBe('Shopping');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+  });
+
+  it('should let explicit @ syntax win over natural language', async () => {
+    const r = await parse('Call mom tomorrow @friday');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+    // 'tomorrow' stays in the title untouched
+    expect(r?.taskChanges.title).toBe('Call mom tomorrow');
+  });
+
+  it('should skip a rejected recurrence candidate and still find a later date', async () => {
+    const r = await parse('Present every thing tomorrow');
+    expect(r?.repeatQuickSetting).toBeNull();
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDate()).toBe(18);
+    expect(r?.taskChanges.title).toBe('Present every thing');
+  });
+
+  it('should respect suppressed texts', async () => {
+    const r = await parse('Call mom tomorrow', {
+      suppressedNaturalDateTexts: ['tomorrow'],
+    });
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+  });
+
+  it('should suppress a contained plain date after its recurrence phrase was dismissed', async () => {
+    const r = await parse('Shopping every friday', {
+      suppressedNaturalDateTexts: ['every friday'],
+    });
+    expect(r?.repeatQuickSetting ?? null).toBeNull();
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+  });
+
+  it('should not treat bare small numbers as dates', async () => {
+    const r = await parse('Buy 5 apples');
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+  });
+
+  it('should tolerate trailing punctuation after a recurrence phrase', async () => {
+    const r = await parse('thing every friday.');
+    expect(r?.repeatQuickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+  });
+
+  it('should do nothing when the config toggle is off', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Call mom tomorrow' },
+      CONFIG,
+      [],
+      [],
+      NOW,
+      {
+        isParseRepeat: true,
+        isParseNaturalDates: true,
+      },
+    );
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+  });
+
+  it('should do nothing on surfaces that do not opt in (title edits)', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Call mom tomorrow' },
+      NL_CONFIG,
+      [],
+      [],
+      NOW,
+    );
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
   });
 });

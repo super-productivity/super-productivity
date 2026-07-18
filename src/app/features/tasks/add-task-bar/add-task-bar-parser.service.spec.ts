@@ -26,11 +26,14 @@ describe('AddTaskBarParserService', () => {
       'updateRepeatSetting',
       'clearRepeatSetting',
       'updateSyntaxHighlight',
+      'suppressNaturalDateText',
+      'suppressedNaturalDateTexts',
       'isAutoDetected',
       'state',
     ]);
 
     mockStateServiceSpy.isAutoDetected.and.returnValue(false);
+    mockStateServiceSpy.suppressedNaturalDateTexts.and.returnValue([]);
 
     // Default state return value
     const defaultMockState = {
@@ -1717,6 +1720,69 @@ describe('AddTaskBarParserService', () => {
       mockStateService.state.and.returnValue(baseState as any);
       await service.parseAndUpdateText('', cfg, [], [], defaultProject);
       expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('natural language due suppression', () => {
+    const nlCfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+      isEnableNaturalLanguageDates: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const baseState = {
+      projectId: 'default-project',
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      repeatEvery: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    };
+
+    it('should suppress the matched text when the due came from natural language', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Call mom tomorrow',
+        nlCfg,
+        [],
+        [],
+        defaultProject,
+      );
+      service.suppressNaturalLanguageDueIfAny();
+      expect(mockStateService.suppressNaturalDateText).toHaveBeenCalledWith('tomorrow');
+    });
+
+    it('should NOT suppress anything when the due came from @ syntax', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText('Call mom @friday', nlCfg, [], [], defaultProject);
+      service.suppressNaturalLanguageDueIfAny();
+      expect(mockStateService.suppressNaturalDateText).not.toHaveBeenCalled();
+    });
+
+    it('should suppress a natural-language recurrence phrase', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Shopping every friday',
+        nlCfg,
+        [],
+        [],
+        defaultProject,
+      );
+      service.suppressNaturalLanguageDueIfAny();
+      expect(mockStateService.suppressNaturalDateText).toHaveBeenCalledWith(
+        'every friday',
+      );
     });
   });
 

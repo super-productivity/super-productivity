@@ -44,8 +44,7 @@ export const shortSyntaxToTags = async ({
     tags,
     projects,
     undefined,
-    'combine',
-    true,
+    { isParseRepeat: true },
   );
   const shortSyntaxTags: ShortSyntaxTag[] = [];
 

@@ -150,6 +150,7 @@ describe('AddTaskBarActionsComponent', () => {
 
     mockParserService = jasmine.createSpyObj('AddTaskBarParserService', [
       'removeShortSyntaxFromInput',
+      'suppressNaturalLanguageDueIfAny',
     ]);
 
     mockProjectsSignal = signal([mockProject]);

@@ -82,6 +82,10 @@ export type ShortSyntaxConfig = Readonly<{
   isEnableProject: boolean;
   isEnableDue: boolean;
   isEnableTag: boolean;
+  // Detect due dates and recurrence in plain text without the @ trigger
+  // ("Call mom tomorrow", "Shopping every friday"). Add-task bar only; off by
+  // default since it rewrites titles based on ordinary words.
+  isEnableNaturalLanguageDates?: boolean;
   urlBehavior?: 'keep' | 'extract' | 'keep-and-attach';
 }>;
 

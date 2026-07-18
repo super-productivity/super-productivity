@@ -125,7 +125,7 @@ export class ShortSyntaxEffects {
             tags,
             projects,
             undefined,
-            isReplaceTagIds ? 'replace' : 'combine',
+            { mode: isReplaceTagIds ? 'replace' : 'combine' },
           ).then((r) => {
             if (environment.production) {
               TaskLog.log('shortSyntax', {

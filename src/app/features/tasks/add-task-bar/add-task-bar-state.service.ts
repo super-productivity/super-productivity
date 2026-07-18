@@ -44,6 +44,17 @@ export class AddTaskBarStateService {
     this.syntaxHighlight.set(syntaxHighlight);
   }
 
+  // Natural-language detections the user dismissed while composing this task;
+  // their matched texts must not re-trigger on subsequent parses. Cleared when
+  // the task is added.
+  readonly suppressedNaturalDateTexts = signal<string[]>([]);
+
+  suppressNaturalDateText(text: string): void {
+    this.suppressedNaturalDateTexts.update((texts) =>
+      texts.includes(text) ? texts : [...texts, text],
+    );
+  }
+
   constructor() {
     effect(() => {
       sessionStorage.setItem(SS.ADD_TASK_BAR_TXT, this.inputTxt());
@@ -220,6 +231,7 @@ export class AddTaskBarStateService {
     }));
     this.inputTxt.set('');
     this.syntaxHighlight.set(null);
+    this.suppressedNaturalDateTexts.set([]);
     // Clear the note text but keep the panel expanded so consecutive
     // note-tasks stay convenient (mirrors how project/date are preserved).
     this.noteTxt.set('');
