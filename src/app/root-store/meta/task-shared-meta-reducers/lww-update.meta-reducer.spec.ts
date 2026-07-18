@@ -953,34 +953,45 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.taskIds).toEqual([]);
     });
 
-    it('warns when a recreate payload is missing ONLY `theme` (#9139)', () => {
-      // Pins `theme` in RECREATE_FALLBACK.TAG.requiredKeys. That entry looks
-      // removable — it drives no backfill, since `defaults` is spread wholesale
-      // — but the warn is gated on `partialKeys.length > 0`, so dropping it
-      // silences the diagnostic ENTIRELY for a payload carrying title+taskIds
-      // and no theme. That is exactly the #9139 corruption shape, on the one
-      // writer that still bypasses getDefaultWorkContextTheme, and provenance
-      // is still unknown — so this is the last signal that path ran.
-      const warnSpy = spyOn(OpLog, 'warn').and.stub();
-      const state = createMockState();
-      const action = {
-        type: '[TAG] LWW Update',
-        id: 'themeless-tag',
-        title: 'Themeless Tag',
-        taskIds: [],
-        meta: {
-          isPersistent: true,
-          entityType: 'TAG',
-          entityId: 'themeless-tag',
-        },
-      };
+    // Pins `theme` in RECREATE_FALLBACK.{TAG,PROJECT}.requiredKeys. Those
+    // entries look removable — they drive no backfill, since `defaults` is
+    // spread wholesale — but the warn is gated on `partialKeys.length > 0`, so
+    // dropping one silences the diagnostic ENTIRELY for a payload carrying
+    // title+taskIds and no theme. That is exactly the #9139 corruption shape,
+    // on the one writer that still bypasses getDefaultWorkContextTheme, and
+    // provenance is still unknown — so this is the last signal that path ran.
+    //
+    // Runs for BOTH types on purpose: covering only TAG left PROJECT's entry
+    // dead (dropping it passed 133/133), i.e. a diagnostic that could be lost
+    // without a single test going red.
+    (
+      [
+        ['TAG', 'themeless-tag', 'Themeless Tag'],
+        ['PROJECT', 'themeless-project', 'Themeless Project'],
+      ] as const
+    ).forEach(([entityType, entityId, title]) => {
+      it(`warns when a recreate payload for ${entityType} is missing ONLY \`theme\` (#9139)`, () => {
+        const warnSpy = spyOn(OpLog, 'warn').and.stub();
+        const state = createMockState();
+        const action = {
+          type: `[${entityType}] LWW Update`,
+          id: entityId,
+          title,
+          taskIds: [],
+          meta: {
+            isPersistent: true,
+            entityType,
+            entityId,
+          },
+        };
 
-      reducer(state, action);
+        reducer(state, action);
 
-      expect(warnSpy).toHaveBeenCalled();
-      const warned = warnSpy.calls.allArgs().flat().join(' ');
-      expect(warned).toContain('missing required');
-      expect(warned).toContain('theme');
+        expect(warnSpy).toHaveBeenCalled();
+        const warned = warnSpy.calls.allArgs().flat().join(' ');
+        expect(warned).toContain('missing required');
+        expect(warned).toContain('theme');
+      });
     });
   });
 

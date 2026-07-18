@@ -96,7 +96,15 @@ import { LOCAL_ACTIONS } from '../../util/local-actions.token';
  */
 export const resolveContextTheme = (awc: WorkContext): WorkContextThemeCfg => {
   const isTag = awc.type === WorkContextType.TAG;
-  const theme = awc.theme ?? getDefaultWorkContextTheme(awc.type, awc.id);
+  // COPY the fallback, never hand out the module constant itself: a consumer
+  // that mutated what this returns would write straight through into
+  // DEFAULT_TAG / TODAY_TAG for the whole app, and those are plain object
+  // literals with nothing freezing them. The on-disk heal already spreads for
+  // the same reason; keeping only one side aliased is the asymmetry that turns
+  // into a bug the first time someone writes to a theme they were handed.
+  // Cheap: `distinctUntilChanged(isShallowEqual)` on currentTheme$ compares
+  // key-by-key, so a fresh object per emission causes no extra emissions.
+  const theme = awc.theme ?? { ...getDefaultWorkContextTheme(awc.type, awc.id) };
   // For tags: theme.primary is the explicit override. If it's still at
   // the auto-default (or unset) and tag.color is set, fall back to
   // tag.color so newly created tags drive Material theming with their

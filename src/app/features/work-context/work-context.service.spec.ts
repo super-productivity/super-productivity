@@ -884,11 +884,13 @@ describe('resolveContextTheme()', () => {
       const ctx = buildCtx();
       delete (ctx as unknown as Record<string, unknown>).theme;
 
-      // Returns the shared constant by reference. Deliberate, but note the
-      // reason is only that both consumers are read-only — NOT emission
-      // dedup: currentTheme$ uses distinctUntilChanged(isShallowEqual), which
-      // compares key-by-key with no reference short-circuit.
-      expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
+      expect(resolveContextTheme(ctx)).toEqual(DEFAULT_TAG.theme);
+      // A COPY, never the module constant itself — a consumer mutating what it
+      // was handed would otherwise corrupt DEFAULT_TAG app-wide. Nothing
+      // freezes these constants, so this is the only thing enforcing it.
+      // (Safe for the stream: currentTheme$ dedups with isShallowEqual, which
+      // compares key-by-key and does not short-circuit on reference.)
+      expect(resolveContextTheme(ctx)).not.toBe(DEFAULT_TAG.theme);
     });
 
     it('returns the PROJECT default for a theme-less project', () => {
@@ -897,13 +899,14 @@ describe('resolveContextTheme()', () => {
       const ctx = buildCtx({ type: WorkContextType.PROJECT });
       delete (ctx as unknown as Record<string, unknown>).theme;
 
-      expect(resolveContextTheme(ctx)).toBe(DEFAULT_PROJECT.theme);
+      expect(resolveContextTheme(ctx)).toEqual(DEFAULT_PROJECT.theme);
+      expect(resolveContextTheme(ctx)).not.toBe(DEFAULT_PROJECT.theme);
     });
 
     it('handles an explicit null theme, not just a missing one', () => {
       const ctx = buildCtx({ theme: null });
 
-      expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
+      expect(resolveContextTheme(ctx)).toEqual(DEFAULT_TAG.theme);
     });
 
     // Regression: the read side was only type-aware while the on-disk heal was
@@ -934,7 +937,9 @@ describe('resolveContextTheme()', () => {
         });
         delete (ctx as unknown as Record<string, unknown>).theme;
 
-        expect(resolveContextTheme(ctx)).toBe(theme);
+        expect(resolveContextTheme(ctx)).toEqual(theme);
+        // System themes are module constants too — same aliasing hazard.
+        expect(resolveContextTheme(ctx)).not.toBe(theme);
       });
 
       it(`${entityId} has a theme that renders differently from the generic default`, () => {
