@@ -4,11 +4,6 @@
  * Enhanced with smooth transitions and accessibility improvements
  */
 
-/* Remove all shadows for clean aesthetic */
-* {
-  box-shadow: none !important;
-}
-
 /* Smooth transitions */
 :root {
   --transition-fast: 150ms ease-in-out;
@@ -32,6 +27,12 @@ body.isDarkTheme {
   --dracula-purple: #bd93f9;
   --dracula-red: #ff5555;
   --dracula-yellow: #f1fa8c;
+
+  /* Public theme contract */
+  --surface-1: var(--dracula-background);
+  --surface-2: #2c2e3a;
+  --ink: var(--dracula-foreground);
+  --ink-on-channel: 248, 248, 242;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -71,7 +72,11 @@ body.isDarkTheme {
 
   --text-color: var(--dracula-foreground);
   --text-color-less-intense: rgba(248, 248, 242, 0.87);
-  --text-color-muted: var(--dracula-comment);
+  --text-color-muted: color-mix(
+    in srgb,
+    var(--dracula-comment) 72%,
+    var(--dracula-foreground)
+  );
   --text-color-more-intense: #ffffff;
   --text-color-most-intense: #ffffff;
 
@@ -107,6 +112,7 @@ body.isDarkTheme {
   --palette-accent-700: #9166f5;
   --palette-accent-800: #7b4cf3;
   --palette-accent-900: #6633f1;
+  --palette-accent-contrast-500: #000000;
 
   /* Secondary colors for potential use */
   --c-success: var(--dracula-green);
@@ -156,8 +162,21 @@ body.isDarkTheme {
   --shadow-key-umbra-opacity: 0;
   --shadow-key-penumbra-opacity: 0;
   --shadow-ambient-shadow-opacity: 0;
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
   --task-current-shadow: none;
   --task-selected-shadow: none;
+  --card-shadow: none;
+  --banner-shadow: none;
+  --bottom-nav-shadow: none;
+  --whiteframe-shadow-1dp: none;
+  --whiteframe-shadow-2dp: none;
+  --whiteframe-shadow-3dp: none;
+  --whiteframe-shadow-4dp: none;
+  --whiteframe-shadow-6dp: none;
+  --whiteframe-shadow-8dp: none;
+  --whiteframe-shadow-12dp: none;
+  --whiteframe-shadow-24dp: none;
 
   /* ===============================
    * HOVER CONTROLS
@@ -213,11 +232,16 @@ body.isDarkTheme a[href]:hover {
   opacity: 0.8;
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */

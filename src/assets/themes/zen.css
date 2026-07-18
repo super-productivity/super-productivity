@@ -8,6 +8,8 @@
 
 body,
 body.isDarkTheme {
+  --zen-selected-border: color-mix(in srgb, var(--text-color) 65%, transparent);
+
   /* Task backgrounds: transparent (current task keeps the default accent bg) */
   --task-c-bg: transparent;
   --task-c-bg-done: transparent;
@@ -50,8 +52,22 @@ body.isDarkTheme {
 
 /* Light mode: use pure white for elevated surfaces instead of off-white (#f8f8f7) */
 body:not(.isDarkTheme) {
+  /* Public theme contract */
+  --surface-1: #f8f8f7;
+  --surface-2: #ffffff;
+  --ink: rgb(44, 44, 44);
+  --ink-on-channel: 44, 44, 44;
+
   --bg-lighter: #fff;
   --bg-lightest: #fff;
+}
+
+body.isDarkTheme {
+  /* Public theme contract */
+  --surface-1: #131314;
+  --surface-2: var(--dark3);
+  --ink: rgb(230, 230, 230);
+  --ink-on-channel: 230, 230, 230;
 }
 
 /* Schedule events: semi-transparent bg with bg image */
@@ -70,20 +86,10 @@ body planner-task {
   background: transparent;
 }
 
-/* Selected task: border instead of shadow/bg */
-body task.isSelected .box {
-  border: 1px solid rgba(128, 128, 128, 0.3) !important;
+/* Selected task: a clear flat boundary instead of shadow/background. */
+body task.isSelected > swipe-block > .inner-wrapper > .box {
+  border: 2px solid var(--zen-selected-border) !important;
   border-radius: var(--task-border-radius);
-}
-
-body.isDarkTheme task.isSelected .box {
-  border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* Don't apply selected border to subtask boxes */
-body task.isSelected .sub-tasks .box {
-  border-color: transparent !important;
-  border-radius: 0;
 }
 
 /* Restore background when dragging */

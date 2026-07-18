@@ -1,11 +1,41 @@
 /**
  * Lines Theme for Super Productivity
- * Builds on the Zen theme: horizontal separator lines between tasks for a list-style aesthetic.
+ * Horizontal separator lines between tasks for a list-style aesthetic.
  * Tasks have only top/bottom borders — no side borders, no shadows, no backgrounds.
  * Works with both light and dark modes.
  */
 
-@import url('./zen.css');
+body,
+body.isDarkTheme {
+  /* Core flat-row treatment previously inherited from Zen. */
+  --task-c-bg: transparent;
+  --task-c-bg-done: transparent;
+  --sub-task-c-bg: transparent;
+  --sub-task-c-bg-done: transparent;
+  --sub-task-c-bg-in-selected: transparent;
+  --task-c-selected-bg: transparent;
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
+  --task-selected-shadow: none;
+  --task-border: none;
+  --lines-selected-border: color-mix(in srgb, var(--text-color) 65%, transparent);
+}
+
+body:not(.isDarkTheme) {
+  /* Public theme contract */
+  --surface-1: #f8f8f7;
+  --surface-2: #ffffff;
+  --ink: rgb(44, 44, 44);
+  --ink-on-channel: 44, 44, 44;
+}
+
+body.isDarkTheme {
+  /* Public theme contract */
+  --surface-1: #131314;
+  --surface-2: var(--dark3);
+  --ink: rgb(230, 230, 230);
+  --ink-on-channel: 230, 230, 230;
+}
 
 /* === Horizontal separator lines between top-level tasks === */
 body task {
@@ -33,20 +63,12 @@ body task .box {
   border-radius: 0 !important;
 }
 
-/* === Selection: zen uses a pill border; we use a subtle tint (corners are sharp) === */
-body task.isSelected .box {
-  background: var(--c-dark-10) !important;
+/* === Selection: a subtle tint plus a clear leading boundary === */
+body task.isSelected > swipe-block > .inner-wrapper > .box {
+  background: var(--state-selected) !important;
   border: none !important;
+  border-left: 3px solid var(--lines-selected-border) !important;
   border-radius: 0 !important;
-}
-
-body.isDarkTheme task.isSelected .box {
-  background: var(--c-light-05) !important;
-}
-
-/* Don't apply selection style to subtask boxes */
-body task.isSelected .sub-tasks .box {
-  background: transparent !important;
 }
 
 /* === Planner & Boards: tight list with horizontal separator lines === */
@@ -108,33 +130,21 @@ body .scheduled-items > .scheduled-item:last-child {
 @media (hover: hover) {
   /* Use :has() so hovering a subtask doesn't also highlight its parent row.
      The .box is the absolute-positioned background layer of a task. */
-  body task:hover:not(:has(task:hover)) > swipe-block > .inner-wrapper > .box {
-    background: rgba(0, 0, 0, 0.04) !important;
-  }
-
-  body.isDarkTheme
-    task:hover:not(:has(task:hover))
+  body
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
     > swipe-block
     > .inner-wrapper
     > .box {
-    background: rgba(255, 255, 255, 0.03) !important;
+    background: var(--state-hover) !important;
   }
 
   body planner-task:hover {
-    background: rgba(0, 0, 0, 0.04) !important;
-  }
-
-  body.isDarkTheme planner-task:hover {
-    background: rgba(255, 255, 255, 0.03) !important;
+    background: var(--state-hover) !important;
   }
 
   /* Selection wins over hover */
   body task.isSelected:hover > swipe-block > .inner-wrapper > .box {
-    background: var(--c-dark-10) !important;
-  }
-
-  body.isDarkTheme task.isSelected:hover > swipe-block > .inner-wrapper > .box {
-    background: var(--c-light-05) !important;
+    background: var(--state-selected) !important;
   }
 }
 

@@ -39,6 +39,14 @@ body.isDarkTheme {
   --nord13: #ebcb8b;
   --nord14: #a3be8c;
   --nord15: #b48ead;
+  --nord-link: #9acddb;
+  --nord-link-hover: #a4d4d0;
+
+  /* Public theme contract */
+  --surface-1: var(--nord1);
+  --surface-2: var(--nord2);
+  --ink: var(--nord6);
+  --ink-on-channel: 236, 239, 244;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -82,7 +90,7 @@ body.isDarkTheme {
 
   --text-color: var(--nord6);
   --text-color-less-intense: rgba(236, 239, 244, 0.87);
-  --text-color-muted: rgba(236, 239, 244, 0.54);
+  --text-color-muted: rgba(236, 239, 244, 0.7);
   --text-color-more-intense: var(--nord4);
   --text-color-most-intense: #ffffff;
 
@@ -109,7 +117,7 @@ body.isDarkTheme {
 
   /* Nord frost blue accent */
   --palette-accent-500: var(--nord10);
-  --c-accent: var(--nord10);
+  --c-accent: var(--nord-link);
   --palette-accent-100: #c7d9ec;
   --palette-accent-200: #afc7e1;
   --palette-accent-300: #97b5d6;
@@ -118,6 +126,7 @@ body.isDarkTheme {
   --palette-accent-700: #4a6587;
   --palette-accent-800: #405775;
   --palette-accent-900: #364963;
+  --palette-accent-contrast-500: #000000;
 
   /* Secondary colors */
   --c-success: var(--nord14);
@@ -223,20 +232,25 @@ body a[href],
 body.isDarkTheme a[href] {
   color: var(--c-accent);
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
 a:hover,
 body a[href]:hover,
 body.isDarkTheme a[href]:hover {
-  opacity: 0.8;
+  color: var(--nord-link-hover);
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */

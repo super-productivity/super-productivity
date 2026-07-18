@@ -6,23 +6,21 @@
   --mat-dialog-container-max-width: 85vw;
   --mat-menu-item-label-text-size: 14px;
 
-  // Tab contrast improvements - use darker shade for light theme
-  --mat-tab-header-active-label-text-color: var(--palette-primary-700);
-  --mat-tab-header-active-ripple-color: var(--palette-primary-700);
-  --mat-tab-header-active-focus-label-text-color: var(--palette-primary-700);
-  --mat-tab-header-active-hover-label-text-color: var(--palette-primary-700);
-  --mdc-tab-indicator-active-indicator-color: var(--palette-primary-700);
-  --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
   --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 
-// Dark theme tab overrides for better contrast - use lighter shade
+:where(body, body.isDarkTheme) {
+  // Active labels use theme ink so arbitrary project colours cannot reduce
+  // text contrast. Brand stays visible in the indicator and ripple.
+  --mat-tab-header-active-label-text-color: var(--text-color-most-intense);
+  --mat-tab-header-active-ripple-color: var(--brand);
+  --mat-tab-header-active-focus-label-text-color: var(--text-color-most-intense);
+  --mat-tab-header-active-hover-label-text-color: var(--text-color-most-intense);
+  --mdc-tab-indicator-active-indicator-color: var(--brand);
+  --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
+}
+
 body.isDarkTheme {
-  --mat-tab-header-active-label-text-color: var(--palette-primary-300);
-  --mat-tab-header-active-ripple-color: var(--palette-primary-300);
-  --mat-tab-header-active-focus-label-text-color: var(--palette-primary-300);
-  --mat-tab-header-active-hover-label-text-color: var(--palette-primary-300);
-  --mdc-tab-indicator-active-indicator-color: var(--palette-primary-300);
   --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
 }
 
@@ -265,24 +263,21 @@ mat-option.isDone {
 .mat-mdc-button,
 .mat-mdc-outlined-button {
   &[color='primary'] {
-    // Use primary color - validated palettes ensure WCAG AA compliance
-    --mdc-text-button-label-text-color: var(--palette-primary-500);
-    --mdc-outlined-button-label-text-color: var(--palette-primary-500);
-    --mdc-outlined-button-outline-color: var(--palette-primary-500);
+    --mdc-text-button-label-text-color: var(--button-primary-label);
+    --mdc-outlined-button-label-text-color: var(--button-primary-label);
+    --mdc-outlined-button-outline-color: var(--button-primary-label);
   }
 
   &[color='accent'] {
-    // Use accent color - validated palettes ensure WCAG AA compliance
-    --mdc-text-button-label-text-color: var(--palette-accent-500);
-    --mdc-outlined-button-label-text-color: var(--palette-accent-500);
-    --mdc-outlined-button-outline-color: var(--palette-accent-500);
+    --mdc-text-button-label-text-color: var(--button-accent-label);
+    --mdc-outlined-button-label-text-color: var(--button-accent-label);
+    --mdc-outlined-button-outline-color: var(--button-accent-label);
   }
 
   &[color='warn'] {
-    // Use warn color - validated palettes ensure WCAG AA compliance
-    --mdc-text-button-label-text-color: var(--palette-warn-500);
-    --mdc-outlined-button-label-text-color: var(--palette-warn-500);
-    --mdc-outlined-button-outline-color: var(--palette-warn-500);
+    --mdc-text-button-label-text-color: var(--button-warn-label);
+    --mdc-outlined-button-label-text-color: var(--button-warn-label);
+    --mdc-outlined-button-outline-color: var(--button-warn-label);
   }
 }
 
@@ -504,14 +499,16 @@ body.isVerticalActionBar .cdk-overlay-pane.mat-mdc-tooltip-panel {
   }
   body.hasMobileBottomNav mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + var(--bottom-nav-safe-area) + 24px
+      var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+        var(--bottom-nav-extra-offset) + 24px
     ) !important;
     pointer-events: auto;
     transition: 150ms margin;
   }
   body.hasMobileBottomNav.isAddTaskBarOpen mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + var(--bottom-nav-safe-area) + 48px
+      var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+        var(--bottom-nav-extra-offset) + 48px
     ) !important;
     pointer-events: auto;
   }

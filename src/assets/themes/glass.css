@@ -3,19 +3,6 @@
  * Minimal glassmorphism design with frosted glass effects
  */
 
-/* Remove shadows for clean glass aesthetic */
-* {
-  box-shadow: none !important;
-  font-family: /*"Sawasdee",*/
-    'Ubuntu Sans',
-    Ubuntu,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Helvetica Neue',
-    'Noto Sans',
-    sans-serif;
-}
-
 /* Smooth transitions */
 :root {
   --transition-fast: 200ms ease-in-out;
@@ -25,107 +12,127 @@
 /* Glass theme variables */
 body,
 body.isDarkTheme {
-  /* Background colors - much darker glass */
-  /*--bg: rgba(8, 8, 15, 0.99);*/
-  /*--bg-darker: rgba(5, 5, 12, 1);*/
-  /*--bg-slightly-lighter: rgba(15, 15, 22, 0.98);*/
-  /*--bg-lighter: rgba(22, 22, 30, 0.95);*/
-  /*--bg-lightest: rgba(30, 30, 38, 0.9);*/
-  /*--bg-super-light: rgba(38, 38, 46, 0.85);*/
+  font-family:
+    'Ubuntu Sans',
+    Ubuntu,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Helvetica Neue',
+    'Noto Sans',
+    sans-serif;
 
-  /*!* Glass component backgrounds - darker *!*/
-  --card-bg: rgba(255, 255, 255, 0.05);
-  --sidenav-bg: rgba(255, 255, 255, 0.02);
-  --selected-task-bg-color: rgba(255, 255, 255, 0.08);
-  --banner-bg: rgba(255, 255, 255, 0.06);
+  /* Public theme contract */
+  --surface-1: #131314;
+  --surface-2: #232326;
+  --ink: rgb(230, 230, 230);
+  --ink-on-channel: 230, 230, 230;
 
-  /*!* Glass task backgrounds - darker *!*/
-  --task-c-bg: rgba(255, 255, 255, 0.05);
-  --task-detail-bg: rgba(255, 255, 255, 0.05);
-  --task-c-selected-bg: rgba(255, 255, 255, 0.08);
-  --sub-task-c-bg: rgba(255, 255, 255, 0.02);
+  --glass-pane-subtle: rgba(255, 255, 255, 0.02);
+  --glass-pane: rgba(255, 255, 255, 0.05);
+  --glass-pane-raised: rgba(255, 255, 255, 0.08);
+  --glass-pane-strong: rgba(255, 255, 255, 0.1);
+  --glass-solid-recessed: #19191c;
+  --glass-solid-raised: #2d2d31;
+  --glass-wallpaper-filter: blur(24px) saturate(130%);
+
+  /* Translucent component surfaces */
+  --card-bg: var(--glass-pane);
+  --sidenav-bg: var(--glass-pane-subtle);
+  --selected-task-bg-color: var(--glass-pane-raised);
+  --banner-bg: var(--glass-pane-raised);
+
+  --task-c-bg: var(--glass-pane);
+  --task-detail-bg: var(--glass-pane);
+  --task-c-selected-bg: var(--glass-pane-raised);
+  --sub-task-c-bg: var(--glass-pane-subtle);
   --sub-task-c-bg-done: rgba(255, 255, 255, 0.01);
-  --task-c-bg-done: rgba(255, 255, 255, 0.02);
+  --task-c-bg-done: var(--glass-pane-subtle);
   --task-c-current-bg: rgba(74, 158, 255, 0.1);
   --task-c-drag-drop-bg: rgba(108, 124, 230, 0.1);
-  --sub-task-c-bg-in-selected: rgba(255, 255, 255, 0.05);
+  --sub-task-c-bg-in-selected: var(--glass-pane);
 
-  /*!* Glass note backgrounds - darker *!*/
-  --standard-note-bg: rgba(255, 255, 255, 0.05);
-  --standard-note-bg-hovered: rgba(255, 255, 255, 0.08);
+  --standard-note-bg: var(--glass-pane);
+  --standard-note-bg-hovered: var(--glass-pane-raised);
 
-  /*!* Text colors *!*/
-  /*--text-color: rgba(255, 255, 255, 0.95);*/
-  /*--text-color-less-intense: rgba(255, 255, 255, 0.8);*/
-  /*--text-color-muted: rgba(255, 255, 255, 0.6);*/
-  /*--text-color-more-intense: rgba(255, 255, 255, 1);*/
-  /*--text-color-most-intense: rgba(255, 255, 255, 1);*/
-  /*--standard-note-fg: rgba(255, 255, 255, 0.9);*/
-  /*--task-detail-value-color: rgba(255, 255, 255, 0.7);*/
-
-  /*!* Borders & separators *!*/
   --extra-border-color: rgba(255, 255, 255, 0.1);
   --separator-color: rgba(255, 255, 255, 0.15);
   --divider-color: rgba(255, 255, 255, 0.08);
   --chip-outline-color: rgba(255, 255, 255, 0.2);
-
-  /*!* Accent & theme colors *!*/
-  /*--palette-accent-500: var(--glass-accent);*/
-  /*--c-accent: var(--glass-accent);*/
-  /*--c-success: var(--glass-success);*/
-  /*--c-warning: var(--glass-warning);*/
-  /*--c-error: var(--glass-error);*/
-  /*--c-info: var(--glass-primary);*/
-
-  /*!* UI elements *!*/
-  /*--close-btn-bg: rgba(255, 255, 255, 0.1);*/
-  /*--close-btn-border: rgba(255, 255, 255, 0.2);*/
-
-  /*--select-hover-bg: rgba(108, 124, 230, 0.15);*/
-  /*--options-border-color: rgba(255, 255, 255, 0.2);*/
-
-  /*--attachment-bg: rgba(255, 255, 255, 0.08);*/
-  /*--grid-color: rgba(255, 255, 255, 0.05);*/
-  /*--progress-bg: rgba(255, 255, 255, 0.1);*/
-
-  /*!* Shadows - disabled *!*/
-  /*--shadow-key-umbra-opacity: 0;*/
-  /*--shadow-key-penumbra-opacity: 0;*/
-  /*--shadow-ambient-shadow-opacity: 0;*/
-  /*--task-current-shadow: none;*/
-  /*--task-selected-shadow: none;*/
-
-  /*!* Hover controls *!*/
-  /*--hover-controls-border: rgba(108, 124, 230, 0.3);*/
-  /*--hover-controls-border-opacity: 0.3;*/
-
-  /*!* Interaction states *!*/
-  /*--hover-bg-opacity: 0.06;*/
-  /*--focus-bg-opacity: 0.1;*/
-  /*--pressed-bg-opacity: 0.15;*/
-  /*--disabled-opacity: 0.4;*/
 
   --right-panel-bg: transparent;
 }
 
 schedule header,
 schedule-event.ScheduledRepeatProjection {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: var(--glass-pane-strong) !important;
 }
 
 schedule-event.ScheduledRepeatProjection,
 .mat-mdc-mini-fab.mat-unthemed {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--glass-pane-strong);
 }
 
-/* Glass task styling */
-schedule header,
-schedule-event,
-.mat-mdc-mini-fab,
-better-drawer-container .side,
-note,
-mat-card,
-planner-task,
-task .box {
-  backdrop-filter: blur(64px) !important;
+/* Blur the wallpaper once, behind every translucent surface. */
+body .bg-overlay {
+  backdrop-filter: var(--glass-wallpaper-filter);
+  -webkit-backdrop-filter: var(--glass-wallpaper-filter);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body,
+  body.isDarkTheme {
+    --glass-pane-subtle: var(--glass-solid-recessed);
+    --glass-pane: var(--surface-2);
+    --glass-pane-raised: var(--glass-solid-raised);
+    --glass-pane-strong: var(--glass-solid-raised);
+    --glass-wallpaper-filter: none;
+    --card-bg: var(--surface-2);
+    --sidenav-bg: var(--glass-solid-recessed);
+    --sidenav-bg-mobile: var(--glass-solid-recessed);
+    --selected-task-bg-color: var(--glass-solid-raised);
+    --banner-bg: var(--glass-solid-raised);
+    --task-c-bg: var(--surface-2);
+    --task-detail-bg: var(--surface-2);
+    --task-c-selected-bg: var(--glass-solid-raised);
+    --sub-task-c-bg: var(--glass-solid-recessed);
+    --sub-task-c-bg-done: var(--surface-1);
+    --task-c-bg-done: var(--glass-solid-recessed);
+    --task-c-current-bg: #253346;
+    --task-c-drag-drop-bg: #282b43;
+    --sub-task-c-bg-in-selected: var(--surface-2);
+    --standard-note-bg: var(--surface-2);
+    --standard-note-bg-hovered: var(--glass-solid-raised);
+    --right-panel-bg: var(--surface-2);
+    --right-panel-bg-mobile: var(--surface-2);
+    --bottom-panel-bg: var(--surface-2);
+  }
+
+  body .bg-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  schedule header,
+  schedule-event.ScheduledRepeatProjection,
+  .mat-mdc-mini-fab.mat-unthemed {
+    background: var(--glass-solid-raised) !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  body,
+  body.isDarkTheme {
+    --glass-pane-subtle: var(--glass-solid-recessed);
+    --glass-pane: var(--surface-2);
+    --glass-pane-raised: var(--glass-solid-raised);
+    --glass-pane-strong: var(--glass-solid-raised);
+    --glass-wallpaper-filter: none;
+    --sidenav-bg-mobile: var(--glass-solid-recessed);
+    --sub-task-c-bg-done: var(--surface-1);
+    --task-c-current-bg: #253346;
+    --task-c-drag-drop-bg: #282b43;
+    --right-panel-bg: var(--surface-2);
+    --right-panel-bg-mobile: var(--surface-2);
+    --bottom-panel-bg: var(--surface-2);
+  }
 }

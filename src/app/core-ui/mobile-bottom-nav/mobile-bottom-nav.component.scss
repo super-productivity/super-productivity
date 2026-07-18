@@ -6,7 +6,7 @@
 
 .mobile-bottom-nav {
   position: fixed;
-  bottom: 0;
+  bottom: var(--bottom-nav-extra-offset);
   left: 0;
   right: 0;
   // Background fills the full height incl. the reserved system-bar area; the

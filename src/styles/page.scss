@@ -81,16 +81,9 @@ html {
   overflow: hidden !important;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-
-  // Set html background for iOS safe area (home indicator)
-  // Uses :has() to match body theme class since --bg is defined on body
-  &:has(body.isLightTheme) {
-    background: #f8f8f7;
-  }
-
-  &:has(body.isDarkTheme) {
-    background: #131314;
-  }
+  // Let the current theme's body background propagate to the canvas and iOS
+  // safe areas instead of painting Default-theme strips around custom themes.
+  background: transparent;
 
   button,
   a {

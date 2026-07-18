@@ -21,6 +21,7 @@ body.isDarkTheme {
   --cybr-no2: #0a0e1a;
 
   --cybr-wh0: #898d99;
+  --cybr-fg: #d5d8e2;
 
   --cybr-me0: #4d5a80;
   --cybr-me1: color-mix(in srgb, var(--cybr-me0) 40%, transparent);
@@ -57,6 +58,12 @@ body.isDarkTheme {
   --cybr-pi0: #f230b2;
   --cybr-pi1: color-mix(in srgb, var(--cybr-pi0) 40%, transparent);
   --cybr-pi2: color-mix(in srgb, var(--cybr-pi0) 20%, transparent);
+
+  /* Public theme contract */
+  --surface-1: var(--cybr-no0);
+  --surface-2: var(--cybr-no1);
+  --ink: var(--cybr-fg);
+  --ink-on-channel: 213, 216, 226;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -98,14 +105,14 @@ body.isDarkTheme {
    * TEXT COLORS
    * ===============================*/
 
-  --text-color: var(--cybr-re0);
-  --text-color-less-intense: color-mix(in srgb, var(--cybr-re0) 87%, transparent);
+  --text-color: var(--cybr-fg);
+  --text-color-less-intense: color-mix(in srgb, var(--cybr-fg) 87%, transparent);
   --text-color-muted: var(--cybr-wh0);
-  --text-color-more-intense: var(--cybr-re0);
-  --text-color-most-intense: var(--cybr-re0);
+  --text-color-more-intense: #f0f2f8;
+  --text-color-most-intense: #ffffff;
 
   /* Note text */
-  --standard-note-fg: var(--cybr-re0);
+  --standard-note-fg: var(--cybr-fg);
 
   /* Task detail */
   --task-detail-value-color: var(--cybr-wh0);
@@ -136,6 +143,7 @@ body.isDarkTheme {
   --palette-accent-700: color-mix(in srgb, var(--cybr-cy0) 60%, #000000);
   --palette-accent-800: color-mix(in srgb, var(--cybr-cy0) 40%, #000000);
   --palette-accent-900: color-mix(in srgb, var(--cybr-cy0) 20%, #000000);
+  --palette-accent-contrast-500: #000000;
 
   /* Semantic colors */
   --c-success: var(--cybr-gr0);
@@ -174,7 +182,7 @@ body.isDarkTheme {
   --progress-bg: var(--cybr-me2);
 
   /* Improvement banner */
-  --improvement-text: var(--cybr-re0);
+  --improvement-text: var(--cybr-fg);
   --improvement-border: var(--cybr-cy1);
   --improvement-button-text: #ffffff;
 
@@ -235,6 +243,14 @@ body.isDarkTheme .page-wrapper {
     'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace !important;
 }
 
+/* Keep the red signature for high-level labels, not dense body copy. */
+body.isDarkTheme h1,
+body.isDarkTheme h2,
+body.isDarkTheme h3,
+body.isDarkTheme main-header .current-work-context-title {
+  color: var(--cybr-re0);
+}
+
 /* Links */
 a,
 body a[href],
@@ -253,16 +269,21 @@ body.isDarkTheme a[href]:hover {
   text-shadow: 0 0 8px var(--cybr-cy1);
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
-  border-left: 2px solid var(--c-accent);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    border-left: 2px solid var(--c-accent);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Current task */
-.task-c.isCurrent {
+body.isDarkTheme task.isCurrent > swipe-block > .inner-wrapper > .box {
   border-left: 3px solid var(--c-accent);
   box-shadow: 0 0 12px var(--cybr-cy2);
 }
