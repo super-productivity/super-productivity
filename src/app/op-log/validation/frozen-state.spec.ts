@@ -42,7 +42,10 @@ import frozen from './test-fixtures/frozen-state-v18.15.json';
  * invalidate that file when a type it only *imports* changes — so right after
  * editing a model, a warm-cache run still validates against the old shape and
  * reports zero errors. CI builds cold and is unaffected. To check a model change
- * locally, clear the cache first: `rm -rf .angular/cache`.
+ * locally, clear the cache first: `rm -rf .angular/cache`. Clearing only the
+ * `babel-webpack` namespace is NOT enough — verified: the typia output is cached
+ * under `angular-webpack`, and the narrower clear still reports a green false
+ * negative against a model that genuinely broke the fixture.
  *
  * @see AGENTS.md — Sync-correctness rule 11
  */
@@ -51,8 +54,15 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
     'FROZEN FIXTURE FAILED — do NOT add the field to the fixture. Type it ' +
     "optional (`?`) or backfill it in a migration. See this spec's docblock.\n";
 
+  // structuredClone is load-bearing: migrateState returns `state` BY REFERENCE
+  // when source === target, so without it every spec here shares one live
+  // handle on the imported module singleton and a single stray mutation would
+  // corrupt the fixture for whatever runs next.
   const migrateFrozen = (): AppDataComplete => {
-    const migrated = migrateState(frozen.state, frozen.__frozenAtSchemaVersion);
+    const migrated = migrateState(
+      structuredClone(frozen.state),
+      frozen.__frozenAtSchemaVersion,
+    );
     if (!migrated.success) {
       throw new Error(`migration of frozen fixture failed: ${migrated.error}`);
     }
