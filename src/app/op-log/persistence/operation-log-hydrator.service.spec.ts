@@ -35,6 +35,7 @@ import { OperationLogEffects } from '../capture/operation-log.effects';
 import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-collector';
 import { reportLoadAllDataReducerFailure } from '../apply/load-all-data-failure-guard.meta-reducer';
 import { Action } from '@ngrx/store';
+import { T } from '../../t.const';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -1751,7 +1752,6 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
-        expect(mockSnackService.open).not.toHaveBeenCalled();
         expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
         expect(mockStore.dispatch).toHaveBeenCalledWith(
           bulkApplyHydrationOperations({
@@ -1759,9 +1759,51 @@ describe('OperationLogHydratorService', () => {
             localClientId: 'test-client',
           }),
         );
-        // The replay persists a fresh CURRENT_SCHEMA_VERSION snapshot, so the
-        // next boot does not re-hit the poisoned snapshot (breaks the loop).
-        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
+        // The degraded recovery must be visible to the user...
+        expect(mockSnackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({ msg: T.F.SYNC.S.HYDRATION_FALLBACK_RECOVERY }),
+        );
+        // ...and must NEVER persist the (possibly partial) replay over the
+        // intact on-disk snapshot: for a synced client the surviving log is
+        // only a compaction-window tail, and sync never re-sends pruned ops.
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should escalate instead of booting silently empty when all surviving rows are reducer-rejected', async () => {
+        arrangeMigrationThrow(new Error('SchemaMigrationService: migration failed'));
+        const rejectedOps = [
+          { ...createMockEntry(1, createMockOperation('op-1')), reducerRejectedAt: 123 },
+          { ...createMockEntry(2, createMockOperation('op-2')), reducerRejectedAt: 123 },
+        ];
+        // The cheap row-count gate passes, but nothing is actually replayable.
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(rejectedOps);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+        expect(mockStore.dispatch).not.toHaveBeenCalled();
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      });
+
+      it('should escalate instead of replaying when the store already holds data (re-entrant hydration)', async () => {
+        // hydrateStore() genuinely re-enters on a LIVE store via
+        // PluginAPI.reInitData(); replay-from-0 on top would double-apply
+        // non-idempotent reducers.
+        arrangeMigrationThrow(new Error('SchemaMigrationService: migration failed'));
+        mockStateSnapshotService.getStateSnapshot.and.returnValue({
+          ...mockState,
+          task: { ids: ['live-task'], entities: { ['live-task']: {} } },
+        });
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(1, createMockOperation('op-1')),
+        ]);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+        expect(mockStore.dispatch).not.toHaveBeenCalled();
       });
 
       it('should escalate to recovery when migration throws and the op-log is empty', async () => {
@@ -1839,7 +1881,6 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
-        expect(mockSnackService.open).not.toHaveBeenCalled();
         // Fallback replays the WHOLE log from seq 0, not the snapshot tail.
         expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
         expect(mockStore.dispatch).toHaveBeenCalledWith(
@@ -1848,6 +1889,12 @@ describe('OperationLogHydratorService', () => {
             localClientId: 'test-client',
           }),
         );
+        // Degraded recovery is visible; the partial replay is never persisted
+        // over the intact snapshot.
+        expect(mockSnackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({ msg: T.F.SYNC.S.HYDRATION_FALLBACK_RECOVERY }),
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
       });
 
       it('should escalate when a reducer rejects the snapshot state and the op-log is empty', async () => {

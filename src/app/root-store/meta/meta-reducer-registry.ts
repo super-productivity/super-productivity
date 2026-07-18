@@ -35,6 +35,12 @@ import { actionLoggerReducer } from './action-logger.reducer';
  * Unwraps bulk dispatches for hydration/sync into individual actions.
  * Must run early so all subsequent meta-reducers see individual actions.
  *
+ * ## Phase 2.5: LoadAllData Failure Guard (#9140)
+ * Converts a reducer throw on loadAllData into a collected failure during
+ * hydration so startup can fall back to op-log replay instead of silently
+ * freezing the store. Must wrap every reducer that handles loadAllData,
+ * i.e. precede Phases 3-8. Pure pass-through outside hydration.
+ *
  * ## Phase 3: Undo/Delete Capture
  * Captures task context before deletion for undo functionality.
  * Must run before CRUD operations that actually delete.

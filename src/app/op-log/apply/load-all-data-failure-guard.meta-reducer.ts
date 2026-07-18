@@ -34,12 +34,21 @@ export const reportLoadAllDataReducerFailure = (error: unknown): void => {
  * collector is active (#9140).
  *
  * Without this, a feature reducer that dereferences a missing required field
- * in old snapshot state throws THROUGH `store.dispatch()` during hydration,
- * which both escalates into disaster recovery (which refuses while a snapshot
- * exists on disk → empty store on every boot) and errors the NgRx state
- * observable, leaving a store that silently ignores every later dispatch.
- * Returning the previous state keeps the store alive so the hydrator can fall
- * back to replaying the op-log instead.
+ * in old snapshot state does NOT surface at the dispatch call site: NgRx runs
+ * reducers inside the State pipeline's `scan`, so rxjs diverts the throw into
+ * the observable error channel — `store.dispatch()` returns normally, the
+ * error resurfaces only as an ASYNC unhandled-error report, and the State
+ * subscription is torn down. The store silently freezes: every later dispatch
+ * (including any recovery replay) is dropped without a trace. Catching INSIDE
+ * the reducer chain is the only place the failure can be observed while
+ * keeping the pipeline alive.
+ *
+ * NOTE: because the guarded dispatch completes normally, `ofType(loadAllData)`
+ * effects still fire with the REJECTED payload even though no state was
+ * committed. Current listeners only seed runtime side state (DateService
+ * start-of-day, shortcuts, polling) and are benign; a future loadAllData
+ * effect must not persist anything derived from the action payload without
+ * reading it back from the store.
  *
  * Outside an active collector (every non-hydration dispatch) this is a pure
  * pass-through: reducer errors propagate exactly as before.

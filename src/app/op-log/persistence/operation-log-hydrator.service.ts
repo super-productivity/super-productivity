@@ -30,7 +30,6 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
-import { VectorClockService } from '../sync/vector-clock.service';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { IS_ELECTRON } from '../../app.constants';
@@ -39,6 +38,7 @@ import {
   runWithBulkReplayFailureCollector,
 } from '../apply/bulk-replay-failure-collector';
 import { runWithLoadAllDataFailureCollector } from '../apply/load-all-data-failure-guard.meta-reducer';
+import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 
 /**
  * sessionStorage key used to track auto-reload attempts after IndexedDB backing store errors.
@@ -70,7 +70,6 @@ export class OperationLogHydratorService {
   private stateSnapshotService = inject(StateSnapshotService);
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
-  private vectorClockService = inject(VectorClockService);
   private operationApplierService = inject(OperationApplierService);
   private hydrationStateService = inject(HydrationStateService);
   private injector = inject(Injector);
@@ -162,26 +161,25 @@ export class OperationLogHydratorService {
       }
 
       // 2. Run schema migration if needed (A.7.12: with backup safety)
+      let hydrationFallbackRan = false;
       if (snapshot && this.schemaMigrationService.needsMigration(snapshot)) {
         try {
           snapshot = await this.snapshotService.migrateSnapshotWithBackup(snapshot);
           this._migrationRanDuringHydration = true;
         } catch (migrationErr) {
-          // #9140: a migration-path throw (metadata-validation failure,
-          // migration transform failure) must not dead-end at an empty store
-          // while the op-log can still rebuild state. migrateSnapshotWithBackup
-          // already rolled the on-disk cache back to the pre-migration backup
-          // (nothing destroyed), and escalating from here would hit
-          // attemptRecovery(), which refuses while a snapshot exists on disk —
-          // the every-boot empty-store brick. Discard the unmigratable snapshot
-          // for this boot and rebuild from the op-log instead; a successful
-          // replay persists a fresh CURRENT_SCHEMA_VERSION snapshot, which
-          // breaks the re-migrate loop.
-          await this._ensureOpLogReplayFallbackViable(migrationErr);
-          OpLog.err(
-            'OperationLogHydratorService: Schema migration failed. Discarding snapshot and replaying the op-log from the start.',
+          // #9140: escalating a migration throw would hit attemptRecovery(),
+          // which refuses while a snapshot exists on disk — the every-boot
+          // empty-store brick. The backup was already restored (nothing
+          // destroyed), so skip the unmigratable-but-intact snapshot for this
+          // boot and rebuild from the op-log instead. The fallback never
+          // persists its result; recovery re-runs each boot until a fixed
+          // build hydrates the intact snapshot again.
+          await this._fallBackToOpLogReplay(
             migrationErr,
+            'Schema migration failed',
+            pendingRemoteOps,
           );
+          hydrationFallbackRan = true;
           snapshot = null;
         }
       }
@@ -268,14 +266,14 @@ export class OperationLogHydratorService {
         // 3. Hydrate NgRx with (possibly repaired) snapshot
         // stateToLoad is AppStateSnapshot which is runtime-compatible but TypeScript can't verify
         //
-        // #9140 (guarded dispatch): if a feature reducer throws on the snapshot
-        // state (e.g. an old snapshot missing a required field no reducer
-        // backfills), the loadAllData failure guard keeps the store alive and
-        // reports the failure here instead of letting the throw escalate into
-        // recovery (which refuses while a snapshot exists on disk → empty
-        // store) and error the NgRx state observable (after which every later
-        // dispatch would be silently dropped). A throwing reducer produces no
-        // state update, so the fallback replay below starts from clean state.
+        // #9140 (guarded dispatch): a feature reducer throw does NOT surface
+        // here — rxjs diverts it to an async unhandled-error report and
+        // silently tears down the store's state subscription, so hydration
+        // would "succeed" against a dead store that drops every later
+        // dispatch. The loadAllData failure guard catches inside the reducer
+        // chain instead, keeps the store alive, and reports here so we can
+        // fall back to op-log replay (a throwing reducer commits no state).
+        // See loadAllDataFailureGuardMetaReducer.
         let snapshotLoadFailure: Error | undefined;
         runWithLoadAllDataFailureCollector(
           (error) => (snapshotLoadFailure = error),
@@ -288,13 +286,12 @@ export class OperationLogHydratorService {
         );
 
         if (snapshotLoadFailure !== undefined) {
-          await this._ensureOpLogReplayFallbackViable(snapshotLoadFailure);
-          OpLog.err(
-            'OperationLogHydratorService: loadAllData reducer rejected the snapshot state. Discarding snapshot and replaying the op-log from the start.',
+          await this._fallBackToOpLogReplay(
             snapshotLoadFailure,
+            'loadAllData reducer rejected the snapshot state',
+            pendingRemoteOps,
           );
-          snapshotPersistedDuringHydration =
-            await this._replayAllOpsFromScratch(pendingRemoteOps);
+          hydrationFallbackRan = true;
         } else {
           // 4. Replay tail operations (A.7.13: with operation migration)
           snapshotPersistedDuringHydration = await this._replayTailOps(
@@ -303,7 +300,7 @@ export class OperationLogHydratorService {
           );
           OpLog.normal('OperationLogHydratorService: Hydration complete.');
         }
-      } else {
+      } else if (!hydrationFallbackRan) {
         snapshotPersistedDuringHydration =
           await this._replayAllOpsFromScratch(pendingRemoteOps);
       }
@@ -338,7 +335,13 @@ export class OperationLogHydratorService {
       // snapshot exists) and surface the very "Failed to load data" this fix
       // removes. Only the on-disk cache is at stake; the store is already
       // hydrated.
-      if (this._migrationRanDuringHydration && !snapshotPersistedDuringHydration) {
+      // The #9140 fallback persists nothing — the convergence save must not
+      // undo that by caching the partial replay over the intact snapshot.
+      if (
+        this._migrationRanDuringHydration &&
+        !snapshotPersistedDuringHydration &&
+        !hydrationFallbackRan
+      ) {
         try {
           // Drain explicitly rather than relying on retryFailedRemoteOps(): it
           // early-returns before its finally when there are no failed ops (the
@@ -407,20 +410,53 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * #9140: gate for falling back from a failed snapshot hydration to an
-   * op-log replay-from-scratch. Rethrows `cause` when no replayable rows exist
-   * (empty op-log — no local source of truth left, so only the terminal
-   * recovery path remains) or when IndexedDB itself is broken (the fallback
-   * would fail identically, and the terminal catch shows the IDB-specific
-   * guidance instead).
+   * #9140: gate for the op-log replay fallback. Rethrows `cause` (preserving
+   * the original error for the terminal catch) when: IndexedDB itself is
+   * broken (the fallback would fail identically; the terminal catch shows the
+   * IDB-specific guidance); the store already holds meaningful data —
+   * hydrateStore() genuinely re-enters on a LIVE store via
+   * PluginAPI.reInitData(), and replay-from-0 on top would double-apply
+   * non-idempotent reducers; or the op-log has no rows. The row check is only
+   * a cheap pre-filter — _replayAllOpsFromScratch re-checks the
+   * reducer-rejected-filtered set.
    */
-  private async _ensureOpLogReplayFallbackViable(cause: unknown): Promise<void> {
+  private async _assertOpLogReplayFallbackViable(cause: unknown): Promise<void> {
     if (cause instanceof IndexedDBOpenError) {
+      throw cause;
+    }
+    if (hasMeaningfulStateData(this.stateSnapshotService.getStateSnapshot())) {
       throw cause;
     }
     if ((await this.opLogStore.getLastSeq()) === 0) {
       throw cause;
     }
+  }
+
+  /**
+   * #9140: hydrates from an op-log replay-from-scratch after the snapshot
+   * could not be hydrated, and makes the degraded recovery visible. Throws
+   * (via the gate or the replay) when the fallback cannot safely produce
+   * state — the terminal catch then keeps the pre-#9140 behavior.
+   */
+  private async _fallBackToOpLogReplay(
+    cause: unknown,
+    reason: string,
+    pendingRemoteOps: OperationLogEntry[],
+  ): Promise<void> {
+    await this._assertOpLogReplayFallbackViable(cause);
+    OpLog.err(
+      `OperationLogHydratorService: ${reason}. Skipping the snapshot for this boot and replaying the op-log from the start.`,
+      cause,
+    );
+    await this._replayAllOpsFromScratch(pendingRemoteOps, cause);
+    // Degradation must be visible (only after the replay actually produced
+    // state — a replay throw takes the terminal HYDRATION_FAILED path): the
+    // replayed state can be missing older items until a full sync or a fixed
+    // build.
+    this.snackService.open({
+      type: 'ERROR',
+      msg: T.F.SYNC.S.HYDRATION_FALLBACK_RECOVERY,
+    });
   }
 
   /**
@@ -550,16 +586,24 @@ export class OperationLogHydratorService {
    * rejection) but the op-log still has replayable rows.
    *
    * MUST only run while the store holds no snapshot-derived state: bulk replay
-   * applies ops ON TOP of current state, so replaying from 0 after a committed
-   * loadAllData would double-apply non-idempotent reducers (time-tracking
-   * deltas, counters). Both #9140 fallback call sites satisfy this — a
-   * migration throw happens before any dispatch, and a throwing loadAllData
-   * reducer produces no state update.
+   * applies ops ON TOP of current state, so replay-from-0 after a committed
+   * loadAllData would double-apply non-idempotent reducers. The no-snapshot
+   * call site satisfies this trivially; the #9140 fallback call sites are
+   * guarded by _assertOpLogReplayFallbackViable (throws happen pre-commit, and
+   * the live-store check rejects re-entrant hydration).
    *
+   * @param fallbackCause - Set when running as the #9140 fallback while an
+   *   INTACT (merely unhydratable-this-build) snapshot is still on disk: the
+   *   replay then rethrows the cause when nothing is replayable (instead of
+   *   booting silently empty) and NEVER persists its result — for a synced
+   *   client the surviving log is only a compaction-window tail and a
+   *   cursor-based sync never re-sends pruned ops, so persisting would
+   *   overwrite the last complete local copy.
    * @returns Whether a fresh snapshot was persisted during the replay.
    */
   private async _replayAllOpsFromScratch(
     pendingRemoteOps: OperationLogEntry[],
+    fallbackCause?: unknown,
   ): Promise<boolean> {
     OpLog.warn(
       'OperationLogHydratorService: Replaying all operations from the start of the op-log.',
@@ -573,6 +617,11 @@ export class OperationLogHydratorService {
     );
 
     if (allOps.length === 0) {
+      if (fallbackCause !== undefined) {
+        // Rows exist (the gate pre-checked) but every one is reducer-rejected:
+        // booting silently empty would be worse than the terminal path.
+        throw fallbackCause;
+      }
       // Fresh install - no data at all. The caller's common tail clears the
       // IDB reload guard.
       OpLog.normal(
@@ -637,6 +686,15 @@ export class OperationLogHydratorService {
       localClientId,
       pendingRemoteOps.filter((entry) => allOpIds.has(entry.op.id)),
     );
+
+    if (fallbackCause !== undefined) {
+      // #9140 fallback mode: never overwrite the intact on-disk snapshot with
+      // the (possibly partial) replay — see the @param doc.
+      OpLog.warn(
+        'OperationLogHydratorService: Fallback replay complete — keeping the existing on-disk snapshot (no persist).',
+      );
+      return false;
+    }
 
     // CHECKPOINT C: Validate state after replaying all operations.
     // If invalid, we still proceed but skip the snapshot save so we don't
