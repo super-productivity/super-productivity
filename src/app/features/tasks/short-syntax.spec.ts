@@ -2274,4 +2274,17 @@ describe('shortSyntax recurrence', () => {
     const r = await parse('Meet @dailystandup');
     expect(r?.repeatCfg ?? null).toBeNull();
   });
+
+  it('should tolerate trailing punctuation after the phrase', async () => {
+    for (const title of [
+      'Water plants @every friday.',
+      'Water plants @every friday,',
+      'Journal @daily.',
+    ]) {
+      const r = await parse(title);
+      expect(r?.repeatCfg?.quickSetting)
+        .withContext(title)
+        .toBe(title.includes('daily') ? 'DAILY' : 'WEEKLY_CURRENT_WEEKDAY');
+    }
+  });
 });

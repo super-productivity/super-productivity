@@ -124,7 +124,10 @@ const WEEKDAY_UNITS: Record<string, number> = {
 // Recurrence phrase at the start of a due match: either a bare frequency word
 // ("@daily") or an "every ..." phrase ("@every friday", "@every 2 weeks",
 // "@every 15th"). Anchored to the start so "@some day every year" is parsed as
-// a plain date, not a recurrence.
+// a plain date, not a recurrence. The phrase may be followed by whitespace,
+// end-of-input, or trailing punctuation ("water plants @every friday.") —
+// chrono is equally punctuation-tolerant for plain dates, so without this the
+// dot would demote the whole phrase to a plain "friday" date.
 export const SHORT_SYNTAX_REPEAT_REG_EX = new RegExp(
   '^(?:(daily|weekly|monthly|yearly|annually)' +
     '|every(?:\\s+(\\d{1,3}))?\\s+(' +
@@ -132,7 +135,7 @@ export const SHORT_SYNTAX_REPEAT_REG_EX = new RegExp(
     '|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?' +
     '|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun' +
     '|\\d{1,2}(?:st|nd|rd|th)' +
-    '))(?=\\s|$)',
+    '))(?=[\\s.,;:!?]|$)',
   'i',
 );
 
