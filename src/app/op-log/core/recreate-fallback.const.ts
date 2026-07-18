@@ -19,9 +19,11 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  *   `requiredKeys`.
  * - `requiredKeys` drives only (a) the meta-reducer's diagnostic warn (which
  *   missing schema-required fields to name in the log) and (b) the per-type
- *   on-disk heal branch in `auto-fix-typia-errors.ts`. Only TASK and
- *   SIMPLE_COUNTER have such a branch today; PROJECT/TAG rely on the generic
- *   recreate backfill alone, so their `requiredKeys` feed only the warn.
+ *   on-disk heal branch in `auto-fix-typia-errors.ts`. TASK and SIMPLE_COUNTER
+ *   have a `requiredKeys`-driven branch. TAG/PROJECT have a narrower one
+ *   covering `theme` only (#9139), which reads its defaults directly rather
+ *   than through this table, so for them `requiredKeys` still feeds only the
+ *   warn — `theme` is listed below so the warn names it.
  *   List the schema-required fields that are NOT already coerced by an
  *   earlier generic branch in `autoFixTypiaErrors` (booleans → false,
  *   nullable → null) — mirroring TASK's curated list.
@@ -73,8 +75,8 @@ export const RECREATE_FALLBACK: Partial<Record<EntityType, RecreateFallback>> = 
       'projectId',
     ],
   },
-  PROJECT: { defaults: DEFAULT_PROJECT, requiredKeys: ['title', 'taskIds'] },
-  TAG: { defaults: DEFAULT_TAG, requiredKeys: ['title', 'taskIds'] },
+  PROJECT: { defaults: DEFAULT_PROJECT, requiredKeys: ['title', 'taskIds', 'theme'] },
+  TAG: { defaults: DEFAULT_TAG, requiredKeys: ['title', 'taskIds', 'theme'] },
   SIMPLE_COUNTER: {
     defaults: EMPTY_SIMPLE_COUNTER,
     // Curated like TASK: omit `icon` (nullable, healed by the undefined→null

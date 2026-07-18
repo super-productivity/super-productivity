@@ -4,8 +4,8 @@ import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
 import { DEFAULT_TASK } from '../../features/tasks/task.model';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
-import { DEFAULT_TAG } from '../../features/tag/tag.const';
-import { DEFAULT_PROJECT } from '../../features/project/project.const';
+import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from '../../features/project/project.const';
 
 const createTypiaError = (
   path: string,
@@ -493,16 +493,26 @@ describe('autoFixTypiaErrors', () => {
     it('should backfill a missing tag.theme with the default tag theme', () => {
       const mockData = createAppDataCompleteMock();
       (mockData as any).tag = {
-        ids: ['TODAY'],
-        entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [] } },
+        ids: ['t1', 't2'],
+        entities: {
+          t1: { id: 't1', title: 'User tag', taskIds: [] },
+          t2: { id: 't2', title: 'Other', taskIds: [] },
+        },
       };
       const errors = [
-        createTypiaError('$input.tag.entities.TODAY.theme', REAL_EXPECTED, undefined),
+        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, undefined),
+        createTypiaError('$input.tag.entities.t2.theme', REAL_EXPECTED, undefined),
       ];
 
       const result = autoFixTypiaErrors(mockData, errors);
 
-      expect((result as any).tag.entities.TODAY.theme).toEqual(DEFAULT_TAG.theme);
+      const a = (result as any).tag.entities.t1.theme;
+      const b = (result as any).tag.entities.t2.theme;
+      expect(a).toEqual(DEFAULT_TAG.theme);
+      // Backfill a COPY: aliasing the constant across entities would let any
+      // later mutation write through into DEFAULT_TAG for the whole app.
+      expect(a).not.toBe(DEFAULT_TAG.theme);
+      expect(a).not.toBe(b);
       expect(errSpy).toHaveBeenCalledWith(
         '[auto-fix-typia-errors] Applied validation auto-fix',
         undefined,
@@ -535,12 +545,12 @@ describe('autoFixTypiaErrors', () => {
       // not change the outcome.
       const mockData = createAppDataCompleteMock();
       (mockData as any).tag = {
-        ids: ['TODAY'],
-        entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [] } },
+        ids: ['t1'],
+        entities: { t1: { id: 't1', title: 'User tag', taskIds: [] } },
       };
       const errors = [
         createTypiaError(
-          '$input.tag.entities.TODAY.theme',
+          '$input.tag.entities.t1.theme',
           'Readonly<__type>.o99999',
           undefined,
         ),
@@ -548,54 +558,94 @@ describe('autoFixTypiaErrors', () => {
 
       const result = autoFixTypiaErrors(mockData, errors);
 
-      expect((result as any).tag.entities.TODAY.theme).toEqual(DEFAULT_TAG.theme);
+      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
     });
 
-    it('should backfill a COPY, never the shared default constant', () => {
-      // Aliasing DEFAULT_TAG.theme across entities would let any later
-      // mutation write through into the app-wide constant.
+    it('should repair an explicit null theme, not just a missing one', () => {
+      // The `setOne` 'replace' branch applies a remote entity verbatim, so
+      // `theme: null` is reachable and typia reports it at the same path with
+      // `value: null`. Gating on `undefined` alone left this dead-ending the
+      // repair pipeline ("state still invalid after repair").
       const mockData = createAppDataCompleteMock();
       (mockData as any).tag = {
-        ids: ['TODAY', 't2'],
-        entities: {
-          TODAY: { id: 'TODAY', title: 'Today', taskIds: [] },
-          t2: { id: 't2', title: 'Other', taskIds: [] },
-        },
+        ids: ['t1'],
+        entities: { t1: { id: 't1', title: 'Other', taskIds: [], theme: null } },
+      };
+      const errors = [
+        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, null),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
+    });
+
+    it('should restore the TODAY tag its own theme, not the generic tag default', () => {
+      // TODAY is the entity from the #9139 report and ships a distinct theme.
+      // The repair is written to disk, so a generic default would permanently
+      // restyle it (cornflower + tint-disabled -> purple + tint-enabled).
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['TODAY'],
+        entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [] } },
       };
       const errors = [
         createTypiaError('$input.tag.entities.TODAY.theme', REAL_EXPECTED, undefined),
-        createTypiaError('$input.tag.entities.t2.theme', REAL_EXPECTED, undefined),
       ];
 
       const result = autoFixTypiaErrors(mockData, errors);
 
-      const a = (result as any).tag.entities.TODAY.theme;
-      const b = (result as any).tag.entities.t2.theme;
-      expect(a).not.toBe(DEFAULT_TAG.theme);
-      expect(b).not.toBe(DEFAULT_TAG.theme);
-      expect(a).not.toBe(b);
-      expect(a).toEqual(DEFAULT_TAG.theme);
+      const healed = (result as any).tag.entities.TODAY.theme;
+      expect(healed).toEqual(TODAY_TAG.theme);
+      expect(healed.primary).toBe(TODAY_TAG.theme.primary);
+      expect(healed.isDisableBackgroundTint).toBe(true);
+      expect(healed.huePrimary).toBe('400');
+      // Guards the regression this test was written for.
+      expect(healed.primary).not.toBe(DEFAULT_TAG.theme.primary);
     });
 
-    it('should NOT overwrite a theme that is present but merely invalid', () => {
-      // `value === undefined` scopes this to a genuinely absent field; a
-      // present-but-wrong theme is a different problem and must not be
-      // silently replaced (that would discard user styling).
+    it('should restore the INBOX project its own theme', () => {
       const mockData = createAppDataCompleteMock();
-      const existingTheme = { primary: '#user-picked' };
-      (mockData as any).tag = {
-        ids: ['TODAY'],
+      (mockData as any).project = {
+        ids: [INBOX_PROJECT.id],
         entities: {
-          TODAY: { id: 'TODAY', title: 'Today', taskIds: [], theme: existingTheme },
+          [INBOX_PROJECT.id]: { id: INBOX_PROJECT.id, title: 'Inbox', taskIds: [] },
         },
       };
       const errors = [
-        createTypiaError('$input.tag.entities.TODAY.theme', REAL_EXPECTED, existingTheme),
+        createTypiaError(
+          `$input.project.entities.${INBOX_PROJECT.id}.theme`,
+          REAL_EXPECTED,
+          undefined,
+        ),
       ];
 
       const result = autoFixTypiaErrors(mockData, errors);
 
-      expect((result as any).tag.entities.TODAY.theme).toEqual(existingTheme);
+      const healed = (result as any).project.entities[INBOX_PROJECT.id].theme;
+      expect(healed).toEqual(INBOX_PROJECT.theme);
+      expect(healed.primary).not.toBe(DEFAULT_PROJECT.theme.primary);
+    });
+
+    it('should not treat a hostile "__proto__" entity id as a system theme', () => {
+      // The system-theme lookup is a Map precisely so this returns undefined
+      // rather than Object.prototype.
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['t1'],
+        entities: { t1: { id: 't1', title: 'x', taskIds: [] } },
+      };
+      const errors = [
+        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
+      expect(
+        (result as any).tag.entities.t1.theme instanceof Object &&
+          Object.getPrototypeOf((result as any).tag.entities.t1.theme),
+      ).toBe(Object.prototype);
     });
   });
 });

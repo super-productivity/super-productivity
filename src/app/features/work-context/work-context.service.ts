@@ -26,9 +26,9 @@ import {
   take,
   withLatestFrom,
 } from 'rxjs/operators';
-import { TODAY_TAG } from '../tag/tag.const';
+import { DEFAULT_TAG, TODAY_TAG } from '../tag/tag.const';
 import { Tag } from '../tag/tag.model';
-import { DEFAULT_TAG_COLOR, WORK_CONTEXT_DEFAULT_THEME } from './work-context.const';
+import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
 import {
@@ -70,7 +70,7 @@ import { getTimeSpentForDay } from './get-time-spent-for-day.util';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { updateWorkContextData } from '../time-tracking/store/time-tracking.actions';
 import { TaskArchiveService } from '../archive/task-archive.service';
-import { INBOX_PROJECT } from '../project/project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
 import { Project } from '../project/project.model';
 import { Log } from '../../core/log';
@@ -83,10 +83,19 @@ import { LOCAL_ACTIONS } from '../../util/local-actions.token';
  * it: validation at hydration is non-fatal, so a snapshot holding a theme-less
  * tag loads anyway and every consumer then dereferences `undefined` (#9139 —
  * this crashed both `resolveBackground` and `_setColorTheme` on every launch).
- * Defaulting here gives the theme pipeline a single choke point.
+ *
+ * Scope: this covers every consumer of `currentTheme$`, i.e. the *active*
+ * work context. It is NOT an app-wide guarantee — code that iterates over all
+ * projects/tags reads the raw entity and must still guard `theme?.` itself.
+ *
+ * The default is type-aware so it matches what `auto-fix-typia-errors` would
+ * later persist for the same entity; otherwise a theme-less project rendered
+ * tag-purple until a repair ran and then flipped to project-teal.
  */
 export const resolveContextTheme = (awc: WorkContext): WorkContextThemeCfg => {
-  const theme = awc.theme ?? WORK_CONTEXT_DEFAULT_THEME;
+  const theme =
+    awc.theme ??
+    (awc.type === WorkContextType.TAG ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme);
   // For tags: theme.primary is the explicit override. If it's still at
   // the auto-default (or unset) and tag.color is set, fall back to
   // tag.color so newly created tags drive Material theming with their

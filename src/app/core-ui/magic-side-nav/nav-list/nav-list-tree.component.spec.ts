@@ -44,4 +44,16 @@ describe('getProjectVisibilityIconColor', () => {
 
     expect(getProjectVisibilityIconColor(project)).toBe('#abcdef');
   });
+
+  it('does not throw for a project persisted without a theme (#9139)', () => {
+    // A project entity can reach the store with no `theme` at all. This helper
+    // renders once per project in the side nav on every launch, and because
+    // DEFAULT_PROJECT_ICON is not an emoji the theme branch is the DEFAULT
+    // path — so an unguarded deref crashed the app at startup.
+    const project = createProject({ icon: 'work' });
+    delete (project as unknown as Record<string, unknown>).theme;
+
+    expect(() => getProjectVisibilityIconColor(project)).not.toThrow();
+    expect(getProjectVisibilityIconColor(project)).toBeNull();
+  });
 });

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { DEFAULT_TAG_COLOR, WORK_CONTEXT_DEFAULT_THEME } from './work-context.const';
+import { DEFAULT_PROJECT } from '../project/project.const';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -12,7 +13,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { DateService } from '../../core/date/date.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
-import { TODAY_TAG } from '../tag/tag.const';
+import { DEFAULT_TAG, TODAY_TAG } from '../tag/tag.const';
 import { WorkContext, WorkContextType } from './work-context.model';
 import {
   selectActiveContextId,
@@ -763,25 +764,31 @@ describe('resolveContextTheme()', () => {
   describe('regression #9139: work context persisted with no theme', () => {
     // A tag/project entity stored without `theme` propagated `undefined` into
     // resolveBackground() and _setColorTheme(), crashing on every launch.
-    it('returns the default theme instead of undefined', () => {
+    // The crashing consumers were resolveBackground() (reads backgroundImage*)
+    // and _setColorTheme() (reads isAutoContrast); both need a real object.
+    it('returns the default tag theme instead of undefined', () => {
       const ctx = buildCtx();
       delete (ctx as unknown as Record<string, unknown>).theme;
 
-      expect(resolveContextTheme(ctx)).toEqual(WORK_CONTEXT_DEFAULT_THEME);
+      // Returns the shared constant by reference — deliberate: both consumers
+      // only read, and a stable identity helps the downstream
+      // distinctUntilChanged. `toBe` pins that decision.
+      expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
     });
 
-    it('returns a theme the crashing consumers can dereference', () => {
-      const ctx = buildCtx();
+    it('returns the PROJECT default for a theme-less project', () => {
+      // Must match what auto-fix-typia-errors would later persist, else a
+      // theme-less project renders tag-purple then flips to project-teal.
+      const ctx = buildCtx({ type: WorkContextType.PROJECT });
       delete (ctx as unknown as Record<string, unknown>).theme;
 
-      const res = resolveContextTheme(ctx);
+      expect(resolveContextTheme(ctx)).toBe(DEFAULT_PROJECT.theme);
+    });
 
-      // The exact fields whose unguarded deref produced the reported crashes:
-      // resolveBackground() reads backgroundImage*, _setColorTheme() reads
-      // isAutoContrast.
-      expect(res.backgroundImageDark).toBeDefined();
-      expect(res.backgroundImageLight).toBeDefined();
-      expect(res.isAutoContrast).toBeDefined();
+    it('handles an explicit null theme, not just a missing one', () => {
+      const ctx = buildCtx({ theme: null });
+
+      expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
     });
 
     it('yields a COMPLETE theme when the tag-color fallback applies', () => {
