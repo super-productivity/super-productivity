@@ -275,9 +275,15 @@ export class OperationLogMigrationService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
-    // 5. Persist to operation log
-    await this.opLogStore.append(migrationOp);
-    const lastSeq = await this.opLogStore.getLastSeq();
+    // 5. Persist to operation log and use the seq append() returns as this op's
+    // own sequence number, rather than re-reading getLastSeq() (a separate
+    // reverse-cursor read that returns the GLOBAL op-log tail). A concurrent
+    // tab's append could push that tail past this op — this path does not hold
+    // the sp_op_log Web Lock other tabs' capture appends under — so the re-read
+    // seq would persist lastAppliedOpSeq too high and the next boot's tail
+    // replay would silently skip the concurrent op. append()'s return is
+    // exactly this op's seq. (#8337)
+    const lastSeq = await this.opLogStore.append(migrationOp);
 
     await this.opLogStore.saveStateCache({
       state: dataToMigrate,

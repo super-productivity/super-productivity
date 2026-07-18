@@ -114,7 +114,12 @@ describe('SyncHydrationService', () => {
     mockClientIdService.loadClientId.and.resolveTo('localClient');
     mockClientIdService.getOrGenerateClientId.and.resolveTo('localClient');
     mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
-    mockOpLogStore.append.and.resolveTo(undefined);
+    // append() returns the seq assigned to the op it just wrote. The
+    // SYNC_IMPORT branch uses this value (not a re-read getLastSeq()) so a
+    // concurrent tab's append cannot inflate the persisted lastAppliedOpSeq
+    // (#8337). Keep it distinct from getLastSeq()'s value so tests can tell
+    // which one is used.
+    mockOpLogStore.append.and.resolveTo(11);
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
@@ -359,8 +364,8 @@ describe('SyncHydrationService', () => {
       expect(appendCall.args[0].clientId).toBe('B_regen');
     });
 
-    it('should save state cache after appending operation', async () => {
-      mockOpLogStore.getLastSeq.and.resolveTo(42);
+    it('should save state cache with the seq returned by append()', async () => {
+      mockOpLogStore.append.and.resolveTo(42);
 
       await service.hydrateFromRemoteSync({});
 
@@ -369,6 +374,25 @@ describe('SyncHydrationService', () => {
           lastAppliedOpSeq: 42,
         }),
       );
+    });
+
+    // Regression (#8337): the SYNC_IMPORT branch must persist the seq append()
+    // returned for the op it just wrote, NOT a fresh getLastSeq() read. Only
+    // this path holds no sp_op_log Web Lock, so a concurrent tab's append can
+    // land between append() and a re-read and push getLastSeq() past this op.
+    // Persisting that higher tail would make the next boot's tail replay
+    // (getOpsAfterSeq) silently skip the concurrent op.
+    it('should NOT persist a getLastSeq() value inflated by a concurrent append (#8337)', async () => {
+      // append() returns this op's real seq...
+      mockOpLogStore.append.and.resolveTo(7);
+      // ...while a concurrent tab's append pushes the GLOBAL tail higher.
+      mockOpLogStore.getLastSeq.and.resolveTo(9);
+
+      await service.hydrateFromRemoteSync({});
+
+      const savedSnapshot = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedSnapshot.lastAppliedOpSeq).toBe(7);
+      expect(savedSnapshot.lastAppliedOpSeq).not.toBe(9);
     });
 
     it('should update vector clock store after sync with minimal clock', async () => {

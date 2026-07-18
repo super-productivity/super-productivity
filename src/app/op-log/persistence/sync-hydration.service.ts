@@ -235,12 +235,18 @@ export class SyncHydrationService {
           syncImportReason: syncImportReason ?? 'FILE_IMPORT',
         };
 
-        // 5. Append operation to SUP_OPS
-        await this.opLogStore.append(op, 'remote');
+        // 5. Append operation to SUP_OPS and use the seq append() returns as the
+        // operation's own sequence number. Re-reading getLastSeq() here (a
+        // separate reverse-cursor read) returns the GLOBAL op-log tail, which a
+        // concurrent tab's append can push past this op — this path does not
+        // hold the sp_op_log Web Lock that other tabs' local-op capture appends
+        // under. The re-read seq would then be too high, so state_cache's
+        // lastAppliedOpSeq is persisted past the concurrent op and the next
+        // boot's tail replay (getOpsAfterSeq) silently skips it. append()'s
+        // return value is exactly this op's seq, so it is race-free and also
+        // drops a redundant transaction. (#8337)
+        lastSeq = await this.opLogStore.append(op, 'remote');
         OpLog.normal('SyncHydrationService: Persisted SYNC_IMPORT operation');
-
-        // 6. Get the sequence number of the operation we just wrote
-        lastSeq = await this.opLogStore.getLastSeq();
       } else {
         // 4b-alt. Skip SYNC_IMPORT creation for file-based sync bootstrap.
         // This avoids "clean slate" semantics so concurrent ops from other clients
