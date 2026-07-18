@@ -66,15 +66,18 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
     return { isValid: false, errors };
   }
 
-  // Decode once before the conservative security scan. The security checks
-  // below intentionally inspect this UNSTRIPPED view: decoding can create
-  // quote or comment-delimiter characters that were escaped identifiers in
-  // the source, so relying on the decoded text's apparent string/comment
-  // structure could hide a later live fetch.
+  // Decode once. The `url(` / `src(` security scans intentionally inspect this
+  // UNSTRIPPED view: decoding can create quote or comment-delimiter characters
+  // that were escaped identifiers in the source, so relying on the decoded
+  // text's apparent string/comment structure could let a disguised token hide
+  // a later live fetch. The keyword-presence bans (`@import`, `image()`,
+  // `image-set()`) instead scan the comment-stripped view below — they have no
+  // fetchable argument to classify, so exempting genuine comments is safe.
   const decoded = decodeCssEscapes(css);
 
-  // Strip comments only for malformed-comment detection and the later theme-
-  // contract presence scan. Tracks string-literal AND url-token state so:
+  // Strip comments for malformed-comment detection, the keyword-presence bans,
+  // and the later theme-contract scan. Tracks string-literal AND url-token
+  // state so:
   //   - `/*` inside `"..."` / `'...'` stays as string content
   //   - `/*` inside `url(...)` (unquoted arg) stays as url content (per CSS
   //     spec, comments aren't recognized inside a url-token)
@@ -89,14 +92,16 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
   const stripped = stripResult.css;
 
   // Installed themes are standalone, so even an apparently local/fragment
-  // import is invalid. Scan the decoded, unstripped source directly:
-  // escape decoding loses whether a quote was originally escaped, so trying
-  // to blank strings here can let that quote hide a later real at-rule.
-  // Rejecting keyword text inside string values is an intentional safe-side
-  // false positive for this untrusted CSS boundary.
-  const importMatch = /@import\b/i.exec(decoded);
+  // import is invalid. `@import` is a keyword-presence ban with no fetchable
+  // argument to classify, so scan the comment-stripped view: a real `@import`
+  // survives (comments only collapse to whitespace), while the same text in a
+  // `/* ... */` comment is correctly exempt. Strings stay intact through the
+  // stripper, so `content: "@import"` is still rejected on the safe side —
+  // blanking strings here is unsafe (an escape-created quote could hide a
+  // later real at-rule), so we don't.
+  const importMatch = /@import\b/i.exec(stripped);
   if (importMatch) {
-    const line = decoded.slice(0, importMatch.index).split('\n').length;
+    const line = stripped.slice(0, importMatch.index).split('\n').length;
     errors.push(`Line ${line}: @import is not supported in theme CSS`);
     return { isValid: false, errors };
   }
@@ -120,23 +125,39 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
   scan(/url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, 'url(...)');
   scan(/src\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, 'src(...)');
 
+  // A `url(` / `src(` with no closing `)` before end-of-input still yields a
+  // fetchable url-token: CSS Syntax §4.3.6 emits the token when consuming
+  // reaches EOF, so `background:url(http://evil` (file ends mid-url) fetches
+  // on every load. The argument regexes above require the `)` and miss it, so
+  // reject any opener that runs unterminated to end-of-input.
+  const unterminatedUrl = /(?:url|src)\s*\([^)]*$/i.exec(decoded);
+  if (unterminatedUrl) {
+    const line = decoded.slice(0, unterminatedUrl.index).split('\n').length;
+    errors.push(`Line ${line}: unterminated url() — remove the incomplete rule`);
+  }
+
   // `image()` can consume a URL string directly or after var() substitution.
   // We do not need this advanced function for local-only themes, so rejecting
   // the function itself is safer than attempting partial grammar resolution.
-  const imageFunctionRegex = /(^|[^\w-])image\s*\(/gim;
+  // Keyword-presence ban → scan the comment-stripped view so prose like
+  // `/* pick an image (large) */` is exempt while a real `image(` is not. The
+  // `(` must abut the name (a function-token has no interior whitespace), so a
+  // literal `image (` with a space is not the function and is left alone.
+  const imageFunctionRegex = /(^|[^\w-])image\(/gim;
   let imageMatch: RegExpExecArray | null;
-  while ((imageMatch = imageFunctionRegex.exec(decoded)) !== null) {
+  while ((imageMatch = imageFunctionRegex.exec(stripped)) !== null) {
     const index = imageMatch.index + imageMatch[1].length;
-    const line = decoded.slice(0, index).split('\n').length;
+    const line = stripped.slice(0, index).split('\n').length;
     errors.push(`Line ${line}: image(...) is not supported in theme CSS`);
   }
 
   // `image-set()` accepts URL strings directly, but escape decoding loses the
   // provenance needed to parse its nested string grammar safely. Themes do
   // not need this advanced function, so reject it wholesale like `image()`.
-  const imageSetMatch = /image-set\s*\(/i.exec(decoded);
+  // Scanned on the comment-stripped view for the same reason as `image()`.
+  const imageSetMatch = /image-set\(/i.exec(stripped);
   if (imageSetMatch) {
-    const line = decoded.slice(0, imageSetMatch.index).split('\n').length;
+    const line = stripped.slice(0, imageSetMatch.index).split('\n').length;
     errors.push(`Line ${line}: image-set(...) is not supported in theme CSS`);
   }
   if (errors.length > 0) {

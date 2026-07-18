@@ -191,7 +191,7 @@ The validator (`src/app/core/theme/validate-theme-css.util.ts`) runs at install 
 
 The validator handles `\xx`-escape attempts on keywords (`u\72l(`, `\55RL(`, `s\72\63(`, `--surf\61ce-1`, etc.) and `/* */` injection inside string literals or `url-tokens` — see `validate-theme-css.util.spec.ts` for the full attack-surface test list.
 
-Security keywords are matched conservatively on decoded source before comments or strings are discarded. Text such as `"@import"` or `"image(...)"` inside a comment or CSS string is therefore rejected too; avoid those literal sequences in theme prose and generated labels.
+Security keywords are matched conservatively. `url(` and `src(` are scanned on the raw (decoded) source, so they are rejected even inside a comment or CSS string — a disguised token must never be able to hide a later live fetch. The keyword-presence bans (`@import`, `image(`, `image-set(`) are scanned on the comment-stripped source instead: they are **allowed inside comments** (a theme may document the restriction) but still rejected inside CSS string values, since blanking strings safely is not possible after escape decoding. Avoid these literal sequences in theme string values and generated labels.
 
 ## Legacy migration note
 
