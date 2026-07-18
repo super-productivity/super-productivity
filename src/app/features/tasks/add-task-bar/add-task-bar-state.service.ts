@@ -145,23 +145,12 @@ export class AddTaskBarStateService {
     }
   }
 
-  updateRepeatSetting(
-    repeatQuickSetting: RepeatQuickSetting,
-    repeatEvery: number | null = null,
-  ): void {
-    this._taskInputState.update((state) => ({
-      ...state,
-      repeatQuickSetting,
-      repeatEvery,
-    }));
+  updateRepeatSetting(repeatQuickSetting: RepeatQuickSetting): void {
+    this._taskInputState.update((state) => ({ ...state, repeatQuickSetting }));
   }
 
   clearRepeatSetting(cleanedInputTxt?: string): void {
-    this._taskInputState.update((state) => ({
-      ...state,
-      repeatQuickSetting: null,
-      repeatEvery: null,
-    }));
+    this._taskInputState.update((state) => ({ ...state, repeatQuickSetting: null }));
     if (cleanedInputTxt !== undefined) {
       this.inputTxt.set(cleanedInputTxt);
     }
@@ -209,7 +198,6 @@ export class AddTaskBarStateService {
       cleanText: null,
       attachments: [],
       repeatQuickSetting: null,
-      repeatEvery: null,
       deadlineDate: null,
       deadlineTime: null,
       deadlineRemindOption: null,

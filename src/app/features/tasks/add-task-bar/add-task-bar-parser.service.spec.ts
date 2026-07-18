@@ -148,7 +148,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -187,7 +186,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -223,7 +221,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -311,7 +308,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          repeatEvery: null,
         });
 
         await service.parseAndUpdateText(
@@ -344,7 +340,6 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
-          repeatEvery: null,
         });
 
         await service.parseAndUpdateText(
@@ -989,7 +984,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1025,7 +1019,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1063,7 +1056,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1099,7 +1091,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1134,7 +1125,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1253,7 +1243,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1288,7 +1277,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1323,7 +1311,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1356,7 +1343,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1390,7 +1376,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1434,7 +1419,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1463,7 +1447,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1512,7 +1495,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1555,7 +1537,6 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
-        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1595,7 +1576,6 @@ describe('AddTaskBarParserService', () => {
       remindOption: null,
       attachments: [],
       repeatQuickSetting: null,
-      repeatEvery: null,
       deadlineDate: null,
       deadlineTime: null,
       deadlineRemindOption: null,
@@ -1612,12 +1592,11 @@ describe('AddTaskBarParserService', () => {
       );
       expect(mockStateService.updateRepeatSetting).toHaveBeenCalledWith(
         'WEEKLY_CURRENT_WEEKDAY',
-        null,
       );
       expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Water plants');
     });
 
-    it('should pass the interval from "@every 2 weeks"', async () => {
+    it('should NOT set a repeat setting for interval phrases like "@every 2 weeks"', async () => {
       mockStateService.state.and.returnValue(baseState as any);
       await service.parseAndUpdateText(
         'Review @every 2 weeks',
@@ -1626,10 +1605,7 @@ describe('AddTaskBarParserService', () => {
         [],
         defaultProject,
       );
-      expect(mockStateService.updateRepeatSetting).toHaveBeenCalledWith(
-        'WEEKLY_CURRENT_WEEKDAY',
-        2,
-      );
+      expect(mockStateService.updateRepeatSetting).not.toHaveBeenCalled();
     });
 
     it('should clear the repeat setting when the syntax is removed again', async () => {
@@ -1682,12 +1658,6 @@ describe('AddTaskBarParserService', () => {
     it('should remove "@daily"', () => {
       expect(service.removeShortSyntaxFromInput('Journal @daily', 'repeat')).toBe(
         'Journal',
-      );
-    });
-
-    it('should remove "@every 2 weeks"', () => {
-      expect(service.removeShortSyntaxFromInput('Review @every 2 weeks', 'repeat')).toBe(
-        'Review',
       );
     });
 

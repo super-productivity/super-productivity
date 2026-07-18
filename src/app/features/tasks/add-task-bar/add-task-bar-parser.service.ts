@@ -25,7 +25,6 @@ interface PreviousParseResult {
   deadlineRemindOption: TaskReminderOptionId | null;
   isDeadlineFromSyntax: boolean;
   repeatQuickSetting: RepeatQuickSetting | null;
-  repeatEvery: number | null;
   isRepeatFromSyntax: boolean;
 }
 
@@ -134,7 +133,6 @@ export class AddTaskBarParserService {
         repeatQuickSetting: wasRepeatFromSyntax
           ? null
           : currentState.repeatQuickSetting || null,
-        repeatEvery: wasRepeatFromSyntax ? null : currentState.repeatEvery || null,
         isRepeatFromSyntax: false,
       };
     } else {
@@ -199,19 +197,12 @@ export class AddTaskBarParserService {
       }
 
       let repeatQuickSetting: RepeatQuickSetting | null;
-      let repeatEvery: number | null;
-      if (parseResult.repeatCfg) {
-        repeatQuickSetting = parseResult.repeatCfg.quickSetting;
-        repeatEvery =
-          parseResult.repeatCfg.repeatEvery > 1
-            ? parseResult.repeatCfg.repeatEvery
-            : null;
+      if (parseResult.repeatQuickSetting) {
+        repeatQuickSetting = parseResult.repeatQuickSetting;
       } else if (wasRepeatFromSyntax) {
         repeatQuickSetting = null;
-        repeatEvery = null;
       } else {
         repeatQuickSetting = currentState.repeatQuickSetting || null;
-        repeatEvery = currentState.repeatEvery || null;
       }
 
       currentResult = {
@@ -229,8 +220,7 @@ export class AddTaskBarParserService {
         deadlineRemindOption: deadlineRemindOption,
         isDeadlineFromSyntax: hasParsedDeadline,
         repeatQuickSetting,
-        repeatEvery,
-        isRepeatFromSyntax: !!parseResult.repeatCfg,
+        isRepeatFromSyntax: !!parseResult.repeatQuickSetting,
       };
     }
 
@@ -344,14 +334,10 @@ export class AddTaskBarParserService {
 
     if (
       !this._previousParseResult ||
-      this._previousParseResult.repeatQuickSetting !== currentResult.repeatQuickSetting ||
-      this._previousParseResult.repeatEvery !== currentResult.repeatEvery
+      this._previousParseResult.repeatQuickSetting !== currentResult.repeatQuickSetting
     ) {
       if (currentResult.repeatQuickSetting) {
-        this._stateService.updateRepeatSetting(
-          currentResult.repeatQuickSetting,
-          currentResult.repeatEvery,
-        );
+        this._stateService.updateRepeatSetting(currentResult.repeatQuickSetting);
       } else if (currentState.repeatQuickSetting) {
         this._stateService.clearRepeatSetting();
       }
@@ -398,10 +384,10 @@ export class AddTaskBarParserService {
         break;
 
       case 'repeat':
-        // Remove recurrence syntax (e.g., @daily @every friday @every 2 weeks);
-        // like the 'date' case, a trailing time token ("3pm") is left in place
+        // Remove recurrence syntax (e.g., @daily @every friday); like the
+        // 'date' case, a trailing time token ("3pm") is left in place
         cleanedInput = cleanedInput.replace(
-          /\s*@(?:(?:daily|weekly|monthly|yearly|annually)\b|every\s+(?:\d{1,3}\s+)?\S+)/gi,
+          /\s*@(?:(?:daily|weekly|monthly|yearly|annually)\b|every\s+\S+)/gi,
           '',
         );
         break;
