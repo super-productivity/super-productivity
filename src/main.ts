@@ -17,6 +17,7 @@ import {
   DEFAULT_LANGUAGE,
   DEFAULT_LOCALE_DATA,
   LocaleImportFns,
+  NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS,
 } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
@@ -366,6 +367,13 @@ bootstrapApplication(AppComponent, {
           })
           .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
+    });
+    // Region variants backing the "System default" browser-locale fallback —
+    // not user-selectable (see locale.constants.ts).
+    Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).forEach(([locale, load]) => {
+      load()
+        .then((m) => registerLocaleData(m.default, locale))
+        .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
     });
   };
 

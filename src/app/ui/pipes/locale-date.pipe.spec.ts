@@ -75,6 +75,18 @@ describe('LocaleDatePipe', () => {
     expect(a).toBe('January');
   });
 
+  it('should fall back to the default locale instead of rendering blank when locale data is unregistered (NG0701)', () => {
+    const date = new Date(2024, 0, 15, 14, 30);
+    // 'th-TH' is a valid BCP-47 tag, but neither 'th-TH' nor 'th' locale data
+    // is registered — pre-fallback this returned null (blank UI).
+    const result = pipe.transform(date, 'MMMM', undefined, 'th-TH');
+    expect(result).toBe('January');
+  });
+
+  it('should still return null when even the default-locale fallback cannot format the value', () => {
+    expect(pipe.transform('invalid-date-string', 'short', undefined, 'th-TH')).toBeNull();
+  });
+
   it('should react to a changed explicit locale arg (en-US vs de-DE)', () => {
     const date = new Date(2024, 0, 15, 14, 30);
     const en = pipe.transform(date, 'MMMM', undefined, 'en-US');
