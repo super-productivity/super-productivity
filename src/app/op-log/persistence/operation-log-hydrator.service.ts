@@ -105,10 +105,18 @@ export class OperationLogHydratorService {
     // few/no tail ops, convergence still writes once more. That extra write is
     // harmless and its post-replay state is strictly more advanced, so it is not
     // worth extra plumbing to suppress; only the every-boot re-migration it
-    // prevents matters. (It is not strictly "once per schema bump per device"
-    // either: sync-hydration.service.ts persists a state cache with no
-    // schemaVersion, which reads back as v1 and re-migrates — the convergence
-    // save stamps a version and ends that loop.)
+    // prevents matters.
+    //
+    // Nor is this strictly "once per schema bump per device": sync-hydration
+    // persists its state cache WITHOUT a schemaVersion, which reads back as v1
+    // and migrates on the next boot. That omission is deliberate and
+    // load-bearing — downloaded snapshot data is never schema-migrated anywhere
+    // else on the client (migrateStateIfNeeded has exactly one call site, on the
+    // local state_cache) and the SYNC_IMPORT op carrying it is stamped
+    // CURRENT_SCHEMA_VERSION, so op migration skips it too. Do NOT "fix" that
+    // writer by stamping a version: it would freeze old-schema remote data into
+    // a cache Checkpoint B then trusts unvalidated. Convergence only stamps a
+    // version AFTER the migration chain has actually run, which is safe.
     let snapshotPersistedDuringHydration = false;
 
     try {
