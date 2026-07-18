@@ -318,6 +318,7 @@
     "typia": "^12.0.2"
   },
   "overrides": {
+    "esbuild": "0.28.1",
     "app-builder-lib": {
       "minimatch": "10.2.5"
     },
@@ -335,6 +336,12 @@
     },
     "node-gyp": {
       "undici": "6.27.0"
+    },
+    "vite": {
+      "esbuild": "0.28.1"
+    },
+    "tsup": {
+      "esbuild": "0.28.1"
     },
     "sockjs": {
       "uuid": "11.1.1"

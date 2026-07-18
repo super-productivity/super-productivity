@@ -1,5 +1,5 @@
 /* eslint-disable max-len */
-import { inject, Injectable, signal, OnDestroy } from '@angular/core';
+import { inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -37,6 +37,7 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { SnackService } from '../core/snack/snack.service';
 import { pingWithRetry } from './util/ping-with-retry.util';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { sanitizeSvgIconContent } from '../util/sanitize-svg-icon.util';
 
 // Each plugin's `id` (from its manifest.json, distinct from the asset path
 // here) becomes the entityId prefix for all data it persists via
@@ -461,8 +462,24 @@ export class PluginService implements OnDestroy {
   }
 
   private _registerPluginIcon(pluginId: string, iconContent: string): void {
+    const sanitizedIcon = this._sanitizePluginIconSvg(
+      iconContent,
+      `${pluginId}/icon.svg`,
+    );
+    if (!sanitizedIcon) {
+      return;
+    }
     const iconName = `plugin-${pluginId}-icon`;
-    this._globalThemeService.registerSvgIconFromContent(iconName, iconContent);
+    this._globalThemeService.registerSvgIconFromContent(iconName, sanitizedIcon);
+  }
+
+  private _sanitizePluginIconSvg(iconContent: string, iconPath: string): string | null {
+    const sanitizedIcon = sanitizeSvgIconContent(iconContent);
+    if (!sanitizedIcon) {
+      PluginLog.err(`Plugin icon ${iconPath} does not appear to be a valid SVG`);
+      return null;
+    }
+    return sanitizedIcon;
   }
 
   private _setPluginState(pluginId: string, state: PluginState): void {
@@ -1372,12 +1389,10 @@ export class PluginService implements OnDestroy {
             }),
           );
         }
-        iconContent = new TextDecoder().decode(iconBytes);
-        // Basic SVG validation
-        if (!iconContent.includes('<svg') || !iconContent.includes('</svg>')) {
-          PluginLog.err(`Plugin icon ${manifest.icon} does not appear to be a valid SVG`);
-          iconContent = null;
-        }
+        iconContent = this._sanitizePluginIconSvg(
+          new TextDecoder().decode(iconBytes),
+          manifest.icon,
+        );
       }
 
       // Extract config schema if specified in manifest
