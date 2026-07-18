@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   HostListener,
   inject,
@@ -62,6 +63,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { ShortSyntaxSegment, splitTextByRanges } from '../short-syntax-ranges';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -132,6 +134,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _customThemeService = inject(CustomThemeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -296,6 +299,44 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (inputElement && overlay) {
       overlay.scrollTop = inputElement.scrollTop;
     }
+  }
+
+  // Custom themes are arbitrary user CSS and can style the textarea and the
+  // overlay div differently (e.g. glass.css sets a font on `*`), so static CSS
+  // cannot guarantee the two layers stay metric-identical. Mirror every
+  // text-layout-affecting computed style of the textarea onto the overlay:
+  // on each segments render and on theme switches. Theme stylesheets load via
+  // async <link>, so the theme trigger re-syncs once more a moment later.
+  private readonly _overlayTypographySyncEffect = effect((onCleanup) => {
+    this.highlightSegments();
+    this._customThemeService.activeRef();
+    this._syncOverlayTypography();
+    const timeoutId = window.setTimeout(() => this._syncOverlayTypography(), 300);
+    onCleanup(() => window.clearTimeout(timeoutId));
+  });
+
+  private _syncOverlayTypography(): void {
+    const inputElement = this.inputEl()?.nativeElement;
+    const overlay = this.highlightEl()?.nativeElement;
+    if (!inputElement || !overlay) {
+      return;
+    }
+    const cs = getComputedStyle(inputElement);
+    const style = overlay.style;
+    style.fontFamily = cs.fontFamily;
+    style.fontSize = cs.fontSize;
+    style.fontWeight = cs.fontWeight;
+    style.fontStyle = cs.fontStyle;
+    style.fontStretch = cs.fontStretch;
+    style.lineHeight = cs.lineHeight;
+    style.letterSpacing = cs.letterSpacing;
+    style.wordSpacing = cs.wordSpacing;
+    style.textTransform = cs.textTransform;
+    style.textIndent = cs.textIndent;
+    style.tabSize = cs.tabSize;
+    style.fontKerning = cs.fontKerning;
+    style.fontVariant = cs.fontVariant;
+    style.fontFeatureSettings = cs.fontFeatureSettings;
   }
 
   private _focusTimeout?: number;
