@@ -562,11 +562,13 @@ test.describe('@webdav WebDAV Provider Switch', () => {
   });
 
   /**
-   * Test: Client with multiple local ops joining sync
+   * Test: Client with multiple local tasks chooses remote on first sync
    *
-   * Verifies that confirmation shows correct count and accepting replaces all local data.
+   * Verifies that choosing Keep remote replaces all local tasks with the exact
+   * remote set. The missing fresh-client secondary-warning oracle is tracked
+   * separately by #9166.
    */
-  test('should replace multiple local ops when user accepts confirmation', async ({
+  test('should replace multiple local tasks when fresh client chooses Keep remote', async ({
     browser,
     baseURL,
     request,
