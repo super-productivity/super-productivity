@@ -372,6 +372,10 @@ export class OperationLogHydratorService {
         }
       }
 
+      // #9140: gate compaction while the fallback's possibly-partial state is
+      // live; a later clean run (plugin reInit) re-enables it.
+      this.hydrationStateService.setHydrationFallbackActive(hydrationFallbackRan);
+
       // Clear the auto-reload guard so that a fresh backing-store error in the same
       // tab session gets the auto-reload treatment again rather than going straight
       // to the manual recovery dialog.
@@ -412,13 +416,11 @@ export class OperationLogHydratorService {
   /**
    * #9140: gate for the op-log replay fallback. Rethrows `cause` (preserving
    * the original error for the terminal catch) when: IndexedDB itself is
-   * broken (the fallback would fail identically; the terminal catch shows the
-   * IDB-specific guidance); the store already holds meaningful data —
-   * hydrateStore() genuinely re-enters on a LIVE store via
-   * PluginAPI.reInitData(), and replay-from-0 on top would double-apply
-   * non-idempotent reducers; or the op-log has no rows. The row check is only
-   * a cheap pre-filter — _replayAllOpsFromScratch re-checks the
-   * reducer-rejected-filtered set.
+   * broken (terminal catch shows the IDB-specific guidance); the store
+   * already holds meaningful data — hydrateStore() re-enters on a LIVE store
+   * via PluginAPI.reInitData(), and replay-from-0 on top would double-apply
+   * non-idempotent reducers; or the op-log has no rows (cheap pre-filter —
+   * _replayAllOpsFromScratch re-checks the reducer-rejected-filtered set).
    */
   private async _assertOpLogReplayFallbackViable(cause: unknown): Promise<void> {
     if (cause instanceof IndexedDBOpenError) {
@@ -449,10 +451,8 @@ export class OperationLogHydratorService {
       cause,
     );
     await this._replayAllOpsFromScratch(pendingRemoteOps, cause);
-    // Degradation must be visible (only after the replay actually produced
-    // state — a replay throw takes the terminal HYDRATION_FAILED path): the
-    // replayed state can be missing older items until a full sync or a fixed
-    // build.
+    // Visible degradation; fires only after the replay produced state (a
+    // replay throw takes the terminal HYDRATION_FAILED path instead).
     this.snackService.open({
       type: 'ERROR',
       msg: T.F.SYNC.S.HYDRATION_FALLBACK_RECOVERY,

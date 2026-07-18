@@ -15,6 +15,7 @@ import { MODEL_CONFIGS } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { HydrationStateService } from '../apply/hydration-state.service';
 import {
   bufferDeferredAction,
   clearDeferredActions,
@@ -128,6 +129,29 @@ describe('OperationLogCompactionService', () => {
       await service.compact();
 
       expect(mockStateSnapshot.getStateSnapshotForOperationLog).toHaveBeenCalled();
+    });
+
+    // #9140: while boot hydration fell back to an op-log replay (intact but
+    // unhydratable snapshot on disk), the live state may be partial —
+    // compacting would overwrite the last complete local copy and prune the
+    // ops the next boot's recovery replays.
+    it('should skip compaction while hydration fallback recovery is active (#9140)', async () => {
+      TestBed.inject(HydrationStateService).setHydrationFallbackActive(true);
+
+      const result = await service.compact();
+
+      expect(result).toBe(false);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
+    it('should also block emergency compaction while hydration fallback recovery is active', async () => {
+      TestBed.inject(HydrationStateService).setHydrationFallbackActive(true);
+
+      const result = await service.emergencyCompact();
+
+      expect(result).toBe(false);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
     it('should log metrics if compaction is slow', async () => {

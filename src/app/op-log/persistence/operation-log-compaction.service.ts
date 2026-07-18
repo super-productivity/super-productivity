@@ -17,6 +17,7 @@ import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { HydrationStateService } from '../apply/hydration-state.service';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -34,6 +35,7 @@ export class OperationLogCompactionService {
   private vectorClockService = inject(VectorClockService);
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
+  private hydrationState = inject(HydrationStateService);
 
   async compact(): Promise<boolean> {
     return this._doCompact(COMPACTION_RETENTION_MS, false);
@@ -114,6 +116,19 @@ export class OperationLogCompactionService {
       if (phantomRisk) {
         OpLog.warn(
           `OperationLogCompactionService: Skipping ${label}compaction — ${phantomRisk} (#8751)`,
+        );
+        return false;
+      }
+
+      // GUARD (#9140): while this session booted via the hydration fallback,
+      // the live state may be PARTIAL (rebuilt from the surviving op tail
+      // only) while the intact-but-unhydratable snapshot still sits on disk.
+      // Compacting would overwrite that last complete local copy AND prune
+      // the ops the next boot's recovery replays. Skipping is always safe —
+      // see the #7892 note below; pruning resumes after the next clean boot.
+      if (this.hydrationState.isHydrationFallbackActive()) {
+        OpLog.warn(
+          `OperationLogCompactionService: Skipping ${label}compaction — hydration fallback recovery active (#9140)`,
         );
         return false;
       }

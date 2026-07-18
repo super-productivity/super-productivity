@@ -1627,7 +1627,7 @@
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
         "FORCE_UPLOAD_FAILED": "Failed to overwrite server data. Your local changes remain available.",
         "FRESH_CLIENT_SYNC_CANCELLED": "Initial sync cancelled. Remote data was not applied.",
-        "HYDRATION_FAILED": "Failed to load data. Please reload the app.",
+        "HYDRATION_FAILED": "Failed to load data. Please reload the app. If this keeps happening, restore your data via sync or by importing a backup.",
         "HYDRATION_FALLBACK_RECOVERY": "Failed to load saved data — showing what could be restored from the local log. Missing items can be recovered with a full sync or backup import.",
         "IMPORTING": "Importing data",
         "INCOMPLETE_CFG": "Sync credentials are missing. Please configure sync.",

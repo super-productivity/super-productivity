@@ -154,6 +154,7 @@ describe('OperationLogHydratorService', () => {
     mockHydrationStateService = jasmine.createSpyObj('HydrationStateService', [
       'startApplyingRemoteOps',
       'endApplyingRemoteOps',
+      'setHydrationFallbackActive',
     ]);
     mockSnapshotService = jasmine.createSpyObj('OperationLogSnapshotService', [
       'isValidSnapshot',
@@ -1767,6 +1768,22 @@ describe('OperationLogHydratorService', () => {
         // intact on-disk snapshot: for a synced client the surviving log is
         // only a compaction-window tail, and sync never re-sends pruned ops.
         expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        // Compaction must also stay blocked for the session (same overwrite
+        // hazard, one writer later) — see OperationLogCompactionService.
+        expect(mockHydrationStateService.setHydrationFallbackActive).toHaveBeenCalledWith(
+          true,
+        );
+      });
+
+      it('should clear the fallback-active flag on a boot that does not fall back', async () => {
+        const snapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+
+        await service.hydrateStore();
+
+        expect(mockHydrationStateService.setHydrationFallbackActive).toHaveBeenCalledWith(
+          false,
+        );
       });
 
       it('should escalate instead of booting silently empty when all surviving rows are reducer-rejected', async () => {
