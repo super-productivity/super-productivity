@@ -50,10 +50,11 @@ describe('getProjectVisibilityIconColor', () => {
     // renders once per project in the side nav on every launch, and because
     // DEFAULT_PROJECT_ICON is not an emoji the theme branch is the DEFAULT
     // path — so an unguarded deref crashed the app at startup.
-    const project = createProject({ icon: 'work' });
+    // No `icon` here on purpose: that is the fall-through the comment
+    // describes, so the fixture exercises the path it claims to.
+    const project = createProject({});
     delete (project as unknown as Record<string, unknown>).theme;
 
-    expect(() => getProjectVisibilityIconColor(project)).not.toThrow();
     expect(getProjectVisibilityIconColor(project)).toBeNull();
   });
 });

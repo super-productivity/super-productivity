@@ -2,45 +2,13 @@ import { AppDataComplete } from '../model/model-config';
 import { IValidation } from 'typia';
 import type { SyncLogMeta } from '@sp/sync-core';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import { DEFAULT_PROJECT, INBOX_PROJECT } from '../../features/project/project.const';
-import {
-  DEFAULT_TAG,
-  IMPORTANT_TAG,
-  IN_PROGRESS_TAG,
-  TODAY_TAG,
-  URGENT_TAG,
-} from '../../features/tag/tag.const';
-import { WorkContextThemeCfg } from '../../features/work-context/work-context.model';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { getDefaultWorkContextTheme } from '../../features/work-context/work-context-default-theme.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { devError } from '../../util/dev-error';
 
 const LOG_PREFIX = '[auto-fix-typia-errors]';
-
-/**
- * System tags/projects ship a *distinct* theme, so healing them from the
- * generic default would silently restyle them — and because the repair is
- * written to disk, permanently. TODAY in particular is the entity from the
- * #9139 report: it is cornflower with `huePrimary: '400'` and background tint
- * disabled, where DEFAULT_TAG is purple with tint on.
- *
- * A Map, not an object literal: a hostile entity id of `__proto__` would hit
- * `Object.prototype` on a plain-object lookup and be treated as a theme.
- */
-const SYSTEM_ENTITY_THEMES: ReadonlyMap<string, WorkContextThemeCfg> = new Map([
-  [TODAY_TAG.id, TODAY_TAG.theme],
-  [URGENT_TAG.id, URGENT_TAG.theme],
-  [IMPORTANT_TAG.id, IMPORTANT_TAG.theme],
-  [IN_PROGRESS_TAG.id, IN_PROGRESS_TAG.theme],
-  [INBOX_PROJECT.id, INBOX_PROJECT.theme],
-]);
-
-const getWorkContextDefaultTheme = (
-  pathRoot: string | number,
-  entityId: string | number,
-): WorkContextThemeCfg =>
-  SYSTEM_ENTITY_THEMES.get(String(entityId)) ??
-  (pathRoot === 'tag' ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme);
 
 const getValueType = (value: unknown): string => {
   if (value === null) return 'null';
@@ -325,7 +293,9 @@ export const autoFixTypiaErrors = (
         // the generated name `Readonly<__type>.oNN`, whose ordinal shifts
         // whenever the type graph changes. Keying on it would make this branch
         // silently stop firing. Path + nullish value is stable.
-        const theme = { ...getWorkContextDefaultTheme(keys[0], keys[2]) };
+        const theme = {
+          ...getDefaultWorkContextTheme(keys[0] === 'tag', String(keys[2])),
+        };
         setValueByPath(data, keys, theme);
         logAutoFixApplied(
           path,

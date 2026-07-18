@@ -578,6 +578,14 @@ describe('autoFixTypiaErrors', () => {
       const result = autoFixTypiaErrors(mockData, errors);
 
       expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
+      // Pins the branch's POSITION in the else-if chain: one of the earlier
+      // `expected.includes('null'|'undefined')` branches swallowing this error
+      // would still leave state changed, but under a different fix label.
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({ fix: 'work-context-theme-undefined-to-default' }),
+      );
     });
 
     it('should restore the TODAY tag its own theme, not the generic tag default', () => {
@@ -627,25 +635,22 @@ describe('autoFixTypiaErrors', () => {
       expect(healed.primary).not.toBe(DEFAULT_PROJECT.theme.primary);
     });
 
-    it('should not treat a hostile "__proto__" entity id as a system theme', () => {
-      // The system-theme lookup is a Map precisely so this returns undefined
-      // rather than Object.prototype.
+    it('should not resolve a hostile "__proto__" entity id to a system theme', () => {
+      // The lookup is a Map for exactly this: an object literal would return
+      // Object.prototype here, which is non-nullish, so the `??` would not fall
+      // through and the entity would be healed to an empty theme.
       const mockData = createAppDataCompleteMock();
-      (mockData as any).tag = {
-        ids: ['t1'],
-        entities: { t1: { id: 't1', title: 'x', taskIds: [] } },
-      };
+      const entities: Record<string, unknown> = {};
+      // Computed key => a genuine OWN property named __proto__, not a set prototype.
+      entities['__proto__'] = { id: '__proto__', title: 'x', taskIds: [] };
+      (mockData as any).tag = { ids: ['__proto__'], entities };
       const errors = [
-        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, undefined),
+        createTypiaError('$input.tag.entities.__proto__.theme', REAL_EXPECTED, undefined),
       ];
 
       const result = autoFixTypiaErrors(mockData, errors);
 
-      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
-      expect(
-        (result as any).tag.entities.t1.theme instanceof Object &&
-          Object.getPrototypeOf((result as any).tag.entities.t1.theme),
-      ).toBe(Object.prototype);
+      expect((result as any).tag.entities['__proto__'].theme).toEqual(DEFAULT_TAG.theme);
     });
   });
 });

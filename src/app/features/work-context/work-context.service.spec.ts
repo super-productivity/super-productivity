@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { DEFAULT_TAG_COLOR, WORK_CONTEXT_DEFAULT_THEME } from './work-context.const';
-import { DEFAULT_PROJECT } from '../project/project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -13,7 +13,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { DateService } from '../../core/date/date.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
-import { DEFAULT_TAG, TODAY_TAG } from '../tag/tag.const';
+import { DEFAULT_TAG, IMPORTANT_TAG, TODAY_TAG, URGENT_TAG } from '../tag/tag.const';
 import { WorkContext, WorkContextType } from './work-context.model';
 import {
   selectActiveContextId,
@@ -748,12 +748,15 @@ describe('WorkContextService - isTodayListSignal reactivity', () => {
 });
 
 describe('resolveContextTheme()', () => {
+  // NOTE: a plain USER tag id by default. System entities (TODAY, INBOX, …)
+  // resolve to their own themes, so a system id here would silently stop these
+  // cases from exercising the generic default.
   const buildCtx = (over: Record<string, unknown> = {}): WorkContext =>
     ({
-      id: 'TODAY',
-      title: 'Today',
+      id: 'user-tag-1',
+      title: 'User tag',
       type: WorkContextType.TAG,
-      routerLink: 'tag/TODAY',
+      routerLink: 'tag/user-tag-1',
       taskIds: [],
       noteIds: [],
       color: null,
@@ -770,9 +773,10 @@ describe('resolveContextTheme()', () => {
       const ctx = buildCtx();
       delete (ctx as unknown as Record<string, unknown>).theme;
 
-      // Returns the shared constant by reference — deliberate: both consumers
-      // only read, and a stable identity helps the downstream
-      // distinctUntilChanged. `toBe` pins that decision.
+      // Returns the shared constant by reference. Deliberate, but note the
+      // reason is only that both consumers are read-only — NOT emission
+      // dedup: currentTheme$ uses distinctUntilChanged(isShallowEqual), which
+      // compares key-by-key with no reference short-circuit.
       expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
     });
 
@@ -789,6 +793,39 @@ describe('resolveContextTheme()', () => {
       const ctx = buildCtx({ theme: null });
 
       expect(resolveContextTheme(ctx)).toBe(DEFAULT_TAG.theme);
+    });
+
+    // Regression: the read side was only type-aware while the on-disk heal was
+    // id-aware, so a theme-less TODAY — the active context at startup —
+    // rendered purple/tinted indefinitely (hydration validates but never
+    // repairs) and then flipped once a sync repair landed. Both sides now
+    // resolve through getDefaultWorkContextTheme.
+    //
+    // Table-driven on purpose: asserting the property that makes each row
+    // exist (its theme is DISTINGUISHABLE from the generic default) means a
+    // row that is actually inert fails here rather than sitting unnoticed.
+    (
+      [
+        [TODAY_TAG, true],
+        [URGENT_TAG, true],
+        [IMPORTANT_TAG, true],
+        [INBOX_PROJECT, false],
+      ] as const
+    ).forEach(([entity, isTag]) => {
+      it(`gives ${entity.id} its own theme, not the generic default`, () => {
+        const ctx = buildCtx({
+          id: entity.id,
+          type: isTag ? WorkContextType.TAG : WorkContextType.PROJECT,
+        });
+        delete (ctx as unknown as Record<string, unknown>).theme;
+
+        const res = resolveContextTheme(ctx);
+        const generic = isTag ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme;
+
+        expect(res).toBe(entity.theme);
+        // If this fails the row is inert and should be deleted, not kept.
+        expect(res.primary).not.toBe(generic.primary);
+      });
     });
 
     it('yields a COMPLETE theme when the tag-color fallback applies', () => {
