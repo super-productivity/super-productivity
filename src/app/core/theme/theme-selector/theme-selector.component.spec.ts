@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ThemeSelectorComponent } from './theme-selector.component';
 import { GlobalThemeService } from '../global-theme.service';
-import { CustomThemeService } from '../custom-theme.service';
+import { CustomTheme, CustomThemeService } from '../custom-theme.service';
 import { ThemeStorageService, StoredTheme } from '../theme-storage.service';
 import { SnackService } from '../../snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
@@ -15,6 +15,9 @@ describe('ThemeSelectorComponent — install warnings', () => {
   let storageMock: jasmine.SpyObj<ThemeStorageService>;
   let customMock: jasmine.SpyObj<CustomThemeService>;
   let snackMock: jasmine.SpyObj<SnackService>;
+  const darkMode = signal<'system' | 'dark' | 'light'>('system');
+  const activeRef = signal({ kind: 'builtin' as const, id: 'default' });
+  const themes = signal<CustomTheme[]>([]);
 
   const buildComponent = (): ThemeSelectorComponent => {
     TestBed.configureTestingModule({
@@ -23,7 +26,7 @@ describe('ThemeSelectorComponent — install warnings', () => {
         {
           provide: GlobalThemeService,
           useValue: {
-            darkMode: signal('system'),
+            darkMode,
           },
         },
         { provide: CustomThemeService, useValue: customMock },
@@ -45,12 +48,15 @@ describe('ThemeSelectorComponent — install warnings', () => {
     customMock = Object.assign(
       jasmine.createSpyObj<CustomThemeService>('CustomThemeService', ['setActiveTheme']),
       {
-        activeRef: signal({ kind: 'builtin' as const, id: 'default' }),
-        themes: signal([]),
+        activeRef,
+        themes,
       },
     );
-    customMock.setActiveTheme.and.resolveTo();
+    customMock.setActiveTheme.and.resolveTo(true);
     snackMock = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
+    darkMode.set('system');
+    activeRef.set({ kind: 'builtin', id: 'default' });
+    themes.set([]);
   });
 
   afterEach(() => {
@@ -66,6 +72,83 @@ describe('ThemeSelectorComponent — install warnings', () => {
     ({
       target: { files: [file], value: 'x' } as unknown as HTMLInputElement,
     }) as unknown as Event;
+
+  const makeThemeSelection = (
+    value: string,
+  ): Parameters<ThemeSelectorComponent['updateCustomTheme']>[0] =>
+    ({ value }) as Parameters<ThemeSelectorComponent['updateCustomTheme']>[0];
+
+  it('distinguishes built-in and user themes that share a filename slug', () => {
+    const cmp = buildComponent();
+
+    expect(cmp.optionValue({ id: 'arc', name: 'Arc', kind: 'builtin' })).toBe(
+      'builtin:arc',
+    );
+    expect(cmp.optionValue({ id: 'arc', name: 'Arc fork', kind: 'user' })).toBe(
+      'user:arc',
+    );
+  });
+
+  it('preserves an explicit mode when selecting a dual-mode theme', async () => {
+    darkMode.set('dark');
+    themes.set([
+      {
+        id: 'plainspace',
+        name: 'Plainspace',
+        kind: 'builtin',
+        requiredMode: 'system',
+      },
+    ]);
+    const cmp = buildComponent();
+
+    await cmp.updateCustomTheme(makeThemeSelection('builtin:plainspace'));
+
+    expect(darkMode()).toBe('dark');
+  });
+
+  it('applies the declared mode for dark-only and light-only themes', async () => {
+    themes.set([
+      { id: 'arc', name: 'Arc', kind: 'builtin', requiredMode: 'dark' },
+      {
+        id: 'nord-snow-storm',
+        name: 'Nord Snow Storm',
+        kind: 'builtin',
+        requiredMode: 'light',
+      },
+    ]);
+    const cmp = buildComponent();
+
+    darkMode.set('light');
+    await cmp.updateCustomTheme(makeThemeSelection('builtin:arc'));
+    expect(darkMode()).toBe('dark');
+
+    await cmp.updateCustomTheme(makeThemeSelection('builtin:nord-snow-storm'));
+    expect(darkMode()).toBe('light');
+  });
+
+  it('does not apply a mode for a theme selection that failed', async () => {
+    darkMode.set('light');
+    themes.set([{ id: 'arc', name: 'Arc', kind: 'builtin', requiredMode: 'dark' }]);
+    customMock.setActiveTheme.and.resolveTo(false);
+    const cmp = buildComponent();
+
+    await cmp.updateCustomTheme(makeThemeSelection('builtin:arc'));
+
+    expect(darkMode()).toBe('light');
+  });
+
+  it('does not allow a fixed-mode theme to be switched into an incompatible mode', () => {
+    activeRef.set({ kind: 'builtin', id: 'arc' });
+    themes.set([{ id: 'arc', name: 'Arc', kind: 'builtin', requiredMode: 'dark' }]);
+    darkMode.set('dark');
+    const cmp = buildComponent();
+
+    cmp.updateDarkMode({
+      value: 'light',
+    } as Parameters<ThemeSelectorComponent['updateDarkMode']>[0]);
+
+    expect(darkMode()).toBe('dark');
+  });
 
   it('opens a warning snack when installFromFile returns warnings', async () => {
     const stored: StoredTheme = {

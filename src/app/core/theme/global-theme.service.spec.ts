@@ -1,5 +1,93 @@
+import { EnvironmentInjector, signal, Signal, WritableSignal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { type WorkContextThemeCfg } from '../../features/work-context/work-context.model';
-import { GlobalWallpaperCfg, resolveBackground } from './global-theme.service';
+import {
+  GlobalThemeService,
+  GlobalWallpaperCfg,
+  resolveBackground,
+  resolveSystemSurfaceColor,
+} from './global-theme.service';
+import { CustomThemeRef } from './custom-theme.service';
+
+interface GlobalThemeInitHarness {
+  init(): void;
+  darkMode: WritableSignal<'system' | 'dark' | 'light'>;
+  _hasInitialized: boolean;
+  _environmentInjector: EnvironmentInjector;
+  _customThemeService: { activeRef: Signal<CustomThemeRef> };
+  _setBackgroundTint(value: boolean): void;
+  _initIcons(): void;
+  _initHandlersForInitialBodyClasses(): void;
+  _initThemeWatchers(): void;
+}
+
+describe('resolveSystemSurfaceColor()', () => {
+  it('uses an opaque theme-supplied hex color', () => {
+    expect(resolveSystemSurfaceColor('  #ece5d4  ', false)).toBe('#ece5d4');
+    expect(resolveSystemSurfaceColor('#abc', false)).toBe('#aabbcc');
+  });
+
+  it('normalizes an opaque CSS rgb color for Android', () => {
+    expect(resolveSystemSurfaceColor('rgb(26, 24, 22)', true)).toBe('#1a1816');
+  });
+
+  it('falls back to the current mode when the token is empty or not a solid color', () => {
+    expect(resolveSystemSurfaceColor('', false)).toBe('#f8f8f7');
+    expect(resolveSystemSurfaceColor('linear-gradient(red, blue)', true)).toBe('#131314');
+    expect(resolveSystemSurfaceColor('rgb(256, 0, 0)', true)).toBe('#131314');
+  });
+
+  it('accepts a computed theme token that resolves through another custom property', () => {
+    try {
+      document.body.style.setProperty('--test-system-surface', '#abc');
+      document.body.style.setProperty('--system-surface', 'var(--test-system-surface)');
+
+      const computedColor = getComputedStyle(document.body).getPropertyValue(
+        '--system-surface',
+      );
+
+      expect(resolveSystemSurfaceColor(computedColor, false)).toBe('#aabbcc');
+    } finally {
+      document.body.style.removeProperty('--system-surface');
+      document.body.style.removeProperty('--test-system-surface');
+    }
+  });
+});
+
+describe('GlobalThemeService fixed-mode initialization', () => {
+  beforeEach(() => TestBed.configureTestingModule({}));
+
+  for (const testCase of [
+    { themeId: 'arc', initial: 'light' as const, expected: 'dark' as const },
+    {
+      themeId: 'nord-snow-storm',
+      initial: 'dark' as const,
+      expected: 'light' as const,
+    },
+  ]) {
+    it(`forces ${testCase.themeId} to ${testCase.expected} during init`, () => {
+      const activeRef = signal<CustomThemeRef>({
+        kind: 'builtin',
+        id: testCase.themeId,
+      });
+      const service = Object.create(
+        GlobalThemeService.prototype,
+      ) as GlobalThemeInitHarness;
+      service.darkMode = signal<'system' | 'dark' | 'light'>(testCase.initial);
+      service._hasInitialized = false;
+      service._environmentInjector = TestBed.inject(EnvironmentInjector);
+      service._customThemeService = { activeRef: activeRef.asReadonly() };
+      service._setBackgroundTint = (): void => undefined;
+      service._initIcons = (): void => undefined;
+      service._initHandlersForInitialBodyClasses = (): void => undefined;
+      service._initThemeWatchers = (): void => undefined;
+
+      service.init();
+
+      expect(service.darkMode()).toBe(testCase.expected);
+    });
+  }
+});
 
 describe('resolveBackground()', () => {
   const contextTheme: WorkContextThemeCfg = {
