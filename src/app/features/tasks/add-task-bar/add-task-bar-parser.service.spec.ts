@@ -25,6 +25,7 @@ describe('AddTaskBarParserService', () => {
       'updateDeadlineRemindOption',
       'updateRepeatSetting',
       'clearRepeatSetting',
+      'updateSyntaxHighlight',
       'isAutoDetected',
       'state',
     ]);
@@ -1645,6 +1646,77 @@ describe('AddTaskBarParserService', () => {
       } as any);
       await service.parseAndUpdateText('Plain task', cfg, [], [], defaultProject);
       expect(mockStateService.clearRepeatSetting).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('syntax highlight ranges', () => {
+    const cfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const baseState = {
+      projectId: 'default-project',
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      repeatEvery: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    };
+
+    it('should publish ranges for detected tokens pinned to the input text', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Fix bug #urgent @friday';
+      await service.parseAndUpdateText(
+        text,
+        cfg,
+        [],
+        [{ id: 'tag-1', title: 'urgent' } as Tag],
+        defaultProject,
+      );
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg?.forText).toBe(text);
+      const highlighted = arg!.ranges.map((r) => ({
+        text: text.slice(r.start, r.end),
+        type: r.type,
+      }));
+      expect(highlighted).toEqual([
+        { text: '#urgent', type: 'tag' },
+        { text: '@friday', type: 'due' },
+      ]);
+    });
+
+    it('should include recurrence phrases in the due range', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Water plants @every friday';
+      await service.parseAndUpdateText(text, cfg, [], [], defaultProject);
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg?.ranges.length).toBe(1);
+      expect(text.slice(arg!.ranges[0].start, arg!.ranges[0].end)).toBe('@every friday');
+      expect(arg!.ranges[0].type).toBe('due');
+    });
+
+    it('should publish null when nothing is parsed', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText('Plain task', cfg, [], [], defaultProject);
+      expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
+    });
+
+    it('should publish null when the input is emptied', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText('', cfg, [], [], defaultProject);
+      expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
     });
   });
 

@@ -12,11 +12,30 @@ import { RepeatQuickSetting } from '../task-repeat-cfg/task-repeat-cfg.model';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
+  matchedText?: string;
 };
 type TagChanges = {
   taskChanges?: Partial<TaskCopy>;
   newTagTitlesToCreate?: string[];
+  matchedTexts?: string[];
 };
+
+export type ShortSyntaxTokenType =
+  | 'due'
+  | 'deadline'
+  | 'estimate'
+  | 'tag'
+  | 'project'
+  | 'url';
+
+// The exact substring a parse stage consumed from the (progressively stripped)
+// title, e.g. '@every friday', '#home', '+work', '30m/1h'. Used to highlight
+// detected syntax in the input; positions are resolved against the raw input
+// separately since each stage sees an already-stripped title.
+export interface ShortSyntaxToken {
+  type: ShortSyntaxTokenType;
+  text: string;
+}
 
 const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
@@ -270,6 +289,7 @@ export const shortSyntax = async (
       projectId: string | undefined;
       attachments: TaskAttachment[];
       repeatQuickSetting: RepeatQuickSetting | null;
+      parsedTokens: ShortSyntaxToken[];
     }
   | undefined
 > => {
@@ -286,20 +306,35 @@ export const shortSyntax = async (
   let changesForTag: TagChanges = {};
   let attachments: TaskAttachment[] = [];
   let repeatQuickSetting: RepeatQuickSetting | null = null;
+  const parsedTokens: ShortSyntaxToken[] = [];
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
-    const { repeatQuickSetting: parsedRepeatQuickSetting, ...dueChanges } =
-      await parseScheduledDate(
-        { ...task, title: taskChanges.title || task.title },
-        now,
-        isParseRepeat,
-      );
-    repeatQuickSetting = parsedRepeatQuickSetting || null;
-    const deadlineChanges = await parseDeadlineDate(
-      { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
+    const timeMatch = SHORT_SYNTAX_TIME_REG_EX.exec(task.title);
+    if (timeMatch) {
+      parsedTokens.push({ type: 'estimate', text: timeMatch[0].trim() });
+    }
+    const {
+      repeatQuickSetting: parsedRepeatQuickSetting,
+      matchedSyntaxText: dueMatchedText,
+      ...dueChanges
+    } = await parseScheduledDate(
+      { ...task, title: taskChanges.title || task.title },
       now,
+      isParseRepeat,
     );
+    repeatQuickSetting = parsedRepeatQuickSetting || null;
+    if (dueMatchedText) {
+      parsedTokens.push({ type: 'due', text: dueMatchedText });
+    }
+    const { matchedSyntaxText: deadlineMatchedText, ...deadlineChanges } =
+      await parseDeadlineDate(
+        { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
+        now,
+      );
+    if (deadlineMatchedText) {
+      parsedTokens.push({ type: 'deadline', text: deadlineMatchedText });
+    }
     taskChanges = { ...taskChanges, ...dueChanges, ...deadlineChanges };
   }
 
@@ -313,6 +348,9 @@ export const shortSyntax = async (
         ...taskChanges,
         title: changesForProject.title,
       };
+      if (changesForProject.matchedText) {
+        parsedTokens.push({ type: 'project', text: changesForProject.matchedText });
+      }
     }
   }
 
@@ -326,6 +364,9 @@ export const shortSyntax = async (
       ...taskChanges,
       ...(changesForTag.taskChanges || {}),
     };
+    changesForTag.matchedTexts?.forEach((text) => {
+      parsedTokens.push({ type: 'tag', text });
+    });
   }
 
   const urlChanges = parseUrlAttachments(
@@ -343,6 +384,9 @@ export const shortSyntax = async (
       ...taskChanges,
       title: urlChanges.title,
     };
+    urlChanges.matchedTexts.forEach((text) => {
+      parsedTokens.push({ type: 'url', text });
+    });
   }
 
   // const changesForDue = parseDueChanges({...task, title: taskChanges.title || task.title});
@@ -364,6 +408,7 @@ export const shortSyntax = async (
     projectId: changesForProject.projectId,
     attachments,
     repeatQuickSetting,
+    parsedTokens,
     // remindAt: changesForDue.remindAt
   };
 };
@@ -414,6 +459,7 @@ export const parseProjectChanges = (
           .trim()
           .replace('  ', ' '),
         projectId: existingProject.id,
+        matchedText: `${CH_PRO}${projectTitle}`,
       };
     }
 
@@ -434,6 +480,7 @@ export const parseProjectChanges = (
           // get rid of excess whitespaces
           .replace('  ', ' '),
         projectId: existingProjectForFirstWordOnly.id,
+        matchedText: `${CH_PRO}${projectTitleFirstWordOnly}`,
       };
     }
   }
@@ -449,6 +496,7 @@ const parseTagChanges = (
   const taskChanges: Partial<TaskCopy> = {};
 
   const newTagTitlesToCreate: string[] = [];
+  const matchedTexts: string[] = [];
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
     const initialTitle = task.title as string;
@@ -520,6 +568,7 @@ const parseTagChanges = (
         taskChanges.title = initialTitle;
         regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
           taskChanges.title = taskChanges.title?.replace(`#${tagTitle}`, '');
+          matchedTexts.push(`#${tagTitle}`);
         });
         taskChanges.title = taskChanges.title.trim();
       }
@@ -537,6 +586,7 @@ const parseTagChanges = (
   return {
     taskChanges,
     newTagTitlesToCreate,
+    matchedTexts,
   };
 };
 
@@ -550,6 +600,7 @@ const parseShortSyntaxDate = async (
   Partial<TaskCopy> & {
     hasDeadlineTime?: boolean;
     repeatQuickSetting?: RepeatQuickSetting;
+    matchedSyntaxText?: string;
   }
 > => {
   if (!task.title) {
@@ -603,6 +654,7 @@ const parseShortSyntaxDate = async (
           deadlineWithTime: due,
           deadlineDay: null,
           title,
+          matchedSyntaxText: textToReplace,
           ...(hasPlannedTime ? { hasDeadlineTime: true } : { hasDeadlineTime: false }),
         };
       } else {
@@ -610,6 +662,7 @@ const parseShortSyntaxDate = async (
           dueWithTime: due,
           dueDay: null,
           title,
+          matchedSyntaxText: textToReplace,
           ...(hasPlannedTime ? {} : { hasPlannedTime: false }),
         };
       }
@@ -644,12 +697,14 @@ const parseShortSyntaxDate = async (
             deadlineWithTime: due.getTime(),
             deadlineDay: null,
             title,
+            matchedSyntaxText: textToReplace,
           };
         } else {
           return {
             dueWithTime: due.getTime(),
             dueDay: null,
             title,
+            matchedSyntaxText: textToReplace,
           };
         }
       }
@@ -668,7 +723,12 @@ const applyRepeatSyntax = async (
   now: Date,
   dueMatch: string,
   repeatResult: RepeatSyntaxResult,
-): Promise<Partial<TaskCopy> & { repeatQuickSetting?: RepeatQuickSetting }> => {
+): Promise<
+  Partial<TaskCopy> & {
+    repeatQuickSetting?: RepeatQuickSetting;
+    matchedSyntaxText?: string;
+  }
+> => {
   const { quickSetting, chronoText, consumedLength, weekday, dayOfMonth } = repeatResult;
   const fullTitle = task.title as string;
   const dateParser = await loadCustomDateParser();
@@ -742,6 +802,7 @@ const applyRepeatSyntax = async (
       dueDay: null,
       title,
       repeatQuickSetting: quickSetting,
+      matchedSyntaxText: textToReplace,
       ...(hasTime ? {} : { hasPlannedTime: false }),
     };
   }
@@ -752,11 +813,12 @@ const applyRepeatSyntax = async (
       dueDay: null,
       title,
       repeatQuickSetting: quickSetting,
+      matchedSyntaxText: textToReplace,
       ...(hasTime ? {} : { hasPlannedTime: false }),
     };
   }
 
-  return { title, repeatQuickSetting: quickSetting };
+  return { title, repeatQuickSetting: quickSetting, matchedSyntaxText: textToReplace };
 };
 
 const parseScheduledDate = (
@@ -767,14 +829,16 @@ const parseScheduledDate = (
   Partial<TaskCopy> & {
     hasDeadlineTime?: boolean;
     repeatQuickSetting?: RepeatQuickSetting;
+    matchedSyntaxText?: string;
   }
 > => parseShortSyntaxDate(task, now, SHORT_SYNTAX_DUE_REG_EX, false, isParseRepeat);
 
 const parseDeadlineDate = (
   task: Partial<TaskCopy>,
   now: Date,
-): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> =>
-  parseShortSyntaxDate(task, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
+): Promise<
+  Partial<TaskCopy> & { hasDeadlineTime?: boolean; matchedSyntaxText?: string }
+> => parseShortSyntaxDate(task, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
 
 export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   if (!task.title) {
@@ -836,6 +900,7 @@ const parseUrlAttachments = (
   | {
       attachments: TaskAttachment[];
       title: string;
+      matchedTexts: string[];
     }
   | undefined => {
   if (!task.title || task.issueId) {
@@ -890,6 +955,8 @@ const parseUrlAttachments = (
   return {
     attachments: newAttachments,
     title: cleanedTitle,
+    // Only URLs actually removed from the title are reported for highlighting
+    matchedTexts: titleChanged ? plainUrlMatches.map((u) => u.trim()) : [],
   };
 };
 

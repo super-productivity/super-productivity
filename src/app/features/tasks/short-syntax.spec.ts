@@ -158,6 +158,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -181,6 +182,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -204,6 +206,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -223,6 +226,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -255,6 +259,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -483,6 +488,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -503,6 +509,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -533,6 +540,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -553,6 +561,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -573,6 +582,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -613,6 +623,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -634,6 +645,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -666,6 +678,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['idontexist'],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -698,6 +711,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -730,6 +744,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['asd'],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -753,6 +768,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['someNewTag3'],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -788,6 +804,7 @@ describe('shortSyntax', () => {
         attachments: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         taskChanges: { tagIds: ['blu_id'], title: 'Fun title' },
       });
     });
@@ -819,6 +836,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -842,6 +860,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['testing'],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -866,6 +885,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -897,6 +917,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -921,6 +942,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -944,6 +966,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -963,6 +986,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1001,6 +1025,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1037,6 +1062,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1060,6 +1086,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1083,6 +1110,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1101,6 +1129,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1119,6 +1148,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1137,6 +1167,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1155,6 +1186,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1191,6 +1223,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1222,6 +1255,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'print',
         attachments: [],
         taskChanges: {
@@ -1248,6 +1282,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1277,6 +1312,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['tag'],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1517,6 +1553,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1533,6 +1570,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
+        parsedTokens: jasmine.anything() as any,
         projectId: undefined,
         attachments: [],
         taskChanges: {

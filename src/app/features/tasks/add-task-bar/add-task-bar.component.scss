@@ -87,17 +87,54 @@
     padding: 10px var(--s) 10px var(--s2);
   }
 
+  // Typography shared by the textarea and its highlight overlay — the overlay
+  // mirrors the text to position highlight backgrounds under the real text, so
+  // any metric drift between the two misplaces the highlights.
+  %main-input-typography {
+    font-size: 16px;
+    line-height: 1.4;
+    font-family: var(--font-primary-stack);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  // Positioning context for the textarea + its highlight overlay; sized purely
+  // by the textarea (its only in-flow child).
+  .main-input-stack {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .main-input-highlight {
+    @extend %main-input-typography;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    // Only the highlight backgrounds may show; the visible glyphs are the
+    // textarea's own (rendered on top of this layer)
+    color: transparent;
+
+    .syntax-highlight {
+      border-radius: var(--radius-xs);
+      background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+    }
+  }
+
   .main-input {
+    @extend %main-input-typography;
     display: block;
     width: 100%;
-    font-size: 16px;
     box-sizing: border-box;
     border-style: solid;
     border-width: 0;
     outline: 0;
     // No padding — see .main-input-wrap for why the gutters must live there.
     padding: 0;
-    line-height: 1.4;
     resize: none;
     // cdkTextareaAutosize owns this field's height (it measures the content and
     // pins an exact px height), so the textarea must never paint its own
@@ -109,7 +146,7 @@
     overflow: hidden;
     background: transparent;
     color: inherit;
-    font-family: var(--font-primary-stack);
+    position: relative;
 
     &::placeholder {
       opacity: 0.6;

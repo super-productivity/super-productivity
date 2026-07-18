@@ -6,6 +6,7 @@ import { SS } from '../../../core/persistence/storage-keys.const';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { ShortSyntaxRange } from '../short-syntax-ranges';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 
 @Injectable()
@@ -27,6 +28,21 @@ export class AddTaskBarStateService {
   // Start expanded when reopening with a persisted draft note, so it is visible
   // rather than hidden behind the collapsed toggle.
   readonly isNoteExpanded = signal(!!this.noteTxt());
+
+  // Positions of detected short syntax in the current input, for the inline
+  // highlight overlay. `forText` pins the ranges to the exact input string they
+  // were computed for — the parse is async, so the overlay must not apply
+  // stale ranges to newer text.
+  readonly syntaxHighlight = signal<{
+    forText: string;
+    ranges: ShortSyntaxRange[];
+  } | null>(null);
+
+  updateSyntaxHighlight(
+    syntaxHighlight: { forText: string; ranges: ShortSyntaxRange[] } | null,
+  ): void {
+    this.syntaxHighlight.set(syntaxHighlight);
+  }
 
   constructor() {
     effect(() => {
@@ -203,6 +219,7 @@ export class AddTaskBarStateService {
       deadlineRemindOption: null,
     }));
     this.inputTxt.set('');
+    this.syntaxHighlight.set(null);
     // Clear the note text but keep the panel expanded so consecutive
     // note-tasks stay convenient (mirrors how project/date are preserved).
     this.noteTxt.set('');

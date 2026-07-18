@@ -61,6 +61,7 @@ import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
+import { ShortSyntaxSegment, splitTextByRanges } from '../short-syntax-ranges';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -268,8 +269,34 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   // View children
   inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('inputEl');
   noteEl = viewChild<ElementRef<HTMLTextAreaElement>>('noteEl');
+  highlightEl = viewChild<ElementRef<HTMLElement>>('highlightEl');
   taskAutoCompleteEl = viewChild<MatAutocomplete>('taskAutoCompleteEl');
   actionsComponent = viewChild(AddTaskBarActionsComponent);
+
+  // Segments of the raw input for the highlight overlay behind the textarea.
+  // Ranges are pinned to the text they were parsed from (the parse is async);
+  // until the current text's parse lands, the whole input renders as plain.
+  highlightSegments = computed<ShortSyntaxSegment[]>(() => {
+    const txt = this.stateService.inputTxt();
+    if (!txt || this.isSearchMode()) {
+      return [];
+    }
+    const highlight = this.stateService.syntaxHighlight();
+    if (!highlight || highlight.forText !== txt || highlight.ranges.length === 0) {
+      return [{ text: txt, type: null }];
+    }
+    return splitTextByRanges(txt, highlight.ranges);
+  });
+
+  // The overlay must track the textarea's scroll position (cdkTextareaAutosize
+  // caps growth at 4 rows, after which the field scrolls)
+  syncHighlightScroll(): void {
+    const inputElement = this.inputEl()?.nativeElement;
+    const overlay = this.highlightEl()?.nativeElement;
+    if (inputElement && overlay) {
+      overlay.scrollTop = inputElement.scrollTop;
+    }
+  }
 
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
