@@ -33,11 +33,11 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
    * Setup:
    * - Client A creates Task1, Task2, Task3 all scheduled for today
    * - Both sync
-   * - Verify: Both clients see [Task1, Task2, Task3] order
+   * - Verify: Both clients see [Task3, Task2, Task1] order
    *
    * Test:
-   * 1. Client A moves Task3 to first position
-   * 2. Client B moves Task1 to last position (before sync)
+   * 1. Client A moves Task1 from last to first
+   * 2. Client B moves Task3 from first to last (before sync)
    * 3. Both sync
    * 4. Verify: Both clients converge to same order (LWW)
    * 5. Verify: All 3 tasks still visible, none lost
@@ -111,29 +111,43 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Reorder] Client B downloaded 3 tasks');
 
+    const initialOrder = [task3Name, task2Name, task1Name];
+    await expect(pageA.locator('task .task-title')).toHaveText(initialOrder);
+    await expect(pageB.locator('task .task-title')).toHaveText(initialOrder);
+
     // --- Concurrent reordering ---
 
-    // Client A moves Task3 to first position using keyboard (Alt+Up repeatedly)
-    const task3OnA = taskPageA.getTaskByText(task3Name).first();
-    await task3OnA.click();
+    // Client A moves Task1 from last to first using keyboard.
+    const task1OnA = taskPageA.getTaskByText(task1Name).first();
+    await task1OnA.focus();
     await pageA.waitForTimeout(500);
     // Move up twice (from position 3 to position 1)
-    await pageA.keyboard.press('Alt+ArrowUp');
+    await task1OnA.press('Control+Shift+ArrowUp');
     await pageA.waitForTimeout(300);
-    await pageA.keyboard.press('Alt+ArrowUp');
+    await task1OnA.press('Control+Shift+ArrowUp');
     await pageA.waitForTimeout(500);
-    console.log('[TODAY Reorder] Client A moved Task3 up');
+    await expect(pageA.locator('task .task-title')).toHaveText([
+      task1Name,
+      task3Name,
+      task2Name,
+    ]);
+    console.log('[TODAY Reorder] Client A moved Task1 up');
 
-    // Client B moves Task1 down using keyboard (Alt+Down repeatedly)
-    const task1OnB = taskPageB.getTaskByText(task1Name).first();
-    await task1OnB.click();
+    // Client B moves Task3 from first to last using keyboard.
+    const task3OnB = taskPageB.getTaskByText(task3Name).first();
+    await task3OnB.focus();
     await pageB.waitForTimeout(500);
     // Move down twice (from position 1 to position 3)
-    await pageB.keyboard.press('Alt+ArrowDown');
+    await task3OnB.press('Control+Shift+ArrowDown');
     await pageB.waitForTimeout(300);
-    await pageB.keyboard.press('Alt+ArrowDown');
+    await task3OnB.press('Control+Shift+ArrowDown');
     await pageB.waitForTimeout(500);
-    console.log('[TODAY Reorder] Client B moved Task1 down');
+    await expect(pageB.locator('task .task-title')).toHaveText([
+      task2Name,
+      task1Name,
+      task3Name,
+    ]);
+    console.log('[TODAY Reorder] Client B moved Task3 down');
 
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
@@ -251,12 +265,17 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // --- Concurrent operations ---
 
-    // Client A reorders: move Task2 up
-    const task2OnA = taskPageA.getTaskByText(task2Name).first();
-    await task2OnA.click();
+    const initialOrder = [task2Name, task1Name];
+    await expect(pageA.locator('task .task-title')).toHaveText(initialOrder);
+    await expect(pageB.locator('task .task-title')).toHaveText(initialOrder);
+
+    // Client A reorders: move Task1 from second to first.
+    const task1OnA = taskPageA.getTaskByText(task1Name).first();
+    await task1OnA.focus();
     await pageA.waitForTimeout(500);
-    await pageA.keyboard.press('Alt+ArrowUp');
+    await task1OnA.press('Control+Shift+ArrowUp');
     await pageA.waitForTimeout(500);
+    await expect(pageA.locator('task .task-title')).toHaveText([task1Name, task2Name]);
     console.log('[TODAY Create] Client A reordered tasks');
 
     // Client B creates a new task in TODAY
@@ -381,6 +400,10 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Remove] Client B downloaded 3 tasks');
 
+    const initialOrder = [task3Name, task2Name, task1Name];
+    await expect(pageA.locator('task .task-title')).toHaveText(initialOrder);
+    await expect(pageB.locator('task .task-title')).toHaveText(initialOrder);
+
     // --- Concurrent operations ---
 
     // Client A removes Task2 from today by clicking the "tomorrow" quick-access button
@@ -400,10 +423,15 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client B tries to reorder Task2 (move up)
     const task2OnB = taskPageB.getTaskByText(task2Name).first();
-    await task2OnB.click();
+    await task2OnB.focus();
     await pageB.waitForTimeout(500);
-    await pageB.keyboard.press('Alt+ArrowUp');
+    await task2OnB.press('Control+Shift+ArrowUp');
     await pageB.waitForTimeout(500);
+    await expect(pageB.locator('task .task-title')).toHaveText([
+      task2Name,
+      task3Name,
+      task1Name,
+    ]);
     console.log('[TODAY Remove] Client B reordered Task2');
 
     // --- Both clients sync ---

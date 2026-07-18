@@ -455,6 +455,10 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
       console.log(`[Concurrent] Final tasks on A: ${JSON.stringify(titlesA)}`);
       console.log(`[Concurrent] Final tasks on B: ${JSON.stringify(titlesB)}`);
 
+      const expectedTitles = ['TaskA', 'TaskA2', 'TaskB'];
+      expect([...titlesA].sort()).toEqual([...expectedTitles].sort());
+      expect([...titlesB].sort()).toEqual([...expectedTitles].sort());
+
       // Verify Client A has all tasks
       await expect(pageA.locator('task', { hasText: 'TaskA2' })).toBeVisible({
         timeout: 5000,

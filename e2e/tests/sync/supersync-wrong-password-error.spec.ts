@@ -41,8 +41,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
    *
    * Verify:
    * - Sync ERROR icon appears
-   * - Error snackbar appears
-   * - DialogHandleDecryptErrorComponent opens (password correction dialog)
+   * - DialogHandleDecryptErrorComponent opens (the snackbar is transient and optional)
    * - User can enter correct password
    * - After entering correct password, sync succeeds
    */

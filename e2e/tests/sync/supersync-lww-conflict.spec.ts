@@ -25,7 +25,6 @@ import {
  * - Conflicts are automatically resolved based on timestamps
  * - When remote is newer, remote state is applied
  * - When local is newer, local state is synced to server
- * - Users see a non-blocking notification about conflict resolution
  * - All clients converge to the same state
  */
 
@@ -92,14 +91,20 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientA.sync.syncAndWait();
 
       // 8. The distinct later remote value must win on both clients.
-      await waitForTask(clientA.page, laterTitle);
-      await waitForTask(clientB.page, laterTitle);
-      await expect(
-        clientA.page.locator(`task:has-text("${earlierTitle}")`),
-      ).not.toBeVisible();
-      await expect(
-        clientB.page.locator(`task:has-text("${earlierTitle}")`),
-      ).not.toBeVisible();
+      const laterTaskOnA = clientA.page.locator(
+        `task:not(.ng-animating):has-text("${laterTitle}")`,
+      );
+      const laterTaskOnB = clientB.page.locator(
+        `task:not(.ng-animating):has-text("${laterTitle}")`,
+      );
+      await expect(laterTaskOnA).toHaveCount(1);
+      await expect(laterTaskOnB).toHaveCount(1);
+      await expect(clientA.page.locator(`task:has-text("${earlierTitle}")`)).toHaveCount(
+        0,
+      );
+      await expect(clientB.page.locator(`task:has-text("${earlierTitle}")`)).toHaveCount(
+        0,
+      );
 
       // Final convergence check
       await clientB.sync.syncAndWait();
@@ -114,9 +119,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
   });
 
   /**
-   * Scenario: Equivalent concurrent updates converge without blocking
+   * Scenario: Equivalent concurrent updates converge
    *
-   * Tests that equivalent concurrent updates auto-resolve without a dialog.
+   * Tests that equivalent concurrent updates converge to the same state.
    *
    * Actions:
    * 1. Client A creates Task, syncs
@@ -126,7 +131,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * 5. Client B syncs (triggers LWW resolution)
    * 6. Verify both clients converge
    */
-  test('LWW: Equivalent concurrent updates converge without blocking', async ({
+  test('LWW: Equivalent concurrent updates converge', async ({
     browser,
     baseURL,
     testRunId,
@@ -186,11 +191,19 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
 
-      // Both should have same state
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
+      // Both should have exactly one matching task in the same state.
+      const finalTaskOnA = clientA.page.locator(
+        `task:not(.ng-animating):has-text("${taskName}")`,
+      );
+      const finalTaskOnB = clientB.page.locator(
+        `task:not(.ng-animating):has-text("${taskName}")`,
+      );
+      await expect(finalTaskOnA).toHaveCount(1);
+      await expect(finalTaskOnB).toHaveCount(1);
+      await expect(finalTaskOnA).toHaveClass(/isDone/);
+      await expect(finalTaskOnB).toHaveClass(/isDone/);
 
-      console.log('[LWW-Notify] ✓ Conflict auto-resolved without blocking dialog');
+      console.log('[LWW-Equivalent] ✓ Equivalent concurrent updates converged');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -627,11 +640,10 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
   });
 
   /**
-   * Scenario: Multiple Operations on Same Entity Use Max Timestamp for LWW
+   * Scenario: Later Multi-Operation Batch Converges
    *
-   * Tests that when both clients have MULTIPLE concurrent operations on the
-   * same entity, LWW correctly uses the MAX timestamp across ALL operations,
-   * not just the last one.
+   * Tests that when both clients have multiple concurrent operations on the
+   * same entity, the later batch wins and both clients converge.
    *
    * Actions:
    * 1. Client A creates Task, syncs
@@ -643,7 +655,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * 7. Final sync round
    * 8. Verify both clients converge to same state
    */
-  test('LWW: Multiple operations on same entity use max timestamp', async ({
+  test('LWW: Later multi-operation batch converges', async ({
     browser,
     baseURL,
     testRunId,
@@ -748,19 +760,18 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         `task:not(.ng-animating):has-text("${titleB}")`,
       );
 
-      // Both should have B's title (B's max timestamp was later)
-      await expect(taskWithBTitleOnA.first()).toBeVisible({ timeout: 10000 });
-      await expect(taskWithBTitleOnB.first()).toBeVisible({ timeout: 10000 });
+      // Both should have exactly one task with B's title (B was later).
+      await expect(taskWithBTitleOnA).toHaveCount(1);
+      await expect(taskWithBTitleOnB).toHaveCount(1);
+      await expect(clientA.page.locator(`task:has-text("${titleA}")`)).toHaveCount(0);
+      await expect(clientB.page.locator(`task:has-text("${titleA}")`)).toHaveCount(0);
 
       // Both should show task as done
-      await expect(taskWithBTitleOnA.first()).toHaveClass(/isDone/);
-      await expect(taskWithBTitleOnB.first()).toHaveClass(/isDone/);
-
-      // Verify both clients have the same visible task with B's title
-      // (Skip raw count comparison as it may include hidden/animating elements)
+      await expect(taskWithBTitleOnA).toHaveClass(/isDone/);
+      await expect(taskWithBTitleOnB).toHaveClass(/isDone/);
 
       console.log(
-        '[MultiOp] ✓ Multiple operations resolved correctly - B won with later max timestamp',
+        "[MultiOp] ✓ Multiple operations resolved correctly - B's later batch converged",
       );
     } finally {
       if (clientA) await closeClient(clientA);
