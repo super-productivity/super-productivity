@@ -1,12 +1,36 @@
 {
-  "__doNotRegenerate": "See frozen-state.spec.ts \u2014 regenerating this file silently disables the guard.",
+  "__capturedAtAppVersion": "18.15.1",
+  "__doNotEdit": "Frozen prior-release state. NEVER add fields here to fix a failing test \u2014 see frozen-state.spec.ts.",
   "__frozenAtSchemaVersion": 4,
   "state": {
     "archiveOld": {
       "lastTimeTrackingFlush": 0,
       "task": {
-        "entities": {},
-        "ids": []
+        "entities": {
+          "arch-2": {
+            "attachments": [
+              {
+                "id": "att-arch",
+                "path": "https://example.com",
+                "title": "Link",
+                "type": "LINK"
+              }
+            ],
+            "created": 1784378893801,
+            "id": "arch-2",
+            "isDone": true,
+            "projectId": "proj-1",
+            "subTaskIds": [],
+            "tagIds": [],
+            "timeEstimate": 0,
+            "timeSpent": 0,
+            "timeSpentOnDay": {},
+            "title": "Task arch-1"
+          }
+        },
+        "ids": [
+          "arch-2"
+        ]
       },
       "timeTracking": {
         "project": {},
@@ -16,8 +40,31 @@
     "archiveYoung": {
       "lastTimeTrackingFlush": 0,
       "task": {
-        "entities": {},
-        "ids": []
+        "entities": {
+          "arch-1": {
+            "attachments": [
+              {
+                "id": "att-arch",
+                "path": "https://example.com",
+                "title": "Link",
+                "type": "LINK"
+              }
+            ],
+            "created": 1784378893801,
+            "id": "arch-1",
+            "isDone": true,
+            "projectId": "proj-1",
+            "subTaskIds": [],
+            "tagIds": [],
+            "timeEstimate": 0,
+            "timeSpent": 0,
+            "timeSpentOnDay": {},
+            "title": "Task arch-1"
+          }
+        },
+        "ids": [
+          "arch-1"
+        ]
       },
       "timeTracking": {
         "project": {},
@@ -78,7 +125,13 @@
       "flowtime": {
         "breakMode": "ratio",
         "breakPercentage": 20,
-        "breakRules": [],
+        "breakRules": [
+          {
+            "breakDuration": 300000,
+            "maxDuration": null,
+            "minDuration": 1500000
+          }
+        ],
         "isBreakEnabled": false
       },
       "focusMode": {
@@ -284,6 +337,13 @@
     },
     "issueProvider": {
       "entities": {
+        "ip-AZURE_DEVOPS": {
+          "id": "ip-AZURE_DEVOPS",
+          "isEnabled": false,
+          "issueProviderKey": "AZURE_DEVOPS",
+          "pluginConfig": {},
+          "pluginId": "sp-azure_devops"
+        },
         "ip-CALDAV": {
           "caldavUrl": null,
           "categoryFilter": null,
@@ -298,6 +358,27 @@
             "title": "pullOnly"
           },
           "username": null
+        },
+        "ip-CLICKUP": {
+          "id": "ip-CLICKUP",
+          "isEnabled": false,
+          "issueProviderKey": "CLICKUP",
+          "pluginConfig": {},
+          "pluginId": "sp-clickup"
+        },
+        "ip-GITEA": {
+          "id": "ip-GITEA",
+          "isEnabled": false,
+          "issueProviderKey": "GITEA",
+          "pluginConfig": {},
+          "pluginId": "sp-gitea"
+        },
+        "ip-GITHUB": {
+          "id": "ip-GITHUB",
+          "isEnabled": false,
+          "issueProviderKey": "GITHUB",
+          "pluginConfig": {},
+          "pluginId": "sp-github"
         },
         "ip-GITLAB": {
           "filter": null,
@@ -329,7 +410,31 @@
           "allowFetchFallback": false,
           "altPublicLinkHost": null,
           "autoAddBacklogJqlQuery": "assignee = currentUser() AND sprint in openSprints() AND resolution = Unresolved",
-          "availableTransitions": [],
+          "availableTransitions": [
+            {
+              "fields": {},
+              "hasScreen": false,
+              "id": "11",
+              "isConditional": false,
+              "isGlobal": true,
+              "isInitial": false,
+              "name": "Done",
+              "to": {
+                "description": "",
+                "iconUrl": "",
+                "id": "10001",
+                "name": "Done",
+                "self": "",
+                "statusCategory": {
+                  "colorName": "green",
+                  "id": 3,
+                  "key": "done",
+                  "name": "Done",
+                  "self": ""
+                }
+              }
+            }
+          ],
           "host": null,
           "id": "ip-JIRA",
           "isAddWorklogOnSubTaskDone": true,
@@ -353,6 +458,13 @@
           "userToAssignOnDone": null,
           "worklogDialogDefaultTime": "AllTime"
         },
+        "ip-LINEAR": {
+          "id": "ip-LINEAR",
+          "isEnabled": false,
+          "issueProviderKey": "LINEAR",
+          "pluginConfig": {},
+          "pluginId": "sp-linear"
+        },
         "ip-NEXTCLOUD_DECK": {
           "doneStackId": null,
           "filterByAssignee": true,
@@ -370,7 +482,12 @@
           "username": null
         },
         "ip-OPEN_PROJECT": {
-          "availableTransitions": [],
+          "availableTransitions": [
+            {
+              "id": "7",
+              "name": "In progress"
+            }
+          ],
           "filterUsername": null,
           "host": null,
           "id": "ip-OPEN_PROJECT",
@@ -401,6 +518,13 @@
           "spaceId": null,
           "token": null
         },
+        "ip-PLUGIN": {
+          "id": "ip-PLUGIN",
+          "isEnabled": false,
+          "issueProviderKey": "plugin:custom",
+          "pluginConfig": {},
+          "pluginId": "custom"
+        },
         "ip-REDMINE": {
           "api_key": null,
           "host": null,
@@ -414,6 +538,13 @@
           "issueProviderKey": "REDMINE",
           "projectId": null,
           "scope": "assigned-to-me"
+        },
+        "ip-TRELLO": {
+          "id": "ip-TRELLO",
+          "isEnabled": false,
+          "issueProviderKey": "TRELLO",
+          "pluginConfig": {},
+          "pluginId": "sp-trello"
         }
       },
       "ids": [
@@ -424,7 +555,14 @@
         "ip-OPEN_PROJECT",
         "ip-REDMINE",
         "ip-NEXTCLOUD_DECK",
-        "ip-PLAINSPACE"
+        "ip-PLAINSPACE",
+        "ip-GITHUB",
+        "ip-CLICKUP",
+        "ip-GITEA",
+        "ip-LINEAR",
+        "ip-TRELLO",
+        "ip-AZURE_DEVOPS",
+        "ip-PLUGIN"
       ]
     },
     "menuTree": {
@@ -454,7 +592,12 @@
         "2026-07-18": {
           "id": "2026-07-18",
           "notes": null,
-          "reflections": []
+          "reflections": [
+            {
+              "created": 1768651200000,
+              "text": "Reflection"
+            }
+          ]
         }
       },
       "ids": [
@@ -465,23 +608,39 @@
       "entities": {
         "note-1": {
           "content": "Note note-1",
-          "created": 1784377137290,
+          "created": 1784378893801,
           "id": "note-1",
           "isPinnedToToday": false,
-          "modified": 1784377137290,
+          "modified": 1784378893801,
           "projectId": "proj-1"
         }
       },
       "ids": [
         "note-1"
       ],
-      "todayOrder": []
+      "todayOrder": [
+        "note-1"
+      ]
     },
     "planner": {
-      "days": {}
+      "days": {
+        "2026-07-19": [
+          "task-3"
+        ]
+      }
     },
-    "pluginMetadata": [],
-    "pluginUserData": [],
+    "pluginMetadata": [
+      {
+        "id": "plugin-a",
+        "isEnabled": true
+      }
+    ],
+    "pluginUserData": [
+      {
+        "data": "{}",
+        "id": "plugin-a"
+      }
+    ],
     "project": {
       "entities": {
         "INBOX": {
@@ -582,7 +741,15 @@
         "proj-1"
       ]
     },
-    "reminders": [],
+    "reminders": [
+      {
+        "id": "reminder-1",
+        "relatedId": "task-3",
+        "remindAt": 1768651200000,
+        "title": "Reminder",
+        "type": "TASK"
+      }
+    ],
     "section": {
       "entities": {
         "section-1": {
@@ -690,7 +857,7 @@
             }
           },
           "color": null,
-          "created": 1784377136041,
+          "created": 1784378893030,
           "icon": null,
           "id": "TODAY",
           "taskIds": [],
@@ -728,7 +895,7 @@
             }
           },
           "color": null,
-          "created": 1784377136041,
+          "created": 1784378893030,
           "icon": null,
           "id": "tag-1",
           "taskIds": [
@@ -760,8 +927,15 @@
       "currentTaskId": null,
       "entities": {
         "task-1": {
-          "attachments": [],
-          "created": 1784377137290,
+          "attachments": [
+            {
+              "id": "att-1",
+              "path": "https://example.com",
+              "title": "Link",
+              "type": "LINK"
+            }
+          ],
+          "created": 1784378893801,
           "id": "task-1",
           "isDone": false,
           "projectId": "proj-1",
@@ -772,13 +946,15 @@
             "tag-1"
           ],
           "timeEstimate": 0,
-          "timeSpent": 0,
-          "timeSpentOnDay": {},
+          "timeSpent": 3600000,
+          "timeSpentOnDay": {
+            "2026-07-18": 3600000
+          },
           "title": "Task task-1"
         },
         "task-2": {
           "attachments": [],
-          "created": 1784377137290,
+          "created": 1784378893801,
           "id": "task-2",
           "isDone": false,
           "parentId": "task-1",
@@ -792,7 +968,7 @@
         },
         "task-3": {
           "attachments": [],
-          "created": 1784377137290,
+          "created": 1784378893801,
           "id": "task-3",
           "isDone": false,
           "projectId": "INBOX",
@@ -821,7 +997,7 @@
           "friday": true,
           "id": "repeat-1",
           "isPaused": false,
-          "lastTaskCreation": 1784377136069,
+          "lastTaskCreation": 1784378893057,
           "lastTaskCreationDay": "2026-07-18",
           "monday": true,
           "order": 0,
@@ -847,8 +1023,26 @@
       ]
     },
     "timeTracking": {
-      "project": {},
-      "tag": {}
+      "project": {
+        "proj-1": {
+          "2026-07-18": {
+            "b": 0,
+            "bt": 0,
+            "e": 2,
+            "s": 1
+          }
+        }
+      },
+      "tag": {
+        "tag-1": {
+          "2026-07-18": {
+            "b": 0,
+            "bt": 0,
+            "e": 2,
+            "s": 1
+          }
+        }
+      }
     }
   }
 }
