@@ -18,7 +18,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { DateService } from '../../core/date/date.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
-import { DEFAULT_TAG, TODAY_TAG } from '../tag/tag.const';
+import { DEFAULT_TAG, IMPORTANT_TAG, TODAY_TAG, URGENT_TAG } from '../tag/tag.const';
 import { WorkContext, WorkContextThemeCfg, WorkContextType } from './work-context.model';
 import {
   selectActiveContextId,
@@ -752,6 +752,112 @@ describe('WorkContextService - isTodayListSignal reactivity', () => {
   });
 });
 
+// The #9139 fix lives in `resolveContextTheme`, but `currentTheme$` is the only
+// thing in production that CALLS it — every crashing consumer (resolveBackground,
+// _setColorTheme) reads this stream, not the function. Without this block the
+// whole fix could be reverted at the `map()` and the suite stayed green: the
+// unit tests below pass a themeless context in by hand, so they never observe
+// the wiring. Tests the seam, deliberately, not the logic.
+describe('WorkContextService - currentTheme$ wiring (#9139)', () => {
+  let store: MockStore;
+  let service: WorkContextService;
+
+  // TODAY, with no `theme` at all — the exact entity and shape from the report,
+  // and the active context at startup.
+  const themelessToday = (): WorkContext => {
+    const ctx = {
+      id: TODAY_TAG.id,
+      type: WorkContextType.TAG,
+      title: 'Today',
+      icon: null,
+      routerLink: `tag/${TODAY_TAG.id}`,
+      advancedCfg: {},
+      taskIds: [],
+      backlogTaskIds: [],
+      noteIds: [],
+    } as unknown as WorkContext;
+    // Assert the premise rather than trusting it: if `theme` were somehow
+    // present the test would pass for the wrong reason.
+    expect('theme' in ctx).toBe(false);
+    return ctx;
+  };
+
+  beforeEach(() => {
+    const tagServiceMock = jasmine.createSpyObj('TagService', ['getTagById$']);
+    tagServiceMock.getTagById$.and.returnValue(of(TODAY_TAG));
+
+    const globalTrackingIntervalServiceMock = jasmine.createSpyObj(
+      'GlobalTrackingIntervalService',
+      [],
+      { todayDateStr$: of('2026-04-06') },
+    );
+
+    const dateServiceMock = jasmine.createSpyObj('DateService', ['todayStr']);
+    dateServiceMock.todayStr.and.returnValue('2026-04-06');
+
+    const timeTrackingServiceMock = jasmine.createSpyObj('TimeTrackingService', [
+      'getWorkStartEndForWorkContext$',
+    ]);
+    timeTrackingServiceMock.getWorkStartEndForWorkContext$.and.returnValue(of({}));
+
+    const taskArchiveServiceMock = jasmine.createSpyObj('TaskArchiveService', [
+      'loadYoung',
+    ]);
+    taskArchiveServiceMock.loadYoung.and.returnValue(
+      Promise.resolve({ ids: [], entities: {} }),
+    );
+
+    TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
+      providers: [
+        provideMockStore({
+          initialState: {
+            workContext: { activeId: TODAY_TAG.id, activeType: 'TAG' },
+            tag: { entities: {}, ids: [] },
+            project: { entities: {}, ids: [] },
+            task: { entities: {}, ids: [] },
+          },
+        }),
+        // activeWorkContext$ is gated behind _afterDataLoadedOnce$, which only
+        // fires after the allDataWasLoaded action.
+        provideMockActions(() => of(allDataWasLoaded())),
+        { provide: Router, useValue: { events: of(), url: '/' } },
+        { provide: TagService, useValue: tagServiceMock },
+        {
+          provide: GlobalTrackingIntervalService,
+          useValue: globalTrackingIntervalServiceMock,
+        },
+        { provide: DateService, useValue: dateServiceMock },
+        { provide: TimeTrackingService, useValue: timeTrackingServiceMock },
+        { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
+        WorkContextService,
+      ],
+    });
+
+    store = TestBed.inject(MockStore);
+    store.overrideSelector(selectActiveWorkContext, themelessToday());
+    store.refreshState();
+
+    service = TestBed.inject(WorkContextService);
+  });
+
+  it('emits a real theme for a themeless active context instead of undefined', () => {
+    const emitted: (WorkContextThemeCfg | undefined)[] = [];
+    const sub = service.currentTheme$.subscribe((v) => emitted.push(v));
+
+    expect(emitted.length).toBe(1);
+    // The crash itself: consumers deref `.backgroundImageDark` / `.isAutoContrast`
+    // on whatever this emits, so `undefined` here IS the bug.
+    expect(emitted[0]).toBeDefined();
+    // TODAY's OWN theme, not the generic tag default — proves the stream routes
+    // through the id-aware fallback and not merely some non-null object.
+    expect(emitted[0]).toEqual(TODAY_TAG.theme);
+    expect(emitted[0]!.primary).not.toBe(DEFAULT_TAG.theme.primary);
+
+    sub.unsubscribe();
+  });
+});
+
 describe('resolveContextTheme()', () => {
   // NOTE: a plain USER tag id by default. System entities (TODAY, INBOX, …)
   // resolve to their own themes, so a system id here would silently stop these
@@ -806,9 +912,18 @@ describe('resolveContextTheme()', () => {
     // repairs) and then flipped once a sync repair landed. Both sides now
     // resolve through getDefaultWorkContextTheme.
     //
-    // Driven from SYSTEM_ENTITY_THEMES itself, NOT a hand-written copy: a
-    // duplicated table only catches rows REMOVED from the Map, never rows
-    // ADDED to it, so an inert row could be introduced and sit unnoticed.
+    // The loop below is driven from SYSTEM_ENTITY_THEMES itself so that a row
+    // ADDED to the Map is automatically covered. The cost is that it is blind in
+    // the other direction: deleting a row deletes its tests too, so they VANISH
+    // (silently, 32 -> 28) rather than fail. This assertion is the other half —
+    // it pins the roster so a removal is loud. Both halves are needed; neither
+    // catches what the other does.
+    it('covers exactly the known system entities', () => {
+      expect([...SYSTEM_ENTITY_THEMES.keys()].sort()).toEqual(
+        [TODAY_TAG.id, URGENT_TAG.id, IMPORTANT_TAG.id, INBOX_PROJECT.id].sort(),
+      );
+    });
+
     [...SYSTEM_ENTITY_THEMES.entries()].forEach(([entityId, theme]) => {
       const isTag = entityId !== INBOX_PROJECT.id;
 
