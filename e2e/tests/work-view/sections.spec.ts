@@ -67,7 +67,9 @@ test.describe('Sections', () => {
     page: import('@playwright/test').Page,
     title: string,
   ): ReturnType<import('@playwright/test').Page['locator']> =>
-    page.locator('.section-container').filter({ hasText: title });
+    page.locator('.section-container').filter({
+      has: page.locator('.collapsible-title').filter({ hasText: title }),
+    });
 
   /**
    * Read a locator's bounding box defensively. `boundingBox()` takes a
