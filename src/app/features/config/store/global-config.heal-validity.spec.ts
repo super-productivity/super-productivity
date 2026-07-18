@@ -14,10 +14,6 @@ import { appDataValidators } from '../../../op-log/validation/validation-fn';
  * these assertions tie that heal to the REAL GlobalConfigState validator so a
  * future required-field-without-default (or a partial old section) is caught here
  * at CI instead of at users' next launch.
- *
- * NOTE: this spec exercises the real typia validators, which require the
- * compile-time typia transform — run it via the full `npm test`, not the
- * single-file `test:file` runner (which does not apply the transform).
  */
 describe('GlobalConfig heal validity (bug-class guard)', () => {
   it('DEFAULT_GLOBAL_CONFIG satisfies the GlobalConfigState validator', () => {
@@ -58,14 +54,21 @@ describe('GlobalConfig heal validity (bug-class guard)', () => {
     // A snapshot from before a whole config section existed. The top-level
     // DEFAULT_GLOBAL_CONFIG spread must supply the absent section so the result
     // validates.
-    const withoutIdle: Record<string, unknown> = { ...initialGlobalConfigState };
-    delete withoutIdle['idle'];
+    //
+    // `flowtime` deliberately, NOT `idle`: the reducer deep-merges idle (and
+    // appFeatures/tasks/shortSyntax/localBackup/focusMode/keyboard/misc/sync)
+    // from defaults section-by-section, so deleting one of those would heal via
+    // that per-section merge and re-test what the case above already covers.
+    // flowtime has no per-section merge, so only the top-level spread can heal
+    // it — deleting that spread fails this test and nothing else.
+    const withoutFlowtime: Record<string, unknown> = { ...initialGlobalConfigState };
+    delete withoutFlowtime['flowtime'];
 
     const result = globalConfigReducer(
       initialGlobalConfigState,
       loadAllData({
         appDataComplete: {
-          globalConfig: withoutIdle as unknown as typeof initialGlobalConfigState,
+          globalConfig: withoutFlowtime as unknown as typeof initialGlobalConfigState,
         } as AppDataComplete,
       }),
     );

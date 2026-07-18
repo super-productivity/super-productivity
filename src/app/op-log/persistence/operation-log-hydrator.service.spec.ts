@@ -208,7 +208,10 @@ describe('OperationLogHydratorService', () => {
     );
     mockSnapshotService.isValidSnapshot.and.returnValue(true);
     mockSnapshotService.migrateSnapshotWithBackup.and.callFake(async (s) => s);
-    mockSnapshotService.saveCurrentStateAsSnapshot.and.returnValue(Promise.resolve());
+    // Resolves `true` = "a snapshot was actually written". The convergence gate
+    // branches on this return value, so a mock resolving undefined would model a
+    // guard-skipped save and silently change which branch the tests exercise.
+    mockSnapshotService.saveCurrentStateAsSnapshot.and.resolveTo(true);
     mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([]);
     mockRecoveryService.cleanupCorruptOps.and.returnValue(Promise.resolve());
     mockRecoveryService.attemptRecovery.and.returnValue(Promise.resolve());
@@ -660,7 +663,7 @@ describe('OperationLogHydratorService', () => {
         });
         mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
           callOrder.push('saveSnapshot');
-          return Promise.resolve();
+          return Promise.resolve(true);
         });
 
         await service.hydrateStore();
@@ -1172,11 +1175,13 @@ describe('OperationLogHydratorService', () => {
           expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
         });
 
-        it('runs the convergence save AFTER retryFailedRemoteOps (drained pipeline)', async () => {
-          // Guards the ordering safety claim: the deferred-action pipeline that
-          // retryFailedRemoteOps drains must be flushed before the snapshot read,
-          // else the phantom-change guard (#8751) would skip the save. Moving the
-          // block before the retry flips this order and fails the test.
+        it('runs the convergence save AFTER retryFailedRemoteOps', async () => {
+          // Ordering matters for #7700: retryFailedRemoteOps merges the retried
+          // remote ops' vector clocks, and the deferred-action drain must follow
+          // that merge so deferred local ops get clocks dominating them. Moving
+          // the convergence block before the retry flips this and fails here.
+          // (The drain itself is asserted separately — retryFailedRemoteOps
+          // early-returns before its own drain when there are no failed ops.)
           const callOrder: string[] = [];
           const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
           const migratedSnapshot = createMockSnapshot({
@@ -1193,7 +1198,7 @@ describe('OperationLogHydratorService', () => {
           });
           mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
             callOrder.push('convergenceSave');
-            return Promise.resolve();
+            return Promise.resolve(true);
           });
 
           await service.hydrateStore();
@@ -1231,6 +1236,124 @@ describe('OperationLogHydratorService', () => {
           await service.hydrateStore();
 
           expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        });
+
+        it('does not double-save when a corrupt migrated snapshot falls through to full replay', async () => {
+          // Reachable path with NO other coverage: a migrated snapshot that fails
+          // isValidSnapshot() sets snapshot = null and drops into the full-replay
+          // branch while _migrationRanDuringHydration is already true. Guards the
+          // full-replay branch's persisted-flag assignment — dropping it there
+          // produces a second, unguarded startup write.
+          mockOpLogStore.loadStateCache.and.resolveTo(
+            createMockSnapshot({ schemaVersion: 0 }),
+          );
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(
+            createMockSnapshot({ schemaVersion: CURRENT_SCHEMA_VERSION }),
+          );
+          mockSnapshotService.isValidSnapshot.and.returnValue(false);
+          mockOpLogStore.getLastSeq.and.resolveTo(5);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+            createMockEntry(1, createMockOperation('op-1')),
+            createMockEntry(2, createMockOperation('op-2')),
+          ]);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
+        });
+
+        it('still converges when the Checkpoint-C save was internally SKIPPED', async () => {
+          // saveCurrentStateAsSnapshot() resolves normally when one of its own
+          // guards (#8751 phantom / #7892 empty) or a caught write failure skipped
+          // the write. Treating "resolved" as "persisted" would leave the on-disk
+          // cache at the old schema and re-migrate every boot — the exact bug this
+          // block exists to fix. Fails if the flag is set unconditionally instead
+          // of from the return value.
+          const oldSnapshot = createMockSnapshot({
+            schemaVersion: 0,
+            lastAppliedOpSeq: 5,
+          });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            lastAppliedOpSeq: 5,
+          });
+          // >10 tail ops → Checkpoint C runs, but reports it did NOT persist.
+          const tailOps = Array.from({ length: 11 }, (_, i) =>
+            createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+          );
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo(tailOps);
+          mockSnapshotService.saveCurrentStateAsSnapshot.and.resolveTo(false);
+
+          await service.hydrateStore();
+
+          // Checkpoint C + convergence retry = 2 attempts, not 1.
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(2);
+        });
+
+        it('drains deferred actions before the convergence save', async () => {
+          // The phantom-change guard (#8751) skips the save while deferred actions
+          // are buffered, and retryFailedRemoteOps() early-returns before its
+          // drain when there are no failed ops — the common boot. So the drain
+          // must be explicit here. Fails if it is removed.
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+          // No failed remote ops → retryFailedRemoteOps() returns before its
+          // own drain, so any drain observed here is the convergence block's.
+          mockOpLogStore.getFailedRemoteOps.and.resolveTo([]);
+
+          const callOrder: string[] = [];
+          mockOperationLogEffects.processDeferredActions.and.callFake(() => {
+            callOrder.push('drain');
+            return Promise.resolve();
+          });
+          mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
+            callOrder.push('convergenceSave');
+            return Promise.resolve(true);
+          });
+
+          await service.hydrateStore();
+
+          expect(callOrder).toEqual(['drain', 'convergenceSave']);
+        });
+
+        it('never escalates a convergence failure into hydration recovery', async () => {
+          // The convergence block is a best-effort cache optimization. If it threw,
+          // the outer catch would run attemptRecovery() — which refuses because a
+          // snapshot exists — and surface the very "Failed to load data" snack this
+          // fix removes, on an otherwise perfectly hydrated store.
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+          // Throw from the convergence-path validation specifically: the earlier
+          // Checkpoint-B validation of the migrated snapshot must still succeed.
+          mockValidateStateService.validateState.and.callFake(async () => {
+            if (mockValidateStateService.validateState.calls.count() > 1) {
+              throw new Error('validator blew up');
+            }
+            return { isValid: true, typiaErrors: [] } as any;
+          });
+
+          await expectAsync(service.hydrateStore()).toBeResolved();
+
+          expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+          expect(mockSnackService.open).not.toHaveBeenCalled();
+          // The auto-reload guard must still be cleared on a successful boot.
+          expect(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY)).toBeNull();
         });
       });
 
@@ -1658,7 +1781,7 @@ describe('OperationLogHydratorService', () => {
         });
         mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
           callOrder.push('saveSnapshot');
-          return Promise.resolve();
+          return Promise.resolve(true);
         });
 
         await service.hydrateStore();
