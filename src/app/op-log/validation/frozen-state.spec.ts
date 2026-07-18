@@ -121,49 +121,51 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
     });
   });
 
-  // Encodes the invariant the docblock relies on: an empty collection silently
-  // validates whatever shape its element type takes, so emptiness = no coverage.
+  // Mechanically enforces the docblock's central prohibition. The likeliest way
+  // this guard dies is someone regenerating the fixture from
+  // `createValidAppData()`, which yields EMPTY collections — and typia cannot
+  // check the shape of a type whose only instances live in an empty collection,
+  // so the spec would still pass while covering nothing. Every path below would
+  // be emptied by that regeneration.
   it('has no vacuous (empty) collections', () => {
-    const state = frozen.state as unknown as Record<string, unknown>;
-    const empties: string[] = [];
-    const nonEmpty: string[] = [];
-    const walk = (value: unknown, path: string): void => {
-      if (Array.isArray(value)) {
-        if (!value.length) {
-          empties.push(path);
-        } else {
-          nonEmpty.push(path);
-          walk(value[0], `${path}[0]`);
-        }
-        return;
-      }
-      if (value && typeof value === 'object') {
-        const entries = Object.entries(value as Record<string, unknown>);
-        if (path.endsWith('.entities')) {
-          (entries.length ? nonEmpty : empties).push(path);
-        }
-        entries.forEach(([k, v]) => walk(v, `${path}.${k}`));
-      }
-    };
-    Object.entries(state).forEach(([k, v]) => walk(v, k));
+    const MUST_BE_POPULATED = [
+      'task.entities',
+      'task.entities.task-1.attachments',
+      'project.entities',
+      'tag.entities',
+      'note.entities',
+      'issueProvider.entities',
+      'metric.entities',
+      'metric.entities.2026-07-18.reflections',
+      'taskRepeatCfg.entities',
+      'section.entities',
+      'simpleCounter.entities',
+      'reminders',
+      'pluginUserData',
+      'pluginMetadata',
+      'planner.days',
+      'timeTracking.project',
+      'timeTracking.tag',
+      'boards.boardCfgs',
+      'archiveYoung.task.entities',
+      'archiveOld.task.entities',
+      'globalConfig.flowtime.breakRules',
+      'issueProvider.entities.ip-JIRA.availableTransitions',
+    ];
+    const at = (path: string): unknown =>
+      path
+        .split('.')
+        .reduce<unknown>(
+          (acc, k) => (acc as Record<string, unknown> | undefined)?.[k],
+          frozen.state,
+        );
 
-    // `*Ids` / `ids` are plain string[], as is motivationalImgs — no element
-    // model of their own to shape-check, so empty is fine.
-    const PRIMITIVE_ARRAYS = ['motivationalImgs'];
-    const nameOf = (p: string): string => p.split('.').pop() as string;
-    const isPrimitiveList = (p: string): boolean =>
-      /^[a-zA-Z]*[iI]ds(\[\d+\])?$/.test(nameOf(p)) ||
-      PRIMITIVE_ARRAYS.includes(nameOf(p));
+    const empty = MUST_BE_POPULATED.filter((path) => {
+      const value = at(path);
+      return !value || Object.keys(value as object).length === 0;
+    });
 
-    // Coverage is per element TYPE, not per instance: one non-empty
-    // `attachments` anywhere shape-checks TaskAttachment, so only flag a
-    // collection name that is empty EVERYWHERE it appears.
-    const nonEmptyNames = new Set(nonEmpty.map(nameOf));
-    expect(
-      [...new Set(empties.filter((p) => !isPrimitiveList(p)).map(nameOf))].filter(
-        (n) => !nonEmptyNames.has(n),
-      ),
-    )
+    expect(empty)
       .withContext('empty collection = its element type is never shape-checked')
       .toEqual([]);
   });
