@@ -150,8 +150,10 @@ export const LocaleImportFns: Record<
  * fr-CA, …) still fall back to their bare language code — not always
  * region-correct, but out of scope here.
  *
- * Keys are snake_case; `registerLocaleData` normalizes them to BCP-47
- * (`en_au` -> `en-au`), matching the lowercased browser culture language.
+ * Keys are snake_case forms of the browser culture tag (`en-AU` -> `en_au`);
+ * main.ts matches `navigator.language` against them for eager loading.
+ * Registration itself passes no id — each data file self-reports its BCP-47
+ * id, which `registerLocaleData` normalizes to lowercase.
  */
 export const NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS: Record<
   string,

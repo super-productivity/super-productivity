@@ -357,6 +357,19 @@ bootstrapApplication(AppComponent, {
   // Register default locale immediately (statically imported, no network fetch)
   registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
 
+  // Eagerly load the browser's own regional locale when it's one of the
+  // navigator-fallback variants: LocaleDatePipe is pure, so a date rendered
+  // before idle-time registration keeps its default-locale fallback until the
+  // binding changes. Loading now instead of at idle closes that window for
+  // exactly the users the fallback data exists for.
+  const navLocaleKey = navigator.language.toLowerCase().replace(/-/g, '_');
+  const eagerNavLocaleLoad = NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS[navLocaleKey];
+  if (eagerNavLocaleLoad) {
+    eagerNavLocaleLoad()
+      .then((m) => registerLocaleData(m.default))
+      .catch((e) => Log.err(`Failed to load locale ${navLocaleKey}`, e));
+  }
+
   // Lazily load and register remaining locales during idle time
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
@@ -369,10 +382,12 @@ bootstrapApplication(AppComponent, {
       }
     });
     // Region variants backing the "System default" browser-locale fallback —
-    // not user-selectable (see locale.constants.ts).
+    // not user-selectable (see locale.constants.ts). No explicit id: unlike
+    // the aliasing loop above ('en'→en-GB, 'zh_tw'→zh), these data files
+    // self-report ids matching their keys, so the self-id is typo-proof.
     Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).forEach(([locale, load]) => {
       load()
-        .then((m) => registerLocaleData(m.default, locale))
+        .then((m) => registerLocaleData(m.default))
         .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
     });
   };
