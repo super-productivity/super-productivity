@@ -1,4 +1,5 @@
 import {
+  afterRenderEffect,
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
@@ -301,14 +302,23 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
+  // Once the field scrolls, the textarea's caret-scroll happens before the
+  // overlay re-renders, so the (scroll)-listener alone would clamp against
+  // still-short overlay content — re-sync after each segments render.
+  private readonly _overlayScrollSyncEffect = afterRenderEffect(() => {
+    this.highlightSegments();
+    this.syncHighlightScroll();
+  });
+
   // Custom themes are arbitrary user CSS and can style the textarea and the
   // overlay div differently (e.g. glass.css sets a font on `*`), so static CSS
   // cannot guarantee the two layers stay metric-identical. Mirror every
-  // text-layout-affecting computed style of the textarea onto the overlay:
-  // on each segments render and on theme switches. Theme stylesheets load via
-  // async <link>, so the theme trigger re-syncs once more a moment later.
+  // text-layout-affecting computed style of the textarea onto the overlay on
+  // view init and theme switches (never per keystroke — computed typography
+  // cannot change while typing, and getComputedStyle forces a style recalc).
+  // Theme stylesheets load via async <link>, so the theme trigger re-syncs
+  // once more a moment later.
   private readonly _overlayTypographySyncEffect = effect((onCleanup) => {
-    this.highlightSegments();
     this._customThemeService.activeRef();
     this._syncOverlayTypography();
     const timeoutId = window.setTimeout(() => this._syncOverlayTypography(), 300);
@@ -337,6 +347,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     style.fontKerning = cs.fontKerning;
     style.fontVariant = cs.fontVariant;
     style.fontFeatureSettings = cs.fontFeatureSettings;
+    style.direction = cs.direction;
+    style.textAlign = cs.textAlign;
+    style.wordBreak = cs.wordBreak;
   }
 
   private _focusTimeout?: number;
