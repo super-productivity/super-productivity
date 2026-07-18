@@ -119,6 +119,22 @@
     // textarea's own (rendered on top of this layer)
     color: transparent;
 
+    // The segment spans must take their text metrics from this overlay (which
+    // runtime-syncs to the textarea), never from a theme rule. Custom themes
+    // are arbitrary CSS and a direct match on the spans — glass.css does
+    // `* { font-family: ... }` — beats inheritance, desyncing the mirrored
+    // text from the textarea. Explicit `inherit` at component specificity
+    // outranks any non-important theme rule on the spans themselves.
+    span {
+      font: inherit;
+      letter-spacing: inherit;
+      word-spacing: inherit;
+      text-transform: inherit;
+      font-kerning: inherit;
+      font-variant: inherit;
+      font-feature-settings: inherit;
+    }
+
     .syntax-highlight {
       border-radius: var(--radius-xs);
       background: color-mix(in srgb, var(--c-accent) 22%, transparent);
