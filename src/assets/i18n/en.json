@@ -2610,6 +2610,8 @@
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
       "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Any application running on this computer will be able to read and modify your tasks.",
+      "LOCAL_REST_API_TOKEN": "Access Token",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Regenerate Access Token",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",

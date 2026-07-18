@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
@@ -31,6 +31,21 @@ const pendingRequests = new Map<
     timeout: NodeJS.Timeout;
   }
 >();
+
+let localRestApiToken: string | undefined = undefined;
+
+const compareToken = (input: string, expected: string): boolean => {
+  const inputBuffer = Buffer.from(input, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+
+  if (inputBuffer.length !== expectedBuffer.length) {
+    // Perform a dummy comparison with expectedBuffer to mitigate timing attacks on length differences
+    timingSafeEqual(expectedBuffer, expectedBuffer);
+    return false;
+  }
+
+  return timingSafeEqual(inputBuffer, expectedBuffer);
+};
 
 const writeJson = (
   res: ServerResponse,
@@ -191,6 +206,32 @@ const handleHttpRequest = async (
     return;
   }
 
+  // Validate authorization token if enabled.
+  // The token is sent in the "Authorization" header as "Bearer <token>".
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    writeJson(res, 401, {
+      ok: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Authorization token required',
+      },
+    });
+    return;
+  }
+
+  const tokenToValidate = authHeader.substring(7); // "Bearer ".length === 7
+  if (!localRestApiToken || !compareToken(tokenToValidate, localRestApiToken)) {
+    writeJson(res, 401, {
+      ok: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid authorization token',
+      },
+    });
+    return;
+  }
+
   if (!getIsAppReady()) {
     writeJson(res, 503, {
       ok: false,
@@ -308,6 +349,7 @@ const stopServer = (): void => {
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
+  localRestApiToken = cfg.misc.localRestApiToken;
   const isForcedForDev = isForceEnabledForDev();
   const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
   if (nextEnabled === isEnabled) {

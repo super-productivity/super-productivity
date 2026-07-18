@@ -31,6 +31,7 @@ import {
   selectMiscConfig,
 } from './global-config.reducer';
 import { mapKeyboardConfigToQwerty } from '../keyboard-shortcut.util';
+import { generateLocalRestApiToken } from '../local-rest-api-token.util';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
@@ -277,6 +278,26 @@ export class GlobalConfigEffects {
         }),
       ),
     { dispatch: false },
+  );
+
+  ensureLocalRestApiToken$ = createEffect(() =>
+    this._actions$.pipe(
+      ofType(loadAllData),
+      filter(() => this._isElectron),
+      concatMap(({ appDataComplete }) => {
+        const cfg = appDataComplete.globalConfig;
+        if (cfg?.misc?.isLocalRestApiEnabled && !cfg?.misc?.localRestApiToken) {
+          const localRestApiToken = generateLocalRestApiToken();
+          return [
+            updateGlobalConfigSection({
+              sectionKey: 'misc',
+              sectionCfg: { localRestApiToken },
+            }),
+          ];
+        }
+        return [];
+      }),
+    ),
   );
 
   // Handle user profiles being enabled/disabled
