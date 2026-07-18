@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { WorkContextService } from './work-context.service';
+import { resolveContextTheme, WorkContextService } from './work-context.service';
+import { DEFAULT_TAG_COLOR, WORK_CONTEXT_DEFAULT_THEME } from './work-context.const';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -742,5 +743,90 @@ describe('WorkContextService - isTodayListSignal reactivity', () => {
     store.refreshState();
 
     expect(service.isTodayListSignal()).toBe(false);
+  });
+});
+
+describe('resolveContextTheme()', () => {
+  const buildCtx = (over: Record<string, unknown> = {}): WorkContext =>
+    ({
+      id: 'TODAY',
+      title: 'Today',
+      type: WorkContextType.TAG,
+      routerLink: 'tag/TODAY',
+      taskIds: [],
+      noteIds: [],
+      color: null,
+      theme: { ...WORK_CONTEXT_DEFAULT_THEME, primary: '#123456' },
+      ...over,
+    }) as unknown as WorkContext;
+
+  describe('regression #9139: work context persisted with no theme', () => {
+    // A tag/project entity stored without `theme` propagated `undefined` into
+    // resolveBackground() and _setColorTheme(), crashing on every launch.
+    it('returns the default theme instead of undefined', () => {
+      const ctx = buildCtx();
+      delete (ctx as unknown as Record<string, unknown>).theme;
+
+      expect(resolveContextTheme(ctx)).toEqual(WORK_CONTEXT_DEFAULT_THEME);
+    });
+
+    it('returns a theme the crashing consumers can dereference', () => {
+      const ctx = buildCtx();
+      delete (ctx as unknown as Record<string, unknown>).theme;
+
+      const res = resolveContextTheme(ctx);
+
+      // The exact fields whose unguarded deref produced the reported crashes:
+      // resolveBackground() reads backgroundImage*, _setColorTheme() reads
+      // isAutoContrast.
+      expect(res.backgroundImageDark).toBeDefined();
+      expect(res.backgroundImageLight).toBeDefined();
+      expect(res.isAutoContrast).toBeDefined();
+    });
+
+    it('yields a COMPLETE theme when the tag-color fallback applies', () => {
+      const ctx = buildCtx({ color: '#abcdef' });
+      delete (ctx as unknown as Record<string, unknown>).theme;
+
+      const res = resolveContextTheme(ctx);
+
+      // Spreading an undefined theme would have produced just `{ primary }`.
+      expect(res.primary).toBe('#abcdef');
+      expect(res.accent).toBe(WORK_CONTEXT_DEFAULT_THEME.accent);
+      expect(res.huePrimary).toBe(WORK_CONTEXT_DEFAULT_THEME.huePrimary);
+    });
+  });
+
+  describe('existing behaviour is preserved', () => {
+    it('keeps an explicit primary override over tag.color', () => {
+      const res = resolveContextTheme(
+        buildCtx({
+          theme: { ...WORK_CONTEXT_DEFAULT_THEME, primary: '#explicit' },
+          color: '#tagcolor',
+        }),
+      );
+      expect(res.primary).toBe('#explicit');
+    });
+
+    it('falls back to tag.color when primary is still the auto-default', () => {
+      const res = resolveContextTheme(
+        buildCtx({
+          theme: { ...WORK_CONTEXT_DEFAULT_THEME, primary: DEFAULT_TAG_COLOR },
+          color: '#tagcolor',
+        }),
+      );
+      expect(res.primary).toBe('#tagcolor');
+    });
+
+    it('does not apply the tag-color fallback for projects', () => {
+      const res = resolveContextTheme(
+        buildCtx({
+          type: WorkContextType.PROJECT,
+          theme: { ...WORK_CONTEXT_DEFAULT_THEME, primary: DEFAULT_TAG_COLOR },
+          color: '#tagcolor',
+        }),
+      );
+      expect(res.primary).toBe(DEFAULT_TAG_COLOR);
+    });
   });
 });

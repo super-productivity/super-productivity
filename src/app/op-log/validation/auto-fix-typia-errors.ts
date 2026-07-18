@@ -2,7 +2,8 @@ import { AppDataComplete } from '../model/model-config';
 import { IValidation } from 'typia';
 import type { SyncLogMeta } from '@sp/sync-core';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import { INBOX_PROJECT } from '../../features/project/project.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from '../../features/project/project.const';
+import { DEFAULT_TAG } from '../../features/tag/tag.const';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { devError } from '../../util/dev-error';
@@ -271,6 +272,36 @@ export const autoFixTypiaErrors = (
         const created = Date.now();
         setValueByPath(data, keys, created);
         logAutoFixApplied(path, keys, 'tag-created-undefined-to-now', value, created);
+      } else if (
+        (keys[0] === 'tag' || keys[0] === 'project') &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'theme' &&
+        value === undefined
+      ) {
+        // A tag/project entity can be persisted with no `theme` at all (#9139).
+        // Left unrepaired it either dead-ends legacy migration ("Migration
+        // failed") or, on the hydration paths where validation is non-fatal,
+        // loads and crashes the theme pipeline on every launch.
+        //
+        // Deliberately NOT matched on `error.expected`: typia reports this as
+        // the generated name `Readonly<__type>.oNN`, whose ordinal shifts
+        // whenever the type graph changes. Keying on it would make this branch
+        // silently stop firing. Path + `value === undefined` is stable.
+        // Copy, never share the constant by reference: two theme-less entities
+        // would otherwise alias one object, and any later mutation would write
+        // straight through into DEFAULT_TAG/DEFAULT_PROJECT for the whole app.
+        const theme = {
+          ...(keys[0] === 'tag' ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme),
+        };
+        setValueByPath(data, keys, theme);
+        logAutoFixApplied(
+          path,
+          keys,
+          'work-context-theme-undefined-to-default',
+          value,
+          theme,
+        );
       } else if (
         keys[0] === 'metric' &&
         keys[1] === 'entities' &&
