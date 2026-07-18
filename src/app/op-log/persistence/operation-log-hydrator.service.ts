@@ -87,6 +87,15 @@ export class OperationLogHydratorService {
   async hydrateStore(): Promise<void> {
     OpLog.normal('OperationLogHydratorService: Starting hydration...');
 
+    // Reset the per-run migration flag so a (hypothetical future) second
+    // hydrateStore() call on the same instance cannot inherit a stale `true` and
+    // fire the post-migration convergence save on a boot where no migration ran.
+    this._migrationRanDuringHydration = false;
+    // Tracks whether a fresh CURRENT_SCHEMA_VERSION snapshot was already persisted
+    // during this hydration, so the post-migration convergence save at the end of
+    // the try block does not double-write.
+    let snapshotPersistedDuringHydration = false;
+
     try {
       // PERF: Parallel startup operations - all access different IndexedDB stores
       // and don't depend on each other's results, so they can run concurrently.
@@ -325,6 +334,7 @@ export class OperationLogHydratorService {
                 `OperationLogHydratorService: Saving new snapshot after replaying ${opsToReplay.length} ops`,
               );
               await this.snapshotService.saveCurrentStateAsSnapshot();
+              snapshotPersistedDuringHydration = true;
             }
           }
         }
@@ -417,6 +427,7 @@ export class OperationLogHydratorService {
               `OperationLogHydratorService: Saving snapshot after replaying ${opsToReplay.length} ops`,
             );
             await this.snapshotService.saveCurrentStateAsSnapshot();
+            snapshotPersistedDuringHydration = true;
           }
         }
 
@@ -429,6 +440,42 @@ export class OperationLogHydratorService {
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
       await this.retryFailedRemoteOps();
+
+      // CONVERGENCE: when a schema migration ran during this hydration but no
+      // fresh snapshot was persisted yet, persist one now from the current,
+      // reducer-healed and retry-drained state so the on-disk cache reaches
+      // CURRENT_SCHEMA_VERSION. Without this the migrated snapshot's safety-net
+      // path (migrateSnapshotWithBackup rolls the on-disk cache back to the
+      // old-schema backup and hydrates unpersisted) never advances the cache, so
+      // migration + validation re-run on EVERY launch for a not-yet-backfilled
+      // required field. This resolves the TODO(followup) in
+      // operation-log-snapshot.service.ts.
+      //
+      // Placed AFTER retryFailedRemoteOps so any deferred/local actions it drains
+      // are already captured — otherwise the phantom-change guard (#8751) would
+      // skip the save. Gated on re-validating the LIVE current state: an unhealed
+      // or corrupt state must never be cached, because Checkpoint B trusts a
+      // matching-schema snapshot unvalidated on the next boot. The save routes
+      // through saveCurrentStateAsSnapshot(), so the #8469 quiesce, #8751 phantom
+      // guard and #7892 empty-overwrite guard all still apply and may safely SKIP
+      // (never corrupt) the write — in which case we simply re-migrate next boot,
+      // exactly as before this change.
+      if (this._migrationRanDuringHydration && !snapshotPersistedDuringHydration) {
+        const isConvergedStateValid = await this._validateCurrentStateForHydration(
+          'post-migration-convergence',
+        );
+        if (isConvergedStateValid) {
+          OpLog.normal(
+            'OperationLogHydratorService: Persisting current-schema snapshot after migration to converge in one boot.',
+          );
+          await this.snapshotService.saveCurrentStateAsSnapshot();
+        } else {
+          OpLog.warn(
+            'OperationLogHydratorService: Skipping post-migration convergence save — ' +
+              'current state did not validate; will re-migrate next boot.',
+          );
+        }
+      }
 
       // Clear the auto-reload guard so that a fresh backing-store error in the same
       // tab session gets the auto-reload treatment again rather than going straight

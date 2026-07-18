@@ -1066,6 +1066,86 @@ describe('OperationLogHydratorService', () => {
         expect(mockSnapshotService.migrateSnapshotWithBackup).not.toHaveBeenCalled();
       });
 
+      // Post-migration convergence: after a migrating hydration reducer-heals the
+      // state, a fresh CURRENT_SCHEMA_VERSION snapshot must be persisted so the
+      // on-disk cache converges in ONE boot instead of re-migrating every launch
+      // (the "Failed to load data" root cause when a required field lacked a
+      // backfill). See the CONVERGENCE block in hydrateStore.
+      describe('post-migration convergence', () => {
+        it('persists a fresh snapshot after a migration even with zero tail ops', async () => {
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          // Zero tail ops: before this change nothing re-persisted the snapshot,
+          // so migration re-ran on every boot.
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
+        });
+
+        it('skips the convergence save when the current state does not validate', async () => {
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+          // Unhealed / corrupt current state must never be cached (Checkpoint B
+          // would trust a matching-schema snapshot unvalidated next boot).
+          mockValidateStateService.validateState.and.resolveTo({
+            isValid: false,
+            typiaErrors: [{ path: '$input.foo', expected: 'string', value: undefined }],
+          } as any);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        });
+
+        it('does not double-save when the tail-replay branch already persisted', async () => {
+          const oldSnapshot = createMockSnapshot({
+            schemaVersion: 0,
+            lastAppliedOpSeq: 5,
+          });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            lastAppliedOpSeq: 5,
+          });
+          // >10 tail ops → the existing Checkpoint-C save fires; convergence must
+          // not add a second write.
+          const tailOps = Array.from({ length: 11 }, (_, i) =>
+            createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+          );
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo(tailOps);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
+        });
+
+        it('does NOT persist a convergence snapshot on a normal boot (no migration)', async () => {
+          const snapshot = createMockSnapshot({ schemaVersion: CURRENT_SCHEMA_VERSION });
+          mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(false);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        });
+      });
+
       it('should dispatch loadAllData with migrated snapshot state', async () => {
         const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
         const migratedState = { task: { entities: {}, ids: ['migrated'] } } as any;
