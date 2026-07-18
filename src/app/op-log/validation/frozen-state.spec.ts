@@ -72,6 +72,30 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
       .toBe(true);
   });
 
+  // #9124 regression lock. v18.14 shipped schema 2 WITHOUT the required field
+  // #8965 added, so the v2->v3 migration has to backfill it — otherwise the
+  // migration-path gate rejects the snapshot and the app boots to an empty
+  // store, every launch. Derived from the same frozen bytes minus that one
+  // field rather than a second fixture: identical coverage, no duplication.
+  // This is also the only case that exercises the migration chain while
+  // __frozenAtSchemaVersion equals CURRENT_SCHEMA_VERSION.
+  it('backfills the idle field when migrating v18.14 (schema 2) data', () => {
+    const v18_14 = structuredClone(frozen.state) as unknown as AppDataComplete;
+    delete (v18_14.globalConfig.idle as { isSuppressIdleDuringFocusMode?: boolean })
+      .isSuppressIdleDuringFocusMode;
+
+    const migrated = migrateState(v18_14, 2);
+    if (!migrated.success) {
+      throw new Error(`v18.14 migration failed: ${migrated.error}`);
+    }
+    const data = migrated.data as AppDataComplete;
+
+    expect(data.globalConfig.idle.isSuppressIdleDuringFocusMode)
+      .withContext('v2->v3 must backfill the field #8965 added (#9124)')
+      .toBe(false);
+    expect(validateFull(data).isValid).withContext(DO_NOT_EDIT).toBe(true);
+  });
+
   // validateFull omits the archives, so they need their own pass.
   (['archiveYoung', 'archiveOld'] as const).forEach((key) => {
     it(`validates ${key}, which validateFull does not cover`, () => {
