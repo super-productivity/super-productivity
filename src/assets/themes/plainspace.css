@@ -410,8 +410,7 @@ board-panel header::after {
   height: 10px;
   background-color: var(--palette-primary-500);
   opacity: 0.9;
-  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
-  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  clip-path: var(--underline-hand-shape);
   pointer-events: none;
 }
 /* Lift the cards a surface step so they read against the bare desk — in dark
