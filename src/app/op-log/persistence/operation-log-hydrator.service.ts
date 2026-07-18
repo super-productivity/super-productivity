@@ -91,9 +91,15 @@ export class OperationLogHydratorService {
     // hydrateStore() call on the same instance cannot inherit a stale `true` and
     // fire the post-migration convergence save on a boot where no migration ran.
     this._migrationRanDuringHydration = false;
-    // Tracks whether a fresh CURRENT_SCHEMA_VERSION snapshot was already persisted
-    // during this hydration, so the post-migration convergence save at the end of
-    // the try block does not double-write.
+    // Tracks whether one of the hydrator's OWN Checkpoint-C saves already
+    // persisted a fresh snapshot this hydration, so the post-migration
+    // convergence save at the end of the try block skips its redundant write.
+    // NB: this does not track migrateSnapshotWithBackup's step-5 persist — on the
+    // healthy backfill path (migrated snapshot validates and is persisted) with
+    // few/no tail ops, convergence still writes once more. That extra write is
+    // harmless and rare (once per schema bump per device) and its post-replay
+    // state is strictly more advanced, so it is not worth extra plumbing to
+    // suppress; only the every-boot re-migration it prevents matters.
     let snapshotPersistedDuringHydration = false;
 
     try {
