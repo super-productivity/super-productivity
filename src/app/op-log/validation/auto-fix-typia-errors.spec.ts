@@ -640,10 +640,17 @@ describe('autoFixTypiaErrors', () => {
       // Object.prototype here, which is non-nullish, so the `??` would not fall
       // through and the entity would be healed to an empty theme.
       const mockData = createAppDataCompleteMock();
-      const entities: Record<string, unknown> = {};
-      // Computed key => a genuine OWN property named __proto__, not a set prototype.
-      entities['__proto__'] = { id: '__proto__', title: 'x', taskIds: [] };
-      (mockData as any).tag = { ids: ['__proto__'], entities };
+      // Built via JSON.parse because that is what a hostile payload actually
+      // arrives as, and it is the ONLY construction that yields a genuine own
+      // "__proto__" key. `obj['__proto__'] = x` invokes the inherited setter
+      // and sets the prototype instead, creating no own property.
+      const tagState = JSON.parse(
+        '{"ids":["__proto__"],"entities":{"__proto__":{"id":"__proto__","title":"x","taskIds":[]}}}',
+      );
+      expect(Object.prototype.hasOwnProperty.call(tagState.entities, '__proto__')).toBe(
+        true,
+      );
+      (mockData as any).tag = tagState;
       const errors = [
         createTypiaError('$input.tag.entities.__proto__.theme', REAL_EXPECTED, undefined),
       ];

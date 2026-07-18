@@ -89,12 +89,14 @@ import { LOCAL_ACTIONS } from '../../util/local-actions.token';
  * work context. It is NOT an app-wide guarantee — code that iterates over all
  * projects/tags reads the raw entity and must still guard `theme?.` itself.
  *
- * The fallback comes from `getDefaultWorkContextTheme`, shared with the on-disk
- * heal, so what is rendered now and what a later repair persists cannot differ.
+ * The FALLBACK comes from `getDefaultWorkContextTheme`, shared with the on-disk
+ * heal, so the theme rendered for a theme-less context and the one a later
+ * repair persists cannot differ. The tag-color override below sits on top and
+ * is read-side only — it is re-applied after any repair, so it does not flip.
  */
 export const resolveContextTheme = (awc: WorkContext): WorkContextThemeCfg => {
   const isTag = awc.type === WorkContextType.TAG;
-  const theme = awc.theme ?? getDefaultWorkContextTheme(isTag, awc.id);
+  const theme = awc.theme ?? getDefaultWorkContextTheme(awc.type, awc.id);
   // For tags: theme.primary is the explicit override. If it's still at
   // the auto-default (or unset) and tag.color is set, fall back to
   // tag.color so newly created tags drive Material theming with their

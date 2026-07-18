@@ -1,7 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
-import { DEFAULT_TAG_COLOR, WORK_CONTEXT_DEFAULT_THEME } from './work-context.const';
+import { SYSTEM_ENTITY_THEMES } from './work-context-default-theme.util';
+import {
+  DEFAULT_TAG_COLOR,
+  isBackgroundImageSet,
+  WORK_CONTEXT_DEFAULT_THEME,
+} from './work-context.const';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
@@ -13,8 +18,8 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { DateService } from '../../core/date/date.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
-import { DEFAULT_TAG, IMPORTANT_TAG, TODAY_TAG, URGENT_TAG } from '../tag/tag.const';
-import { WorkContext, WorkContextType } from './work-context.model';
+import { DEFAULT_TAG, TODAY_TAG } from '../tag/tag.const';
+import { WorkContext, WorkContextThemeCfg, WorkContextType } from './work-context.model';
 import {
   selectActiveContextId,
   selectActiveWorkContext,
@@ -801,30 +806,39 @@ describe('resolveContextTheme()', () => {
     // repairs) and then flipped once a sync repair landed. Both sides now
     // resolve through getDefaultWorkContextTheme.
     //
-    // Table-driven on purpose: asserting the property that makes each row
-    // exist (its theme is DISTINGUISHABLE from the generic default) means a
-    // row that is actually inert fails here rather than sitting unnoticed.
-    (
-      [
-        [TODAY_TAG, true],
-        [URGENT_TAG, true],
-        [IMPORTANT_TAG, true],
-        [INBOX_PROJECT, false],
-      ] as const
-    ).forEach(([entity, isTag]) => {
-      it(`gives ${entity.id} its own theme, not the generic default`, () => {
+    // Driven from SYSTEM_ENTITY_THEMES itself, NOT a hand-written copy: a
+    // duplicated table only catches rows REMOVED from the Map, never rows
+    // ADDED to it, so an inert row could be introduced and sit unnoticed.
+    [...SYSTEM_ENTITY_THEMES.entries()].forEach(([entityId, theme]) => {
+      const isTag = entityId !== INBOX_PROJECT.id;
+
+      it(`gives ${entityId} its own theme, not the generic default`, () => {
         const ctx = buildCtx({
-          id: entity.id,
+          id: entityId,
           type: isTag ? WorkContextType.TAG : WorkContextType.PROJECT,
         });
         delete (ctx as unknown as Record<string, unknown>).theme;
 
-        const res = resolveContextTheme(ctx);
-        const generic = isTag ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme;
+        expect(resolveContextTheme(ctx)).toBe(theme);
+      });
 
-        expect(res).toBe(entity.theme);
-        // If this fails the row is inert and should be deleted, not kept.
-        expect(res.primary).not.toBe(generic.primary);
+      it(`${entityId} has a theme that renders differently from the generic default`, () => {
+        const generic = isTag ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme;
+        // OBSERVABLE difference, not raw field inequality: the background-image
+        // fields reach the UI only through isBackgroundImageSet, so '' and null
+        // are the same thing. Comparing raw values would call IN_PROGRESS_TAG
+        // ('' vs null, nothing else) "different" and let an inert row back in.
+        const observable = (t: WorkContextThemeCfg): Record<string, unknown> => ({
+          ...t,
+          backgroundImageDark: isBackgroundImageSet(t.backgroundImageDark),
+          backgroundImageLight: isBackgroundImageSet(t.backgroundImageLight),
+        });
+        const a = observable(generic);
+        const b = observable(theme);
+
+        // If this fails the row is inert and should be DELETED, not kept —
+        // IN_PROGRESS_TAG was removed for exactly this reason.
+        expect(Object.keys({ ...a, ...b }).some((k) => a[k] !== b[k])).toBe(true);
       });
     });
 

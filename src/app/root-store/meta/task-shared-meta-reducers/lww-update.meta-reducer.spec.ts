@@ -952,6 +952,36 @@ describe('lwwUpdateMetaReducer', () => {
       // Backfilled from DEFAULT_TAG
       expect(recreated.taskIds).toEqual([]);
     });
+
+    it('warns when a recreate payload is missing ONLY `theme` (#9139)', () => {
+      // Pins `theme` in RECREATE_FALLBACK.TAG.requiredKeys. That entry looks
+      // removable — it drives no backfill, since `defaults` is spread wholesale
+      // — but the warn is gated on `partialKeys.length > 0`, so dropping it
+      // silences the diagnostic ENTIRELY for a payload carrying title+taskIds
+      // and no theme. That is exactly the #9139 corruption shape, on the one
+      // writer that still bypasses getDefaultWorkContextTheme, and provenance
+      // is still unknown — so this is the last signal that path ran.
+      const warnSpy = spyOn(OpLog, 'warn').and.stub();
+      const state = createMockState();
+      const action = {
+        type: '[TAG] LWW Update',
+        id: 'themeless-tag',
+        title: 'Themeless Tag',
+        taskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'TAG',
+          entityId: 'themeless-tag',
+        },
+      };
+
+      reducer(state, action);
+
+      expect(warnSpy).toHaveBeenCalled();
+      const warned = warnSpy.calls.allArgs().flat().join(' ');
+      expect(warned).toContain('missing required');
+      expect(warned).toContain('theme');
+    });
   });
 
   // Issue #7330 recurred on SIMPLE_COUNTER (ruckusvol's logs, both clients

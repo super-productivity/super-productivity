@@ -1,4 +1,4 @@
-import { WorkContextThemeCfg } from './work-context.model';
+import { WorkContextThemeCfg, WorkContextType } from './work-context.model';
 import { DEFAULT_TAG, IMPORTANT_TAG, TODAY_TAG, URGENT_TAG } from '../tag/tag.const';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
 
@@ -15,7 +15,7 @@ import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
  * only in `backgroundImageDark` ('' vs null), and `isBackgroundImageSet` treats
  * both as unset — so a row for it could not change any rendered output.
  */
-const SYSTEM_ENTITY_THEMES: ReadonlyMap<string, WorkContextThemeCfg> = new Map(
+export const SYSTEM_ENTITY_THEMES: ReadonlyMap<string, WorkContextThemeCfg> = new Map(
   [TODAY_TAG, URGENT_TAG, IMPORTANT_TAG, INBOX_PROJECT].map(
     (e) => [e.id, e.theme] as const,
   ),
@@ -38,8 +38,8 @@ const SYSTEM_ENTITY_THEMES: ReadonlyMap<string, WorkContextThemeCfg> = new Map(
  * and deserves its own change with its own convergence analysis.
  */
 export const getDefaultWorkContextTheme = (
-  isTag: boolean,
+  type: WorkContextType,
   entityId: string,
 ): WorkContextThemeCfg =>
   SYSTEM_ENTITY_THEMES.get(entityId) ??
-  (isTag ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme);
+  (type === WorkContextType.TAG ? DEFAULT_TAG.theme : DEFAULT_PROJECT.theme);

@@ -4,6 +4,7 @@ import type { SyncLogMeta } from '@sp/sync-core';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { getDefaultWorkContextTheme } from '../../features/work-context/work-context-default-theme.util';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { devError } from '../../util/dev-error';
@@ -294,7 +295,10 @@ export const autoFixTypiaErrors = (
         // whenever the type graph changes. Keying on it would make this branch
         // silently stop firing. Path + nullish value is stable.
         const theme = {
-          ...getDefaultWorkContextTheme(keys[0] === 'tag', String(keys[2])),
+          ...getDefaultWorkContextTheme(
+            keys[0] === 'tag' ? WorkContextType.TAG : WorkContextType.PROJECT,
+            String(keys[2]),
+          ),
         };
         setValueByPath(data, keys, theme);
         logAutoFixApplied(
