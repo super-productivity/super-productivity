@@ -1,5 +1,6 @@
 import {
   APP_INITIALIZER,
+  provideAppInitializer,
   enableProdMode,
   EnvironmentInjector,
   ErrorHandler,
@@ -13,12 +14,11 @@ import { registerLocaleData } from '@angular/common';
 
 import { environment } from './environments/environment';
 import { IS_ELECTRON } from './app/app.constants';
+import { DEFAULT_LANGUAGE, LocaleImportFns } from './app/core/locale.constants';
 import {
-  DEFAULT_LANGUAGE,
-  DEFAULT_LOCALE_DATA,
-  LocaleImportFns,
-  NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS,
-} from './app/core/locale.constants';
+  registerDefaultLocale,
+  registerNavigatorLocale,
+} from './app/core/locale-registration';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
 import { AndroidBackButtonService } from './app/features/android/android-back-button.service';
@@ -122,8 +122,18 @@ setLegacyKdfWarningHandler(() => {
   );
 });
 
+// Register default locale data before bootstrap: LocaleDatePipe is pure, so a
+// date rendered before registration would cache Angular's built-in en-US
+// resolution for the session (bootstrapApplication's .then runs after first
+// render, which is too late).
+registerDefaultLocale();
+
 bootstrapApplication(AppComponent, {
   providers: [
+    // Await the browser's own regional locale (en-AU, en-CA, … — navigator-only
+    // variants backing "System default") before first render, for the same
+    // pure-pipe reason as above. Never rejects, so it cannot block bootstrap.
+    provideAppInitializer(() => registerNavigatorLocale()),
     // Provide configuration for TranslateHttpLoader
     {
       provide: TRANSLATE_HTTP_LOADER_CONFIG,
@@ -354,23 +364,10 @@ bootstrapApplication(AppComponent, {
   // Initialize touch fix for Material menus
   initializeMatMenuTouchFix();
 
-  // Register default locale immediately (statically imported, no network fetch)
-  registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
-
-  // Eagerly load the browser's own regional locale when it's one of the
-  // navigator-fallback variants: LocaleDatePipe is pure, so a date rendered
-  // before idle-time registration keeps its default-locale fallback until the
-  // binding changes. Loading now instead of at idle closes that window for
-  // exactly the users the fallback data exists for.
-  const navLocaleKey = navigator.language.toLowerCase().replace(/-/g, '_');
-  const eagerNavLocaleLoad = NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS[navLocaleKey];
-  if (eagerNavLocaleLoad) {
-    eagerNavLocaleLoad()
-      .then((m) => registerLocaleData(m.default))
-      .catch((e) => Log.err(`Failed to load locale ${navLocaleKey}`, e));
-  }
-
-  // Lazily load and register remaining locales during idle time
+  // Lazily load and register remaining locales during idle time. The
+  // navigator-only regional variants are NOT loaded here — only the matched
+  // navigator.language entry is ever needed, and the app initializer above
+  // already registered it before first render.
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {
@@ -380,15 +377,6 @@ bootstrapApplication(AppComponent, {
           })
           .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
       }
-    });
-    // Region variants backing the "System default" browser-locale fallback —
-    // not user-selectable (see locale.constants.ts). No explicit id: unlike
-    // the aliasing loop above ('en'→en-GB, 'zh_tw'→zh), these data files
-    // self-report ids matching their keys, so the self-id is typo-proof.
-    Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).forEach(([locale, load]) => {
-      load()
-        .then((m) => registerLocaleData(m.default))
-        .catch((e) => Log.err(`Failed to load locale ${locale}`, e));
     });
   };
 

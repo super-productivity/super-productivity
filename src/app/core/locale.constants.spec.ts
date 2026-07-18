@@ -1,13 +1,14 @@
-import { formatDate, registerLocaleData } from '@angular/common';
+import { formatDate } from '@angular/common';
 import { NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS } from './locale.constants';
+import { registerNavigatorLocale } from './locale-registration';
 
 /**
  * Covers the registration half of the navigator-fallback fix: without their
  * own locale data, en-AU/en-CA/… resolve through `en` (registered as en-GB in
- * prod) and render 24h time. These specs register the data exactly as main.ts
- * does — `registerLocaleData(m.default)` with no explicit id, relying on the
- * data's self-reported BCP-47 id — and assert the user-visible symptom:
- * 12h vs 24h `shortTime`.
+ * prod) and render 24h time. These specs register every variant through the
+ * production path (`registerNavigatorLocale`, keyless — relying on the data's
+ * self-reported BCP-47 id) and assert the user-visible symptom: 12h vs 24h
+ * `shortTime`.
  */
 describe('NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS', () => {
   // 1pm is the discriminating hour: 12h renders "1:00 …", 24h renders "13:00".
@@ -31,7 +32,7 @@ describe('NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS', () => {
       Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).map(async ([key, load]) => {
         const m = await load();
         loadedById.set(key, m.default);
-        registerLocaleData(m.default);
+        await registerNavigatorLocale(key.replace(/_/g, '-'));
       }),
     );
   });
