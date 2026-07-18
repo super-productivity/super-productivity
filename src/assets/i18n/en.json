@@ -2072,6 +2072,7 @@
         "ORD_THIRD_NTH": "third",
         "Q_CUSTOM": "Custom recurring config",
         "Q_DAILY": "Every day",
+        "Q_EVERY_X_WEEKS": "Every {{x}} weeks on {{weekdayStr}}",
         "Q_MONDAY_TO_FRIDAY": "Every Monday through Friday",
         "Q_MONTHLY_CURRENT_DATE": "Every month on the day {{dateDayStr}}",
         "Q_MONTHLY_FIRST_DAY": "Every month on the first day",

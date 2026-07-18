@@ -157,6 +157,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -179,6 +180,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -201,6 +203,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -219,6 +222,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -250,6 +254,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -477,6 +482,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -496,6 +502,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -525,6 +532,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -544,6 +552,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -563,6 +572,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -602,6 +612,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -622,6 +633,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -653,6 +665,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['idontexist'],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -684,6 +697,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -715,6 +729,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['asd'],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -737,6 +752,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['someNewTag3'],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -771,6 +787,7 @@ describe('shortSyntax', () => {
         projectId: undefined,
         attachments: [],
         remindAt: null,
+        repeatCfg: null,
         taskChanges: { tagIds: ['blu_id'], title: 'Fun title' },
       });
     });
@@ -801,6 +818,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -823,6 +841,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['testing'],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -846,6 +865,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -876,6 +896,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -899,6 +920,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -921,6 +943,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -939,6 +962,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -976,6 +1000,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1011,6 +1036,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1033,6 +1059,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1055,6 +1082,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1072,6 +1100,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1089,6 +1118,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1106,6 +1136,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1123,6 +1154,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1158,6 +1190,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1188,6 +1221,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'print',
         attachments: [],
         taskChanges: {
@@ -1213,6 +1247,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1241,6 +1276,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['tag'],
         remindAt: null,
+        repeatCfg: null,
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1480,6 +1516,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1495,6 +1532,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
+        repeatCfg: null,
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -2068,5 +2106,172 @@ describe('parseTimeSpentChanges', () => {
     const result = parseTimeSpentChanges({ title: 'Task 15m/' });
     expect(result.timeSpentOnDay?.[getDbDateStr()]).toBe(15 * 60 * 1000);
     expect(result.title).toBe('Task');
+  });
+});
+
+describe('shortSyntax recurrence', () => {
+  // Wed Jan 17 2024, 10:00 local time
+  const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
+
+  const parse = async (title: string, now: Date = NOW): ReturnType<typeof shortSyntax> =>
+    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, 'combine', true);
+
+  it('should parse "@every friday" as weekly repeat anchored to next friday', async () => {
+    const r = await parse('Water plants @every friday');
+    expect(r?.repeatCfg).toEqual({
+      quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+      repeatEvery: 1,
+    });
+    expect(r?.taskChanges.title).toBe('Water plants');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+    expect(due.getTime()).toBeGreaterThan(NOW.getTime());
+    expect(r?.taskChanges.hasPlannedTime).toBe(false);
+  });
+
+  it('should keep today as anchor when "@every wednesday" matches the current weekday', async () => {
+    const r = await parse('Standup @every wednesday');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(3);
+    expect(due.getDate()).toBe(17);
+  });
+
+  it('should parse weekday abbreviations and plurals', async () => {
+    for (const syntax of ['@every fri', '@every fridays', '@every Fri']) {
+      const r = await parse(`Water plants ${syntax}`);
+      expect(r?.repeatCfg?.quickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+      const due = new Date(r?.taskChanges.dueWithTime as number);
+      expect(due.getDay()).toBe(5);
+    }
+  });
+
+  it('should parse "@every friday 3pm" with a start time', async () => {
+    const r = await parse('Team call @every friday 3pm');
+    expect(r?.repeatCfg?.quickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    expect(r?.taskChanges.title).toBe('Team call');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+    expect(due.getHours()).toBe(15);
+    expect(r?.taskChanges.hasPlannedTime).toBeUndefined();
+  });
+
+  it('should parse "@daily" as daily repeat without an anchor date', async () => {
+    const r = await parse('Journal @daily');
+    expect(r?.repeatCfg).toEqual({ quickSetting: 'DAILY', repeatEvery: 1 });
+    expect(r?.taskChanges.title).toBe('Journal');
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+  });
+
+  it('should parse "@daily 6am" with a time anchor', async () => {
+    const r = await parse('Journal @daily 6am');
+    expect(r?.repeatCfg?.quickSetting).toBe('DAILY');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should parse "@every 2 weeks" with an interval', async () => {
+    const r = await parse('Review @every 2 weeks');
+    expect(r?.repeatCfg).toEqual({
+      quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+      repeatEvery: 2,
+    });
+    expect(r?.taskChanges.title).toBe('Review');
+  });
+
+  it('should parse "@every 3 days" as daily with interval', async () => {
+    const r = await parse('Water flowers @every 3 days');
+    expect(r?.repeatCfg).toEqual({ quickSetting: 'DAILY', repeatEvery: 3 });
+  });
+
+  it('should parse "@every weekday" as monday through friday', async () => {
+    const r = await parse('Standup @every weekday');
+    expect(r?.repeatCfg?.quickSetting).toBe('MONDAY_TO_FRIDAY');
+  });
+
+  it('should parse "@every 15th" as monthly on next 15th', async () => {
+    const r = await parse('Pay rent @every 15th', new Date(2024, 0, 20, 10, 0));
+    expect(r?.repeatCfg?.quickSetting).toBe('MONTHLY_CURRENT_DATE');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDate()).toBe(15);
+    expect(due.getMonth()).toBe(1);
+  });
+
+  it('should anchor "@every 15th" to the current month when still upcoming', async () => {
+    const r = await parse('Pay rent @every 15th', new Date(2024, 0, 10, 10, 0));
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDate()).toBe(15);
+    expect(due.getMonth()).toBe(0);
+  });
+
+  it('should parse "@every month" and "@monthly" as monthly without anchor', async () => {
+    for (const syntax of ['@every month', '@monthly']) {
+      const r = await parse(`Backup ${syntax}`);
+      expect(r?.repeatCfg?.quickSetting).toBe('MONTHLY_CURRENT_DATE');
+      expect(r?.taskChanges.dueWithTime).toBeUndefined();
+    }
+  });
+
+  it('should parse "@yearly" and "@every year" as yearly', async () => {
+    for (const syntax of ['@yearly', '@every year', '@annually']) {
+      const r = await parse(`Checkup ${syntax}`);
+      expect(r?.repeatCfg?.quickSetting).toBe('YEARLY_CURRENT_DATE');
+    }
+  });
+
+  it('should work combined with tags', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Water plants #blu @every sunday' },
+      CONFIG,
+      ALL_TAGS,
+      [],
+      NOW,
+      'combine',
+      true,
+    );
+    expect(r?.repeatCfg?.quickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    expect(r?.taskChanges.tagIds).toEqual(['blu_id']);
+    expect(r?.taskChanges.title).toBe('Water plants');
+  });
+
+  it('should NOT parse recurrence when isParseRepeat is false (title-edit path)', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Water plants @every friday' },
+      CONFIG,
+      [],
+      [],
+      NOW,
+    );
+    expect(r?.repeatCfg).toBeNull();
+    // chrono still finds the date within the phrase, as before this feature
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+  });
+
+  it('should NOT parse a plain "@friday" as recurrence', async () => {
+    const r = await parse('Water plants @friday');
+    expect(r?.repeatCfg).toBeNull();
+    expect(r?.taskChanges.dueWithTime).toBeDefined();
+  });
+
+  it('should NOT parse deadline syntax "!every friday" as recurrence', async () => {
+    const r = await parse('Taxes !every friday');
+    expect(r?.repeatCfg).toBeNull();
+  });
+
+  it('should NOT treat a recurrence phrase mid-match as recurrence', async () => {
+    const r = await parse('Meet @friday every week');
+    expect(r?.repeatCfg).toBeNull();
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(5);
+  });
+
+  it('should NOT match an incomplete "@every"', async () => {
+    const r = await parse('Task @every');
+    expect(r?.repeatCfg ?? null).toBeNull();
+  });
+
+  it('should NOT match words merely starting with a frequency word', async () => {
+    const r = await parse('Meet @dailystandup');
+    expect(r?.repeatCfg ?? null).toBeNull();
   });
 });

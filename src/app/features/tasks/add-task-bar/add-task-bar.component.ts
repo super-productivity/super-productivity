@@ -550,6 +550,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             ...DEFAULT_TASK_REPEAT_CFG,
             startDate,
             ...quickSettingUpdates,
+            // Interval from recurrence short syntax ("@every 2 weeks") — the
+            // quick-setting presets themselves always mean an interval of 1
+            ...(state.repeatEvery && state.repeatEvery > 1
+              ? { repeatEvery: state.repeatEvery }
+              : {}),
             title,
             quickSetting: state.repeatQuickSetting,
             tagIds: taskData.tagIds ?? [],

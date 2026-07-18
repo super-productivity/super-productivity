@@ -204,8 +204,55 @@ export class AddTaskBarActionsComponent {
   repeatDisplay = computed(() => {
     const setting = this.state().repeatQuickSetting;
     if (!setting) return null;
+    const repeatEvery = this.state().repeatEvery;
+    // Interval override from recurrence short syntax ("@every 2 weeks") — the
+    // quick-setting labels all assume an interval of 1
+    if (repeatEvery && repeatEvery > 1) {
+      const intervalLabel = this._getIntervalRepeatLabel(setting, repeatEvery);
+      if (intervalLabel) {
+        return intervalLabel;
+      }
+    }
     return this.repeatQuickOptions().find((o) => o.value === setting)?.label ?? null;
   });
+
+  private _getIntervalRepeatLabel(
+    setting: RepeatQuickSetting,
+    repeatEvery: number,
+  ): string | null {
+    switch (setting) {
+      case 'DAILY':
+        return this._translateService.instant(
+          T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_DAILY,
+          {
+            x: repeatEvery,
+          },
+        );
+      case 'WEEKLY_CURRENT_WEEKDAY': {
+        const dateStr = this.state().date;
+        const refDate = dateStr ? dateStrToUtcDate(dateStr) : new Date();
+        return this._translateService.instant(T.F.TASK_REPEAT.F.Q_EVERY_X_WEEKS, {
+          x: repeatEvery,
+          weekdayStr: refDate.toLocaleDateString(
+            this._dateTimeFormatService.textLocale(),
+            { weekday: 'long' },
+          ),
+        });
+      }
+      case 'MONTHLY_CURRENT_DATE':
+        return this._translateService.instant(
+          T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_MONTHLY,
+          { x: repeatEvery },
+        );
+      case 'YEARLY_CURRENT_DATE':
+        return this._translateService.instant(
+          T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_YEARLY,
+          { x: repeatEvery },
+        );
+      default:
+        return null;
+    }
+  }
 
   // Emoji detection for project icons
   isProjectEmojiIcon = computed(() => {
@@ -336,7 +383,12 @@ export class AddTaskBarActionsComponent {
   }
 
   clearRepeatSetting(): void {
-    this.stateService.clearRepeatSetting();
+    const currentInput = this.stateService.inputTxt();
+    const cleanedInput = this._parserService.removeShortSyntaxFromInput(
+      currentInput,
+      'repeat',
+    );
+    this.stateService.clearRepeatSetting(cleanedInput);
     this.refocus.emit();
   }
 

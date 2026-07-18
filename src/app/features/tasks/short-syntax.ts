@@ -8,6 +8,7 @@ import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { nanoid } from 'nanoid';
 import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
+import { RepeatQuickSetting } from '../task-repeat-cfg/task-repeat-cfg.model';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
@@ -16,6 +17,11 @@ type TagChanges = {
   taskChanges?: Partial<TaskCopy>;
   newTagTitlesToCreate?: string[];
 };
+
+export interface ShortSyntaxRepeatCfg {
+  quickSetting: RepeatQuickSetting;
+  repeatEvery: number;
+}
 
 const CH_TSP = '/';
 // Due how this expression capture clusters of duration units, be mindful of
@@ -92,6 +98,140 @@ const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`,
 // Match string starting with the literal @ and followed by 1 or more of the characters
 // not in the ALL_SPECIAL
 const SHORT_SYNTAX_DUE_REG_EX = new RegExp(`\\${CH_DUE}[^${ALL_SPECIAL}]+`, 'gi');
+
+// Weekday unit → Date.getDay() index; covers abbreviations and singular form
+// (plural "fridays" is normalized by stripping the trailing "s" before lookup)
+const WEEKDAY_UNITS: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
+
+// Recurrence phrase at the start of a due match: either a bare frequency word
+// ("@daily") or an "every ..." phrase ("@every friday", "@every 2 weeks",
+// "@every 15th"). Anchored to the start so "@some day every year" is parsed as
+// a plain date, not a recurrence.
+export const SHORT_SYNTAX_REPEAT_REG_EX = new RegExp(
+  '^(?:(daily|weekly|monthly|yearly|annually)' +
+    '|every(?:\\s+(\\d{1,3}))?\\s+(' +
+    'days?|weeks?|months?|years?|weekdays?|workdays?' +
+    '|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?' +
+    '|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun' +
+    '|\\d{1,2}(?:st|nd|rd|th)' +
+    '))(?=\\s|$)',
+  'i',
+);
+
+interface RepeatSyntaxResult {
+  repeatCfg: ShortSyntaxRepeatCfg;
+  // Remainder after the recurrence phrase, run through chrono for an optional
+  // time ("3pm" in "@every friday 3pm")
+  chronoText: string;
+  // Chars of the due match consumed by the recurrence phrase itself
+  consumedLength: number;
+  // Anchor for the first occurrence; chrono never sees the unit word
+  weekday?: number;
+  dayOfMonth?: number;
+}
+
+const parseRepeatSyntax = (dueMatchContent: string): RepeatSyntaxResult | null => {
+  const m = dueMatchContent.match(SHORT_SYNTAX_REPEAT_REG_EX);
+  if (!m) {
+    return null;
+  }
+  const bareWord = m[1]?.toLowerCase();
+  const repeatEvery = m[2] ? Math.max(1, +m[2]) : 1;
+  const unit = m[3]?.toLowerCase();
+  const remainder = dueMatchContent.slice(m[0].length);
+
+  const result = (
+    quickSetting: RepeatQuickSetting,
+    anchor?: { weekday?: number; dayOfMonth?: number },
+  ): RepeatSyntaxResult => ({
+    repeatCfg: { quickSetting, repeatEvery },
+    chronoText: remainder,
+    consumedLength: m[0].length,
+    ...anchor,
+  });
+
+  if (bareWord) {
+    switch (bareWord) {
+      case 'daily':
+        return result('DAILY');
+      case 'weekly':
+        return result('WEEKLY_CURRENT_WEEKDAY');
+      case 'monthly':
+        return result('MONTHLY_CURRENT_DATE');
+      default:
+        // yearly | annually
+        return result('YEARLY_CURRENT_DATE');
+    }
+  }
+
+  const weekday = WEEKDAY_UNITS[unit] ?? WEEKDAY_UNITS[unit.replace(/s$/, '')];
+  if (weekday !== undefined) {
+    return result('WEEKLY_CURRENT_WEEKDAY', { weekday });
+  }
+
+  const ordinalMatch = unit.match(/^(\d{1,2})(?:st|nd|rd|th)$/);
+  if (ordinalMatch) {
+    const dayOfMonth = +ordinalMatch[1];
+    if (dayOfMonth < 1 || dayOfMonth > 31) {
+      return null;
+    }
+    return result('MONTHLY_CURRENT_DATE', { dayOfMonth });
+  }
+
+  if (unit.startsWith('weekday') || unit.startsWith('workday')) {
+    return result('MONDAY_TO_FRIDAY');
+  }
+  if (unit.startsWith('day')) {
+    return result('DAILY');
+  }
+  if (unit.startsWith('week')) {
+    return result('WEEKLY_CURRENT_WEEKDAY');
+  }
+  if (unit.startsWith('month')) {
+    return result('MONTHLY_CURRENT_DATE');
+  }
+  // year(s)
+  return result('YEARLY_CURRENT_DATE');
+};
+
+// Next date falling on the given weekday, today or later, at 12:00 (mirrors
+// chrono's implied-time default so the downstream dueDay conversion matches)
+const getNextWeekdayDate = (now: Date, weekday: number): Date => {
+  const diff = (weekday - now.getDay() + 7) % 7;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, 12, 0);
+};
+
+// Next date with the given day-of-month, today or later; months without that
+// day (e.g. "every 31st" in February) are skipped, matching how the monthly
+// repeat engine clamps occurrences.
+const getNextDayOfMonthDate = (now: Date, dayOfMonth: number): Date | null => {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  for (let i = 0; i < 24; i++) {
+    const candidate = new Date(now.getFullYear(), now.getMonth() + i, dayOfMonth, 12, 0);
+    if (candidate.getDate() === dayOfMonth && candidate >= startOfToday) {
+      return candidate;
+    }
+  }
+  return null;
+};
 const SHORT_SYNTAX_DEADLINE_REG_EX = new RegExp(
   `\\${CH_DEADLINE}[^${ALL_SPECIAL}]+`,
   'gi',
@@ -117,6 +257,10 @@ export const shortSyntax = async (
   allProjects?: Project[],
   now = new Date(),
   mode: 'combine' | 'replace' = 'combine',
+  // Recurrence syntax ("@every friday") is only meaningful where a repeat cfg
+  // can be created for the result — the add-task bar. Title edits of existing
+  // tasks keep parsing it as a plain date.
+  isParseRepeat: boolean = false,
 ): Promise<
   | {
       taskChanges: Partial<Task> & { hasDeadlineTime?: boolean };
@@ -124,6 +268,7 @@ export const shortSyntax = async (
       remindAt: number | null;
       projectId: string | undefined;
       attachments: TaskAttachment[];
+      repeatCfg: ShortSyntaxRepeatCfg | null;
     }
   | undefined
 > => {
@@ -139,13 +284,16 @@ export const shortSyntax = async (
   let changesForProject: ProjectChanges = {};
   let changesForTag: TagChanges = {};
   let attachments: TaskAttachment[] = [];
+  let repeatCfg: ShortSyntaxRepeatCfg | null = null;
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
-    const dueChanges = await parseScheduledDate(
+    const { repeatCfg: parsedRepeatCfg, ...dueChanges } = await parseScheduledDate(
       { ...task, title: taskChanges.title || task.title },
       now,
+      isParseRepeat,
     );
+    repeatCfg = parsedRepeatCfg || null;
     const deadlineChanges = await parseDeadlineDate(
       { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
       now,
@@ -213,6 +361,7 @@ export const shortSyntax = async (
     remindAt: null,
     projectId: changesForProject.projectId,
     attachments,
+    repeatCfg,
     // remindAt: changesForDue.remindAt
   };
 };
@@ -394,7 +543,10 @@ const parseShortSyntaxDate = async (
   now: Date,
   regEx: RegExp,
   isDeadline: boolean,
-): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> => {
+  isParseRepeat: boolean = false,
+): Promise<
+  Partial<TaskCopy> & { hasDeadlineTime?: boolean; repeatCfg?: ShortSyntaxRepeatCfg }
+> => {
   if (!task.title) {
     return {};
   }
@@ -408,6 +560,13 @@ const parseShortSyntaxDate = async (
         indexBeforeTrigger >= 0 ? task.title.charAt(indexBeforeTrigger) : '';
       if (charBeforeTrigger && charBeforeTrigger !== ' ') {
         return {};
+      }
+    }
+
+    if (!isDeadline && isParseRepeat) {
+      const repeatResult = parseRepeatSyntax(rr[0].substring(1));
+      if (repeatResult) {
+        return await applyRepeatSyntax(task, now, rr[0], repeatResult);
       }
     }
 
@@ -495,11 +654,73 @@ const parseShortSyntaxDate = async (
   return {};
 };
 
+// Resolves a matched recurrence phrase into task changes: the quick-setting
+// repeat cfg plus an optional anchor date/time parsed from what follows the
+// phrase ("@every friday 3pm" → next Friday 15:00), with the consumed syntax
+// stripped from the title.
+const applyRepeatSyntax = async (
+  task: Partial<TaskCopy>,
+  now: Date,
+  dueMatch: string,
+  repeatResult: RepeatSyntaxResult,
+): Promise<Partial<TaskCopy> & { repeatCfg?: ShortSyntaxRepeatCfg }> => {
+  const { repeatCfg, chronoText, consumedLength, weekday, dayOfMonth } = repeatResult;
+  const dateParser = await loadCustomDateParser();
+  const parsedDateArr = chronoText
+    ? dateParser.parse(chronoText, now, { forwardDate: true })
+    : [];
+  const parsedDateResult = parsedDateArr.length ? parsedDateArr[0] : null;
+  // Chars of the due match consumed in total (incl. the trigger char) — the
+  // recurrence phrase itself plus whatever chrono matched of the remainder
+  const consumedTotal =
+    1 +
+    consumedLength +
+    (parsedDateResult ? parsedDateResult.index + parsedDateResult.text.length : 0);
+  const textToReplace = dueMatch.substring(0, consumedTotal);
+  const title = (task.title as string).replace(textToReplace, '').trim();
+  const hasTime = !!parsedDateResult && parsedDateResult.start.isCertain('hour');
+
+  const anchorDate =
+    weekday !== undefined
+      ? getNextWeekdayDate(now, weekday)
+      : dayOfMonth !== undefined
+        ? getNextDayOfMonthDate(now, dayOfMonth)
+        : null;
+
+  if (anchorDate) {
+    if (hasTime && parsedDateResult) {
+      const parsed = parsedDateResult.start.date();
+      anchorDate.setHours(parsed.getHours(), parsed.getMinutes(), 0, 0);
+    }
+    return {
+      dueWithTime: anchorDate.getTime(),
+      dueDay: null,
+      title,
+      repeatCfg,
+      ...(hasTime ? {} : { hasPlannedTime: false }),
+    };
+  }
+
+  if (parsedDateResult) {
+    return {
+      dueWithTime: parsedDateResult.start.date().getTime(),
+      dueDay: null,
+      title,
+      repeatCfg,
+      ...(hasTime ? {} : { hasPlannedTime: false }),
+    };
+  }
+
+  return { title, repeatCfg };
+};
+
 const parseScheduledDate = (
   task: Partial<TaskCopy>,
   now: Date,
-): Promise<Partial<TaskCopy> & { hasDeadlineTime?: boolean }> =>
-  parseShortSyntaxDate(task, now, SHORT_SYNTAX_DUE_REG_EX, false);
+  isParseRepeat: boolean = false,
+): Promise<
+  Partial<TaskCopy> & { hasDeadlineTime?: boolean; repeatCfg?: ShortSyntaxRepeatCfg }
+> => parseShortSyntaxDate(task, now, SHORT_SYNTAX_DUE_REG_EX, false, isParseRepeat);
 
 const parseDeadlineDate = (
   task: Partial<TaskCopy>,

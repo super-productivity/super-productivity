@@ -17,6 +17,9 @@ export interface AddTaskBarState {
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
   repeatQuickSetting: RepeatQuickSetting | null;
+  // Interval override from recurrence short syntax ("@every 2 weeks");
+  // null = the quick setting's own default of 1
+  repeatEvery: number | null;
   deadlineDate?: string | null;
   deadlineTime?: string | null;
   deadlineRemindOption?: TaskReminderOptionId | null;
@@ -49,6 +52,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   remindOption: null,
   attachments: [],
   repeatQuickSetting: null,
+  repeatEvery: null,
   deadlineDate: null,
   deadlineTime: null,
   deadlineRemindOption: null,
@@ -133,4 +137,17 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'end of week',
   'end of month',
   'end of year',
+
+  // Recurrence
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+  'every day',
+  'every weekday',
+  'every week',
+  'every monday',
+  'every friday',
+  'every month',
+  'every 2 weeks',
 ];

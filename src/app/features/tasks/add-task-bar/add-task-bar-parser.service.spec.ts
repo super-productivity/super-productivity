@@ -23,6 +23,8 @@ describe('AddTaskBarParserService', () => {
       'updateAttachments',
       'updateDeadline',
       'updateDeadlineRemindOption',
+      'updateRepeatSetting',
+      'clearRepeatSetting',
       'isAutoDetected',
       'state',
     ]);
@@ -146,6 +148,7 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
+          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -184,6 +187,7 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
+          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -219,6 +223,7 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
+          repeatEvery: null,
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -306,6 +311,7 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
+          repeatEvery: null,
         });
 
         await service.parseAndUpdateText(
@@ -338,6 +344,7 @@ describe('AddTaskBarParserService', () => {
           remindOption: null,
           attachments: [],
           repeatQuickSetting: null,
+          repeatEvery: null,
         });
 
         await service.parseAndUpdateText(
@@ -982,6 +989,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1017,6 +1025,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1054,6 +1063,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1089,6 +1099,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1123,6 +1134,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1241,6 +1253,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1275,6 +1288,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1309,6 +1323,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1341,6 +1356,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1374,6 +1390,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1417,6 +1434,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1445,6 +1463,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1493,6 +1512,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1535,6 +1555,7 @@ describe('AddTaskBarParserService', () => {
         remindOption: null,
         attachments: [],
         repeatQuickSetting: null,
+        repeatEvery: null,
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -1551,6 +1572,135 @@ describe('AddTaskBarParserService', () => {
       expect(attachments.length).toBe(1);
       expect(attachments[0].path).toBe('//www.example.com');
       expect(attachments[0].type).toBe('LINK');
+    });
+  });
+
+  describe('repeat short syntax', () => {
+    const cfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const baseState = {
+      projectId: 'default-project',
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      repeatEvery: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    };
+
+    it('should set repeat setting from "@every friday"', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      expect(mockStateService.updateRepeatSetting).toHaveBeenCalledWith(
+        'WEEKLY_CURRENT_WEEKDAY',
+        null,
+      );
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Water plants');
+    });
+
+    it('should pass the interval from "@every 2 weeks"', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Review @every 2 weeks',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      expect(mockStateService.updateRepeatSetting).toHaveBeenCalledWith(
+        'WEEKLY_CURRENT_WEEKDAY',
+        2,
+      );
+    });
+
+    it('should clear the repeat setting when the syntax is removed again', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      mockStateService.state.and.returnValue({
+        ...baseState,
+        repeatQuickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+      } as any);
+      await service.parseAndUpdateText('Water plants', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).toHaveBeenCalled();
+    });
+
+    it('should clear a syntax-set repeat setting when the input is emptied', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      await service.parseAndUpdateText('', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).toHaveBeenCalled();
+    });
+
+    it('should preserve a menu-selected repeat setting on unrelated text', async () => {
+      mockStateService.state.and.returnValue({
+        ...baseState,
+        repeatQuickSetting: 'DAILY',
+      } as any);
+      await service.parseAndUpdateText('Plain task', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeShortSyntaxFromInput repeat', () => {
+    it('should remove "@every friday"', () => {
+      expect(service.removeShortSyntaxFromInput('Water @every friday', 'repeat')).toBe(
+        'Water',
+      );
+    });
+
+    it('should remove "@daily"', () => {
+      expect(service.removeShortSyntaxFromInput('Journal @daily', 'repeat')).toBe(
+        'Journal',
+      );
+    });
+
+    it('should remove "@every 2 weeks"', () => {
+      expect(service.removeShortSyntaxFromInput('Review @every 2 weeks', 'repeat')).toBe(
+        'Review',
+      );
+    });
+
+    it('should leave a trailing time token like the date case does', () => {
+      expect(service.removeShortSyntaxFromInput('Call @every friday 3pm', 'repeat')).toBe(
+        'Call 3pm',
+      );
+    });
+
+    it('should not eat words merely starting with a frequency word', () => {
+      expect(service.removeShortSyntaxFromInput('Meet @dailystandup', 'repeat')).toBe(
+        'Meet @dailystandup',
+      );
     });
   });
 });
