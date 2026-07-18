@@ -6,7 +6,6 @@ import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { mapShortSyntaxTokensToRanges } from '../short-syntax-ranges';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
@@ -92,10 +91,10 @@ export class AddTaskBarParserService {
     }
 
     this._stateService.updateSyntaxHighlight(
-      parseResult && parseResult.parsedTokens.length
+      parseResult && parseResult.parsedRanges.length
         ? {
             forText: text,
-            ranges: mapShortSyntaxTokensToRanges(text, parseResult.parsedTokens),
+            ranges: parseResult.parsedRanges,
           }
         : null,
     );

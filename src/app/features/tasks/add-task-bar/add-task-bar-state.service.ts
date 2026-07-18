@@ -6,7 +6,7 @@ import { SS } from '../../../core/persistence/storage-keys.const';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { ShortSyntaxRange } from '../short-syntax-ranges';
+import { ShortSyntaxRange } from '../short-syntax';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 
 @Injectable()

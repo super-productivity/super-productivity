@@ -1,5 +1,10 @@
 import { TaskCopy } from './task.model';
-import { shortSyntax, parseTimeSpentChanges } from './short-syntax';
+import {
+  shortSyntax,
+  parseTimeSpentChanges,
+  ShortSyntaxRange,
+  ShortSyntaxTokenType,
+} from './short-syntax';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import {
   MONTH_SHORT_NAMES,
@@ -48,6 +53,30 @@ const ALL_TAGS: Tag[] = [
   { ...DEFAULT_TAG, id: 'multi_word_id', title: 'Multi Word Tag' },
 ];
 const CONFIG = DEFAULT_GLOBAL_CONFIG.shortSyntax;
+
+// Builds the expected parsedRanges for inputs where each consumed substring
+// occurs unambiguously; cases exercising ambiguous inputs (token text also
+// present inside a tag/URL/word) assert literal positions instead.
+const expectedRanges = (
+  title: string,
+  tokens: [type: ShortSyntaxTokenType, text: string][],
+): ShortSyntaxRange[] => {
+  const ranges: ShortSyntaxRange[] = [];
+  for (const [type, text] of tokens) {
+    let start = title.indexOf(text);
+    while (
+      start !== -1 &&
+      ranges.some((r) => start < r.end && start + text.length > r.start)
+    ) {
+      start = title.indexOf(text, start + 1);
+    }
+    if (start === -1) {
+      throw new Error(`spec error: '${text}' not found in '${title}'`);
+    }
+    ranges.push({ type, start, end: start + text.length });
+  }
+  return ranges.sort((a, b) => a.start - b.start);
+};
 
 const getPlannedDateTimestampFromShortSyntaxReturnValue = async (
   taskInput: TaskCopy,
@@ -158,7 +187,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '10m/1h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -182,7 +211,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '1h/120m']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -206,7 +235,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '1.5h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -226,7 +255,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '1.5h/2.5h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -259,7 +288,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '30m/']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -488,7 +517,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#blu']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -509,7 +538,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#blu']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -540,7 +569,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#blu']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -561,7 +590,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#hihi'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -582,7 +614,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#A'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -623,7 +658,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#bla']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -645,7 +680,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#hihi'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -678,7 +716,10 @@ describe('shortSyntax', () => {
         newTagTitles: ['idontexist'],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#idontexist'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -711,7 +752,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#bla'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -744,7 +788,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['asd'],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#asd']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -768,7 +812,10 @@ describe('shortSyntax', () => {
         newTagTitles: ['someNewTag3'],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#testing'],
+          ['tag', '#someNewTag3'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -804,7 +851,10 @@ describe('shortSyntax', () => {
         attachments: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#blu'],
+          ['tag', '#idontexist'],
+        ]),
         taskChanges: { tagIds: ['blu_id'], title: 'Fun title' },
       });
     });
@@ -836,7 +886,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#testing']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -860,7 +910,10 @@ describe('shortSyntax', () => {
         newTagTitles: ['testing'],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#testing'],
+          ['tag', '#blu'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -885,7 +938,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#testing'],
+          ['tag', '#blu'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -917,7 +973,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['estimate', '10m/1h'],
+          ['tag', '#blu'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -942,7 +1001,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['estimate', '10m/1h'],
+          ['tag', '#blu'],
+        ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -966,7 +1028,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['tag', '#blu']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -986,7 +1048,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '10m/1h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1025,7 +1087,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+ProjectEasyShort']]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1062,7 +1124,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['estimate', '10m/1h'],
+          ['project', '+ProjectEasyShort'],
+        ]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1086,7 +1151,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '10m/1h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1110,7 +1175,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+ProjectEasyShort']]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1129,7 +1194,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+Project']]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1148,7 +1213,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+Some Project Title']]),
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1167,7 +1232,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+Some Pro']]),
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1186,7 +1251,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+SomePro']]),
         projectId: 'SomeProjectID',
         attachments: [],
         taskChanges: {
@@ -1223,7 +1288,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '10m']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1255,7 +1320,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['project', '+print']]),
         projectId: 'print',
         attachments: [],
         taskChanges: {
@@ -1282,7 +1347,10 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['estimate', '10m/1h'],
+          ['project', '+ProjectEasyShort'],
+        ]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1312,7 +1380,11 @@ describe('shortSyntax', () => {
         newTagTitles: ['tag'],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [
+          ['project', '+ProjectEasyShort'],
+          ['estimate', '30m'],
+          ['tag', '#tag'],
+        ]),
         projectId: 'ProjectEasyShortID',
         attachments: [],
         taskChanges: {
@@ -1553,7 +1625,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '3m']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -1570,7 +1642,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         repeatQuickSetting: null,
-        parsedTokens: jasmine.anything() as any,
+        parsedRanges: expectedRanges(t.title, [['estimate', '3h']]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
@@ -2101,6 +2173,64 @@ describe('shortSyntax', () => {
         expect(r?.attachments[1].path).toBe('https://b.com');
         expect(r?.taskChanges.title).toBe('docs and');
       });
+    });
+  });
+
+  // Positions come from the parser's offset map, not from searching the raw
+  // text — these inputs are exactly the ones where searching guesses wrong
+  describe('parsedRanges position tracking', () => {
+    it('should not highlight an estimate inside a tag', async () => {
+      const t = {
+        ...TASK,
+        title: '#1h retro 1h',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+      expect(r?.taskChanges.title).toBe('retro');
+      expect(r?.newTagTitles).toEqual(['1h']);
+      expect(r?.parsedRanges).toEqual([
+        { type: 'tag', start: 0, end: 3 },
+        { type: 'estimate', start: 10, end: 12 },
+      ]);
+    });
+
+    it('should not highlight an estimate inside a URL', async () => {
+      const t = {
+        ...TASK,
+        title: 'Read https://ex.com/30m-guide later 30m',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r?.taskChanges.title).toBe('Read later');
+      expect(r?.parsedRanges).toEqual([
+        { type: 'url', start: 5, end: 29 },
+        { type: 'estimate', start: 36, end: 39 },
+      ]);
+    });
+
+    it('should split a due range around an earlier estimate removal', async () => {
+      const t = {
+        ...TASK,
+        title: 'Call Bob @tomorrow 1h evening',
+      };
+      const now = new Date(2024, 0, 15, 10, 0, 0, 0);
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+      expect(r?.taskChanges.title).toBe('Call Bob');
+      expect(r?.parsedRanges).toEqual([
+        { type: 'due', start: 9, end: 18 },
+        { type: 'estimate', start: 19, end: 21 },
+        { type: 'due', start: 22, end: 29 },
+      ]);
+    });
+
+    it('should locate duplicate tag texts at distinct positions', async () => {
+      const t = {
+        ...TASK,
+        title: 'A #blu #blu',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+      expect(r?.parsedRanges).toEqual([
+        { type: 'tag', start: 2, end: 6 },
+        { type: 'tag', start: 7, end: 11 },
+      ]);
     });
   });
 });

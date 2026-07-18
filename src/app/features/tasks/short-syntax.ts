@@ -9,15 +9,16 @@ import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { nanoid } from 'nanoid';
 import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
 import { RepeatQuickSetting } from '../task-repeat-cfg/task-repeat-cfg.model';
+import { TextRange, TrackedTitle } from './tracked-title';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
-  matchedText?: string;
 };
 type TagChanges = {
-  taskChanges?: Partial<TaskCopy>;
-  newTagTitlesToCreate?: string[];
-  matchedTexts?: string[];
+  taskChanges: Partial<TaskCopy>;
+  newTagTitlesToCreate: string[];
+  ranges: TextRange[];
+  isTitleChanged: boolean;
 };
 
 export type ShortSyntaxTokenType =
@@ -28,13 +29,16 @@ export type ShortSyntaxTokenType =
   | 'project'
   | 'url';
 
-// The exact substring a parse stage consumed from the (progressively stripped)
-// title, e.g. '@every friday', '#home', '+work', '30m/1h'. Used to highlight
-// detected syntax in the input; positions are resolved against the raw input
-// separately since each stage sees an already-stripped title.
-export interface ShortSyntaxToken {
+// A span of the *raw* input consumed by a parse stage, e.g. '@every friday',
+// '#home', '+work', '30m/1h'. Used to highlight detected syntax in the input.
+// Each stage sees an already-stripped working title, so positions are mapped
+// back through the TrackedTitle offset map; a token whose consumed text is
+// split by an earlier removal ("@tomorrow evening" around a stripped "1h")
+// yields one range per contiguous run.
+export interface ShortSyntaxRange {
   type: ShortSyntaxTokenType;
-  text: string;
+  start: number;
+  end: number;
 }
 
 const CH_TSP = '/';
@@ -289,7 +293,7 @@ export const shortSyntax = async (
       projectId: string | undefined;
       attachments: TaskAttachment[];
       repeatQuickSetting: RepeatQuickSetting | null;
-      parsedTokens: ShortSyntaxToken[];
+      parsedRanges: ShortSyntaxRange[];
     }
   | undefined
 > => {
@@ -302,80 +306,70 @@ export const shortSyntax = async (
 
   // TODO clean up this mess
   let taskChanges: Partial<TaskCopy> & { hasDeadlineTime?: boolean } = {};
-  let changesForProject: ProjectChanges = {};
-  let changesForTag: TagChanges = {};
+  let projectId: string | undefined;
+  let newTagTitles: string[] = [];
   let attachments: TaskAttachment[] = [];
   let repeatQuickSetting: RepeatQuickSetting | null = null;
-  const parsedTokens: ShortSyntaxToken[] = [];
+  const parsedRanges: ShortSyntaxRange[] = [];
+  // The working title all stages strip from; maps every surviving character
+  // back to its raw-input position so consumed spans highlight exactly.
+  const tracked = new TrackedTitle(task.title);
+  let isTitleChanged = false;
+  const pushRanges = (type: ShortSyntaxTokenType, ranges: TextRange[]): void => {
+    ranges.forEach((r) => parsedRanges.push({ type, ...r }));
+  };
 
   if (config.isEnableDue) {
-    taskChanges = parseTimeSpentChanges(task);
-    const timeMatch = SHORT_SYNTAX_TIME_REG_EX.exec(task.title);
-    if (timeMatch) {
-      parsedTokens.push({ type: 'estimate', text: timeMatch[0].trim() });
+    const timeResult = parseTimeSpentTracked(task, tracked);
+    if (timeResult) {
+      taskChanges = { ...timeResult.changes };
+      pushRanges('estimate', timeResult.ranges);
+      isTitleChanged = true;
     }
-    const {
-      repeatQuickSetting: parsedRepeatQuickSetting,
-      matchedSyntaxText: dueMatchedText,
-      ...dueChanges
-    } = await parseScheduledDate(
-      { ...task, title: taskChanges.title || task.title },
-      now,
-      isParseRepeat,
-    );
-    repeatQuickSetting = parsedRepeatQuickSetting || null;
-    if (dueMatchedText) {
-      parsedTokens.push({ type: 'due', text: dueMatchedText });
+    const dueResult = await parseScheduledDate(tracked, now, isParseRepeat);
+    if (dueResult) {
+      repeatQuickSetting = dueResult.repeatQuickSetting || null;
+      taskChanges = { ...taskChanges, ...dueResult.changes };
+      pushRanges('due', dueResult.ranges);
+      isTitleChanged = true;
     }
-    const { matchedSyntaxText: deadlineMatchedText, ...deadlineChanges } =
-      await parseDeadlineDate(
-        { ...task, title: dueChanges.title ?? (taskChanges.title || task.title) },
-        now,
-      );
-    if (deadlineMatchedText) {
-      parsedTokens.push({ type: 'deadline', text: deadlineMatchedText });
+    const deadlineResult = await parseDeadlineDate(tracked, now);
+    if (deadlineResult) {
+      taskChanges = { ...taskChanges, ...deadlineResult.changes };
+      pushRanges('deadline', deadlineResult.ranges);
+      isTitleChanged = true;
     }
-    taskChanges = { ...taskChanges, ...dueChanges, ...deadlineChanges };
   }
 
   if (config.isEnableProject) {
-    changesForProject = parseProjectChanges(
-      { ...task, title: taskChanges.title || task.title },
+    const projectResult = parseProjectTracked(
+      task,
+      tracked,
       allProjects?.filter((p) => !p.isArchived && !p.isHiddenFromMenu),
     );
-    if (changesForProject.projectId) {
-      taskChanges = {
-        ...taskChanges,
-        title: changesForProject.title,
-      };
-      if (changesForProject.matchedText) {
-        parsedTokens.push({ type: 'project', text: changesForProject.matchedText });
-      }
+    if (projectResult) {
+      projectId = projectResult.projectId;
+      pushRanges('project', projectResult.ranges);
+      isTitleChanged = true;
     }
   }
 
   if (config.isEnableTag) {
-    changesForTag = parseTagChanges(
-      { ...task, title: taskChanges.title || task.title },
-      allTags,
-      mode,
-    );
+    const tagResult = parseTagChanges(task, tracked, allTags, mode);
     taskChanges = {
       ...taskChanges,
-      ...(changesForTag.taskChanges || {}),
+      ...tagResult.taskChanges,
     };
-    changesForTag.matchedTexts?.forEach((text) => {
-      parsedTokens.push({ type: 'tag', text });
-    });
+    newTagTitles = tagResult.newTagTitlesToCreate;
+    pushRanges('tag', tagResult.ranges);
+    isTitleChanged = isTitleChanged || tagResult.isTitleChanged;
   }
 
-  const urlChanges = parseUrlAttachments(
-    {
-      ...task,
-      title: taskChanges.title || task.title,
-    },
-    config,
-  );
+  if (isTitleChanged) {
+    taskChanges.title = tracked.text;
+  }
+
+  const urlChanges = parseUrlAttachments(task, tracked, config);
   if (urlChanges) {
     if (urlChanges.attachments.length > 0) {
       attachments = urlChanges.attachments;
@@ -384,32 +378,23 @@ export const shortSyntax = async (
       ...taskChanges,
       title: urlChanges.title,
     };
-    urlChanges.matchedTexts.forEach((text) => {
-      parsedTokens.push({ type: 'url', text });
-    });
+    pushRanges('url', urlChanges.ranges);
   }
-
-  // const changesForDue = parseDueChanges({...task, title: taskChanges.title || task.title});
-  // if (changesForDue.remindAt) {
-  //   taskChanges = {
-  //     ...taskChanges,
-  //     title: changesForDue.title,
-  //   };
-  // }
 
   if (Object.keys(taskChanges).length === 0 && attachments.length === 0) {
     return undefined;
   }
 
+  parsedRanges.sort((a, b) => a.start - b.start);
+
   return {
     taskChanges,
-    newTagTitles: changesForTag.newTagTitlesToCreate || [],
+    newTagTitles,
     remindAt: null,
-    projectId: changesForProject.projectId,
+    projectId,
     attachments,
     repeatQuickSetting,
-    parsedTokens,
-    // remindAt: changesForDue.remindAt
+    parsedRanges,
   };
 };
 
@@ -417,29 +402,57 @@ export const parseProjectChanges = (
   task: Partial<TaskCopy>,
   allProjects?: Project[],
 ): ProjectChanges => {
-  if (
-    task.issueId || // don't allow for issue tasks
-    !task.title ||
-    !Array.isArray(allProjects) ||
-    !allProjects ||
-    allProjects.length === 0
-  ) {
+  if (!task.title) {
     return {};
   }
+  const tracked = new TrackedTitle(task.title);
+  const result = parseProjectTracked(task, tracked, allProjects);
+  return result ? { title: tracked.text, projectId: result.projectId } : {};
+};
 
-  const rr = task.title.match(SHORT_SYNTAX_PROJECT_REG_EX);
+const parseProjectTracked = (
+  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
+  allProjects?: Project[],
+): { projectId: string; ranges: TextRange[] } | null => {
+  if (
+    task.issueId || // don't allow for issue tasks
+    !tracked.text ||
+    !Array.isArray(allProjects) ||
+    allProjects.length === 0
+  ) {
+    return null;
+  }
+
+  const rr = tracked.text.match(SHORT_SYNTAX_PROJECT_REG_EX);
 
   if (rr && rr[0]) {
     const projectTitle: string = rr[0].trim().replace(CH_PRO, '');
     const projectTitleToMatch = projectTitle.replaceAll(' ', '').toLowerCase();
     const indexBeforePlus =
-      task.title.toLowerCase().lastIndexOf(CH_PRO + projectTitleToMatch) - 1;
-    const charBeforePlus = task.title.charAt(indexBeforePlus);
+      tracked.text.toLowerCase().lastIndexOf(CH_PRO + projectTitleToMatch) - 1;
+    const charBeforePlus = tracked.text.charAt(indexBeforePlus);
 
     // don't parse Fun title+blu as project
     if (charBeforePlus && charBeforePlus !== ' ') {
-      return {};
+      return null;
     }
+
+    const consume = (matchedText: string): TextRange[] => {
+      const start = tracked.text.indexOf(matchedText);
+      if (start === -1) {
+        return [];
+      }
+      const ranges = tracked.rawRanges(start, start + matchedText.length);
+      tracked.remove(start, start + matchedText.length);
+      tracked.trim();
+      // get rid of excess whitespace a mid-title removal leaves behind
+      const doubleSpaceIdx = tracked.text.indexOf('  ');
+      if (doubleSpaceIdx !== -1) {
+        tracked.remove(doubleSpaceIdx, doubleSpaceIdx + 1);
+      }
+      return ranges;
+    };
 
     // Prefer shortest prefix-based project title match
     const sortedAllProjects = allProjects
@@ -454,12 +467,8 @@ export const parseProjectChanges = (
 
     if (existingProject) {
       return {
-        title: task.title
-          ?.replace(`${CH_PRO}${projectTitle}`, '')
-          .trim()
-          .replace('  ', ' '),
         projectId: existingProject.id,
-        matchedText: `${CH_PRO}${projectTitle}`,
+        ranges: consume(`${CH_PRO}${projectTitle}`),
       };
     }
 
@@ -474,32 +483,29 @@ export const parseProjectChanges = (
 
     if (existingProjectForFirstWordOnly) {
       return {
-        title: task.title
-          ?.replace(`${CH_PRO}${projectTitleFirstWordOnly}`, '')
-          .trim()
-          // get rid of excess whitespaces
-          .replace('  ', ' '),
         projectId: existingProjectForFirstWordOnly.id,
-        matchedText: `${CH_PRO}${projectTitleFirstWordOnly}`,
+        ranges: consume(`${CH_PRO}${projectTitleFirstWordOnly}`),
       };
     }
   }
 
-  return {};
+  return null;
 };
 
 const parseTagChanges = (
   task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   allTags?: Tag[],
   mode: 'combine' | 'replace' = 'combine',
 ): TagChanges => {
   const taskChanges: Partial<TaskCopy> = {};
 
   const newTagTitlesToCreate: string[] = [];
-  const matchedTexts: string[] = [];
+  const ranges: TextRange[] = [];
+  let isTitleChanged = false;
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
-    const initialTitle = task.title as string;
+    const initialTitle = tracked.text;
     const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX);
 
     if (regexTagTitles && regexTagTitles.length) {
@@ -560,69 +566,64 @@ const parseTagChanges = (
         }
       }
 
-      if (
-        newTagTitlesToCreate.length ||
-        taskChanges.tagIds?.length ||
-        regexTagTitlesTrimmedAndFiltered.length
-      ) {
-        taskChanges.title = initialTitle;
+      if (regexTagTitlesTrimmedAndFiltered.length) {
         regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
-          taskChanges.title = taskChanges.title?.replace(`#${tagTitle}`, '');
-          matchedTexts.push(`#${tagTitle}`);
+          const matchedText = `${CH_TAG}${tagTitle}`;
+          const start = tracked.text.indexOf(matchedText);
+          if (start !== -1) {
+            ranges.push(...tracked.rawRanges(start, start + matchedText.length));
+            tracked.remove(start, start + matchedText.length);
+          }
         });
-        taskChanges.title = taskChanges.title.trim();
+        tracked.trim();
+        isTitleChanged = true;
       }
-
-      // TaskLog.log(task.title);
-      // TaskLog.log('newTagTitles', regexTagTitles);
-      // TaskLog.log('newTagTitlesTrimmed', regexTagTitlesTrimmedAndFiltered);
-      // TaskLog.log('allTags)', allTags.map(tag => `${tag.id}: ${tag.title}`));
-      // TaskLog.log('task.tagIds', task.tagIds);
-      // TaskLog.log('task.title', task.title);
     }
   }
-  // TaskLog.log(taskChanges);
 
   return {
     taskChanges,
     newTagTitlesToCreate,
-    matchedTexts,
+    ranges,
+    isTitleChanged,
   };
 };
 
+// Result of a date-like stage: the task field changes plus the raw-input
+// ranges of the consumed syntax (the working-title edit happens on `tracked`)
+interface DateStageResult {
+  changes: Partial<TaskCopy> & { hasDeadlineTime?: boolean };
+  repeatQuickSetting?: RepeatQuickSetting;
+  ranges: TextRange[];
+}
+
 const parseShortSyntaxDate = async (
-  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   now: Date,
   regEx: RegExp,
   isDeadline: boolean,
   isParseRepeat: boolean = false,
-): Promise<
-  Partial<TaskCopy> & {
-    hasDeadlineTime?: boolean;
-    repeatQuickSetting?: RepeatQuickSetting;
-    matchedSyntaxText?: string;
+): Promise<DateStageResult | null> => {
+  if (!tracked.text) {
+    return null;
   }
-> => {
-  if (!task.title) {
-    return {};
-  }
-  const rr = task.title.match(regEx);
+  const rr = tracked.text.match(regEx);
 
   if (rr && rr[0]) {
     if (isDeadline) {
       // Check if the character before trigger is a space or start of string
-      const indexBeforeTrigger = task.title.indexOf(rr[0]) - 1;
+      const indexBeforeTrigger = tracked.text.indexOf(rr[0]) - 1;
       const charBeforeTrigger =
-        indexBeforeTrigger >= 0 ? task.title.charAt(indexBeforeTrigger) : '';
+        indexBeforeTrigger >= 0 ? tracked.text.charAt(indexBeforeTrigger) : '';
       if (charBeforeTrigger && charBeforeTrigger !== ' ') {
-        return {};
+        return null;
       }
     }
 
     if (!isDeadline && isParseRepeat) {
       const repeatResult = parseRepeatSyntax(rr[0].substring(1));
       if (repeatResult) {
-        return await applyRepeatSyntax(task, now, rr[0], repeatResult);
+        return await applyRepeatSyntax(tracked, now, rr[0], repeatResult);
       }
     }
 
@@ -630,6 +631,18 @@ const parseShortSyntaxDate = async (
     const parsedDateArr = dateParser.parse(rr[0], now, {
       forwardDate: true,
     });
+
+    // Strip out the short syntax for scheduled date and given date
+    const consume = (textToReplace: string): TextRange[] => {
+      const removeStart = tracked.text.indexOf(textToReplace);
+      if (removeStart === -1) {
+        return [];
+      }
+      const ranges = tracked.rawRanges(removeStart, removeStart + textToReplace.length);
+      tracked.remove(removeStart, removeStart + textToReplace.length);
+      tracked.trim();
+      return ranges;
+    };
 
     if (parsedDateArr.length) {
       const parsedDateResult = parsedDateArr[0];
@@ -646,24 +659,25 @@ const parseShortSyntaxDate = async (
       const matchText = parsedDateResult.text;
       const matchIndex = parsedDateResult.index;
       const textToReplace = rr[0].substring(0, matchIndex + matchText.length);
-      // Strip out the short syntax for scheduled date and given date
-      const title = task.title.replace(textToReplace, '').trim();
+      const ranges = consume(textToReplace);
 
       if (isDeadline) {
         return {
-          deadlineWithTime: due,
-          deadlineDay: null,
-          title,
-          matchedSyntaxText: textToReplace,
-          ...(hasPlannedTime ? { hasDeadlineTime: true } : { hasDeadlineTime: false }),
+          changes: {
+            deadlineWithTime: due,
+            deadlineDay: null,
+            hasDeadlineTime: hasPlannedTime,
+          },
+          ranges,
         };
       } else {
         return {
-          dueWithTime: due,
-          dueDay: null,
-          title,
-          matchedSyntaxText: textToReplace,
-          ...(hasPlannedTime ? {} : { hasPlannedTime: false }),
+          changes: {
+            dueWithTime: due,
+            dueDay: null,
+            ...(hasPlannedTime ? {} : { hasPlannedTime: false }),
+          },
+          ranges,
         };
       }
     }
@@ -690,28 +704,24 @@ const parseShortSyntaxDate = async (
         const matchIndex = simpleMatch.index as number;
         const matchText = simpleMatch[0];
         const textToReplace = rr[0].substring(0, matchIndex + matchText.length);
-        const title = task.title.replace(textToReplace, '').trim();
+        const ranges = consume(textToReplace);
 
         if (isDeadline) {
           return {
-            deadlineWithTime: due.getTime(),
-            deadlineDay: null,
-            title,
-            matchedSyntaxText: textToReplace,
+            changes: { deadlineWithTime: due.getTime(), deadlineDay: null },
+            ranges,
           };
         } else {
           return {
-            dueWithTime: due.getTime(),
-            dueDay: null,
-            title,
-            matchedSyntaxText: textToReplace,
+            changes: { dueWithTime: due.getTime(), dueDay: null },
+            ranges,
           };
         }
       }
     }
   }
 
-  return {};
+  return null;
 };
 
 // Resolves a matched recurrence phrase into task changes: the quick-setting
@@ -719,18 +729,12 @@ const parseShortSyntaxDate = async (
 // phrase ("@every friday 3pm" → next Friday 15:00), with the consumed syntax
 // stripped from the title.
 const applyRepeatSyntax = async (
-  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   now: Date,
   dueMatch: string,
   repeatResult: RepeatSyntaxResult,
-): Promise<
-  Partial<TaskCopy> & {
-    repeatQuickSetting?: RepeatQuickSetting;
-    matchedSyntaxText?: string;
-  }
-> => {
+): Promise<DateStageResult> => {
   const { quickSetting, chronoText, consumedLength, weekday, dayOfMonth } = repeatResult;
-  const fullTitle = task.title as string;
   const dateParser = await loadCustomDateParser();
   const parsedDateArr = chronoText
     ? dateParser.parse(chronoText, now, { forwardDate: true })
@@ -750,18 +754,27 @@ const applyRepeatSyntax = async (
     consumedLength +
     (parsedDateResult ? parsedDateResult.index + parsedDateResult.text.length : 0);
   const textToReplace = dueMatch.substring(0, consumedTotal);
-  const tokenStart = fullTitle.indexOf(textToReplace);
-  let head = fullTitle.slice(0, tokenStart);
-  let tail = fullTitle.slice(tokenStart + textToReplace.length);
+  const tokenStart = tracked.text.indexOf(textToReplace);
+  const tokenEnd = tokenStart + textToReplace.length;
+  const ranges = tracked.rawRanges(tokenStart, tokenEnd);
+  const head = tracked.text.slice(0, tokenStart);
+  const tail = tracked.text.slice(tokenEnd);
   // Trailing punctuation stays in the title; join it to the preceding word so
   // "Water plants @every friday." becomes "Water plants." and not
   // "Water plants .". A mid-title phrase must not leave a double space either.
   if (/^[.,;:!?]/.test(tail)) {
-    head = head.replace(/\s+$/, '');
+    let wsStart = tokenStart;
+    while (wsStart > 0 && /\s/.test(tracked.text[wsStart - 1])) {
+      wsStart--;
+    }
+    tracked.remove(wsStart, tokenEnd);
   } else if (/\s$/.test(head) && /^\s/.test(tail)) {
-    tail = tail.replace(/^\s+/, '');
+    const tailWs = tail.match(/^\s+/);
+    tracked.remove(tokenStart, tokenEnd + (tailWs ? tailWs[0].length : 0));
+  } else {
+    tracked.remove(tokenStart, tokenEnd);
   }
-  const title = (head + tail).trim();
+  tracked.trim();
   const hasTime = !!parsedDateResult && parsedDateResult.start.isCertain('hour');
 
   let anchorDate =
@@ -798,76 +811,90 @@ const applyRepeatSyntax = async (
       }
     }
     return {
-      dueWithTime: anchorDate.getTime(),
-      dueDay: null,
-      title,
+      changes: {
+        dueWithTime: anchorDate.getTime(),
+        dueDay: null,
+        ...(hasTime ? {} : { hasPlannedTime: false }),
+      },
       repeatQuickSetting: quickSetting,
-      matchedSyntaxText: textToReplace,
-      ...(hasTime ? {} : { hasPlannedTime: false }),
+      ranges,
     };
   }
 
   if (parsedDateResult) {
     return {
-      dueWithTime: parsedDateResult.start.date().getTime(),
-      dueDay: null,
-      title,
+      changes: {
+        dueWithTime: parsedDateResult.start.date().getTime(),
+        dueDay: null,
+        ...(hasTime ? {} : { hasPlannedTime: false }),
+      },
       repeatQuickSetting: quickSetting,
-      matchedSyntaxText: textToReplace,
-      ...(hasTime ? {} : { hasPlannedTime: false }),
+      ranges,
     };
   }
 
-  return { title, repeatQuickSetting: quickSetting, matchedSyntaxText: textToReplace };
+  return { changes: {}, repeatQuickSetting: quickSetting, ranges };
 };
 
 const parseScheduledDate = (
-  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   now: Date,
   isParseRepeat: boolean = false,
-): Promise<
-  Partial<TaskCopy> & {
-    hasDeadlineTime?: boolean;
-    repeatQuickSetting?: RepeatQuickSetting;
-    matchedSyntaxText?: string;
-  }
-> => parseShortSyntaxDate(task, now, SHORT_SYNTAX_DUE_REG_EX, false, isParseRepeat);
+): Promise<DateStageResult | null> =>
+  parseShortSyntaxDate(tracked, now, SHORT_SYNTAX_DUE_REG_EX, false, isParseRepeat);
 
 const parseDeadlineDate = (
-  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   now: Date,
-): Promise<
-  Partial<TaskCopy> & { hasDeadlineTime?: boolean; matchedSyntaxText?: string }
-> => parseShortSyntaxDate(task, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
+): Promise<DateStageResult | null> =>
+  parseShortSyntaxDate(tracked, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
+
+const parseTimeSpentTracked = (
+  task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
+): { changes: Partial<Task>; ranges: TextRange[] } | null => {
+  if (!tracked.text) {
+    return null;
+  }
+
+  const matches = SHORT_SYNTAX_TIME_REG_EX.exec(tracked.text);
+  if (!matches) {
+    return null;
+  }
+
+  const [matchSpan, preSplit, postSplit] = matches;
+  const start = matches.index;
+  const ranges = tracked.rawRanges(start, start + matchSpan.length);
+  tracked.remove(start, start + matchSpan.length);
+  tracked.trim();
+  const timeSpent = matchSpan.includes(CH_TSP) ? preSplit : null;
+  const timeEstimate = timeSpent === null ? preSplit : postSplit;
+
+  return {
+    changes: {
+      ...(typeof timeSpent === 'string' && {
+        timeSpentOnDay: {
+          ...task.timeSpentOnDay,
+          [getDbDateStr()]: timeSpent
+            .split(/\s+/g)
+            .reduce((ms, s) => ms + stringToMs(s), 0),
+        },
+      }),
+      ...(typeof timeEstimate === 'string' && {
+        timeEstimate: timeEstimate.split(/\s+/g).reduce((ms, s) => ms + stringToMs(s), 0),
+      }),
+    },
+    ranges,
+  };
+};
 
 export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   if (!task.title) {
     return {};
   }
-
-  const matches = SHORT_SYNTAX_TIME_REG_EX.exec(task.title);
-  if (!matches) {
-    return {};
-  }
-
-  const [matchSpan, preSplit, postSplit] = matches;
-  const timeSpent = matchSpan.includes(CH_TSP) ? preSplit : null;
-  const timeEstimate = timeSpent === null ? preSplit : postSplit;
-
-  return {
-    ...(typeof timeSpent === 'string' && {
-      timeSpentOnDay: {
-        ...task.timeSpentOnDay,
-        [getDbDateStr()]: timeSpent
-          .split(/\s+/g)
-          .reduce((ms, s) => ms + stringToMs(s), 0),
-      },
-    }),
-    ...(typeof timeEstimate === 'string' && {
-      timeEstimate: timeEstimate.split(/\s+/g).reduce((ms, s) => ms + stringToMs(s), 0),
-    }),
-    title: task.title.replace(matchSpan, '').trim(),
-  };
+  const tracked = new TrackedTitle(task.title);
+  const result = parseTimeSpentTracked(task, tracked);
+  return result ? { ...result.changes, title: tracked.text } : {};
 };
 
 /**
@@ -895,22 +922,25 @@ const extractMarkdownLinks = (
 
 const parseUrlAttachments = (
   task: Partial<TaskCopy>,
+  tracked: TrackedTitle,
   config: ShortSyntaxConfig,
 ):
   | {
       attachments: TaskAttachment[];
       title: string;
-      matchedTexts: string[];
+      ranges: TextRange[];
     }
   | undefined => {
-  if (!task.title || task.issueId) {
+  if (!tracked.text || task.issueId) {
     return undefined;
   }
+
+  const titleBefore = tracked.text;
 
   // 1. Extract markdown links first — they take priority over plain URL matching
   // This prevents the plain URL regex from greedily including the closing ')' of
   // markdown syntax like [text](https://example.com/)
-  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(task.title);
+  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(titleBefore);
 
   // 2. Then match remaining plain URLs in the title (after markdown links are replaced)
   const plainUrlMatches = titleWithoutMarkdown.match(SHORT_SYNTAX_URL_REG_EX) || [];
@@ -929,11 +959,41 @@ const parseUrlAttachments = (
   // Filter out attachments that already exist (prevent duplicates)
   const newAttachments = filterDuplicateUrlAttachments(allUrls, task.attachments || []);
 
-  let cleanedTitle = task.title;
+  const ranges: TextRange[] = [];
+  let cleanedTitle = titleBefore;
   if (config.urlBehavior === 'extract') {
     // In extract mode: replace markdown links with display text, remove plain URLs
-    cleanedTitle = markdownUrls.length > 0 ? titleWithoutMarkdown : task.title;
-    cleanedTitle = removeUrlsFromTitle(cleanedTitle, plainUrlMatches);
+    if (markdownUrls.length > 0) {
+      // A markdown link keeps its display text: drop '[' and '](url)'.
+      // Right-to-left so earlier removals don't shift later match positions.
+      const mdMatches = [...tracked.text.matchAll(SHORT_SYNTAX_MARKDOWN_LINK_REG_EX)];
+      for (const m of mdMatches.reverse()) {
+        const mdStart = m.index as number;
+        const displayText = m[1];
+        tracked.remove(mdStart + 1 + displayText.length, mdStart + m[0].length);
+        tracked.remove(mdStart, mdStart + 1);
+      }
+    }
+    // Remove every occurrence of each plain URL (normalized the same way the
+    // attachment path is: trimmed, trailing punctuation stripped)
+    for (const url of plainUrlMatches) {
+      let path = url.trim().replace(/[.,;!?]+$/, '');
+      if (!path.match(/^(?:https?|file):\/\//)) {
+        path = '//' + path;
+      }
+      const originalUrl = path.startsWith('//') ? path.substring(2) : path;
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const spans = [...tracked.text.matchAll(new RegExp(escapedUrl, 'g'))].map((m) => ({
+        start: m.index as number,
+        end: (m.index as number) + m[0].length,
+      }));
+      for (const span of spans.reverse()) {
+        ranges.push(...tracked.rawRanges(span.start, span.end));
+        tracked.remove(span.start, span.end);
+      }
+    }
+    tracked.collapseWhitespace();
+    cleanedTitle = tracked.text;
 
     // If the title is empty after extracting URLs, use a URL basename as
     // the task name so pasting a bare URL results in a meaningful title.
@@ -945,7 +1005,7 @@ const parseUrlAttachments = (
   }
 
   // Return undefined if nothing changed
-  const titleChanged = cleanedTitle !== task.title;
+  const titleChanged = cleanedTitle !== titleBefore;
   const hasNewAttachments = newAttachments.length > 0;
 
   if (!titleChanged && !hasNewAttachments) {
@@ -956,7 +1016,7 @@ const parseUrlAttachments = (
     attachments: newAttachments,
     title: cleanedTitle,
     // Only URLs actually removed from the title are reported for highlighting
-    matchedTexts: titleChanged ? plainUrlMatches.map((u) => u.trim()) : [],
+    ranges: titleChanged ? ranges : [],
   };
 };
 
@@ -1011,30 +1071,6 @@ const filterDuplicateUrlAttachments = (
   return urlMatches
     .map((url) => createUrlAttachment(url))
     .filter((attachment) => attachment.path && !existingPaths.has(attachment.path));
-};
-
-const removeUrlsFromTitle = (title: string, urlMatches: string[]): string => {
-  let cleanedTitle = title;
-
-  // Clean URLs from title - process all URL matches
-  // We need to remove URLs even if they already exist as attachments
-  urlMatches.forEach((url) => {
-    let path = url.trim().replace(/[.,;!?]+$/, '');
-
-    // Add protocol if missing (for www. URLs)
-    if (!path.match(/^(?:https?|file):\/\//)) {
-      path = '//' + path;
-    }
-
-    // For www URLs, the path has '//' prepended, but the original doesn't
-    const originalUrl = path.startsWith('//') ? path.substring(2) : path;
-
-    // Escape special regex characters for safe replacement
-    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
-  });
-
-  return cleanedTitle.trim().replace(/\s+/g, ' ');
 };
 
 const _baseNameForUrl = (passedStr: string): string => {
