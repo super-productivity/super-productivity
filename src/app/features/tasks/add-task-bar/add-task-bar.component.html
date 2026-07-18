@@ -12,17 +12,17 @@
         <!-- Mirror overlay: paints a background behind detected short-syntax
              spans; its text is transparent and the textarea's text renders on
              top, so typography must stay identical to .main-input. -->
+        <!-- Every segment is a whitespace-tight span: bare text nodes here
+             would pick up the template's own indentation as a literal space
+             (Angular collapses static whitespace around interpolations) and
+             shift the mirrored text out of sync with the textarea. -->
         <div
           #highlightEl
           class="main-input-highlight"
           aria-hidden="true"
         >
           @for (seg of highlightSegments(); track $index) {
-            @if (seg.type) {
-              <span class="syntax-highlight">{{ seg.text }}</span>
-            } @else {
-              {{ seg.text }}
-            }
+            <span [class.syntax-highlight]="!!seg.type">{{ seg.text }}</span>
           }
         </div>
         <textarea
