@@ -180,10 +180,13 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Both clients should have the same order (LWW convergence)
     const finalTitlesA = await pageA.locator('task .task-title').allInnerTexts();
     const finalTitlesB = await pageB.locator('task .task-title').allInnerTexts();
+    const expectedTitles = [task1Name, task2Name, task3Name].sort();
     console.log('[TODAY Reorder] Final order on A:', finalTitlesA);
     console.log('[TODAY Reorder] Final order on B:', finalTitlesB);
 
-    // The orders should be the same (convergence)
+    // Exact membership prevents identical duplicate/missing sets from passing.
+    expect([...finalTitlesA].sort()).toEqual(expectedTitles);
+    expect([...finalTitlesB].sort()).toEqual(expectedTitles);
     expect(finalTitlesA).toEqual(finalTitlesB);
     console.log('[TODAY Reorder] ✓ Both clients converged to same order');
 
@@ -315,8 +318,11 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Both clients should have the same order (convergence)
     const finalTitlesA = await pageA.locator('task .task-title').allInnerTexts();
     const finalTitlesB = await pageB.locator('task .task-title').allInnerTexts();
+    const expectedTitles = [task1Name, task2Name, task3Name].sort();
     console.log('[TODAY Create] Final order on A:', finalTitlesA);
     console.log('[TODAY Create] Final order on B:', finalTitlesB);
+    expect([...finalTitlesA].sort()).toEqual(expectedTitles);
+    expect([...finalTitlesB].sort()).toEqual(expectedTitles);
     expect(finalTitlesA).toEqual(finalTitlesB);
 
     console.log('[TODAY Create] ✓ Concurrent create + reorder resolved correctly');

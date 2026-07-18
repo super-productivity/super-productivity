@@ -13,10 +13,10 @@ import {
 /**
  * WebDAV Single Client Rapid Sync E2E Tests
  *
- * These tests verify that rapid successive syncs from a single client
- * complete without errors. Conflict detection uses content hashing (MD5)
- * to compare the remote file before uploading, so timing precision
- * is not a concern.
+ * These tests verify that serialized create/change-and-sync cycles from a
+ * single client complete without errors and reach a second client. They do
+ * not force operations into the same externally visible WebDAV revision;
+ * deterministic same-revision coverage is tracked in #9147.
  *
  * Prerequisites:
  * - WebDAV server running at http://127.0.0.1:2345/
@@ -101,7 +101,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
         await workViewPage.addTask(taskName);
         await expect(page.locator(`task:has-text("${taskName}")`)).toBeVisible();
 
-        // Immediately sync (within the same second if possible)
+        // Start the next serialized sync immediately after local creation.
         await syncPage.triggerSync();
         const result = await waitForSyncComplete(page, syncPage);
 
