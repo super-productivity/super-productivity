@@ -1144,6 +1144,94 @@ describe('OperationLogHydratorService', () => {
 
           expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
         });
+
+        it('converges after a migrating full-state-op (SyncImport) boot', async () => {
+          // The full-state-op load branch loads directly and never sets the
+          // Checkpoint-C save flag, so a migrating boot whose tail is a SyncImport
+          // must still converge. Second positive test that FAILS if the
+          // convergence block is removed.
+          const oldSnapshot = createMockSnapshot({
+            schemaVersion: 0,
+            lastAppliedOpSeq: 5,
+          });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            lastAppliedOpSeq: 5,
+          });
+          const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+            payload: { appDataComplete: { task: {}, project: {} } },
+            entityType: 'ALL',
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([createMockEntry(6, syncImportOp)]);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
+        });
+
+        it('runs the convergence save AFTER retryFailedRemoteOps (drained pipeline)', async () => {
+          // Guards the ordering safety claim: the deferred-action pipeline that
+          // retryFailedRemoteOps drains must be flushed before the snapshot read,
+          // else the phantom-change guard (#8751) would skip the save. Moving the
+          // block before the retry flips this order and fails the test.
+          const callOrder: string[] = [];
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+          // getFailedRemoteOps is the first call inside retryFailedRemoteOps.
+          mockOpLogStore.getFailedRemoteOps.and.callFake(() => {
+            callOrder.push('retryFailedRemoteOps');
+            return Promise.resolve([]);
+          });
+          mockSnapshotService.saveCurrentStateAsSnapshot.and.callFake(() => {
+            callOrder.push('convergenceSave');
+            return Promise.resolve();
+          });
+
+          await service.hydrateStore();
+
+          expect(callOrder).toContain('convergenceSave');
+          expect(callOrder.indexOf('convergenceSave')).toBeGreaterThan(
+            callOrder.indexOf('retryFailedRemoteOps'),
+          );
+        });
+
+        it('does not converge on a later non-migrating boot (per-run flag reset)', async () => {
+          // Guards the per-run reset of _migrationRanDuringHydration: a migrating
+          // boot must not leave a stale flag that fires convergence on a later
+          // non-migrating boot on the same instance. Removing the reset makes the
+          // second boot save spuriously.
+          const oldSnapshot = createMockSnapshot({ schemaVersion: 0 });
+          const migratedSnapshot = createMockSnapshot({
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(oldSnapshot);
+          mockSchemaMigrationService.needsMigration.and.returnValue(true);
+          mockSnapshotService.migrateSnapshotWithBackup.and.resolveTo(migratedSnapshot);
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+          await service.hydrateStore();
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalledTimes(1);
+
+          // Second boot on the same instance: current-schema snapshot, no migration.
+          mockSnapshotService.saveCurrentStateAsSnapshot.calls.reset();
+          mockOpLogStore.loadStateCache.and.resolveTo(
+            createMockSnapshot({ schemaVersion: CURRENT_SCHEMA_VERSION }),
+          );
+          mockSchemaMigrationService.needsMigration.and.returnValue(false);
+
+          await service.hydrateStore();
+
+          expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+        });
       });
 
       it('should dispatch loadAllData with migrated snapshot state', async () => {
