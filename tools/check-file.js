@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-const { execFileSync } = require('child_process');
+// NOTE: execSync with a quoted command string instead of execFileSync('npm', ...):
+// on Windows npm/npx are .cmd shims, which Node refuses to spawn without a shell
+// (EINVAL/ENOENT since the CVE-2024-27980 fix), so execFileSync breaks there.
+const { execSync } = require('child_process');
 const path = require('path');
 
 const file = process.argv[2];
@@ -11,29 +14,26 @@ if (!file) {
 // Get absolute path
 const absolutePath = path.resolve(file);
 
-try {
-  // Run prettier
-  console.log(`🎨 Formatting ${path.basename(file)}...`);
-  execFileSync('npm', ['run', 'prettier:file', '--', absolutePath], {
+const run = (command) =>
+  execSync(command, {
     stdio: 'pipe',
     encoding: 'utf8',
   });
+
+try {
+  // Run prettier
+  console.log(`🎨 Formatting ${path.basename(file)}...`);
+  run(`npm run prettier:file -- "${absolutePath}"`);
 
   // Run lint based on file type
   console.log(`🔍 Linting ${path.basename(file)}...`);
 
   if (file.endsWith('.scss')) {
     // Use stylelint for SCSS files
-    execFileSync('npx', ['stylelint', absolutePath], {
-      stdio: 'pipe',
-      encoding: 'utf8',
-    });
+    run(`npx stylelint "${absolutePath}"`);
   } else {
     // Use ng lint for TypeScript/JavaScript files
-    execFileSync('npm', ['run', 'lint:file', '--', absolutePath], {
-      stdio: 'pipe',
-      encoding: 'utf8',
-    });
+    run(`npm run lint:file -- "${absolutePath}"`);
   }
 
   // If we get here, both commands succeeded
