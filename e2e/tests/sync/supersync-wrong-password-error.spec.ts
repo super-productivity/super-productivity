@@ -1,3 +1,4 @@
+import { type Dialog } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -114,13 +115,16 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
         .catch(() => false);
 
       if (!dialogAlreadyOpen) {
-        // Dialog not open yet - trigger sync manually
-        await clientB.sync.triggerSync();
-        // Wait a bit for the error to be processed
-        await clientB.page.waitForTimeout(2000);
+        // Use a raw click: triggerSync() is success-only and would throw on the
+        // expected decrypt error before this test can assert its recovery UI.
+        // dispatchEvent avoids an actionability deadlock if auto-sync opens the
+        // disable-close dialog between the probe and this nudge.
+        await clientB.page.locator('button.sync-btn').dispatchEvent('click');
       } else {
         console.log('[WrongPassword] Decrypt error dialog already open from auto-sync');
       }
+
+      await decryptErrorDialogEarly.waitFor({ state: 'visible', timeout: 10000 });
 
       // ============ PHASE 5: Verify error handling ============
       console.log('[WrongPassword] Phase 5: Verifying error is properly surfaced');
@@ -152,8 +156,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       }
 
       // Verify DialogHandleDecryptError component opens
-      const decryptErrorDialog = clientB.page.locator('dialog-handle-decrypt-error');
-      await decryptErrorDialog.waitFor({ state: 'visible', timeout: 5000 });
+      const decryptErrorDialog = decryptErrorDialogEarly;
       console.log('[WrongPassword] ✓ DialogHandleDecryptError is open');
 
       // ============ PHASE 6: User corrects password and retries ============
@@ -166,46 +169,27 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
 
       // Look for the password input in the dialog
       const passwordInput = decryptErrorDialog.locator('input[type="password"]');
-      const passwordInputExists = await passwordInput.isVisible().catch(() => false);
+      await expect(passwordInput).toBeVisible();
+      await passwordInput.fill(newPassword);
+      console.log('[WrongPassword] Filled in correct password');
 
-      if (passwordInputExists) {
-        // Fill in the correct password
-        await passwordInput.fill(newPassword);
-        console.log('[WrongPassword] Filled in correct password');
+      const resyncBtn = decryptErrorDialog
+        .locator('button')
+        .filter({ hasText: /retry.*decrypt/i })
+        .first();
+      await expect(resyncBtn).toBeEnabled();
+      await resyncBtn.click();
+      console.log('[WrongPassword] Clicked Retry Decrypt button');
 
-        // Click the "Change & Attempt Decrypt" button to retry with new password
-        const resyncBtn = decryptErrorDialog
-          .locator('button')
-          .filter({ hasText: /retry.*decrypt/i })
-          .first();
-        await resyncBtn.click();
-        console.log('[WrongPassword] Clicked Change & Attempt Decrypt button');
+      await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+      await clientB.sync.waitForSyncToComplete({ timeout: 15000 });
 
-        // Wait for dialog to close
-        await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+      await waitForTask(clientB.page, taskName);
+      console.log('[WrongPassword] ✓ Task synced after password correction');
 
-        // Wait for sync to complete
-        await clientB.sync.waitForSyncToComplete({ timeout: 15000 });
-
-        // Verify task synced successfully
-        await waitForTask(clientB.page, taskName);
-        console.log(
-          '[WrongPassword] ✓ Task synced successfully after password correction',
-        );
-
-        // Verify sync status is now success (no error icon)
-        const stillHasError = await clientB.sync.hasSyncError();
-        expect(stillHasError).toBe(false);
-        console.log('[WrongPassword] ✓ Sync status shows success');
-      } else {
-        // Dialog might not have password input field - just verify it's open
-        console.log(
-          '[WrongPassword] Note: Dialog opened but may have different UI than expected',
-        );
-        console.log(
-          '[WrongPassword] This is acceptable - main fix is that dialog opens at all',
-        );
-      }
+      const stillHasError = await clientB.sync.hasSyncError();
+      expect(stillHasError).toBe(false);
+      console.log('[WrongPassword] ✓ Sync status shows success');
 
       console.log('[WrongPassword] ✓ Test completed successfully!');
     } finally {
@@ -228,6 +212,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let clientC: SimulatedE2EClient | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -303,30 +288,61 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       // Look for "Change & Overwrite Remote" button (should be enabled now)
       const overwriteBtn = decryptErrorDialog
         .locator('button')
-        .filter({ hasText: /overwrite.*remote|change.*overwrite/i })
+        .filter({ hasText: /Overwrite Server & Other Devices/i })
         .first();
-      const hasOverwriteBtn = await overwriteBtn.isVisible().catch(() => false);
+      await expect(overwriteBtn).toBeVisible();
+      await expect(overwriteBtn).toBeEnabled();
 
-      if (hasOverwriteBtn) {
-        await overwriteBtn.click();
-        await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+      const forceUploadResponse = clientB.page.waitForResponse(
+        (response) => {
+          const request = response.request();
+          return (
+            request.method() === 'POST' &&
+            new URL(response.url()).pathname === '/api/sync/snapshot' &&
+            response.ok()
+          );
+        },
+        { timeout: 30000 },
+      );
+      const confirmationMessages: string[] = [];
+      const confirmationHandler = async (dialog: Dialog): Promise<void> => {
+        confirmationMessages.push(dialog.message());
+        await dialog.accept();
+      };
+      clientB.page.on('dialog', confirmationHandler);
 
-        // Wait for force upload to complete
-        await clientB.page.waitForTimeout(3000);
+      const response = await (async () => {
+        try {
+          await overwriteBtn.click();
+          return await forceUploadResponse;
+        } finally {
+          clientB.page.off('dialog', confirmationHandler);
+        }
+      })();
 
-        // Client B's task should still exist
-        await waitForTask(clientB.page, taskB);
+      expect(confirmationMessages).toEqual([
+        "This will REPLACE the encrypted data on the server with this device's local copy and re-encrypt it with the new password. All other devices will need to re-enter the password and download the replaced data. Any unsynced changes on those devices will be permanently lost. Continue?",
+        "This will REPLACE all data on the server and on every other device with this device's local copy. Any unsynced changes on those devices will be permanently lost. Continue?",
+      ]);
+      expect(await response.finished()).toBeNull();
+      await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+      await waitForTask(clientB.page, taskB);
 
-        // NOTE: We don't sync Client A here because the server now has data
-        // encrypted with newPassword, but Client A only knows password2.
-        // Client A would get a DecryptError dialog. That's a different test scenario.
-        console.log('[Overwrite] Force upload completed');
-      } else {
-        console.log('[Overwrite] Note: Overwrite button not found in current UI');
-      }
+      // A fresh client is the remote oracle: it must hydrate B's replacement
+      // with the new password, and the old remote snapshot must be gone.
+      clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+      await clientC.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: newPassword,
+      });
+      await waitForTask(clientC.page, taskB);
+      await expect(clientC.page.locator(`task:has-text("${taskA}")`)).not.toBeVisible();
+      console.log('[Overwrite] Fresh client verified the encrypted remote replacement');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
+      if (clientC) await closeClient(clientC);
     }
   });
 });

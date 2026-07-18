@@ -9,6 +9,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 
@@ -124,24 +125,17 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     // Click "Keep local"
     const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
     await expect(useLocalBtn).toBeVisible();
+    syncPageB.prepareForNextSyncCycle('write');
     await useLocalBtn.click();
     console.log('[Test] Clicked Keep local on Client B');
 
-    // Handle potential confirmation dialog
-    const confirmDialog = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialog
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
     // Wait for sync to complete — this is the critical moment.
     // If the double-encryption bug were present, decryption would fail here.
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log(
       '[Test] Client B sync completed after USE_LOCAL (no double-encryption error)',
     );

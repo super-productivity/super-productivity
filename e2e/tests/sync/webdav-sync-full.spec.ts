@@ -267,41 +267,16 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     await syncPageB2.triggerSync();
     const result = await waitForSyncComplete(pageB2, syncPageB2);
 
-    if (result === 'success') {
-      console.log(
-        'Warning: No conflict detected (Auto-merged or overwrite). Checking content...',
-      );
-      const isA = await pageB2
-        .locator('task', { hasText: 'Conflict Task A' })
-        .isVisible();
-      const isB = await pageB2
-        .locator('task', { hasText: 'Conflict Task B' })
-        .isVisible();
-      console.log(`Content on B: A=${isA}, B=${isB}`);
-      // If it was merged/overwritten, we skip the resolution steps
-    } else {
-      expect(result).toBe('conflict');
+    // Established clients exchange ordinary operations here. Surfacing a
+    // destructive whole-state conflict would be a regression, not an
+    // alternative successful outcome.
+    expect(result).toBe('success');
+    await expect(pageB2.locator('task', { hasText: 'Conflict Task B' })).toBeVisible();
+    await expect(
+      pageB2.locator('task', { hasText: 'Conflict Task A' }),
+    ).not.toBeVisible();
 
-      // Resolve conflict: Use Remote (A)
-      console.log('Resolving conflict with Remote...');
-      await pageB2.locator('dialog-sync-conflict button', { hasText: /Remote/i }).click();
-
-      // Handle potential confirmation dialog
-      const confirmDialog = pageB2.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog.locator('button[color="warn"]').click();
-      } catch {
-        // Confirmation might not appear
-      }
-
-      await waitForSyncComplete(pageB2, syncPageB2);
-
-      await expect(pageB2.locator('task', { hasText: 'Conflict Task A' })).toBeVisible();
-      await expect(
-        pageB2.locator('task', { hasText: 'Conflict Task B' }),
-      ).not.toBeVisible();
-    }
+    await expect(pageB2.locator('task')).toHaveCount(2);
 
     // Cleanup
     await contextA.close();
@@ -311,10 +286,9 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
   /**
    * Scenario: Near-simultaneous uploads from two clients preserve all data
    *
-   * Verifies that the content-hash-based conflict detection (GET-compare-PUT)
-   * correctly handles concurrent uploads. When two clients sync at nearly the
-   * same time, the second client should detect the hash mismatch, retry with
-   * merged data, and no tasks should be lost.
+   * Exercises overlapping sync attempts and verifies eventual convergence with
+   * no data loss. Timing alone cannot prove that the content-hash retry branch
+   * ran; deterministic GET/PUT barriers are tracked in #9147.
    *
    * Setup:
    * - Client A and Client B both configured with WebDAV sync to the same folder
@@ -323,9 +297,8 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
    * Actions:
    * 1. Client A creates TaskA2, Client B creates TaskB
    * 2. Trigger sync on Client A, then Client B shortly after (without waiting
-   *    for A to finish). The slight offset gives A time to start uploading so
-   *    B's hash check can detect the change, triggering conflict retry.
-   * 3. Wait for both syncs to complete (handling any conflict dialogs)
+   *    for A to finish).
+   * 3. Require both overlapping syncs to complete without conflict dialogs
    * 4. Run convergence syncs until both clients have all data
    *
    * Verify:
@@ -425,10 +398,8 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
 
       // --- Step 4: Near-simultaneous sync ---
       // Trigger Client A first, then Client B after a short delay. We do NOT
-      // wait for A to complete, but the slight offset ensures A's upload is
-      // in-flight (or complete) when B attempts its own upload. This exercises
-      // the content-hash conflict detection: B's pre-upload GET returns a
-      // different hash than expected, triggering a retry with merged data.
+      // wait for A to complete. The offset increases overlap likelihood, while
+      // the assertions below cover the observable no-loss/convergence contract.
       console.log('[Concurrent] Triggering near-simultaneous syncs...');
 
       const syncPromiseA = (async () => {
@@ -447,37 +418,8 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
       // Wait for both syncs to complete
       const [resultA, resultB] = await Promise.all([syncPromiseA, syncPromiseB]);
       console.log(`[Concurrent] Simultaneous sync results: A=${resultA}, B=${resultB}`);
-
-      // Handle conflict dialogs if they appear
-      if (resultA === 'conflict') {
-        console.log('[Concurrent] Client A got conflict, using remote');
-        await pageA
-          .locator('dialog-sync-conflict button', { hasText: /Remote/i })
-          .click();
-        const confirmDialog = pageA.locator('dialog-confirm');
-        try {
-          await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-          await confirmDialog.locator('button[color="warn"]').click();
-        } catch {
-          // Confirmation might not appear
-        }
-        await waitForSyncComplete(pageA, syncPageA);
-      }
-
-      if (resultB === 'conflict') {
-        console.log('[Concurrent] Client B got conflict, using remote');
-        await pageB
-          .locator('dialog-sync-conflict button', { hasText: /Remote/i })
-          .click();
-        const confirmDialog = pageB.locator('dialog-confirm');
-        try {
-          await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-          await confirmDialog.locator('button[color="warn"]').click();
-        } catch {
-          // Confirmation might not appear
-        }
-        await waitForSyncComplete(pageB, syncPageB);
-      }
+      expect(resultA).toBe('success');
+      expect(resultB).toBe('success');
 
       // --- Step 5: Convergence syncs ---
       // Sync both clients sequentially to ensure they converge on the same state.
@@ -487,35 +429,11 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
       for (let round = 1; round <= 3; round++) {
         await syncPageA.triggerSync();
         const convergenceResultA = await waitForSyncComplete(pageA, syncPageA);
-        if (convergenceResultA === 'conflict') {
-          await pageA
-            .locator('dialog-sync-conflict button', { hasText: /Remote/i })
-            .click();
-          const cd = pageA.locator('dialog-confirm');
-          try {
-            await cd.waitFor({ state: 'visible', timeout: 3000 });
-            await cd.locator('button[color="warn"]').click();
-          } catch {
-            // Confirmation might not appear
-          }
-          await waitForSyncComplete(pageA, syncPageA);
-        }
+        expect(convergenceResultA).toBe('success');
 
         await syncPageB.triggerSync();
         const convergenceResultB = await waitForSyncComplete(pageB, syncPageB);
-        if (convergenceResultB === 'conflict') {
-          await pageB
-            .locator('dialog-sync-conflict button', { hasText: /Remote/i })
-            .click();
-          const cd = pageB.locator('dialog-confirm');
-          try {
-            await cd.waitFor({ state: 'visible', timeout: 3000 });
-            await cd.locator('button[color="warn"]').click();
-          } catch {
-            // Confirmation might not appear
-          }
-          await waitForSyncComplete(pageB, syncPageB);
-        }
+        expect(convergenceResultB).toBe('success');
 
         // Check if both clients have all 3 tasks
         const countA = await pageA.locator('task').count();

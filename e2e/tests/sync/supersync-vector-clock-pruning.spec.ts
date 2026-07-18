@@ -11,28 +11,12 @@ import { ImportPage } from '../../pages/import.page';
 import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
 
 /**
- * SuperSync Vector Clock Pruning E2E Tests
+ * SuperSync Post-Import Operation Flow E2E Tests
  *
- * These tests verify the fix for the vector clock pruning bug that caused
- * new operations to be incorrectly filtered after a SYNC_IMPORT.
- *
- * BUG SCENARIO:
- * 1. Client A creates SYNC_IMPORT with clock {A: 1}
- * 2. Client B receives it, merges clocks → {A: 1, B: x, ...other clients...}
- * 3. When B has 21+ clients, pruning triggers (MAX_VECTOR_CLOCK_SIZE = 20)
- * 4. A's entry (counter=1, lowest) gets PRUNED
- * 5. New tasks from B have clock {B: y} - MISSING A's entry!
- * 6. Comparison: {A: 0} vs {A: 1} → CONCURRENT
- * 7. Tasks incorrectly filtered as "invalidated by SYNC_IMPORT"
- *
- * FIX:
- * - After applying SYNC_IMPORT, store the import client ID as "protected"
- * - limitVectorClockSize() preserves protected client IDs even with low counters
- * - New ops include the import client entry → comparison yields GREATER_THAN
- *
- * NOTE: E2E tests can't easily simulate 91+ clients to trigger pruning.
- * These tests verify the end-to-end flow that would fail without the fix.
- * Unit tests in vector-clock.spec.ts verify the pruning-specific behavior.
+ * These tests verify ordinary post-import operations across real clients. They
+ * deliberately do not claim vector-clock pruning coverage: production pruning
+ * requires more than MAX_VECTOR_CLOCK_SIZE (20) durable client identities and
+ * is covered only by lower-level tests today.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -43,16 +27,13 @@ import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
+test.describe('@supersync Post-Import Operation Flow', () => {
   /**
    * Scenario: Tasks created after receiving SYNC_IMPORT sync correctly
    *
-   * This test verifies the core fix: after receiving a SYNC_IMPORT, the
-   * receiving client can create new tasks that sync back to the import client.
-   *
-   * Without the fix, these tasks would be filtered as "concurrent with import"
-   * because their vector clocks wouldn't include the import client's entry
-   * (it would be pruned due to having the lowest counter value).
+   * This verifies the adjacent two-client flow: after receiving a SYNC_IMPORT,
+   * the receiving client can create new tasks that sync back to the import
+   * client. No vector-clock entry is pruned in this scenario.
    *
    * Setup: Client A and B with shared SuperSync account
    *
@@ -82,7 +63,7 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
       const syncConfig = getSuperSyncConfig(user);
 
       // ============ PHASE 1: Setup Both Clients ============
-      console.log('[VC Pruning] Phase 1: Setting up both clients');
+      console.log('[Post Import] Phase 1: Setting up both clients');
 
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
@@ -93,10 +74,10 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
       // Initial sync to establish connection
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
-      console.log('[VC Pruning] Both clients synced initially');
+      console.log('[Post Import] Both clients synced initially');
 
       // ============ PHASE 2: Client A Imports Backup ============
-      console.log('[VC Pruning] Phase 2: Client A importing backup');
+      console.log('[Post Import] Phase 2: Client A importing backup');
 
       const importPage = new ImportPage(clientA.page);
       await importPage.navigateToImportPage();
@@ -104,7 +85,7 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
       // Import backup (creates SYNC_IMPORT with A's clock)
       const backupPath = ImportPage.getFixturePath('test-backup.json');
       await importPage.importBackupFile(backupPath);
-      console.log('[VC Pruning] Client A imported backup');
+      console.log('[Post Import] Client A imported backup');
 
       // Reload page after import - use goto instead of reload for reliability
       await clientA.page.goto(clientA.page.url(), {
@@ -118,28 +99,28 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
 
       // Verify imported data is visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[VC Pruning] Client A showing imported data');
+      console.log('[Post Import] Client A showing imported data');
 
       // ============ PHASE 3: Sync SYNC_IMPORT to Server ============
-      console.log('[VC Pruning] Phase 3: Syncing SYNC_IMPORT to server');
+      console.log('[Post Import] Phase 3: Syncing SYNC_IMPORT to server');
 
       await clientA.sync.syncAndWait();
-      console.log('[VC Pruning] Client A synced (SYNC_IMPORT uploaded)');
+      console.log('[Post Import] Client A synced (SYNC_IMPORT uploaded)');
 
       // ============ PHASE 4: Client B Receives SYNC_IMPORT ============
-      console.log('[VC Pruning] Phase 4: Client B receiving SYNC_IMPORT');
+      console.log('[Post Import] Phase 4: Client B receiving SYNC_IMPORT');
 
       await clientB.sync.syncAndWait();
-      console.log('[VC Pruning] Client B synced (received SYNC_IMPORT)');
+      console.log('[Post Import] Client B synced (received SYNC_IMPORT)');
 
       // Navigate to work view and verify import applied
       await clientB.page.goto('/#/work-view');
       await clientB.page.waitForLoadState('networkidle');
       await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[VC Pruning] Client B showing imported data');
+      console.log('[Post Import] Client B showing imported data');
 
       // ============ PHASE 5: Client B Creates New Tasks ============
-      console.log('[VC Pruning] Phase 5: Client B creating new tasks after import');
+      console.log('[Post Import] Phase 5: Client B creating new tasks after import');
 
       // Create multiple tasks to verify the fix works for multiple ops
       const task1 = `PostImport-Task1-${uniqueId}`;
@@ -148,53 +129,51 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
 
       await clientB.workView.addTask(task1);
       await waitForTask(clientB.page, task1);
-      console.log(`[VC Pruning] Client B created: ${task1}`);
+      console.log(`[Post Import] Client B created: ${task1}`);
 
       await clientB.workView.addTask(task2);
       await waitForTask(clientB.page, task2);
-      console.log(`[VC Pruning] Client B created: ${task2}`);
+      console.log(`[Post Import] Client B created: ${task2}`);
 
       await clientB.workView.addTask(task3);
       await waitForTask(clientB.page, task3);
-      console.log(`[VC Pruning] Client B created: ${task3}`);
+      console.log(`[Post Import] Client B created: ${task3}`);
 
       // ============ PHASE 6: Client B Syncs New Tasks ============
-      console.log('[VC Pruning] Phase 6: Client B syncing new tasks');
+      console.log('[Post Import] Phase 6: Client B syncing new tasks');
 
-      // This is the CRITICAL step - with the bug, these tasks would be filtered
-      // by SyncImportFilterService as "concurrent with import" and not uploaded
       await clientB.sync.syncAndWait();
-      console.log('[VC Pruning] Client B synced (new tasks uploaded)');
+      console.log('[Post Import] Client B synced (new tasks uploaded)');
 
       // Check for sync errors (would appear if tasks were rejected)
       const errorSnack = clientB.page.locator('simple-snack-bar.error');
       await expect(errorSnack).not.toBeVisible({ timeout: 5000 });
-      console.log('[VC Pruning] No sync errors on Client B');
+      console.log('[Post Import] No sync errors on Client B');
 
       // ============ PHASE 7: Client A Downloads New Tasks ============
-      console.log('[VC Pruning] Phase 7: Client A downloading new tasks from B');
+      console.log('[Post Import] Phase 7: Client A downloading new tasks from B');
 
       await clientA.sync.syncAndWait();
-      console.log('[VC Pruning] Client A synced (downloaded B tasks)');
+      console.log('[Post Import] Client A synced (downloaded B tasks)');
 
       // Navigate to work view
       await clientA.page.goto('/#/work-view');
       await clientA.page.waitForLoadState('networkidle');
 
       // ============ PHASE 8: Verify Both Clients Have All Tasks ============
-      console.log('[VC Pruning] Phase 8: Verifying both clients have all tasks');
+      console.log('[Post Import] Phase 8: Verifying both clients have all tasks');
 
       // Verify tasks on Client A (originally created by B)
       await waitForTask(clientA.page, task1);
       await waitForTask(clientA.page, task2);
       await waitForTask(clientA.page, task3);
-      console.log('[VC Pruning] Client A has all tasks created by B');
+      console.log('[Post Import] Client A has all tasks created by B');
 
       // Verify tasks on Client B (confirm they still exist)
       await expect(clientB.page.locator(`task:has-text("${task1}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${task2}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${task3}")`)).toBeVisible();
-      console.log('[VC Pruning] Client B still has all tasks');
+      console.log('[Post Import] Client B still has all tasks');
 
       // Also verify imported task is on both
       await expectTaskOnAllClients(
@@ -202,7 +181,7 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
         'E2E Import Test - Active Task With Subtask',
       );
 
-      console.log('[VC Pruning] Vector clock pruning fix E2E test PASSED!');
+      console.log('[Post Import] Post-import operation flow PASSED!');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -339,5 +318,5 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
   // NOTE: The "Reload after SYNC_IMPORT" scenario is already covered by
   // supersync-superseded-clock-regression.spec.ts tests. That test verifies that
   // reloading after receiving SYNC_IMPORT doesn't cause superseded clock issues.
-  // Combined with the pruning fix verified above, the full scenario is covered.
+  // Together they cover the ordinary post-import flow, not clock pruning.
 });

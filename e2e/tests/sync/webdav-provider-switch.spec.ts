@@ -9,6 +9,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 
 /**
@@ -626,30 +627,22 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     const conflictDialog = pageB.locator('mat-dialog-container', {
       hasText: 'Conflicting Data',
     });
-    const conflictVisible = await conflictDialog
-      .waitFor({ state: 'visible', timeout: 10000 })
-      .then(() => true)
-      .catch(() => false);
+    await expect(conflictDialog).toBeVisible({ timeout: 10000 });
+    const keepRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
+    syncPageB.prepareForNextSyncCycle('read');
+    await keepRemoteBtn.click();
 
-    if (conflictVisible) {
-      const keepRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
-      await keepRemoteBtn.click();
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-      // A fresh client with no last-synced baseline now gets an overwrite
-      // confirmation (getChangeCount → null ⇒ shouldConfirmOverwrite, since #8785).
-      // Accept it — this is the "when user accepts confirmation" the test name
-      // describes. The confirmation is optional, so tolerate its absence.
-      const confirmDialog = pageB.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog.locator('[e2e="confirmBtn"]').click();
-      } catch {
-        // No confirmation shown — fine.
-      }
-
-      // Wait for dialog to close
-      await conflictDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
-    }
+    await expect(conflictDialog).toBeHidden({ timeout: 5000 });
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
+    await expect(pageB.locator('task', { hasText: taskA1 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskA2 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskA3 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskB1 })).not.toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskB2 })).not.toBeVisible();
 
     // Trigger sync if not already syncing and wait for completion
     await syncPageB.triggerSync();

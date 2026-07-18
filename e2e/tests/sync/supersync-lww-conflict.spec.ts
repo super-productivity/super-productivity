@@ -38,7 +38,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * Actions:
    * 1. Client A creates Task, syncs
    * 2. Client B syncs (download task)
-   * 3. Client A marks task done (creates op at time T1)
+   * 3. Client A edits the title (creates op at time T1)
    * 4. Wait a bit for time to advance
    * 5. Client B edits task title (creates op at time T2, where T2 > T1)
    * 6. Client B syncs first (uploads T2 change to server)
@@ -74,24 +74,16 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, taskName);
 
-      // 3. Client A marks task done (earlier timestamp)
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorA.hover();
-      await taskLocatorA.locator('done-toggle').click();
-      await expect(taskLocatorA).toHaveClass(/isDone/);
+      // 3. Client A writes the earlier value.
+      const earlierTitle = `${taskName}-A-Earlier`;
+      const laterTitle = `${taskName}-B-Later`;
+      await renameTask(clientA, taskName, earlierTitle);
 
       // 4. Wait for time to advance (ensures B's timestamp will be newer)
       await clientA.page.waitForTimeout(500);
 
-      // 5. Client B also marks task done (later timestamp, but same logical change)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorB.hover();
-      await taskLocatorB.locator('done-toggle').click();
-      await expect(taskLocatorB).toHaveClass(/isDone/);
+      // 5. Client B writes a distinct, later value to the same field.
+      await renameTask(clientB, taskName, laterTitle);
 
       // 6. Client B syncs first (B's change goes to server)
       await clientB.sync.syncAndWait();
@@ -99,10 +91,15 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       // 7. Client A syncs (LWW: B's timestamp is newer, so remote wins)
       await clientA.sync.syncAndWait();
 
-      // 8. Both clients should have consistent state
-      // (Both should show task as done - the outcome is the same for this test)
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
+      // 8. The distinct later remote value must win on both clients.
+      await waitForTask(clientA.page, laterTitle);
+      await waitForTask(clientB.page, laterTitle);
+      await expect(
+        clientA.page.locator(`task:has-text("${earlierTitle}")`),
+      ).not.toBeVisible();
+      await expect(
+        clientB.page.locator(`task:has-text("${earlierTitle}")`),
+      ).not.toBeVisible();
 
       // Final convergence check
       await clientB.sync.syncAndWait();
@@ -117,9 +114,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
   });
 
   /**
-   * Scenario: LWW Notification Appears
+   * Scenario: Equivalent concurrent updates converge without blocking
    *
-   * Tests that users see a notification when conflicts are auto-resolved.
+   * Tests that equivalent concurrent updates auto-resolve without a dialog.
    *
    * Actions:
    * 1. Client A creates Task, syncs
@@ -127,9 +124,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * 3. Both clients make concurrent changes
    * 4. Client A syncs first
    * 5. Client B syncs (triggers LWW resolution)
-   * 6. Verify notification appears indicating auto-resolution
+   * 6. Verify both clients converge
    */
-  test('LWW: Notification appears after conflict auto-resolution', async ({
+  test('LWW: Equivalent concurrent updates converge without blocking', async ({
     browser,
     baseURL,
     testRunId,
@@ -185,24 +182,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       // 5. Client B syncs (triggers LWW resolution)
       await clientB.sync.syncAndWait();
 
-      // 6. Verify LWW notification appears on Client B
-      // The notification contains "auto-resolved" or similar text
-      // Note: The exact text depends on translation; we check for the snack appearing
-      const snackBar = clientB.page.locator('snack-custom, .mat-mdc-snack-bar-container');
-
-      // Try to catch the notification (it may disappear quickly)
-      try {
-        await snackBar.waitFor({ state: 'visible', timeout: 3000 });
-        console.log('[LWW-Notify] Snackbar appeared after sync');
-      } catch {
-        // Snackbar may have already disappeared - that's okay
-        console.log('[LWW-Notify] Snackbar not visible (may have auto-dismissed)');
-      }
-
-      // The key assertion is that sync completed without blocking dialogs
-      // and both clients have consistent state
-
-      // Final convergence
+      // 6. Final convergence
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
 
@@ -365,28 +345,16 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, taskName);
 
-      // 3. Client B makes change first (earlier timestamp)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorB.waitFor({ state: 'visible', timeout: 10000 });
-      await taskLocatorB.hover();
-      await clientB.page.waitForTimeout(100); // Let hover state settle
-      await taskLocatorB.locator('done-toggle').click();
-      await expect(taskLocatorB).toHaveClass(/isDone/, { timeout: 5000 });
+      // 3. Client B writes the earlier title.
+      const earlierTitle = `${taskName}-B-Earlier`;
+      const laterTitle = `${taskName}-A-Later`;
+      await renameTask(clientB, taskName, earlierTitle);
 
       // 4. Wait for time to advance significantly
       await clientB.page.waitForTimeout(1000);
 
-      // 5. Client A makes same change (later timestamp)
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorA.waitFor({ state: 'visible', timeout: 10000 });
-      await taskLocatorA.hover();
-      await clientA.page.waitForTimeout(100); // Let hover state settle
-      await taskLocatorA.locator('done-toggle').click();
-      await expect(taskLocatorA).toHaveClass(/isDone/, { timeout: 5000 });
+      // 5. Client A writes a distinct, later title to the same field.
+      await renameTask(clientA, taskName, laterTitle);
 
       // 6. Client B syncs (uploads B's earlier change to server)
       await clientB.sync.syncAndWait();
@@ -398,17 +366,22 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       // 8. Client B syncs again (should receive A's winning state via new update op)
       await clientB.sync.syncAndWait();
 
-      // 9. Both clients should have consistent state
-      // In this case, both marked as done, so state should be isDone
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
+      // 9. Both clients must contain A's distinct winning value.
+      await waitForTask(clientA.page, laterTitle);
+      await waitForTask(clientB.page, laterTitle);
+      await expect(
+        clientA.page.locator(`task:has-text("${earlierTitle}")`),
+      ).not.toBeVisible();
+      await expect(
+        clientB.page.locator(`task:has-text("${earlierTitle}")`),
+      ).not.toBeVisible();
 
       // Final convergence
       await clientA.sync.syncAndWait();
 
       // Both should have same task count
-      const countA = await clientA.page.locator(`task:has-text("${taskName}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${taskName}")`).count();
+      const countA = await clientA.page.locator(`task:has-text("${laterTitle}")`).count();
+      const countB = await clientB.page.locator(`task:has-text("${laterTitle}")`).count();
       expect(countA).toBe(1);
       expect(countB).toBe(1);
 
@@ -663,9 +636,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * Actions:
    * 1. Client A creates Task, syncs
    * 2. Client B syncs (download task)
-   * 3. Client A makes 3 rapid changes (rename, mark done, add note)
-   * 4. Client B makes 3 different changes offline (different rename, unmark, remove note)
-   * 5. Client B syncs first (uploads B's 3 ops)
+   * 3. Client A makes 2 rapid changes (rename and mark done)
+   * 4. Client B makes the same two kinds of changes with a different title
+   * 5. Client B syncs first (uploads B's 2 ops)
    * 6. Client A syncs (LWW compares max timestamps across all ops)
    * 7. Final sync round
    * 8. Verify both clients converge to same state
@@ -699,7 +672,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, originalTitle);
 
-      // 3. Client A makes 3 rapid changes
+      // 3. Client A makes 2 rapid changes
       const taskLocatorA = clientA.page
         .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
         .first();
@@ -723,20 +696,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await taskLocatorAUpdated.locator('done-toggle').click();
       await clientA.page.waitForTimeout(300);
 
-      // Change 3: Add time estimate (another field update)
-      // This creates a third operation on the same entity
-      await taskLocatorAUpdated.hover();
-      const additionalBtn = taskLocatorAUpdated
-        .locator('.task-additional-info-btn, button[mat-icon-button]')
-        .first();
-      if (await additionalBtn.isVisible()) {
-        await additionalBtn.click();
-        await clientA.page.waitForTimeout(200);
-      }
+      console.log('[MultiOp] Client A made 2 changes');
 
-      console.log('[MultiOp] Client A made 3 changes');
-
-      // 4. Client B makes 3 different changes (offline - hasn't synced yet)
+      // 4. Client B makes 2 changes (offline - hasn't synced yet)
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
         .first();
@@ -763,7 +725,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await taskLocatorBUpdated.locator('done-toggle').click();
       await clientB.page.waitForTimeout(300);
 
-      console.log('[MultiOp] Client B made 3 changes (B has later timestamps)');
+      console.log('[MultiOp] Client B made 2 changes (B has later timestamps)');
 
       // 5. Client B syncs FIRST (uploads B's ops to server)
       await clientB.sync.syncAndWait();
@@ -1407,7 +1369,7 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
    * timestamp in the LWW system. The task is preserved on both clients.
    *
    * Actions:
-   * 1. Client A creates task for today (sd:today), syncs
+   * 1. Client A creates task for today (`@today`), syncs
    * 2. Client B syncs (download task)
    * 3. Client A deletes the task
    * 4. Client B (with later timestamp) updates the task title
@@ -1435,9 +1397,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
 
-      // 1. Client A creates task for TODAY (sd:today sets dueDay)
+      // 1. Client A creates task for TODAY (`@today` sets dueDay)
       const taskName = `TodayDeleteRace-${testRunId}`;
-      await clientA.workView.addTask(`${taskName} sd:today`);
+      await clientA.workView.addTask(`${taskName} @today`, false, taskName);
       await waitForTask(clientA.page, taskName);
       console.log('[TodayDeleteRace] Created task for today on Client A');
 

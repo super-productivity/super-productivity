@@ -71,13 +71,13 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await pageA.goto(`${url}/#/tag/TODAY/tasks`);
     await workViewPageA.waitForTaskList();
 
-    // Client A creates 3 tasks scheduled for today using sd:today syntax
+    // Client A creates 3 tasks scheduled for today using @today syntax
     const task1Name = 'Task1-Reorder';
     const task2Name = 'Task2-Reorder';
     const task3Name = 'Task3-Reorder';
-    await workViewPageA.addTask(`${task1Name} sd:today`);
-    await workViewPageA.addTask(`${task2Name} sd:today`);
-    await workViewPageA.addTask(`${task3Name} sd:today`);
+    await workViewPageA.addTask(`${task1Name} @today`, false, task1Name);
+    await workViewPageA.addTask(`${task2Name} @today`, false, task2Name);
+    await workViewPageA.addTask(`${task3Name} @today`, false, task3Name);
     await expect(pageA.locator('task')).toHaveCount(3);
     console.log('[TODAY Reorder] Client A created 3 tasks for today');
 
@@ -218,8 +218,8 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A creates 2 tasks for today
     const task1Name = 'Task1-Original';
     const task2Name = 'Task2-Original';
-    await workViewPageA.addTask(`${task1Name} sd:today`);
-    await workViewPageA.addTask(`${task2Name} sd:today`);
+    await workViewPageA.addTask(`${task1Name} @today`, false, task1Name);
+    await workViewPageA.addTask(`${task2Name} @today`, false, task2Name);
     await expect(pageA.locator('task')).toHaveCount(2);
     console.log('[TODAY Create] Client A created 2 tasks for today');
 
@@ -261,7 +261,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client B creates a new task in TODAY
     const task3Name = 'Task3-NewFromB';
-    await workViewPageB.addTask(`${task3Name} sd:today`);
+    await workViewPageB.addTask(`${task3Name} @today`, false, task3Name);
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Create] Client B created Task3');
 
@@ -349,9 +349,9 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     const task1Name = 'Task1-Stay';
     const task2Name = 'Task2-Remove';
     const task3Name = 'Task3-Stay';
-    await workViewPageA.addTask(`${task1Name} sd:today`);
-    await workViewPageA.addTask(`${task2Name} sd:today`);
-    await workViewPageA.addTask(`${task3Name} sd:today`);
+    await workViewPageA.addTask(`${task1Name} @today`, false, task1Name);
+    await workViewPageA.addTask(`${task2Name} @today`, false, task2Name);
+    await workViewPageA.addTask(`${task3Name} @today`, false, task3Name);
     await expect(pageA.locator('task')).toHaveCount(3);
     console.log('[TODAY Remove] Client A created 3 tasks for today');
 
@@ -436,24 +436,16 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await waitForAppReady(pageB);
     await workViewPageB.waitForTaskList();
 
-    // Check final counts
-    const countA = await pageA.locator('task').count();
-    const countB = await pageB.locator('task').count();
-    console.log(`[TODAY Remove] Final counts: A=${countA}, B=${countB}`);
-
-    // Both should have the same count
-    expect(countA).toBe(countB);
-
-    // The state should be consistent - either both have 2 (Task2 removed from TODAY)
-    // or both have 3 (if reorder somehow re-scheduled it, which shouldn't happen)
-    // With proper LWW, the dueDay change to tomorrow should make Task2 not appear in TODAY
-    // regardless of any taskIds ordering operations
-
-    // Verify Task1 and Task3 are visible on both
+    // The dueDay change must remove Task2 from virtual TODAY membership on both
+    // clients; convergence with the wrong three-task result is still a failure.
+    await expect(pageA.locator('task')).toHaveCount(2);
+    await expect(pageB.locator('task')).toHaveCount(2);
     await expect(taskPageA.getTaskByText(task1Name)).toBeVisible();
     await expect(taskPageA.getTaskByText(task3Name)).toBeVisible();
     await expect(taskPageB.getTaskByText(task1Name)).toBeVisible();
     await expect(taskPageB.getTaskByText(task3Name)).toBeVisible();
+    await expect(taskPageA.getTaskByText(task2Name)).not.toBeVisible();
+    await expect(taskPageB.getTaskByText(task2Name)).not.toBeVisible();
 
     console.log('[TODAY Remove] ✓ Remove from today handled correctly');
 
