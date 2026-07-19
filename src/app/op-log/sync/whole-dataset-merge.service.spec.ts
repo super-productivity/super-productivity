@@ -187,9 +187,14 @@ describe('WholeDatasetMergeService', () => {
     };
 
     const provider = {} as OperationSyncCapable;
-    const merged = (await service.applyMerge(provider, localState, diff, picks, {
-      devA: 3,
-    })) as { task: { ids: string[]; entities: Record<string, { title: string }> } };
+    const merged = (await service.applyMerge(
+      provider,
+      localState,
+      diff,
+      picks,
+      { devA: 3 },
+      { devA: 1 }, // baseline == mocked current clock → gate passes (not stale)
+    )) as { task: { ids: string[]; entities: Record<string, { title: string }> } };
 
     // Merged state reflects the picks exactly.
     expect(merged.task.entities['differ'].title).toBe('L');
@@ -221,7 +226,14 @@ describe('WholeDatasetMergeService', () => {
       onlyRemote: { [pickKey('task', 'onlyRemoteAdd')]: 'add' },
     };
 
-    await service.applyMerge({} as OperationSyncCapable, localState, diff, picks);
+    await service.applyMerge(
+      {} as OperationSyncCapable,
+      localState,
+      diff,
+      picks,
+      undefined,
+      { devA: 1 }, // baseline == mocked current clock → gate passes (not stale)
+    );
 
     expect(record).toHaveBeenCalledTimes(1);
     const entry = record.calls.mostRecent().args[0] as ConflictJournalEntry;
@@ -241,7 +253,14 @@ describe('WholeDatasetMergeService', () => {
     const picks = buildDefaultPicks(diff);
     picks.differing[pickKey('task', 'differ')] = 'local'; // non-default → journaled
 
-    await service.applyMerge({} as OperationSyncCapable, localState, diff, picks);
+    await service.applyMerge(
+      {} as OperationSyncCapable,
+      localState,
+      diff,
+      picks,
+      undefined,
+      { devA: 1 }, // baseline == mocked current clock → gate passes (not stale)
+    );
 
     expect(record).toHaveBeenCalled();
     expect(hydrate).toHaveBeenCalledBefore(record);
@@ -255,7 +274,9 @@ describe('WholeDatasetMergeService', () => {
     forceUpload.and.rejectWith(new Error('network down'));
 
     await expectAsync(
-      service.applyMerge({} as OperationSyncCapable, localState, diff, picks),
+      service.applyMerge({} as OperationSyncCapable, localState, diff, picks, undefined, {
+        devA: 1,
+      }),
     ).toBeRejected();
 
     expect(hydrate).toHaveBeenCalledTimes(1);
@@ -268,7 +289,14 @@ describe('WholeDatasetMergeService', () => {
     const picks = buildDefaultPicks(diff);
     picks.differing[pickKey('task', 'differ')] = 'local';
 
-    await service.applyMerge({} as OperationSyncCapable, localState, diff, picks);
+    await service.applyMerge(
+      {} as OperationSyncCapable,
+      localState,
+      diff,
+      picks,
+      undefined,
+      { devA: 1 }, // baseline == mocked current clock → gate passes (not stale)
+    );
 
     const differEntries = record.calls
       .allArgs()

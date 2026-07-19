@@ -114,8 +114,13 @@ export class WholeDatasetMergeService {
     localState: Record<string, unknown>,
     diff: WholeDatasetDiff,
     picks: MergePicks,
-    remoteVectorClock?: Record<string, number>,
-    baselineVectorClock?: VectorClock,
+    remoteVectorClock: Record<string, number> | undefined,
+    // Required (not optional): the staleness gate below is a data-loss guard and
+    // must be unbypassable at this chokepoint. When the parameter was optional a
+    // caller that omitted it silently skipped the whole gate — i.e. exactly the
+    // pre-fix vulnerable behavior — with no signal. Making it required moves that
+    // failure from a silent runtime no-op to a compile error.
+    baselineVectorClock: VectorClock,
   ): Promise<Record<string, unknown>> {
     // SPAP-45 staleness gate. The review modal can stay open for minutes; a local
     // edit (or batched tracked time) in that window advances the local clock. The
@@ -130,21 +135,19 @@ export class WholeDatasetMergeService {
     // so an op landing between here and the hydrate's own deferred-action window is
     // not yet covered. Closing that fully needs the check and hydrate to share one
     // cutoff and is tracked as a follow-up.
-    if (baselineVectorClock !== undefined) {
-      this.taskTimeSyncService.flush();
-      await this.operationWriteFlushService.flushThenRunExclusive(async () => {
-        const currentClock = await this.vectorClockService.getCurrentVectorClock();
-        if (
-          compareVectorClocks(currentClock, baselineVectorClock) !==
-          VectorClockComparison.EQUAL
-        ) {
-          OpLog.warn(
-            'WholeDatasetMergeService: local state changed during review — aborting stale merge.',
-          );
-          throw new StaleReviewError();
-        }
-      });
-    }
+    this.taskTimeSyncService.flush();
+    await this.operationWriteFlushService.flushThenRunExclusive(async () => {
+      const currentClock = await this.vectorClockService.getCurrentVectorClock();
+      if (
+        compareVectorClocks(currentClock, baselineVectorClock) !==
+        VectorClockComparison.EQUAL
+      ) {
+        OpLog.warn(
+          'WholeDatasetMergeService: local state changed during review — aborting stale merge.',
+        );
+        throw new StaleReviewError();
+      }
+    });
 
     const mergedState = buildMergedState(localState, diff, picks);
 
