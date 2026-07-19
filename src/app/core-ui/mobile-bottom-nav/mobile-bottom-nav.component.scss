@@ -96,6 +96,8 @@
     }
 
     &.smaller {
+      flex-basis: var(--bottom-nav-height);
+      width: var(--bottom-nav-height);
       height: var(--bottom-nav-height);
       margin-left: var(--s);
       margin-right: var(--s);
