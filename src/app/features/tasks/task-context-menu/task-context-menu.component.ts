@@ -33,4 +33,18 @@ export class TaskContextMenuComponent {
     this._cd.detectChanges();
     this.taskContextMenuInner()?.open(ev, isOpenedFromKeyBoard);
   }
+
+  close(): boolean {
+    if (!this.isShowInner) {
+      return false;
+    }
+
+    const trigger = this.taskContextMenuInner()?.contextMenuTrigger();
+    if (!trigger) {
+      return false;
+    }
+
+    trigger.closeMenu();
+    return true;
+  }
 }
