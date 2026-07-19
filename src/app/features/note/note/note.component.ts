@@ -42,6 +42,7 @@ import {
   LocalDraftService,
 } from '../../../core/draft/local-draft.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
 import { Log } from '../../../core/log';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
@@ -77,6 +78,7 @@ export class NoteComponent implements OnChanges {
   private readonly _clipboardImageService = inject(ClipboardImageService);
   private readonly _localDraftService = inject(LocalDraftService);
   private readonly _operationWriteFlush = inject(OperationWriteFlushService);
+  private readonly _operationCapture = inject(OperationCaptureService);
 
   note!: Note;
 
@@ -296,11 +298,18 @@ export class NoteComponent implements OnChanges {
             // Clear only once the update is DURABLY persisted, not merely
             // dispatched. flushPendingWrites() drains the op-capture pending
             // counter (incremented synchronously by the meta-reducer, so it is
-            // already >=1 here) and re-acquires the write lock, confirming the
-            // IndexedDB transaction committed. A crash anywhere before this
-            // resolves leaves the draft for the next open to recover.
+            // already >=1 here) and re-acquires the write lock. Draining proves
+            // the write pipeline is idle, but NOT that the write succeeded — the
+            // persist effect decrements the counter in its `finally` even when
+            // the write threw and rolled back (operation-log.effects.ts), so the
+            // flush resolves on a failed persist too. Gate the clear on the
+            // divergence flag the effect sets in that catch: if live state is
+            // ahead of a durable op, keep the draft so the next open recovers
+            // it. A crash anywhere before the clear also leaves the draft.
             await this._operationWriteFlush.flushPendingWrites();
-            await this._localDraftService.clearDraft('NOTE', note.id);
+            if (!this._operationCapture.hasUnrecoveredPersistFailure()) {
+              await this._localDraftService.clearDraft('NOTE', note.id);
+            }
           } catch (e) {
             // Flush timed out (throws on MAX_WAIT_TIME) — keep the draft. Failing
             // here must leave MORE recoverable state, never less; a later open

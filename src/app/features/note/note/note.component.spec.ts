@@ -17,6 +17,7 @@ import {
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
 
 describe('NoteComponent editFullscreen', () => {
   let component: NoteComponent;
@@ -24,6 +25,7 @@ describe('NoteComponent editFullscreen', () => {
   let noteService: jasmine.SpyObj<NoteService>;
   let localDraftService: jasmine.SpyObj<LocalDraftService>;
   let flushService: jasmine.SpyObj<OperationWriteFlushService>;
+  let captureService: jasmine.SpyObj<OperationCaptureService>;
   let contentChanged$: Subject<string>;
   let afterClosed$: Subject<unknown>;
   let confirmResult: boolean | undefined;
@@ -79,6 +81,11 @@ describe('NoteComponent editFullscreen', () => {
     ]);
     flushService.flushPendingWrites.and.resolveTo(undefined);
 
+    captureService = jasmine.createSpyObj('OperationCaptureService', [
+      'hasUnrecoveredPersistFailure',
+    ]);
+    captureService.hasUnrecoveredPersistFailure.and.returnValue(false);
+
     const clipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'resolveMarkdownImages',
     ]);
@@ -99,6 +106,7 @@ describe('NoteComponent editFullscreen', () => {
         { provide: ClipboardImageService, useValue: clipboardImageService },
         { provide: LocalDraftService, useValue: localDraftService },
         { provide: OperationWriteFlushService, useValue: flushService },
+        { provide: OperationCaptureService, useValue: captureService },
       ],
     });
 
@@ -256,6 +264,29 @@ describe('NoteComponent editFullscreen', () => {
     expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
       content: 'final content',
     });
+    expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft when the flush drains but the write did not persist (rolled back)', async () => {
+    // flushPendingWrites resolves even on a FAILED persist: the effect
+    // decrements the pending counter in its `finally` regardless of outcome, so
+    // draining proves the pipeline is idle, not that the write committed. When
+    // the effect rolled the write back it sets the divergence flag, and the
+    // draft must survive so the next open recovers the edit.
+    captureService.hasUnrecoveredPersistFailure.and.returnValue(true);
+
+    await editFullscreen();
+
+    afterClosed$.next('final content');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
+      content: 'final content',
+    });
+    // Drop the `!hasUnrecoveredPersistFailure()` guard and this clears a draft
+    // whose edit was never durably persisted -> this expectation goes red.
     expect(localDraftService.clearDraft).not.toHaveBeenCalled();
   });
 
