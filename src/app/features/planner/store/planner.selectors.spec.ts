@@ -449,6 +449,25 @@ describe('Planner Selectors - selectPlannerDays', () => {
     expect(dayDates).toContain(tomorrow);
   });
 
+  it('should keep dates consecutive when planner state extends the loaded range', () => {
+    const task = createMockTask({ id: 't1' });
+    const plannerState: PlannerState = {
+      ...emptyPlannerState,
+      days: { ['2026-07-28']: ['t1'] },
+    };
+
+    const selector = createPlannerDaysSelector(['2026-07-25', '2026-07-26']);
+    const tasks = createTasksMapFromTasksArray([task]);
+    const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
+
+    expect(result.map((day) => day.dayDate)).toEqual([
+      '2026-07-25',
+      '2026-07-26',
+      '2026-07-27',
+      '2026-07-28',
+    ]);
+  });
+
   it('should filter out deleted tasks from planner days', () => {
     const plannerState: PlannerState = {
       ...emptyPlannerState,
