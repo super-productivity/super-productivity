@@ -35,6 +35,7 @@ import { OperationWriteFlushService } from './operation-write-flush.service';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 import { RemoteOpsProcessingService } from './remote-ops-processing.service';
 import { ConflictJournalService } from './conflict-journal.service';
+import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { VectorClockService } from './vector-clock.service';
 import {
   DownloadResultForRejection,
@@ -173,6 +174,7 @@ export class OperationLogSyncService {
   // Extracted services
   private remoteOpsProcessingService = inject(RemoteOpsProcessingService);
   private conflictJournalService = inject(ConflictJournalService);
+  private localDraftService = inject(LocalDraftService);
   private vectorClockService = inject(VectorClockService);
   private rejectedOpsHandlerService = inject(RejectedOpsHandlerService);
   private syncHydrationService = inject(SyncHydrationService);
@@ -2229,6 +2231,14 @@ export class OperationLogSyncService {
     // keep the badge count and offer review actions against replaced state.
     // clearAll swallows its own errors and must not fail the rebuild.
     await this.conflictJournalService.clearAll();
+    // Same reasoning for note drafts: this "Use Server Data" path replays the
+    // complete server history over live state, replacing every note, so a draft's
+    // baseContent now refers to content that no longer exists. This is the flow
+    // users actually hit for a force-download (distinct from super-sync-restore's
+    // restore-to-a-serverSeq), and it does NOT funnel through importCompleteBackup,
+    // so clearing at that chokepoint would miss it. Swallows its own errors and
+    // must not fail the rebuild.
+    await this.localDraftService.deleteDraftsForActiveProfile();
     return hasDurableRecovery;
   }
 

@@ -306,6 +306,89 @@ describe('LocalDraftService', () => {
     expect(pruneSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('should prune the oldest drafts beyond the 200-entry cap', async () => {
+    activeProfileId = 'profile-a';
+    // Write 201 fresh drafts (all inside the retention window) with strictly
+    // increasing updatedAt so "oldest" is well-defined. saveDraft always stamps
+    // now(), so write directly to control the age.
+    const base = Date.now();
+    const ids = Array.from({ length: 201 }, () => uniqueId());
+    await (service as any)._withRetryOnClose(async (db: any) => {
+      for (let i = 0; i < ids.length; i++) {
+        await db.put('drafts', {
+          key: `profile-a:NOTE:${ids[i]}`,
+          entityType: 'NOTE',
+          entityId: ids[i],
+          profileId: 'profile-a',
+          content: `c${i}`,
+          baseContent: 'base',
+          updatedAt: base + i,
+        });
+      }
+    });
+
+    await (service as any)._pruneStaleDraftsOnce();
+
+    // The single oldest survivor is evicted to hold the cap; the newest stays.
+    // Delete the DRAFT_MAX_ENTRIES overflow slice and all 201 remain -> red.
+    expect(await service.loadDraft('NOTE', ids[0])).toBeUndefined();
+    const newest = await loadDraft(ids[ids.length - 1]);
+    expect(newest?.content).toBe('c200');
+
+    await (service as any)._withRetryOnClose(async (db: any) => {
+      for (const id of ids) {
+        await db.delete('drafts', `profile-a:NOTE:${id}`);
+      }
+    });
+  });
+
+  it('should run the prune when triggered through the public loadDraft() (not just the private method)', async () => {
+    activeProfileId = 'profile-a';
+    const staleId = uniqueId();
+    const otherId = uniqueId();
+    const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+    await (service as any)._withRetryOnClose((db: any) =>
+      db.put('drafts', {
+        key: `profile-a:NOTE:${staleId}`,
+        entityType: 'NOTE',
+        entityId: staleId,
+        profileId: 'profile-a',
+        content: 'stale',
+        baseContent: 'base',
+        updatedAt: Date.now() - fifteenDaysMs,
+      }),
+    );
+
+    // Public API only: loadDraft fires the once-per-session prune fire-and-forget.
+    // Remove the `void this._pruneStaleDraftsOnce()` wiring line from loadDraft
+    // and _prunePromise stays undefined, the stale draft survives -> red.
+    await service.loadDraft('NOTE', otherId);
+    await (service as any)._prunePromise;
+
+    expect(await service.loadDraft('NOTE', staleId)).toBeUndefined();
+  });
+
+  it('should prune on app start via the public pruneOnStart()', async () => {
+    activeProfileId = 'profile-a';
+    const staleId = uniqueId();
+    const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+    await (service as any)._withRetryOnClose((db: any) =>
+      db.put('drafts', {
+        key: `profile-a:NOTE:${staleId}`,
+        entityType: 'NOTE',
+        entityId: staleId,
+        profileId: 'profile-a',
+        content: 'stale',
+        baseContent: 'base',
+        updatedAt: Date.now() - fifteenDaysMs,
+      }),
+    );
+
+    await service.pruneOnStart();
+
+    expect(await service.loadDraft('NOTE', staleId)).toBeUndefined();
+  });
+
   it('should retry once and succeed when the connection closes mid-operation (iOS #6643)', async () => {
     // Seed a draft, then simulate the iOS "connection is closing" DOMException
     // on the first read; the retry-once wrapper must re-open and succeed.

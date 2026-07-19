@@ -827,7 +827,7 @@
     "NOTE": {
       "D_DRAFT_CONFLICT": {
         "KEEP_SAVED": "Keep saved version",
-        "MSG": "An unsaved draft of this note was recovered, but the note has changed in the meantime (e.g. through sync). Review the recovered draft in the editor or keep the saved version and delete the draft?",
+        "MSG": "A draft of this note was recovered, but the note has changed in the meantime (e.g. through sync). Review the recovered draft in the editor or keep the saved version and delete the draft?",
         "REVIEW_DRAFT": "Review draft"
       },
       "D_FULLSCREEN": {

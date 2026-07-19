@@ -96,10 +96,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     content: string;
     taskId?: string;
     originalContent?: string;
-    // Only set by flows that keep a crash-safe draft (project notes): when true,
-    // the Discard button asks for confirmation before closing. Task notes and
-    // inline markdown leave it unset and close immediately (#8982 review).
-    isConfirmDiscardOnClose?: boolean;
   } = inject(MAT_DIALOG_DATA) || { content: '' };
   // Reference for the discard confirmation. `originalContent` wins when the
   // dialog is seeded with recovered draft content that differs from the
@@ -324,25 +320,21 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     // callers tell a user-confirmed discard from the dialog being disposed some
     // other way (e.g. MatDialog.closeAll()), which emits undefined.
     if (isSkipSave) {
-      // Only flows that keep a crash-safe draft (project notes) confirm before
-      // discarding — there is unsynced work that would be lost. Task notes and
-      // inline markdown have no draft, so they close immediately (#8982 review).
-      if (this.data?.isConfirmDiscardOnClose) {
-        this._confirmDiscardIfNeeded(() =>
-          this._matDialogRef.close({ action: 'DISCARD' }),
-        );
-      } else {
-        this._matDialogRef.close({ action: 'DISCARD' });
-      }
+      // Confirm before discarding modified content, for every caller of this
+      // shared dialog. The "Close" action was renamed to "Discard" (more final),
+      // so confirming is the matching guard — and having no crash-safe draft
+      // (task notes, inline markdown) is a reason to confirm more, not less.
+      // _confirmDiscardIfNeeded no-ops when nothing was modified, so an unmodified
+      // close still closes instantly (#8982 review).
+      this._confirmDiscardIfNeeded(() => this._matDialogRef.close({ action: 'DISCARD' }));
       // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
     } else if (!this.data?.content && this.data.content.trim().length < 1) {
       this._matDialogRef.close({ action: 'DELETE' });
       // When the "Save" button is clicked by the user and the note has content, it will save.
     } else {
-      // The auto-save stream is debounced (500ms), so a pending emission would be
-      // dropped on close. Emit synchronously so subscribers (e.g. the crash-safe
-      // draft) see the final content; duplicate emissions are harmless.
-      this.contentChanged.emit(this.data.content);
+      // The Save path resolves afterClosed with the final content; the note's
+      // save handler awaits its own crash-safe draft write, so no close-path
+      // contentChanged emit is needed (it would only race a duplicate write).
       this._matDialogRef.close(this.data?.content);
     }
   }

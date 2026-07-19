@@ -4,6 +4,7 @@ import { LocalBackupService } from './local-backup.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
 import { BackupService } from '../../op-log/backup/backup.service';
+import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
 import { ArchiveModel } from '../../features/archive/archive.model';
@@ -40,6 +41,7 @@ describe('LocalBackupService', () => {
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
   let globalConfigServiceSpy: jasmine.SpyObj<GlobalConfigService>;
   let backupServiceSpy: jasmine.SpyObj<BackupService>;
+  let localDraftServiceSpy: jasmine.SpyObj<LocalDraftService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let translateServiceSpy: jasmine.SpyObj<TranslateService>;
   let platformServiceSpy: jasmine.SpyObj<CapacitorPlatformService>;
@@ -93,6 +95,10 @@ describe('LocalBackupService', () => {
       cfg$: of({ localBackup: { isEnabled: false } }),
     });
     backupServiceSpy = jasmine.createSpyObj('BackupService', ['importCompleteBackup']);
+    localDraftServiceSpy = jasmine.createSpyObj('LocalDraftService', [
+      'deleteDraftsForActiveProfile',
+    ]);
+    localDraftServiceSpy.deleteDraftsForActiveProfile.and.resolveTo();
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     translateServiceSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     platformServiceSpy = jasmine.createSpyObj('CapacitorPlatformService', ['isIOS']);
@@ -130,6 +136,7 @@ describe('LocalBackupService', () => {
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
         { provide: BackupService, useValue: backupServiceSpy },
+        { provide: LocalDraftService, useValue: localDraftServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
@@ -210,6 +217,7 @@ describe('LocalBackupService', () => {
           { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
           { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
           { provide: BackupService, useValue: backupServiceSpy },
+          { provide: LocalDraftService, useValue: localDraftServiceSpy },
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformServiceSpy },
@@ -476,6 +484,7 @@ describe('LocalBackupService', () => {
           { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
           { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
           { provide: BackupService, useValue: backupServiceSpy },
+          { provide: LocalDraftService, useValue: localDraftServiceSpy },
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformServiceSpy },
@@ -651,6 +660,7 @@ describe('LocalBackupService', () => {
           { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
           { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
           { provide: BackupService, useValue: backupServiceSpy },
+          { provide: LocalDraftService, useValue: localDraftServiceSpy },
           { provide: SnackService, useValue: snackServiceSpy },
           { provide: TranslateService, useValue: translateServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformServiceSpy },

@@ -172,6 +172,20 @@ export class LocalDraftService {
   }
 
   /**
+   * Prunes stale drafts on app start, mirroring ConflictJournalService.pruneOnStart
+   * (wired via APP_INITIALIZER in main.ts). Without this, prune only ever ran
+   * lazily off loadDraft(), so a user who stopped opening notes never pruned
+   * again and their drafts — full note content — could outlive the documented
+   * 14-day retention indefinitely. Shares the once-per-session guard, so a later
+   * loadDraft() in the same session does not prune a second time. Fire-and-forget
+   * and best-effort: it opens its own IndexedDB lazily and swallows its own
+   * errors, so it can never block or fail bootstrap.
+   */
+  pruneOnStart(): Promise<void> {
+    return this._pruneStaleDraftsOnce();
+  }
+
+  /**
    * Prunes drafts by `updatedAt`: drops anything older than the retention window
    * and, if still over the entry cap, the oldest remaining entries. Runs at most
    * once per session (guarded by `_prunePromise`) and is best-effort — a failure

@@ -16,12 +16,14 @@ import {
 } from '../../../core/draft/local-draft.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
+import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 
 describe('NoteComponent editFullscreen', () => {
   let component: NoteComponent;
   let matDialog: jasmine.SpyObj<MatDialog>;
   let noteService: jasmine.SpyObj<NoteService>;
   let localDraftService: jasmine.SpyObj<LocalDraftService>;
+  let flushService: jasmine.SpyObj<OperationWriteFlushService>;
   let contentChanged$: Subject<string>;
   let afterClosed$: Subject<unknown>;
   let confirmResult: boolean | undefined;
@@ -72,6 +74,11 @@ describe('NoteComponent editFullscreen', () => {
     localDraftService.saveDraft.and.resolveTo(undefined);
     localDraftService.clearDraft.and.resolveTo(undefined);
 
+    flushService = jasmine.createSpyObj('OperationWriteFlushService', [
+      'flushPendingWrites',
+    ]);
+    flushService.flushPendingWrites.and.resolveTo(undefined);
+
     const clipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'resolveMarkdownImages',
     ]);
@@ -91,6 +98,7 @@ describe('NoteComponent editFullscreen', () => {
         { provide: WorkContextService, useValue: { activeWorkContextTypeAndId$: EMPTY } },
         { provide: ClipboardImageService, useValue: clipboardImageService },
         { provide: LocalDraftService, useValue: localDraftService },
+        { provide: OperationWriteFlushService, useValue: flushService },
       ],
     });
 
@@ -167,9 +175,14 @@ describe('NoteComponent editFullscreen', () => {
 
   it('should persist the draft BEFORE dispatching the note update on save (durability ordering)', async () => {
     const callOrder: string[] = [];
-    localDraftService.saveDraft.and.callFake(() => {
+    // Push on RESOLUTION, not invocation: the guarantee is that saveDraft has
+    // *resolved* before dispatch (the crash-safety window), not merely that it
+    // was called first. A fake that pushes synchronously at call time stays green
+    // even if the production `await` is deleted — the exact false-positive
+    // johannesjo found by mutation-testing this spec (#8982 review).
+    localDraftService.saveDraft.and.callFake(async () => {
+      await Promise.resolve();
       callOrder.push('saveDraft');
-      return Promise.resolve();
     });
     noteService.update.and.callFake(() => {
       callOrder.push('update');
@@ -184,8 +197,8 @@ describe('NoteComponent editFullscreen', () => {
     await Promise.resolve();
 
     // The draft (with the about-to-be-saved content, baseContent still the
-    // current note) is written durably first; the next open either lazily clears
-    // it (persisted) or crash-recovers it (baseContent still matches).
+    // current note) is written durably first; only then is the update dispatched
+    // and (after the flush) the draft cleared.
     expect(localDraftService.saveDraft).toHaveBeenCalledWith({
       entityType: 'NOTE',
       entityId: NOTE.id,
@@ -196,7 +209,86 @@ describe('NoteComponent editFullscreen', () => {
       content: 'final content',
     });
     // Ordering is the crash-safety guarantee: draft durable before dispatch.
+    // Drop the production `await` and this flips to ['update', 'saveDraft'].
     expect(callOrder).toEqual(['saveDraft', 'update']);
+  });
+
+  it('does not clear the draft until the update is durably persisted (flush gates the clear)', async () => {
+    let resolveFlush!: () => void;
+    flushService.flushPendingWrites.and.returnValue(
+      new Promise<void>((r) => (resolveFlush = r)),
+    );
+
+    await editFullscreen();
+
+    afterClosed$.next('final content');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Dispatched, but the flush hasn't resolved — this is the crash window. The
+    // draft MUST survive it, or a crash here loses the edit.
+    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
+      content: 'final content',
+    });
+    expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+
+    resolveFlush();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Drop the `await` before clearDraft and it clears while the flush is still
+    // pending -> this expectation goes red.
+    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
+  });
+
+  it('keeps the draft when the flush times out (fail-safe direction)', async () => {
+    flushService.flushPendingWrites.and.rejectWith(new Error('flush timeout'));
+
+    await editFullscreen();
+
+    afterClosed$.next('final content');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Failing must leave MORE recoverable state, never less: the note was still
+    // dispatched, but the draft is kept so the next open can recover it.
+    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
+      content: 'final content',
+    });
+    expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+  });
+
+  it('clears the draft (does not save one) when closing on unchanged content', async () => {
+    await editFullscreen();
+
+    // ESC on an unedited open, or an edit reverted before close: res equals the
+    // note content, so there is nothing unsaved to recover.
+    afterClosed$.next('saved content');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(localDraftService.saveDraft).not.toHaveBeenCalled();
+    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
+    // No durable-persistence gate needed for a no-op: nothing unsaved existed, so
+    // the flush is skipped entirely.
+    expect(flushService.flushPendingWrites).not.toHaveBeenCalled();
+  });
+
+  it('checkpoints the editor contents while typing (crash-safety premise)', async () => {
+    await editFullscreen();
+
+    // The while-typing checkpoint IS the crash-safety premise (type, crash,
+    // recover). Delete the contentChanged -> saveDraft subscription in production
+    // and this is the only test that goes red.
+    contentChanged$.next('typed so far');
+
+    expect(localDraftService.saveDraft).toHaveBeenCalledWith({
+      entityType: 'NOTE',
+      entityId: NOTE.id,
+      content: 'typed so far',
+      baseContent: 'saved content',
+    });
   });
 
   it('should remove the note and clear its draft when deleted from the note menu', () => {

@@ -17,7 +17,6 @@ describe('DialogFullscreenMarkdownComponent', () => {
     content: string;
     taskId?: string;
     originalContent?: string;
-    isConfirmDiscardOnClose?: boolean;
   };
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
 
@@ -368,7 +367,6 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
   describe('close with discard', () => {
     it('should close without confirmation when the content is unmodified', () => {
-      component.data.isConfirmDiscardOnClose = true;
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
 
       component.close(true);
@@ -378,7 +376,6 @@ describe('DialogFullscreenMarkdownComponent', () => {
     });
 
     it('should ask for confirmation and close when the user confirms discarding', () => {
-      component.data.isConfirmDiscardOnClose = true;
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
         afterClosed: () => of(true),
       } as any);
@@ -391,7 +388,6 @@ describe('DialogFullscreenMarkdownComponent', () => {
     });
 
     it('should keep the dialog open when the user does not confirm discarding', () => {
-      component.data.isConfirmDiscardOnClose = true;
       spyOn(component['_matDialog'], 'open').and.returnValue({
         afterClosed: () => of(false),
       } as any);
@@ -404,7 +400,6 @@ describe('DialogFullscreenMarkdownComponent', () => {
 
     it('should use originalContent as the modification reference when provided', () => {
       dialogData.originalContent = 'persisted content that differs';
-      dialogData.isConfirmDiscardOnClose = true;
       const recoveredFixture = TestBed.createComponent(DialogFullscreenMarkdownComponent);
       const recoveredComponent = recoveredFixture.componentInstance;
       const confirmDialogSpy = spyOn(
@@ -421,30 +416,37 @@ describe('DialogFullscreenMarkdownComponent', () => {
       expect(recoveredComponent._matDialogRef.close).not.toHaveBeenCalled();
     });
 
-    it('should discard immediately WITHOUT confirmation when the flag is unset (task notes / inline markdown)', () => {
-      // No isConfirmDiscardOnClose: these flows keep no crash-safe draft, so a
-      // Discard must close right away even with modified content (#8982 review).
-      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+    it('should confirm before discarding modified content for every caller (task notes / inline markdown included)', () => {
+      // The confirm is unconditional now: the "Close" action was renamed to the
+      // more final "Discard" for all callers of this shared dialog, so all of them
+      // confirm before discarding modified content. Task notes and inline markdown
+      // keep no crash-safe draft, which is a reason to confirm MORE, not less —
+      // this is the #8932 loss the earlier gating reintroduced (#8982 review).
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
       component.data.content = 'changed content';
 
       component.close(true);
 
-      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(confirmDialogSpy).toHaveBeenCalled();
       expect(component._matDialogRef.close).toHaveBeenCalledWith({ action: 'DISCARD' });
     });
   });
 
   describe('close with save', () => {
-    it('should emit contentChanged synchronously with the final content before closing', () => {
-      // The auto-save stream is debounced; a close right after typing must not
-      // drop the pending emission (crash-safe draft would go stale otherwise).
+    it('should close with the final content and NOT emit contentChanged on the close path', () => {
+      // The Save path resolves afterClosed with the content; the note's save
+      // handler awaits its own crash-safe draft write, so a close-path
+      // contentChanged emit is redundant (it would only race a duplicate write)
+      // and was removed (#8982 review).
       spyOn(component.contentChanged, 'emit');
       component.data.content = 'final content';
 
       component.close();
 
-      expect(component.contentChanged.emit).toHaveBeenCalledWith('final content');
       expect(component._matDialogRef.close).toHaveBeenCalledWith('final content');
+      expect(component.contentChanged.emit).not.toHaveBeenCalled();
     });
   });
 

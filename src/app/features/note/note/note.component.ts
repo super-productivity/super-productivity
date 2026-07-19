@@ -41,6 +41,7 @@ import {
   DRAFT_LOAD_ERROR,
   LocalDraftService,
 } from '../../../core/draft/local-draft.service';
+import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { Log } from '../../../core/log';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
@@ -75,6 +76,7 @@ export class NoteComponent implements OnChanges {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _clipboardImageService = inject(ClipboardImageService);
   private readonly _localDraftService = inject(LocalDraftService);
+  private readonly _operationWriteFlush = inject(OperationWriteFlushService);
 
   note!: Note;
 
@@ -241,8 +243,6 @@ export class NoteComponent implements OnChanges {
     const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
       content: contentToOpen,
       ...(contentToOpen !== note.content ? { originalContent: note.content } : {}),
-      // Project notes keep a crash-safe draft, so confirm before discarding.
-      isConfirmDiscardOnClose: true,
     });
     // Checkpoint the editor contents locally so they survive a crash.
     const contentChangedSub = isDraftUnreadable
@@ -266,15 +266,20 @@ export class NoteComponent implements OnChanges {
         if (!isDraftUnreadable) {
           this._localDraftService.clearDraft('NOTE', note.id);
         }
-        // Save ("Save" button, non-empty). Persist the draft (rewritten with the
-        // about-to-be-saved content, baseContent = the still-current note content)
-        // and AWAIT it BEFORE dispatching the note update, so a crash in the
-        // window between the two finds a durable draft: the next open restores it
-        // via the baseContent === note.content branch. The draft is not cleared
-        // here — a later open clears it lazily once draft.content === note.content
-        // proves the update persisted (the durable-persistence acknowledgement).
       } else if (typeof res === 'string') {
-        if (!isDraftUnreadable) {
+        if (!isDraftUnreadable && res === note.content) {
+          // Nothing unsaved: the editor is closing on the content already
+          // persisted (ESC on an unedited open, or an edit reverted before
+          // close). Keeping a draft here would arm a false "unsaved draft"
+          // conflict prompt if the note later changes on another device.
+          await this._localDraftService.clearDraft('NOTE', note.id);
+        } else if (!isDraftUnreadable) {
+          // Persist the draft (baseContent = the still-current note content) and
+          // AWAIT it BEFORE dispatching the note update, so a crash in the window
+          // between the two leaves a durable draft the next open restores via the
+          // baseContent === note.content branch. Best-effort: saveDraft swallows
+          // its own write errors, so this resolves even on failure — the flush
+          // below is what confirms durability, not this await.
           await this._localDraftService.saveDraft({
             entityType: 'NOTE',
             entityId: note.id,
@@ -286,6 +291,23 @@ export class NoteComponent implements OnChanges {
         // the await, so re-reading the instance field here would be reading it
         // across the suspension point.
         this._noteService.update(note.id, { content: res });
+        if (!isDraftUnreadable && res !== note.content) {
+          try {
+            // Clear only once the update is DURABLY persisted, not merely
+            // dispatched. flushPendingWrites() drains the op-capture pending
+            // counter (incremented synchronously by the meta-reducer, so it is
+            // already >=1 here) and re-acquires the write lock, confirming the
+            // IndexedDB transaction committed. A crash anywhere before this
+            // resolves leaves the draft for the next open to recover.
+            await this._operationWriteFlush.flushPendingWrites();
+            await this._localDraftService.clearDraft('NOTE', note.id);
+          } catch (e) {
+            // Flush timed out (throws on MAX_WAIT_TIME) — keep the draft. Failing
+            // here must leave MORE recoverable state, never less; a later open
+            // still clears it via draft.content === note.content once persisted.
+            Log.err('NoteComponent: flush before draft clear failed; keeping draft', e);
+          }
+        }
         // Discard — confirmed by the user in the dialog, so the draft goes too. Any
         // other result (undefined from a force-close) keeps the draft recoverable.
       } else if (res?.action === 'DISCARD' && !isDraftUnreadable) {
