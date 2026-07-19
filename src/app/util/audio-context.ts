@@ -49,7 +49,9 @@ export const getAudioBuffer = async (filePath: string): Promise<AudioBuffer> => 
 
   const ctx = getAudioContext();
   const response = await fetch(filePath);
-  if (!response.ok) {
+  // Capacitor's iOS asset scheme can return a readable response with status 0.
+  // Network failures still reject fetch(), and decodeAudioData validates the body.
+  if (!response.ok && response.status !== 0) {
     throw new Error(`Failed to fetch audio file ${filePath}: ${response.status}`);
   }
   const arrayBuffer = await response.arrayBuffer();

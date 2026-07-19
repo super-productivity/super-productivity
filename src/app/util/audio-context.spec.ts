@@ -188,6 +188,21 @@ describe('audio-context', () => {
         /Failed to fetch audio file.*404/,
       );
     });
+
+    it('should decode readable custom-scheme responses with status 0', async () => {
+      fetchSpy.and.returnValue(
+        Promise.resolve({
+          ok: false,
+          status: 0,
+          arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+        } as Response),
+      );
+
+      const buffer = await getAudioBuffer('./assets/snd/done1.mp3');
+
+      expect(mockContext.decodeAudioData).toHaveBeenCalledWith(mockArrayBuffer);
+      expect(buffer).toBe(mockAudioBuffer);
+    });
   });
 
   describe('playBuffer', () => {
