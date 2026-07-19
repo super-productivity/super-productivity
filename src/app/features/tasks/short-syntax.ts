@@ -417,6 +417,18 @@ export const parseProjectChanges = (
           projectId: wholeTokenProject.id,
         };
       }
+      // Same legacy fallback with trailing words ("+A/B Testing extra words"):
+      // the first word alone, slash included, as a project title prefix.
+      const firstWord = rawToken.split(' ')[0];
+      if (firstWord.includes(CH_SECTION)) {
+        const firstWordProject = matchProject(firstWord.toLowerCase());
+        if (firstWordProject) {
+          return {
+            title: stripAt(1 + firstWord.length),
+            projectId: firstWordProject.id,
+          };
+        }
+      }
     }
 
     const existingProject = matchProject(projectTitleToMatch);

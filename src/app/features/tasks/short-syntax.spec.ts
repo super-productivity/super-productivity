@@ -1483,6 +1483,27 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
+    it('should prefer a project whose title contains "/" with trailing words', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +A/B Testing extra words',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        sections,
+      );
+      expect(r?.projectId).toBe('SlashProjectID');
+      expect(r?.sectionId).toBeUndefined();
+      // Regression (PR #9014 review): matches master's first-word fallback —
+      // strip "+A/B", not "+A/", so no orphaned "B" remains.
+      expect(r?.taskChanges.title).toBe('Task Testing extra words');
+    });
+
     it('should match the project without a section when the section part matches nothing', async () => {
       const t = {
         ...TASK,
