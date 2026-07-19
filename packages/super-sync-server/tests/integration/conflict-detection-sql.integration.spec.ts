@@ -165,6 +165,140 @@ describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () =>
     expect(result.conflictType).toBe('concurrent');
   });
 
+  // The GLOBAL_CONFIG misc→tasks alias (a legacy v1 misc write stored task
+  // settings under the raw `misc` key) must gate on the FIXED v1→v2 split
+  // boundary, not the moving CURRENT_SCHEMA_VERSION. Before the fix the
+  // read-side lookup used `schemaVersion < CURRENT_SCHEMA_VERSION`, so once v4
+  // shipped a post-split (v2/v3) misc op — disjoint from `tasks` — was aliased
+  // to an incoming `tasks` write and fabricated a false conflict.
+  const insertConfigOp = async (args: {
+    entityId: 'misc' | 'tasks';
+    clientId: string;
+    schemaVersion: number;
+    vectorClock: VectorClock;
+  }): Promise<void> => {
+    opCounter++;
+    await prisma.operation.create({
+      data: {
+        id: `test-conflict-sql-cfg-${opCounter}-${Date.now()}`,
+        userId: TEST_USER_ID,
+        clientId: args.clientId,
+        serverSeq: opCounter,
+        actionType: '[Global Config] Update Section',
+        opType: 'UPD',
+        entityType: 'GLOBAL_CONFIG',
+        entityId: args.entityId,
+        entityIds: [],
+        payload: {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON input; matches sibling specs
+        vectorClock: args.vectorClock as any,
+        schemaVersion: args.schemaVersion,
+        clientTimestamp: BigInt(Date.now()),
+        receivedAt: BigInt(Date.now()),
+      },
+    });
+  };
+
+  const incomingConfigTasksOp = (
+    clientId: string,
+    vectorClock: VectorClock,
+  ): Operation => ({
+    id: `incoming-cfg-tasks-${clientId}-${Date.now()}`,
+    clientId,
+    actionType: '[Global Config] Update Section',
+    opType: 'UPD',
+    entityType: 'GLOBAL_CONFIG',
+    entityId: 'tasks',
+    payload: {},
+    vectorClock,
+    timestamp: Date.now(),
+    schemaVersion: 4,
+  });
+
+  it('does not alias a post-split (v3) misc write to an incoming tasks write', async () => {
+    // Stored post-split misc write from A (v3 >= split v2 → disjoint from tasks).
+    await insertConfigOp({
+      entityId: 'misc',
+      clientId: 'A',
+      schemaVersion: 3,
+      vectorClock: { A: 1 },
+    });
+
+    // Concurrent incoming `tasks` write from B.
+    const result = await detectConflict(
+      TEST_USER_ID,
+      incomingConfigTasksOp('B', { B: 1 }),
+      tx(),
+    );
+
+    // Pre-fix (`< CURRENT_SCHEMA_VERSION` = < 4): v3 misc aliased to tasks →
+    // CONCURRENT → false conflict. Post-fix (`< split v2`): v3 excluded → none.
+    expect(result.hasConflict).toBe(false);
+  });
+
+  it('still aliases a legacy pre-split (v1) misc write to an incoming tasks write', async () => {
+    // The alias must remain for genuine pre-split rows: a v1 misc op DID carry
+    // task settings, so a concurrent tasks write is a real conflict.
+    await insertConfigOp({
+      entityId: 'misc',
+      clientId: 'A',
+      schemaVersion: 1,
+      vectorClock: { A: 1 },
+    });
+
+    const result = await detectConflict(
+      TEST_USER_ID,
+      incomingConfigTasksOp('B', { B: 1 }),
+      tx(),
+    );
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('concurrent');
+  });
+
+  // The same fix applies to the batch lookup `prefetchLatestEntityOpsForBatch`,
+  // which folds a legacy misc row into the `tasks` conflict key. Cover both
+  // directions of the split-boundary gate on that path too.
+  it('prefetch does not fold a post-split (v3) misc write into the tasks key', async () => {
+    await insertConfigOp({
+      entityId: 'misc',
+      clientId: 'A',
+      schemaVersion: 3,
+      vectorClock: { A: 1 },
+    });
+
+    const latestByEntity = await prefetchLatestEntityOpsForBatch(
+      TEST_USER_ID,
+      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
+      tx(),
+    );
+
+    // Pre-fix (`< CURRENT_SCHEMA_VERSION`) folded the v3 misc row into the tasks
+    // key; post-fix (`< split v2`) excludes it, so tasks has no aliased op.
+    expect(
+      latestByEntity.get(getEntityConflictKey('GLOBAL_CONFIG', 'tasks')),
+    ).toBeUndefined();
+  });
+
+  it('prefetch still folds a legacy pre-split (v1) misc write into the tasks key', async () => {
+    await insertConfigOp({
+      entityId: 'misc',
+      clientId: 'A',
+      schemaVersion: 1,
+      vectorClock: { A: 1 },
+    });
+
+    const latestByEntity = await prefetchLatestEntityOpsForBatch(
+      TEST_USER_ID,
+      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
+      tx(),
+    );
+
+    const row = latestByEntity.get(getEntityConflictKey('GLOBAL_CONFIG', 'tasks'));
+    expect(row).toBeDefined();
+    expect(row?.clientId).toBe('A');
+  });
+
   it('falls back to the scalar entity_id for pre-migration rows (empty entity_ids)', async () => {
     await insertOp({
       serverSeq: 1,

@@ -151,9 +151,12 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     } catch (e) {
       // Already surfaced to the user inside writeOperation; swallow so the
       // shared effect stream is never torn down by a single failed write.
+      // The optimistic NgRx change now has no durable op behind it — mark the
+      // divergence so compaction won't bake it into state_cache (#8751).
+      this.operationCaptureService.markUnrecoveredPersistFailure();
       OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
     } finally {
-      this.operationCaptureService.decrementPending();
+      this.operationCaptureService.decrementPending(action);
     }
   }
 
@@ -199,6 +202,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           `Deferred action ${action.type} has invalid entity identifiers.`,
         );
       }
+      // The reducer already applied this action; skipping persistence leaves a
+      // phantom change in live state — block snapshotting until reload (#8751).
+      // Marked before devError, which throws in dev builds.
+      this.operationCaptureService.markUnrecoveredPersistFailure();
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -310,12 +317,18 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
               `Deferred action ${action.type} has an invalid payload.`,
             );
           }
+          // Same phantom-change situation as a failed write: the reducer ran,
+          // no op will exist. Suppress snapshotting until reload (#8751).
+          this.operationCaptureService.markUnrecoveredPersistFailure();
           this.snackService.open({
             type: 'ERROR',
             msg: T.F.SYNC.S.INVALID_OPERATION_PAYLOAD,
             actionStr: T.PS.RELOAD,
             actionFn: (): void => {
               window.location.reload();
+            },
+            config: {
+              duration: 0, // Sticky — state diverged; only a reload recovers (#8751)
             },
           });
           return; // Skip persisting invalid operation
@@ -334,7 +347,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // (one to SUP_OPS, one to pf.META_MODEL) into a single atomic transaction,
         // reducing disk I/O by ~50% on mobile devices.
         // The op.vectorClock already contains the incremented clock (from newClock above).
-        await this.opLogStore.appendWithVectorClockUpdate(op, 'local');
+        await this.opLogStore.appendWithVectorClockOverwrite(op, 'local');
 
         // The op is durably committed past this point. Bookkeeping failures
         // below must NOT propagate: a throw would send the deferred retry loop
@@ -446,7 +459,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     OpLog.normal('OperationLogEffects: Triggering compaction...');
     this.compactionService
       .compact()
-      .then(() => {
+      .then((didCompact) => {
+        if (!didCompact) {
+          return;
+        }
         this.compactionFailures = 0;
         // Reset in-memory counter on successful compaction
         this.inMemoryCompactionCounter = 0;
@@ -491,6 +507,20 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   /**
    * Checks if an error is a QuotaExceededError from IndexedDB.
    * This happens when the browser storage quota is exceeded.
+   *
+   * Reachability (#8751): the store's `_handleAppendError` wraps only the
+   * standard `QuotaExceededError` name into `StorageQuotaExceededError extends
+   * Error`, which never matches here — so on Chromium the quota branch below is
+   * effectively dead and real quota failures take the generic
+   * mark-divergence-and-reload path. The two legacy spellings below are NOT
+   * wrapped, so they still arrive as raw DOMExceptions and do reach
+   * `handleQuotaExceeded`. There, `emergencyCompact()` now always returns false:
+   * it is called from the failing write's own stack, so that write is still
+   * counted pending and the phantom-change guard skips the snapshot. Net effect
+   * is the same reload prompt, just via a wasted compaction attempt. Do not
+   * "simplify" this on the assumption that quota handling is unreachable — see
+   * #9082 (delete-only emergency compaction), which is what would make freeing
+   * space possible without baking a phantom change.
    */
   private isQuotaExceededError(e: unknown): boolean {
     if (e instanceof DOMException) {

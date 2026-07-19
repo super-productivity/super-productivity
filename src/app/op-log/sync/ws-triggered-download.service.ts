@@ -1,6 +1,6 @@
 import { inject, Injectable, Injector, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { debounceTime, exhaustMap, filter } from 'rxjs/operators';
+import { debounceTime, filter } from 'rxjs/operators';
 import { SuperSyncWebSocketService } from './super-sync-websocket.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
@@ -11,18 +11,26 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { lazyInject } from '../../util/lazy-inject';
 import { SyncLog } from '../../core/log';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+  SyncEpochChangedError,
+} from '../core/errors/sync-errors';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
 const WS_DOWNLOAD_DEBOUNCE_MS = 500;
+const WS_GATE_RETRY_MS = 250;
+const WS_DOWNLOAD_RETRY_BASE_MS = 1_000;
+const WS_DOWNLOAD_MAX_RETRIES = 3;
 
 /**
  * Triggers operation downloads when WebSocket notifications arrive.
  *
- * Pipeline: newOpsNotification$ → debounce(500ms) → filter(!syncInProgress) → exhaustMap(download)
- *
- * Uses exhaustMap to ignore new notifications while a download is in progress.
+ * Debounced notifications are coalesced into a one-item high-watermark queue.
+ * A blocked or in-flight download leaves the newest server sequence pending,
+ * so realtime catch-up resumes after the active sync/encryption cycle ends.
  * Reuses the existing OperationLogSyncService.downloadRemoteOps() code path.
  */
 @Injectable({
@@ -46,6 +54,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
   private _getSyncWrapper = lazyInject(this._injector, SyncWrapperService);
 
   private _subscription: Subscription | null = null;
+  private _pendingLatestSeq: number | undefined;
+  private _drainTimer: ReturnType<typeof setTimeout> | null = null;
+  private _isDraining = false;
+  private _downloadRetryCount = 0;
 
   /**
    * Whether an encryption operation (password change, enable/disable, force
@@ -66,11 +78,14 @@ export class WsTriggeredDownloadService implements OnDestroy {
       .pipe(
         debounceTime(WS_DOWNLOAD_DEBOUNCE_MS),
         filter(() => !(globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD),
-        filter(() => !this._providerManager.isSyncInProgress),
-        filter(() => !this._isEncryptionOperationInProgress),
-        exhaustMap((notification) => this._downloadOps(notification.latestSeq)),
       )
-      .subscribe();
+      .subscribe((notification) => {
+        this._pendingLatestSeq = Math.max(
+          this._pendingLatestSeq ?? 0,
+          notification.latestSeq,
+        );
+        this._scheduleDrain(0);
+      });
 
     SyncLog.log('WsTriggeredDownloadService: Started listening for WS notifications');
   }
@@ -78,6 +93,12 @@ export class WsTriggeredDownloadService implements OnDestroy {
   stop(): void {
     this._subscription?.unsubscribe();
     this._subscription = null;
+    this._pendingLatestSeq = undefined;
+    this._downloadRetryCount = 0;
+    if (this._drainTimer !== null) {
+      clearTimeout(this._drainTimer);
+      this._drainTimer = null;
+    }
     SyncLog.log('WsTriggeredDownloadService: Stopped');
   }
 
@@ -85,18 +106,38 @@ export class WsTriggeredDownloadService implements OnDestroy {
     this.stop();
   }
 
-  private async _downloadOps(latestSeq: number): Promise<void> {
-    if (this._providerManager.isSyncInProgress) {
-      SyncLog.log('WsTriggeredDownloadService: Sync in progress, skipping WS download');
+  private _scheduleDrain(delayMs: number): void {
+    if (
+      !this._subscription ||
+      this._drainTimer !== null ||
+      this._isDraining ||
+      this._pendingLatestSeq === undefined
+    ) {
       return;
     }
 
-    // Re-check synchronously (the pipe filter ran before the debounce settled):
-    // never download/decrypt while an encryption operation owns the key state.
+    this._drainTimer = setTimeout(() => {
+      this._drainTimer = null;
+      void this._drainPending();
+    }, delayMs);
+  }
+
+  private async _drainPending(): Promise<void> {
+    if (!this._subscription || this._isDraining || this._pendingLatestSeq === undefined) {
+      return;
+    }
+
+    if (this._providerManager.isSyncInProgress) {
+      SyncLog.log('WsTriggeredDownloadService: Sync in progress, queueing WS download');
+      this._scheduleDrain(WS_GATE_RETRY_MS);
+      return;
+    }
+
     if (this._isEncryptionOperationInProgress) {
       SyncLog.log(
-        'WsTriggeredDownloadService: Encryption operation in progress, skipping WS download',
+        'WsTriggeredDownloadService: Encryption operation in progress, queueing WS download',
       );
+      this._scheduleDrain(WS_GATE_RETRY_MS);
       return;
     }
 
@@ -109,19 +150,42 @@ export class WsTriggeredDownloadService implements OnDestroy {
     // calls would misattribute the validation latch.
     if (!this._syncCycleGuard.tryBegin()) {
       SyncLog.log(
-        'WsTriggeredDownloadService: Another sync cycle is active, skipping WS download',
+        'WsTriggeredDownloadService: Another sync cycle is active, queueing WS download',
       );
+      this._scheduleDrain(WS_GATE_RETRY_MS);
       return;
     }
 
+    const latestSeq = this._pendingLatestSeq;
+    this._pendingLatestSeq = undefined;
+    this._isDraining = true;
+    let retryDelayMs = 0;
     try {
-      return await this._downloadOpsInner(latestSeq);
+      const shouldRetry = await this._downloadOpsInner(latestSeq);
+      if (shouldRetry && this._subscription) {
+        if (this._downloadRetryCount < WS_DOWNLOAD_MAX_RETRIES) {
+          this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
+          const retryMultiplier = 2 ** this._downloadRetryCount;
+          retryDelayMs = WS_DOWNLOAD_RETRY_BASE_MS * retryMultiplier;
+          this._downloadRetryCount++;
+        } else {
+          this._downloadRetryCount = 0;
+          SyncLog.err(
+            'WsTriggeredDownloadService: Download retry limit reached — reporting ERROR',
+          );
+          this._providerManager.setSyncStatus('ERROR');
+        }
+      } else {
+        this._downloadRetryCount = 0;
+      }
     } finally {
       this._syncCycleGuard.end();
+      this._isDraining = false;
+      this._scheduleDrain(retryDelayMs);
     }
   }
 
-  private async _downloadOpsInner(latestSeq: number): Promise<void> {
+  private async _downloadOpsInner(latestSeq: number): Promise<boolean> {
     // WS-triggered downloads are their own session boundary. The session
     // wrapper resets the latch up-front so the read at the end reflects
     // only this session, and a leaked-failed latch from a prior path can't
@@ -130,28 +194,43 @@ export class WsTriggeredDownloadService implements OnDestroy {
     // dropped before the next user-initiated sync() reset the latch.)
     return this._sessionValidation.withSession(async () => {
       try {
+        // #9074: the (provider, epoch) pair MUST be read in one synchronous
+        // block — see the matching note in SyncWrapperService._syncBody.
         const rawProvider = this._providerManager.getActiveProvider();
+        const fenceEpoch = this._providerManager.syncEpoch;
         if (!rawProvider) {
           SyncLog.log(
             'WsTriggeredDownloadService: No active provider, skipping WS download',
           );
-          return;
+          return false;
         }
 
-        const syncCapableProvider =
-          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+        const syncCapableProvider = await this._wrappedProvider.getOperationSyncCapable(
+          rawProvider,
+          { fenceEpoch },
+        );
         if (!syncCapableProvider) {
           SyncLog.log(
             'WsTriggeredDownloadService: Provider not operation-sync capable, skipping',
           );
-          return;
+          return false;
+        }
+
+        const localServerSeq = await syncCapableProvider.getLastServerSeq();
+        if (localServerSeq >= latestSeq) {
+          SyncLog.log(
+            `WsTriggeredDownloadService: Local cursor ${localServerSeq} already covers WS notification ${latestSeq}`,
+          );
+          return false;
         }
 
         SyncLog.log(
           `WsTriggeredDownloadService: Downloading ops triggered by WS notification (latestSeq=${latestSeq})`,
         );
 
-        const result = await this._syncService.downloadRemoteOps(syncCapableProvider);
+        const result = await this._syncService.downloadRemoteOps(syncCapableProvider, {
+          fenceEpoch,
+        });
 
         SyncLog.log(`WsTriggeredDownloadService: Download complete. kind=${result.kind}`);
 
@@ -160,7 +239,52 @@ export class WsTriggeredDownloadService implements OnDestroy {
             'WsTriggeredDownloadService: Download blocked by an incompatible operation',
           );
           this._providerManager.setSyncStatus('ERROR');
-          return;
+          return false;
+        }
+
+        // A WS-triggered download can create LWW local-win ops when incoming
+        // remote ops conflict with pending local ops (the losing local op is
+        // rejected and a replacement op appended straight to the op-log,
+        // bypassing the capture effect). Unlike ImmediateUploadService and the
+        // main sync loop, this path has no follow-up upload, so those preserved
+        // edits would sit unsynced until the next user edit or periodic sync
+        // (unbounded for manual-sync-only users). Push them now.
+        if (result.kind === 'ops_processed' && result.localWinOpsCreated > 0) {
+          SyncLog.log(
+            `WsTriggeredDownloadService: LWW created ${result.localWinOpsCreated} ` +
+              `local-win op(s), re-uploading`,
+          );
+          const uploadResult = await this._syncService.uploadPendingOps(
+            syncCapableProvider,
+            { fenceEpoch },
+          );
+          if (uploadResult.kind === 'blocked_incompatible') {
+            SyncLog.warn(
+              'WsTriggeredDownloadService: Local-win re-upload blocked by an incompatible operation',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+            return false;
+          }
+          // Surface the same terminal outcomes ImmediateUploadService does: a
+          // permanently-rejected or baseline-blocked local-win op is a preserved
+          // edit that failed to converge and must not stay silent (the WS path
+          // never claims IN_SYNC, so under-reporting here would leave it invisible
+          // until the next full sync). Single follow-up only, matching the sibling
+          // side channel — a re-upload that itself yields more local-win ops or a
+          // transient throw defers to the next sync/trigger.
+          if (uploadResult.kind === 'completed') {
+            if (
+              uploadResult.permanentRejectionCount > 0 ||
+              uploadResult.blockedByRejectedFullState === true
+            ) {
+              this._providerManager.setSyncStatus('ERROR');
+              return false;
+            }
+            if (uploadResult.encryptionRequiredKeyMissing === true) {
+              this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+              return false;
+            }
+          }
         }
 
         if (this._sessionValidation.hasFailed()) {
@@ -169,7 +293,22 @@ export class WsTriggeredDownloadService implements OnDestroy {
           );
           this._providerManager.setSyncStatus('ERROR');
         }
+        return false;
       } catch (err) {
+        if (err instanceof ForceUploadPendingOpsError) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return false;
+        }
+
+        if (err instanceof ForceUploadFailedError) {
+          this._providerManager.setSyncStatus('ERROR');
+          this._snackService.open({
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+            type: 'ERROR',
+          });
+          return false;
+        }
+
         if (err instanceof IncompleteRemoteOperationsError) {
           SyncLog.err(
             'WsTriggeredDownloadService: Remote operation application is incomplete',
@@ -183,17 +322,27 @@ export class WsTriggeredDownloadService implements OnDestroy {
               config: { duration: 0 },
             });
           }
-          return;
+          return false;
+        }
+        if (err instanceof SyncEpochChangedError) {
+          // #9074: a provider switch/encryption op landed mid-download; this
+          // cycle is stale by design. No retry, no ERROR — the new epoch's own
+          // sync covers catch-up.
+          SyncLog.log(
+            'WsTriggeredDownloadService: Sync epoch changed mid-download, abandoning stale cycle',
+          );
+          return false;
         }
         if (err instanceof AuthFailSPError || err instanceof MissingCredentialsSPError) {
           SyncLog.warn('WsTriggeredDownloadService: Auth failure during download', err);
           this.stop();
-          return;
+          return false;
         }
         SyncLog.warn(
-          'WsTriggeredDownloadService: Download failed, periodic sync will retry',
+          'WsTriggeredDownloadService: Download failed, queueing WS retry',
           err,
         );
+        return true;
       }
     });
   }

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { EntityChange, OpType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { OpLog } from '../../core/log';
+import { BatchedTimeSyncEntry } from '../../core/util/batched-time-sync-accumulator';
 
 /**
  * Tracks how many local actions have been captured but not yet written to the
@@ -47,10 +48,35 @@ export class OperationCaptureService {
   private pendingCount = 0;
 
   /**
+   * Task-time actions update live task state before their operation is durable.
+   * Keep those deltas visible to snapshot projection until the matching write
+   * attempt completes, otherwise a snapshot can overlap its later tail op.
+   */
+  private pendingTaskTimeEntries = new Map<PersistentAction, BatchedTimeSyncEntry[]>();
+
+  /**
    * Tracks if we've already warned about the pending counter growing large,
    * to avoid log spam.
    */
   private hasWarnedAboutPending = false;
+
+  /**
+   * Sticky divergence marker (#8751): set when a captured action's write
+   * attempt failed for good (or its operation was rejected by validation),
+   * i.e. an optimistic NgRx state change has no durable op behind it.
+   * While set, compaction must not snapshot the live store — that would bake
+   * the phantom change into state_cache and turn a transient persistence
+   * failure into permanent, silent cross-device divergence.
+   * Deliberately in-memory and per tab: a reload rebuilds state purely from
+   * durable data, which discards the phantom and thereby resolves the
+   * divergence (the failure paths show a sticky reload snackbar for exactly
+   * that reason). Also deliberately NOT cleared by full-state replacements
+   * (SYNC_IMPORT/BACKUP_IMPORT) even though they discard the phantom too —
+   * keeping it sticky is conservatively simple, and the only cost is
+   * compaction staying suppressed until the reload the snackbar already
+   * demands.
+   */
+  private unrecoveredPersistFailure = false;
 
   /**
    * Records that a local action has been captured and is awaiting persistence.
@@ -58,6 +84,12 @@ export class OperationCaptureService {
    */
   incrementPending(action: PersistentAction): void {
     this.pendingCount++;
+    const taskTimeEntry = this._getTaskTimeEntry(action);
+    if (taskTimeEntry) {
+      const entries = this.pendingTaskTimeEntries.get(action) ?? [];
+      entries.push(taskTimeEntry);
+      this.pendingTaskTimeEntries.set(action, entries);
+    }
 
     // Warn if the counter is growing large (indicates the effect is not keeping up)
     if (
@@ -82,7 +114,7 @@ export class OperationCaptureService {
    * failure). Called from the persist effect's `finally`, so a thrown write —
    * e.g. a lock-acquisition timeout — can never leak a pending entry (#8306).
    */
-  decrementPending(): void {
+  decrementPending(action?: PersistentAction): void {
     if (this.pendingCount <= 0) {
       // Underflow guard: a decrement with no matching increment. This is only
       // reachable in the degenerate window before the meta-reducer service is
@@ -96,6 +128,14 @@ export class OperationCaptureService {
     }
 
     this.pendingCount--;
+    if (action) {
+      const entries = this.pendingTaskTimeEntries.get(action);
+      if (entries?.length === 1) {
+        this.pendingTaskTimeEntries.delete(action);
+      } else if (entries && entries.length > 1) {
+        entries.shift();
+      }
+    }
 
     // Reset warning flag once the backlog drains so we can warn again if it refills
     if (
@@ -118,12 +158,72 @@ export class OperationCaptureService {
     return this.pendingCount;
   }
 
+  /** Returns task-time deltas that are captured but not yet durably written. */
+  getPendingTaskTimeEntries(): BatchedTimeSyncEntry[] {
+    const totals = new Map<string, BatchedTimeSyncEntry>();
+    for (const entries of this.pendingTaskTimeEntries.values()) {
+      for (const entry of entries) {
+        const key = `${entry.id}\u0000${entry.date}`;
+        const existing = totals.get(key);
+        if (existing) {
+          existing.duration += entry.duration;
+        } else {
+          totals.set(key, { ...entry });
+        }
+      }
+    }
+    return [...totals.values()];
+  }
+
+  /**
+   * Marks that live NgRx state now contains a change with no durable op
+   * behind it (#8751). Consulted by compaction to suppress snapshotting.
+   */
+  markUnrecoveredPersistFailure(): void {
+    if (!this.unrecoveredPersistFailure) {
+      OpLog.err(
+        'OperationCaptureService: Unrecovered persist failure — live state is ahead of the op log; snapshotting is suppressed until reload',
+      );
+    }
+    this.unrecoveredPersistFailure = true;
+  }
+
+  /** True while live state contains changes that no durable op represents (#8751). */
+  hasUnrecoveredPersistFailure(): boolean {
+    return this.unrecoveredPersistFailure;
+  }
+
   /**
    * Resets the pending counter (for testing and error recovery).
    */
   clear(): void {
     this.pendingCount = 0;
     this.hasWarnedAboutPending = false;
+    this.pendingTaskTimeEntries.clear();
+    this.unrecoveredPersistFailure = false;
+  }
+
+  private _getTaskTimeEntry(action: PersistentAction): BatchedTimeSyncEntry | undefined {
+    if (
+      action.type !== '[TimeTracking] Sync time spent' ||
+      action.meta.entityType !== 'TASK'
+    ) {
+      return undefined;
+    }
+
+    const actionPayload = action as unknown as Record<string, unknown>;
+    const taskId = actionPayload['taskId'];
+    const date = actionPayload['date'];
+    const duration = actionPayload['duration'];
+    if (
+      typeof taskId !== 'string' ||
+      typeof date !== 'string' ||
+      typeof duration !== 'number' ||
+      !Number.isFinite(duration)
+    ) {
+      return undefined;
+    }
+    return { id: taskId, date, duration };
   }
 
   /**
@@ -231,7 +331,11 @@ export class OperationCaptureService {
         entityType: 'TASK',
         entityId: taskId,
         opType: OpType.Update,
-        changes: { taskId, date, duration },
+        changes: {
+          taskId,
+          date,
+          duration,
+        },
       },
     ];
   }

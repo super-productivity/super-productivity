@@ -173,14 +173,13 @@ export class DialogFocusSessionEditComponent {
     const date = this.selectedDateStr();
     if (date === this.todayStr) return 'Today';
 
-    return new Date(date).toLocaleDateString(
-      this._dateTimeFormatService.currentLocale(),
-      {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      },
-    );
+    // Spelled-out weekday/month names follow the UI language under the ISO 8601
+    // option (the `sv` sentinel would otherwise leak Swedish). #8987 follow-up.
+    return new Date(date).toLocaleDateString(this._dateTimeFormatService.textLocale(), {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
   }
 
   private _getChartDates(): string[] {

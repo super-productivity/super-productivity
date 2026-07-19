@@ -85,10 +85,6 @@ test.describe('Doc Mode Stage A migration', () => {
 
     const assetsAvailable = await waitForPluginAssets(page);
     if (!assetsAvailable) {
-      if (process.env.CI) {
-        test.skip(true, 'Plugin assets not available in CI');
-        return;
-      }
       throw new Error('Plugin assets not available — run `npm run prebuild`');
     }
 
@@ -126,10 +122,6 @@ test.describe('Doc Mode Stage A migration', () => {
 
     const assetsAvailable = await waitForPluginAssets(page);
     if (!assetsAvailable) {
-      if (process.env.CI) {
-        test.skip(true, 'Plugin assets not available in CI');
-        return;
-      }
       throw new Error('Plugin assets not available — run `npm run prebuild`');
     }
 

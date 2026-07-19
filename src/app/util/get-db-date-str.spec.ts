@@ -1,4 +1,4 @@
-import { getDbDateStr, isDBDateStr } from './get-db-date-str';
+import { getDbDateStr, isDBDateStr, isValidDBDateStr } from './get-db-date-str';
 
 describe('getDbDateStr', () => {
   it('should return YYYY-MM-DD for a given date', () => {
@@ -86,5 +86,19 @@ describe('isDBDateStr', () => {
     it('should reject spaces in digit positions', () => {
       expect(isDBDateStr('2026- 3-21')).toBe(false);
     });
+  });
+});
+
+describe('isValidDBDateStr', () => {
+  it('should accept real calendar dates including leap days', () => {
+    expect(isValidDBDateStr('2024-02-29')).toBe(true);
+    expect(isValidDBDateStr('2026-12-31')).toBe(true);
+  });
+
+  it('should reject structurally valid but impossible dates', () => {
+    expect(isValidDBDateStr('2023-02-29')).toBe(false);
+    expect(isValidDBDateStr('2024-02-30')).toBe(false);
+    expect(isValidDBDateStr('2024-13-01')).toBe(false);
+    expect(isValidDBDateStr('2024-00-10')).toBe(false);
   });
 });

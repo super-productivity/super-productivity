@@ -39,20 +39,24 @@ export class SyncPage extends BasePage {
     this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
   }
 
-  async setupWebdavSync(config: {
-    baseUrl: string;
-    username: string;
-    password: string;
-    syncFolderPath: string;
-    isEncryptionEnabled?: boolean;
-    encryptionPassword?: string;
-    /**
-     * Set the encryption password in the setup-time "Encrypt before first
-     * upload?" dialog (instead of the post-setup Enable Encryption button), so
-     * the very first sync is encrypted. Requires `encryptionPassword`.
-     */
-    encryptAtSetup?: boolean;
-  }): Promise<void> {
+  async setupWebdavSync(
+    config: {
+      baseUrl: string;
+      username: string;
+      password: string;
+      syncFolderPath: string;
+      isEncryptionEnabled?: boolean;
+      encryptionPassword?: string;
+      isUseSplitSyncFiles?: boolean;
+      /**
+       * Set the encryption password in the setup-time "Encrypt before first
+       * upload?" dialog (instead of the post-setup Enable Encryption button), so
+       * the very first sync is encrypted. Requires `encryptionPassword`.
+       */
+      encryptAtSetup?: boolean;
+    },
+    options: { isReconfigure?: boolean } = {},
+  ): Promise<void> {
     // Try entire setup flow up to 2 times (dialog-level retry)
     for (let dialogAttempt = 0; dialogAttempt < 2; dialogAttempt++) {
       if (dialogAttempt > 0) {
@@ -83,7 +87,11 @@ export class SyncPage extends BasePage {
 
       // Click sync button to open settings dialog
       // Use noWaitAfter to prevent blocking on Angular hash navigation
-      await this.syncBtn.click({ timeout: 5000, noWaitAfter: true });
+      await this.syncBtn.click({
+        button: options.isReconfigure ? 'right' : 'left',
+        timeout: 5000,
+        noWaitAfter: true,
+      });
 
       // Wait for dialog to appear
       const dialog = this.page.locator('mat-dialog-container, .mat-mdc-dialog-container');
@@ -95,7 +103,11 @@ export class SyncPage extends BasePage {
       // If dialog didn't open, try clicking again
       if (!dialogVisible) {
         await this.page.waitForTimeout(500);
-        await this.syncBtn.click({ force: true, noWaitAfter: true });
+        await this.syncBtn.click({
+          button: options.isReconfigure ? 'right' : 'left',
+          force: true,
+          noWaitAfter: true,
+        });
         await dialog.waitFor({ state: 'visible', timeout: 5000 });
       }
 
@@ -199,6 +211,17 @@ export class SyncPage extends BasePage {
         await this.userNameInput.fill(config.username);
         await this.passwordInput.fill(config.password);
         await this.syncFolderInput.fill(config.syncFolderPath);
+
+        if (config.isUseSplitSyncFiles !== undefined) {
+          await this.expandAdvancedSettings();
+          const splitSyncCheckbox = dialog.getByRole('checkbox', {
+            name: /Surgical sync/i,
+          });
+          await splitSyncCheckbox.setChecked(config.isUseSplitSyncFiles);
+          await expect(splitSyncCheckbox).toBeChecked({
+            checked: config.isUseSplitSyncFiles,
+          });
+        }
 
         // Save the configuration
         await this.saveBtn.click();

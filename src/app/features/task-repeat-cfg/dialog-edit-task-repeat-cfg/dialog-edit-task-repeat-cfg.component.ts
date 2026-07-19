@@ -117,29 +117,29 @@ export class DialogEditTaskRepeatCfgComponent {
     const d = this.repeatCfg().startDate;
     if (!d) return this._translateService.instant(T.F.TASK_REPEAT.F.START_DATE);
     const date = dateStrToUtcDate(d);
-    const locale = this._dateTimeFormatService.currentLocale();
-    const time = this.repeatCfg().startTime;
-    if (time && isValidSplitTime(time)) {
-      const formattedDate = date.toLocaleDateString(locale, {
+    // Spelled-out weekday/month names follow the UI language under the ISO 8601
+    // option (the `sv` sentinel would otherwise leak Swedish, e.g. "ons 15 juli
+    // 2026"). The clock time below keeps currentLocale() so 24h is preserved.
+    const formattedDate = date.toLocaleDateString(
+      this._dateTimeFormatService.textLocale(),
+      {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-      });
+      },
+    );
+    const time = this.repeatCfg().startTime;
+    if (time && isValidSplitTime(time)) {
       const [hours, minutes] = time.split(':').map(Number);
       const safeTimeDate = new Date(2000, 0, 1, hours, minutes, 0, 0);
       const formattedTime = this._dateTimeFormatService.formatTime(
         safeTimeDate.getTime(),
-        locale,
+        this._dateTimeFormatService.currentLocale(),
       );
       return `${formattedDate}, ${formattedTime}`;
     }
-    return date.toLocaleDateString(locale, {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return formattedDate;
   });
 
   openScheduleDialog(): void {
@@ -360,10 +360,13 @@ export class DialogEditTaskRepeatCfgComponent {
       // Read currentLocale() reactively each time options are built so the
       // correct locale is used even when the config store hasn't emitted yet
       // at construction time (previously captured once as a const → en-GB).
+      // textLocale() localizes the spelled-out weekday name (UI language under
+      // the ISO option), while numeric day/month keep currentLocale().
       buildRepeatQuickSettingOptions(
         refDate,
         this._dateTimeFormatService.currentLocale(),
         translateService,
+        this._dateTimeFormatService.textLocale(),
       );
 
     const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
@@ -390,18 +393,26 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // Memoize to avoid rebuilding options on every formly change cycle
     let lastStartDate: string | undefined;
-    let lastLocale: string | undefined;
+    let lastLocaleKey: string | undefined;
     let cachedOptions: { value: string; label: string }[];
 
-    // Update options reactively when startDate or locale changes
+    // Update options when startDate or either locale changes. The key must track
+    // textLocale, not just currentLocale: under the ISO option currentLocale()
+    // stays 'sv' while textLocale() carries the UI language for the weekday
+    // label. Those move independently — applyLanguageFromState$ deliberately
+    // applies the UI language from remote sync too, so lng can change while this
+    // dialog is open, shifting textLocale() with currentLocale() frozen at 'sv'.
+    // A currentLocale-only key would serve a stale weekday label there.
     quickSettingField.expressionProperties = {
       ...quickSettingField.expressionProperties,
       ['templateOptions.options']: (model: Record<string, unknown>) => {
         const sd = model['startDate'] as string | undefined;
         const currentLocale = this._dateTimeFormatService.currentLocale();
-        if (sd !== lastStartDate || currentLocale !== lastLocale || !cachedOptions) {
+        const textLocale = this._dateTimeFormatService.textLocale();
+        const localeKey = `${currentLocale}|${textLocale}`;
+        if (sd !== lastStartDate || localeKey !== lastLocaleKey || !cachedOptions) {
           lastStartDate = sd;
-          lastLocale = currentLocale;
+          lastLocaleKey = localeKey;
           const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
           cachedOptions = buildOptions(refDate);
         }

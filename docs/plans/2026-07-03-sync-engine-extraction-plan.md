@@ -1,7 +1,8 @@
 # SuperSync Extraction Plan — standalone, framework-agnostic sync library (v2)
 
-**Status:** Plan (no code changed)
+**Status:** Deferred as the immediate roadmap; retained as future standalone-library research. See [`2026-07-13-sync-simplification-plan.md`](./2026-07-13-sync-simplification-plan.md).
 **Date:** 2026-07-03 (v2 — revised after two-agent adversarial review; v1's step 5 "near drop-in" claim was wrong)
+**Evidence warning:** All counts, line references, dependency inventories, and coverage claims below are a 2026-07-03 point-in-time audit, not current repository facts. Re-audit them before reusing this plan.
 **Decisions baked in:** the extracted library has **no rxjs** and **no `@angular/core` signals** (both verified below)
 **Builds on:** `docs/sync-and-op-log/package-boundaries.md` (the extraction is an established, lint-enforced direction; `@sp/sync-core` + `@sp/sync-providers` + `@sp/shared-schema` already exist)
 

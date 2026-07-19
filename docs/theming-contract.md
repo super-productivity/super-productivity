@@ -61,8 +61,11 @@ If any of these are missing, the validator emits a warning listing the token nam
 | `--state-selected-alpha` | Selected-row overlay opacity              | `0.10`         |
 | `--state-disabled-alpha` | Disabled element opacity                  | `0.40`         |
 | `--focus-ring`           | Focus-ring color (defaults to `--brand`). | `var(--brand)` |
+| `--system-surface`       | Native Android system-bar backdrop.       | `var(--bg)`    |
 
 These are **alpha scalars** (or single colors), not rgba colors. The base composes them with `--ink-on-channel` to produce the actual overlay color, so a theme tuning `--state-hover-alpha` to `0.10` automatically gets a stronger hover in both light and dark modes.
+
+`--system-surface` must resolve to an opaque `#rgb`, `#rrggbb`, or integer-channel `rgb(...)` color without alpha. Transparent values, percentage channels, and gradients fall back to the Default-theme surface because Android's native color parser cannot use them.
 
 ## Special tokens
 
@@ -79,9 +82,9 @@ body.isDarkTheme {
 }
 ```
 
-### `--state-*-alpha` and the velvet legacy bridge
+### `--state-*-alpha` and the legacy bridge
 
-Velvet (the shipped accent theme) historically declared `--hover-bg-opacity`, `--focus-bg-opacity`, `--pressed-bg-opacity`, and `--disabled-opacity` directly. The base now declares the canonical names with the velvet names as `var()` fallbacks:
+Older themes historically declared `--hover-bg-opacity`, `--focus-bg-opacity`, `--pressed-bg-opacity`, and `--disabled-opacity` directly. The base declares the canonical names with those legacy names as `var()` fallbacks:
 
 ```css
 :where(body, body.isDarkTheme) {
@@ -93,7 +96,7 @@ Velvet (the shipped accent theme) historically declared `--hover-bg-opacity`, `-
 }
 ```
 
-If your theme already uses the velvet legacy names, they continue to work — you do not need to rename. New themes should prefer the `--state-*-alpha` names.
+If your theme already uses the legacy names, they continue to work — you do not need to rename. New themes should prefer the `--state-*-alpha` names.
 
 ## Selector contract
 
@@ -105,20 +108,17 @@ This part is load-bearing. Read it before debugging "my theme works in light mod
 | Semantic aliases (e.g. `--bg`, `--card-bg`)         | `:where(body, body.isDarkTheme)`          | (0,0,0) — `:where()` is the zero-specificity wrapper |
 | Category-B tokens (per-mode)                        | `body` (light), `body.isDarkTheme` (dark) | (0,0,1) and (0,1,1)                                  |
 
-**Themes overriding primitives MUST use `body` and/or `body.isDarkTheme` selectors.** If you declare `--surface-1` only at `:root` (specificity 0,1,0):
+**Themes overriding primitives MUST use `body` and/or `body.isDarkTheme` selectors.** A declaration at `:root` is inherited by `body`, but the base declares the same property directly on `body`. A direct declaration always wins over an inherited value; selector specificity is never compared across those two elements. A `:root`-only primitive therefore has no effect on the body in either mode.
 
-- In light mode → wins over base `body` (0,1,0 > 0,0,1) ✓
-- In dark mode → loses to base `body.isDarkTheme` (0,1,0 < 0,1,1) ✗
+Always declare light primitives under `body` and dark primitives under `body.isDarkTheme`.
 
-That's a mode-inconsistent theme. Always declare primitives under `body` (for light) and `body.isDarkTheme` (for dark).
+**Themes overriding semantic aliases** should use the same body selectors. Aliases live at `:where(...)` (specificity 0,0,0), so a later `body` or `body.isDarkTheme` rule wins normally. A `:root` alias remains inherited and cannot replace an alias declared directly on the body.
 
-**Themes overriding semantic aliases** can use any selector with non-zero specificity (`body`, `body.isDarkTheme`, `:root`). Aliases live at `:where(...)` (specificity 0,0,0), so anything beats them.
-
-The validator's warning pass is **presence-only** in v1: it does not parse selectors. A theme that declares `--surface-1` only at `:root` will pass validation even though it's mode-inconsistent. Selector-aware warnings are a tracked follow-up.
+The validator's warning pass is **presence-only** in v1: it does not parse selectors. A theme that declares `--surface-1` only at `:root` will pass validation even though that declaration is ineffective on the body. Selector-aware warnings are a tracked follow-up.
 
 ## Forking instructions
 
-1. Pick the closest shipped theme as a starting point: `src/assets/themes/{arc,catppuccin-mocha,cybr,dark-base,dracula,everforest,glass,lines,nord-polar-night,nord-snow-storm,plainspace,rainbow,velvet,zen}.css`.
+1. Pick the closest shipped theme as a starting point: `src/assets/themes/{arc,catppuccin-mocha,cybr,dark-base,dracula,everforest,glass,lines,liquid-glass,nord-polar-night,nord-snow-storm,plainspace,rainbow,velvet,zen}.css`.
 2. Copy it to a new file. Rename `.css` to whatever you want — the picker uses the filename slug as the theme id.
 3. Edit the primitive declarations under `body` and `body.isDarkTheme`. Start with `--surface-1`, `--surface-2`, `--ink`, `--ink-on-channel`. Leave everything else default.
 4. Drop the file into Settings → Theme → "Install theme…". The file lives in IndexedDB; nothing leaves your machine.
@@ -173,15 +173,15 @@ body.isDarkTheme {
 
 ## Validation rules
 
-The validator (`src/app/core/theme/validate-theme-css.util.ts`) runs at install time. Warnings produced at install time are persisted alongside the theme record in IndexedDB and re-surfaced from the stored snapshot — themes are NOT re-validated on cold load. If the contract changes between releases, existing themes' warnings reflect the contract at their install time until the user re-uploads.
+The validator (`src/app/core/theme/validate-theme-css.util.ts`) runs at install time. Warnings are persisted alongside the theme in IndexedDB so the picker can display them without another read. Stored CSS is also re-validated before every load; a theme accepted by an older client therefore cannot bypass newer safety rules. Contract warnings remain the snapshot from installation until the user re-uploads the file.
 
 **Hard rejects (theme will not install):**
 
 - `url(...)` arguments that resolve to a remote URL (`http:`, `https:`, `//host/...`, `data:` URIs, schemeless absolute, or any other protocol)
 - Relative `url(...)` paths (no bundled assets in v1)
 - `src(...)` arguments (CSS Fonts L4 form) — same rules as `url(...)`
-- `@import "https://..."` and `@import url(...)` with absolute URLs
-- `image-set("https://...")` and bare `image-set(http://... 1x)` — same rules
+- Any `@import` rule
+- Advanced image functions: any `image(...)` or `image-set(...)`
 - Files larger than 500 KB
 - Unterminated `/* comments` (malformed CSS)
 
@@ -191,8 +191,10 @@ The validator (`src/app/core/theme/validate-theme-css.util.ts`) runs at install 
 
 The validator handles `\xx`-escape attempts on keywords (`u\72l(`, `\55RL(`, `s\72\63(`, `--surf\61ce-1`, etc.) and `/* */` injection inside string literals or `url-tokens` — see `validate-theme-css.util.spec.ts` for the full attack-surface test list.
 
+Security keywords are matched conservatively. `url(` and `src(` are scanned on the raw (decoded) source, so they are rejected even inside a comment or CSS string — a disguised token must never be able to hide a later live fetch. The keyword-presence bans (`@import`, `image(`, `image-set(`) are scanned on the comment-stripped source instead: they are **allowed inside comments** (a theme may document the restriction) but still rejected inside CSS string values, since blanking strings safely is not possible after escape decoding. Avoid these literal sequences in theme string values and generated labels.
+
 ## Legacy migration note
 
-If you already have a theme that worked before the token-model refactor: nothing required. The 13 shipped themes are not edited, and the validator's warning pass is non-blocking. If your theme used the velvet legacy names (`--hover-bg-opacity`, `--focus-bg-opacity`, `--pressed-bg-opacity`, `--disabled-opacity`), they continue to work via the `var()` fallback bridge in the base.
+If you already have a theme that worked before the token-model refactor, nothing is required. The validator's warning pass is non-blocking, and the 15 built-in CSS themes provide examples that satisfy the minimum contract. If your theme used the legacy names (`--hover-bg-opacity`, `--focus-bg-opacity`, `--pressed-bg-opacity`, `--disabled-opacity`), they continue to work through the `var()` fallback bridge in the base.
 
 If you want the contract warnings to be quiet, declare the four required tokens (`--surface-1`, `--surface-2`, `--ink`, `--ink-on-channel`) under `body` (and `body.isDarkTheme` if your theme has a dark mode). The recommended tokens are nice-to-have but not required.

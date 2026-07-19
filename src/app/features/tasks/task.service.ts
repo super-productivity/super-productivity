@@ -36,7 +36,6 @@ import {
 import { getNextHideSubTasksMode } from './util/get-next-hide-sub-tasks-mode';
 import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
-import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
 import {
   selectAllTasks,
   selectCurrentTask,
@@ -106,6 +105,7 @@ import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
+import { TaskTimeSyncService } from './task-time-sync.service';
 
 @Injectable({
   providedIn: 'root',
@@ -124,6 +124,7 @@ export class TaskService {
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
   private readonly _archiveTaskPromisesById = new Map<string, Promise<void>>();
+  private readonly _taskTimeSync = inject(TaskTimeSyncService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -200,13 +201,6 @@ export class TaskService {
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
-  // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
-  private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-  private _timeAccumulator = new BatchedTimeSyncAccumulator(
-    TaskService.SYNC_INTERVAL_MS,
-    (taskId, date, duration) =>
-      this._store.dispatch(syncTimeSpent({ taskId, date, duration })),
-  );
   private _unsyncedContexts: Map<
     string,
     { contextType: 'TAG' | 'PROJECT'; contextId: string; date: string }
@@ -238,13 +232,13 @@ export class TaskService {
           this.addTimeSpent(currentTask, tick.duration, tick.date);
 
           // Accumulate for batch sync
-          this._timeAccumulator.accumulate(currentTask.id, tick.duration, tick.date);
+          this._taskTimeSync.accumulate(currentTask.id, tick.duration, tick.date);
 
           // Track contexts for TIME_TRACKING sync
           this._trackContextsForSync(currentTask, tick.date);
 
           // Check if it's time to sync (every 5 minutes)
-          if (this._timeAccumulator.shouldFlush()) {
+          if (this._taskTimeSync.shouldFlush()) {
             this._flushAccumulatedTimeSpent();
           }
         }
@@ -292,7 +286,7 @@ export class TaskService {
    */
   private _flushAccumulatedTimeSpent(): void {
     // Sync task.timeSpent totals
-    this._timeAccumulator.flush();
+    this._taskTimeSync.flush();
 
     // Sync TIME_TRACKING session data (start/end times)
     if (this._unsyncedContexts.size > 0) {
@@ -482,17 +476,22 @@ export class TaskService {
   }
 
   remove(task: TaskWithSubTasks): void {
+    this._taskTimeSync.clearOne(task.id);
+    task.subTasks.forEach((subTask) => this._taskTimeSync.clearOne(subTask.id));
     this._store.dispatch(TaskSharedActions.deleteTask({ task }));
   }
 
   removeMultipleTasks(taskIds: string[]): void {
     // Store issue metadata in the sidecar *before* dispatching, so the
-    // deleteIssueOnBulkTaskDelete$ effect can pick it up. This keeps
-    // full Task objects out of the action payload and the op-log.
+    // deleteIssueOnBulkTaskDelete$ effect can pick it up.
     const entities = this._taskEntities();
-    const tasks = taskIds
+    const affectedTaskIds = Array.from(
+      new Set(taskIds.flatMap((id) => [id, ...(entities[id]?.subTaskIds ?? [])])),
+    );
+    const tasks = affectedTaskIds
       .map((id) => entities[id])
       .filter((task): task is Task => !!task);
+    affectedTaskIds.forEach((id) => this._taskTimeSync.clearOne(id));
     this._deletedTaskIssueSidecar.set(
       tasks
         .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
@@ -505,13 +504,35 @@ export class TaskService {
     this._timeBlockDeleteSidecar.set(
       tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
     );
-    this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
+    this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
   update(id: string, changedFields: Partial<Task>): void {
+    if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
+      this._taskTimeSync.flushOne(id);
+    }
+
+    const entities = this._taskEntities();
+    const task = entities[id];
+    const projectMoveSubTaskIds =
+      Object.prototype.hasOwnProperty.call(changedFields, 'projectId') &&
+      task &&
+      !task.parentId
+        ? unique([
+            ...task.subTaskIds,
+            ...Object.values(entities)
+              .filter(
+                (candidate): candidate is Task =>
+                  !!candidate && candidate.parentId === id,
+              )
+              .map((subTask) => subTask.id),
+          ])
+        : undefined;
+
     this._store.dispatch(
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
+        ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
       }),
     );
   }
@@ -870,9 +891,16 @@ export class TaskService {
     if (duration <= 0) {
       return;
     }
+    this._taskTimeSync.flushOne(task.id);
     const date = this._dateService.todayStr();
     this.addTimeSpent(task, duration, date);
-    this._store.dispatch(syncTimeSpent({ taskId: task.id, date, duration }));
+    this._store.dispatch(
+      syncTimeSpent({
+        taskId: task.id,
+        date,
+        duration,
+      }),
+    );
   }
 
   removeTimeSpent(
@@ -880,6 +908,7 @@ export class TaskService {
     duration: number,
     date: string = this._dateService.todayStr(),
   ): void {
+    this._taskTimeSync.flushOne(id);
     this._store.dispatch(removeTimeSpent({ id, date, duration }));
   }
 
@@ -1092,6 +1121,7 @@ export class TaskService {
     });
 
     // today
+    todayIds.forEach((taskId) => this._taskTimeSync.flushOne(taskId));
     this._store.dispatch(
       roundTimeSpentForDay({ day, taskIds: todayIds, roundTo, isRoundUp, projectId }),
     );
@@ -1256,11 +1286,14 @@ export class TaskService {
 
   async convertToMainTask(task: Task): Promise<void> {
     const parent = await this.getByIdOnce$(task.parentId as string).toPromise();
+    const now = Date.now();
     this._store.dispatch(
       TaskSharedActions.convertToMainTask({
         task,
         parentTagIds: parent.tagIds,
         isPlanForToday: this._workContextService.activeWorkContextId === TODAY_TAG.id,
+        today: this._dateService.todayStr(),
+        modified: now,
       }),
     );
   }

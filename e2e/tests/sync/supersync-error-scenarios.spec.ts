@@ -1,12 +1,76 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import type { Page } from '@playwright/test';
 import {
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  parseSuperSyncRequestBody,
+  routeSuperSyncOps,
+  unrouteSuperSyncOps,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+
+interface MutableServerOperation {
+  op?: {
+    id?: string;
+    schemaVersion?: number;
+  };
+}
+
+interface OperationDownloadBody {
+  ops?: MutableServerOperation[];
+}
+
+interface OperationUploadBody {
+  ops: Array<{ id: string }>;
+}
+
+const getSuperSyncCursor = async (page: Page): Promise<string | null> =>
+  page.evaluate(() => {
+    const key = Object.keys(localStorage).find((candidate) =>
+      candidate.startsWith('super_sync_last_server_seq_'),
+    );
+    return key ? localStorage.getItem(key) : null;
+  });
+
+const areLocalOperationsSynced = (page: Page, operationIds: string[]): Promise<boolean> =>
+  page.evaluate(async (ids) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const openRequest = indexedDB.open('SUP_OPS');
+      openRequest.onsuccess = (): void => resolve(openRequest.result);
+      openRequest.onerror = (): void => reject(openRequest.error);
+    });
+    try {
+      const entries = await Promise.all(
+        ids.map(
+          (id) =>
+            new Promise<{ syncedAt?: number; rejectedAt?: number } | undefined>(
+              (resolve, reject) => {
+                const tx = db.transaction('ops', 'readonly');
+                const getRequest = tx.objectStore('ops').index('byId').get(id);
+                getRequest.onsuccess = (): void =>
+                  resolve(
+                    getRequest.result as
+                      | { syncedAt?: number; rejectedAt?: number }
+                      | undefined,
+                  );
+                getRequest.onerror = (): void => reject(getRequest.error);
+              },
+            ),
+        ),
+      );
+      return (
+        ids.length > 0 &&
+        entries.every(
+          (entry) => entry?.syncedAt !== undefined && entry.rejectedAt === undefined,
+        )
+      );
+    } finally {
+      db.close();
+    }
+  }, operationIds);
 
 /**
  * SuperSync Error Scenarios E2E Tests
@@ -39,6 +103,8 @@ test.describe('@supersync Error Scenarios', () => {
     test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     const state = { interceptUpload: true };
+    const rejectedOpIds: string[] = [];
+    const subsequentUploadIds: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
@@ -52,36 +118,34 @@ test.describe('@supersync Error Scenarios', () => {
       await clientA.workView.addTask(taskName);
       await waitForTask(clientA.page, taskName);
 
-      // Intercept the upload to return a VALIDATION_ERROR rejection
-      // NOTE: With mandatory encryption, POST body is encrypted binary, not JSON.
-      // We forward the request to get real op IDs from the server response,
-      // then return the rejection.
-      await clientA.page.route('**/api/sync/ops', async (route) => {
+      // Intercept the upload and reject the exact operation IDs emitted by the client.
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (state.interceptUpload && route.request().method() === 'POST') {
           state.interceptUpload = false;
           console.log('[Test] Simulating VALIDATION_ERROR rejection');
 
-          // Forward request to server to get real response with op IDs
-          const response = await route.fetch();
-          const realBody = await response.json().catch(() => ({}));
-          // Use a fake op ID since we can't parse encrypted request body
-          const results = [
-            {
-              opId: realBody?.results?.[0]?.opId || 'fake-op-id',
-              accepted: false,
-              error: 'Invalid entity structure',
-              errorCode: 'VALIDATION_ERROR',
-            },
-          ];
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          rejectedOpIds.push(...upload.ops.map((operation) => operation.id));
+          expect(rejectedOpIds.length).toBeGreaterThan(0);
+          const results = upload.ops.map((operation) => ({
+            opId: operation.id,
+            accepted: false,
+            error: 'Invalid entity structure',
+            errorCode: 'VALIDATION_ERROR',
+          }));
 
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
               results,
-              latestSeq: realBody?.latestSeq || 1,
+              latestSeq: 0,
             }),
           });
+        } else if (route.request().method() === 'POST') {
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          subsequentUploadIds.push(...upload.ops.map((operation) => operation.id));
+          await route.continue();
         } else {
           await route.continue();
         }
@@ -95,9 +159,6 @@ test.describe('@supersync Error Scenarios', () => {
         // Expected — triggerSync may throw on error state
       }
 
-      // Remove interception
-      await clientA.page.unroute('**/api/sync/ops');
-
       // Verify sync shows error status (permanentRejectionCount > 0 → ERROR)
       const hasError = await clientA.sync.hasSyncError();
       expect(hasError).toBe(true);
@@ -105,13 +166,15 @@ test.describe('@supersync Error Scenarios', () => {
       // Sync again — the rejected op should NOT be retried
       // (it should sync successfully since the rejected op is skipped)
       await clientA.sync.syncAndWait();
+      expect(subsequentUploadIds).not.toEqual(expect.arrayContaining(rejectedOpIds));
+      await unrouteSuperSyncOps(clientA.page);
 
       console.log(
         '[ValidationError] Validation error correctly caused error status and op was not retried',
       );
     } finally {
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
         await closeClient(clientA);
       }
     }
@@ -129,6 +192,7 @@ test.describe('@supersync Error Scenarios', () => {
   }) => {
     test.setTimeout(60000);
     let clientA: SimulatedE2EClient | null = null;
+    const rejectedOpIds: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
@@ -155,36 +219,23 @@ test.describe('@supersync Error Scenarios', () => {
       // Intercept upload to return rejected ops with "Payload too large" error.
       // The app shows alertDialog only when rejected ops contain this text,
       // not on raw HTTP 413 responses.
-      // We forward the request to get real op IDs from the server response.
-      await clientA.page.route('**/api/sync/ops', async (route) => {
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (route.request().method() === 'POST') {
           console.log('[Test] Simulating Payload Too Large rejection');
-          const response = await route.fetch();
-          const realBody = await response.json().catch(() => ({}));
-          // Use real op IDs so the app can look up the ops in its local store
-          const realResults = (realBody?.results || []) as Array<{
-            opId: string;
-            accepted: boolean;
-          }>;
-          const rejectedResults = realResults.map((r) => ({
-            opId: r.opId,
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          rejectedOpIds.push(...upload.ops.map((operation) => operation.id));
+          expect(rejectedOpIds.length).toBeGreaterThan(0);
+          const rejectedResults = upload.ops.map((operation) => ({
+            opId: operation.id,
             accepted: false,
             error: 'Payload too large',
           }));
-          // Fallback if no results from server
-          if (rejectedResults.length === 0) {
-            rejectedResults.push({
-              opId: 'fake-op-id',
-              accepted: false,
-              error: 'Payload too large',
-            });
-          }
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
               results: rejectedResults,
-              latestSeq: realBody?.latestSeq || 1,
+              latestSeq: 0,
             }),
           });
         } else {
@@ -212,6 +263,7 @@ test.describe('@supersync Error Scenarios', () => {
       }
 
       // Verify alert was shown with appropriate message
+      expect(rejectedOpIds.length).toBeGreaterThan(0);
       expect(alertShown).toBe(true);
       expect(alertMessage.length).toBeGreaterThan(0);
 
@@ -221,7 +273,7 @@ test.describe('@supersync Error Scenarios', () => {
       console.log('[PayloadTooLarge] Alert dialog shown for 413 response');
     } finally {
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
         await closeClient(clientA);
       }
     }
@@ -243,6 +295,7 @@ test.describe('@supersync Error Scenarios', () => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     const state = { returnDuplicate: false };
+    const duplicateOpIds: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
@@ -262,31 +315,31 @@ test.describe('@supersync Error Scenarios', () => {
       await waitForTask(clientA.page, taskName2);
 
       // Intercept the next upload to return DUPLICATE_OPERATION
-      // NOTE: With mandatory encryption, POST body is encrypted binary, not JSON.
-      // We forward the request to get real response, then return the rejection.
+      // The server accepts the upload, but the client receives a duplicate response
+      // for the exact IDs it sent (the lost-acknowledgement recovery case).
       state.returnDuplicate = true;
-      await clientA.page.route('**/api/sync/ops', async (route) => {
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (state.returnDuplicate && route.request().method() === 'POST') {
           state.returnDuplicate = false;
           console.log('[Test] Simulating DUPLICATE_OPERATION rejection');
 
-          // Forward request to server to get real response
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          duplicateOpIds.push(...upload.ops.map((operation) => operation.id));
+          expect(duplicateOpIds.length).toBeGreaterThan(0);
           const response = await route.fetch();
-          const realBody = await response.json().catch(() => ({}));
+          const realBody = (await response.json()) as { latestSeq?: number };
 
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              results: [
-                {
-                  opId: realBody?.results?.[0]?.opId || 'fake-op-id',
-                  accepted: false,
-                  error: 'Duplicate operation',
-                  errorCode: 'DUPLICATE_OPERATION',
-                },
-              ],
-              latestSeq: realBody?.latestSeq || 2,
+              results: upload.ops.map((operation) => ({
+                opId: operation.id,
+                accepted: false,
+                error: 'Duplicate operation',
+                errorCode: 'DUPLICATE_OPERATION',
+              })),
+              latestSeq: realBody.latestSeq ?? 0,
             }),
           });
         } else {
@@ -302,8 +355,14 @@ test.describe('@supersync Error Scenarios', () => {
         // May or may not throw
       }
 
+      await expect
+        .poll(() => areLocalOperationsSynced(clientA!.page, duplicateOpIds), {
+          message: 'the duplicate response must acknowledge the exact uploaded ops',
+        })
+        .toBe(true);
+
       // Remove interception
-      await clientA.page.unroute('**/api/sync/ops');
+      await unrouteSuperSyncOps(clientA.page);
 
       // Verify no error shown — duplicate should be handled silently
       // After removing the route, the next sync should succeed
@@ -319,11 +378,12 @@ test.describe('@supersync Error Scenarios', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, taskName);
+      await waitForTask(clientB.page, taskName2);
 
       console.log('[DuplicateOp] Duplicate operation handled silently without error');
     } finally {
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
         await closeClient(clientA);
       }
       if (clientB) await closeClient(clientB);
@@ -331,12 +391,9 @@ test.describe('@supersync Error Scenarios', () => {
   });
 
   /**
-   * Scenario G.7: Schema version mismatch returns handled error
-   *
-   * When downloaded ops have a modelVersion higher than the client's,
-   * the client should log a warning and return HANDLED_ERROR without crashing.
+   * Scenario G.7: A future-schema operation blocks cursor advancement
    */
-  test('Schema version mismatch returns handled error without crash', async ({
+  test('Future-schema operation blocks until a compatible response is available', async ({
     browser,
     baseURL,
     testRunId,
@@ -344,169 +401,181 @@ test.describe('@supersync Error Scenarios', () => {
     test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const state = { injectFutureSchemaOps: true };
+    let injectedResponses = 0;
 
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // Client A creates real data
+      // Establish a shared cursor before creating the incompatible suffix.
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `Schema-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.sync.syncAndWait();
-
-      // Client B will receive ops with future schema version
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
+      const cursorBeforeBlock = await getSuperSyncCursor(clientB.page);
+      expect(cursorBeforeBlock).not.toBeNull();
 
-      // Intercept download to inject ops with a very high schema version
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (route.request().method() === 'GET' && state.injectFutureSchemaOps) {
-          state.injectFutureSchemaOps = false;
-          console.log('[Test] Injecting ops with future schema version');
-
-          // Get real response and modify it
-          const response = await route.fetch();
-          const json = await response.json();
-
-          // Modify all ops to have a very high schema version
-          if (json.ops) {
-            for (const op of json.ops) {
-              op.schemaVersion = 99999;
-            }
-          }
-
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(json),
-          });
-        } else {
-          await route.continue();
+      const taskName = `Schema-${testRunId}`;
+      const uploadedOpIds: string[] = [];
+      await routeSuperSyncOps(clientA.page, async (route) => {
+        if (route.request().method() === 'POST') {
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          uploadedOpIds.push(...upload.ops.map((operation) => operation.id));
         }
+        await route.continue();
+      });
+      await clientA.workView.addTask(taskName);
+      await clientA.sync.syncAndWait();
+      await unrouteSuperSyncOps(clientA.page);
+      expect(uploadedOpIds).toHaveLength(1);
+      const blockerOpId = uploadedOpIds[0];
+
+      // Tamper with the real operation wrapper on every retry. `schemaVersion`
+      // is plaintext metadata beside the encrypted payload.
+      await routeSuperSyncOps(clientB.page, async (route) => {
+        if (route.request().method() === 'GET') {
+          const response = await route.fetch();
+          const body = (await response.json()) as OperationDownloadBody;
+          const blocker = body.ops?.find(({ op }) => op?.id === blockerOpId);
+          if (blocker?.op) {
+            // 99 is within the transport contract (1..100) but newer than this
+            // client's current schema, so it exercises the sync-layer blocker.
+            blocker.op.schemaVersion = 99;
+            injectedResponses++;
+          }
+          await route.fulfill({
+            response,
+            body: JSON.stringify(body),
+          });
+          return;
+        }
+        await route.continue();
       });
 
-      // Client B syncs — should handle the schema mismatch gracefully
-      try {
-        await clientB.sync.triggerSync();
-        await clientB.page.waitForTimeout(3000);
-      } catch {
-        // May or may not throw depending on error handling
-      }
+      // `triggerSync()` is a success-oriented helper and may throw as soon as
+      // the expected error icon appears. Click directly and require the stable
+      // blocked state before inspecting the cursor.
+      await clientB.sync.syncBtn.click();
+      await expect.poll(() => clientB!.sync.hasSyncError()).toBe(true);
 
-      // Remove interception and retry with real data
-      await clientB.page.unroute('**/api/sync/ops/**');
+      expect(injectedResponses).toBeGreaterThan(0);
+      expect(await getSuperSyncCursor(clientB.page)).toBe(cursorBeforeBlock);
+      await expect(
+        clientB.page.locator(`task:has-text("${taskName}")`),
+      ).not.toBeVisible();
+
+      await unrouteSuperSyncOps(clientB.page);
       await clientB.sync.syncAndWait();
-
-      // Verify Client B didn't crash and can still sync
       await waitForTask(clientB.page, taskName);
-      const hasError = await clientB.sync.hasSyncError();
-      expect(hasError).toBe(false);
-
-      console.log(
-        '[SchemaVersionMismatch] Client handled future schema version without crash',
-      );
+      expect(await clientB.sync.hasSyncError()).toBe(false);
+      expect(await getSuperSyncCursor(clientB.page)).not.toBe(cursorBeforeBlock);
     } finally {
-      if (clientA) await closeClient(clientA);
+      if (clientA) {
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
+        await closeClient(clientA);
+      }
       if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientB.page).catch(() => {});
         await closeClient(clientB);
       }
     }
   });
 
   /**
-   * Scenario G.8: Failed operation migration skips op and other ops still apply
-   *
-   * When a downloaded op has a corrupted/unmigrateable structure,
-   * it should be skipped and other valid ops should still be applied.
+   * Scenario G.8: A mid-batch schema blocker applies only the valid prefix and keeps
+   * the cursor before the blocker so the suffix can be retried after recovery.
    */
-  test('Failed operation migration skips corrupted op, applies others', async ({
+  test('Mid-batch schema blocker applies prefix and retries suffix from prior cursor', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const state = { injectCorruptedOp: true };
+    let injectedResponses = 0;
 
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // Client A creates real data
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `MigrationFail-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.sync.syncAndWait();
-
-      // Client B will receive ops including one corrupted one
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
+      const cursorBeforeBlock = await getSuperSyncCursor(clientB.page);
+      expect(cursorBeforeBlock).not.toBeNull();
 
-      // Intercept download to inject a corrupted op alongside valid ones
-      await clientB.page.route('**/api/sync/ops/**', async (route) => {
-        if (route.request().method() === 'GET' && state.injectCorruptedOp) {
-          state.injectCorruptedOp = false;
-          console.log('[Test] Injecting corrupted op into download response');
-
-          const response = await route.fetch();
-          const json = await response.json();
-
-          // Insert a corrupted op before the valid ones
-          if (json.ops && json.ops.length > 0) {
-            const corruptedOp = {
-              id: 'corrupted-migration-op',
-              opType: 'UPD',
-              entityType: 'TASK',
-              entityId: 'nonexistent-entity',
-              actionType: '[Task] CORRUPTED_ACTION',
-              payload: { title: undefined, __broken: true },
-              vectorClock: { broken_client: 1 },
-              timestamp: Date.now(),
-              schemaVersion: 0, // Very old schema, likely to fail migration
-              clientId: 'broken-client',
-            };
-            json.ops.unshift(corruptedOp);
-          }
-
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(json),
-          });
-        } else {
-          await route.continue();
+      const taskNames = [
+        `MigrationPrefix-${testRunId}`,
+        `MigrationBlocker-${testRunId}`,
+        `MigrationSuffix-${testRunId}`,
+      ];
+      const uploadedOpIds: string[] = [];
+      await routeSuperSyncOps(clientA.page, async (route) => {
+        if (route.request().method() === 'POST') {
+          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
+          uploadedOpIds.push(...upload.ops.map((operation) => operation.id));
         }
+        await route.continue();
+      });
+      for (const taskName of taskNames) {
+        await clientA.workView.addTask(taskName);
+      }
+      await clientA.sync.syncAndWait();
+      await unrouteSuperSyncOps(clientA.page);
+      expect(uploadedOpIds).toHaveLength(3);
+      const blockerOpId = uploadedOpIds[1];
+
+      await routeSuperSyncOps(clientB.page, async (route) => {
+        if (route.request().method() === 'GET') {
+          const response = await route.fetch();
+          const body = (await response.json()) as OperationDownloadBody;
+          const blocker = body.ops?.find(({ op }) => op?.id === blockerOpId);
+          if (blocker?.op) {
+            // Use a real encrypted operation and change only its schema metadata,
+            // preserving real server sequences on both sides of the blocker.
+            blocker.op.schemaVersion = 99;
+            injectedResponses++;
+          }
+          await route.fulfill({
+            response,
+            body: JSON.stringify(body),
+          });
+          return;
+        }
+        await route.continue();
       });
 
-      // Client B syncs — corrupted op should be skipped, valid ops applied
+      await clientB.sync.syncBtn.click();
+      await expect.poll(() => clientB!.sync.hasSyncError()).toBe(true);
+
+      expect(injectedResponses).toBeGreaterThan(0);
+      expect(await getSuperSyncCursor(clientB.page)).toBe(cursorBeforeBlock);
+      await waitForTask(clientB.page, taskNames[0]);
+      await expect(
+        clientB.page.locator(`task:has-text("${taskNames[1]}")`),
+      ).not.toBeVisible();
+      await expect(
+        clientB.page.locator(`task:has-text("${taskNames[2]}")`),
+      ).not.toBeVisible();
+
+      await unrouteSuperSyncOps(clientB.page);
       await clientB.sync.syncAndWait();
-
-      // Remove interception
-      await clientB.page.unroute('**/api/sync/ops/**');
-
-      // Verify the valid task was still received despite the corrupted op
-      await waitForTask(clientB.page, taskName);
-
-      // Verify Client B is healthy and can sync again
-      await clientB.sync.syncAndWait();
-      const hasError = await clientB.sync.hasSyncError();
-      expect(hasError).toBe(false);
-
-      console.log(
-        '[MigrationFailure] Corrupted op skipped, valid ops applied successfully',
-      );
+      for (const taskName of taskNames) {
+        await waitForTask(clientB.page, taskName);
+      }
+      expect(await clientB.sync.hasSyncError()).toBe(false);
+      expect(await getSuperSyncCursor(clientB.page)).not.toBe(cursorBeforeBlock);
     } finally {
-      if (clientA) await closeClient(clientA);
+      if (clientA) {
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
+        await closeClient(clientA);
+      }
       if (clientB) {
-        await clientB.page.unroute('**/api/sync/ops/**').catch(() => {});
+        await unrouteSuperSyncOps(clientB.page).catch(() => {});
         await closeClient(clientB);
       }
     }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getConflictEntityIds,
   isSameDuplicateOperation,
+  isSameIncomingOperation,
   isSameDuplicateTimestamp,
   pruneVectorClockForStorage,
   resolveConflictForExistingOp,
@@ -45,10 +46,29 @@ const duplicateCandidate = (
   receivedAt: 1_000,
   isPayloadEncrypted: false,
   syncImportReason: null,
+  repairBaseServerSeq: null,
   ...overrides,
 });
 
 describe('conflict helpers', () => {
+  it('matches causal REPAIR retries with the same base cursor', () => {
+    const repair = op({
+      opType: 'REPAIR',
+      entityType: 'ALL',
+      entityId: undefined,
+      repairBaseServerSeq: 10,
+    });
+
+    expect(
+      isSameIncomingOperation(
+        { ...repair, entityIds: [] },
+        { ...repair, entityIds: undefined },
+        0,
+        0,
+      ),
+    ).toBe(true);
+  });
+
   it('includes a divergent scalar entityId in the incoming conflict set', () => {
     expect(
       getConflictEntityIds(op({ entityId: 'task-scalar', entityIds: ['task-array'] })),
@@ -68,6 +88,20 @@ describe('conflict helpers', () => {
           }),
         ),
       ).toEqual(['misc', 'tasks']);
+    },
+  );
+
+  it.each([2, 3, 4])(
+    'does NOT alias a post-split (v%i) misc write to tasks',
+    (schemaVersion) => {
+      // The misc→tasks split was the v1→v2 migration; v2+ misc writes touch only
+      // misc. The legacy boundary must stay fixed at v2 so schema bumps do not
+      // fabricate conflicts between disjoint settings (regression: v3→v4 bump).
+      expect(
+        getConflictEntityIds(
+          op({ entityType: 'GLOBAL_CONFIG', entityId: 'misc', schemaVersion }),
+        ),
+      ).toEqual(['misc']);
     },
   );
 
@@ -218,6 +252,41 @@ describe('conflict helpers', () => {
     });
   });
 
+  it('accepts concurrent additive task-time deltas for the same task', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-b',
+        vectorClock: { 'client-b': 1 },
+      },
+    );
+
+    expect(result).toEqual({ hasConflict: false });
+  });
+
+  it('still rejects a causally stale additive task-time delta', () => {
+    const result = resolveConflictForExistingOp(
+      op({
+        actionType: '[TimeTracking] Sync time spent',
+        vectorClock: { 'client-a': 1 },
+      }),
+      'task-1',
+      {
+        actionType: '[TimeTracking] Sync time spent',
+        clientId: 'client-a',
+        vectorClock: { 'client-a': 2 },
+      },
+    );
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('superseded');
+  });
+
   it('classifies less-than vector clocks as superseded', () => {
     const result = resolveConflictForExistingOp(
       op({ vectorClock: { 'client-a': 1 } }),
@@ -252,5 +321,25 @@ describe('conflict helpers', () => {
     expect(incoming.vectorClock).not.toBe(originalClock);
     expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
     expect(incoming.vectorClock['client-25']).toBe(25);
+  });
+
+  it('preserves the active full-state author while pruning', () => {
+    const fullStateAuthor = 'import-client';
+    const incoming = op({
+      clientId: 'upload-client',
+      vectorClock: {
+        [fullStateAuthor]: 1,
+        'upload-client': 2,
+        ...Object.fromEntries(
+          Array.from({ length: 25 }, (_, index) => [`old-client-${index}`, 100 + index]),
+        ),
+      },
+    });
+
+    pruneVectorClockForStorage(incoming, [fullStateAuthor]);
+
+    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
+    expect(incoming.vectorClock[fullStateAuthor]).toBe(1);
+    expect(incoming.vectorClock['upload-client']).toBe(2);
   });
 });

@@ -39,6 +39,19 @@ const stateWith = (
   };
 };
 
+const addProject = (state: RootState, projectId: string): void => {
+  const template = state[PROJECT_FEATURE_NAME].entities.project1;
+  if (!template) throw new Error('Expected project1 test fixture');
+  state[PROJECT_FEATURE_NAME].entities[projectId] = {
+    ...template,
+    id: projectId,
+    title: projectId,
+    taskIds: [],
+    backlogTaskIds: [],
+  };
+  (state[PROJECT_FEATURE_NAME].ids as string[]).push(projectId);
+};
+
 describe('sectionSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
   let metaReducer: ActionReducer<any, Action>;
@@ -149,6 +162,92 @@ describe('sectionSharedMetaReducer', () => {
     ] as SectionState;
     expect(updated.entities['s1']?.taskIds).toEqual(['other']);
     expect(updated.entities['s2']?.taskIds).toEqual([]);
+  });
+
+  it('clears stale project-section references when restoring a reverse-linked subtask', () => {
+    const state = stateWith(
+      {
+        sub1: { parentId: 'parent', projectId: 'oldP' },
+      },
+      [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['parent', 'sub1'],
+        },
+        {
+          id: 'sTag',
+          contextId: 'tag1',
+          contextType: WorkContextType.TAG,
+          title: 'tag section',
+          taskIds: ['sub1'],
+        },
+        {
+          id: 'sToday',
+          contextId: TODAY_TAG.id,
+          contextType: WorkContextType.TAG,
+          title: 'today section',
+          taskIds: ['sub1'],
+        },
+      ],
+    );
+
+    metaReducer(
+      state,
+      TaskSharedActions.restoreTask({
+        task: createMockTask({ id: 'parent', projectId: 'project1', subTaskIds: [] }),
+        subTasks: [],
+      }),
+    );
+
+    const updated = (
+      mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      }
+    )[SECTION_FEATURE_NAME];
+    expect(updated.entities['sOld']?.taskIds).toEqual([]);
+    expect(updated.entities['sTag']?.taskIds).toEqual(['sub1']);
+    expect(updated.entities['sToday']?.taskIds).toEqual(['sub1']);
+  });
+
+  it('keeps section membership for a payload child owned by another parent', () => {
+    const state = stateWith(
+      {
+        otherParent: { projectId: 'oldP', subTaskIds: ['collision'] },
+        collision: { projectId: 'oldP', parentId: 'otherParent' },
+      },
+      [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['collision'],
+        },
+      ],
+    );
+
+    metaReducer(
+      state,
+      TaskSharedActions.restoreTask({
+        task: createMockTask({
+          id: 'parent',
+          projectId: 'project1',
+          subTaskIds: ['collision', 'missing-child'],
+        }),
+        subTasks: [
+          createMockTask({
+            id: 'collision',
+            parentId: 'parent',
+            projectId: 'project1',
+          }),
+        ],
+      }),
+    );
+
+    expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
   });
 
   it('handles deleteTasks (bulk) across multiple sections', () => {
@@ -407,6 +506,63 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sA']?.taskIds).toEqual([]);
     });
 
+    it('uses current project relationships when deleteProject task ids are stale', () => {
+      const state = stateWith(
+        {
+          root: { projectId: 'project1', subTaskIds: ['child'] },
+          child: { projectId: 'project1', parentId: 'root' },
+          backlog: { projectId: 'project1' },
+          projectIdOnly: { projectId: 'project1' },
+          unrelated: { projectId: 'another-project' },
+        },
+        [
+          {
+            id: 'sA',
+            contextId: 'tA',
+            contextType: WorkContextType.TAG,
+            title: 'Shared tag section',
+            taskIds: ['root', 'child', 'backlog', 'projectIdOnly', 'unrelated'],
+          },
+        ],
+      );
+      const project = state[PROJECT_FEATURE_NAME].entities.project1;
+      if (!project) {
+        throw new Error('Expected project test fixture.');
+      }
+      state[PROJECT_FEATURE_NAME] = {
+        ...state[PROJECT_FEATURE_NAME],
+        entities: {
+          ...state[PROJECT_FEATURE_NAME].entities,
+          project1: {
+            ...project,
+            taskIds: ['root'],
+            backlogTaskIds: ['backlog'],
+          },
+        },
+      };
+
+      metaReducer(
+        state,
+        TaskSharedActions.deleteProject({
+          projectId: 'project1',
+          allTaskIds: ['payload-task'],
+          noteIds: [],
+        }),
+      );
+
+      const [updatedState, forwardedAction] = mockReducer.calls.mostRecent().args;
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sA']?.taskIds).toEqual([
+        'projectIdOnly',
+        'unrelated',
+      ]);
+      expect(forwardedAction.allTaskIds).toEqual([
+        'payload-task',
+        'root',
+        'backlog',
+        'child',
+      ]);
+    });
+
     it('strips a moved task (and its subtasks) from sections in the old project only', () => {
       const state = stateWith(
         {
@@ -454,6 +610,491 @@ describe('sectionSharedMetaReducer', () => {
       expect(updated.entities['sOther']?.taskIds).toEqual([]);
       // Tag-context section keeps the parent — tag membership didn't change.
       expect(updated.entities['sTag']?.taskIds).toEqual(['parent']);
+    });
+
+    it('strips project sections when updateTask changes projectId', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'sub1', 'unrelated'],
+          },
+          {
+            id: 'sOther',
+            contextId: 'newP',
+            contextType: WorkContextType.PROJECT,
+            title: 'target project section',
+            taskIds: [],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent', changes: { projectId: 'newP' } },
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([
+        'unrelated',
+      ]);
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOther']?.taskIds).toEqual([]);
+    });
+
+    it('strips old-project sections for the authenticated footprint on LWW resolution', () => {
+      // Footprint comes from the authenticated meta.projectMoveFootprint (sourced from
+      // the encrypted payload), not the plaintext meta.entityIds envelope.
+      // 'receiverOnly' is a divergent receiver-side child outside the footprint,
+      // so it must survive.
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: [] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+          receiverOnly: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'sub1', 'receiverOnly'],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: 'newP',
+        meta: { projectMoveFootprint: ['parent', 'sub1'] },
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toEqual(['receiverOnly']);
+    });
+
+    it('ignores a tampered meta.entityIds envelope on LWW resolution (GHSA-8pxh-mgc7-gp3g)', () => {
+      // A compromised server injects 'victim' into the plaintext meta.entityIds
+      // envelope. The reducer derives the footprint only from the authenticated
+      // meta.projectMoveFootprint, so 'victim' is not stripped from its section.
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+          victim: { projectId: 'oldP' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'sub1', 'victim'],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: 'newP',
+        meta: {
+          projectMoveFootprint: ['parent', 'sub1'],
+          entityIds: ['parent', 'sub1', 'victim'],
+        },
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toContain('victim');
+    });
+
+    it('repairs stale other-project sections for a same-project LWW snapshot', () => {
+      const state = stateWith({ parent: { projectId: 'project1' } }, [
+        {
+          id: 'sTarget',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'target section',
+          taskIds: ['parent'],
+        },
+        {
+          id: 'sStale',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'stale section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: 'project1',
+        meta: { entityIds: ['parent'] },
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sTarget']?.taskIds).toEqual(['parent']);
+      expect(updated.entities['sStale']?.taskIds).toEqual([]);
+    });
+
+    it('strips old-project sections when LWW clears projectId', () => {
+      const state = stateWith({ parent: { projectId: 'oldP' } }, [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: '',
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toEqual([]);
+    });
+
+    it('keeps the current-project section for a patch-mode null projectId (#9025)', () => {
+      // A patch-path null keeps the task in its current project (mirroring the
+      // task slice), so its current-project section membership must survive
+      // while stale other-project references are still repaired.
+      const state = stateWith({ parent: { projectId: 'project1' } }, [
+        {
+          id: 'sTarget',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'target section',
+          taskIds: ['parent'],
+        },
+        {
+          id: 'sStale',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'stale section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: null,
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sTarget']?.taskIds).toEqual(['parent']);
+      expect(updated.entities['sStale']?.taskIds).toEqual([]);
+    });
+
+    it('keeps the current-project section for a replace-mode null projectId (#9025)', () => {
+      // Invalid destinations are mode-independent: even a replace snapshot's
+      // null keeps the task in its current project, so its section survives.
+      const state = stateWith({ parent: { projectId: 'project1' } }, [
+        {
+          id: 'sTarget',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'target section',
+          taskIds: ['parent'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: null,
+        meta: { lwwUpdateMode: 'replace' },
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sTarget']?.taskIds).toEqual(['parent']);
+    });
+
+    it('strips project sections for reverse-linked children when LWW recreates a parent', () => {
+      const state = stateWith({ sub1: { projectId: 'oldP', parentId: 'parent' } }, [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['sub1'],
+        },
+      ]);
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'parent',
+        projectId: 'project1',
+        subTaskIds: [],
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toEqual([]);
+    });
+
+    it('strips old-project sections when LWW reparents a subtask across projects', () => {
+      const state = stateWith(
+        {
+          oldParent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          newParent: { projectId: 'project1', subTaskIds: [] },
+          sub1: { projectId: 'oldP', parentId: 'oldParent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['sub1'],
+          },
+        ],
+      );
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'sub1',
+        parentId: 'newParent',
+        projectId: 'project1',
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toEqual([]);
+    });
+
+    it('strips old-project sections when LWW promotes a subtask in another project', () => {
+      const state = stateWith(
+        {
+          oldParent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'oldParent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['sub1'],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+
+      metaReducer(state, {
+        type: '[TASK] LWW Update',
+        id: 'sub1',
+        parentId: undefined,
+        projectId: 'newP',
+      } as Action);
+
+      const updated = (
+        mockReducer.calls.mostRecent().args[0] as RootState & {
+          [SECTION_FEATURE_NAME]: SectionState;
+        }
+      )[SECTION_FEATURE_NAME];
+      expect(updated.entities['sOld']?.taskIds).toEqual([]);
+    });
+
+    it('keeps section references for a rejected direct subtask projectId update', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: ['sub1'] },
+          sub1: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['sub1'],
+          },
+        ],
+      );
+
+      metaReducer(
+        state,
+        TaskSharedActions.updateTask({
+          task: { id: 'sub1', changes: { projectId: 'project1' } },
+        }),
+      );
+
+      expect(mockReducer.calls.mostRecent().args[0]).toBe(state);
+    });
+
+    it('cleans only the captured project-move footprint on divergent state', () => {
+      const state = stateWith(
+        {
+          parent: { projectId: 'oldP', subTaskIds: [] },
+          orphan: { projectId: 'oldP', parentId: 'parent' },
+          receiverOnly: { projectId: 'oldP', parentId: 'parent' },
+        },
+        [
+          {
+            id: 'sOld',
+            contextId: 'oldP',
+            contextType: WorkContextType.PROJECT,
+            title: 'old project section',
+            taskIds: ['parent', 'orphan', 'receiverOnly'],
+          },
+        ],
+      );
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'parent', changes: { projectId: 'newP' } },
+        projectMoveSubTaskIds: ['orphan'],
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([
+        'receiverOnly',
+      ]);
+    });
+
+    it('keeps sections unchanged for a missing project destination', () => {
+      const state = stateWith({ task1: { projectId: 'project1' } }, [
+        {
+          id: 'sCurrent',
+          contextId: 'project1',
+          contextType: WorkContextType.PROJECT,
+          title: 'current project section',
+          taskIds: ['task1'],
+        },
+      ]);
+
+      metaReducer(
+        state,
+        TaskSharedActions.updateTask({
+          task: { id: 'task1', changes: { projectId: 'missing-project' } },
+        }),
+      );
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sCurrent']?.taskIds).toEqual([
+        'task1',
+      ]);
+    });
+
+    it('removes stale section references when restoring a task family', () => {
+      const state = stateWith({}, [
+        {
+          id: 'sOld',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'old project section',
+          taskIds: ['parent', 'subtask', 'unrelated'],
+        },
+      ]);
+      const parent = createMockTask({
+        id: 'parent',
+        projectId: 'newP',
+        subTaskIds: ['subtask'],
+      });
+      const subTask = createMockTask({
+        id: 'subtask',
+        parentId: 'parent',
+        projectId: 'oldP',
+      });
+
+      metaReducer(
+        state,
+        TaskSharedActions.restoreTask({ task: parent, subTasks: [subTask] }),
+      );
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sOld']?.taskIds).toEqual([
+        'unrelated',
+      ]);
+    });
+
+    it('repairs stale project sections when projectId is patched unchanged', () => {
+      const state = stateWith({ task1: { projectId: 'newP' } }, [
+        {
+          id: 'sStale',
+          contextId: 'oldP',
+          contextType: WorkContextType.PROJECT,
+          title: 'stale project section',
+          taskIds: ['task1'],
+        },
+        {
+          id: 'sTarget',
+          contextId: 'newP',
+          contextType: WorkContextType.PROJECT,
+          title: 'target project section',
+          taskIds: ['task1'],
+        },
+      ]);
+      addProject(state, 'newP');
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task1', changes: { projectId: 'newP' } },
+      });
+
+      metaReducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as RootState & {
+        [SECTION_FEATURE_NAME]: SectionState;
+      };
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sStale']?.taskIds).toEqual([]);
+      expect(updatedState[SECTION_FEATURE_NAME].entities['sTarget']?.taskIds).toEqual([
+        'task1',
+      ]);
     });
 
     it('updateTask without tagIds change is a no-op for sections', () => {

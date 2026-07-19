@@ -3,8 +3,11 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
+  type Request,
+  type Route,
   expect,
 } from '@playwright/test';
+import { gunzipSync } from 'zlib';
 import { SuperSyncPage, type SuperSyncConfig } from '../pages/supersync.page';
 import { WorkViewPage } from '../pages/work-view.page';
 import { waitForAppReady } from './waits';
@@ -14,7 +17,6 @@ import {
   UI_VISIBLE_TIMEOUT,
   UI_VISIBLE_TIMEOUT_LONG,
   UI_SETTLE_SMALL,
-  UI_SETTLE_MEDIUM,
   UI_SETTLE_STANDARD,
   UI_SETTLE_EXTENDED,
   RETRY_BASE_DELAY,
@@ -36,6 +38,37 @@ import {
  */
 export const SUPERSYNC_BASE_URL =
   process.env.SUPERSYNC_E2E_URL || 'http://localhost:1901';
+
+/**
+ * Matches both `/api/sync/ops` uploads and `/api/sync/ops?...` downloads.
+ * Do not add a trailing slash: the production endpoint has none.
+ */
+const SUPERSYNC_OPS_ROUTE = '**/api/sync/ops*';
+
+export const routeSuperSyncOps = async (
+  page: Page,
+  handler: (route: Route) => Promise<void>,
+): Promise<void> => page.route(SUPERSYNC_OPS_ROUTE, handler);
+
+export const unrouteSuperSyncOps = async (page: Page): Promise<void> =>
+  page.unroute(SUPERSYNC_OPS_ROUTE);
+
+/** Parse a SuperSync upload body regardless of whether the browser gzipped it. */
+export const parseSuperSyncRequestBody = <T>(request: Request): T => {
+  try {
+    return request.postDataJSON() as T;
+  } catch {
+    const rawBody = request.postDataBuffer();
+    if (!rawBody) {
+      throw new Error('SuperSync request did not contain a body');
+    }
+    try {
+      return JSON.parse(gunzipSync(rawBody).toString('utf-8')) as T;
+    } catch (error) {
+      throw new Error('Failed to parse SuperSync request body', { cause: error });
+    }
+  }
+};
 
 /**
  * Test user credentials returned from the server.
@@ -693,6 +726,14 @@ export const renameTask = async (
   // Type directly into the textarea via evaluate to avoid focus/detach races
   await textarea.evaluate((el: HTMLTextAreaElement, name: string) => {
     el.focus();
+    // Dispatch focus explicitly rather than trusting el.focus() to emit it.
+    // These tests drive two clients as separate pages and only one page can hold
+    // focus, so on CI the event often never fires. TaskTitleComponent then keeps
+    // _isFocused=false, and its resetToLastExternalValueTrigger resets tmpValue
+    // to the stored title on the next task-object emission — blur therefore
+    // computes wasChanged=false, task.component skips update(), and the rename
+    // is silently dropped without ever becoming an op.
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
     el.value = name;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, newName);
@@ -700,7 +741,17 @@ export const renameTask = async (
   await textarea.evaluate((el: HTMLTextAreaElement) => {
     el.dispatchEvent(new Event('blur', { bubbles: true }));
   });
-  await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
+  // Assert against the STORE, not the DOM. task-title renders tmpValue (a
+  // component-local signal) in both its editing and idle branches, so a DOM
+  // check matches as soon as the synthetic input fires and can never tell a
+  // typed title from a committed one. Only the store proves an op was captured
+  // — and an uncaptured rename is invisible until a later sync reverts it.
+  await expect
+    .poll(() => getTaskTitleFromState(client, newName), {
+      timeout: UI_VISIBLE_TIMEOUT,
+      message: `renameTask: "${newName}" never reached the store — the rename was typed but never committed as an op`,
+    })
+    .toBe(newName);
 };
 
 /**
@@ -836,6 +887,73 @@ export const waitForTaskTimeDisplay = async (
  * @param taskName - The task name
  * @returns The persisted timeSpent value in milliseconds, or null if not found
  */
+/**
+ * Read a task's title from the live NgRx store.
+ *
+ * The DOM cannot answer this: task-title renders tmpValue, a component-local
+ * signal, in both its editing and idle branches, so it shows a typed title
+ * whether or not an op was ever captured. Only the store distinguishes them.
+ *
+ * @param client - The simulated E2E client
+ * @param titleSubstring - Substring identifying the task
+ * @returns The stored title, or null when no task matches
+ */
+export const getTaskTitleFromState = async (
+  client: SimulatedE2EClient,
+  titleSubstring: string,
+): Promise<string | null> =>
+  client.page.evaluate(async (name) => {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null;
+
+    const getTitleFromRootState = (state: Record<string, unknown>): string | null => {
+      const taskState = state.tasks ?? state.task;
+      if (!isRecord(taskState) || !isRecord(taskState.entities)) {
+        return null;
+      }
+      for (const task of Object.values(taskState.entities)) {
+        if (
+          isRecord(task) &&
+          typeof task.title === 'string' &&
+          task.title.includes(name)
+        ) {
+          return task.title;
+        }
+      }
+      return null;
+    };
+
+    type StoreSubscription = { unsubscribe: () => void };
+    type StoreLike = {
+      subscribe: (next: (state: unknown) => void) => StoreSubscription;
+    };
+
+    const helpers = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+      .__e2eTestHelpers;
+
+    const store = helpers?.store;
+    if (!store) {
+      return null;
+    }
+
+    const liveState = await new Promise<Record<string, unknown> | null>((resolve) => {
+      let isDone = false;
+      const subscriptionRef: { current?: StoreSubscription } = {};
+      const finish = (state: unknown): void => {
+        if (isDone) {
+          return;
+        }
+        isDone = true;
+        window.setTimeout(() => subscriptionRef.current?.unsubscribe());
+        resolve(isRecord(state) ? state : null);
+      };
+      subscriptionRef.current = store.subscribe(finish);
+      window.setTimeout(() => finish(null), 1000);
+    });
+
+    return liveState ? getTitleFromRootState(liveState) : null;
+  }, titleSubstring);
+
 export const getTaskTimeSpentFromState = async (
   client: SimulatedE2EClient,
   taskName: string,

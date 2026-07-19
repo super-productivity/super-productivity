@@ -106,7 +106,7 @@ describe('ImportEncryptionHandlerService', () => {
       expect(result.importedEnabled).toBeTrue();
     });
 
-    it('should detect change from encrypted to unencrypted', async () => {
+    it('should not report disabling encryption because SuperSync requires it', async () => {
       // Current: encrypted
       (mockSyncProvider.privateCfg.load as jasmine.Spy).and.resolveTo({
         ...mockExistingCfg,
@@ -117,7 +117,7 @@ describe('ImportEncryptionHandlerService', () => {
 
       const result = await service.checkEncryptionStateChange(importedData);
 
-      expect(result.willChange).toBeTrue();
+      expect(result.willChange).toBeFalse();
       expect(result.currentEnabled).toBeTrue();
       expect(result.importedEnabled).toBeFalse();
     });

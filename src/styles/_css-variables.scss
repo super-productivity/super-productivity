@@ -18,11 +18,10 @@
 //
 // Selector contract for theme authors:
 //   Primitives MUST be overridden under `body` (light) or `body.isDarkTheme`
-//   (dark). Declaring a primitive at `:root` only is mode-inconsistent —
-//   `:root` (specificity 0,1,0) beats base `body` (0,0,1) but loses to
-//   `body.isDarkTheme` (0,1,1), so the override silently fails in dark mode.
-//   Semantic aliases live at `:where(body, body.isDarkTheme)` (specificity 0)
-//   so any selector with non-zero specificity wins.
+//   (dark). A `:root` value is inherited, while the base value is declared
+//   directly on `body`; the direct declaration wins before specificity is
+//   considered. Semantic aliases also need a body selector. Their zero-
+//   specificity `:where()` rule lets later body-scoped theme rules win.
 //
 // File layout:
 //   1. `:root` — primitive scales (palette stops, dark/light elevation,
@@ -284,7 +283,9 @@
   --page-transition-duration: 225ms;
 
   // Transition shorthands
-  --transition-fast: all var(--transition-duration-xs) ease-in-out;
+  // Property-less on purpose: valid both as `transition: var(...)` (defaults
+  // to `all`) and as `transition: opacity var(...)`.
+  --transition-fast: var(--transition-duration-xs) ease-in-out;
   --transition-standard: all var(--transition-duration-m) var(--ani-standard-timing);
   --transition-enter: all var(--transition-duration-m) var(--ani-enter-timing);
   --transition-leave: all var(--transition-duration-m) var(--ani-leave-timing);
@@ -345,7 +346,9 @@
   // -----------------------------
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
-  --focus-ring-color: var(--palette-primary-500);
+  // Fallback for any root-level consumer; body aliases this to the public
+  // `--focus-ring` primitive below.
+  --focus-ring-color: var(--focus-ring, var(--palette-primary-500));
 }
 
 // ===============================
@@ -361,8 +364,8 @@
 //
 //   2. SEMANTIC ALIASES — declared once at `:where(body, body.isDarkTheme)`
 //      (specificity 0,0,0). Category-A semantic tokens whose value is the
-//      same across modes when expressed via primitives. Themes win regardless
-//      of selector choice (`:root`, `body`, `body.isDarkTheme`).
+//      same across modes when expressed via primitives. Body-scoped theme
+//      declarations win without specificity escalation.
 //
 //   3. CATEGORY B — true per-mode tokens whose relationship genuinely differs
 //      between modes (see migration table for rationale). Stay split.
@@ -403,6 +406,10 @@ body {
   // light-mode contrast issue.
   --brand: var(--palette-primary-600);
   --focus-ring: var(--brand);
+  // Must resolve to an opaque solid color: native Android uses this behind
+  // its transparent system bars. `--bg` lets legacy themes participate while
+  // modern themes can override this token directly.
+  --system-surface: var(--bg, #f8f8f7);
 
   // Input fields
   --input-bg: rgba(var(--ink-on-channel), 0.04);
@@ -429,6 +436,7 @@ body.isDarkTheme {
 
   --brand: var(--palette-primary-400);
   --focus-ring: var(--brand);
+  --system-surface: var(--bg, #131314);
 
   // Input fields
   --input-bg: rgba(var(--ink-on-channel), 0.06);
@@ -437,12 +445,17 @@ body.isDarkTheme {
 }
 
 // -----------------------------
-// Layer 2: SEMANTIC ALIASES (zero specificity — themes always win)
+// Layer 2: SEMANTIC ALIASES (zero specificity — body-scoped themes win)
 // -----------------------------
 //
 // `:where()` makes the selector contribute zero specificity (CSS Selectors L4).
-// Any theme override at `body`, `body.isDarkTheme`, or `:root` wins by spec.
+// Later `body` / `body.isDarkTheme` theme rules win. A `:root` declaration is
+// inherited and cannot replace a value declared directly on the body.
 :where(body, body.isDarkTheme) {
+  // Public themes set `--focus-ring`; existing components consume the older
+  // `--focus-ring-color` name.
+  --focus-ring-color: var(--focus-ring);
+
   // Backgrounds (Cat A)
   --bg: var(--surface-1);
   --bg-darker: var(--surface-0);
@@ -453,16 +466,32 @@ body.isDarkTheme {
   // Navigation & panel (Cat A)
   --sidenav-bg: transparent;
   --sidenav-bg-mobile: var(--bg);
-  // 10% ink overlay; replaces the `rgba(255,255,255,1.25)` typo that previously
-  // clamped to opaque white in light mode.
-  --sidenav-item-active-bg: rgba(var(--ink-on-channel), 0.1);
-  --sidenav-active-text: var(--brand);
+  // Keep active labels contrast-safe on every project colour. Brand remains
+  // visible in the non-text selection tint instead of carrying text contrast.
+  --sidenav-item-active-bg: color-mix(in srgb, var(--brand) 18%, transparent);
+  --sidenav-active-text: var(--ink-strong);
   --sidenav-text: var(--text-color-less-intense);
   --sidenav-text-hover: var(--text-color-most-intense);
   --sidenav-text-secondary: var(--text-color-muted);
 
+  // Text/outlined actions sit directly on theme surfaces. Keep a restrained
+  // role-color cue while anchoring arbitrary project palettes in mode-safe ink.
+  // The worst-case black/white palette contrast is guarded by theme-assets.test.
+  --button-primary-label: color-mix(
+    in srgb,
+    var(--palette-primary-500) 18%,
+    var(--ink-strong)
+  );
+  --button-accent-label: color-mix(
+    in srgb,
+    var(--palette-accent-500) 18%,
+    var(--ink-strong)
+  );
+  --button-warn-label: color-mix(in srgb, var(--palette-warn-500) 18%, var(--ink-strong));
+
   --right-panel-bg: transparent;
   --bottom-nav-height: 44px;
+  --bottom-nav-extra-offset: 0px;
   --bottom-nav-bg: var(--sidenav-bg-mobile);
   --bottom-nav-shadow: var(--whiteframe-shadow-2dp);
   --bottom-panel-handle: rgba(var(--ink-on-channel), 0.4);

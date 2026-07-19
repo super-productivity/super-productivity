@@ -24,7 +24,14 @@
   font-feature-settings: 'liga';
 }
 
+@mixin androidWebViewTextZoomCompensation() {
+  body.hasAndroidWebViewTextZoom & {
+    scale: var(--android-webview-icon-scale, 1);
+  }
+}
+
 @mixin materialIcon($iconName) {
   @include materialIconBase();
+  @include androidWebViewTextZoomCompensation();
   content: $iconName;
 }

@@ -125,7 +125,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
     storeSpy.select.and.returnValue(of([]));
     const dateTimeFormatServiceSpy = jasmine.createSpyObj(
       'DateTimeFormatService',
-      ['currentLocale'],
+      ['currentLocale', 'textLocale'],
       {
         dateFormat: () => ({
           parse: 'MM/dd/yyyy',
@@ -134,6 +134,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       },
     );
     dateTimeFormatServiceSpy.currentLocale.and.returnValue('en-US');
+    dateTimeFormatServiceSpy.textLocale.and.returnValue('en-US');
     const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
       getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
       setLocale: () => {},

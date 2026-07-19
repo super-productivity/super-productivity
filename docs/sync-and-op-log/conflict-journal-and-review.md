@@ -46,9 +46,14 @@ Contracts:
   `BackupService.importCompleteBackup` — the chokepoint every replacement path
   funnels through (profile switch, JSON import, local-backup restore, SuperSync
   restore) — calls `ConflictJournalService.clearAll()`.
-- **Retention.** Pruned on app start to whichever bound binds first: entries
-  older than 14 days (`JOURNAL_RETENTION_DAYS`) or beyond the newest 200
-  (`JOURNAL_MAX_ENTRIES`).
+- **Retention.** Each prune applies whichever bound binds first: entries older
+  than 14 days (`JOURNAL_RETENTION_DAYS`), then anything beyond the newest 200
+  (`JOURNAL_MAX_ENTRIES`). Pruning runs on app start, and opportunistically
+  mid-session from `record()` — but the mid-session prune is **count-triggered**:
+  it fires only once the store grows past the soft cap `JOURNAL_MAX_ENTRIES +
+JOURNAL_PRUNE_SLACK` (220), then prunes back to the newest 200. So a
+  long-running low-volume session (few entries, never crossing the soft cap)
+  relies on the next app start to enforce the 14-day age bound.
 
 ### Classification taxonomy
 
@@ -83,6 +88,15 @@ delta from two sources in order:
 2. the capture-time `entityChanges` computed by `OperationCaptureService`
    (covers TIME_TRACKING and `syncTimeSpent`).
 
+Extraction is scoped to the entity currently in conflict. `entityId` and
+`entityIds` are treated as one deduplicated set, matching server conflict
+detection even for inconsistent legacy metadata. For a multi-entity op, only a
+matching `entityChanges` entry with `opType: UPDATE`, a plain-object delta, and
+no identity (`id`) field is accepted. A multi-entity op without such a safe
+target delta is opaque; it must not borrow the primary entity's adapter payload
+because doing so could attribute one entity's values to another. Direct-format
+legacy bulk payloads are therefore opaque for non-primary entities.
+
 An op with neither is **opaque** (`hasOpaqueChanges`). Opaque ops still
 represent real state changes, so:
 
@@ -104,6 +118,25 @@ kept by synthesizing a single merged UPDATE op. Eligibility
 `conflict-resolution.service.ts`):
 
 - neither side has a DELETE op, and the plan is not an archive plan;
+- neither side contains a multi-entity op. Resolution rejects the original ops,
+  so merging only the conflicted entity would silently drop the bulk op's
+  sibling-entity updates. Unsafe partial compensation fails closed before any
+  op-log mutation, leaving the local operation pending and surfacing a sync
+  error. Whole-set remote DELETE/archive winners and recreated local archives
+  retain their existing atomic paths. The one explicitly
+  decomposable legacy action (`TASK_ROUND_TIME_SPENT`) re-emits its known
+  per-task time fields from CURRENT state (so a later local edit is not
+  overwritten). Current round-time capture intentionally emits an empty
+  `entityChanges` array, so the resolver uses the action's static
+  `timeSpent`/`timeSpentOnDay` contract only after validating its payload and ID
+  metadata. This includes a remote-winning conflict target when the remote delta
+  is safely extractable and disjoint (for example, remote title versus local
+  rounded time), as well as non-conflicting siblings. Overlapping target
+  fields remain remote-won only when the remote delta covers the whole coupled
+  local field set; a partial overlap or opaque remote target delta fails closed.
+  A sibling missing from current state is not recreated (a later delete owns it).
+  Arbitrary bulk actions are not split from `entityChanges`: relationship/list
+  mutations may carry atomic invariants that plain payload shape cannot prove;
 - neither side has opaque ops (their changes could not be carried into the
   synthesized delta — merging would silently drop them and the two clients
   would synthesize DIFFERENT results);

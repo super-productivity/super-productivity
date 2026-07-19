@@ -61,7 +61,7 @@ describe('Migration Handling Integration', () => {
             ]);
             spy.checkOpForConflicts.and.resolveTo({
               isSupersededOrDuplicate: false,
-              conflict: null,
+              conflicts: [],
             });
             return spy;
           },
@@ -88,7 +88,7 @@ describe('Migration Handling Integration', () => {
             const spy = jasmine.createSpyObj('OperationLogCompactionService', [
               'compact',
             ]);
-            spy.compact.and.returnValue(Promise.resolve());
+            spy.compact.and.returnValue(Promise.resolve(true));
             return spy;
           },
         },

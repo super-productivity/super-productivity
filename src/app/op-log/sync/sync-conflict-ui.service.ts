@@ -280,6 +280,9 @@ export class SyncConflictUiService {
             id: entityId,
             changes: changes as Partial<Project>,
           } as Update<Project>,
+          // The flip flow reports its own outcome — without this the
+          // unconditional "Project updated" snack pops on top of it.
+          isSkipSnack: true,
         });
       case 'NOTE':
         return updateNote({

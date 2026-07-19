@@ -5,6 +5,7 @@ import {
   assertContiguousReplayBatch,
   assertReplayStateSize,
   EncryptedOpsNotSupportedError,
+  LegacyRepairReplayUnsupportedError,
   MAX_REPLAY_STATE_SIZE_BYTES,
   replayOpsToState,
   type ReplayOperationRow,
@@ -135,6 +136,34 @@ describe('op replay', () => {
     );
   });
 
+  it('rejects legacy repairs whose missing causal base makes server replay ambiguous', () => {
+    expect(() =>
+      replayOpsToState([
+        row({
+          opType: 'REPAIR',
+          entityType: 'ALL',
+          entityId: null,
+          payload: { appDataComplete: { TASK: {} } },
+          repairBaseServerSeq: null,
+        }),
+      ]),
+    ).toThrowError(LegacyRepairReplayUnsupportedError);
+  });
+
+  it('replays a repair with an explicit causal base as a full-state operation', () => {
+    const state = replayOpsToState([
+      row({
+        opType: 'REPAIR',
+        entityType: 'ALL',
+        entityId: null,
+        payload: { appDataComplete: { TASK: { repaired: { done: true } } } },
+        repairBaseServerSeq: 0,
+      }),
+    ]);
+
+    expect(state).toEqual({ TASK: { repaired: { done: true } } });
+  });
+
   it('rejects non-contiguous replay batches', () => {
     expect(() =>
       assertContiguousReplayBatch(
@@ -169,5 +198,22 @@ describe('op replay', () => {
     expect(() => _resolveExpectedFirstSeq([row({ serverSeq: 10 })], 0, 0, 10)).toThrow(
       'Expected operation serverSeq 1 but got 10',
     );
+  });
+
+  it('rejects a leading gap at a legacy repair without a causal base', () => {
+    expect(() =>
+      _resolveExpectedFirstSeq(
+        [
+          row({
+            serverSeq: 10,
+            opType: 'REPAIR',
+            repairBaseServerSeq: null,
+          }),
+        ],
+        0,
+        0,
+        10,
+      ),
+    ).toThrow('Expected operation serverSeq 1 but got 10');
   });
 });

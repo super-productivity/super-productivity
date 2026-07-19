@@ -5,7 +5,7 @@
  *
  *  TIER A — Window / Sidebar / Content / Cards
  *    Substantially opaque (~0.78 light, ~0.72 dark).
- *    Subtle vibrancy blur, no saturate boost.
+ *    Opaque enough to avoid a live blur on the routed-content container.
  *    Heavy ambient drop shadow.
  *    Big rounded corners (16–18px).
  *    The wallpaper FRAMES these surfaces — it does not
@@ -84,15 +84,17 @@ body {
   --lg-solid-utility-bg: var(--surface-2);
   --ink-strong: rgb(0, 0, 0);
   --ink: rgb(28, 28, 30);
-  --ink-muted: rgba(60, 60, 67, 0.62);
+  --ink-muted: rgba(60, 60, 67, 0.74);
   --ink-on-channel: 0, 0, 0;
   --separator: rgba(60, 60, 67, 0.2);
   --divider: rgba(60, 60, 67, 0.12);
   --scrim: rgba(0, 0, 0, 0.4);
   /* Apple convention: focus ring is system blue, independent of the
-   * user's picker color. --brand stays as the picker primary so the
-   * sidenav-active-text and resize-handle hover follow user choice. */
+   * user's picker color. */
   --focus-ring: var(--lg-accent);
+  --system-surface: var(--surface-1);
+  /* The shared nav already reserves --bottom-nav-safe-area internally. */
+  --bottom-nav-extra-offset: var(--s);
 
   /* Three-radial wallpaper tinted by the user's primary colour.
    * Fixed pixel positions keep the generated wallpaper stable
@@ -149,7 +151,7 @@ body {
   /* Slightly stronger contrast since cards are more transparent */
   --text-color: rgba(28, 28, 30, 1);
   --text-color-less-intense: rgba(28, 28, 30, 0.78);
-  --text-color-muted: rgba(60, 60, 67, 0.62);
+  --text-color-muted: rgba(60, 60, 67, 0.74);
   --text-color-more-intense: rgba(0, 0, 0, 1);
   --text-color-most-intense: rgba(0, 0, 0, 1);
 
@@ -174,7 +176,7 @@ body {
   --task-detail-bg-hover: rgba(255, 255, 255, 0.95);
 
   /* Notes: glass-like translucent fill (was warm-yellow). The
-   * main-content blur underneath provides the glass material;
+   * high-alpha surface stays readable over the wallpaper while
    * a faint warm hint preserves note "personality" without
    * the sticky-note look. */
   --standard-note-bg: rgba(255, 250, 235, 0.78);
@@ -210,6 +212,7 @@ body {
   --lg-overlay-bg: rgba(255, 255, 255, 0.36);
   --lg-mobile-nav-bg: rgba(255, 255, 255, 0.5);
   --lg-overlay-rim: rgba(255, 255, 255, 0.7);
+  --lg-backdrop-bg: rgba(0, 0, 0, 0.16);
 
   /* Don't overwrite --palette-accent-500 / --c-accent — the user picks
    * their accent color in the theme picker, and forcing Apple system
@@ -278,12 +281,13 @@ body.isDarkTheme {
   --lg-solid-utility-bg: var(--surface-3);
   --ink-strong: rgb(255, 255, 255);
   --ink: rgb(245, 245, 247);
-  --ink-muted: rgba(235, 235, 245, 0.55);
+  --ink-muted: rgba(235, 235, 245, 0.72);
   --ink-on-channel: 255, 255, 255;
   --separator: rgba(255, 255, 255, 0.12);
   --divider: rgba(255, 255, 255, 0.08);
   --scrim: rgba(0, 0, 0, 0.6);
   --focus-ring: var(--lg-accent);
+  --system-surface: var(--surface-1);
 
   --lg-wallpaper:
     radial-gradient(
@@ -326,7 +330,7 @@ body.isDarkTheme {
 
   --text-color: rgba(245, 245, 247, 0.96);
   --text-color-less-intense: rgba(235, 235, 240, 0.78);
-  --text-color-muted: rgba(235, 235, 245, 0.55);
+  --text-color-muted: rgba(235, 235, 245, 0.72);
   --text-color-more-intense: rgba(255, 255, 255, 1);
   --text-color-most-intense: rgba(255, 255, 255, 1);
 
@@ -382,6 +386,7 @@ body.isDarkTheme {
   --lg-overlay-bg: rgba(40, 42, 50, 0.42);
   --lg-mobile-nav-bg: rgba(40, 42, 50, 0.56);
   --lg-overlay-rim: rgba(255, 255, 255, 0.32);
+  --lg-backdrop-bg: rgba(0, 0, 0, 0.38);
 
   /* See light-mode rationale — accent stays from the user's picker. */
   --c-info: var(--lg-accent);
@@ -528,22 +533,10 @@ body.isDisableBackgroundTint.isDarkTheme {
     linear-gradient(180deg, #0d0d0f 0px, #08080a 900px);
 }
 
-/* ---------------------------------------------------------
- * Tier A — single unified blur on the main content area.
- *
- * Apply backdrop-filter ONCE on `.main-content`, the
- * container that sits above the bg-image / wallpaper. All
- * children (header, banner, right-panel, route content,
- * cards, tasks, notes, etc.) inherit the already-blurred
- * backdrop through their translucent fills — no per-child
- * blur, so no visible seam between header and content
- * and no compounded "milky plastic" look. */
-
-.main-content {
-  backdrop-filter: blur(var(--lg-blur-vibrancy)) saturate(var(--lg-saturate-vibrancy));
-  -webkit-backdrop-filter: blur(var(--lg-blur-vibrancy))
-    saturate(var(--lg-saturate-vibrancy));
-}
+/* Tier A deliberately avoids filtering `.main-content`: filter and
+ * backdrop-filter establish a containing block that can clip routed fixed
+ * overlays. The high-alpha surface fills provide the calmer window material;
+ * live blur is reserved for navigation and CDK overlay surfaces below. */
 
 /* ---------------------------------------------------------
  * Side nav as floating glass.
@@ -691,7 +684,7 @@ magic-side-nav .nav-link.active {
 .mobile-bottom-nav {
   left: 8px !important;
   right: 8px !important;
-  bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  bottom: var(--bottom-nav-extra-offset) !important;
   border-top: none !important;
   border-radius: var(--lg-radius-lg);
   /* Neutral nav material — no accent gradient, see sidenav. */
@@ -757,16 +750,15 @@ body.isDarkTheme .bottom-panel-sheet .mat-bottom-sheet-container {
 }
 
 /* ---------------------------------------------------------
- * Modal backdrops — replace the dark/light scrim with a
- * pure blur. Opening a dialog/sheet/menu blurs the app
- * behind it without dimming or tinting. */
+ * Modal backdrops — combine a restrained scrim with blur so
+ * dialogs remain isolated even when live transparency is unavailable. */
 
 .nav-backdrop-mobile,
 .cdk-overlay-backdrop,
 .cdk-overlay-dark-backdrop,
 .mat-bottom-sheet-backdrop,
 .mat-mdc-dialog-backdrop {
-  background-color: transparent !important;
+  background-color: var(--lg-backdrop-bg) !important;
   backdrop-filter: blur(10px) saturate(120%);
   -webkit-backdrop-filter: blur(10px) saturate(120%);
 }
@@ -1128,8 +1120,8 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
  *   Transparency" accessibility setting. Drop all
  *   translucency to solid surfaces.
  *
- * @supports not (backdrop-filter): older browsers — surfaces
- *   stay translucent but without live blur.
+ * @supports not (backdrop-filter): older browsers — key surfaces
+ *   become solid so translucency never depends on live blur.
  * --------------------------------------------------------- */
 
 @media (prefers-reduced-transparency: reduce) {
@@ -1137,25 +1129,56 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #eef2f8 0px, #e6ecf4 900px) !important;
     --card-bg: #ffffff;
     --sidenav-bg: #f5f7fa;
+    --sidenav-bg-mobile: #f5f7fa;
     --task-c-bg: #ffffff;
     --task-c-selected-bg: #f0f3f7;
     --selected-task-bg-color: #f0f3f7;
+    --sub-task-c-bg: #f5f7fa;
+    --sub-task-c-bg-done: #eef1f5;
+    --task-c-bg-done: #eef1f5;
     --banner-bg: #ffffff;
     --task-detail-bg: #ffffff;
+    --task-detail-bg-hover: #f0f3f7;
     --right-panel-bg: #ffffff;
+    --right-panel-bg-mobile: #ffffff;
+    --bottom-panel-bg: #ffffff;
     --schedule-event-bg: #ffffff;
+    --lg-overlay-bg: #ffffff;
+    --lg-mobile-nav-bg: #ffffff;
+    --lg-backdrop-bg: var(--scrim);
   }
   body.isDarkTheme {
     background: linear-gradient(180deg, #0d1018 0px, #0a0c12 900px) !important;
     --card-bg: #1a1c22;
     --sidenav-bg: #14161c;
+    --sidenav-bg-mobile: #14161c;
     --task-c-bg: #1a1c22;
     --task-c-selected-bg: #242831;
     --selected-task-bg-color: #242831;
+    --sub-task-c-bg: #20222a;
+    --sub-task-c-bg-done: #16181e;
+    --task-c-bg-done: #16181e;
     --banner-bg: #1a1c22;
     --task-detail-bg: #1a1c22;
+    --task-detail-bg-hover: #242831;
     --right-panel-bg: #1a1c22;
+    --right-panel-bg-mobile: #1a1c22;
+    --bottom-panel-bg: #1a1c22;
     --schedule-event-bg: #1a1c22;
+    --lg-overlay-bg: #242831;
+    --lg-mobile-nav-bg: #1a1c22;
+    --lg-backdrop-bg: var(--scrim);
+  }
+  body.hasBgImage .bg-overlay {
+    display: block !important;
+    background: var(--scrim) !important;
+  }
+  .nav-backdrop-mobile,
+  .cdk-overlay-backdrop,
+  .cdk-overlay-dark-backdrop,
+  .mat-bottom-sheet-backdrop,
+  .mat-mdc-dialog-backdrop {
+    background-color: var(--scrim) !important;
   }
   *,
   *::before,
@@ -1166,14 +1189,18 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
 }
 
 @supports not (backdrop-filter: blur(1px)) {
-  :root {
-    --card-bg: rgba(255, 255, 255, 0.92);
-    --task-c-bg: rgba(255, 255, 255, 0.92);
-    --sidenav-bg: rgba(255, 255, 255, 0.92);
+  body {
+    --card-bg: #ffffff;
+    --task-c-bg: #ffffff;
+    --sidenav-bg: #f5f7fa;
+    --lg-overlay-bg: #ffffff;
+    --lg-mobile-nav-bg: #ffffff;
   }
   body.isDarkTheme {
-    --card-bg: rgba(40, 42, 50, 0.95);
-    --task-c-bg: rgba(50, 52, 60, 0.92);
-    --sidenav-bg: rgba(20, 22, 28, 0.95);
+    --card-bg: #282a32;
+    --task-c-bg: #32343c;
+    --sidenav-bg: #14161c;
+    --lg-overlay-bg: #242831;
+    --lg-mobile-nav-bg: #1a1c22;
   }
 }

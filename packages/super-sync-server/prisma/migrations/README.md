@@ -72,3 +72,14 @@ auto-recovered — it fails loudly by gate, deterministically, which is the
 intended behavior. This is enforced by `tests/migration-sql.spec.ts` (the
 migration has no `DROP`) and `tests/migrate-deploy-script.spec.ts` (a bare
 CREATE is refused, never marked applied).
+
+**Bare vs drop-then-create for a _new_ index.** Reserve the bare fail-loud
+shape for a _correctness-critical_ index, where an interrupted build should
+halt the deploy for a human rather than silently retry. For a
+_performance-only_ index that has a correct fallback path — e.g.
+`operations_entity_ids_gin`, whose conflict lookups fall back to the scalar
+`entity_id` — prefer the auto-recoverable drop-then-create shape so an
+interrupted build self-heals on the next deploy instead of wedging it and
+requiring manual recovery. Do **not** retro-convert an already-applied bare
+CREATE: that changes its checksum and breaks `migrate deploy` on every DB that
+has it.

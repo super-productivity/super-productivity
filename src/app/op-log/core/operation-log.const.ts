@@ -80,6 +80,19 @@ export const LOCK_NAMES = {
 } as const;
 
 /**
+ * Error code a REPAIR recovery snapshot upload returns when it is based on a
+ * remote the client has not fully merged (#9023). Shared as a single symbol so
+ * the producer (`FileBasedSyncAdapterService`) and the consumer
+ * (`RejectedOpsHandlerService`, which routes it to a rebase) cannot drift apart.
+ *
+ * The value MUST equal the server's `SYNC_ERROR_CODES.REPAIR_STALE` — the same
+ * code arrives over the wire from SuperSync, so this is also the wire contract.
+ * (Server-originated codes like CONFLICT_CONCURRENT stay as string matches: the
+ * server owns those; this one has a client-side producer that must agree.)
+ */
+export const REPAIR_STALE_ERROR_CODE = 'REPAIR_STALE';
+
+/**
  * Maximum time to wait for lock acquisition before throwing (milliseconds).
  * If a lock holder crashes or stalls, waiters would hang indefinitely without this.
  * Default: 30 seconds - long enough for legitimate operations (compaction can take ~5s),

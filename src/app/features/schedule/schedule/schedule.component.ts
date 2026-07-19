@@ -103,6 +103,8 @@ export class ScheduleComponent {
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
+  isDayView = computed(() => this._currentTimeViewMode() === 'day');
+  isWeekView = computed(() => this._currentTimeViewMode() === 'week');
 
   // Navigation state - null = viewing today, Date = viewing selected date
   private _selectedDate = signal<Date | null>(null);
@@ -140,6 +142,8 @@ export class ScheduleComponent {
     const selectedView = this._currentTimeViewMode();
     const width = size.width;
     const height = size.height;
+
+    if (selectedView === 'day') return 1;
 
     if (selectedView === 'month') {
       const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
@@ -189,11 +193,23 @@ export class ScheduleComponent {
   private _isVeryCompact = computed(
     () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.XXS,
   );
+  private _isTablet = computed(
+    () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET,
+  );
 
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
     const locale = this._dateTimeFormatService.currentLocale();
+
+    if (this.isDayView()) {
+      // On tablet width and below the full date clips, so drop to month + day
+      // (the weekday still shows in the day-column header).
+      const dayOpts: Intl.DateTimeFormatOptions = this._isTablet()
+        ? { month: 'short', day: 'numeric' }
+        : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      return new Intl.DateTimeFormat(locale, dayOpts).format(parseDbDateStr(days[0]));
+    }
 
     if (this.isMonthView()) {
       const mid = parseDbDateStr(days[Math.floor(days.length / 2)]);
@@ -225,15 +241,33 @@ export class ScheduleComponent {
   // Calculate context-aware "now" based on selected date
   // When viewing a future week, use the start of that week as reference time
   private _contextNow = computed(() => {
+    // Date.now() is not reactive and computeds cache, so without a time-varying
+    // dependency the reference would freeze at whatever instant this last ran.
+    // Same 2-min tick currentTimeRow and scheduleDays already refresh on.
+    this.scheduleService.scheduleRefreshTick();
+
     const selectedDate = this._selectedDate();
     if (selectedDate === null) {
       return Date.now();
     }
 
-    // Viewing a different date - use that date's midnight as reference
-    const contextDate = new Date(selectedDate);
-    contextDate.setHours(0, 0, 0, 0);
-    return contextDate.getTime();
+    // contextNow anchors dayDates[0] (`startTime = i == 0 ? now` in
+    // create-schedule-days), so it has to stay inside that day. Testing where the
+    // wall clock sits within the selected day - rather than comparing day strings -
+    // lets the view self-correct once it drifts under a midnight rollover (a day
+    // picked as "tomorrow" becomes today while the view stays put), and can never
+    // hand the mapper a now past day 0's end, which would push every entry out of
+    // the column.
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    // setDate rather than +24h: DST-safe day advancement.
+    const nextDayStart = new Date(dayStart);
+    nextDayStart.setDate(nextDayStart.getDate() + 1);
+
+    const now = Date.now();
+    return now >= dayStart.getTime() && now < nextDayStart.getTime()
+      ? now
+      : dayStart.getTime();
   });
 
   scheduleDays = computed(() => {
@@ -386,14 +420,16 @@ export class ScheduleComponent {
     });
   }
 
-  selectTimeView(view: 'week' | 'month'): void {
+  selectTimeView(view: 'week' | 'month' | 'day'): void {
     this.layoutService.selectedTimeView.set(view);
     localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
   }
 
-  private getTimeView(): 'week' | 'month' {
+  private getTimeView(): 'week' | 'month' | 'day' {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
-    return preservedView === 'month' ? 'month' : 'week';
+    if (preservedView === 'month') return 'month';
+    if (preservedView === 'day') return 'day';
+    return 'week';
   }
 
   constructor() {

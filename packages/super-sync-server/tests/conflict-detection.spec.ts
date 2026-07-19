@@ -210,6 +210,11 @@ vi.mock('../src/db', async () => {
         }));
       }
 
+      if (sql.includes('FROM user_sync_state') && sql.includes('FOR UPDATE')) {
+        const [txUserId] = params as [number];
+        return [{ lastSeq: state.userSyncStates.get(txUserId)?.lastSeq ?? 0 }];
+      }
+
       const [userId, entityType, entityIdsSql] = params as [number, string, Prisma.Sql];
       state.batchConflictQueryCount++;
       if (!Array.isArray(entityIdsSql.values)) {
@@ -590,15 +595,16 @@ describe('Conflict Detection', () => {
       });
       await service.uploadOps(userId, clientA, [op1]);
 
-      // REPAIR with superseded clock should still be accepted
+      // A causal REPAIR with a current base should bypass vector-clock conflicts.
       const op2 = createOp({
         entityId,
         clientId: clientB,
         vectorClock: {},
         opType: 'REPAIR',
         entityType: 'RECOVERY',
+        repairBaseServerSeq: 1,
       });
-      const result = await service.uploadOps(userId, clientB, [op2]);
+      const result = await service.uploadOps(userId, clientB, [op2], false, undefined, 1);
       expect(result[0].accepted).toBe(true);
     });
 

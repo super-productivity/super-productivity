@@ -376,6 +376,113 @@ describe('TaskUiEffects', () => {
     });
   });
 
+  describe('goToProjectSnack$', () => {
+    const createMockTaskWithSubTasks = (
+      overrides: Partial<TaskWithSubTasks> = {},
+    ): TaskWithSubTasks => ({
+      ...createMockTask(),
+      subTasks: [],
+      ...overrides,
+    });
+
+    const setup = (): void => {
+      actions$ = new Subject<Action>();
+      snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
+      taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
+      navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
+        'navigate',
+      ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [
+              {
+                selector: selectProjectById,
+                value: { id: 'INBOX_PROJECT', title: 'Inbox' },
+              },
+            ],
+          }),
+          { provide: SnackService, useValue: snackServiceMock },
+          { provide: TaskService, useValue: taskServiceMock },
+          { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
+          {
+            provide: WorkContextService,
+            // Active context is a project the moved task is not in, so only the
+            // orphan-source guard decides whether the snack fires.
+            useValue: {
+              activeWorkContextId: 'some-other-project',
+              mainListTaskIds$: of([]),
+            },
+          },
+          {
+            provide: NotifyService,
+            useValue: jasmine.createSpyObj('NotifyService', ['notify']),
+          },
+          {
+            provide: BannerService,
+            useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: of({ doneSound: null }) },
+          },
+          { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
+        ],
+      });
+
+      effects = TestBed.inject(TaskUiEffects);
+    };
+
+    beforeEach(setup);
+
+    it('should NOT show the "moved to project" snack when self-healing an orphan (no source project) into the Inbox (#8780)', () => {
+      const sub = effects.goToProjectSnack$.subscribe();
+      actions$.next(
+        TaskSharedActions.moveToOtherProject({
+          task: createMockTaskWithSubTasks({ id: 'orphan-1', projectId: '' }),
+          targetProjectId: 'INBOX_PROJECT',
+        }),
+      );
+
+      expect(snackServiceMock.open).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('should show the "moved to project" snack for a real move of a task that had a source project into the Inbox', () => {
+      const sub = effects.goToProjectSnack$.subscribe();
+      actions$.next(
+        TaskSharedActions.moveToOtherProject({
+          task: createMockTaskWithSubTasks({ id: 'real-1', projectId: 'project-a' }),
+          targetProjectId: 'INBOX_PROJECT',
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      const snackParams = snackServiceMock.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.msg).toBe(T.F.TASK.S.MOVED_TO_PROJECT);
+      sub.unsubscribe();
+    });
+
+    it('should still show the snack for a project-less task assigned to a NON-Inbox project (quick-add default-project), since the suppression is scoped to Inbox filing', () => {
+      const sub = effects.goToProjectSnack$.subscribe();
+      actions$.next(
+        TaskSharedActions.moveToOtherProject({
+          task: createMockTaskWithSubTasks({ id: 'quick-1', projectId: '' }),
+          targetProjectId: 'default-project',
+        }),
+      );
+
+      expect(snackServiceMock.open).toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+  });
+
   describe('deadlineTodayBanner$', () => {
     let store: MockStore;
 

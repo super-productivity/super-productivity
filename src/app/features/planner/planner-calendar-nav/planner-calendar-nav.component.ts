@@ -14,6 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { getWeekRange } from '../../../util/get-week-range';
@@ -45,6 +46,7 @@ interface CalendarDay {
 })
 export class PlannerCalendarNavComponent {
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _cdr = inject(ChangeDetectorRef);
   private _elRef = inject(ElementRef);
@@ -127,6 +129,12 @@ export class PlannerCalendarNavComponent {
   });
 
   monthLabel = computed(() => {
+    // The spelled-out month name follows textLocale(): passing no locale would
+    // use the *browser's*, ignoring both the configured date locale and the UI
+    // language (a German browser showed "Juli 2026" in an English app). Under
+    // the ISO 8601 option textLocale() is the UI language rather than the `sv`
+    // sentinel, so the name isn't shown in Swedish either. #8987 follow-up.
+    const locale = this._dateTimeFormatService.textLocale();
     const allWeeks = this.weeks();
     const weekIdx = this.isExpanded()
       ? Math.floor(allWeeks.length / 2)
@@ -134,11 +142,11 @@ export class PlannerCalendarNavComponent {
     const week = allWeeks[weekIdx];
     if (week?.length > 0) {
       const date = parseDbDateStr(week[Math.floor(week.length / 2)].dateStr);
-      return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      return date.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
     }
     const visibleDay =
       this.visibleDayDate() || this._globalTrackingIntervalService.todayDateStr();
-    return parseDbDateStr(visibleDay).toLocaleDateString(undefined, {
+    return parseDbDateStr(visibleDay).toLocaleDateString(locale, {
       month: 'long',
       year: 'numeric',
     });

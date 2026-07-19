@@ -95,7 +95,7 @@ load_env_value() {
     export "$key=$value"
 }
 
-for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT DEPLOY_WAIT_TIMEOUT SUPERSYNC_SKIP_IMAGE_REVISION_CHECK; do
+for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT MIGRATE_STEP_TIMEOUT DEPLOY_WAIT_TIMEOUT SUPERSYNC_SKIP_IMAGE_REVISION_CHECK; do
     load_env_value "$env_key"
 done
 
@@ -286,11 +286,57 @@ echo ""
 # for arbitrarily long. Wrap the migrator with a timeout so a stuck deploy fails
 # loudly instead of hanging this script forever. Exit code 124 = timed out.
 MIGRATION_TIMEOUT="${MIGRATION_TIMEOUT:-900}"
-MIGRATOR_RUN="docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T supersync"
+# The migrator image caps each migration step at MIGRATE_STEP_TIMEOUT (1800s by
+# default inside the image). Left unset it silently overrides a larger
+# MIGRATION_TIMEOUT and kills a slow CREATE INDEX CONCURRENTLY early, so forward
+# the operator's budget into the container. Keep it just under the host timeout
+# so the in-image guard — which prints the precise per-step message — fires
+# first, with the host timeout as a hard backstop.
+if [ "$MIGRATION_TIMEOUT" -gt 90 ]; then
+    MIGRATE_STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-$((MIGRATION_TIMEOUT - 30))}"
+else
+    MIGRATE_STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-$MIGRATION_TIMEOUT}"
+fi
+# One-off migrator containers run under `timeout`. A timed-out `docker compose
+# run` SIGTERMs the compose CLI but can leave the container (and its DB
+# connection) running detached, which keeps Prisma's session-level migration
+# advisory lock held and wedges the NEXT deploy with P1002. Give every run
+# container a per-deploy name and force-remove it after each run — plus an EXIT
+# sweep — so the connection and lock are always released with this deploy.
+#
+# Single source of truth for the names: used to BOTH name each container and
+# sweep them, so the two must stay in lockstep. $$-scoped so the sweep can never
+# touch a concurrent deploy's (or a live build's) container.
+MIGRATOR_NAME_PREFIX="supersync-migrator-$$"
+
+cleanup_migrator_containers() {
+    local ids
+    ids="$(docker ps -aq --filter "name=${MIGRATOR_NAME_PREFIX}-" 2>/dev/null || true)"
+    if [ -n "$ids" ]; then
+        docker rm -f $ids >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup_migrator_containers EXIT
+
+run_migrator() {
+    local run_timeout="$1"
+    shift
+    local name="${MIGRATOR_NAME_PREFIX}-$RANDOM"
+    local rc=0
+    # -k gives the host timeout its own SIGKILL escalation, so a `docker compose
+    # run` that ignores SIGTERM cannot hang the deploy past its budget; the
+    # unconditional `docker rm -f` below then releases the container either way.
+    timeout -k 30 "$run_timeout" \
+        docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T \
+        --name "$name" -e "MIGRATE_STEP_TIMEOUT=$MIGRATE_STEP_TIMEOUT" \
+        supersync "$@" || rc=$?
+    docker rm -f "$name" >/dev/null 2>&1 || true
+    return "$rc"
+}
+
 echo "==> Verifying database connectivity from the supersync image..."
 set +e
-timeout "$POSTGRES_WAIT_TIMEOUT" \
-    $MIGRATOR_RUN sh -ec 'printf "SELECT 1;" | npx prisma db execute --schema prisma/schema.prisma --stdin > /dev/null'
+run_migrator "$POSTGRES_WAIT_TIMEOUT" sh -ec 'printf "SELECT 1;" | npx prisma db execute --schema prisma/schema.prisma --stdin > /dev/null'
 DB_CHECK_STATUS=$?
 set -e
 if [ "$DB_CHECK_STATUS" -eq 124 ]; then
@@ -315,8 +361,7 @@ echo "==> Applying database migrations before app restart (timeout: ${MIGRATION_
 # recovery). The host only owns the timeout + exit-code policy here.
 MIGRATE_STATUS=0
 set +e
-timeout "$MIGRATION_TIMEOUT" \
-    $MIGRATOR_RUN sh -ec 'echo "    Migrator container started"; sh scripts/migrate-deploy.sh'
+run_migrator "$MIGRATION_TIMEOUT" sh -ec 'echo "    Migrator container started"; sh scripts/migrate-deploy.sh'
 MIGRATE_STATUS=$?
 set -e
 

@@ -3,11 +3,6 @@
  * Minimal dark theme with enhanced accessibility and smooth transitions
  */
 
-/* Remove all shadows for minimal aesthetic */
-* {
-  box-shadow: none !important;
-}
-
 /* Smooth transitions for better UX */
 :root {
   --transition-fast: 150ms ease-in-out;
@@ -16,6 +11,12 @@
 
 /* Dark theme variables */
 body.isDarkTheme {
+  /* Public theme contract */
+  --surface-1: #0a0a0a;
+  --surface-2: #141414;
+  --ink: #e0e0e0;
+  --ink-on-channel: 224, 224, 224;
+
   /* ===============================
    * BACKGROUND COLORS
    * ===============================*/
@@ -90,6 +91,7 @@ body.isDarkTheme {
   --palette-accent-700: #cc2b60;
   --palette-accent-800: #b31f50;
   --palette-accent-900: #991340;
+  --palette-accent-contrast-500: #000000;
 
   /* ===============================
    * UI ELEMENTS
@@ -133,8 +135,21 @@ body.isDarkTheme {
   --shadow-key-umbra-opacity: 0;
   --shadow-key-penumbra-opacity: 0;
   --shadow-ambient-shadow-opacity: 0;
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
   --task-current-shadow: none;
   --task-selected-shadow: none;
+  --card-shadow: none;
+  --banner-shadow: none;
+  --bottom-nav-shadow: none;
+  --whiteframe-shadow-1dp: none;
+  --whiteframe-shadow-2dp: none;
+  --whiteframe-shadow-3dp: none;
+  --whiteframe-shadow-4dp: none;
+  --whiteframe-shadow-6dp: none;
+  --whiteframe-shadow-8dp: none;
+  --whiteframe-shadow-12dp: none;
+  --whiteframe-shadow-24dp: none;
 
   /* ===============================
    * HOVER CONTROLS
@@ -190,11 +205,16 @@ body.isDarkTheme a[href]:hover {
   opacity: 0.8;
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */

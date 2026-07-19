@@ -8,12 +8,15 @@ import {
 import {
   AcceptedBatchOperation,
   BatchUploadCandidate,
+  CAUSAL_FULL_STATE_OPERATION_WHERE,
   CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   ConflictResult,
   DEFAULT_SYNC_CONFIG,
   DUPLICATE_OP_SELECT,
+  isCausalFullStateOperation,
   isFullStateOpType,
   limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
   Operation,
   OP_TYPES,
   ProcessOperationResult,
@@ -229,6 +232,69 @@ export class OperationUploadService {
     });
   }
 
+  /**
+   * Memoizes the causal full-state author per upload transaction. The answer can
+   * only change when THIS transaction accepts a causal full-state op, which
+   * {@link noteFullStateAuthor} folds back in — so one query per transaction is
+   * enough. Keyed by the `tx` client (a fresh short-lived object per
+   * `$transaction`), so entries cannot outlive the request that created them.
+   */
+  private readonly fullStateAuthorByTx = new WeakMap<
+    Prisma.TransactionClient,
+    { author: string | undefined }
+  >();
+
+  /**
+   * The latest causal full-state author remains a required clock edge for
+   * post-import operations. If pruning drops that low-counter entry, clients
+   * at the boundary classify the operation as concurrent and filter it out.
+   *
+   * Resolved lazily: only an op whose clock actually overflows pays for it.
+   */
+  private async resolveFullStateAuthor(
+    tx: Prisma.TransactionClient,
+    userId: number,
+  ): Promise<string | undefined> {
+    const memoized = this.fullStateAuthorByTx.get(tx);
+    if (memoized) {
+      return memoized.author;
+    }
+    const latestFullStateOp = await tx.operation.findFirst({
+      where: { userId, ...CAUSAL_FULL_STATE_OPERATION_WHERE },
+      orderBy: { serverSeq: 'desc' },
+      select: { clientId: true },
+    });
+    const author = latestFullStateOp?.clientId;
+    this.fullStateAuthorByTx.set(tx, { author });
+    return author;
+  }
+
+  /**
+   * Records a causal full-state op accepted earlier in this same transaction, so
+   * later ops protect the new author without re-reading (and without depending on
+   * read-your-writes visibility).
+   */
+  private noteFullStateAuthor(tx: Prisma.TransactionClient, clientId: string): void {
+    this.fullStateAuthorByTx.set(tx, { author: clientId });
+  }
+
+  /**
+   * Protected clock IDs for storage: the uploader, plus the active causal
+   * full-state author when the clock is actually oversized. Under-limit clocks are
+   * never pruned, so they need no lookup at all.
+   */
+  private async getPruneProtectedIds(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    op: Operation,
+  ): Promise<string[]> {
+    if (Object.keys(op.vectorClock).length <= MAX_VECTOR_CLOCK_SIZE) {
+      return [];
+    }
+    const author = await this.resolveFullStateAuthor(tx, userId);
+    return author ? [author] : [];
+  }
+
   async processOperationBatch(
     userId: number,
     clientId: string,
@@ -386,7 +452,7 @@ export class OperationUploadService {
         op,
         resultIndex: i,
         originalTimestamp,
-        fullStateVectorClock: isFullStateOpType(op.opType)
+        fullStateVectorClock: isCausalFullStateOperation(op)
           ? { ...op.vectorClock }
           : undefined,
         payloadBytes: validation.payloadBytes,
@@ -538,7 +604,11 @@ export class OperationUploadService {
         }
       }
 
-      pruneVectorClockForStorage(op);
+      if (isCausalFullStateOperation(op)) {
+        this.noteFullStateAuthor(tx, op.clientId);
+      }
+      const protectedIds = await this.getPruneProtectedIds(tx, userId, op);
+      pruneVectorClockForStorage(op, protectedIds);
       // Reuse the payload byte size measured during validation; the clock is
       // (re)measured inside computeOpStorageBytes because it was just pruned.
       const sized = computeOpStorageBytes(op, candidate.payloadBytes);
@@ -558,6 +628,7 @@ export class OperationUploadService {
             entityType: op.entityType,
             entityId,
             clientId: op.clientId,
+            actionType: op.actionType,
             vectorClock: op.vectorClock,
           });
         }
@@ -618,6 +689,7 @@ export class OperationUploadService {
         receivedAt: BigInt(now),
         isPayloadEncrypted: candidate.op.isPayloadEncrypted ?? false,
         syncImportReason: candidate.op.syncImportReason ?? null,
+        repairBaseServerSeq: candidate.op.repairBaseServerSeq ?? null,
       })),
     });
     return 2;
@@ -721,7 +793,7 @@ export class OperationUploadService {
     // unpruned copy on `user_sync_state` lets the download path re-prune at
     // read time with knowledge of `preserveClientIds` (excludeClient, snapshot
     // author), keeping more relevant entries than a pre-pruned snapshot would.
-    const fullStateVectorClock = isFullStateOpType(op.opType)
+    const fullStateVectorClock = isCausalFullStateOperation(op)
       ? { ...op.vectorClock }
       : undefined;
 
@@ -840,7 +912,14 @@ export class OperationUploadService {
     // clock ID, causing the comparison to return CONCURRENT instead of GREATER_THAN,
     // leading to an infinite rejection loop.
     const beforeSize = Object.keys(op.vectorClock).length;
-    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+    // Note this op's own authorship first: a causal full-state op is its own
+    // active author, so the memo answers without a query (and later ops in the
+    // same transaction see it).
+    if (isCausalFullStateOperation(op)) {
+      this.noteFullStateAuthor(tx, op.clientId);
+    }
+    const protectedIds = await this.getPruneProtectedIds(tx, userId, op);
+    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId, ...protectedIds]);
     const afterSize = Object.keys(op.vectorClock).length;
     if (afterSize < beforeSize) {
       Logger.debug(
@@ -877,6 +956,7 @@ export class OperationUploadService {
           receivedAt: BigInt(now),
           isPayloadEncrypted: op.isPayloadEncrypted ?? false,
           syncImportReason: op.syncImportReason ?? null,
+          repairBaseServerSeq: op.repairBaseServerSeq ?? null,
         },
       ],
       skipDuplicates: true,

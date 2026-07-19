@@ -342,6 +342,9 @@ export class SyncConfigService {
       ...(newSettings.isManualSyncOnly !== undefined
         ? { isManualSyncOnly: newSettings.isManualSyncOnly }
         : {}),
+      ...(newSettings.isUseSplitSyncFiles !== undefined
+        ? { isUseSplitSyncFiles: newSettings.isUseSplitSyncFiles }
+        : {}),
     };
     // Provider-specific settings (URLs, credentials) must be stored securely
     if (providerId) {

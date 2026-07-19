@@ -4,11 +4,6 @@
  * Clean, minimal, with enhanced accessibility
  */
 
-/* Remove all shadows for minimal aesthetic */
-* {
-  box-shadow: none !important;
-}
-
 /* Smooth transitions */
 :root {
   --transition-fast: 150ms ease-in-out;
@@ -44,6 +39,13 @@ body:not(.isDarkTheme) {
   --nord13: #ebcb8b;
   --nord14: #a3be8c;
   --nord15: #b48ead;
+  --nord-link: #45698f;
+
+  /* Public theme contract */
+  --surface-1: var(--nord6);
+  --surface-2: #ffffff;
+  --ink: var(--nord1);
+  --ink-on-channel: 59, 66, 82;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -83,7 +85,7 @@ body:not(.isDarkTheme) {
 
   --text-color: var(--nord1);
   --text-color-less-intense: rgba(59, 66, 82, 0.87);
-  --text-color-muted: rgba(59, 66, 82, 0.54);
+  --text-color-muted: rgba(59, 66, 82, 0.76);
   --text-color-more-intense: var(--nord0);
   --text-color-most-intense: var(--nord0);
 
@@ -110,7 +112,7 @@ body:not(.isDarkTheme) {
 
   /* Dark accent for contrast on light background */
   --palette-accent-500: var(--nord0);
-  --c-accent: var(--nord10);
+  --c-accent: var(--nord-link);
   --palette-accent-100: #9fa5b0;
   --palette-accent-200: #7f879a;
   --palette-accent-300: #5f6984;
@@ -119,6 +121,7 @@ body:not(.isDarkTheme) {
   --palette-accent-700: #1f2430;
   --palette-accent-800: #181b26;
   --palette-accent-900: #11121c;
+  --palette-accent-contrast-500: #ffffff;
 
   /* Alternative Nord blue accent */
   --nord-blue: var(--nord10);
@@ -171,8 +174,21 @@ body:not(.isDarkTheme) {
   --shadow-key-umbra-opacity: 0;
   --shadow-key-penumbra-opacity: 0;
   --shadow-ambient-shadow-opacity: 0;
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
   --task-current-shadow: none;
   --task-selected-shadow: none;
+  --card-shadow: none;
+  --banner-shadow: none;
+  --bottom-nav-shadow: none;
+  --whiteframe-shadow-1dp: none;
+  --whiteframe-shadow-2dp: none;
+  --whiteframe-shadow-3dp: none;
+  --whiteframe-shadow-4dp: none;
+  --whiteframe-shadow-6dp: none;
+  --whiteframe-shadow-8dp: none;
+  --whiteframe-shadow-12dp: none;
+  --whiteframe-shadow-24dp: none;
 
   /* ===============================
    * HOVER CONTROLS
@@ -225,20 +241,31 @@ body a[href],
 body:not(.isDarkTheme) a[href] {
   color: var(--c-accent);
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
 a:hover,
 body a[href]:hover,
 body:not(.isDarkTheme) a[href]:hover {
-  opacity: 0.7;
+  color: var(--nord0);
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Task states use a contrast-safe Nord blue boundary. */
+@media (hover: hover) {
+  body:not(.isDarkTheme)
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--nord4);
+    border-left: 2px solid var(--nord-link);
+    transition: background-color var(--transition-fast);
+  }
+}
+
+body:not(.isDarkTheme) task.isSelected > swipe-block > .inner-wrapper > .box,
+body:not(.isDarkTheme) task.isCurrent > swipe-block > .inner-wrapper > .box {
+  border-left: 3px solid var(--nord-link);
 }
 
 /* Focus visible for accessibility */

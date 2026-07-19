@@ -241,8 +241,10 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           take: limit,
           select: {
             id: true,
+            clientId: true,
             opType: true,
             serverSeq: true,
+            vectorClock: true,
           },
         });
 

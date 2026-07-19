@@ -21,12 +21,14 @@ import { DateService } from '../../../core/date/date.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 
 describe('TaskRepeatCleanupEffects', () => {
   let effects: TaskRepeatCleanupEffects;
   let store: jasmine.SpyObj<Store>;
   let repeatableTasks$: BehaviorSubject<TaskWithSubTasks[]>;
   let repeatCfgs$: BehaviorSubject<TaskRepeatCfg[]>;
+  let taskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const todayMs = new Date().setHours(12, 0, 0, 0);
@@ -83,6 +85,7 @@ describe('TaskRepeatCleanupEffects', () => {
       'DeletedTaskIssueSidecarService',
       ['set'],
     );
+    taskTimeSync = jasmine.createSpyObj('TaskTimeSyncService', ['clearOne']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -93,6 +96,7 @@ describe('TaskRepeatCleanupEffects', () => {
         { provide: SyncWrapperService, useValue: syncWrapperSpy },
         { provide: HydrationStateService, useValue: hydrationStateSpy },
         { provide: DeletedTaskIssueSidecarService, useValue: sidecarSpy },
+        { provide: TaskTimeSyncService, useValue: taskTimeSync },
         { provide: DateService, useValue: { todayStr: () => getDbDateStr(todayMs) } },
       ],
     });
@@ -215,6 +219,62 @@ describe('TaskRepeatCleanupEffects', () => {
 
       // The older instance is removed; the newer one survives.
       expect(getDispatchedDeleteIds()).toEqual(['today-stale']);
+      expect(taskTimeSync.clearOne).toHaveBeenCalledOnceWith('today-stale');
+
+      sub.unsubscribe();
+    }));
+
+    it('includes subtasks when deleting a duplicate parent instance', fakeAsync(() => {
+      const staleSubtask: Task = {
+        ...DEFAULT_TASK,
+        id: 'stale-subtask',
+        parentId: 'today-stale-parent',
+        projectId: 'p1',
+        title: 'Subtask',
+        created: todayMs - 60_000,
+        dueDay: getDbDateStr(todayMs),
+      };
+      const staleParent: TaskWithSubTasks = {
+        ...DEFAULT_TASK,
+        id: 'today-stale-parent',
+        projectId: 'p1',
+        title: 'Duplicate',
+        repeatCfgId: 'cfg-with-subtask',
+        created: todayMs - 60_000,
+        dueDay: getDbDateStr(todayMs),
+        subTaskIds: [staleSubtask.id],
+        subTasks: [staleSubtask],
+      };
+      const newestParent = wrapWithSubTasks({
+        ...DEFAULT_TASK,
+        id: 'today-newest-parent',
+        projectId: 'p1',
+        title: 'Duplicate',
+        repeatCfgId: 'cfg-with-subtask',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+      });
+      repeatableTasks$.next([staleParent, newestParent]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      const deleteAction = store.dispatch.calls
+        .allArgs()
+        .map(
+          ([action]) =>
+            action as unknown as ReturnType<typeof TaskSharedActions.deleteTasks>,
+        )
+        .find((action) => action.type === TaskSharedActions.deleteTasks.type);
+      expect(deleteAction?.taskIds).toEqual(['today-stale-parent']);
+      expect(deleteAction?.tasks?.map(({ id }) => id)).toEqual([
+        'today-stale-parent',
+        'stale-subtask',
+      ]);
+      expect(taskTimeSync.clearOne.calls.allArgs()).toEqual([
+        ['today-stale-parent'],
+        ['stale-subtask'],
+      ]);
 
       sub.unsubscribe();
     }));

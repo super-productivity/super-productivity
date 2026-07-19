@@ -117,21 +117,31 @@ export class IdleEffects {
         ({
           isEnableIdleTimeTracking,
           isOnlyOpenIdleWhenCurrentTask,
+          isSuppressIdleDuringFocusMode,
           minIdleTime = DEFAULT_MIN_IDLE_TIME,
         }) =>
           !isEnableIdleTimeTracking
             ? of(resetIdle())
             : this._triggerIdleApis$.pipe(
-                withLatestFrom(this._store.select(selectIsIdle)),
-                switchMap(([idleTimeInMs, isAlreadyIdle]) => {
+                withLatestFrom(
+                  this._store.select(selectIsIdle),
+                  this._isFocusSessionRunning$,
+                ),
+                switchMap(([idleTimeInMs, isAlreadyIdle, isFocusSessionRunning]) => {
                   // Skip if already in idle state - let internal poll timer handle updates
                   if (isAlreadyIdle) {
                     return EMPTY;
                   }
+
+                  if (isSuppressIdleDuringFocusMode && isFocusSessionRunning) {
+                    return EMPTY;
+                  }
+
                   Log.verbose('triggerIdleWhenEnabled$', {
                     idleTimeInMs,
                     isEnableIdleTimeTracking,
                     isOnlyOpenIdleWhenCurrentTask,
+                    isSuppressIdleDuringFocusMode,
                     minIdleTime,
                   });
                   if (

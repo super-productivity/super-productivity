@@ -1,6 +1,6 @@
 # Operation Log: Design Rules & Guidelines
 
-**Last Updated:** December 2025
+**Last Updated:** July 2026
 **Related:** [Operation Log Architecture](./operation-log-architecture.md)
 
 This document establishes the core rules and principles for designing the Operation Log store and defining new Operations. Adherence to these rules ensures data integrity, synchronization reliability, and system performance.
@@ -9,17 +9,18 @@ This document establishes the core rules and principles for designing the Operat
 
 ### 1.1 Append-Only Persistence
 
-- **Rule:** The `ops` table in the store must be strictly **append-only** for active operations.
+- **Rule:** Operation payloads in the `ops` table are append-only. Lifecycle metadata may advance in place as described in 1.2.
 - **Reasoning:** History preservation is critical for event sourcing and conflict resolution.
-- **Exception:** Operations can only be deleted by the **Compaction Service**, and only if they are:
-  1.  Older than the retention window.
-  2.  Successfully synced (`syncedAt` is set).
-  3.  "Baked" into a secure snapshot.
+- **Exception:** Operations can only be deleted by the **Compaction Service**, and only if they are older than the retention window, baked into the current snapshot (`seq <= lastAppliedOpSeq`), and either:
+  1. Successfully synced and application-complete; or
+  2. Terminally rejected.
+- **Never compact:** Non-rejected `pending`, `archive_pending`, and `failed` remote work is retained regardless of age.
 
 ### 1.2 Immutable History
 
-- **Rule:** Once an operation is written to `SUP_OPS`, it **MUST NOT** be modified.
+- **Rule:** Once an operation is written to `SUP_OPS`, its operation ID, payload, action, vector clock, source, and sequence **MUST NOT** be modified.
 - **Reasoning:** Modifying history breaks the cryptographic chain (if implemented later) and confuses sync peers who have already received the operation.
+- **Lifecycle exception:** Local bookkeeping metadata advances in place: `syncedAt`, `rejectedAt`, `reducerRejectedAt`, `applicationStatus`, `retryCount`, `lastRetryAt`, and `error`. These fields describe local delivery/application state; they do not rewrite the operation peers exchange.
 - **Correction:** If an operation was incorrect, append a new _compensating operation_ (e.g., an undo or correction op) rather than editing the old one.
 
 ### 1.3 Single Source of Truth
@@ -76,11 +77,43 @@ This document establishes the core rules and principles for designing the Operat
 - **Rule:** Every operation **MUST** carry a `schemaVersion`.
 - **Purpose:** To allow future versions of the app to migrate or interpret old operations correctly.
 - **Default:** Use `CURRENT_SCHEMA_VERSION` from `SchemaMigrationService` at the time of creation.
+- **Compatibility barrier:** Bump the schema version when an old reducer would
+  silently misinterpret a new payload semantic — but a bump alone does NOT stop
+  released clients: v17.0.0–v18.14.0 receivers apply ops up to schema 5
+  unmigrated, and at ≥ 6 block them while still advancing the server cursor
+  (permanent silent skip). Only post-v18.14.0 receivers block newer ops safely.
+  New payload semantics must therefore degrade gracefully on old clients; see
+  the Bump Policy in
+  [operation-log-architecture.md](operation-log-architecture.md) §A.7.11.
 
 ### 2.6 Explicit Intent (OpType)
 
 - **Rule:** Use specific `OpType`s (`CRT`, `UPD`, `DEL`, `MOV`) rather than a generic `CHANGE`.
 - **Reasoning:** Specific types allow for smarter conflict resolution and UI feedback (e.g., "Task was deleted remotely" vs "Task was moved").
+
+### 2.7 Causal Automatic Repair
+
+- **Rule:** A new `REPAIR` snapshot sent to SuperSync must carry a top-level
+  `repairBaseServerSeq` equal to the server cursor included in the repaired state.
+- **Server acceptance:** The server checks the base before quota cleanup and again
+  while holding the `user_sync_state.lastSeq` row lock in the upload transaction.
+  A mismatch returns `REPAIR_STALE`; it must not prune history or consume quota.
+- **Replay:** Operations at or below an accepted causal repair's base are already
+  represented by its snapshot and must not be replayed. Concurrent operations that
+  landed after the repair remain valid and apply on top.
+- **Stale rebase:** Download and apply the missing suffix while ignoring the stale
+  local repair as a filtering boundary. Then atomically mark the stale repair
+  rejected and append a new repair containing the resulting state, updated vector
+  clock, and downloaded server cursor.
+- **Capability negotiation:** A SuperSync client may upload causal repairs only
+  after `GET /api/sync/ops` advertises `capabilities.causalRepairSnapshots: true`.
+  This makes a new client fail closed against an older server.
+- **Legacy compatibility:** A markerless repair from an older client may be retained
+  non-destructively, but it is not a proven causal boundary. It must not authorize
+  download fast-forward, snapshot-cache trust, or history pruning; concurrent prefix
+  work is replayed after that legacy repair. Because the server cannot reconstruct
+  that ordering from the markerless row alone, it must also exclude the row from
+  restore points and fail closed if server-side snapshot replay crosses it.
 
 ## 3. Interaction & Safety Rules
 
@@ -135,7 +168,9 @@ This document establishes the core rules and principles for designing the Operat
 - **Limits:**
   - **Max batch size:** 25 operations per batch for normal sync uploads.
   - **Max payload size:** 1 MB per batch to prevent timeout issues.
-- **Exception:** `SYNC_IMPORT` and `BACKUP_IMPORT` bypass these limits but must be clearly marked as bulk operations and trigger immediate snapshot creation afterward.
+- **Exception:** `SYNC_IMPORT`, `BACKUP_IMPORT`, and `REPAIR` bypass these limits but
+  must be clearly marked as bulk operations. Imports trigger immediate snapshot
+  creation; only causal (base-marked) repairs may be cached as server snapshots.
 
 ## 4. Effect Rules
 

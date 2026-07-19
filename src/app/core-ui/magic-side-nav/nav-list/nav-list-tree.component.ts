@@ -44,7 +44,7 @@ const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
 export const getProjectVisibilityIconColor = (project: Project): string | null =>
   isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)
     ? null
-    : (project.theme.primary ?? null);
+    : (project.theme?.primary ?? null);
 
 @Component({
   selector: 'nav-list-tree',

@@ -15,6 +15,11 @@ set -eu
 # names: the failing migration is read from Prisma's own output and its SQL is
 # read from prisma/migrations/<name>/migration.sql.
 #
+# A P1002 advisory-lock timeout (another session holds Prisma's migration lock,
+# usually a migrator container orphaned by a prior interrupted deploy) is NOT a
+# migration failure: it is detected separately and printed with cleanup steps,
+# never auto-resolved.
+#
 # This script is COPYed into the image next to prisma/migrations in the same
 # build, so it is always version-locked to the migrations it must handle. All
 # three call sites (host deploy.sh, image startup CMD, helm initContainer)
@@ -48,7 +53,19 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-1800}"
 
 if command -v timeout >/dev/null 2>&1; then
-  with_timeout() { timeout "$STEP_TIMEOUT" "$@"; }
+  with_timeout() {
+    wt_rc=0
+    timeout "$STEP_TIMEOUT" "$@" || wt_rc=$?
+    # GNU coreutils `timeout` exits 124 on expiry; BusyBox `timeout` (shipped by
+    # the node:*-alpine runtime image) instead lets the child die from the
+    # default SIGTERM and returns 128+15=143. Normalize so the single 124
+    # timeout branch is reached on both. Under this wrapper a 143 is timeout's
+    # own SIGTERM, not an unrelated external kill.
+    if [ "$wt_rc" -eq 143 ]; then
+      wt_rc=124
+    fi
+    return "$wt_rc"
+  }
 else
   with_timeout() { "$@"; }
 fi
@@ -115,6 +132,14 @@ is_stuck_failed_migration() {
   log_has 'P3009'
 }
 
+# A P1002 whose message names the advisory lock: another DB session holds
+# Prisma's migration advisory lock, so `migrate deploy` never began applying
+# migrations. Distinct from every migration-level failure below — nothing was
+# applied, so there is no failing migration to recover; only the holder to clear.
+is_advisory_lock_timeout() {
+  log_has 'P1002' && log_has 'advisory lock'
+}
+
 migration_sql_path() {
   printf '%s/%s/migration.sql' "$MIGRATIONS_DIR" "$1"
 }
@@ -127,6 +152,17 @@ is_recoverable_concurrently_migration() {
   [ -f "$sql" ] &&
     grep -Eqi 'DROP[[:space:]]+INDEX[[:space:]]+CONCURRENTLY' "$sql" &&
     grep -Eqi 'CREATE[[:space:]]+INDEX[[:space:]]+CONCURRENTLY' "$sql"
+}
+
+# The intentionally-fail-loud shape: a bare CREATE INDEX CONCURRENTLY with no
+# DROP. Not auto-recovered (an interrupted build leaves an INVALID index that
+# must be handled deliberately), but distinguished from a plain non-index
+# migration so the loud failure can print the correct manual steps.
+is_bare_create_concurrently() {
+  sql="$1"
+  [ -f "$sql" ] &&
+    grep -Eqi 'CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]+CONCURRENTLY' "$sql" &&
+    ! grep -Eqi 'DROP[[:space:]]+INDEX[[:space:]]+CONCURRENTLY' "$sql"
 }
 
 # One statement per line; multi-line statements collapsed to a single line
@@ -161,6 +197,71 @@ print_manual_recovery() {
     echo "  printf '%s\\n' $(shell_quote "$stmt") | npx prisma db execute --schema $SCHEMA --stdin"
   done < "$STMT_FILE"
   echo "  npx prisma migrate resolve --applied $(shell_quote "$name")   # only after every statement above succeeds"
+}
+
+# Copy-paste recovery for an interrupted bare CREATE INDEX CONCURRENTLY. An
+# aborted concurrent build leaves an INVALID index of the same name, so a plain
+# re-run of the migration fails with "already exists"; the INVALID index must be
+# dropped first. Then clear the failed record so the next deploy re-applies the
+# migration natively (single-statement CONCURRENTLY needs no out-of-band run).
+print_bare_create_recovery() {
+  name="$1"
+  sql="$2"
+  idx="$(grep -Ei 'CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]+CONCURRENTLY' "$sql" |
+    grep -oE '"[^"]+"' | head -n1 | tr -d '"')"
+  echo ""
+  echo "Manual recovery for $name (interrupted bare CREATE INDEX CONCURRENTLY, copy-paste):"
+  if [ -n "$idx" ]; then
+    echo "  printf '%s\\n' $(shell_quote "DROP INDEX CONCURRENTLY IF EXISTS \"$idx\";") | npx prisma db execute --schema $SCHEMA --stdin"
+  else
+    echo "  # Drop any INVALID index left by the interrupted build (see $sql), e.g.:"
+    echo "  #   DROP INDEX CONCURRENTLY IF EXISTS \"<index_name>\";"
+  fi
+  echo "  npx prisma migrate resolve --rolled-back $(shell_quote "$name")"
+  echo "  # Then re-run the deploy; $name re-applies natively."
+}
+
+# Print copy-paste recovery for an INTERRUPTED CONCURRENTLY index build (a
+# migrate step aborted by a timeout SIGTERM, OOM, or external stop), if — and
+# only if — the failing migration is one. An aborted CONCURRENTLY build leaves
+# an INVALID index of the target name, so a plain re-run cannot rebuild it. This
+# only ever prints guidance; it never resolves a migration, and a non-index or
+# unidentifiable failure prints nothing. Safe to call from any failure branch.
+emit_interrupted_recovery_hint() {
+  hint_name="$(parse_failing_migration)"
+  [ -n "$hint_name" ] || return 0
+  hint_sql="$(migration_sql_path "$hint_name")"
+  if is_bare_create_concurrently "$hint_sql"; then
+    print_bare_create_recovery "$hint_name" "$hint_sql"
+  elif is_recoverable_concurrently_migration "$hint_sql"; then
+    echo ""
+    echo "$hint_name is an auto-recoverable CONCURRENTLY migration; re-run the deploy to finish it (the re-run drops any INVALID index and rebuilds)."
+  fi
+}
+
+# Copy-paste diagnosis + cleanup for a P1002 advisory-lock timeout. Another DB
+# session holds Prisma's migration advisory lock — almost always a one-off
+# migrator container orphaned by a previous interrupted deploy (a timed-out
+# `docker compose run` can leave its container, and thus its DB connection,
+# alive). This only ever prints guidance; it NEVER terminates a backend, because
+# an active CREATE INDEX CONCURRENTLY build legitimately holds the lock and must
+# not be killed. The operator decides.
+emit_advisory_lock_recovery() {
+  echo ""
+  echo "Another database session holds Prisma's migration advisory lock, so"
+  echo "migrate deploy could not start. This is usually a migrator container"
+  echo "orphaned by a previous interrupted deploy. Diagnose and clear it:"
+  echo ""
+  echo "  1. Remove any orphaned one-off migrator containers:"
+  echo "       docker ps -aq --filter name=supersync-migrator | xargs -r docker rm -f"
+  echo "       docker ps -aq --filter name=supersync-run       | xargs -r docker rm -f"
+  echo "  2. If the lock is still held, find who holds it (against your Postgres):"
+  echo "       SELECT a.pid, a.state, now() - a.state_change AS idle_for, left(a.query, 80)"
+  echo "         FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid"
+  echo "        WHERE l.locktype = 'advisory' AND l.granted;"
+  echo "  3. If that session is idle (NOT actively building an index), release it:"
+  echo "       SELECT pg_terminate_backend(<pid>);"
+  echo "  4. Re-run the deploy. Never terminate a live CREATE INDEX CONCURRENTLY build."
 }
 
 fail_loudly() {
@@ -215,7 +316,13 @@ while :; do
     exit 0
   fi
   if [ "$MIGRATE_STATUS" -eq 124 ]; then
-    fail_loudly "prisma migrate deploy timed out after ${STEP_TIMEOUT}s (a long-running transaction may be blocking CREATE/DROP INDEX CONCURRENTLY)." 1
+    # This branch also catches a normalized 143 (with_timeout maps BusyBox's
+    # SIGTERM exit to 124), i.e. the incident's own signal. A timed-out/aborted
+    # CONCURRENTLY build leaves an INVALID index + a failed record, so raising
+    # the timeout alone will not let a plain re-run rebuild it — surface the
+    # drop-index recovery here so the FIRST failure is actionable.
+    emit_interrupted_recovery_hint
+    fail_loudly "prisma migrate deploy timed out after ${STEP_TIMEOUT}s (a long-running transaction may be blocking CREATE/DROP INDEX CONCURRENTLY). Clear the blocker, then raise MIGRATION_TIMEOUT (it forwards to MIGRATE_STEP_TIMEOUT) and re-run." 1
   fi
 
   attempt=$((attempt + 1))
@@ -224,6 +331,20 @@ while :; do
   fi
 
   if ! is_transaction_block_failure && ! is_stuck_failed_migration; then
+    if is_advisory_lock_timeout; then
+      # Not a migration failure (nothing was applied) — print cleanup guidance
+      # and fail loudly. Rationale is on is_advisory_lock_timeout / the emitter.
+      emit_advisory_lock_recovery
+      fail_loudly "prisma migrate deploy could not acquire the migration advisory lock (P1002) within 10s; another migrator session holds it." 1
+    fi
+    # A non-P3018/P3009 exit is usually a genuine error (bad SQL, unreachable
+    # DB), but OOM (137) or another non-timeout kill can also abort an in-flight
+    # CONCURRENTLY build before Prisma records the failure. (A timeout SIGTERM is
+    # normalized to 124 above and handled there — it never reaches here.) Surface
+    # the drop-index recovery when the in-flight migration is a CONCURRENTLY
+    # build so the FIRST failure is actionable (deploy.sh promises "recovery
+    # steps above"); guidance only, never auto-resolves.
+    emit_interrupted_recovery_hint
     fail_loudly "prisma migrate deploy failed (exit $MIGRATE_STATUS)."
   fi
 
@@ -234,6 +355,9 @@ while :; do
 
   sql="$(migration_sql_path "$name")"
   if ! is_recoverable_concurrently_migration "$sql"; then
+    if is_bare_create_concurrently "$sql"; then
+      print_bare_create_recovery "$name" "$sql"
+    fi
     fail_loudly "$name is not a recoverable drop-then-create CONCURRENTLY index migration (a bare CREATE is intentionally fail-loud); refusing to auto-resolve."
   fi
 

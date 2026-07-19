@@ -79,7 +79,10 @@
 .has-mobile-bottom-nav {
   @include mq(xs, max) {
     .main-content {
-      padding-bottom: calc(var(--bottom-nav-height) + var(--bottom-nav-safe-area));
+      padding-bottom: calc(
+        var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+          var(--bottom-nav-extra-offset)
+      );
     }
   }
 }

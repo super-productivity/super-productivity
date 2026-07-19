@@ -23,17 +23,19 @@ export interface ThemeCssValidationResult {
  * to declarations that can't reach the network.
  *
  * Rejects:
- *   - any `url(...)` / `@import url(...)` argument that resolves to an
+ *   - every `@import` rule (installed themes are standalone)
+ *   - any `url(...)` argument that resolves to an
  *     absolute URL (`http:`, `https:`, `//host/...`, schemeless absolute)
  *   - any relative `url(...)` (no bundled assets in v1)
  *   - `data:` URIs (also bundled-asset territory)
+ *   - every `image(...)` and `image-set(...)` function
  *
  * Accepts: `url(#fragment)` (in-document SVG references) and CSS that
- * contains no `url(` / `@import` at all.
+ * contains no network-capable or advanced image functions.
  *
- * The check is intentionally regex-based — pulling in a full CSS parser
- * for one rule is overkill, and false positives bias toward blocking,
- * which is the safe direction for security checks.
+ * The check is intentionally regex-based — pulling in a full CSS parser for
+ * this narrow, conservative allowlist is overkill, and false positives bias
+ * toward blocking, which is the safe direction for security checks.
  */
 export const validateThemeCss = (css: string): ThemeCssValidationResult => {
   const errors: string[] = [];
@@ -52,24 +54,35 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
         MAX_THEME_CSS_SIZE / 1024
       ).toFixed(0)} KB)`,
     );
+    return { isValid: false, errors };
   }
 
-  // Order matters: DECODE first, then STRIP. CSS Syntax §4.3 normalizes hex
-  // escapes inside ident-tokens BEFORE keyword/url-token matching. If we
-  // strip comments first and then decode, an attacker who escape-encodes the
-  // `url` keyword (`u\72l(`) hides the url-token from the URL-aware stripper,
-  // letting a `/*` inside the disguised url() open a comment that eats the
-  // real `url(http://evil)` later in the file. Decode first → the stripper
-  // sees `url(` for what it is and refuses to enter comment-mode inside.
+  // Validate real comment delimiters on the provenance-preserving source.
+  // Escape decoding can create quote characters that would otherwise make a
+  // raw unterminated comment look like string content.
+  const rawCommentResult = stripCssComments(css, true);
+  if (!rawCommentResult.ok) {
+    errors.push(rawCommentResult.error);
+    return { isValid: false, errors };
+  }
+
+  // Decode once. The `url(` / `src(` security scans intentionally inspect this
+  // UNSTRIPPED view: decoding can create quote or comment-delimiter characters
+  // that were escaped identifiers in the source, so relying on the decoded
+  // text's apparent string/comment structure could let a disguised token hide
+  // a later live fetch. The keyword-presence bans (`@import`, `image()`,
+  // `image-set()`) instead scan the comment-stripped view below — they have no
+  // fetchable argument to classify, so exempting genuine comments is safe.
   const decoded = decodeCssEscapes(css);
 
-  // Strip comments. Tracks string-literal AND url-token state so:
+  // Strip comments for malformed-comment detection, the keyword-presence bans,
+  // and the later theme-contract scan. Tracks string-literal AND url-token
+  // state so:
   //   - `/*` inside `"..."` / `'...'` stays as string content
   //   - `/*` inside `url(...)` (unquoted arg) stays as url content (per CSS
   //     spec, comments aren't recognized inside a url-token)
   // Replaces each comment with a single SPACE, not nothing — comments are
-  // whitespace per the spec, so `@import/**/"..."` must become `@import "..."`
-  // for the @import regex (which requires `\s+`) to still match.
+  // whitespace per the spec, keeping token boundaries intact for warnings.
   // Rejects unterminated comments outright as malformed CSS.
   const stripResult = stripCssComments(decoded);
   if (!stripResult.ok) {
@@ -78,60 +91,75 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
   }
   const stripped = stripResult.css;
 
-  // Scan for url(<arg>), src(<arg>), and @import "...". Both function forms
+  // Installed themes are standalone, so even an apparently local/fragment
+  // import is invalid. `@import` is a keyword-presence ban with no fetchable
+  // argument to classify, so scan the comment-stripped view: a real `@import`
+  // survives (comments only collapse to whitespace), while the same text in a
+  // `/* ... */` comment is correctly exempt. Strings stay intact through the
+  // stripper, so `content: "@import"` is still rejected on the safe side —
+  // blanking strings here is unsafe (an escape-created quote could hide a
+  // later real at-rule), so we don't.
+  const importMatch = /@import\b/i.exec(stripped);
+  if (importMatch) {
+    const line = stripped.slice(0, importMatch.index).split('\n').length;
+    errors.push(`Line ${line}: @import is not supported in theme CSS`);
+    return { isValid: false, errors };
+  }
+
+  // Scan for url(<arg>) and src(<arg>). Both function forms
   // extract their argument from capture groups 1-3 (quoted ", quoted ', bare).
-  // The @import-with-url() form is covered by the url() pass.
-  //
   // `src(...)` is the CSS Fonts Module Level 4 form of `@font-face { src: ... }`
   // and is treated by browsers as a fetchable resource — same exfiltration
   // surface as `url(...)`. Bundled fonts are a v1 non-goal so any argument is
   // rejected.
   const scan = (pattern: RegExp, label: string): void => {
     let match: RegExpExecArray | null;
-    while ((match = pattern.exec(stripped)) !== null) {
+    while ((match = pattern.exec(decoded)) !== null) {
       const arg = (match[1] ?? match[2] ?? match[3] ?? '').trim();
       const reason = classifyThemeUrl(arg);
       if (reason) {
-        errors.push(formatUrlError(label, match[0], reason, stripped, match.index));
+        errors.push(formatUrlError(label, match[0], reason, decoded, match.index));
       }
     }
   };
   scan(/url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, 'url(...)');
   scan(/src\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, 'src(...)');
-  // `image-set(...)` (CSS Images Module Level 4) takes <image-set-option>#
-  // args — each option is `<image> <resolution>?`. The <image> may be a
-  // `<string>` (which the browser fetches like a URL), `url(...)`, `src(...)`,
-  // a `<gradient>` function, or `image()`. Inner `url(...)` / `src(...)` are
-  // already caught above. We extract each comma-separated option, find its
-  // leading <image> token (string or bare URL-like word), and classify.
-  // Skip options whose leading token looks like a CSS function call (e.g.
-  // `linear-gradient(...)`) — those have no fetchable arg of their own.
-  const imageSetRegex = /image-set\s*\(/gi;
-  let imgSetMatch: RegExpExecArray | null;
-  while ((imgSetMatch = imageSetRegex.exec(stripped)) !== null) {
-    const argsStart = imgSetMatch.index + imgSetMatch[0].length;
-    const argsEnd = findMatchingParen(stripped, argsStart);
-    if (argsEnd < 0) continue;
-    const argsBody = stripped.slice(argsStart, argsEnd);
-    for (const option of splitTopLevel(argsBody, ',')) {
-      const token = extractLeadingImageToken(option);
-      if (token === null) continue;
-      const reason = classifyThemeUrl(token);
-      if (reason) {
-        errors.push(
-          formatUrlError(
-            'image-set(...)',
-            `image-set(${option.trim()})`,
-            reason,
-            stripped,
-            imgSetMatch.index,
-          ),
-        );
-      }
-    }
-  }
-  scan(/@import\s+(?:"([^"]*)"|'([^']*)')/gi, '@import');
 
+  // A `url(` / `src(` with no closing `)` before end-of-input still yields a
+  // fetchable url-token: CSS Syntax §4.3.6 emits the token when consuming
+  // reaches EOF, so `background:url(http://evil` (file ends mid-url) fetches
+  // on every load. The argument regexes above require the `)` and miss it, so
+  // reject any opener that runs unterminated to end-of-input.
+  const unterminatedUrl = /(?:url|src)\s*\([^)]*$/i.exec(decoded);
+  if (unterminatedUrl) {
+    const line = decoded.slice(0, unterminatedUrl.index).split('\n').length;
+    errors.push(`Line ${line}: unterminated url() — remove the incomplete rule`);
+  }
+
+  // `image()` can consume a URL string directly or after var() substitution.
+  // We do not need this advanced function for local-only themes, so rejecting
+  // the function itself is safer than attempting partial grammar resolution.
+  // Keyword-presence ban → scan the comment-stripped view so prose like
+  // `/* pick an image (large) */` is exempt while a real `image(` is not. The
+  // `(` must abut the name (a function-token has no interior whitespace), so a
+  // literal `image (` with a space is not the function and is left alone.
+  const imageFunctionRegex = /(^|[^\w-])image\(/gim;
+  let imageMatch: RegExpExecArray | null;
+  while ((imageMatch = imageFunctionRegex.exec(stripped)) !== null) {
+    const index = imageMatch.index + imageMatch[1].length;
+    const line = stripped.slice(0, index).split('\n').length;
+    errors.push(`Line ${line}: image(...) is not supported in theme CSS`);
+  }
+
+  // `image-set()` accepts URL strings directly, but escape decoding loses the
+  // provenance needed to parse its nested string grammar safely. Themes do
+  // not need this advanced function, so reject it wholesale like `image()`.
+  // Scanned on the comment-stripped view for the same reason as `image()`.
+  const imageSetMatch = /image-set\(/i.exec(stripped);
+  if (imageSetMatch) {
+    const line = stripped.slice(0, imageSetMatch.index).split('\n').length;
+    errors.push(`Line ${line}: image-set(...) is not supported in theme CSS`);
+  }
   if (errors.length > 0) {
     return { isValid: false, errors };
   }
@@ -162,7 +190,8 @@ export const validateThemeCss = (css: string): ThemeCssValidationResult => {
  *
  * Detection is presence-only: it does NOT parse selectors, so a theme that
  * declares `--surface-1` at `:root` (rather than `body` / `body.isDarkTheme`)
- * will pass even though it's mode-inconsistent. Selector-aware validation
+ * will pass even though the body-scoped base declaration makes it ineffective.
+ * Selector-aware validation
  * is a tracked follow-up.
  */
 const DECLARATION_PATTERN = /(?:^|[^\w-])(--[\w-]+)\s*:/gm;
@@ -257,27 +286,27 @@ const blankStringAndUrlContents = (css: string): string => {
 type StripCssResult = { ok: true; css: string } | { ok: false; error: string };
 
 /**
- * Strip CSS comments, preserving string literals and url-tokens, replacing
- * each comment with a single space (per CSS spec, comments are whitespace).
+ * Validate and strip CSS comments, preserving string literals and url-tokens,
+ * and replacing each comment with a single space (per CSS spec, comments are
+ * whitespace). Called on both the raw source for delimiter provenance and the
+ * decoded source used by the contract-warning scan. In raw mode, CSS escapes
+ * outside strings are consumed atomically so an escaped quote cannot open a
+ * synthetic string and hide a later real comment delimiter.
  *
- * Two attack classes the naive `replace(/\/\*[\s\S]*?\*\//g, '')` permits:
- *   1. `/*` inside `"..."` / `'...'` — fixed by tracking `inString`.
- *   2. `/*` inside `url(<unquoted>)` — fixed by tracking `inUrl`. Per CSS
- *      Syntax §4.3.6, comments aren't recognized inside a url-token; e.g.
- *      `a{background:url(/*)} b{background:url(http://evil)}` parses as
- *      two URL tokens, not "first url + comment to EOF".
- *   3. `@import/* … *​/"..."` — comments must collapse to whitespace, not
- *      vanish, so the `@import\s+...` regex still fires after stripping.
- *      Replacing each `/* ... *​/` with a single SPACE handles this.
+ * Unlike a naive `replace(/\/\*[\s\S]*?\*\//g, '')`, this tracks strings and
+ * unquoted url-tokens so comment-like text inside either is preserved. Real
+ * comments collapse to one space to preserve token boundaries for the later
+ * contract-presence scan.
  *
- * Caller decodes CSS escapes BEFORE this runs, so `u\72l(` is already
- * `url(` — keyword detection is a contiguous case-insensitive match.
+ * The decoded-mode call handles escaped string delimiters and comment markers
+ * consistently with the contract-warning view; raw mode preserves their
+ * source provenance for malformed-comment detection.
  *
  * Unterminated `/*` (no closing `*​/`) is malformed CSS and rejected outright
  * — a benign theme will not contain one, and tolerating it lets an attacker
  * hide a remote `url(...)` after the bogus comment-open.
  */
-const stripCssComments = (css: string): StripCssResult => {
+const stripCssComments = (css: string, isRawSource = false): StripCssResult => {
   let out = '';
   let i = 0;
   let inString: '"' | "'" | null = null;
@@ -287,9 +316,15 @@ const stripCssComments = (css: string): StripCssResult => {
 
     if (inString) {
       out += ch;
+      if (isRawSource && (ch === '\n' || ch === '\r' || ch === '\f')) {
+        inString = null;
+        i++;
+        continue;
+      }
       if (ch === '\\' && i + 1 < css.length) {
-        out += css[i + 1];
-        i += 2;
+        const escapeLength = isRawSource ? rawCssEscapeLength(css, i) : 2;
+        out += css.slice(i + 1, i + escapeLength);
+        i += escapeLength;
         continue;
       }
       if (ch === inString) inString = null;
@@ -315,6 +350,15 @@ const stripCssComments = (css: string): StripCssResult => {
       continue;
     }
 
+    if (isRawSource && ch === '\\') {
+      const escapeLength = rawCssEscapeLength(css, i);
+      if (escapeLength > 0) {
+        out += css.slice(i, i + escapeLength);
+        i += escapeLength;
+        continue;
+      }
+    }
+
     if (ch === '"' || ch === "'") {
       inString = ch;
       out += ch;
@@ -322,8 +366,11 @@ const stripCssComments = (css: string): StripCssResult => {
       continue;
     }
 
-    // Detect `url(` (case-insensitive, contiguous — escapes already decoded).
+    // Detect contiguous `url(` only in the decoded warning view. Raw comment
+    // validation intentionally treats `/*` in every unsupported URL/function
+    // token as a comment opener; all non-fragment URLs are rejected anyway.
     if (
+      !isRawSource &&
       (ch === 'u' || ch === 'U') &&
       i + 3 < css.length &&
       (css[i + 1] === 'r' || css[i + 1] === 'R') &&
@@ -353,12 +400,15 @@ const stripCssComments = (css: string): StripCssResult => {
   return { ok: true, css: out };
 };
 
+const rawCssEscapeLength = (css: string, index: number): number =>
+  /^\\(?:[0-9a-fA-F]{1,6}(?:[ \t\n\f]|\r\n?)?|\r\n|[\s\S])/.exec(css.slice(index))?.[0]
+    .length ?? 0;
+
 /**
  * Decode CSS escapes per CSS Syntax §4.3. Two forms:
  *   1. `\<hex 1-6>` optionally followed by a single whitespace — code point.
- *   2. `\<any non-hex single char>` — literal char (newline becomes nothing
- *      when at end of value, but for our scan-for-keywords purpose we keep
- *      the literal char).
+ *   2. `\<newline>` — string line continuation, removed.
+ *   3. `\<any other non-hex single char>` — literal char.
  *
  * We deliberately decode *inside string literals too*: an attacker could
  * stash `\3a //evil` (escaped `:`) inside `url("...")` as a quoted bare
@@ -367,104 +417,18 @@ const stripCssComments = (css: string): StripCssResult => {
  */
 const decodeCssEscapes = (css: string): string =>
   // Hex form: \<1-6 hex>[ \t\n\r\f]?  →  the corresponding code point.
+  // Line continuation: \<newline>     →  removed.
   // Literal form: \<single char>      →  that char.
   // Trailing `\` at EOF doesn't match either alternation and is left as-is.
-  css.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([\s\S])/g, (_m, hex, lit) => {
-    if (lit !== undefined) return lit;
-    const cp = parseInt(hex, 16);
-    return cp === 0 || cp > 0x10ffff ? '�' : String.fromCodePoint(cp);
-  });
-
-/**
- * Find the index of the `)` that closes a `(` at position `start - 1`.
- * Honors string literals and nested parens. Returns -1 if unbalanced.
- */
-const findMatchingParen = (css: string, start: number): number => {
-  let depth = 1;
-  let inString: '"' | "'" | null = null;
-  for (let i = start; i < css.length; i++) {
-    const ch = css[i];
-    if (inString) {
-      if (ch === '\\' && i + 1 < css.length) {
-        i++;
-        continue;
-      }
-      if (ch === inString) inString = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") inString = ch;
-    else if (ch === '(') depth++;
-    else if (ch === ')') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-};
-
-/**
- * Split a string by `sep` at depth 0 only — string literals and parenthesized
- * groups are kept intact. Used to walk the comma-separated args of
- * `image-set(...)` without splitting `linear-gradient(red, blue)`.
- */
-const splitTopLevel = (input: string, sep: string): string[] => {
-  const parts: string[] = [];
-  let depth = 0;
-  let inString: '"' | "'" | null = null;
-  let last = 0;
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    if (inString) {
-      if (ch === '\\' && i + 1 < input.length) {
-        i++;
-        continue;
-      }
-      if (ch === inString) inString = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") inString = ch;
-    else if (ch === '(') depth++;
-    else if (ch === ')') depth--;
-    else if (ch === sep && depth === 0) {
-      parts.push(input.slice(last, i));
-      last = i + 1;
-    }
-  }
-  parts.push(input.slice(last));
-  return parts;
-};
-
-/**
- * Extract the leading <image> token from a single image-set option:
- *   "https://..." 1x         → "https://..."  (quoted string)
- *   https://... 1x            → "https://..." (bare URL-like token)
- *   linear-gradient(red, blue) 1x → null      (function call, skip)
- *   url(...) / src(...)       → null (inner scans handled it)
- *   image-set(...)            → null (let the outer loop handle the nested one)
- *
- * Returns the token to classify, or null if the option should be skipped.
- */
-const extractLeadingImageToken = (option: string): string | null => {
-  const trimmed = option.trim();
-  if (!trimmed) return null;
-  const first = trimmed[0];
-  if (first === '"' || first === "'") {
-    // Quoted string — extract its content.
-    let i = 1;
-    while (i < trimmed.length && trimmed[i] !== first) {
-      if (trimmed[i] === '\\' && i + 1 < trimmed.length) i += 2;
-      else i++;
-    }
-    return trimmed.slice(1, i);
-  }
-  // Bare token: read up to whitespace or `(` to spot function calls.
-  let i = 0;
-  while (i < trimmed.length && !/[\s(]/.test(trimmed[i])) i++;
-  // Hit a `(` — it's a function call (gradient, url, src, image-set, etc.).
-  // Inner url/src scans cover the dangerous ones; skip here.
-  if (i < trimmed.length && trimmed[i] === '(') return null;
-  return trimmed.slice(0, i);
-};
+  css.replace(
+    /\\([0-9a-fA-F]{1,6})(?:[ \t\n\f]|\r\n?)?|\\(\r\n|[\n\r\f])|\\([\s\S])/g,
+    (_m, hex, continuation, lit) => {
+      if (continuation !== undefined) return '';
+      if (lit !== undefined) return lit;
+      const cp = parseInt(hex, 16);
+      return cp === 0 || cp > 0x10ffff ? '�' : String.fromCodePoint(cp);
+    },
+  );
 
 type UrlRejectReason = 'remote' | 'data' | 'relative';
 

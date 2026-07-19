@@ -252,7 +252,9 @@
 
   @include mq(xs, max) {
     padding-top: var(--safe-area-top);
-    padding-bottom: calc(var(--safe-area-bottom) + var(--bottom-nav-height));
+    padding-bottom: calc(
+      var(--safe-area-bottom) + var(--bottom-nav-height) + var(--bottom-nav-extra-offset)
+    );
   }
 
   :host-context(.isMac.isElectron) & {

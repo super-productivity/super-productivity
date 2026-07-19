@@ -183,6 +183,33 @@ describe('taskSharedSchedulingMetaReducer', () => {
         testState,
       );
     });
+
+    it('should use the captured day when replaying on a different day', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['task1']);
+      testState[appStateFeatureKey] = {
+        ...testState[appStateFeatureKey],
+        todayStr: '2024-06-15',
+      };
+      const action = {
+        ...TaskSharedActions.unscheduleTask({
+          id: 'task1',
+          isLeaveInToday: true,
+        }),
+        today: '2024-06-14',
+      };
+
+      metaReducer(testState, action);
+
+      expectStateUpdate(
+        expectTaskUpdate('task1', {
+          dueDay: '2024-06-14',
+          dueWithTime: undefined,
+        }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
   });
 
   describe('dismissReminderOnly action', () => {

@@ -53,6 +53,9 @@ export interface CompactOperation {
 
   /** syncImportReason (optional) */
   r?: string;
+
+  /** repairBaseServerSeq (optional) */
+  b?: number;
 }
 
 /**

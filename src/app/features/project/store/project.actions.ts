@@ -31,7 +31,9 @@ export const addProjects = createAction(
 
 export const updateProject = createAction(
   '[Project] Update Project',
-  (projectProps: { project: Update<Project> }) => ({
+  // isSkipSnack: suppress the unconditional "Project updated" snack — used by
+  // flows that surface their own outcome (e.g. the conflict-review flip).
+  (projectProps: { project: Update<Project>; isSkipSnack?: boolean }) => ({
     ...projectProps,
     meta: {
       isPersistent: true,

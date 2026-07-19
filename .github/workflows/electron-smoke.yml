@@ -9,11 +9,9 @@ name: Electron Packaging Smoke Test
 # and the compiled dep was omitted from the electron-builder files glob,
 # so every 18.2.7 binary crashed on launch.
 #
-# PRs run the cheap static check (~10s after the build) — paths filter
-# excludes docs, translations, and platform-specific trees but still covers
-# src/**, because #7320's root cause lived under src/app/util/. The full
-# launch-under-xvfb smoke test runs on merge to master, release tags, and
-# manual dispatch — stronger signal but needs xvfb setup + ~30s of wait.
+# The static check catches missing require() targets. The packaged renderer
+# also runs a task-create-and-reload flow under xvfb on every invocation, so
+# pull requests prove the native shell can perform and persist a core action.
 
 on:
   pull_request:
@@ -96,99 +94,18 @@ jobs:
           node tools/verify-electron-requires.js "$ASAR"
 
       - name: Install xvfb
-        if: github.event_name != 'pull_request'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      - name: Smoke test — launch packaged app
-        if: github.event_name != 'pull_request'
+      - name: Smoke test packaged app task flow
         run: |
-          set -uo pipefail
-
-          UNPACKED=.tmp/app-builds/linux-unpacked
-          # afterPack.js renames the real binary to superproductivity-bin and
-          # installs a shell wrapper at superproductivity. Launch the wrapper
-          # so the smoke test exercises the exact entry path users hit.
-          BIN="$UNPACKED/superproductivity"
-          if [ ! -x "$BIN" ]; then
-            echo "::error::Expected launcher at $BIN not found or not executable"
-            ls -la "$UNPACKED" || true
-            exit 1
-          fi
-
-          # Keep the log inside the workspace so upload-artifact can find it
-          # when a step fails. /tmp is accessible but fragile across runner
-          # images and upload-artifact glob evaluation.
+          set -o pipefail
           mkdir -p .tmp/smoke
-          LOG=.tmp/smoke/launch.log
-          : > "$LOG"
-
-          echo "Launching $BIN under xvfb (log: $LOG)"
-          # Electron flags:
-          #   --no-sandbox: chrome-sandbox needs setuid root, not set on runners
-          #   --disable-gpu: no GPU on the runner
-          #   --disable-dev-shm-usage: /dev/shm is small in GH-hosted containers,
-          #     and Chromium/Electron can die with shared-memory errors without it
-          # Xvfb flags:
-          #   --server-args: explicit screen geometry; Xvfb's 640x480x8 default
-          #     trips some Chromium color-depth assertions
           xvfb-run \
             --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
-            "$BIN" \
-              --no-sandbox \
-              --disable-gpu \
-              --disable-dev-shm-usage \
-            > "$LOG" 2>&1 &
-          WRAPPER_PID=$!
-
-          # Wait up to 30s for the app to crash. The #7320 crash surfaces
-          # within ~100ms — 30s is generous headroom for Angular bootstrap
-          # in CI. xvfb-run exits when its child exits, so the wrapper PID
-          # going away is a reliable crash signal. We also scan stderr for
-          # known failure markers as a belt-and-suspenders backstop: some
-          # main-process exceptions log without killing the process.
-          CRASH_RE='(Uncaught Exception|Cannot find module|A JavaScript error occurred in the main process|Segmentation fault|SIGSEGV|SIGABRT|TypeError:|ReferenceError:|FATAL ERROR|Check failed)'
-          for i in $(seq 1 30); do
-            if ! kill -0 $WRAPPER_PID 2>/dev/null; then
-              echo "::error::xvfb-run/Electron exited after ${i}s — likely crash."
-              echo "----8<---- launch log"
-              cat "$LOG" || true
-              echo "---->8----"
-              exit 1
-            fi
-            if grep -E -q "$CRASH_RE" "$LOG" 2>/dev/null; then
-              echo "::error::Crash marker detected in log after ${i}s:"
-              grep -E "$CRASH_RE" "$LOG" || true
-              echo "----8<---- launch log"
-              cat "$LOG" || true
-              echo "---->8----"
-              kill -9 $WRAPPER_PID 2>/dev/null || true
-              exit 1
-            fi
-            sleep 1
-          done
-
-          echo "App still alive after 30s — startup OK. Terminating."
-          kill $WRAPPER_PID 2>/dev/null || true
-          # xvfb-run forwards SIGTERM to its child; give them 5s to exit
-          # cleanly before SIGKILL. Also sweep any stray electron workers.
-          for i in 1 2 3 4 5; do
-            if ! kill -0 $WRAPPER_PID 2>/dev/null; then break; fi
-            sleep 1
-          done
-          kill -9 $WRAPPER_PID 2>/dev/null || true
-          pkill -9 -f "$UNPACKED/superproductivity" 2>/dev/null || true
-          wait $WRAPPER_PID 2>/dev/null || true
-
-          # Final scan for errors that didn't crash the main process but
-          # would still indicate a broken build.
-          if grep -E -q "$CRASH_RE" "$LOG" 2>/dev/null; then
-            echo "::error::Crash marker detected in final log scan:"
-            grep -E "$CRASH_RE" "$LOG" || true
-            exit 1
-          fi
-
-          echo "Smoke test passed."
+            node e2e/electron/packaged-app-smoke.cjs \
+              .tmp/app-builds/linux-unpacked/superproductivity \
+            2>&1 | tee .tmp/smoke/launch.log
 
       - name: Upload logs on failure
         if: failure()

@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import { Logger } from '../logger';
 import {
   BatchUploadCandidate,
@@ -14,6 +13,8 @@ import {
   isFullStateOpType,
   limitVectorClockSize,
 } from './sync.types';
+
+const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
 
 /**
  * Check if an incoming operation conflicts with existing operations.
@@ -94,6 +95,7 @@ export const detectConflictForEntities = async (
       SELECT DISTINCT ON (eid)
         eid AS "entityId",
         o.client_id AS "clientId",
+        o.action_type AS "actionType",
         o.vector_clock AS "vectorClock"
       FROM operations o
       CROSS JOIN LATERAL unnest(
@@ -128,7 +130,7 @@ export const detectConflictForEntities = async (
 export const resolveConflictForExistingOp = (
   op: Operation,
   entityId: string,
-  existingOp: { clientId: string; vectorClock: unknown },
+  existingOp: { actionType?: string; clientId: string; vectorClock: unknown },
 ): ConflictResult => {
   // Stored JSON/vector_clock values arrive as unknown from both Prisma model
   // reads and raw SQL rows; cast only at the vector-clock comparison boundary.
@@ -136,6 +138,19 @@ export const resolveConflictForExistingOp = (
 
   // Compare vector clocks
   const comparison = compareVectorClocks(op.vectorClock, existingClock);
+
+  // Timer batches are additive and uniquely identified operations. Concurrent
+  // deltas commute, so entity-level LWW must not discard either contribution.
+  // Keep the causal checks below for EQUAL/LESS_THAN clocks: those operations
+  // may already be represented by the stored state and replaying them could
+  // double-count time.
+  if (
+    comparison === 'CONCURRENT' &&
+    op.actionType === TASK_TIME_DELTA_ACTION_TYPE &&
+    existingOp.actionType === TASK_TIME_DELTA_ACTION_TYPE
+  ) {
+    return { hasConflict: false };
+  }
 
   // If the incoming op's clock is GREATER_THAN existing, it's a valid successor
   if (comparison === 'GREATER_THAN') {
@@ -219,7 +234,7 @@ export const detectConflictForEntity = async (
       entityType: op.entityType,
       OR: [{ entityId }, { entityIds: { has: entityId } }],
     },
-    select: { clientId: true, vectorClock: true, serverSeq: true },
+    select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
     orderBy: { serverSeq: 'desc' },
   });
 
@@ -239,7 +254,13 @@ export const detectConflictForEntity = async (
             userId,
             entityType: 'GLOBAL_CONFIG',
             entityId: 'misc',
-            schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
+            // Only pre-split (< v2) misc rows carry migrated task settings; a
+            // post-split v2/v3 misc write is disjoint from `tasks`. Gate on the
+            // fixed split boundary, NOT the moving CURRENT_SCHEMA_VERSION, or
+            // every schema bump aliases already-split misc writes to tasks and
+            // fabricates conflicts between disjoint settings (matches the
+            // isLegacyMiscConfigOperation gate).
+            schemaVersion: { lt: MISC_TASKS_SPLIT_SCHEMA_VERSION },
           },
           select: { clientId: true, vectorClock: true, serverSeq: true },
           orderBy: { serverSeq: 'desc' },
@@ -267,7 +288,27 @@ export const isSameDuplicateOperation = (
   maxClockDriftMs: number,
   originalTimestamp: number = op.timestamp,
 ): boolean => {
-  const storedVectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+  // Reproduce the normalization of the already-stored row. Storage may protect
+  // a low-counter causal full-state author in addition to the uploader, so use
+  // the stored clock's IDs as the authoritative protected set. Otherwise a
+  // genuine retry of an oversized post-import op compares as an ID collision.
+  //
+  // Tradeoff, deliberate: for an oversized incoming clock this projects onto the
+  // stored key set, so an id collision that ALSO differs only by an extra clock
+  // entry now reads as a duplicate instead of being caught. Accepted because
+  // every other structural field below (clientId, payload, entity, timestamp)
+  // must still match — and when they all do, acking beats rejecting a retry
+  // whose only sin is having learned about one more client.
+  const storedClockClientIds =
+    existingOp.vectorClock !== null &&
+    typeof existingOp.vectorClock === 'object' &&
+    !Array.isArray(existingOp.vectorClock)
+      ? Object.keys(existingOp.vectorClock)
+      : [];
+  const storedVectorClock = limitVectorClockSize(op.vectorClock, [
+    op.clientId,
+    ...storedClockClientIds,
+  ]);
   const incomingEncrypted = op.isPayloadEncrypted ?? false;
 
   // encrypt() uses a fresh random IV per call, so retried ciphertext differs
@@ -299,7 +340,8 @@ export const isSameDuplicateOperation = (
       maxClockDriftMs,
     ) &&
     existingOp.isPayloadEncrypted === incomingEncrypted &&
-    existingOp.syncImportReason === (op.syncImportReason ?? null)
+    existingOp.syncImportReason === (op.syncImportReason ?? null) &&
+    existingOp.repairBaseServerSeq === (op.repairBaseServerSeq ?? null)
   );
 };
 
@@ -327,7 +369,8 @@ export const isSameIncomingOperation = (
     first.schemaVersion === second.schemaVersion &&
     firstOriginalTimestamp === secondOriginalTimestamp &&
     (first.isPayloadEncrypted ?? false) === (second.isPayloadEncrypted ?? false) &&
-    (first.syncImportReason ?? null) === (second.syncImportReason ?? null)
+    (first.syncImportReason ?? null) === (second.syncImportReason ?? null) &&
+    (first.repairBaseServerSeq ?? null) === (second.repairBaseServerSeq ?? null)
   );
 };
 
@@ -398,8 +441,18 @@ export const getConflictEntityIds = (op: Operation): string[] => {
   return Array.from(new Set(rawEntityIds));
 };
 
+/**
+ * The misc→tasks settings split happened in the v1→v2 migration
+ * (`MiscToTasksSettingsMigration_v1v2`), so ONLY pre-v2 `GLOBAL_CONFIG:misc`
+ * writes also touched what is now `GLOBAL_CONFIG:tasks`. Gate on that fixed
+ * boundary, not the moving `CURRENT_SCHEMA_VERSION`: otherwise every schema bump
+ * (e.g. v3→v4) newly aliases already-split misc writes to tasks and fabricates
+ * conflicts between disjoint settings during rollout.
+ */
+const MISC_TASKS_SPLIT_SCHEMA_VERSION = 2;
+
 const isLegacyMiscConfigOperation = (op: Operation): boolean =>
-  op.schemaVersion < CURRENT_SCHEMA_VERSION &&
+  op.schemaVersion < MISC_TASKS_SPLIT_SCHEMA_VERSION &&
   op.entityType === 'GLOBAL_CONFIG' &&
   op.entityId === 'misc';
 
@@ -486,6 +539,7 @@ export const prefetchLatestEntityOpsForBatch = async (
         o.entity_type AS "entityType",
         eid AS "entityId",
         o.client_id AS "clientId",
+        o.action_type AS "actionType",
         o.vector_clock AS "vectorClock",
         o.server_seq AS "serverSeq"
       FROM operations o
@@ -519,9 +573,11 @@ export const prefetchLatestEntityOpsForBatch = async (
         userId,
         entityType: 'GLOBAL_CONFIG',
         entityId: 'misc',
-        schemaVersion: { lt: CURRENT_SCHEMA_VERSION },
+        // Gate on the fixed split boundary, not CURRENT_SCHEMA_VERSION; see the
+        // detectConflictForEntity legacy-misc lookup for the full rationale.
+        schemaVersion: { lt: MISC_TASKS_SPLIT_SCHEMA_VERSION },
       },
-      select: { clientId: true, vectorClock: true, serverSeq: true },
+      select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
       orderBy: { serverSeq: 'desc' },
     });
     const tasksKey = getEntityConflictKey('GLOBAL_CONFIG', 'tasks');
@@ -542,9 +598,15 @@ export const prefetchLatestEntityOpsForBatch = async (
   return latestByEntity;
 };
 
-export const pruneVectorClockForStorage = (op: Operation): void => {
+export const pruneVectorClockForStorage = (
+  op: Operation,
+  preserveClientIds: readonly string[] = [],
+): void => {
   const beforeSize = Object.keys(op.vectorClock).length;
-  op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+  op.vectorClock = limitVectorClockSize(op.vectorClock, [
+    op.clientId,
+    ...preserveClientIds,
+  ]);
   const afterSize = Object.keys(op.vectorClock).length;
   if (afterSize < beforeSize) {
     Logger.debug(

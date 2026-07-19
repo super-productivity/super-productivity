@@ -45,5 +45,14 @@ export const IDLE_FORM_CFG: ConfigFormSection<IdleConfig> = {
         label: T.GCF.IDLE.IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK,
       },
     },
+    {
+      key: 'isSuppressIdleDuringFocusMode',
+      className: HelperClasses.isHideForNoAdvancedFeatures,
+      type: 'checkbox',
+      hideExpression: '!model.isEnableIdleTimeTracking',
+      templateOptions: {
+        label: T.GCF.IDLE.IS_SUPPRESS_IDLE_DURING_FOCUS_MODE,
+      },
+    },
   ],
 };

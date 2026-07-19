@@ -317,4 +317,33 @@ export class SyncTriggerService {
   isInitialSyncDoneSync(): boolean {
     return this._isInitialSyncDoneSync;
   }
+
+  /**
+   * The initial/after-enable gate as an edge — the exact observable mirror of
+   * {@link isInitialSyncDoneSync}, since `setInitialSyncDone()` is the only
+   * writer of both. For deferred work that must not start before the awaited
+   * initial path has opened the gate, and must be told the moment it does.
+   *
+   * NOT the same thing as the private `_isInitialSyncDone$`, which answers a
+   * different question ("may the UI show data yet?") and short-circuits to true
+   * for SuperSync and when initial sync is disabled.
+   *
+   * Emits on a `setInitialSyncDone()` call: replays the latest value to late
+   * subscribers, and emits nothing at all before the first flip (the gate reads
+   * closed via the getter until then).
+   *
+   * CAVEAT — this does NOT mean "the initial sync completed". The
+   * `MAX_WAIT_FOR_INITIAL_SYNC` (8s) failsafes inside
+   * `afterInitialSyncDoneAndDataLoadedInitially$` and `afterInitialSyncDoneStrict$`
+   * call `setInitialSyncDone(true)` from a `tap`, so a wall-clock timer opens
+   * this gate too — and both are subscribed live across the app, so the timers
+   * really are armed. The honest reading is "the gate is open", not "the initial
+   * sync landed": if the initial path hangs (e.g. the PWA update check, also 8s),
+   * the failsafe can open it first, a deferred background sync drains, and the
+   * later initial `sync()` bounces off `SyncCycleGuard.tryBegin()` and returns
+   * HANDLED_ERROR. Both paths call the same `sync()`, so the practical harm is
+   * low — but do not build a stronger invariant on this than it can carry.
+   */
+  readonly initialSyncGateOpen$: Observable<boolean> =
+    this._isInitialSyncDoneManual$.asObservable();
 }

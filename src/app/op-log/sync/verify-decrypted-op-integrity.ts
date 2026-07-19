@@ -5,6 +5,85 @@ import { isSingletonEntityId } from '../core/entity-registry';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { ACTION_TYPE_ALIASES } from '../apply/operation-converter.util';
 import { SyncLog } from '../../core/log';
+import {
+  extractFullStateFromPayload,
+  FULL_STATE_OP_TYPES,
+  OpType,
+} from '../core/operation.types';
+import {
+  CURRENT_SCHEMA_VERSION,
+  MIN_SUPPORTED_SCHEMA_VERSION,
+  migrateState,
+} from '@sp/shared-schema';
+
+let _validateAllDataPromise:
+  | Promise<typeof import('../validation/validation-fn').validateAllData>
+  | undefined;
+
+const _loadValidateAllData = (): Promise<
+  typeof import('../validation/validation-fn').validateAllData
+> => {
+  if (!_validateAllDataPromise) {
+    _validateAllDataPromise = import('../validation/validation-fn')
+      .then((m) => m.validateAllData)
+      .catch((err) => {
+        _validateAllDataPromise = undefined;
+        throw err;
+      });
+  }
+  return _validateAllDataPromise;
+};
+
+const _isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const _restoreKnownFullStateOmissionsForValidation = (fullState: unknown): unknown => {
+  if (!_isRecord(fullState)) {
+    return fullState;
+  }
+
+  // Pre-section backups are still supported by the loadAllData reducers.
+  const stateForValidation = Object.hasOwn(fullState, 'section')
+    ? fullState
+    : { ...fullState, section: { ids: [], entities: {} } };
+  const globalConfig = stateForValidation['globalConfig'];
+  if (!_isRecord(globalConfig)) {
+    return stateForValidation;
+  }
+  const syncConfig = globalConfig['sync'];
+  if (!_isRecord(syncConfig) || Object.hasOwn(syncConfig, 'syncInterval')) {
+    return stateForValidation;
+  }
+
+  // Snapshot uploads intentionally omit this device-local setting. Its actual
+  // value is restored downstream; only its required numeric shape matters here.
+  return {
+    ...stateForValidation,
+    globalConfig: {
+      ...globalConfig,
+      sync: { ...syncConfig, syncInterval: 0 },
+    },
+  };
+};
+
+const _migrateFullStateForValidation = (
+  op: SyncOperation,
+  fullState: unknown,
+): unknown => {
+  const rawSchemaVersion = (op as { schemaVersion?: unknown }).schemaVersion;
+  const schemaVersion = rawSchemaVersion === undefined ? 1 : rawSchemaVersion;
+  if (
+    typeof schemaVersion !== 'number' ||
+    !Number.isInteger(schemaVersion) ||
+    schemaVersion < MIN_SUPPORTED_SCHEMA_VERSION ||
+    schemaVersion >= CURRENT_SCHEMA_VERSION
+  ) {
+    return fullState;
+  }
+
+  const migrationResult = migrateState(fullState, schemaVersion, CURRENT_SCHEMA_VERSION);
+  return migrationResult.success ? migrationResult.data : fullState;
+};
 
 /**
  * Verifies that a just-decrypted operation's UNAUTHENTICATED metadata is
@@ -37,9 +116,9 @@ import { SyncLog } from '../../core/log';
  * NOTE: interim hardening only. The plaintext-injection downgrade (a forged op
  * with `isPayloadEncrypted=false` that would skip decryption AND this check) is
  * handled separately by `assertOpsEncryptedWhenExpected` at the download
- * boundary. Still OPEN pending the durable fix (bind metadata as GCM AAD behind
- * an envelope-versioned migration):
- *  - `opType` promotion to a full-state (`loadAllData`) op.
+ * boundary. Full-state `opType` promotion is handled below by
+ * `assertDecryptedFullStateOpIntegrity`. Still OPEN pending the durable fix
+ * (bind metadata as GCM AAD behind an envelope-versioned migration):
  *  - Within-LWW `entityType`/`actionType` swap (ids left equal so this passes).
  *  - `vectorClock`/`timestamp` reorder/replay.
  * See GHSA-8pxh-mgc7-gp3g and
@@ -74,24 +153,154 @@ export const assertDecryptedOpMetadataIntegrity = (
   // (unauthenticated) `op.entityId`. Missing / non-string / mismatched all mean
   // the metadata cannot be trusted — convertOpToAction coerces `id = op.entityId`
   // in every one of those cases, so anything but a positive match is rejected.
-  if (typeof payloadId === 'string' && payloadId === op.entityId) {
+  if (!(typeof payloadId === 'string' && payloadId === op.entityId)) {
+    // Log ids only — never payload content (op log is exportable). Rule 9.
+    SyncLog.err(
+      '[assertDecryptedOpMetadataIntegrity] encrypted op entityId does not match authenticated payload.id — rejecting (possible sync-server tampering)',
+      {
+        opId: op.id,
+        entityType: op.entityType,
+        opEntityId: op.entityId,
+        payloadId: typeof payloadId === 'string' ? payloadId : `<${typeof payloadId}>`,
+        actionType: op.actionType,
+      },
+    );
+    throw new OperationIntegrityError(
+      `Operation ${op.id} failed metadata integrity check: encrypted payload id ` +
+        `does not match op.entityId (possible sync-server tampering). ` +
+        `GHSA-8pxh-mgc7-gp3g`,
+    );
+  }
+
+  // Second vector on the same LWW update: the multi-task project-move footprint.
+  assertEncryptedProjectMoveFootprintIntegrity(op, actionPayload);
+};
+
+/**
+ * A task project-move LWW update declares its multi-task footprint twice: as the
+ * authenticated `payload.projectMoveSubTaskIds` (inside the AES-GCM ciphertext)
+ * and as the plaintext `op.entityIds` envelope field. The LWW project-repair
+ * reducer (task-shared-meta-reducers/lww-update.meta-reducer.ts) trusts
+ * `meta.entityIds` — copied verbatim from that envelope by convertOpToAction —
+ * as the source footprint and moves EVERY declared task out of its current
+ * project. A compromised sync server could therefore append victim task ids to
+ * the envelope of an otherwise-valid encrypted move and orphan those tasks,
+ * without touching (or being able to decrypt) the ciphertext.
+ *
+ * Bind the envelope footprint to the authenticated one: require exact-set
+ * equality between `op.entityIds` and `{op.entityId} ∪ projectMoveSubTaskIds`.
+ *
+ * INTERIM hardening — only enforceable when the authenticated payload actually
+ * carries a `projectMoveSubTaskIds` array. Synthetic LWW ops minted by conflict
+ * resolution legitimately carry `entityIds` WITHOUT that payload field (their
+ * footprint lives only in the plaintext envelope), so they cannot be validated
+ * here and are intentionally left untouched to avoid rejecting valid ops. Fully
+ * closing the envelope-injection vector needs the durable fix that is still
+ * OPEN: bind the complete footprint as GCM AAD behind an envelope-versioned
+ * migration so every producer's footprint is authenticated. GHSA-8pxh-mgc7-gp3g.
+ *
+ * @throws OperationIntegrityError when the declared footprint diverges from the
+ *   authenticated one.
+ */
+const assertEncryptedProjectMoveFootprintIntegrity = (
+  op: SyncOperation,
+  actionPayload: Record<string, unknown> | undefined,
+): void => {
+  if (op.entityIds === undefined || !op.entityId) {
+    return;
+  }
+  const subTaskIds = actionPayload?.['projectMoveSubTaskIds'];
+  if (!Array.isArray(subTaskIds)) {
+    // No authenticated footprint to bind against (e.g. synthetic LWW op) — see
+    // the "INTERIM hardening" note above. Leave the op unchanged.
     return;
   }
 
-  // Log ids only — never payload content (op log is exportable). Rule 9.
+  const authenticatedFootprint = new Set<string>([
+    op.entityId,
+    ...subTaskIds.filter((id): id is string => typeof id === 'string'),
+  ]);
+  // Exact-set equality: same size (no extras, no duplicates, no non-strings) and
+  // every declared id is in the authenticated footprint (no injected victim id).
+  const isExactSet =
+    op.entityIds.length === authenticatedFootprint.size &&
+    op.entityIds.every((id) => typeof id === 'string' && authenticatedFootprint.has(id));
+  if (isExactSet) {
+    return;
+  }
+
+  // Log ids/counts only — never payload content (op log is exportable). Rule 9.
   SyncLog.err(
-    '[assertDecryptedOpMetadataIntegrity] encrypted op entityId does not match authenticated payload.id — rejecting (possible sync-server tampering)',
+    '[assertDecryptedOpMetadataIntegrity] encrypted op entityIds do not match the authenticated project-move footprint — rejecting (possible sync-server tampering)',
     {
       opId: op.id,
       entityType: op.entityType,
       opEntityId: op.entityId,
-      payloadId: typeof payloadId === 'string' ? payloadId : `<${typeof payloadId}>`,
+      declaredCount: op.entityIds.length,
+      authenticatedCount: authenticatedFootprint.size,
       actionType: op.actionType,
     },
   );
   throw new OperationIntegrityError(
-    `Operation ${op.id} failed metadata integrity check: encrypted payload id ` +
-      `does not match op.entityId (possible sync-server tampering). ` +
+    `Operation ${op.id} failed metadata integrity check: encrypted op entityIds do ` +
+      `not match the authenticated project-move footprint (possible sync-server ` +
+      `tampering). GHSA-8pxh-mgc7-gp3g`,
+  );
+};
+
+/**
+ * Rejects an encrypted operation whose unauthenticated `opType` was promoted
+ * to a full-state operation while its authenticated payload is not complete
+ * application data.
+ *
+ * Full-state payloads exist in two legitimate formats: direct app data for
+ * SYNC_IMPORT/BACKUP_IMPORT and an `appDataComplete` wrapper for REPAIR (plus
+ * legacy wrapped imports). Validation is loaded lazily because Typia's
+ * generated full-state validator is large and must stay out of the initial
+ * application bundle.
+ *
+ * Supported legacy state is migrated on a copy before validation because this
+ * boundary runs before RemoteOpsProcessingService's normal operation processing.
+ * Known compatible omissions are also restored on that copy: pre-section backups
+ * and the device-local sync interval intentionally stripped from wire snapshots.
+ * The decrypted payload itself remains unchanged for the existing downstream path.
+ * This check intentionally uses structural Typia validation only. Cross-model
+ * relationship validation would turn recoverable data inconsistencies into a
+ * security failure and is not needed to distinguish ordinary entity payloads
+ * from complete state.
+ *
+ * @throws OperationIntegrityError when a full-state op carries a non-full-state payload.
+ */
+export const assertDecryptedFullStateOpIntegrity = async (
+  op: SyncOperation,
+  decryptedPayload: unknown,
+): Promise<void> => {
+  if (!FULL_STATE_OP_TYPES.has(op.opType as OpType)) {
+    return;
+  }
+
+  const validateAllData = await _loadValidateAllData();
+  const fullState = extractFullStateFromPayload(decryptedPayload);
+  const migratedState = _migrateFullStateForValidation(op, fullState);
+  const stateToValidate = _restoreKnownFullStateOmissionsForValidation(migratedState);
+  const validationResult = validateAllData(stateToValidate);
+  if (validationResult.success) {
+    return;
+  }
+
+  // Never log validator values: they can contain task titles, notes, and other
+  // user content. `opType` is safe here because it matched the fixed allowlist.
+  SyncLog.err(
+    '[assertDecryptedFullStateOpIntegrity] encrypted full-state op payload is not complete app data — rejecting (possible sync-server tampering)',
+    {
+      opId: op.id,
+      opType: op.opType,
+      validationErrorCount: validationResult.errors.length,
+    },
+  );
+  throw new OperationIntegrityError(
+    `Operation ${op.id} failed metadata integrity check: encrypted payload is not ` +
+      `valid full-state data for ${op.opType} (possible sync-server tampering). ` +
       `GHSA-8pxh-mgc7-gp3g`,
   );
 };

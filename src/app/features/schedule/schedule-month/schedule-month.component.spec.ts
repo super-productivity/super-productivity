@@ -3,6 +3,7 @@ import { Component, Input, signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { registerLocaleData } from '@angular/common';
 import localeDe from '@angular/common/locales/de';
+import localeSv from '@angular/common/locales/sv';
 import { ScheduleMonthComponent } from './schedule-month.component';
 import { ScheduleService } from '../schedule.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -28,8 +29,11 @@ describe('ScheduleMonthComponent', () => {
     mockScheduleService.getEventDayStr.and.returnValue(null);
 
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
-      currentLocale: () => 'en-US',
+      currentLocale: () => 'sv',
+      isoTextLocale: () => 'de',
     });
+
+    registerLocaleData(localeSv, 'sv');
 
     await TestBed.configureTestingModule({
       imports: [ScheduleMonthComponent],
@@ -301,7 +305,7 @@ describe('ScheduleMonthComponent', () => {
 
       // Assert
       // Sunday should be first
-      expect(headers[0]).toContain('Sun');
+      expect(headers[0]).toBe('So');
     });
 
     it('should start with Monday when firstDayOfWeek is 1', () => {
@@ -314,7 +318,7 @@ describe('ScheduleMonthComponent', () => {
 
       // Assert
       // Monday should be first
-      expect(headers[0]).toContain('Mon');
+      expect(headers[0]).toBe('Mo');
     });
 
     it('should cycle correctly for all days of week', () => {
@@ -453,7 +457,10 @@ describe('ScheduleMonthComponent dayNumberByDay (SPAP-26)', () => {
       imports: [ScheduleMonthComponent],
       providers: [
         { provide: ScheduleService, useValue: scheduleServiceStub },
-        { provide: DateTimeFormatService, useValue: { currentLocale: localeSig } },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: localeSig, isoTextLocale: () => null },
+        },
       ],
     })
       .overrideComponent(ScheduleMonthComponent, {

@@ -1,11 +1,17 @@
-import { IpcRendererEvent } from 'electron';
+// This file is pulled into the frontend TS program (via src/app/core/window-ea.d.ts).
+// That program sets `types: []`, so it has no ambient Node globals of its own and
+// relied on the now-removed `import { IpcRendererEvent } from 'electron'` here to
+// transitively supply them. Several frontend/shared modules still probe Node globals
+// guarded at runtime (get-dist-channel's `process`/`NodeJS`, generate-client-id's
+// `process`, create-task-placeholder's `NodeJS.Timeout`, user-profile's `require`),
+// so re-expose them explicitly instead of by accident.
+/// <reference types="node" />
 import {
   GlobalConfigState,
   TakeABreakConfig,
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
-import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
@@ -16,12 +22,10 @@ import {
   LocalRestApiResponsePayload,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import { JiraElectronApi } from './shared-with-frontend/jira-request.model';
 
 export interface ElectronAPI {
-  on(
-    channel: string,
-    listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-  ): void;
+  on(channel: string, listener: (...args: unknown[]) => void): void;
 
   // SYNC
   // ----
@@ -55,15 +59,38 @@ export interface ElectronAPI {
   checkDirExists(args: { relativePath?: string }): Promise<true | Error>;
 
   /**
-   * Opens the native folder picker for the sync folder. Resolves to:
-   * - `string`: the canonicalized, persisted folder path on success
+   * Opens the native folder picker for the sync folder. Prepare-only (#9075):
+   * the pick is held main-side as a pending candidate and does NOT become the
+   * live sync target until `commitPickedDirectory()` (settings Save).
+   * Resolves to:
+   * - `string`: the canonicalized candidate folder path (display only)
    * - `undefined`: the user cancelled the picker
-   * - `Error`: the pick succeeded but main could not canonicalize/persist it
-   *   (e.g. the folder was deleted between pick and commit, EACCES, or the
-   *   folder lives inside the app's private dir). Nothing is persisted in
+   * - `Error`: the pick succeeded but main could not canonicalize/validate it
+   *   (e.g. the folder was deleted right after picking, EACCES, or the
+   *   folder lives inside the app's private dir). No candidate is stored in
    *   this case; the renderer must treat it as a failure, not a picked path.
    */
   pickDirectory(): Promise<string | Error | undefined>;
+
+  /**
+   * Persists the pending picked folder (see `pickDirectory`) as the live sync
+   * target. Call from settings Save only. Resolves to:
+   * - `{ path, isChanged }`: committed; `isChanged` is false when the user
+   *   re-picked the folder that was already configured (callers must skip
+   *   target-change invalidation in that case)
+   * - `null`: no pending candidate (routine save without a pick) — a no-op
+   * - `Error`: validation/persistence failed (e.g. folder deleted between
+   *   pick and Save). The candidate is kept so a retry fails loudly instead
+   *   of silently saving without the folder change.
+   */
+  commitPickedDirectory(): Promise<{ path: string; isChanged: boolean } | null | Error>;
+
+  /**
+   * Drops the pending picked folder without touching the live sync target.
+   * Call when the settings UI closes without a save. No-op if nothing is
+   * pending.
+   */
+  discardPickedDirectory(): Promise<void>;
 
   /**
    * Returns the main-owned sync folder path for display, or null if not yet
@@ -220,16 +247,6 @@ export interface ElectronAPI {
 
   showFullScreenBlocker(args: { msg?: string; takeABreakCfg: TakeABreakConfig }): void;
 
-  // TODO use invoke instead
-  makeJiraRequest(args: {
-    requestId: string;
-    url: string;
-    requestInit: RequestInit;
-    jiraCfg: JiraCfg;
-  }): void;
-
-  jiraSetupImgHeaders(args: { jiraCfg: JiraCfg }): void;
-
   backupAppData(args: {
     data: AppDataCompleteLegacy | AppDataComplete;
     maxBackupFiles?: number | null;
@@ -249,6 +266,8 @@ export interface ElectronAPI {
   ): void;
 
   onSwitchTask(listener: (taskId: string) => void): void;
+
+  consumeJiraApi(): JiraElectronApi | null;
 
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 

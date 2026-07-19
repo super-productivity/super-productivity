@@ -13,7 +13,7 @@ test.describe('Project completion', () => {
     await workViewPage.waitForTaskList();
   });
 
-  test('complete a project and see the celebration', async ({ page }) => {
+  test('complete a project and reopen it from archived projects', async ({ page }) => {
     // Arrange: a project with one done and one unfinished task
     await projectPage.createProject('Test Project');
     await projectPage.navigateToProjectByName('Test Project');
@@ -56,10 +56,21 @@ test.describe('Project completion', () => {
     await expect(celebration.getByText(/project complete/i)).toBeVisible();
     await expect(celebration.getByText('Test Project')).toBeVisible();
 
-    // Close the celebration. There is no reopen/undo here — completion resolves
-    // tasks irreversibly; reactivation lives on the archived-projects page.
+    // Close the celebration and exercise the reactivation path.
     await celebration.locator('.actions button').click();
     await expect(celebration).toBeHidden();
+
+    await page.goto('/#/archived-projects');
+    const archivedProject = page
+      .locator('archived-projects-page .project-row')
+      .filter({ hasText: 'Test Project' });
+    await expect(archivedProject).toBeVisible();
+
+    await archivedProject.getByRole('button', { name: 'Reopen' }).click();
+
+    await expect(archivedProject).toHaveCount(0);
+    await projectPage.navigateToProjectByName('Test Project');
+    await expect(page).toHaveURL(/\/#\/project\/.+\/tasks/);
 
     await expectNoGlobalError(page);
   });

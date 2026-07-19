@@ -88,9 +88,9 @@ The Operation Log serves **four distinct purposes**:
 | **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅ (single-version)¹ |
 | **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅                   |
 
-> ¹ **Cross-version sync limitation**: Part C is complete for clients on the same schema version. Cross-version sync (A.7.11) is not yet implemented—see [A.7.11 Conflict-Aware Migration](#a711-conflict-aware-migration-strategy) for guardrails.
+> ¹ **Cross-version sync**: receiver-side op migration (A.7.11) runs before conflict detection. The remaining caveat is the released fleet: v17.0.0–v18.14.0 clients apply newer-schema ops (up to schema 5) unmigrated — see the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet).
 
-> **✅ Migration Ready**: Migration safety (A.7.12), tail ops consistency (A.7.13), and unified migration interface (A.7.15) are now implemented. The system is ready for schema migrations when `CURRENT_SCHEMA_VERSION > 1`.
+> **✅ Migrations Active**: Migration safety (A.7.12), tail ops consistency (A.7.13), and unified migration interface (A.7.15) are implemented, and real migrations exist — `CURRENT_SCHEMA_VERSION = 4` (v1→v2 misc-to-tasks-settings split; v2→v3 and v3→v4 are semantic compatibility barriers). See A.7 and the A.7.11 Bump Policy.
 
 This document is structured around these four purposes. Most complexity lives in **Part A** (local persistence). **Part B** handles file-based sync via the `FileBasedSyncAdapter`. **Part C** handles operation-based sync with SuperSync server. **Part D** integrates validation and automatic repair.
 
@@ -215,7 +215,28 @@ Downloaded operations use a durable status transition so reducer state, archive 
 3. `failed` — an archive side-effect attempt failed. `retryCount` is charged only to the attempted row, so later rows in the same batch do not consume retry budget.
 4. `applied` — reducer and archive work both completed.
 
-Startup hydration replays persisted state history, quarantines surviving `pending` rows, and retries `archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download, upload, or advance its cursor while any incomplete rows remain. Database version 8 is a downgrade barrier: released readers that do not understand the distinct reducer checkpoint cannot open the newer store and silently overlook outstanding archive work.
+Bulk replay isolates conversion/reducer exceptions per operation. The reducer-successful
+subsequence is checkpointed and receives archive side effects; ordinary reducer-failed remote
+rows are marked with terminal `rejectedAt` plus `reducerRejectedAt` metadata in the **same transaction**.
+`reducerRejectedAt` is distinct from an ordinary sync rejection: hydration excludes that row
+because its migrated reducer effect never entered state. Pending rows deliberately removed by a
+schema migration receive the same terminal marker. This prevents one malformed operation from
+terminating NgRx's state pipeline or receiving archive work, without creating a crash window
+where startup could mistake it for incomplete reducer work.
+
+Full-state and local operations are exceptions: a full-state failure discards the entire
+speculative bulk batch, while a local replay failure aborts hydration without rejecting the user
+intent. Neither case is terminally acknowledged when its state never entered NgRx.
+
+Startup recovery leaves surviving `pending` rows pending, then hydration replays them through the
+same per-operation reducer-failure collector. Successful rows and reducer failures are durably
+partitioned before archive retry or snapshot creation. A pending full-state operation never uses
+the direct-load shortcut. During live sync, a full-state reducer failure aborts before the reducer
+checkpoint and server cursor advance, so the pending row remains recoverable. Hydration retries
+`archive_pending`/`failed` rows with reducer dispatch disabled. Ordinary sync refuses to download,
+upload, or advance its cursor while any incomplete rows remain. Version 8 introduced a downgrade
+barrier for the reducer/archive checkpoint; version 9 similarly prevents older readers from replaying
+operations quarantined with `reducerRejectedAt`.
 
 Local actions buffered during a remote-apply window stay ordered until each operation is durable. Transient persistence failures keep the failed suffix queued and block the current sync so a later sync can retry. A deterministically invalid buffered action also remains queued, but requires reload: its reducer already changed live state, so discarding it would let live state diverge from the durable operation log.
 
@@ -399,12 +420,15 @@ Without compaction, the op log grows unbounded. Compaction:
 
 ```typescript
 async compact(): Promise<void> {
-  // 1. Acquire lock
-  await this.lockService.request('sp_op_log_compact', async () => {
-    // 2. Read current state from NgRx (via delegate)
+  // 1. Acquire the operation-log lock
+  await this.lockService.request('sp_op_log', async () => {
+    // 2. Never advance a snapshot past reducer-uncommitted remote rows
+    if ((await this.opLogStore.getPendingRemoteOps()).length > 0) return;
+
+    // 3. Read current state from NgRx (via delegate)
     const currentState = await this.storeDelegate.getAllSyncModelDataFromStore();
 
-    // 3. Save new snapshot
+    // 4. Save new snapshot
     const lastSeq = await this.opLogStore.getLastSeq();
     await this.opLogStore.saveStateCache({
       state: currentState,
@@ -414,16 +438,25 @@ async compact(): Promise<void> {
       schemaVersion: CURRENT_SCHEMA_VERSION
     });
 
-    // 4. Delete old ops (sync-aware)
-    // Only delete ops that have been synced AND are older than retention window
+    // 5. Delete old terminal ops only
     const retentionWindowMs = 7 * 24 * 60 * 60 * 1000; // 7 days
     const cutoff = Date.now() - retentionWindowMs;
 
     await this.opLogStore.deleteOpsWhere(
-      (entry) =>
-        !!entry.syncedAt && // never drop unsynced ops
-        entry.appliedAt < cutoff &&
-        entry.seq <= lastSeq
+      (entry) => {
+        const rejected = entry.rejectedAt !== undefined;
+        const complete =
+          rejected ||
+          entry.applicationStatus === undefined ||
+          entry.applicationStatus === 'applied';
+        const terminalAt = entry.rejectedAt ?? entry.appliedAt;
+        return (
+          (!!entry.syncedAt || rejected) &&
+          complete &&
+          terminalAt < cutoff &&
+          entry.seq <= lastSeq
+        );
+      }
     );
   });
 }
@@ -438,7 +471,9 @@ async compact(): Promise<void> {
 | Emergency retention             | 1 day   | Shorter retention for quota exceeded           |
 | Compaction timeout              | 25 sec  | Abort if exceeds (prevents lock expiration)    |
 | Max compaction failures         | 3       | Failures before user notification              |
-| Unsynced ops                    | ∞       | Never delete unsynced ops                      |
+| Unsynced non-rejected ops       | ∞       | Never delete unsynced active ops               |
+| Incomplete remote ops           | ∞       | Never delete pending/archive_pending/failed    |
+| Rejected ops retention          | 7 days  | Delete after terminal rejection retention      |
 | Max download ops in memory      | 50,000  | Bounds memory during API download              |
 | Remote file retention           | 14 days | Server-side operation file retention           |
 | Max remote files to keep        | 100     | Minimum recent files on server                 |
@@ -566,12 +601,18 @@ export class MyEffects {
 
 ```
 1. Detect: Hydration fails or returns empty/invalid state
-2. Check legacy 'pf' database for data
-3. If found: Run recovery migration with that data
-4. If not: Check remote sync for data
-5. If remote has data: Force sync download
-6. If all else fails: User must restore from backup
+2. Verify SUP_OPS has neither a snapshot nor any operation rows
+3. Only when SUP_OPS is provably empty, check legacy 'pf' database for data
+4. If found: Run recovery migration with that data
+5. Otherwise: restore through sync or a user-selected backup
 ```
+
+Automatic legacy recovery runs the emptiness check and legacy write under the operation-log
+lock, and fails closed. A present snapshot, a non-empty operation log, or an inspection error
+prevents the legacy write and propagates the hydration failure. The generic hydration catch
+must never place an older `pf` copy at the current SUP_OPS sequence frontier. When recovery is
+allowed, the recovery operation, state-cache snapshot, and vector clock commit in one IndexedDB
+transaction; an interrupted write cannot leave a snapshot claiming an operation that rolled back.
 
 ### Implementation
 
@@ -580,11 +621,12 @@ async hydrateStore(): Promise<void> {
   try {
     const snapshot = await this.opLogStore.loadStateCache();
     if (!snapshot || !this.isValidSnapshot(snapshot)) {
-      await this.attemptRecovery();
-      return;
+      // attemptRecovery() proceeds only if snapshot === null and lastSeq === 0
+      return await this.attemptRecovery();
     }
     // Normal hydration...
   } catch (e) {
+    // This rethrows when SUP_OPS is non-empty or cannot be inspected.
     await this.attemptRecovery();
   }
 }
@@ -605,16 +647,19 @@ private async attemptRecovery(): Promise<void> {
 
 When Super Productivity's data model changes (new fields, renamed properties, restructured entities), schema migrations ensure existing data remains usable after app updates.
 
-> **Current Status:** Migration infrastructure is implemented, but no actual migrations exist yet. The `MIGRATIONS` array is empty and `CURRENT_SCHEMA_VERSION = 1`. This section documents the designed behavior for when migrations are needed.
+> **Current Status (2026-07):** `CURRENT_SCHEMA_VERSION = 4`. Three migrations exist: v1→v2 (misc-to-tasks-settings split, a real payload transformation) and two no-op semantic barriers — v2→v3 (replacement-mode LWW envelopes) and v3→v4 (marked project delete-wins). The barriers change no stored shapes; they gate conflict semantics for receivers that understand them. Read the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet) before adding version 5.
 
 ### Configuration
 
-`CURRENT_SCHEMA_VERSION` is defined in `src/app/op-log/store/schema-migration.service.ts`:
+`CURRENT_SCHEMA_VERSION` is defined in `packages/shared-schema/src/schema-version.ts` (shared by client and server) and re-exported through `src/app/op-log/persistence/schema-migration.service.ts`:
 
 ```typescript
-export const CURRENT_SCHEMA_VERSION = 1;
+export const PROJECT_DELETE_WINS_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = PROJECT_DELETE_WINS_SCHEMA_VERSION;
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
-export const MAX_VERSION_SKIP = 5; // Max versions ahead we'll attempt to load
+// MAX_VERSION_SKIP was removed: current receivers block any newer-schema op
+// outright. Released v17.0.0–v18.14.0 clients still ship the old +3 band and
+// apply ops up to schema 5 UNMIGRATED — see the A.7.11 Bump Policy.
 ```
 
 ### Core Concepts
@@ -717,6 +762,10 @@ Client v2 ◄─── ops from v1 client
 
 Scenario 2: Older client receives newer ops
 ──────────────────────────────────────────
+[OUTDATED design sketch — actual behavior differs. Current (post-v18.14.0)
+receivers BLOCK any newer-schema op outright (cursor frozen, update prompt).
+Released v17–v18.14 receivers apply newer ops UNMIGRATED — unknown fields are
+NOT ignored; reducers write them into state. See the A.7.11 Bump Policy.]
 Client v1 ◄─── ops from v2 client
     │
     ├── Individual ops: Unknown fields ignored (graceful degradation)
@@ -737,6 +786,8 @@ Client v1 conflicts with Client v2
 ### A.7.4 Full State Imports (SYNC_IMPORT/BACKUP_IMPORT)
 
 When receiving full state from remote (e.g., SYNC_IMPORT from another client):
+
+> **Note (2026-07):** the pseudo-code below predates the removal of the forward-compat band (`MAX_VERSION_SKIP` no longer exists; current receivers block any newer-versioned data outright). Kept as design context only.
 
 ```typescript
 async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Promise<void> {
@@ -783,7 +834,7 @@ async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Prom
 
 ### A.7.5 Migration Implementation
 
-Migrations are defined in `src/app/op-log/store/schema-migration.service.ts`.
+Migrations are defined in `packages/shared-schema/src/migrations/` (registered in its `index.ts`); the Angular wrapper is `src/app/op-log/persistence/schema-migration.service.ts`.
 
 **How to Create a New Migration:**
 
@@ -848,22 +899,20 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 **Rule of thumb:** Additive changes (new optional fields, new entities) don't need operation migration. Field renames/removals require it.
 
-### A.7.8 Cross-Version Sync (Not Yet Implemented)
+### A.7.8 Cross-Version Sync
 
-**Status:** Design ready, not implemented. Safe while `CURRENT_SCHEMA_VERSION = 1`.
+**Status:** Implemented receiver-side: every remote op passes `SchemaMigrationService.migrateOperation()` before conflict detection (`RemoteOpsProcessingService`, STEP 1). Sender uploads ops as-is.
 
-**Strategy:** Receiver migrates incoming ops before conflict detection. Sender uploads ops as-is.
+**Guardrails for newer-schema ops:**
 
-**Interim guardrails:**
-
-- Reject ops with `schemaVersion > CURRENT + MAX_VERSION_SKIP`
-- Prompt user to update app when receiving newer-version ops
+- Current receivers (post-v18.14.0): block any op with `schemaVersion > CURRENT_SCHEMA_VERSION` outright, freeze the download cursor, and prompt for an app update.
+- Released receivers (v17.0.0–v18.14.0): tolerate up to `CURRENT + 3` (their `MAX_VERSION_SKIP`) and apply those ops UNMIGRATED after a once-per-session warning — and they advance the cursor even when blocking, permanently skipping blocked ops. This fleet reality drives the A.7.11 Bump Policy.
 
 **Required before:** Any schema migration that renames/removes fields.
 
 ### A.7.11 Cross-Version Sync Implementation Guide
 
-> **Status:** Not yet implemented. This section documents the design for when `CURRENT_SCHEMA_VERSION > 1`.
+> **Status:** The receiver-side migration pipeline is implemented and `CURRENT_SCHEMA_VERSION = 4` (two of the three existing migrations are no-op semantic barriers). The Bump Policy below is normative.
 
 This guide provides the implementation roadmap for supporting sync between clients on different schema versions.
 
@@ -882,6 +931,21 @@ Bump the schema version when:
 | Bug fix in reducer              | ❌ No         | Not a schema change                                                  |
 
 **Decision rule:** If the change affects how `state_cache` snapshots or operation payloads are structured, bump the version.
+
+> ⚠️ **This table is a legacy shape-based heuristic — the Bump Policy below supersedes it.** Several "✅ Yes" rows (especially _add optional field with default_) are degradable via the `LwwUpdatePayload` envelope / inert-marker pattern: when old clients can apply the op unmigrated, prefer a payload marker with **no** bump (Bump Policy item 0). Bump only for a change old clients would genuinely misapply — a transforming migration (rename/remove/type-change) or a semantic you must hard-fence.
+
+#### Bump Policy — a bump does NOT protect the released fleet
+
+A version bump only fences receivers that ship AFTER the bump. As of 2026-07:
+
+- Every released client from v17.0.0 through v18.14.0 runs schema 2 with a forward-compat band (`MAX_VERSION_SKIP = 3`): it APPLIES ops up to schema 5 unmigrated after a once-per-session warning snack, and blocks schema ≥ 6 — but these clients advance the server cursor even while blocking, permanently skipping the blocked ops (loss that survives the later app update).
+- Post-v18.14.0 receivers block any newer-schema op outright and freeze the cursor (loud and lossless).
+
+Therefore:
+
+0. **Default: do NOT bump.** A bump is near-irreversible and it is not free even when "safe": it hard-blocks every not-yet-updated post-v18.14.0 client (frozen cursor) on the new ops, and it cannot be reverted once any op carries the new version — a reverted client hard-blocks on the v(N+1) ops it already wrote and the USE_REMOTE recovery path throws on them. So a bump must earn its cost. If old clients can apply the op unmigrated (the envelope / inert-marker pattern), gate the new semantics on a payload marker and **leave `CURRENT_SCHEMA_VERSION` alone**. Only bump when a change genuinely requires it: a transforming migration (renamed/removed field, dropped op) or a semantic you must hard-fence off older clients. **Cautionary example — v4 (#9009, project delete-wins) was bumped for a marker-only change old clients degrade on fine: the feature is driven entirely by the payload marker (plus the `entityId === projectId` auth check); the `schemaVersion >= 4` gate adds only narrow malformed-op hardening, not feature correctness. It needed no bump, yet it now fences every lagging post-v18.14.0 client and can't be undone. Don't repeat it.**
+1. New op semantics MUST degrade gracefully on older clients — see the `LwwUpdatePayload` envelope pattern in `packages/sync-core` ('patch' ops apply correctly on pre-v3 clients via `updateOne`; the v4 delete-wins marker is inert for them). If they degrade, bumping is _safe_ at any fleet share (the stamp is a fence for future receivers, not a protection for current ones) — but safe ≠ necessary: if it degrades, prefer a marker/envelope with **no** bump (see 0).
+2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
 
 #### Operation Transformation Strategy
 
@@ -946,14 +1010,15 @@ Remote Op (v1)          Local Op (v2)
 
 #### Backward Compatibility Guarantees
 
-| Scenario                                   | Behavior                                             | User Experience           |
-| ------------------------------------------ | ---------------------------------------------------- | ------------------------- |
-| Newer client → Older client                | Ops uploaded as-is; older client migrates on receive | Seamless                  |
-| Older client → Newer client                | Newer client migrates incoming ops                   | Seamless                  |
-| Client too old (> MAX_VERSION_SKIP behind) | Reject ops, prompt update                            | "Please update app" modal |
-| Client too new (server rejects)            | N/A - server doesn't validate schema                 | No issue                  |
+| Scenario                                      | Behavior                                                                                                                                      | User Experience                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Older client → Newer client                   | Newer client migrates incoming ops                                                                                                            | Seamless                                        |
+| Newer client → post-v18.14.0 receiver         | Receiver blocks the op outright, freezes the cursor, prompts update                                                                           | Sync pauses loudly, lossless                    |
+| Newer client → released receiver (v17–v18.14) | Applies ops up to schema 5 UNMIGRATED (once-per-session warning); at ≥ 6 blocks but advances the cursor, permanently skipping the blocked ops | Silent misapply / silent loss — see Bump Policy |
+| Op below `MIN_SUPPORTED_SCHEMA_VERSION`       | Reject ops, prompt update                                                                                                                     | "Please update app" error                       |
+| Client too new (server rejects)               | N/A - server doesn't validate schema semantics (bounds check only)                                                                            | No issue                                        |
 
-**MAX_VERSION_SKIP = 5**: Clients more than 5 versions behind cannot sync until updated. This bounds the migration chain complexity.
+There is no forward-migration path: an older client can never migrate a newer op. Cross-version safety toward older clients rests entirely on payload-level graceful degradation (see Bump Policy above). `MAX_VERSION_SKIP` no longer exists in current code; released v17–v18.14 clients shipped it as `3`.
 
 #### Migration Rollout Strategy
 
@@ -1162,6 +1227,16 @@ async hydrateFromRemoteSync(downloadedMainModelData?: Record<string, unknown>): 
 
 Archive data (`archiveYoung`, `archiveOld`) is included in the state snapshot for file-based sync.
 Archives are written directly to IndexedDB via `ArchiveDbAdapter` (bypassing the operation log for performance).
+
+Remote full-state replay holds the archive mutex while it loads, preflights, and writes both
+archive halves. When both halves are available, `archiveYoung` and `archiveOld` commit through
+one `saveArchivesAtomic()` transaction; a protected or omitted half is carried forward unchanged.
+`BACKUP_IMPORT` does not prompt on receiving clients: the originating restore was already an
+explicit user decision, so replay is deterministic across devices.
+
+Archive compression uses the same `TASK_ARCHIVE` mutex for its entire read-compress-write cycle.
+This prevents compression from overwriting a concurrent full-state replacement with archives it
+read before the replacement. The final young/old pair is still committed atomically.
 
 ### Why Archives Bypass Operation Log
 
@@ -1406,27 +1481,12 @@ Conflicts are automatically resolved using Last-Write-Wins (LWW) strategy via `C
 2. **Newer wins**: The side with the newer timestamp wins
 3. **Tie-breaker**: When timestamps are equal, remote wins (server-authoritative)
 
-```typescript
-async autoResolveConflictsLWW(conflicts: EntityConflict[], nonConflictingOps: Operation[]): Promise<void> {
-  for (const conflict of conflicts) {
-    const localMaxTimestamp = Math.max(...conflict.localOps.map(op => op.timestamp));
-    const remoteMaxTimestamp = Math.max(...conflict.remoteOps.map(op => op.timestamp));
-
-    if (localMaxTimestamp > remoteMaxTimestamp) {
-      // Local wins - create new UPDATE op with current entity state
-      const localWinOp = await this._createLocalWinUpdateOp(conflict);
-      // Reject both old local and remote ops
-      await this.opLogStore.markRejected([...localOpIds, ...remoteOpIds]);
-      // New op will sync local state on next upload
-      await this.opLogStore.append(localWinOp, 'local');
-    } else {
-      // Remote wins (including tie)
-      await this.operationApplier.applyOperations(conflict.remoteOps);
-      await this.opLogStore.markRejected(localOpIds);
-    }
-  }
-}
-```
+The selected operation or synthetic merge is persisted and applied before either original side
+is rejected. Only after reducer and archive work succeeds does the service finalize rejections
+and emit the conflict journal entry. A failed resolution therefore leaves the originals eligible
+for retry instead of recording a winner that never entered state. If a synthetic disjoint merge
+cannot pass reducer replay, that synthetic row is quarantined and the same conflict immediately
+falls back to ordinary LWW; a `merged` journal entry is emitted only when the merge itself succeeds.
 
 ### When Local Wins
 
@@ -1608,6 +1668,7 @@ enum OpType {
 interface RepairPayload {
   appDataComplete: AppDataCompleteNew; // Full repaired state
   repairSummary: RepairSummary; // What was fixed
+  repairBaseServerSeq?: number; // Server cursor included in this repaired state
 }
 
 interface RepairSummary {
@@ -1623,6 +1684,8 @@ interface RepairSummary {
 ### REPAIR Operation Behavior
 
 - **During replay**: REPAIR operations load state directly (like SyncImport), skipping prior operations
+- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded.
+- **Upload ordering**: If a full-state upload fails, later regular operations stay pending. Permanent snapshot failures are classified by the central rejection handler after any remote work has been applied. A rejected local explicit import/restore remains a durable upload barrier across later sync cycles; incremental operations resume only after a newer full-state snapshot succeeds. Rejected remote imports are conflict-resolution history, and stale automatic REPAIR is excluded so its concurrent suffix can download and trigger a fresh repair if still necessary.
 - **User notification**: Shows snackbar with count of issues fixed
 - **Audit trail**: REPAIR operations are visible in the operation log for debugging
 
@@ -1871,9 +1934,12 @@ fresh id.
 
 **Status:** Handled via Locks
 
-- Compaction acquires `sp_op_log_compact` lock
-- Sync operations use separate locks
-- **Verified safe**: Compaction only deletes ops with `syncedAt` set, so unsynced ops from active sync are preserved
+- Compaction and sync serialize on the operation-log lock
+- Compaction aborts before snapshotting while any non-rejected `pending` remote row exists
+- Deletion requires terminal status: synced applied/legacy-complete rows or old rejected rows
+- `archive_pending` and `failed` quarantine rows survive regardless of age
+- Emergency compaction returns `false` when it skips for pending reducer work or an empty/degraded
+  live state; callers only treat an actually written snapshot/prune pass as success
 
 ---
 
@@ -2230,7 +2296,7 @@ When adding new entities or relationships:
 | ------------------------------- | ------- | ---------------------------------------- | ------------------------------------------------------- |
 | **Conflict-aware op migration** | A.7.11  | Conflicts may compare mismatched schemas | Before any schema migration that renames/removes fields |
 
-> **Note**: A.7.11 is required for cross-version sync. Currently safe because `CURRENT_SCHEMA_VERSION = 1` (all clients on same version). See [A.7.11 Interim Guardrails](#interim-guardrails-until-implementation) for pre-release checklist.
+> **Note**: receiver-side op migration (A.7.11) runs before conflict detection. `CURRENT_SCHEMA_VERSION = 4`; released v17–v18.14 clients apply v3/v4 ops unmigrated and rely on payload-level graceful degradation — see the A.7.11 Bump Policy. What remains unimplemented is a _transforming_ migration for field renames/removals.
 
 ## Part B: Legacy Sync Bridge
 
@@ -2279,7 +2345,7 @@ When adding new entities or relationships:
   - Batch cleanup queries (replaced N+1 pattern)
   - Database index on `(user_id, received_at)` for cleanup queries
 
-> **Cross-version limitation**: Part C is complete for clients on the same schema version. When `CURRENT_SCHEMA_VERSION > 1` and clients run different versions, A.7.11 (conflict-aware op migration) is required to ensure correct conflict detection.
+> **Cross-version note**: incoming ops are migrated (A.7.11) before conflict detection. `CURRENT_SCHEMA_VERSION = 4` since 2026-07; cross-version safety against released v17–v18.14 clients rests on payload-level graceful degradation, not on the version fence — see the A.7.11 Bump Policy.
 
 ## Part D: Validation & Repair
 
@@ -2295,12 +2361,12 @@ When adding new entities or relationships:
 
 ## Future Enhancements 🔮
 
-| Component  | Description                                | Priority | Notes                                                                          |
-| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------ |
-| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                |
-| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                |
-| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation) |
-| A.7.11     | Conflict-aware operation migration         | High     | Required before `CURRENT_SCHEMA_VERSION > 1` for cross-version sync            |
+| Component  | Description                                | Priority | Notes                                                                                             |
+| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                                   |
+| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                                   |
+| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation)                    |
+| A.7.11     | Transforming operation migrations          | High     | Receiver-side pipeline exists; a rename/remove-field migration must follow the A.7.11 Bump Policy |
 
 > **Recently Completed (December 2025):**
 >
@@ -2338,11 +2404,10 @@ src/app/op-log/
 ├── operation-converter.util.ts           # Op ↔ Action conversion
 ├── persistent-action.interface.ts        # PersistentAction type + isPersistentAction guard
 ├── entity-key.util.ts                    # Entity key generation utilities
-├── store/
+├── persistence/
 │   ├── operation-log-store.service.ts        # SUP_OPS IndexedDB wrapper
 │   ├── operation-log-hydrator.service.ts     # Startup hydration + crash recovery
 │   ├── operation-log-compaction.service.ts   # Snapshot + cleanup + emergency mode
-│   ├── operation-log-manifest.service.ts     # File-based sync manifest management
 │   ├── operation-log-migration.service.ts    # Genesis migration from legacy
 │   └── schema-migration.service.ts           # State schema migrations
 ├── sync/

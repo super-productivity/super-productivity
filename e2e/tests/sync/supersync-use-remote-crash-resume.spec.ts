@@ -97,7 +97,9 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
           rebuildCommittedLog: REBUILD_COMMITTED_LOG,
         },
       );
-      await clientB.page.reload();
+      // `reload()` preserves sessionStorage (unlike close()+newPage()), which
+      // this test needs; `waitForAppReady` below is the real readiness gate.
+      await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
       await waitForAppReady(clientB.page);
 
       // Importing gives B a known local state and creates a full-state local op,
@@ -131,7 +133,13 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
 
       await clientB.sync.syncImportUseRemoteBtn.click();
       await crashObserved;
-      await clientB.page.reload();
+      // This reload races the crashed sync's unwind: while `isSyncInProgress` is
+      // still set, startup.service's beforeunload handler prevents the unload and
+      // Chrome prompts (the click above supplies the required user activation).
+      // installDevErrorDialogHandler accepts that prompt — without it the
+      // navigation never starts and this hangs. sessionStorage survives the
+      // reload; the assertion below depends on it.
+      await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
       await waitForAppReady(clientB.page);
       expect(
         await clientB.page.evaluate(

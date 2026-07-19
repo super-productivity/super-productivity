@@ -11,11 +11,7 @@ import { SyncSessionValidationService } from '../sync/sync-session-validation.se
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation, OpType, ActionType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
-import {
-  incrementVectorClock,
-  limitVectorClockSize,
-  mergeVectorClocks,
-} from '../../core/util/vector-clock';
+import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
@@ -28,6 +24,24 @@ import {
   applyLocalOnlySyncSettingsToAppData,
   stripLocalOnlySyncSettingsFromAppData,
 } from '../../features/config/local-only-sync-settings.util';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
+import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+
+interface SnapshotHydrationHooks {
+  /** Remote operations already represented by a file-based snapshot. */
+  snapshotIncludedOps?: readonly Operation[];
+  /** Runs synchronously after downloaded archive replacement commits. */
+  afterArchiveReplacement?: () => void;
+  /** Runs synchronously after the snapshot baseline transaction commits. */
+  afterSnapshotCachePersisted?: () => void;
+  /** Runs synchronously after the complete snapshot baseline commits. */
+  afterSnapshotPersisted?: () => void;
+  /** Runs synchronously immediately before loadAllData replaces live NgRx state. */
+  beforeStateLoad?: () => void;
+  /** Runs synchronously after loadAllData has replaced live NgRx state. */
+  afterStateLoad?: () => void;
+}
 
 /**
  * Handles hydration after remote sync downloads.
@@ -52,6 +66,8 @@ export class SyncHydrationService {
   private sessionValidation = inject(SyncSessionValidationService);
   private snackService = inject(SnackService);
   private archiveDbAdapter = inject(ArchiveDbAdapter);
+  private lockService = inject(LockService);
+  private taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
    * Handles hydration after a remote sync download.
@@ -71,16 +87,27 @@ export class SyncHydrationService {
    *   for file-based sync bootstrap to avoid "clean slate" semantics that would filter
    *   concurrent ops from other clients. Default is true for backwards compatibility
    *   and for explicit "use local/remote" conflict resolution flows.
+   * @param hooks - Internal orchestration hooks around archive and state replacement.
    */
   async hydrateFromRemoteSync(
     downloadedMainModelData?: Record<string, unknown>,
     remoteVectorClock?: Record<string, number>,
     createSyncImportOp: boolean = true,
     syncImportReason?: SyncImportReason,
+    hooks?: SnapshotHydrationHooks,
   ): Promise<void> {
     OpLog.normal('SyncHydrationService: Hydrating from remote sync...');
 
     try {
+      // Capture the exact pending set before any snapshot work can yield. The
+      // normal file-snapshot caller opens a remote-apply window around this
+      // method, so user actions arriving after this read are deferred and must
+      // be preserved on top of the downloaded snapshot rather than rejected as
+      // if they belonged to the superseded local baseline.
+      const unsyncedOpsToReject = createSyncImportOp
+        ? []
+        : await this.opLogStore.getUnsynced();
+
       // 0. Capture current local-only sync settings BEFORE overwriting
       // These settings should remain local to each client and not be overwritten by remote data.
       // FIX: isEnabled was not being preserved, causing sync to appear disabled after reload
@@ -94,31 +121,45 @@ export class SyncHydrationService {
         isManualSyncOnly: currentSyncConfig.isManualSyncOnly,
       };
 
-      // 1. Write archives to IndexedDB if they were included in the downloaded data.
-      // This is critical for file-based sync where archives are bundled with the snapshot.
-      // Archives must be written BEFORE we read them back via getAllSyncModelDataFromStoreAsync().
-      // NOTE: This only happens when actually applying remote state (not during conflict
-      // detection - the downloadOps method no longer writes archives prematurely).
-      if (downloadedMainModelData) {
-        const typedData = downloadedMainModelData as Record<string, unknown>;
-        if (typedData['archiveYoung']) {
-          await this.archiveDbAdapter.saveArchiveYoung(
-            typedData['archiveYoung'] as ArchiveModel,
-          );
-          OpLog.normal('SyncHydrationService: Wrote archiveYoung to IndexedDB from sync');
-        }
-        if (typedData['archiveOld']) {
-          await this.archiveDbAdapter.saveArchiveOld(
-            typedData['archiveOld'] as ArchiveModel,
-          );
-          OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
-        }
-      }
+      const typedDownloadedData = downloadedMainModelData as
+        | Record<string, unknown>
+        | undefined;
+      const downloadedArchiveYoung = typedDownloadedData?.['archiveYoung'] as
+        | ArchiveModel
+        | undefined;
+      const downloadedArchiveOld = typedDownloadedData?.['archiveOld'] as
+        | ArchiveModel
+        | undefined;
 
-      // 2. Read archive data from IndexedDB and merge with passed entity data
-      // Entity models (task, tag, project, etc.) come from downloadedMainModelData
-      // Archive models (archiveYoung, archiveOld) come from IndexedDB (now with synced data)
-      const dbData = await this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
+      // 1. Replace downloaded archives and read the resulting snapshot under one
+      // archive lock. Otherwise a local archive read-modify-write can start from
+      // the old archive, then save it after this replacement and silently erase
+      // downloaded entries. TASK_ARCHIVE is independent from OPERATION_LOG.
+      const dbData = await this.lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+        // Full-state imports retain their existing archive write order. File
+        // snapshots defer these writes to commitFileSnapshotBaseline(), where
+        // archives, state, clock, and included operations commit atomically.
+        if (createSyncImportOp) {
+          if (downloadedArchiveYoung) {
+            await this.archiveDbAdapter.saveArchiveYoung(downloadedArchiveYoung);
+            hooks?.afterArchiveReplacement?.();
+            OpLog.normal(
+              'SyncHydrationService: Wrote archiveYoung to IndexedDB from sync',
+            );
+          }
+          if (downloadedArchiveOld) {
+            await this.archiveDbAdapter.saveArchiveOld(downloadedArchiveOld);
+            hooks?.afterArchiveReplacement?.();
+            OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
+          }
+        }
+
+        // Archives must be read after the optional replacement while the same
+        // lock is still held so the state cache and loadAllData use one view.
+        return this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
+      });
+
+      // 2. Merge the serialized archive data with passed entity data.
 
       const mergedData = downloadedMainModelData
         ? { ...dbData, ...downloadedMainModelData }
@@ -159,9 +200,13 @@ export class SyncHydrationService {
         });
       }
 
-      const newClock = limitVectorClockSize(
+      // Store-owned pruning (#9096): preserves the current client and — for
+      // the file-snapshot bootstrap branch, where no SYNC_IMPORT is created
+      // and a previously stored full-state op stays the filter baseline — the
+      // latest full-state author. Must run after getOrGenerateClientId() so
+      // the id is persisted for the store's lookup.
+      const newClock = await this.opLogStore.pruneClockForStorage(
         incrementVectorClock(mergedClock, clientId),
-        clientId,
       );
 
       let lastSeq: number;
@@ -204,27 +249,13 @@ export class SyncHydrationService {
           'SyncHydrationService: Skipping SYNC_IMPORT creation (file-based bootstrap)',
         );
 
-        // CRITICAL: Reject any local pending ops since they're now based on superseded state.
-        // Without SYNC_IMPORT, SyncImportFilterService won't automatically filter them.
-        // These ops have superseded clocks and payloads that don't match the new snapshot.
-        const unsyncedOps = await this.opLogStore.getUnsynced();
-        if (unsyncedOps.length > 0) {
-          const opIds = unsyncedOps.map((entry) => entry.op.id);
-          await this.opLogStore.markRejected(opIds);
-          OpLog.normal(
-            `SyncHydrationService: Rejected ${unsyncedOps.length} local pending op(s) ` +
-              `(superseded after file-based sync snapshot)`,
-          );
-
-          // Notify user that local changes were discarded
-          this.snackService.open({
-            msg: T.F.SYNC.S.LOCAL_CHANGES_DISCARDED_SNAPSHOT,
-            translateParams: {
-              count: unsyncedOps.length,
-            },
-          });
-        }
-
+        // Any local pending ops are now based on superseded state and must be
+        // rejected: without a SYNC_IMPORT, SyncImportFilterService won't filter
+        // them automatically. The rejection is deferred into
+        // commitFileSnapshotBaseline() below so it commits atomically with the
+        // state replacement. Rejecting here (a separate transaction) would
+        // strand these ops as permanently non-uploadable if the baseline commit
+        // then failed (e.g. the op-log tail changed) and the old state survived.
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
@@ -245,6 +276,9 @@ export class SyncHydrationService {
             globalConfig: normalizedGlobalConfig,
           }
         : downloadedAppData;
+      // Runs inside the sp_op_log lock (flushThenRunExclusive) during automatic
+      // snapshot hydration, so rely on the non-interactive default — a blocking
+      // dialog on an invalid remote snapshot would starve lock contenders (#9026).
       const validationResult =
         await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
@@ -280,25 +314,84 @@ export class SyncHydrationService {
         clockForStorage = newClock;
       }
 
-      // 9. Save new state cache (snapshot) for crash safety
-      await this.opLogStore.saveStateCache({
-        state: dataToLoad,
-        lastAppliedOpSeq: lastSeq,
-        vectorClock: clockForStorage,
-        compactedAt: Date.now(),
-      });
-      OpLog.normal('SyncHydrationService: Saved state cache after sync');
+      // 9. Commit the durable snapshot baseline before replacing live state.
+      // File snapshots include the downloaded archives and represented remote
+      // operations in this same transaction. If any write fails, the old
+      // baseline remains intact and mid-hydration local actions can safely drain
+      // against it; there is no cache-only or ops-only restart state.
+      if (createSyncImportOp) {
+        await this.opLogStore.saveStateCache({
+          state: dataToLoad,
+          lastAppliedOpSeq: lastSeq,
+          vectorClock: clockForStorage,
+          compactedAt: Date.now(),
+        });
+        hooks?.afterSnapshotCachePersisted?.();
 
-      // 10. Update vector clock store
-      // This is critical because:
-      // - The SYNC_IMPORT was appended with source='remote', so store wasn't updated
-      // - If user creates new ops in this session, incrementAndStoreVectorClock reads from store
-      // - Without this, new ops would have clocks missing entries from the SYNC_IMPORT
-      await this.opLogStore.setVectorClock(clockForStorage);
-      OpLog.normal('SyncHydrationService: Updated vector clock store after sync');
+        // The SYNC_IMPORT was appended with source='remote', so update the
+        // working clock separately on this legacy full-state-import path.
+        await this.opLogStore.setVectorClock(clockForStorage);
+      } else {
+        // Reject superseded local ops atomically with the state replacement.
+        const rejectOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
+        const appendResult = await this.opLogStore.commitFileSnapshotBaseline({
+          state: dataToLoad,
+          lastAppliedOpSeq: lastSeq,
+          vectorClock: clockForStorage,
+          compactedAt: Date.now(),
+          snapshotIncludedOps: hooks?.snapshotIncludedOps ?? [],
+          ...(rejectOpIds.length ? { rejectOpIds } : {}),
+          ...(downloadedArchiveYoung ? { archiveYoung: downloadedArchiveYoung } : {}),
+          ...(downloadedArchiveOld ? { archiveOld: downloadedArchiveOld } : {}),
+        });
+        if (downloadedArchiveYoung || downloadedArchiveOld) {
+          hooks?.afterArchiveReplacement?.();
+        }
+        hooks?.afterSnapshotCachePersisted?.();
+        OpLog.normal(
+          `SyncHydrationService: Atomically committed file snapshot and ` +
+            `${appendResult.writtenOps.length} included operation(s)` +
+            (appendResult.skippedCount > 0
+              ? `; skipped ${appendResult.skippedCount} duplicate(s)`
+              : ''),
+        );
 
-      // 11. Dispatch loadAllData to update NgRx
+        // Notify the user only after the rejection durably committed with the
+        // new baseline — never before, so a failed commit leaves both the old
+        // state and the still-uploadable local ops intact.
+        if (rejectOpIds.length > 0) {
+          OpLog.normal(
+            `SyncHydrationService: Rejected ${rejectOpIds.length} local pending op(s) ` +
+              `(superseded after file-based sync snapshot)`,
+          );
+          this.snackService.open({
+            msg: T.F.SYNC.S.LOCAL_CHANGES_DISCARDED_SNAPSHOT,
+            translateParams: { count: rejectOpIds.length },
+          });
+        }
+      }
+      hooks?.afterSnapshotPersisted?.();
+      OpLog.normal('SyncHydrationService: Committed snapshot persistence baseline');
+
+      // Flush the in-memory tracked-time accumulator into a durable syncTimeSpent
+      // op BEFORE replacing NgRx. The accumulator holds time already applied to
+      // the live state we are about to discard; left in place, that stale delta
+      // later flushes as a LOCAL (non-remote) syncTimeSpent that the reducer
+      // intentionally ignores (task.reducer only applies remote syncTimeSpent),
+      // so the accepted time silently vanishes from live state until the next
+      // op-log replay. Flushing captures it as a pending op (re-applied
+      // additively on replay, and uploaded) and empties the accumulator so
+      // nothing stale survives the replacement. Placed AFTER the baseline commit
+      // so the appended op cannot move the op-log tail past the seq that
+      // commitFileSnapshotBaseline() asserts. Unlike backup import — which
+      // clear()s because it deliberately discards local concurrent state — sync
+      // hydration preserves local edits (cf. snapshot-hydration handling).
+      this.taskTimeSyncService.flush();
+
+      // 10. Dispatch loadAllData to update NgRx
+      hooks?.beforeStateLoad?.();
       this.store.dispatch(loadAllData({ appDataComplete: dataToLoad }));
+      hooks?.afterStateLoad?.();
       OpLog.normal('SyncHydrationService: Dispatched loadAllData with synced data');
     } catch (e) {
       OpLog.err('SyncHydrationService: Error during hydrateFromRemoteSync', e);

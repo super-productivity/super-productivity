@@ -11,8 +11,11 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
   createSyncFolder,
   generateSyncFolderName,
+  setupSyncClient,
+  waitForSyncComplete,
 } from '../../utils/sync-helpers';
 import { SyncPage } from '../../pages/sync.page';
+import { isWebDavServerUp } from '../../utils/check-webdav';
 
 /**
  * SuperSync Provider Switch E2E Tests
@@ -29,21 +32,6 @@ import { SyncPage } from '../../pages/sync.page';
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-provider-switch.spec.ts
  */
-
-/**
- * Check if the WebDAV server is available.
- */
-const isWebDAVAvailable = async (): Promise<boolean> => {
-  try {
-    const response = await fetch('http://localhost:2345', {
-      method: 'OPTIONS',
-      signal: AbortSignal.timeout(3000),
-    });
-    return response.ok || response.status === 200 || response.status === 207;
-  } catch {
-    return false;
-  }
-};
 
 test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
   /**
@@ -67,7 +55,10 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
     test.setTimeout(180000);
 
     // Skip if WebDAV server is not available
-    const webdavAvailable = await isWebDAVAvailable();
+    const webdavAvailable = await isWebDavServerUp();
+    if (!webdavAvailable && process.env.E2E_REQUIRE_WEBDAV === 'true') {
+      throw new Error('WebDAV is required for provider-switch coverage.');
+    }
     testInfo.skip(!webdavAvailable, 'WebDAV server not running on localhost:2345');
 
     const appUrl = baseURL || 'http://localhost:4242';
@@ -105,14 +96,17 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
 
       // Disable SuperSync and set up WebDAV
       const syncPageA = new SyncPage(clientA.page);
-      await syncPageA.configureSyncProvider({
-        ...WEBDAV_CONFIG_TEMPLATE,
-        syncFolderPath: `/${syncFolderName}`,
-      });
+      await syncPageA.setupWebdavSync(
+        {
+          ...WEBDAV_CONFIG_TEMPLATE,
+          syncFolderPath: `/${syncFolderName}`,
+        },
+        { isReconfigure: true },
+      );
       console.log('[ProviderSwitch] Switched to WebDAV');
 
-      // Wait for WebDAV sync
-      await clientA.page.waitForTimeout(3000);
+      await syncPageA.triggerSync();
+      await waitForSyncComplete(clientA.page, syncPageA);
 
       // Verify tasks still exist on Client A
       await waitForTask(clientA.page, task1);
@@ -122,24 +116,19 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
       // ============ PHASE 3: New client joins via WebDAV ============
       console.log('[ProviderSwitch] Phase 3: New client joins via WebDAV');
 
-      contextB = await browser.newContext({
-        storageState: undefined,
-        viewport: { width: 1920, height: 1080 },
-      });
-      const pageB = await contextB.newPage();
-      await pageB.goto(appUrl);
-      await pageB.waitForLoadState('networkidle');
-      await pageB.waitForTimeout(2000);
+      const clientB = await setupSyncClient(browser, appUrl);
+      contextB = clientB.context;
+      const pageB = clientB.page;
 
       const syncPageB = new SyncPage(pageB);
-      await syncPageB.configureSyncProvider({
+      await syncPageB.setupWebdavSync({
         ...WEBDAV_CONFIG_TEMPLATE,
         syncFolderPath: `/${syncFolderName}`,
       });
       console.log('[ProviderSwitch] Client B joined via WebDAV');
 
-      // Wait for sync
-      await pageB.waitForTimeout(5000);
+      await syncPageB.triggerSync();
+      await waitForSyncComplete(pageB, syncPageB);
 
       // Verify tasks on Client B
       await waitForTask(pageB, task1);

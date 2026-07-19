@@ -133,6 +133,8 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   they read the same pre-insert snapshot
 - Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
   accepted writers for the same user to serialize on that row lock
+- A causal `REPAIR` snapshot must prove that its state includes the current
+  server prefix; the same row serializes that base-cursor check with later writes
 - If two batches race, the later writer blocks on the row and the transaction
   retry path handles the serialization failure rather than silently accepting
   conflicting operations
@@ -145,6 +147,12 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
   `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
 - The batch insert does not use `skipDuplicates`; an unexpected unique conflict
   aborts the transaction and lets the request retry
+- `REPAIR` uploads persist `repairBaseServerSeq` on the operation row. The HTTP
+  handler rejects an obviously stale base before quota cleanup, and the upload
+  transaction repeats the check under `SELECT ... FOR UPDATE` before insertion
+- Markerless legacy repairs are compatibility records, not causal boundaries:
+  they cannot drive download fast-forward, snapshot trust, history pruning, or
+  server-generated restore points; snapshot replay across one fails closed
 - Removing or sharding the `lastSeq` write requires replacing this safety
   mechanism with an equivalent per-user serialization primitive
 
@@ -154,12 +162,14 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 
 - [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
 - [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
+- [`packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts`](packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts) - Real-PostgreSQL race coverage
 
 **When to Update This Pattern**:
 
 - Changing upload conflict detection
 - Changing server sequence assignment
 - Changing transaction isolation for upload operations
+- Changing repair base-cursor validation or full-state history pruning
 - Introducing multi-writer or multi-region upload processing
 
 ---
@@ -195,6 +205,121 @@ The atomic op's headline benefit — reversing the whole thing as one unit — w
 - Adding a true bulk meta-reducer action for general use (revisit whether completion should adopt it)
 - Reworking how completion resolves unfinished tasks
 - Any proposal to make completion a single synced op again
+
+---
+
+### 6. Passkeys Stay Pending Until Email Verification
+
+**Status**: ✅ Active (since July 2026)
+
+**Decision**: A passkey submitted during account registration is stored as a
+`PendingPasskeyRegistration` tied to its exact email-verification token. It is
+promoted to the user's active `Passkey` set only when that token is consumed.
+
+**Rationale**:
+
+- A WebAuthn registration ceremony proves possession of a credential, not
+  ownership of the email address entered alongside it.
+- Storing a submitted credential directly on an unverified user lets an attacker
+  pre-register a victim's address, then have the victim's later magic-link
+  verification activate the attacker's passkey.
+- Keeping separate pending attempts prevents concurrent registrations from
+  replacing or activating one another. The email owner chooses the credential
+  by consuming the link produced by that same registration attempt.
+- Failed email delivery leaves the bounded, expiring pending attempt in place.
+  Deleting the shared unverified user can race a concurrent registration and
+  invalidate a link that was successfully delivered.
+
+**Implementation**:
+
+- Passkey registration stores no active credential and creates one pending row
+  per verification token.
+- Email verification atomically claims the unverified user, replaces active
+  passkeys with the credential bound to that token, and deletes the user's
+  remaining pending attempts.
+- Passkey verification tokens live only on pending registrations; user-row
+  verification tokens belong to magic-link registrations. Consuming a user-row
+  token verifies the email but removes untrusted active and pending passkeys.
+- The migration moves the latest legacy credential for each unverified user to
+  the pending table and removes all active credentials from unverified users.
+- The resend cap bounds pending rows per unverified account; rows also expire
+  with their verification tokens.
+
+**Key Files**:
+
+- [`auth.ts`](packages/super-sync-server/src/auth.ts)
+- [`passkey.ts`](packages/super-sync-server/src/passkey.ts)
+- [`schema.prisma`](packages/super-sync-server/prisma/schema.prisma)
+
+**When to Update This Pattern**:
+
+- Changing passkey enrollment or email-verification flows
+- Adding another credential type to registration
+- Changing verification-token persistence or cleanup
+
+---
+
+### 7. Versioned Delete-Wins Semantics for Project Deletion
+
+**Status**: ✅ Active (since July 2026)
+
+**Decision**: Project deletions created with schema v4 or newer carry an explicit
+`projectDeleteWins` marker and beat concurrent project updates. Historical,
+unmarked deletions keep timestamp-based LWW semantics.
+
+This is a deliberate semantic trade-off: a concurrent project rename or field
+edit that is vector-clock CONCURRENT with a marked delete **loses**, regardless
+of which has the newer wall-clock timestamp. Deleting an entity another device is
+editing wins over the edit — the alternative (timestamp LWW) resurrects an empty
+project shell and silently loses its task subtree. The lost edit is only
+recoverable via local undo, not via sync.
+
+**Rationale**:
+
+- `deleteProject` is one user intent whose reducer cascade removes the project,
+  active tasks, notes, sections, repeat configuration, and related archive data.
+  Reversing only the project entity after that operation loses data and violates
+  replay determinism.
+- Capturing every cascaded entity in the delete payload or emitting restoration
+  sidecars makes payload size scale with project size and still cannot restore
+  every side effect safely.
+- Deletion is the only complete, deterministic result already represented by the
+  operation. A concurrent rename or project-field edit must not partially undo it.
+- The schema-v4 barrier makes clients that do not understand this conflict policy
+  stop before applying the operation (they block on the newer-schema gate rather
+  than mis-resolving). The **absence** of the payload marker on historical
+  deletions — never added by the no-op v3→v4 migration — is what preserves their
+  timestamp-LWW semantics; the marker, not the version number, is the real
+  discriminator. The classifier additionally requires the marked delete's
+  plaintext `entityId` to match its authenticated payload `projectId`, so a
+  tampered/replayed delete retargeted onto a live entity cannot win.
+
+**Implementation**:
+
+- New `deleteProject` actions include `projectDeleteWins: true`; replacement
+  delete operations preserve that payload.
+- The shared LWW planner accepts a host-supplied delete-wins classifier. A remote
+  marked delete is applied regardless of timestamps. A local marked delete is
+  replaced with one operation whose vector clock dominates both conflict sides.
+- SuperSync keeps its generic conflict protocol: if the first delete upload is
+  rejected, the existing retry path uploads the causally dominant replacement.
+  File-based providers use the same client planner and marker.
+- Do not add per-task/note restoration operations or project-sized snapshots to
+  compensate a losing marked project delete.
+
+**Key Files**:
+
+- [`task-shared.actions.ts`](src/app/root-store/meta/task-shared.actions.ts) — the `PROJECT_DELETE_WINS_MARKER` producer
+- [`conflict-resolution.ts`](packages/sync-core/src/conflict-resolution.ts)
+- [`conflict-resolution.service.ts`](src/app/op-log/sync/conflict-resolution.service.ts) — the delete-wins classifier
+- [`schema-version.ts`](packages/shared-schema/src/schema-version.ts)
+- [`project-delete-wins-barrier-v3-to-v4.ts`](packages/shared-schema/src/migrations/project-delete-wins-barrier-v3-to-v4.ts) (registered in [`migrations/index.ts`](packages/shared-schema/src/migrations/index.ts))
+
+**When to Update This Pattern**:
+
+- Changing the cascade performed by `deleteProject`
+- Adding another operation with delete-wins conflict semantics
+- Changing schema compatibility or LWW replacement behavior
 
 ---
 

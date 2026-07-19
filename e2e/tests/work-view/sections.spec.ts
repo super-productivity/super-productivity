@@ -67,7 +67,9 @@ test.describe('Sections', () => {
     page: import('@playwright/test').Page,
     title: string,
   ): ReturnType<import('@playwright/test').Page['locator']> =>
-    page.locator('.section-container').filter({ hasText: title });
+    page.locator('.section-container').filter({
+      has: page.locator('.collapsible-title').filter({ hasText: title }),
+    });
 
   /**
    * Read a locator's bounding box defensively. `boundingBox()` takes a
@@ -77,9 +79,9 @@ test.describe('Sections', () => {
    * `@for track` reorders nodes) and freshly-dropped tasks run an
    * `expandInOnly` enter animation that holds them at `height: 0`. Wait
    * for the element to be visible, then poll until it reports a real box
-   * so the read can't race the re-render. This is the failure the two
-   * `test.fixme`s below hit; keeping the guard here lets the active tests
-   * stay reliable instead of throwing "no bounding box".
+   * so the read can't race the re-render. This was the failure the former
+   * disabled cross-list scenarios hit; keeping the guard here prevents the
+   * active tests from throwing "no bounding box".
    *
    * The box captured *inside* the poll is the one returned — re-reading
    * after the poll reopens the very race the poll closes (the list can
@@ -143,18 +145,18 @@ test.describe('Sections', () => {
    * `expandInOnly` animation (`height: 0 -> *`, expand.ani.ts) and has a
    * zero-height layout box mid-animation. `boundingBox()` returns `null` for
    * that, which is the root cause of the "drag source/target has no bounding
-   * box" flake (and why the cross-section tests below are fixme'd).
+   * box" flake in the former disabled cross-section scenarios.
    *
    * Flipping the app's own `isDisableAnimations` config toggles the
    * `@HostBinding('@.disabled')` on the root component (app.component.ts),
    * which disables every `@trigger` including `expandInOnly` — so dropped
    * tasks render at full height instantly and their box never collapses.
    *
-   * NOTE: only the intra-section reorder test uses this. The "drops a task
-   * into a section" test intentionally keeps animations on: it drags out of
-   * the no-section list into an *empty* section, and with animations off the
-   * source-removal reflow is instant, so the empty drop target can jump out
-   * from under the in-flight pointer and the drop misses.
+   * NOTE: the "drops a task into a section" test intentionally keeps
+   * animations on: it drags out of the no-section list into an *empty*
+   * section, and with animations off the source-removal reflow is instant,
+   * so the empty drop target can jump out from under the in-flight pointer
+   * and the drop misses. Reorder and cross-list scenarios disable them.
    */
   const disableAnimations = async (
     page: import('@playwright/test').Page,
@@ -304,7 +306,7 @@ test.describe('Sections', () => {
     await expect(sectionByTitle(page, 'Doomed')).toHaveCount(0);
   });
 
-  test('drops a task into a section via drag and drop', async ({
+  test('drops a task into a section and updates its task count', async ({
     page,
     workViewPage,
     projectPage,
@@ -322,6 +324,8 @@ test.describe('Sections', () => {
 
     const section = sectionByTitle(page, 'Target');
     await expect(section).toBeVisible();
+    const sectionTitle = section.locator('.collapsible-title');
+    await expect(sectionTitle).toHaveText('Target (0)');
     // The section's inner task-list is the drop target.
     const sectionTaskList = section.locator('task-list').first();
     const noSectionTaskList = page.locator('.no-section task-list').first();
@@ -336,6 +340,7 @@ test.describe('Sections', () => {
     await expect(section.locator('task').filter({ hasText: 'Movable' })).toBeVisible({
       timeout: 5000,
     });
+    await expect(sectionTitle).toHaveText('Target (1)');
     await expect(
       noSectionTaskList.locator('task').filter({ hasText: 'Movable' }),
     ).toHaveCount(0);
@@ -399,18 +404,13 @@ test.describe('Sections', () => {
     await expect.poll(async () => (await sectionTaskTitles()).length).toBe(3);
   });
 
-  // FIXME: cross-section drag is flaky in headless CDK for the same
-  // pointer-event reason as the section→no-section round-trip below — the
-  // source task's bounding box can collapse mid-gesture when the source
-  // section re-renders without it. Behavior is covered by section.reducer
-  // unit tests (cross-section moves via `addTaskToSection`) and by the
-  // component-level `undoneTasksBySection` spec.
-  test.fixme('moves a task from one section to a specific slot in another', async ({
+  test('moves a task from one section to another', async ({
     page,
     workViewPage,
     projectPage,
   }) => {
     await setupTestProject(workViewPage, projectPage);
+    await disableAnimations(page);
 
     await openProjectContextMenu(page);
     await clickAddSection(page);
@@ -442,10 +442,14 @@ test.describe('Sections', () => {
       });
     }
 
-    // Drag Zulu from Left onto Yankee in Right.
+    // Drag Zulu into Right's actual CDK drop list. Targeting a task row can
+    // race the row transform while CDK makes room for the incoming item.
     const taskZulu = left.locator('task').filter({ hasText: 'Zulu' }).first();
-    const taskYankee = right.locator('task').filter({ hasText: 'Yankee' }).first();
-    await cdkDragTo(page, taskZulu.locator('done-toggle').first(), taskYankee);
+    await cdkDragTo(
+      page,
+      taskZulu.locator('done-toggle').first(),
+      right.locator('.task-list-inner').first(),
+    );
 
     // Behavioral invariant: Zulu has crossed sections. Exact slot is
     // CDK-cursor dependent, so we don't pin it.
@@ -456,13 +460,7 @@ test.describe('Sections', () => {
     await expect(right.locator('task')).toHaveCount(3);
   });
 
-  // FIXME: round-trip drag (section → no-section) is flaky in headless CDK.
-  // The forward "into section" drag passes; the reverse fails to register the
-  // drop on the empty `.no-section` task-list whose bounding box collapses
-  // to its hint-message. Driving CDK pointer events deterministically here
-  // is non-trivial — track as a follow-up and exercise reverse moves via
-  // unit tests in section.reducer.spec.ts (`removeTaskFromSection`).
-  test.fixme('drags a task back out of a section into the main list', async ({
+  test('drags a task back out of a section into the main list', async ({
     page,
     workViewPage,
     projectPage,
@@ -478,9 +476,6 @@ test.describe('Sections', () => {
 
     const section = sectionByTitle(page, 'Holding');
     const sectionTaskList = section.locator('task-list').first();
-    // Target the wrapper `.no-section` div, not the inner task-list — when
-    // the no-section bucket is empty the task-list collapses to its hint
-    // text and may have a too-small bounding box for a stable drop.
     const noSection = page.locator('.no-section').first();
 
     const task = page.locator('task').filter({ hasText: 'Roundtrip' }).first();
@@ -494,9 +489,16 @@ test.describe('Sections', () => {
       .first();
     await expect(taskInSection).toBeVisible();
 
+    // Give the no-section CDK list a stable row target. Its empty-state text
+    // is a sibling that overlaps the otherwise-empty drop rect, so a row is
+    // the deterministic equivalent of a user dropping beside another task.
+    await workViewPage.addTask('Main anchor');
+    const mainAnchor = noSection.locator('task').filter({ hasText: 'Main anchor' });
+    await expect(mainAnchor).toBeVisible();
+
     // Move back out — re-acquire handle from the new DOM location.
     dragHandle = taskInSection.locator('done-toggle').first();
-    await cdkDragTo(page, dragHandle, noSection);
+    await cdkDragTo(page, dragHandle, mainAnchor);
 
     await expect(noSection.locator('task').filter({ hasText: 'Roundtrip' })).toBeVisible({
       timeout: 5000,

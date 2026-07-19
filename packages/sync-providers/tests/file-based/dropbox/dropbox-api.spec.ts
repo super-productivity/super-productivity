@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AuthFailSPError,
+  HttpNotOkAPIError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
   UploadRevToMatchMismatchAPIError,
@@ -569,6 +570,37 @@ describe('DropboxApi', () => {
       expect(body).toContain('code=test-auth-code');
       expect(body).toContain('code_verifier=test-code-verifier');
       expect(body).toContain('grant_type=authorization_code');
+    });
+
+    it('preserves response metadata when the token exchange fails', async () => {
+      const headers = new Headers();
+      headers.set('X-Dropbox-Request-Id', 'dbx-request-123');
+      const response = new Response('gateway timeout', {
+        status: 504,
+        statusText: 'Gateway Timeout',
+        headers,
+      });
+      fetchSpy.mockResolvedValue(response);
+
+      let thrown: HttpNotOkAPIError | undefined;
+      try {
+        await dropboxApi.getTokensFromAuthCode(
+          'test-auth-code',
+          'test-code-verifier',
+          null,
+        );
+      } catch (error) {
+        if (error instanceof HttpNotOkAPIError) {
+          thrown = error;
+        }
+      }
+
+      expect(thrown).toBeDefined();
+      expect(thrown?.response).toBe(response);
+      expect(thrown?.message).toBe('HTTP 504 Gateway Timeout');
+      expect(thrown?.response.headers.get('X-Dropbox-Request-Id')).toBe(
+        'dbx-request-123',
+      );
     });
 
     it('should throw error for invalid token response', async () => {

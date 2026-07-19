@@ -37,6 +37,8 @@ import {
   applyLocalOnlySyncSettingsToAppData,
   LocalOnlySyncSettings,
 } from '../../features/config/local-only-sync-settings.util';
+import { HydrationStateService } from '../apply/hydration-state.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -68,6 +70,8 @@ export class RemoteOpsProcessingService {
   private compactionService = inject(OperationLogCompactionService);
   private syncImportFilterService = inject(SyncImportFilterService);
   private writeFlushService = inject(OperationWriteFlushService);
+  private hydrationStateService = inject(HydrationStateService);
+  private providerManager = inject(SyncProviderManager);
   private injector = inject(Injector);
 
   /** Flag to show version-incompatibility warnings only once per session */
@@ -97,6 +101,20 @@ export class RemoteOpsProcessingService {
     options?: {
       skipConflictDetection?: boolean;
       callerHoldsOperationLogLock?: boolean;
+      ignoredLocalFullStateOpIds?: readonly string[];
+      /**
+       * Final full-state conflict check. Runs with the operation-log lock held,
+       * immediately before the destructive reducer application. Returning false
+       * aborts the apply so the caller can show UI after the lock is released.
+       */
+      beforeFullStateApply?: (fullStateOps: Operation[]) => Promise<boolean>;
+      /**
+       * Sync epoch captured at cycle start (#9074). Re-asserted INSIDE each
+       * apply-lock closure (i.e. after the lock wait), so a stale cycle that
+       * queued behind a destructive replacement (e.g. createCleanSlate) cannot
+       * apply old-epoch ops onto the fresh state.
+       */
+      fenceEpoch?: number;
     },
   ): Promise<{
     localWinOpsCreated: number;
@@ -111,6 +129,8 @@ export class RemoteOpsProcessingService {
      * when a later incompatible op blocks the remaining batch suffix.
      */
     committedFullStateOpIds?: string[];
+    /** True when beforeFullStateApply vetoed the destructive state replacement. */
+    fullStateApplyBlockedByLocalConflict?: boolean;
   }> {
     // Validation failure surfaces via the SyncSessionValidationService latch
     // (#7330). `validateAfterSync` and the conflict-resolution validation path
@@ -226,7 +246,9 @@ export class RemoteOpsProcessingService {
     // This also checks the LOCAL STORE for imports downloaded in previous sync cycles.
     // ─────────────────────────────────────────────────────────────────────────
     const { validOps, invalidatedOps, filteringImport, isLocalUnsyncedImport } =
-      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps);
+      await this.syncImportFilterService.filterOpsInvalidatedBySyncImport(migratedOps, {
+        ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
+      });
 
     if (invalidatedOps.length > 0) {
       OpLog.warn(
@@ -264,24 +286,82 @@ export class RemoteOpsProcessingService {
         'RemoteOpsProcessingService: Full-state operation detected, skipping conflict detection.',
       );
       const callerHoldsOperationLogLock = options?.callerHoldsOperationLogLock ?? false;
-      const applyAndValidateWithOperationLogLockHeld = async (): Promise<string[]> => {
-        const committedFullStateOpIds = await this.applyNonConflictingOps(validOps, true);
+      const applyAndValidateWithOperationLogLockHeld = async (): Promise<{
+        committedFullStateOpIds: string[];
+        blockedByLocalConflict: boolean;
+      }> => {
+        // #9074: asserted AFTER the lock wait — the highest-value fence site
+        // for full-state ops (a stale SYNC_IMPORT applied wholesale after a
+        // clean-slate/switch is the worst interleave).
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'full-state apply',
+        );
+        // The operation-log lock blocks cross-tab operation writes, while this
+        // hold makes same-tab reducer actions enter the deferred queue. Together
+        // they keep the final pending-work read and destructive apply stable.
+        const releaseApplyingRemoteOpsHold =
+          this.hydrationStateService.acquireApplyingRemoteOpsHold();
+        const fullStateApplyResult: {
+          committedFullStateOpIds: string[];
+          blockedByLocalConflict: boolean;
+        } = {
+          committedFullStateOpIds: [],
+          blockedByLocalConflict: false,
+        };
+        let hasPrimaryError = false;
+        try {
+          if (
+            options?.beforeFullStateApply &&
+            !(await options.beforeFullStateApply(validOps))
+          ) {
+            fullStateApplyResult.blockedByLocalConflict = true;
+          } else {
+            fullStateApplyResult.committedFullStateOpIds =
+              await this.applyNonConflictingOps(validOps, true, {
+                skipDeferredActionDrain: true,
+              });
+          }
+        } catch (error) {
+          hasPrimaryError = true;
+          throw error;
+        } finally {
+          releaseApplyingRemoteOpsHold();
+          try {
+            await processDeferredActionsAfterRemoteApply(this.injector, true);
+          } catch (deferredError) {
+            if (!hasPrimaryError) {
+              throw deferredError;
+            }
+            OpLog.err(
+              'RemoteOpsProcessingService: Deferred-action drain also failed after full-state processing error',
+              { name: (deferredError as Error | undefined)?.name },
+            );
+          }
+        }
 
-        // Clean Slate Semantics: SYNC_IMPORT/BACKUP_IMPORT replaces entire state.
-        // Local synced ops are NOT replayed - the import is an explicit user action
-        // to restore all clients to a specific point in time.
-        await this.validateAfterSync(true);
-        return committedFullStateOpIds;
+        if (!fullStateApplyResult.blockedByLocalConflict) {
+          // Clean Slate Semantics: SYNC_IMPORT/BACKUP_IMPORT replaces entire state.
+          // Local synced ops are NOT replayed - the import is an explicit user action
+          // to restore all clients to a specific point in time. Validate after the
+          // deferred local actions, preserving the established apply pipeline order.
+          await this.validateAfterSync(true);
+        }
+        return fullStateApplyResult;
       };
 
-      // Keep the pending-write cutoff, remote-clock premerge, full-state reducer,
-      // deferred capture drain, and validation in one operation-log critical
-      // section. Callers already inside that section must not re-enter its
-      // non-reentrant lock or flush while holding it.
-      const committedFullStateOpIds = callerHoldsOperationLogLock
+      // Take UPLOAD before OPERATION_LOG, matching the established server-migration
+      // lock order. The outer lock prevents another tab from starting an upload
+      // selection/acknowledgement round during the cutoff; the inner lock keeps the
+      // final pending-work read, full-state reducer, deferred capture drain, and
+      // validation atomic with operation capture. Callers already inside OPERATION_LOG
+      // must not re-enter either path or flush while holding its non-reentrant lock.
+      const fullStateApplyResult = callerHoldsOperationLogLock
         ? await applyAndValidateWithOperationLogLockHeld()
-        : await this.writeFlushService.flushThenRunExclusive(
-            applyAndValidateWithOperationLogLockHeld,
+        : await this.lockService.request(LOCK_NAMES.UPLOAD, () =>
+            this.writeFlushService.flushThenRunExclusive(
+              applyAndValidateWithOperationLogLockHeld,
+            ),
           );
 
       return {
@@ -290,7 +370,8 @@ export class RemoteOpsProcessingService {
         filteredOpCount: 0,
         isLocalUnsyncedImport: false,
         blockedByIncompatibleOp,
-        committedFullStateOpIds,
+        committedFullStateOpIds: fullStateApplyResult.committedFullStateOpIds,
+        fullStateApplyBlockedByLocalConflict: fullStateApplyResult.blockedByLocalConflict,
       };
     }
 
@@ -315,6 +396,7 @@ export class RemoteOpsProcessingService {
         'RemoteOpsProcessingService: Skipping conflict detection (skipConflictDetection=true). ' +
           `Applying ${validOps.length} ops directly.`,
       );
+      this.providerManager.assertSyncEpochUnchanged(options?.fenceEpoch, 'direct apply');
       await this.applyNonConflictingOps(
         validOps,
         options.callerHoldsOperationLogLock ?? false,
@@ -343,10 +425,18 @@ export class RemoteOpsProcessingService {
     // detect conflicts, AND apply resolutions.
     let localWinOpsCreated = 0;
     await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
-      const appliedFrontierByEntity = await this.vectorClockService.getEntityFrontier();
+      // #9074: asserted AFTER the lock wait — a stale cycle that queued behind
+      // a destructive replacement must not apply old-epoch ops onto it.
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'remote-ops apply',
+      );
+      const { frontier: appliedFrontierByEntity, retainedOpsByEntity } =
+        await this.vectorClockService.getEntityFrontierWithOps();
       const conflictResult = await this.detectConflicts(
         validOps,
         appliedFrontierByEntity,
+        retainedOpsByEntity,
       );
       const { nonConflicting, conflicts } = conflictResult;
 
@@ -372,10 +462,29 @@ export class RemoteOpsProcessingService {
         // Auto-resolve conflicts using Last-Write-Wins strategy.
         // Piggyback non-conflicting ops so they're applied with resolved conflicts.
         // Validation failure is surfaced via the session-validation latch.
+        //
+        // PRODUCER FREEZE (journal half) for the conflict-review rollback, set
+        // here at the only production entry point so the producer stops at the
+        // fleet boundary while the service keeps the capability intact:
+        //  - disableConflictJournal: stop persisting the discarded side of a
+        //    conflict verbatim, so that device-local data obligation does not
+        //    expand beyond the edge/internal builds that already carry it.
+        // Reverting the freeze = drop that line.
+        //
+        // The disjoint-merge half of the original #9061 freeze was UNFROZEN for
+        // #9095: with the merge disabled, concurrent edits to DIFFERENT fields
+        // of one entity resolve by whole-entity LWW and the earlier side's edit
+        // is silently and permanently lost on every client (a rename dies when
+        // another device marks the task done). The merged op is a standard LWW
+        // Update whose 'patch' payload released clients apply via updateOne, so
+        // re-enabling it ships no wire format they cannot handle.
         const lwwResult = await this.conflictResolutionService.autoResolveConflictsLWW(
           conflicts,
           nonConflicting,
-          { callerHoldsOperationLogLock: true },
+          {
+            callerHoldsOperationLogLock: true,
+            disableConflictJournal: true,
+          },
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
         return;
@@ -461,11 +570,14 @@ export class RemoteOpsProcessingService {
    * @param ops - Non-conflicting operations to apply
    * @param callerHoldsLock - If true, deferred local actions reuse the caller's
    *        sp_op_log lock after remote clocks are merged.
+   * @param options.skipDeferredActionDrain - If true, the caller owns a wider
+   *        apply window and drains deferred actions after validation or abort.
    * @throws Re-throws if application fails (ops marked as failed first)
    */
   async applyNonConflictingOps(
     ops: Operation[],
     callerHoldsLock: boolean = false,
+    options: { skipDeferredActionDrain?: boolean } = {},
   ): Promise<string[]> {
     const locallyReplayableOps =
       await this._withLocalOnlySyncSettingsForFullStateOps(ops);
@@ -501,7 +613,7 @@ export class RemoteOpsProcessingService {
         },
       });
 
-      committedFullStateOpIds = result.appendedOps
+      committedFullStateOpIds = result.appliedOps
         .filter((op) => FULL_STATE_OP_TYPES.has(op.opType))
         .map((op) => op.id);
 
@@ -550,7 +662,7 @@ export class RemoteOpsProcessingService {
       hasPrimaryError = true;
       throw error;
     } finally {
-      if (canDrainDeferredActions) {
+      if (canDrainDeferredActions && !options.skipDeferredActionDrain) {
         try {
           await processDeferredActionsAfterRemoteApply(this.injector, callerHoldsLock);
         } catch (deferredError) {
@@ -676,11 +788,15 @@ export class RemoteOpsProcessingService {
    *
    * @param remoteOps - Remote operations to check for conflicts
    * @param appliedFrontierByEntity - Per-entity vector clocks of applied ops
+   * @param retainedOpsByEntity - Per-entity retained (non-rejected) ops from the
+   *        same scan as the frontier; reconstructs the local side of no-pending
+   *        CONCURRENT crossings (#9073)
    * @returns Object with `nonConflicting` ops to apply and `conflicts` to resolve
    */
   async detectConflicts(
     remoteOps: Operation[],
     appliedFrontierByEntity: Map<string, VectorClock>,
+    retainedOpsByEntity: Map<string, Operation[]>,
   ): Promise<ConflictResult> {
     const localPendingOpsByEntity = await this.opLogStore.getUnsyncedByEntity();
     const conflicts: EntityConflict[] = [];
@@ -704,13 +820,14 @@ export class RemoteOpsProcessingService {
       const result = await this.conflictResolutionService.checkOpForConflicts(remoteOp, {
         localPendingOpsByEntity,
         appliedFrontierByEntity,
+        retainedOpsByEntity,
         snapshotVectorClock,
         snapshotEntityKeys,
         hasNoSnapshotClock,
       });
 
-      if (result.conflict) {
-        conflicts.push(result.conflict);
+      if (result.conflicts.length > 0) {
+        conflicts.push(...result.conflicts);
       } else if (!result.isSupersededOrDuplicate) {
         nonConflicting.push(remoteOp);
       }

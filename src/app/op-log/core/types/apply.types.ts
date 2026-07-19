@@ -7,10 +7,15 @@ import type { Operation } from '../operation.types';
 export interface ApplyOperationsResult {
   /** Operations that were successfully applied. */
   appliedOps: Operation[];
+  /** Operations skipped because conversion or reducer application threw. */
+  reducerFailures?: Array<{
+    op: Operation;
+    error: Error;
+  }>;
   /**
    * First op whose archive side effect threw. Its reducer effect (and that of
-   * every op after it) DID commit — the bulk dispatch is all-or-nothing and
-   * precedes archive handling — so retry paths must pass `skipReducerDispatch`.
+   * every reducer-successful op after it) DID commit before archive handling,
+   * so retry paths must pass `skipReducerDispatch`.
    */
   failedOp?: {
     op: Operation;
@@ -34,6 +39,12 @@ export interface ApplyOperationsOptions {
   skipDeferredLocalActions?: boolean;
 
   /**
+   * The caller already owns the remote-apply window and will close it after a
+   * larger multi-pass replay. The applier must not create a gap between passes.
+   */
+  remoteApplyWindowAlreadyOpen?: boolean;
+
+  /**
    * When true, skip the bulk reducer dispatch and run only the archive side
    * effects. Used to retry ops marked `failed`, whose reducer effects already
    * committed (see `ApplyOperationsResult.failedOp`): re-dispatching would
@@ -47,5 +58,8 @@ export interface ApplyOperationsOptions {
    * Remote apply uses this to persist its reducer/archive checkpoint and merge the
    * causal frontier before deferred local actions can be written.
    */
-  onReducersCommitted?: (ops: Operation[]) => Promise<void>;
+  onReducersCommitted?: (
+    ops: Operation[],
+    failures?: NonNullable<ApplyOperationsResult['reducerFailures']>,
+  ) => Promise<void>;
 }

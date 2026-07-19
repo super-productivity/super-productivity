@@ -104,9 +104,7 @@ export class MainHeaderComponent implements OnDestroy {
 
   // SPAP-15: persistent badge on the sync icon — count of unreviewed
   // auto-resolved sync conflicts awaiting review.
-  readonly unreviewedConflictCount = toSignal(this._conflictJournal.unreviewedCount$, {
-    initialValue: 0,
-  });
+  readonly unreviewedConflictCount = this._conflictJournal.unreviewedCount;
 
   T: typeof T = T;
   isShowSimpleCounterBtnsDropdown = signal(false);

@@ -10,6 +10,9 @@ import { SnackService } from '../../core/snack/snack.service';
 import { EntityType } from '../core/operation.types';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { selectTaskById } from '../../features/tasks/store/task.selectors';
+import { selectProjectById } from '../../features/project/store/project.selectors';
+import { updateProject } from '../../features/project/store/project.actions';
+import { Project } from '../../features/project/project.model';
 import { Task } from '../../features/tasks/task.model';
 
 const makeEntry = (over: Partial<ConflictJournalEntry> = {}): ConflictJournalEntry => ({
@@ -73,6 +76,13 @@ describe('SyncConflictUiService', () => {
       title: 'Remote title',
     } as Task);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+  });
+
+  afterEach(() => {
+    // overrideSelector mutates the SHARED selector references (selectTaskById /
+    // selectProjectById) — without a reset the overrides leak into other spec
+    // files in the same karma bundle (e.g. project.service.spec).
+    store.resetSelectors();
   });
 
   it('keep() marks the entry kept', async () => {
@@ -380,6 +390,36 @@ describe('SyncConflictUiService', () => {
     const changes = dispatched.task.changes as Record<string, unknown>;
     expect(changes).toEqual({ title: 'Local title' });
     expect(Object.prototype.hasOwnProperty.call(changes, 'notes')).toBe(false);
+  });
+
+  it('flip() on a PROJECT entry suppresses the "Project updated" snack (isSkipSnack)', async () => {
+    // The flip already reports its own outcome; without isSkipSnack the
+    // unconditional snackUpdateBaseSettings$ effect would ALSO pop
+    // "Project updated" on top of it.
+    const entry = makeEntry({
+      id: 'p1',
+      entityType: 'PROJECT' as EntityType,
+      entityId: 'project-1',
+    });
+    await journal.record(entry);
+    store.overrideSelector(selectProjectById, {
+      id: 'project-1',
+      title: 'Remote title',
+    } as Project);
+    store.refreshState();
+
+    const result = await service.flip(entry);
+
+    expect(result).toBe('applied');
+    const dispatched = dispatchSpy.calls.mostRecent().args[0] as ReturnType<
+      typeof updateProject
+    >;
+    expect(dispatched.type).toBe(updateProject.type);
+    expect(dispatched.project).toEqual({
+      id: 'project-1',
+      changes: { title: 'Local title' },
+    });
+    expect((dispatched as { isSkipSnack?: boolean }).isSkipSnack).toBe(true);
   });
 
   it('canFlip() is false for delete-lost and delete-wins entries', () => {

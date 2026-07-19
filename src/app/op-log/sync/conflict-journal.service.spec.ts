@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { firstValueFrom } from 'rxjs';
 import { ConflictJournalService } from './conflict-journal.service';
 import {
   ConflictJournalEntry,
   JOURNAL_MAX_ENTRIES,
+  JOURNAL_PRUNE_SLACK,
   JOURNAL_RETENTION_DAYS,
 } from './conflict-journal.model';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
@@ -64,14 +64,14 @@ describe('ConflictJournalService (store)', () => {
     expect(unreviewed.map((e) => e.id)).toEqual(['new', 'old']);
   });
 
-  it('unreviewedCount$ reflects the number of unreviewed entries', async () => {
-    expect(await firstValueFrom(service.unreviewedCount$)).toBe(0);
+  it('unreviewedCount reflects the number of unreviewed entries', async () => {
+    expect(service.unreviewedCount()).toBe(0);
 
     await service.record(makeEntry({ id: 'a', status: 'unreviewed' }));
     await service.record(makeEntry({ id: 'b', status: 'unreviewed' }));
     await service.record(makeEntry({ id: 'c', status: 'info' }));
 
-    expect(await firstValueFrom(service.unreviewedCount$)).toBe(2);
+    expect(service.unreviewedCount()).toBe(2);
   });
 
   it('markKept / markFlipped update status and the unreviewed count', async () => {
@@ -83,20 +83,20 @@ describe('ConflictJournalService (store)', () => {
 
     expect((await service.getEntry('a'))?.status).toBe('kept');
     expect((await service.getEntry('b'))?.status).toBe('flipped');
-    expect(await firstValueFrom(service.unreviewedCount$)).toBe(0);
+    expect(service.unreviewedCount()).toBe(0);
   });
 
   it('clearAll() removes every entry and resets the unreviewed count (profile switch)', async () => {
     await service.record(makeEntry({ id: 'a', status: 'unreviewed' }));
     await service.record(makeEntry({ id: 'b', status: 'kept' }));
-    expect(await firstValueFrom(service.unreviewedCount$)).toBe(1);
+    expect(service.unreviewedCount()).toBe(1);
 
     await service.clearAll();
 
     expect(await service.getEntry('a')).toBeUndefined();
     expect(await service.getEntry('b')).toBeUndefined();
     expect((await service.list('history')).length).toBe(0);
-    expect(await firstValueFrom(service.unreviewedCount$)).toBe(0);
+    expect(service.unreviewedCount()).toBe(0);
   });
 
   describe('retention (pruneOnStart)', () => {
@@ -153,6 +153,39 @@ describe('ConflictJournalService (store)', () => {
     });
   });
 
+  describe('opportunistic retention on record() (SPAP-36)', () => {
+    it('does NOT prune while the count is within the soft cap', async () => {
+      const now = Date.now();
+      const softCap = JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK;
+      for (let i = 0; i < softCap; i++) {
+        await service.record(
+          makeEntry({ id: `entry-${i}`, resolvedAt: now - (softCap - i) }),
+        );
+      }
+
+      // Exactly at the soft cap: nothing pruned mid-session yet.
+      expect((await service.list('history')).length).toBe(softCap);
+      expect(await service.getEntry('entry-0')).toBeTruthy();
+    });
+
+    it('prunes back to JOURNAL_MAX_ENTRIES when record() crosses the soft cap', async () => {
+      const now = Date.now();
+      const softCap = JOURNAL_MAX_ENTRIES + JOURNAL_PRUNE_SLACK;
+      // One entry past the soft cap → the crossing record() triggers the prune.
+      for (let i = 0; i <= softCap; i++) {
+        await service.record(
+          makeEntry({ id: `entry-${i}`, resolvedAt: now - (softCap - i) }),
+        );
+      }
+
+      const history = await service.list('history');
+      expect(history.length).toBe(JOURNAL_MAX_ENTRIES);
+      // Oldest overflow dropped, newest kept.
+      expect(await service.getEntry('entry-0')).toBeUndefined();
+      expect(await service.getEntry(`entry-${softCap}`)).toBeTruthy();
+    });
+  });
+
   describe('failure hardening (never-throw contract)', () => {
     it('list/getEntry/markKept/markFlipped degrade to safe defaults when the DB cannot open', async () => {
       // list() is awaited inside conflict resolution's notification step — a
@@ -193,6 +226,140 @@ describe('ConflictJournalService (store)', () => {
       const ids = (await service.list('history')).map((e) => e.id);
       expect(ids).toContain('before-term');
       expect(ids).toContain('after-term');
+    });
+
+    it('awaits tx.done alongside the deletes so an aborted prune transaction cannot leak (SPAP-36)', async () => {
+      // MAX_ENTRIES + 1 entries: below the soft cap, so record()'s own
+      // opportunistic prune does NOT fire during setup (which would run under the
+      // real transaction and leave nothing to delete). pruneOnStart then has
+      // exactly one overflow entry to delete under the aborted transaction below.
+      const now = Date.now();
+      for (let i = 0; i <= JOURNAL_MAX_ENTRIES; i++) {
+        await service.record(
+          makeEntry({ id: `e-${i}`, resolvedAt: now - (JOURNAL_MAX_ENTRIES - i) }),
+        );
+      }
+
+      // Simulate an aborted delete transaction: both the delete requests and
+      // tx.done reject, exactly as idb reports an abort. Zone.js swallows the
+      // native `unhandledrejection` event under Karma, so rather than listening
+      // for the global leak we assert the fix's mechanism directly: the prune
+      // must AWAIT tx.done even when the delete aggregate rejects. With the old
+      // `Promise.all(deletes); await tx.done` sequencing, `await tx.done` is
+      // never reached once the deletes reject, so tx.done's rejection escapes;
+      // the fix puts tx.done inside the same Promise.all, which attaches a
+      // handler to it (its `.then` runs) regardless of the delete failure.
+      const db = await service['_ensureDb']();
+      const realTransaction = db.transaction.bind(db);
+      const abortErr = new DOMException('simulated abort', 'AbortError');
+      const doneThen = jasmine
+        .createSpy('tx.done.then')
+        .and.callFake((onFulfilled?: unknown, onRejected?: unknown) =>
+          Promise.reject(abortErr).then(onFulfilled as never, onRejected as never),
+        );
+      const fakeTx = {
+        store: { delete: (): Promise<void> => Promise.reject(abortErr) },
+        // A thenable, so Promise.all([...deletes, tx.done]) invokes its `.then`.
+        done: { then: doneThen },
+      } as unknown as ReturnType<typeof db.transaction>;
+      spyOn(db, 'transaction').and.callFake(((
+        storeName: unknown,
+        mode?: unknown,
+        ...rest: unknown[]
+      ) =>
+        mode === 'readwrite'
+          ? fakeTx
+          : (
+              realTransaction as (...args: unknown[]) => ReturnType<typeof db.transaction>
+            )(storeName, mode, ...rest)) as typeof db.transaction);
+
+      // Observe-only contract: the prune resolves, never rejects into the caller.
+      await expectAsync(service.pruneOnStart(now)).toBeResolved();
+      // The abort was observed: tx.done was awaited despite the delete failure.
+      // Old sequencing would leave it unhandled — doneThen never called.
+      expect(doneThen).toHaveBeenCalled();
+    });
+  });
+
+  describe('durable clear boundary (privacy fail-safe on profile switch)', () => {
+    const MARKER_KEY = 'SUP_CONFLICT_JOURNAL_CLEARED_BEFORE';
+
+    afterEach(() => localStorage.removeItem(MARKER_KEY));
+
+    it('hides pre-switch entries and zeroes the badge even when the bulk clear fails', async () => {
+      const now = Date.now();
+      await service.record(
+        makeEntry({ id: 'stale-a', resolvedAt: now - 1000, status: 'unreviewed' }),
+      );
+      await service.record(
+        makeEntry({ id: 'stale-b', resolvedAt: now - 500, status: 'kept' }),
+      );
+      expect(service.unreviewedCount()).toBe(1);
+
+      // The exact failure the fix targets: the IndexedDB bulk clear throws.
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+
+      await expectAsync(service.clearAll()).toBeResolved(); // never throws
+
+      // Survivors physically remain but are hidden from every read path.
+      expect(await service.list('history')).toEqual([]);
+      expect(await service.getEntry('stale-a')).toBeUndefined();
+      expect(await service.getEntry('stale-b')).toBeUndefined();
+      expect(service.unreviewedCount()).toBe(0);
+    });
+
+    it('shows only entries recorded after a failed clear (the new profile stays clean)', async () => {
+      await service.record(makeEntry({ id: 'pre', resolvedAt: Date.now() - 1000 }));
+
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+      await service.clearAll();
+
+      // Record relative to the actual boundary so the assertion is clock-agnostic.
+      const marker = Number(localStorage.getItem(MARKER_KEY));
+      await service.record(
+        makeEntry({ id: 'post', resolvedAt: marker + 1000, status: 'unreviewed' }),
+      );
+
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['post']);
+      expect(await service.getEntry('post')).toBeTruthy();
+      expect(service.unreviewedCount()).toBe(1);
+    });
+
+    it('drops the marker on a successful clear so later entries are never wrongly filtered', async () => {
+      await service.record(makeEntry({ id: 'x', resolvedAt: Date.now() - 1000 }));
+      await service.clearAll(); // succeeds → marker removed
+
+      expect(localStorage.getItem(MARKER_KEY)).toBeNull();
+      // An old-timestamped entry is still visible: no stale boundary lingers.
+      await service.record(makeEntry({ id: 'old-but-valid', resolvedAt: 1000 }));
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['old-but-valid']);
+    });
+
+    it('pruneOnStart reclaims hidden survivors but spares post-marker entries, then drops the marker', async () => {
+      const now = Date.now();
+      await service.record(makeEntry({ id: 'survivor', resolvedAt: now - 1000 }));
+
+      const db = await service['_ensureDb']();
+      spyOn(db, 'clear').and.rejectWith(new Error('idb clear failed'));
+      await service.clearAll();
+      const marker = Number(localStorage.getItem(MARKER_KEY));
+      expect(marker).toBeGreaterThan(0);
+
+      // A conflict recorded by the NEW profile (after the boundary) must NOT be
+      // reclaimed by the marker-aware prune — guards against a "prune deletes
+      // everything while a marker is set" regression.
+      await service.record(makeEntry({ id: 'fresh', resolvedAt: marker + 1000 }));
+
+      // Next app start: prune uses delete (not clear), so it reclaims the hidden
+      // survivor, keeps the fresh entry, and drops the now-unnecessary marker.
+      await service.pruneOnStart(now);
+
+      expect(localStorage.getItem(MARKER_KEY)).toBeNull();
+      expect(await service.getEntry('survivor')).toBeUndefined();
+      expect(await service.getEntry('fresh')).toBeTruthy();
+      expect((await service.list('history')).map((e) => e.id)).toEqual(['fresh']);
     });
   });
 });
@@ -343,6 +510,105 @@ describe('buildConflictJournalEntry (taxonomy)', () => {
     const durationDiff = entry.fieldDiffs.find((d) => d.field === 'duration');
     expect(durationDiff?.localVal).toBe(100);
     expect(durationDiff?.localChanged).toBe(true);
+  });
+
+  it('attributes legacy bulk-op field values to the conflicted non-primary entity', () => {
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-2',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            actionPayload: {
+              day: '2026-07-10',
+              taskIds: ['task-1', 'task-2'],
+              roundTo: 15,
+              isRoundUp: true,
+              task: { id: 'task-1', title: 'Wrong primary title' },
+            },
+            entityChanges: [
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-1',
+                opType: OpType.Update,
+                changes: { timeSpent: 111 },
+              },
+              {
+                entityType: 'TASK' as EntityType,
+                entityId: 'task-2',
+                opType: OpType.Update,
+                changes: { timeSpent: 222 },
+              },
+            ],
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          entityId: 'task-2',
+          payload: { task: { id: 'task-2', changes: { notes: 'Remote' } } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    const timeSpentDiff = entry.fieldDiffs.find((d) => d.field === 'timeSpent');
+    expect(timeSpentDiff?.localVal).toBe(222);
+    expect(timeSpentDiff?.localChanged).toBe(true);
+    expect(entry.entityTitle).toBe('');
+  });
+
+  it('keeps a direct-format bulk payload opaque for a non-primary entity', () => {
+    const entry = buildConflictJournalEntry({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-2',
+      winner: 'remote',
+      planReason: 'remote-timestamp-or-tie',
+      localOps: [
+        op({
+          entityId: 'task-1',
+          entityIds: ['task-1', 'task-2'],
+          payload: {
+            task: {
+              id: 'task-1',
+              title: 'Wrong primary title',
+              changes: { notes: 'Task 1 notes' },
+            },
+          },
+          timestamp: 1000,
+        }),
+      ],
+      remoteOps: [
+        op({
+          entityId: 'task-2',
+          payload: { task: { id: 'task-2', changes: { title: 'Remote' } } },
+          timestamp: 2000,
+          clientId: 'B',
+        }),
+      ],
+      isCorruptionSuspected: false,
+      resolvePayloadKey,
+    });
+
+    expect(entry.entityTitle).toBe('Remote');
+    expect(entry.fieldDiffs.some((diff) => diff.field === 'notes')).toBe(false);
+    const actionDiff = entry.fieldDiffs.find((diff) => diff.kind === 'action');
+    expect(actionDiff?.localChanged).toBe(true);
+    expect(actionDiff?.localVal).toEqual({
+      task: {
+        id: 'task-1',
+        title: 'Wrong primary title',
+        changes: { notes: 'Task 1 notes' },
+      },
+    });
   });
 
   it('records per-side presence so winner-only fields are not attributed to the loser', () => {

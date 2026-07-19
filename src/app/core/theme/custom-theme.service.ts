@@ -2,7 +2,7 @@ import { computed, inject, Injectable, signal, Signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Log } from '../log';
 import { LS } from '../persistence/storage-keys.const';
-import { ThemeStorageService } from './theme-storage.service';
+import { StoredTheme, ThemeStorageService } from './theme-storage.service';
 import { validateThemeCss } from './validate-theme-css.util';
 import { ThemeCssWarning } from './theme-contract.const';
 import { IS_APPLE_SILICON } from '../../app.constants';
@@ -25,7 +25,7 @@ export interface CustomTheme {
   requiredMode?: 'dark' | 'light' | 'system';
   /**
    * Non-blocking warnings carried over from the validator (user themes only).
-   * Built-ins ship with a complete contract and never set this. The picker
+   * Built-ins satisfy the required contract and never set this. The picker
    * may surface warnings the first time a theme is installed.
    */
   warnings?: ThemeCssWarning[];
@@ -55,6 +55,9 @@ const parseRef = (raw: string | null): CustomThemeRef => {
 };
 
 const serializeRef = (ref: CustomThemeRef): string => `${ref.kind}:${ref.id}`;
+
+const refsEqual = (a: CustomThemeRef, b: CustomThemeRef): boolean =>
+  a.kind === b.kind && a.id === b.id;
 
 /**
  * Pick the cold-start theme. Honors any stored selection first; otherwise
@@ -189,17 +192,31 @@ export const BUILT_IN_THEMES: CustomTheme[] = [
   },
 ];
 
+/** Return the mode a fixed-mode built-in requires; dual-mode and user themes are free. */
+export const getRequiredThemeMode = (
+  ref: CustomThemeRef,
+): 'dark' | 'light' | undefined => {
+  if (ref.kind !== 'builtin') return undefined;
+  const requiredMode = BUILT_IN_THEMES.find((theme) => theme.id === ref.id)?.requiredMode;
+  return requiredMode === 'dark' || requiredMode === 'light' ? requiredMode : undefined;
+};
+
 @Injectable({ providedIn: 'root' })
 export class CustomThemeService {
   private _document = inject<Document>(DOCUMENT);
   private _themeStorage = inject(ThemeStorageService);
+  private _loadRequestGeneration = 0;
 
   private _activeRef = signal<CustomThemeRef>(
     pickInitialActiveRef(localStorage.getItem(LS.CUSTOM_THEME), IS_APPLE_SILICON),
   );
+  private _appliedThemeVersion = signal(0);
 
   /** The currently selected theme reference. */
   readonly activeRef: Signal<CustomThemeRef> = this._activeRef.asReadonly();
+
+  /** Increments after a stylesheet has been successfully applied. */
+  readonly appliedThemeVersion: Signal<number> = this._appliedThemeVersion.asReadonly();
 
   /** All themes available in the picker — built-ins first, then user uploads. */
   readonly themes: Signal<CustomTheme[]> = computed(() => [
@@ -215,24 +232,22 @@ export class CustomThemeService {
     ),
   ]);
 
-  /**
-   * Apply the currently-selected theme. Called from startup to honor a
-   * cold-start `LS.CUSTOM_THEME` value, and from `setActiveTheme` after
-   * a user picks a theme.
-   */
+  /** Apply the currently-selected theme during startup. */
   async applyActiveTheme(): Promise<void> {
-    await this.loadTheme(this._activeRef());
+    const activeRef = this._activeRef();
+    const storedRef = localStorage.getItem(LS.CUSTOM_THEME);
+    const shouldRepairStoredRef =
+      storedRef !== null && storedRef !== serializeRef(activeRef);
+    await this._activateTheme(activeRef, shouldRepairStoredRef);
   }
 
   /**
-   * Persist the selection to localStorage and load it. Sole writer of
-   * `LS.CUSTOM_THEME` — every caller goes through here so the signal,
-   * localStorage, and the live stylesheet stay in lockstep.
+   * Load a requested selection and persist it only after the stylesheet is
+   * active. Returns false when the request failed, was superseded, or had to
+   * fall back, allowing callers to avoid applying stale companion state.
    */
-  async setActiveTheme(ref: CustomThemeRef): Promise<void> {
-    this._activeRef.set(ref);
-    localStorage.setItem(LS.CUSTOM_THEME, serializeRef(ref));
-    await this.loadTheme(ref);
+  async setActiveTheme(ref: CustomThemeRef): Promise<boolean> {
+    return this._activateTheme(ref, true);
   }
 
   /**
@@ -268,32 +283,61 @@ export class CustomThemeService {
 
   /** Inject the appropriate stylesheet element for the given ref. */
   async loadTheme(ref: CustomThemeRef): Promise<void> {
-    this._unloadCurrentTheme();
+    await this._activateTheme(ref, false);
+  }
+
+  private async _activateTheme(
+    ref: CustomThemeRef,
+    persistSelection: boolean,
+  ): Promise<boolean> {
+    const requestGeneration = ++this._loadRequestGeneration;
+    const appliedRef = await this._applyTheme(ref, requestGeneration);
+    if (!appliedRef || requestGeneration !== this._loadRequestGeneration) return false;
+
+    const requestedThemeWasApplied = refsEqual(appliedRef, ref);
+    if (persistSelection || !requestedThemeWasApplied) {
+      this._commitActiveRef(appliedRef);
+    }
+    this._markThemeApplied();
+    return requestedThemeWasApplied;
+  }
+
+  private async _applyTheme(
+    ref: CustomThemeRef,
+    requestGeneration: number,
+  ): Promise<CustomThemeRef | undefined> {
+    if (requestGeneration !== this._loadRequestGeneration) return undefined;
 
     if (ref.kind === 'builtin') {
       const theme = BUILT_IN_THEMES.find((t) => t.id === ref.id);
       if (!theme) {
         Log.err({ themeId: ref.id, kind: ref.kind, reason: 'unknown built-in theme' });
-        return;
+        return this._applyDefaultTheme(requestGeneration);
       }
       if (theme.id === 'default' || !theme.url) {
-        return;
+        return this._applyDefaultTheme(requestGeneration);
       }
-      const link = this._document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = theme.url;
-      link.id = STYLESHEET_ID;
-      this._document.head.appendChild(link);
-      return;
+      return this._loadBuiltInTheme(ref, theme.url, requestGeneration);
     }
 
     // User theme — read CSS from IDB and inject a <style> element.
-    const stored = await this._themeStorage.getTheme(ref.id);
+    let stored: StoredTheme | undefined;
+    try {
+      stored = await this._themeStorage.getTheme(ref.id);
+    } catch {
+      if (requestGeneration === this._loadRequestGeneration) {
+        Log.err({
+          themeId: ref.id,
+          kind: ref.kind,
+          reason: 'theme-storage-read-failed',
+        });
+      }
+      return undefined;
+    }
+    if (requestGeneration !== this._loadRequestGeneration) return undefined;
     if (!stored) {
       Log.err({ themeId: ref.id, kind: ref.kind, reason: 'theme not found in storage' });
-      // Active theme reset on missing data so the picker doesn't get stuck.
-      await this.setActiveTheme(DEFAULT_REF);
-      return;
+      return this._applyDefaultTheme(requestGeneration);
     }
     // Re-validate cached CSS — a previous client may have stored bytes the
     // current validator now rejects (e.g. an `image-set` payload from before
@@ -302,13 +346,89 @@ export class CustomThemeService {
     const validation = validateThemeCss(stored.css);
     if (!validation.isValid) {
       Log.err({ themeId: ref.id, reason: 'cached-css-failed-validation' });
-      await this.setActiveTheme(DEFAULT_REF);
-      return;
+      return this._applyDefaultTheme(requestGeneration);
     }
     const style = this._document.createElement('style');
-    style.id = STYLESHEET_ID;
     style.textContent = stored.css;
-    this._document.head.appendChild(style);
+    return this._swapThemeElement(style, requestGeneration) ? ref : undefined;
+  }
+
+  private _loadBuiltInTheme(
+    ref: CustomThemeRef,
+    url: string,
+    requestGeneration: number,
+  ): Promise<CustomThemeRef | undefined> {
+    return new Promise((resolve) => {
+      const link = this._document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = url;
+      // Load without applying so the current theme remains visually active
+      // until the replacement stylesheet is ready.
+      link.media = 'not all';
+      link.setAttribute('data-custom-theme-candidate', '');
+
+      const settle = (result: CustomThemeRef | undefined): void => {
+        link.onload = null;
+        link.onerror = null;
+        resolve(result);
+      };
+      link.onload = (): void => {
+        if (!this._swapThemeElement(link, requestGeneration)) {
+          link.remove();
+          settle(undefined);
+          return;
+        }
+        settle(ref);
+      };
+      link.onerror = (): void => {
+        link.remove();
+        if (requestGeneration === this._loadRequestGeneration) {
+          Log.err({ themeId: ref.id, kind: ref.kind, reason: 'stylesheet-load-failed' });
+        }
+        settle(undefined);
+      };
+
+      this._document.head.appendChild(link);
+    });
+  }
+
+  private _applyDefaultTheme(requestGeneration: number): CustomThemeRef | undefined {
+    if (requestGeneration !== this._loadRequestGeneration) return undefined;
+    this._unloadCurrentTheme();
+    return DEFAULT_REF;
+  }
+
+  private _swapThemeElement(
+    next: HTMLLinkElement | HTMLStyleElement,
+    requestGeneration: number,
+  ): boolean {
+    if (requestGeneration !== this._loadRequestGeneration) return false;
+
+    const current = this._document.getElementById(STYLESHEET_ID);
+    if (!next.isConnected) {
+      next.id = `${STYLESHEET_ID}-candidate`;
+      this._document.head.appendChild(next);
+    }
+    current?.remove();
+    next.id = STYLESHEET_ID;
+    next.removeAttribute('media');
+    next.removeAttribute('data-custom-theme-candidate');
+    return true;
+  }
+
+  private _commitActiveRef(ref: CustomThemeRef): void {
+    this._activeRef.set(ref);
+    try {
+      localStorage.setItem(LS.CUSTOM_THEME, serializeRef(ref));
+    } catch {
+      // The stylesheet is already live. Keep the in-memory selection usable
+      // for this session even when browser privacy/quota rules block storage.
+      Log.err({ reason: 'theme-selection-persistence-failed' });
+    }
+  }
+
+  private _markThemeApplied(): void {
+    this._appliedThemeVersion.update((version) => version + 1);
   }
 
   private _unloadCurrentTheme(): void {

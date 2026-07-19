@@ -13,11 +13,13 @@ const buildConflictData = (overrides: {
   remoteVectorClock?: VectorClock;
   lastSyncedVectorClock?: VectorClock | null;
   localUnsyncedOpsCount?: number;
+  remoteLastUpdate?: number | null;
 }): ConflictData => ({
   reason: ConflictReason.NoLastSync,
   localUnsyncedOpsCount: overrides.localUnsyncedOpsCount,
   remote: {
-    lastUpdate: 1000,
+    lastUpdate:
+      overrides.remoteLastUpdate === undefined ? 1000 : overrides.remoteLastUpdate,
     lastUpdateAction: 'Remote data',
     revMap: {},
     crossModelVersion: 1,
@@ -63,6 +65,23 @@ describe('DialogSyncConflictComponent', () => {
     }).compileComponents();
   });
 
+  describe('timestamp highlighting', () => {
+    it('does not present an unknown remote timestamp as the newest write', () => {
+      const component = createComponent(buildConflictData({ remoteLastUpdate: null }));
+
+      expect(component.isHighlightRemote).toBe(false);
+      expect(component.isHighlightLocal).toBe(false);
+    });
+
+    it('does not recommend either side when timestamps are equal', () => {
+      const data = buildConflictData({ remoteLastUpdate: 2000 });
+      const component = createComponent(data);
+
+      expect(component.isHighlightRemote).toBeFalse();
+      expect(component.isHighlightLocal).toBeFalse();
+    });
+  });
+
   describe('getChangeCount()', () => {
     it('(a) returns correct per-client delta when lastSyncedVectorClock is present', () => {
       const component = createComponent(
@@ -91,6 +110,23 @@ describe('DialogSyncConflictComponent', () => {
       // Bug SPAP-7: previously summed the whole clock (3000 / 1400). Must be null now.
       expect(component.localChangeCount).toBeNull();
       expect(component.remoteChangeCount).toBeNull();
+      expect(component.isHighlightLocalChanges).toBeFalse();
+      expect(component.isHighlightRemoteChanges).toBeFalse();
+    });
+
+    it('does not recommend either side when known change counts are equal', () => {
+      const component = createComponent(
+        buildConflictData({
+          localVectorClock: { clientA: 10, clientB: 5 },
+          remoteVectorClock: { clientA: 3, clientB: 12 },
+          lastSyncedVectorClock: { clientA: 3, clientB: 5 },
+        }),
+      );
+
+      expect(component.localChangeCount).toBe(7);
+      expect(component.remoteChangeCount).toBe(7);
+      expect(component.isHighlightLocalChanges).toBeFalse();
+      expect(component.isHighlightRemoteChanges).toBeFalse();
     });
 
     it('shows the exact pending-op count when the clock delta under-counts (compaction fold)', () => {

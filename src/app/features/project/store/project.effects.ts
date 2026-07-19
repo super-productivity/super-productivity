@@ -107,7 +107,8 @@ export class ProjectEffects {
   snackUpdateBaseSettings$: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(updateProject.type),
+        ofType(updateProject),
+        filter((a) => !a.isSkipSnack),
         tap(() => {
           this._snackService.open({
             type: 'SUCCESS',

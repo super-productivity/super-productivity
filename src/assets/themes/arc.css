@@ -24,7 +24,14 @@ body.isDarkTheme {
   --arc-text: #c5cfd9;
   --arc-text-bright: #d3dae3;
   --arc-blue: #5294e2;
+  --arc-link: #70aff8;
   --arc-selection: #4a5466;
+
+  /* Public theme contract */
+  --surface-1: var(--arc-bg-dark);
+  --surface-2: var(--arc-bg-medium);
+  --ink: var(--arc-text);
+  --ink-on-channel: 197, 207, 217;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -64,7 +71,7 @@ body.isDarkTheme {
 
   --text-color: var(--arc-text);
   --text-color-less-intense: rgba(197, 207, 217, 0.87);
-  --text-color-muted: rgba(197, 207, 217, 0.54);
+  --text-color-muted: rgba(197, 207, 217, 0.74);
   --text-color-more-intense: var(--arc-text-bright);
   --text-color-most-intense: #ffffff;
 
@@ -72,7 +79,7 @@ body.isDarkTheme {
   --standard-note-fg: var(--arc-text);
 
   /* Task detail */
-  --task-detail-value-color: rgba(197, 207, 217, 0.7);
+  --task-detail-value-color: rgba(197, 207, 217, 0.74);
 
   /* ===============================
    * BORDERS & SEPARATORS
@@ -100,6 +107,7 @@ body.isDarkTheme {
   --palette-accent-700: #3f76b8;
   --palette-accent-800: #3567a6;
   --palette-accent-900: #2a5894;
+  --palette-accent-contrast-500: #000000;
 
   /* ===============================
    * UI ELEMENTS
@@ -192,22 +200,27 @@ body.isDarkTheme .page-wrapper {
 a,
 body a[href],
 body.isDarkTheme a[href] {
-  color: var(--c-accent);
+  color: var(--arc-link);
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
 a:hover,
 body a[href]:hover,
 body.isDarkTheme a[href]:hover {
-  opacity: 0.8;
+  color: color-mix(in srgb, var(--arc-link) 82%, white);
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */

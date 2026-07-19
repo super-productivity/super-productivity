@@ -3,9 +3,11 @@ import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
 import {
+  closeClient,
+  createSimulatedClient,
   createTestUser,
   getSuperSyncConfig,
-  isServerHealthy,
+  type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import {
   createLegacyMigratedClient,
@@ -31,14 +33,6 @@ import legacyDataCollisionB from '../../fixtures/legacy-migration-collision-b.js
  */
 test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const healthy = await isServerHealthy();
-    if (!healthy) {
-      console.warn('SuperSync server not healthy. Skipping SuperSync tests.');
-      test.skip(true, 'SuperSync server not healthy');
-    }
-  });
 
   /**
    * Test: Both clients migrated from legacy - Keep local resolution
@@ -480,12 +474,8 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
    * Verifies that archived tasks from legacy data survive the migration
    * process and can be synced to other clients.
    *
-   * Note: This test is skipped because the fresh client sync flow has
-   * timing issues with the setupSuperSync method. Archive sync is already
-   * covered by other SuperSync tests. The core legacy migration scenarios
-   * (tests 1-3) demonstrate the main functionality.
    */
-  test.skip('verify archive data is preserved after migration + sync', async ({
+  test('verify archive data is preserved after migration + sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -500,10 +490,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       context: Awaited<ReturnType<typeof browser.newContext>>;
       page: Awaited<ReturnType<typeof browser.newPage>>;
     } | null = null;
-    let clientB: {
-      context: Awaited<ReturnType<typeof browser.newContext>>;
-      page: Awaited<ReturnType<typeof browser.newPage>>;
-    } | null = null;
+    let clientB: SimulatedE2EClient | null = null;
 
     try {
       // === Client A: Legacy migration with archived task ===
@@ -538,27 +525,10 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       // === Client B: Fresh client (no legacy data), syncs ===
       // We use a fresh client to verify archive data transfers correctly
       console.log('[Test] Creating fresh Client B...');
-      const contextB = await browser.newContext({
-        baseURL: url,
-        acceptDownloads: true,
-      });
-      const pageB = await contextB.newPage();
-
-      // Auto-accept dialogs for fresh client
-      pageB.on('dialog', async (dialog) => {
-        if (dialog.type() === 'confirm') {
-          await dialog.accept();
-        }
-      });
-
-      await pageB.goto('/');
-      // Wait for app to be ready
-      await pageB.waitForSelector('magic-side-nav', { state: 'visible', timeout: 30000 });
-
-      clientB = { context: contextB, page: pageB };
-      const syncPageB = new SuperSyncPage(pageB);
-      const workViewB = new WorkViewPage(pageB);
-      await workViewB.waitForTaskList();
+      clientB = await createSimulatedClient(browser, url, 'B', testRunId);
+      const pageB = clientB.page;
+      const syncPageB = clientB.sync;
+      const workViewB = clientB.workView;
 
       // Setup sync - fresh client downloads data
       await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
@@ -616,7 +586,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       console.log('[Test] SUCCESS: Archive data preserved after migration + sync');
     } finally {
       if (clientA) await closeLegacyClient(clientA).catch(() => {});
-      if (clientB) await closeLegacyClient(clientB).catch(() => {});
+      if (clientB) await closeClient(clientB).catch(() => {});
     }
   });
 });

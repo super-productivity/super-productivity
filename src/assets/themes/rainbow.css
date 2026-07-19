@@ -21,7 +21,10 @@
   --transition-normal: 250ms ease-in-out;
 }
 
-* {
+body.isDarkTheme h1,
+body.isDarkTheme h2,
+body.isDarkTheme h3,
+body.isDarkTheme main-header .current-work-context-title {
   font-family: 'Chilanka', 'Comic Sans MS', 'URW Chancery L', 'Dancing Script', cursive;
 }
 
@@ -61,6 +64,12 @@ body.isDarkTheme {
   --neon-orange: #ff8a4c;
   --neon-pink: #ff5cc8;
   --neon-magenta: #e84df0;
+
+  /* Public theme contract */
+  --surface-1: #0e0b1a;
+  --surface-2: #15102a;
+  --ink: #ece6ff;
+  --ink-on-channel: 236, 230, 255;
 
   /* Reusable rainbow gradient for borders / accents */
   --rainbow-gradient: linear-gradient(
@@ -174,6 +183,7 @@ body.isDarkTheme {
 
   /* Primary = neon violet (buttons, focus, brand) */
   --palette-primary-500: var(--neon-violet);
+  --palette-primary-contrast-500: #000000;
   --c-primary: var(--neon-violet);
   --brand: var(--neon-violet);
 
@@ -188,6 +198,7 @@ body.isDarkTheme {
   --palette-accent-700: color-mix(in srgb, var(--neon-cyan) 60%, #000000);
   --palette-accent-800: color-mix(in srgb, var(--neon-cyan) 40%, #000000);
   --palette-accent-900: color-mix(in srgb, var(--neon-cyan) 20%, #000000);
+  --palette-accent-contrast-500: #000000;
 
   /* Semantic */
   --c-success: var(--neon-green);
@@ -473,37 +484,42 @@ body.isDarkTheme main-header .wrapper {
 }
 
 /* ===================================================================
- * TASKS — static per-row glow, intensified on state
- * (no animation; box-shadow only — cheap to composite on long lists)
+ * TASKS — flat idle edge, with glow reserved for interactive state.
+ * This keeps long scrolling lists cheap while preserving the neon identity.
  * ===================================================================*/
-body.isDarkTheme task .box {
+body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
   border: 1px solid color-mix(in srgb, var(--neon-violet) 14%, transparent);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+  box-shadow: none;
   transition:
     background-color var(--transition-fast),
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
 }
 
-body.isDarkTheme task:hover .box,
-body.isDarkTheme task .box:hover {
-  border-color: color-mix(in srgb, var(--neon-cyan) 40%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--neon-cyan) 25%, transparent);
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    border-color: color-mix(in srgb, var(--neon-cyan) 40%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--neon-cyan) 25%, transparent);
+  }
 }
 
-body.isDarkTheme task.isSelected .box {
+body.isDarkTheme task.isSelected > swipe-block > .inner-wrapper > .box {
   border-color: color-mix(in srgb, var(--neon-cyan) 55%, transparent);
   box-shadow: var(--task-selected-shadow);
 }
 
-body.isDarkTheme task.isCurrent .box {
+body.isDarkTheme task.isCurrent > swipe-block > .inner-wrapper > .box {
   border-color: color-mix(in srgb, var(--neon-pink) 60%, transparent);
   box-shadow: var(--task-current-shadow);
 }
 
 /* Running-task done-toggle halo (the pink "live" tell) */
-body.isDarkTheme task.isCurrent done-toggle .ico-btn {
-  box-shadow: 0 0 12px color-mix(in srgb, var(--neon-pink) 55%, transparent);
+body.isDarkTheme task.isCurrent done-toggle.is-current:not(.is-done) .done-toggle-svg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--neon-pink) 55%, transparent));
 }
 
 /* ===================================================================
@@ -526,7 +542,7 @@ body.isDarkTheme button[mat-flat-button][color='primary'],
 body.isDarkTheme .mat-mdc-raised-button.mat-primary,
 body.isDarkTheme .mat-mdc-unelevated-button.mat-primary {
   background: linear-gradient(120deg, var(--neon-violet), var(--neon-pink)) !important;
-  color: #ffffff !important;
+  color: var(--bg-darker) !important;
   border-radius: 10px !important;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.12) inset,
@@ -597,4 +613,42 @@ body.isDarkTheme
   .mat-mdc-slide-toggle.mat-mdc-slide-toggle-checked
   .mdc-switch__handle::after {
   box-shadow: 0 0 8px color-mix(in srgb, var(--neon-cyan) 55%, transparent);
+}
+
+/* Accessibility and compatibility: keep every pane opaque when live
+ * backdrop sampling is disabled or unavailable. */
+@media (prefers-reduced-transparency: reduce) {
+  body.isDarkTheme {
+    --neon-blur: none;
+    --neon-pane: #211a44;
+    --neon-pane-strong: #251d4e;
+    --task-c-bg: #211a44;
+    --task-c-selected-bg: #2a2056;
+    --sub-task-c-bg: #1a1438;
+    --sub-task-c-bg-done: #120e26;
+    --task-c-bg-done: #120e26;
+    --task-c-current-bg: #2a1f52;
+    --task-c-drag-drop-bg: #2a2056;
+    --sub-task-c-bg-in-selected: #2f2560;
+    --task-detail-bg: #1d1640;
+    --task-detail-bg-hover: #261d50;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  body.isDarkTheme {
+    --neon-blur: none;
+    --neon-pane: #211a44;
+    --neon-pane-strong: #251d4e;
+    --task-c-bg: #211a44;
+    --task-c-selected-bg: #2a2056;
+    --sub-task-c-bg: #1a1438;
+    --sub-task-c-bg-done: #120e26;
+    --task-c-bg-done: #120e26;
+    --task-c-current-bg: #2a1f52;
+    --task-c-drag-drop-bg: #2a2056;
+    --sub-task-c-bg-in-selected: #2f2560;
+    --task-detail-bg: #1d1640;
+    --task-detail-bg-hover: #261d50;
+  }
 }

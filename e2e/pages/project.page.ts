@@ -1,6 +1,9 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { BasePage } from './base.page';
 
+export const isProjectTasksRoute = (url: string): boolean =>
+  /\/#\/project\/[^/]+\/tasks(?:[/?#]|$)/.test(url);
+
 export class ProjectPage extends BasePage {
   readonly sidenav: Locator;
   readonly createProjectBtn: Locator;
@@ -144,6 +147,10 @@ export class ProjectPage extends BasePage {
 
     // Helper function to check if we're already on the project
     const isAlreadyOnProject = async (): Promise<boolean> => {
+      if (!isProjectTasksRoute(this.page.url())) {
+        return false;
+      }
+
       try {
         // Use page.evaluate for direct DOM check (most reliable)
         return await this.page.evaluate((name) => {

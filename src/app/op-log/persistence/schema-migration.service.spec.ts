@@ -47,11 +47,6 @@ describe('SchemaMigrationService', () => {
     it('should return the current schema version', () => {
       expect(service.getCurrentVersion()).toBe(CURRENT_SCHEMA_VERSION);
     });
-
-    it('should return 2 as the current version', () => {
-      // Current implementation is at version 2 after migration from MiscConfig to TasksConfig
-      expect(service.getCurrentVersion()).toBe(2);
-    });
   });
 
   describe('getMigrations', () => {
@@ -76,12 +71,12 @@ describe('SchemaMigrationService', () => {
     it('should return true for cache with undefined schemaVersion (defaults to 1)', () => {
       const cache = createMockCache(undefined);
       // When schemaVersion is undefined, it defaults to 1
-      // Since CURRENT_SCHEMA_VERSION is 2, migration is needed
+      // Since CURRENT_SCHEMA_VERSION is 3, migration is needed
       expect(service.needsMigration(cache)).toBeTrue();
     });
 
     it('should return true for cache with older version', () => {
-      const cache = createMockCache(1); // Version 1 is older than current version 2
+      const cache = createMockCache(1); // Version 1 is older than current version 3
       expect(service.needsMigration(cache)).toBeTrue();
     });
   });
@@ -95,7 +90,7 @@ describe('SchemaMigrationService', () => {
     it('should return true for operation with undefined schemaVersion (defaults to 1)', () => {
       const op = createMockOperation('op-1');
       op.schemaVersion = undefined as any;
-      // Since CURRENT_SCHEMA_VERSION is 2, migration is needed
+      // Since CURRENT_SCHEMA_VERSION is 3, migration is needed
       expect(service.operationNeedsMigration(op)).toBeTrue();
     });
 

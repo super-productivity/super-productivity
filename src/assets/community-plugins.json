@@ -126,5 +126,13 @@
     "author": "jloops412",
     "authorUrl": "https://github.com/jloops412",
     "stars": 0
+  },
+  {
+    "name": "Goals Vision Board",
+    "shortDescription": "A customizable two-page visual board for long-term goals, reminders, notes, images, tags, checklists, and metrics.",
+    "url": "https://github.com/CuriousChipmunk/vision-board-super-productivity",
+    "author": "CuriousChipmunk",
+    "authorUrl": "https://github.com/CuriousChipmunk",
+    "stars": 0
   }
 ]

@@ -2,6 +2,7 @@
 export {
   OpType,
   isMultiEntityPayload,
+  isLwwUpdatePayload,
   extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
@@ -14,6 +15,8 @@ export type {
   ConflictResult,
   EntityChange,
   MultiEntityPayload,
+  LwwUpdateMode,
+  LwwUpdatePayload,
 } from './operation.types';
 
 // Vector-clock algorithms — single source of truth for client/server parity.
@@ -75,7 +78,11 @@ export { createLwwUpdateActionTypeHelpers } from './lww-update-action-types';
 export type { LwwUpdateActionTypeHelpers } from './lww-update-action-types';
 
 // Apply-operation result and option types.
-export type { ApplyOperationsResult, ApplyOperationsOptions } from './apply.types';
+export type {
+  ApplyOperationsResult,
+  ApplyOperationsOptions,
+  OperationApplyFailure,
+} from './apply.types';
 
 // Generic operation replay coordinator.
 export { replayOperationBatch } from './replay-coordinator';

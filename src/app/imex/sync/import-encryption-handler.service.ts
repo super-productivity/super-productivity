@@ -92,8 +92,10 @@ export class ImportEncryptionHandlerService {
     const importedEnabled = importedSuperSync?.isEncryptionEnabled ?? false;
     const importedHasKey = !!importedSuperSync?.encryptKey;
 
-    // Encryption state changes if enabled state differs
-    const willChange = currentEnabled !== importedEnabled;
+    // SuperSync encryption is mandatory, so an import can enable encryption but
+    // can never disable it. Do not warn that encryption "will change" for a
+    // transition this service intentionally ignores below.
+    const willChange = !currentEnabled && importedEnabled;
 
     return {
       willChange,

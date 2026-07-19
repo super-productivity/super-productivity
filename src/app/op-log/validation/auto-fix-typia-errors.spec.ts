@@ -1,9 +1,13 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
+import { validateAllData } from './validation-fn';
+import type { AppDataComplete } from '../model/model-config';
 import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
 import { DEFAULT_TASK } from '../../features/tasks/task.model';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
+import { DEFAULT_PROJECT, INBOX_PROJECT } from '../../features/project/project.const';
 
 const createTypiaError = (
   path: string,
@@ -479,5 +483,303 @@ describe('autoFixTypiaErrors', () => {
         }),
       );
     });
+  });
+
+  describe('issue #9139 — tag/project entities missing `theme` entirely', () => {
+    // The `expected` string typia ACTUALLY emits for this error, captured by
+    // running the real validator. It is a generated anonymous type name whose
+    // ordinal suffix moves whenever the type graph changes — which is exactly
+    // why the fix must not key on it. See the no-longer-brittle test below.
+    const REAL_EXPECTED = 'Readonly<__type>.o26';
+
+    it('should backfill a missing tag.theme with the default tag theme', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['t1', 't2'],
+        entities: {
+          t1: { id: 't1', title: 'User tag', taskIds: [] },
+          t2: { id: 't2', title: 'Other', taskIds: [] },
+        },
+      };
+      const errors = [
+        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, undefined),
+        createTypiaError('$input.tag.entities.t2.theme', REAL_EXPECTED, undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      const a = (result as any).tag.entities.t1.theme;
+      const b = (result as any).tag.entities.t2.theme;
+      expect(a).toEqual(DEFAULT_TAG.theme);
+      // Backfill a COPY: aliasing the constant across entities would let any
+      // later mutation write through into DEFAULT_TAG for the whole app.
+      expect(a).not.toBe(DEFAULT_TAG.theme);
+      expect(a).not.toBe(b);
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({
+          fix: 'work-context-theme-undefined-to-default',
+          pathRoot: 'tag',
+        }),
+      );
+    });
+
+    it('should backfill a missing project.theme with the default project theme', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).project = {
+        ids: ['p1'],
+        entities: { p1: { id: 'p1', title: 'Proj', taskIds: [] } },
+      };
+      const errors = [
+        createTypiaError('$input.project.entities.p1.theme', REAL_EXPECTED, undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).project.entities.p1.theme).toEqual(DEFAULT_PROJECT.theme);
+    });
+
+    it('should still fire when typia renames the generated `expected` type', () => {
+      // Guards the #9045 failure mode: a branch keyed on `error.expected`
+      // would silently stop firing the moment the ordinal shifts. This fix
+      // matches on path + `value === undefined` only, so a renamed type must
+      // not change the outcome.
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['t1'],
+        entities: { t1: { id: 't1', title: 'User tag', taskIds: [] } },
+      };
+      const errors = [
+        createTypiaError(
+          '$input.tag.entities.t1.theme',
+          'Readonly<__type>.o99999',
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
+    });
+
+    it('should repair an explicit null theme, not just a missing one', () => {
+      // The `setOne` 'replace' branch applies a remote entity verbatim, so
+      // `theme: null` is reachable and typia reports it at the same path with
+      // `value: null`. Gating on `undefined` alone left this dead-ending the
+      // repair pipeline ("state still invalid after repair").
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['t1'],
+        entities: { t1: { id: 't1', title: 'Other', taskIds: [], theme: null } },
+      };
+      const errors = [
+        createTypiaError('$input.tag.entities.t1.theme', REAL_EXPECTED, null),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).tag.entities.t1.theme).toEqual(DEFAULT_TAG.theme);
+      // Pins the branch's POSITION in the else-if chain: one of the earlier
+      // `expected.includes('null'|'undefined')` branches swallowing this error
+      // would still leave state changed, but under a different fix label.
+      expect(errSpy).toHaveBeenCalledWith(
+        '[auto-fix-typia-errors] Applied validation auto-fix',
+        undefined,
+        jasmine.objectContaining({ fix: 'work-context-theme-undefined-to-default' }),
+      );
+    });
+
+    it('should restore the TODAY tag its own theme, not the generic tag default', () => {
+      // TODAY is the entity from the #9139 report and ships a distinct theme.
+      // The repair is written to disk, so a generic default would permanently
+      // restyle it (cornflower + tint-disabled -> purple + tint-enabled).
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).tag = {
+        ids: ['TODAY'],
+        entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [] } },
+      };
+      const errors = [
+        createTypiaError('$input.tag.entities.TODAY.theme', REAL_EXPECTED, undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      const healed = (result as any).tag.entities.TODAY.theme;
+      expect(healed).toEqual(TODAY_TAG.theme);
+      expect(healed.primary).toBe(TODAY_TAG.theme.primary);
+      expect(healed.isDisableBackgroundTint).toBe(true);
+      expect(healed.huePrimary).toBe('400');
+      // Guards the regression this test was written for.
+      expect(healed.primary).not.toBe(DEFAULT_TAG.theme.primary);
+    });
+
+    it('should restore the INBOX project its own theme', () => {
+      const mockData = createAppDataCompleteMock();
+      (mockData as any).project = {
+        ids: [INBOX_PROJECT.id],
+        entities: {
+          [INBOX_PROJECT.id]: { id: INBOX_PROJECT.id, title: 'Inbox', taskIds: [] },
+        },
+      };
+      const errors = [
+        createTypiaError(
+          `$input.project.entities.${INBOX_PROJECT.id}.theme`,
+          REAL_EXPECTED,
+          undefined,
+        ),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      const healed = (result as any).project.entities[INBOX_PROJECT.id].theme;
+      expect(healed).toEqual(INBOX_PROJECT.theme);
+      expect(healed.primary).not.toBe(DEFAULT_PROJECT.theme.primary);
+    });
+
+    it('should not resolve a hostile "__proto__" entity id to a system theme', () => {
+      // The lookup is a Map for exactly this: an object literal would return
+      // Object.prototype here, which is non-nullish, so the `??` would not fall
+      // through and the entity would be healed to an empty theme.
+      const mockData = createAppDataCompleteMock();
+      // Built via JSON.parse because that is what a hostile payload actually
+      // arrives as, and it is the ONLY construction that yields a genuine own
+      // "__proto__" key. `obj['__proto__'] = x` invokes the inherited setter
+      // and sets the prototype instead, creating no own property.
+      const tagState = JSON.parse(
+        '{"ids":["__proto__"],"entities":{"__proto__":{"id":"__proto__","title":"x","taskIds":[]}}}',
+      );
+      expect(Object.prototype.hasOwnProperty.call(tagState.entities, '__proto__')).toBe(
+        true,
+      );
+      (mockData as any).tag = tagState;
+      const errors = [
+        createTypiaError('$input.tag.entities.__proto__.theme', REAL_EXPECTED, undefined),
+      ];
+
+      const result = autoFixTypiaErrors(mockData, errors);
+
+      expect((result as any).tag.entities['__proto__'].theme).toEqual(DEFAULT_TAG.theme);
+    });
+  });
+});
+
+// Every test above hand-builds its typia errors, so all of them would still
+// pass if REAL typia reported a themeless entity somewhere else entirely and
+// the fix's branch never fired on real data. That is not hypothetical here:
+// #9045 shipped a check that was fully tested and never once ran in
+// production. These tests close that loop by driving the actual validator.
+describe('autoFixTypiaErrors — against REAL typia validation (#9139)', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  // A tag/project that is valid in every respect except what each test does to
+  // `theme`, so nothing unrelated pollutes the error list.
+  const buildTag = (mutate: (t: Record<string, unknown>) => void): AppDataComplete => {
+    const d = createAppDataCompleteMock() as unknown as Record<string, unknown>;
+    const tag = {
+      ...DEFAULT_TAG,
+      id: 't1',
+      title: 'Probe',
+      created: Date.now(),
+    } as unknown as Record<string, unknown>;
+    mutate(tag);
+    d.tag = { ids: ['t1'], entities: { t1: tag } };
+    return d as unknown as AppDataComplete;
+  };
+
+  const buildProject = (
+    mutate: (p: Record<string, unknown>) => void,
+  ): AppDataComplete => {
+    const d = createAppDataCompleteMock() as unknown as Record<string, unknown>;
+    const project = { ...DEFAULT_PROJECT, id: 'p1', title: 'Probe' } as unknown as Record<
+      string,
+      unknown
+    >;
+    mutate(project);
+    d.project = { ids: ['p1'], entities: { p1: project } };
+    return d as unknown as AppDataComplete;
+  };
+
+  const errorsOf = (d: AppDataComplete): IValidation.IError[] => {
+    const res = validateAllData(d) as { success: boolean; errors?: IValidation.IError[] };
+    return res.errors ?? [];
+  };
+  const isValid = (d: AppDataComplete): boolean =>
+    (validateAllData(d) as { success: boolean }).success;
+
+  it('the unmodified mock is fully valid, so any error below is caused by the test', () => {
+    // Without this the round-trips further down could pass or fail for reasons
+    // that have nothing to do with `theme`.
+    expect(isValid(createAppDataCompleteMock())).toBe(true);
+  });
+
+  (
+    [
+      ['tag', (): AppDataComplete => buildTag((t) => delete t.theme), 't1'],
+      ['project', (): AppDataComplete => buildProject((p) => delete p.theme), 'p1'],
+    ] as const
+  ).forEach(([root, build, entityId]) => {
+    it(`real typia reports a missing ${root} theme at the exact path the fix matches`, () => {
+      const errors = errorsOf(build());
+
+      // The branch keys on: keys[0] in {tag,project}, keys[1] === 'entities',
+      // keys.length === 4, keys[3] === 'theme'. If typia ever reported this
+      // per-member (deeper) or on the entity (shallower), the fix would go
+      // silently dead — so pin the shape, not just "some error exists".
+      expect(errors.length).toBe(1);
+      expect(errors[0].path).toBe(`$input.${root}.entities.${entityId}.theme`);
+      expect(errors[0].path.split('.').length - 1).toBe(4);
+      expect(errors[0].value).toBeUndefined();
+    });
+
+    it(`repairing the real errors makes the ${root} data validate clean`, () => {
+      const data = build();
+      expect(isValid(data)).toBe(false);
+
+      const repaired = autoFixTypiaErrors(data, errorsOf(data)) as AppDataComplete;
+
+      // The round trip is the point: the fix does not merely write *a* value,
+      // it writes one the validator accepts.
+      expect(isValid(repaired)).toBe(true);
+    });
+  });
+
+  it('real typia reports an explicit null theme at the same path', () => {
+    // Justifies the `value == null` gate rather than `=== undefined`: null is
+    // reachable via the setOne 'replace' branch and reported identically.
+    const errors = errorsOf(buildTag((t) => (t.theme = null)));
+
+    expect(errors.length).toBe(1);
+    expect(errors[0].path).toBe('$input.tag.entities.t1.theme');
+    expect(errors[0].value).toBeNull();
+  });
+
+  // KNOWN GAP (#9156), pinned deliberately as characterization, NOT approval.
+  //
+  // Every member of WorkContextThemeCfg is optional; only `theme` itself is
+  // required. So typia accepts `{}` and even a theme missing `primary` — no
+  // error is produced, which means the heal above can never see them and the
+  // read-side `??` never fires either (both are nullish-gated).
+  //
+  // This is why an empty theme is STICKIER than a missing one: a missing theme
+  // self-heals on the next validation pass, `{}` is invisible to validation
+  // forever. The settings dialog persists exactly `{}` (see #9156).
+  //
+  // When #9156 is fixed these expectations SHOULD flip — that is the signal,
+  // not a regression.
+  it('DOCUMENTS #9156: an empty or partial theme is invisible to validation', () => {
+    expect(isValid(buildTag((t) => (t.theme = {})))).toBe(true);
+    expect(
+      isValid(
+        buildTag((t) => {
+          const theme = { ...DEFAULT_TAG.theme } as Record<string, unknown>;
+          delete theme.primary;
+          t.theme = theme;
+        }),
+      ),
+    ).toBe(true);
   });
 });

@@ -1,0 +1,8 @@
+- make interrupted CONCURRENTLY migrations recoverable
+- stop the widget labelling a stale list as Today (#9098) (#9118)
+- add a single-day view to the Schedule tab (#9058)
+- show custom section task counts #9068 (#9109)
+- keep import author in client-side clock pruning (#9096) (#9102)
+- Add critical tests for task and sync helper flows (#9079)
+- unfreeze the disjoint-field merge to stop data loss (#9095) (#9101)
+- dedupe surgical-sync retries and keep the import author through pruning (#9089)

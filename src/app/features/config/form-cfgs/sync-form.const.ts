@@ -226,6 +226,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           // No `key` on purpose: post-#8228 the sync folder path is owned
           // main-side. The picker's return value is for display only and
           // must not write back into the renderer credential store.
+          // Prepare-only (#9075): main holds the pick as a pending candidate;
+          // DialogSyncCfgComponent.save() commits it (and fires the
+          // target-change invalidation there); closing without save discards.
           type: 'btn',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
@@ -262,7 +265,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
             btnStyle: 'stroked',
             onClick: async () => {
-              // NOTE: this actually sets the value in the model
+              // NOTE: this actually sets the value in the model — and ONLY
+              // the model (#9075). The URI is persisted by settings Save via
+              // setProviderConfig, whose config diff detects the target move
+              // (safFolderUri is identity-affecting), so Cancel abandons the
+              // pick. setupSaf throws on cancel, so a value = success.
               const providers = await loadSyncProviders();
               const localProvider = providers.find(
                 (p) => p.id === SyncProviderId.LocalFile,

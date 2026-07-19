@@ -56,6 +56,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
   interface Ctx {
     localPendingOpsByEntity: Map<string, Operation[]>;
     appliedFrontierByEntity: Map<string, VectorClock>;
+    retainedOpsByEntity: Map<string, Operation[]>;
     snapshotVectorClock: VectorClock | undefined;
     snapshotEntityKeys: Set<string> | undefined;
     hasNoSnapshotClock: boolean;
@@ -64,6 +65,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
   const ctx = (over: Partial<Ctx> = {}): Ctx => ({
     localPendingOpsByEntity: new Map(),
     appliedFrontierByEntity: new Map(),
+    retainedOpsByEntity: new Map(),
     snapshotVectorClock: undefined,
     snapshotEntityKeys: undefined,
     hasNoSnapshotClock: true,
@@ -82,14 +84,18 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'appendBatchSkipDuplicates',
       'appendMixedSourceBatchSkipDuplicates',
-      'appendWithVectorClockUpdate',
+      'appendWithVectorClockOverwrite',
       'markApplied',
       'markRejected',
       'markFailed',
       'getUnsyncedByEntity',
+      'getOpById',
       'mergeRemoteOpClocks',
       'markReducersCommittedAndMergeClocks',
     ]);
+    // Row lookup can't resolve in this mocked store → the synced-op rejection
+    // guard fails open (keeps the pending-path rejection behavior).
+    mockOpLogStore.getOpById.and.resolveTo(undefined);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
@@ -103,7 +109,7 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
       skippedCount: 0,
     }));
     mockOpLogStore.getUnsyncedByEntity.and.resolveTo(new Map());
-    mockOpLogStore.appendWithVectorClockUpdate.and.resolveTo(undefined);
+    mockOpLogStore.appendWithVectorClockOverwrite.and.resolveTo(undefined);
     mockOpLogStore.markRejected.and.resolveTo(undefined);
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
@@ -168,9 +174,9 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
       }),
     );
 
-    expect(detection.conflict).toBeTruthy();
+    expect(detection.conflicts.length).toBe(1);
 
-    await service.autoResolveConflictsLWW([detection.conflict as EntityConflict]);
+    await service.autoResolveConflictsLWW(detection.conflicts);
 
     const entries = await journal.list('history');
     expect(entries.length).toBe(1);
@@ -234,8 +240,8 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
 
     nonConflictCases.forEach(({ name, run }) => {
       it(`${name} → no conflict, zero entries`, async () => {
-        const result = (await run()) as { conflict: EntityConflict | null };
-        expect(result.conflict).toBeNull();
+        const result = (await run()) as { conflicts: EntityConflict[] };
+        expect(result.conflicts).toEqual([]);
         expect((await journal.list('history')).length).toBe(0);
       });
     });
@@ -269,19 +275,19 @@ describe('ConflictResolution → ConflictJournal hook (integration)', () => {
     // Control run: journaling works normally.
     await service.autoResolveConflictsLWW([buildConflict()]);
     const controlRejected = mockOpLogStore.markRejected.calls.allArgs();
-    const controlAppended = mockOpLogStore.appendWithVectorClockUpdate.calls
+    const controlAppended = mockOpLogStore.appendWithVectorClockOverwrite.calls
       .allArgs()
       .map(([o]) => (o as Operation).entityId);
 
     mockOpLogStore.markRejected.calls.reset();
-    mockOpLogStore.appendWithVectorClockUpdate.calls.reset();
+    mockOpLogStore.appendWithVectorClockOverwrite.calls.reset();
 
     // Sabotaged run: force record() to reject — resolution must be unaffected.
     spyOn(journal, 'record').and.rejectWith(new Error('journal boom'));
 
     await service.autoResolveConflictsLWW([buildConflict()]);
     const sabotagedRejected = mockOpLogStore.markRejected.calls.allArgs();
-    const sabotagedAppended = mockOpLogStore.appendWithVectorClockUpdate.calls
+    const sabotagedAppended = mockOpLogStore.appendWithVectorClockOverwrite.calls
       .allArgs()
       .map(([o]) => (o as Operation).entityId);
 

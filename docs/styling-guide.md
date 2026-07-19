@@ -120,11 +120,14 @@ When migrating hardcoded durations, pick the nearest bucket — up to ~15% drift
 
 Keyboard-accessibility tokens for custom interactive elements. Material components keep their own focus treatment; use these for non-Material buttons, cards, and custom controls.
 
-| Variable              | Value                        |
-| --------------------- | ---------------------------- |
-| `--focus-ring-width`  | 2px                          |
-| `--focus-ring-offset` | 2px                          |
-| `--focus-ring-color`  | `var(--palette-primary-500)` |
+| Variable              | Value               |
+| --------------------- | ------------------- |
+| `--focus-ring-width`  | 2px                 |
+| `--focus-ring-offset` | 2px                 |
+| `--focus-ring`        | `var(--brand)`      |
+| `--focus-ring-color`  | `var(--focus-ring)` |
+
+Themes should override the public `--focus-ring` primitive on `body` / `body.isDarkTheme`. `--focus-ring-color` is the compatibility alias consumed by existing components.
 
 Quickest adoption — add the `.focus-ring` utility class from `util.scss`, which applies an `outline` on `:focus-visible` only (so it doesn't fire on mouse clicks).
 

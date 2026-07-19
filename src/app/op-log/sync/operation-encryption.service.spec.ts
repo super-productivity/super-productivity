@@ -2,9 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError, OperationIntegrityError } from '../core/errors/sync-errors';
-import { ActionType } from '../core/operation.types';
+import { ActionType, OpType } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
+import { createValidAppData } from '../validation/state-validity-test-utils';
+import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -23,6 +26,8 @@ describe('OperationEncryptionService', () => {
     timestamp: Date.now(),
     schemaVersion: 1,
   });
+
+  const jsonRoundTrip = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
   // Use real encryption with weakened Argon2 params (8KiB memory, 1 iteration).
   // The session cache derives the key once per password across the whole spec,
@@ -278,6 +283,326 @@ describe('OperationEncryptionService', () => {
       expect(decrypted.payload).toEqual({
         id: 'task-123',
         changes: { title: 'legit change' },
+      });
+    });
+
+    // --- project-move footprint (op.entityIds) across the real crypto flow ---
+    // Proves the attack model concretely: entityIds ride OUTSIDE the AES-GCM
+    // ciphertext (tamperable), the authenticated payload footprint stays intact,
+    // and the interim #2 gate catches the tamper on decrypt without rejecting
+    // legitimate or synthetic (envelope-only) ops.
+
+    const createMoveOp = (): SyncOperation => ({
+      ...createMockSyncOp({
+        actionPayload: {
+          id: 'task-1',
+          projectMoveSubTaskIds: ['sub-1', 'sub-2'],
+          changes: { projectId: 'project-2' },
+        },
+        entityChanges: [],
+      }),
+      actionType: LWW_TASK,
+      opType: 'UPDATE',
+      entityType: 'TASK',
+      entityId: 'task-1',
+      entityIds: ['task-1', 'sub-1', 'sub-2'],
+    });
+
+    it('round-trips a legitimate encrypted project move (entityIds ride outside the ciphertext)', async () => {
+      const encrypted = await service.encryptOperation(createMoveOp(), TEST_PASSWORD);
+      // entityIds are plaintext envelope metadata; only the payload is encrypted.
+      expect(encrypted.entityIds).toEqual(['task-1', 'sub-1', 'sub-2']);
+      expect(typeof encrypted.payload).toBe('string');
+
+      const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+      expect(decrypted.entityIds).toEqual(['task-1', 'sub-1', 'sub-2']);
+      expect(
+        (decrypted.payload as { actionPayload: { projectMoveSubTaskIds: string[] } })
+          .actionPayload.projectMoveSubTaskIds,
+      ).toEqual(['sub-1', 'sub-2']);
+    });
+
+    it('rejects a decrypted move whose entityIds footprint was tampered (single)', async () => {
+      const encrypted = await service.encryptOperation(createMoveOp(), TEST_PASSWORD);
+      // A compromised server appends a victim task id to the plaintext envelope;
+      // the authenticated projectMoveSubTaskIds ciphertext is untouched.
+      const tampered: SyncOperation = {
+        ...encrypted,
+        entityIds: [...(encrypted.entityIds as string[]), 'victim-task'],
+      };
+      await expectAsync(
+        service.decryptOperation(tampered, TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('rejects a tampered entityIds footprint via the batch decrypt path too', async () => {
+      const [encrypted] = await service.encryptOperations(
+        [createMoveOp()],
+        TEST_PASSWORD,
+      );
+      const tampered: SyncOperation = {
+        ...encrypted,
+        entityIds: [...(encrypted.entityIds as string[]), 'victim-task'],
+      };
+      await expectAsync(
+        service.decryptOperations([tampered], TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
+    it('accepts a synthetic LWW op that carries entityIds but no authenticated footprint', async () => {
+      // Conflict-resolution synthetic ops legitimately declare entityIds in the
+      // envelope only (no payload projectMoveSubTaskIds); they must NOT be rejected.
+      const syntheticOp: SyncOperation = {
+        ...createMockSyncOp({
+          actionPayload: { id: 'task-1', changes: { projectId: 'project-2' } },
+          entityChanges: [],
+        }),
+        actionType: LWW_TASK,
+        opType: 'UPDATE',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        entityIds: ['task-1', 'sub-1'],
+      };
+      const encrypted = await service.encryptOperation(syntheticOp, TEST_PASSWORD);
+      await expectAsync(
+        service.decryptOperation(encrypted, TEST_PASSWORD),
+      ).toBeResolved();
+    });
+
+    describe('full-state opType promotion', () => {
+      const createFullStateOp = (
+        opType: OpType.SyncImport | OpType.BackupImport | OpType.Repair,
+        payload: unknown,
+        schemaVersion: number = CURRENT_SCHEMA_VERSION,
+      ): SyncOperation => ({
+        ...createMockSyncOp(payload),
+        actionType:
+          opType === OpType.Repair ? ActionType.REPAIR_AUTO : ActionType.LOAD_ALL_DATA,
+        opType,
+        entityType: 'ALL',
+        entityId: opType === OpType.BackupImport ? 'backup-import-1' : undefined,
+        schemaVersion,
+      });
+
+      const createLegacyV1AppData = (): unknown => {
+        const state = jsonRoundTrip(createValidAppData());
+        const {
+          isAutoMarkParentAsDone,
+          isAutoAddWorkedOnToToday,
+          isConfirmBeforeDelete,
+          isTrayShowCurrent,
+          isMarkdownFormattingInNotesEnabled,
+          defaultProjectId,
+          notesTemplate,
+          ...unmigratedTaskSettings
+        } = state.globalConfig.tasks;
+
+        return {
+          ...state,
+          globalConfig: {
+            ...state.globalConfig,
+            misc: {
+              ...state.globalConfig.misc,
+              isAutMarkParentAsDone: isAutoMarkParentAsDone,
+              isAutoAddWorkedOnToToday,
+              isConfirmBeforeTaskDelete: isConfirmBeforeDelete,
+              isTrayShowCurrentTask: isTrayShowCurrent,
+              isTurnOffMarkdown: !isMarkdownFormattingInNotesEnabled,
+              defaultProjectId,
+              taskNotesTpl: notesTemplate,
+            },
+            tasks: unmigratedTaskSettings,
+          },
+        };
+      };
+
+      const requiredFullStateKeys = [
+        'task',
+        'project',
+        'tag',
+        'note',
+        'menuTree',
+        'globalConfig',
+        'simpleCounter',
+        'taskRepeatCfg',
+        'reminders',
+        'planner',
+        'boards',
+        'issueProvider',
+        'metric',
+        'timeTracking',
+      ] as const;
+
+      const optionalFullStateKeys = ['pluginUserData', 'pluginMetadata'] as const;
+
+      it('rejects an ordinary encrypted op promoted to SYNC_IMPORT (single)', async () => {
+        const encrypted = await service.encryptOperation(
+          createMockSyncOp({ task: { id: 'task-123', changes: { title: 'x' } } }),
+          TEST_PASSWORD,
+        );
+        const tampered: SyncOperation = {
+          ...encrypted,
+          opType: OpType.SyncImport,
+        };
+
+        await expectAsync(
+          service.decryptOperation(tampered, TEST_PASSWORD),
+        ).toBeRejectedWithError(OperationIntegrityError);
+      });
+
+      it('rejects an ordinary encrypted op promoted to REPAIR (batch)', async () => {
+        const [encrypted] = await service.encryptOperations(
+          [createMockSyncOp({ task: { id: 'task-123', changes: { title: 'x' } } })],
+          TEST_PASSWORD,
+        );
+        const tampered: SyncOperation = {
+          ...encrypted,
+          opType: OpType.Repair,
+        };
+
+        await expectAsync(
+          service.decryptOperations([tampered], TEST_PASSWORD),
+        ).toBeRejectedWithError(OperationIntegrityError);
+      });
+
+      it('rejects missing or malformed required roots and malformed optional roots', async () => {
+        for (const key of requiredFullStateKeys) {
+          for (const invalidValue of ['missing', null] as const) {
+            const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+            if (invalidValue === 'missing') {
+              delete state[key];
+            } else {
+              state[key] = invalidValue;
+            }
+
+            const encrypted = await service.encryptOperation(
+              createMockSyncOp(state),
+              TEST_PASSWORD,
+            );
+            const promoted: SyncOperation = {
+              ...encrypted,
+              opType: OpType.SyncImport,
+            };
+
+            await expectAsync(service.decryptOperation(promoted, TEST_PASSWORD))
+              .withContext(`${key} must reject ${invalidValue}`)
+              .toBeRejectedWithError(OperationIntegrityError);
+          }
+        }
+
+        for (const key of optionalFullStateKeys) {
+          const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+          state[key] = null;
+          const encrypted = await service.encryptOperation(
+            createMockSyncOp(state),
+            TEST_PASSWORD,
+          );
+          const promoted: SyncOperation = {
+            ...encrypted,
+            opType: OpType.SyncImport,
+          };
+
+          await expectAsync(service.decryptOperation(promoted, TEST_PASSWORD))
+            .withContext(`${key} must reject malformed values when present`)
+            .toBeRejectedWithError(OperationIntegrityError);
+        }
+      });
+
+      it('accepts a legitimate direct SYNC_IMPORT payload', async () => {
+        const state = createValidAppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(state));
+      });
+
+      it('accepts a direct SYNC_IMPORT wire payload without local-only schedule settings', async () => {
+        const state = stripLocalOnlySyncSettingsFromAppData(
+          jsonRoundTrip(createValidAppData()),
+        );
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(state);
+      });
+
+      it('accepts a schema-v1 SYNC_IMPORT at the decryption boundary without mutating it', async () => {
+        const state = createLegacyV1AppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.SyncImport, state, 1),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(state);
+      });
+
+      it('accepts a legitimate direct BACKUP_IMPORT payload', async () => {
+        const state = createValidAppData();
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.BackupImport, state),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(state));
+      });
+
+      it('accepts a legitimate wrapped REPAIR payload', async () => {
+        const state = createValidAppData();
+        const payload = {
+          appDataComplete: state,
+          repairSummary: {
+            entityStateFixed: 1,
+            orphanedEntitiesRestored: 0,
+            invalidReferencesRemoved: 0,
+            relationshipsFixed: 0,
+            structureRepaired: 0,
+            typeErrorsFixed: 0,
+          },
+        };
+        const encrypted = await service.encryptOperation(
+          createFullStateOp(OpType.Repair, payload),
+          TEST_PASSWORD,
+        );
+
+        const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(jsonRoundTrip(payload));
+      });
+
+      it('accepts a wrapped REPAIR wire payload without the legacy section slice in a batch', async () => {
+        const state = jsonRoundTrip(createValidAppData()) as Record<string, unknown>;
+        delete state['section'];
+        const payload = {
+          appDataComplete: state,
+          repairSummary: {
+            entityStateFixed: 1,
+            orphanedEntitiesRestored: 0,
+            invalidReferencesRemoved: 0,
+            relationshipsFixed: 0,
+            structureRepaired: 0,
+            typeErrorsFixed: 0,
+          },
+        };
+        const [encrypted] = await service.encryptOperations(
+          [createFullStateOp(OpType.Repair, payload)],
+          TEST_PASSWORD,
+        );
+
+        const [decrypted] = await service.decryptOperations([encrypted], TEST_PASSWORD);
+
+        expect(decrypted.payload).toEqual(payload);
       });
     });
   });

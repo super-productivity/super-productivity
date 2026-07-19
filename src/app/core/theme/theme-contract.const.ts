@@ -7,14 +7,14 @@
  *   - `required`    — theme cannot render coherently without these.
  *   - `recommended` — strongly suggested; missing them produces visible drift.
  *
- * Optional tokens (`--state-*-alpha`, `--focus-ring`) are documented in
- * `docs/theming-contract.md` but are NOT enumerated here — they always
- * inherit from the base layer and never produce warnings.
+ * Optional tokens (`--state-*-alpha`, `--focus-ring`, `--system-surface`) are
+ * documented in `docs/theming-contract.md` but are NOT enumerated here — they
+ * always inherit from the base layer and never produce warnings.
  *
  * The validator's warning pass is **presence-only** in v1 — it does NOT parse
  * selectors. A theme that declares `--surface-1` only at `:root` will pass
- * even though it would be mode-inconsistent at runtime (selector-aware
- * validation is a tracked follow-up).
+ * even though the body-scoped base declaration makes it ineffective at runtime
+ * (selector-aware validation is a tracked follow-up).
  */
 export interface ThemeTokenSpec {
   readonly name: `--${string}`;

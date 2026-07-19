@@ -6,11 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
-import {
-  incrementVectorClock,
-  limitVectorClockSize,
-  mergeVectorClocks,
-} from '../../core/util/vector-clock';
+import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -113,6 +109,10 @@ export class ServerMigrationService {
       return;
     }
 
+    if (await this._skipOrThrowForOutstandingServerMigration()) {
+      return;
+    }
+
     // Check if server is empty by doing a minimal download request
     const response = await syncProvider.downloadOps(0, undefined, 1);
     if (response.latestSeq !== 0) {
@@ -177,14 +177,21 @@ export class ServerMigrationService {
    * @param options - Optional configuration
    * @param options.skipServerEmptyCheck - If true, creates SYNC_IMPORT even if server has data.
    *   Used for "USE_LOCAL" conflict resolution to force overwrite remote with local state.
+   * @returns The created SYNC_IMPORT operation ID, or undefined when creation was skipped.
    */
   async handleServerMigration(
     syncProvider: OperationSyncCapable,
     options?: { skipServerEmptyCheck?: boolean; syncImportReason?: SyncImportReason },
-  ): Promise<void> {
-    // Double-check server is still empty (in case another client just uploaded)
-    // This is called inside the upload lock, but network timing could still race
-    // Skip this check when forcing upload (conflict resolution "USE_LOCAL")
+  ): Promise<string | undefined> {
+    const isServerMigration =
+      (options?.syncImportReason ?? 'SERVER_MIGRATION') === 'SERVER_MIGRATION';
+    if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
+      return;
+    }
+
+    // Double-check server is still empty (in case another client just uploaded).
+    // The final append is deduplicated inside the operation-log mutation barrier.
+    // Skip this check when forcing upload (conflict resolution "USE_LOCAL").
     if (!options?.skipServerEmptyCheck) {
       const freshCheck = await syncProvider.downloadOps(0, undefined, 1);
       if (freshCheck.latestSeq !== 0) {
@@ -207,11 +214,18 @@ export class ServerMigrationService {
     // flushThenRunExclusive owns the flush→lock→recheck retry loop (bounded, so
     // continuous dispatch cannot livelock the migration; it re-triggers on the
     // next sync).
-    await this.writeFlushService.flushThenRunExclusive(async () => {
+    return this.writeFlushService.flushThenRunExclusive(async () => {
+      // Another tab may have appended the same multi-megabyte migration op
+      // while this tab was probing the server or waiting for confirmation.
+      // Re-check inside the cross-tab operation-log barrier before snapshotting.
+      if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
+        return;
+      }
+
       // Get current full state from NgRx store (async to include archives from IndexedDB)
       // Cast to Record for validation compatibility
       let currentState: Record<string, unknown> =
-        (await this.stateSnapshotService.getStateSnapshotAsync()) as unknown as Record<
+        (await this.stateSnapshotService.getStateSnapshotForOperationLogAsync()) as unknown as Record<
           string,
           unknown
         >;
@@ -226,7 +240,9 @@ export class ServerMigrationService {
 
       // Validate and repair state before creating SYNC_IMPORT
       // This prevents corrupted state (e.g., orphaned menuTree references) from
-      // propagating to other clients via the full state import.
+      // propagating to other clients via the full state import. Runs inside the
+      // sp_op_log lock (flushThenRunExclusive) during automatic sync, so rely on
+      // the non-interactive default — no blocking dialog under the lock (#9026).
       const validationResult =
         await this.validateStateService.validateAndRepair(currentState);
 
@@ -277,9 +293,12 @@ export class ServerMigrationService {
       for (const entry of allLocalOps) {
         mergedClock = mergeVectorClocks(mergedClock, entry.op.vectorClock);
       }
-      const newClock = limitVectorClockSize(
+      // Store-owned pruning (#9096) preserves self — the author of the
+      // SYNC_IMPORT built here, whose entry the sync-import filter's rescue
+      // predicate reads on peers — and, harmlessly, the author of the stored
+      // import this one supersedes.
+      const newClock = await this.opLogStore.pruneClockForStorage(
         incrementVectorClock(mergedClock, clientId),
-        clientId,
       );
 
       OpLog.normal(
@@ -310,7 +329,35 @@ export class ServerMigrationService {
         'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +
           'Will be uploaded immediately via follow-up upload.',
       );
+      return op.id;
     });
+  }
+
+  private async _skipOrThrowForOutstandingServerMigration(): Promise<boolean> {
+    const entries = await this.opLogStore.getOpsAfterSeq(0);
+    const existing = [...entries]
+      .reverse()
+      .find(
+        (entry) =>
+          entry.source === 'local' &&
+          entry.op.opType === OpType.SyncImport &&
+          entry.op.syncImportReason === 'SERVER_MIGRATION' &&
+          !entry.syncedAt,
+      );
+
+    if (!existing) {
+      return false;
+    }
+    if (existing.rejectedAt) {
+      throw new Error(
+        'A previous server-migration snapshot was rejected; refusing to create another snapshot.',
+      );
+    }
+
+    OpLog.normal(
+      'ServerMigrationService: Reusing the existing pending server-migration snapshot.',
+    );
+    return true;
   }
 
   /**

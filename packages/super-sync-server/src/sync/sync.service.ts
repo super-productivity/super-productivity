@@ -60,6 +60,12 @@ const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
   );
 };
 
+class CleanSlateUploadRejectedError extends Error {
+  constructor(readonly results: UploadResult[]) {
+    super('Clean-slate replacement was rejected');
+  }
+}
+
 /**
  * Main sync orchestration service.
  *
@@ -133,12 +139,27 @@ export class SyncService {
     ops: Operation[],
     isCleanSlate?: boolean,
     requestStartOccupiedIds?: ReadonlySet<string>,
+    repairBaseServerSeq?: number,
+    allowLegacyRepairWithoutBase: boolean = false,
   ): Promise<UploadResult[]> {
+    if (isCleanSlate && ops.length === 0) {
+      return [];
+    }
+
     const results: UploadResult[] = [];
     const now = Date.now();
     const txStartedAt = Date.now();
     let uploadDbRoundtrips = 0;
     const prevalidatedResults = new Map<Operation, ValidationResult>();
+    const containsRepair = ops.some((op) => op.opType === 'REPAIR');
+    const isLegacyRepairUpload =
+      containsRepair && repairBaseServerSeq === undefined && allowLegacyRepairWithoutBase;
+    const shouldCleanSlate = !!isCleanSlate && !containsRepair;
+    if (isCleanSlate && containsRepair) {
+      Logger.warn(
+        `[user:${userId}] Ignoring destructive clean-slate flag for REPAIR upload`,
+      );
+    }
     for (const op of ops) {
       const validation = this.prevalidatedOps.get(op);
       if (validation) {
@@ -146,12 +167,84 @@ export class SyncService {
       }
     }
 
+    if (isCleanSlate) {
+      const validations = ops.map((op) => {
+        const validation =
+          prevalidatedResults.get(op) ?? this.validationService.validateOp(op, clientId);
+        prevalidatedResults.set(op, validation);
+        return validation;
+      });
+      if (validations.some(({ valid }) => !valid)) {
+        return ops.map((op, index) => {
+          const validation = validations[index];
+          return validation.valid
+            ? {
+                opId: op.id,
+                accepted: false,
+                error: 'Clean-slate batch contains an invalid operation',
+                errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+              }
+            : {
+                opId: op.id,
+                accepted: false,
+                error: validation.error ?? 'Invalid operation',
+                errorCode: validation.errorCode,
+              };
+        });
+      }
+    }
+
     try {
       // Use transaction to acquire write lock and ensure atomicity
       await prisma.$transaction(
         async (tx) => {
+          if (containsRepair && !isLegacyRepairUpload) {
+            // Serialize the causal precondition and the later insert through the
+            // same per-user sequence row. A concurrent upload either commits
+            // first (making this base stale) or waits and lands after REPAIR.
+            await tx.userSyncState.upsert({
+              where: { userId },
+              create: { userId, lastSeq: 0 },
+              update: {},
+            });
+            const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
+              SELECT last_seq AS "lastSeq"
+              FROM user_sync_state
+              WHERE user_id = ${userId}
+              FOR UPDATE
+            `;
+            const currentServerSeq = rows[0]?.lastSeq ?? 0;
+            if (
+              repairBaseServerSeq === undefined ||
+              repairBaseServerSeq !== currentServerSeq
+            ) {
+              Logger.warn(
+                `[user:${userId}] Rejecting stale REPAIR snapshot ` +
+                  `(base=${repairBaseServerSeq ?? 'missing'}, current=${currentServerSeq})`,
+              );
+              results.push(
+                ...ops.map((op) =>
+                  op.opType === 'REPAIR'
+                    ? {
+                        opId: op.id,
+                        accepted: false,
+                        error: 'REPAIR snapshot does not include current server state',
+                        errorCode: SYNC_ERROR_CODES.REPAIR_STALE,
+                      }
+                    : {
+                        opId: op.id,
+                        accepted: false,
+                        error: 'Batch deferred because its REPAIR snapshot is stale',
+                        errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+                      },
+                ),
+              );
+              return;
+            }
+          }
+
           // If clean slate requested, delete all existing data first
-          if (isCleanSlate) {
+          if (shouldCleanSlate) {
             Logger.info(
               `[user:${userId}] Clean slate requested - deleting all user data`,
             );
@@ -266,6 +359,25 @@ export class SyncService {
             );
           }
 
+          if (
+            isCleanSlate &&
+            (results.length !== ops.length || results.some(({ accepted }) => !accepted))
+          ) {
+            throw new CleanSlateUploadRejectedError(
+              ops.map((op, index) => {
+                const result = results[index];
+                return result && !result.accepted
+                  ? result
+                  : {
+                      opId: op.id,
+                      accepted: false,
+                      error: 'Clean-slate replacement was rolled back',
+                      errorCode: SYNC_ERROR_CODES.INTERNAL_ERROR,
+                    };
+              }),
+            );
+          }
+
           // Update device last seen
           await tx.syncDevice.upsert({
             where: {
@@ -298,7 +410,7 @@ export class SyncService {
           // advisory; reconcile self-heals if it ever drifts). Clean slate
           // already reset the counter to zero above, so SET (rather than
           // increment) avoids double-counting anything left in the row.
-          if (acceptedDeltaBytes > 0 && !isCleanSlate) {
+          if (acceptedDeltaBytes > 0 && !shouldCleanSlate) {
             const delta = BigInt(Math.floor(acceptedDeltaBytes));
             await tx.$executeRaw`
               UPDATE users
@@ -306,7 +418,7 @@ export class SyncService {
               WHERE id = ${userId}
             `;
             uploadDbRoundtrips++;
-          } else if (acceptedDeltaBytes > 0 && isCleanSlate) {
+          } else if (acceptedDeltaBytes > 0 && shouldCleanSlate) {
             const delta = BigInt(Math.floor(acceptedDeltaBytes));
             await tx.$executeRaw`
               UPDATE users
@@ -331,7 +443,7 @@ export class SyncService {
       // Clear caches after clean slate transaction completes successfully.
       // Include request dedup so a retry from before the wipe cannot return
       // cached results that reference now-deleted state.
-      if (isCleanSlate) {
+      if (shouldCleanSlate) {
         this.rateLimitService.clearForUser(userId);
         this.snapshotService.clearForUser(userId);
         this.storageQuotaService.clearForUser(userId);
@@ -349,6 +461,13 @@ export class SyncService {
         batchUpload: this.config.batchUpload,
       });
     } catch (err) {
+      if (err instanceof CleanSlateUploadRejectedError) {
+        Logger.warn(
+          `[user:${userId}] Clean-slate replacement rejected; existing data preserved`,
+        );
+        return err.results;
+      }
+
       // Transaction failed - all operations were rolled back
       const errorMessage = (err as Error).message || 'Unknown error';
 

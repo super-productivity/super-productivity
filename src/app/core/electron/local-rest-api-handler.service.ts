@@ -512,6 +512,46 @@ export class LocalRestApiHandlerService {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
+        if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
+          const targetProjectId = changes.projectId;
+          if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
+            return createErrorResponse(
+              requestId,
+              400,
+              'INVALID_INPUT',
+              'projectId must be a non-empty string',
+            );
+          }
+          const isProjectChange = targetProjectId !== task.projectId;
+          // Echoing back the unchanged projectId is allowed on subtasks so
+          // GET→PATCH round-trips don't fail; only actual changes are rejected.
+          if (task.parentId && isProjectChange) {
+            return createErrorResponse(
+              requestId,
+              400,
+              'UNSUPPORTED_FIELD',
+              'projectId cannot be changed directly on a subtask — move its parent task instead',
+            );
+          }
+
+          if (isProjectChange) {
+            // list() only contains unarchived projects, and matching by iteration
+            // (not entity-map lookup) keeps prototype-property names like
+            // 'constructor' from resolving to a truthy non-project.
+            const targetProject = this._projectService
+              .list()
+              .find((project) => project.id === targetProjectId && !project.isArchived);
+            if (!targetProject) {
+              return createErrorResponse(
+                requestId,
+                404,
+                'PROJECT_NOT_FOUND',
+                'Destination project not found or archived',
+              );
+            }
+          }
+        }
+
         this._taskService.update(taskId, changes);
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
@@ -624,16 +664,17 @@ export class LocalRestApiHandlerService {
     return createSuccessResponse(requestId, 200, tags);
   }
 
+  // The id equality checks reject prototype-property names ('constructor',
+  // 'toString', …) that entity-map lookups resolve to truthy non-tasks.
   private async _getTaskById(taskId: string): Promise<Task | undefined> {
-    return (await firstValueFrom(this._taskService.getByIdOnce$(taskId))) || undefined;
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    return task?.id === taskId ? task : undefined;
   }
 
   private async _getTaskWithSubTasksById(
     taskId: string,
   ): Promise<TaskWithSubTasks | undefined> {
-    return (
-      (await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId))) ||
-      undefined
-    );
+    const task = await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId));
+    return task?.id === taskId ? task : undefined;
   }
 }

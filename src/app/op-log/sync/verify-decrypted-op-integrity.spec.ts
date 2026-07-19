@@ -94,4 +94,122 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
       ).not.toThrow();
     });
   });
+
+  describe('rejects project-move footprint tampering (fail closed)', () => {
+    it('throws when op.entityIds injects a victim id absent from the authenticated footprint', () => {
+      // Valid encrypted move of task-123 (+ subtask sub-1). A compromised server
+      // appended victim-task to the plaintext envelope so the LWW project-repair
+      // reducer would drag it out of its project too. GHSA-8pxh-mgc7-gp3g.
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 'sub-1', 'victim-task'],
+      });
+      const authenticatedPayload = {
+        id: 'task-123',
+        projectMoveSubTaskIds: ['sub-1'],
+        changes: { projectId: 'project-2' },
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).toThrowError(OperationIntegrityError);
+    });
+
+    it('throws for the multi-entity-wrapped move payload too', () => {
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 'victim-task'],
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'task-123', projectMoveSubTaskIds: [] },
+        entityChanges: [],
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).toThrowError(OperationIntegrityError);
+    });
+
+    it('throws when a non-string id is injected into op.entityIds', () => {
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 42 as unknown as string],
+      });
+      const authenticatedPayload = {
+        id: 'task-123',
+        projectMoveSubTaskIds: ['sub-1'],
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).toThrowError(OperationIntegrityError);
+    });
+  });
+
+  describe('accepts legitimate project moves (no false positives)', () => {
+    it('passes when op.entityIds exactly equals {entityId} ∪ projectMoveSubTaskIds (flat)', () => {
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 'sub-1', 'sub-2'],
+      });
+      const authenticatedPayload = {
+        id: 'task-123',
+        projectMoveSubTaskIds: ['sub-1', 'sub-2'],
+        changes: { projectId: 'project-2' },
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).not.toThrow();
+    });
+
+    it('passes for the multi-entity-wrapped move payload', () => {
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 'sub-1'],
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'task-123', projectMoveSubTaskIds: ['sub-1'] },
+        entityChanges: [],
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).not.toThrow();
+    });
+
+    it('ignores ordering differences (set, not sequence, equality)', () => {
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['sub-1', 'task-123'],
+      });
+      const authenticatedPayload = {
+        id: 'task-123',
+        projectMoveSubTaskIds: ['sub-1'],
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).not.toThrow();
+    });
+
+    it('does not validate entityIds when the payload carries no authenticated footprint (synthetic LWW op)', () => {
+      // Synthetic conflict-resolution ops carry entityIds in the envelope only;
+      // there is no projectMoveSubTaskIds to bind against, so they must pass
+      // untouched (validating them would reject valid ops and break sync).
+      const op = createOp({
+        entityId: 'task-123',
+        entityIds: ['task-123', 'sub-1', 'anything'],
+      });
+      const authenticatedPayload = { id: 'task-123', changes: {} };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).not.toThrow();
+    });
+
+    it('does not validate footprint when op.entityIds is absent', () => {
+      const op = createOp({ entityId: 'task-123', entityIds: undefined });
+      const authenticatedPayload = {
+        id: 'task-123',
+        projectMoveSubTaskIds: ['sub-1'],
+      };
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).not.toThrow();
+    });
+  });
 });

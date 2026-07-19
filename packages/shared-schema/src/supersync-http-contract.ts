@@ -78,6 +78,8 @@ export const SuperSyncOperationSchema = z.object({
   schemaVersion: z.number().int().min(1).max(100),
   isPayloadEncrypted: z.boolean().optional(),
   syncImportReason: z.enum(SUPER_SYNC_IMPORT_REASONS).optional(),
+  /** Server cursor proven to be included in a causally accepted REPAIR snapshot. */
+  repairBaseServerSeq: z.number().int().min(0).optional(),
 });
 
 // Upload requests are envelopes for independently validated operations. Keep
@@ -124,6 +126,7 @@ export const SuperSyncUploadSnapshotRequestSchema = z
     opId: z.string().uuid().optional(),
     isCleanSlate: z.boolean().optional(),
     snapshotOpType: z.enum(SUPER_SYNC_SNAPSHOT_OP_TYPES).optional(),
+    repairBaseServerSeq: z.number().int().min(0).optional(),
     requestId: SuperSyncRequestIdSchema.optional(),
   })
   .superRefine((request, context) => {
@@ -174,6 +177,11 @@ export const SuperSyncDownloadOpsResponseSchema = z
     gapDetected: z.boolean().optional(),
     snapshotVectorClock: SuperSyncVectorClockSchema.optional(),
     serverTime: z.number().optional(),
+    capabilities: z
+      .object({
+        causalRepairSnapshots: z.literal(true).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 
@@ -190,6 +198,7 @@ export const SuperSyncSnapshotUploadResponseSchema = z
     accepted: z.boolean(),
     serverSeq: z.number().optional(),
     error: z.string().optional(),
+    errorCode: z.string().optional(),
   })
   .passthrough();
 

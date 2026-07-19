@@ -52,6 +52,12 @@ body.isDarkTheme {
   --ctp-flamingo: #f2cdcd;
   --ctp-rosewater: #f5e0dc;
 
+  /* Public theme contract */
+  --surface-1: var(--ctp-base);
+  --surface-2: var(--ctp-surface0);
+  --ink: var(--ctp-text);
+  --ink-on-channel: 205, 214, 244;
+
   /* ===============================
    * BACKGROUND COLORS
    * ===============================*/
@@ -130,6 +136,7 @@ body.isDarkTheme {
   --palette-accent-700: #8c96cc;
   --palette-accent-800: #7882b3;
   --palette-accent-900: #646e9a;
+  --palette-accent-contrast-500: #000000;
 
   /* Secondary colors */
   --c-success: var(--ctp-green);
@@ -240,11 +247,16 @@ body.isDarkTheme a[href]:hover {
   opacity: 0.8;
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */

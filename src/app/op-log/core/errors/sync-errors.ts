@@ -81,6 +81,8 @@ export class LocalDataConflictError extends Error {
     // display heuristic, not an exact "unsynced" figure. `null` for genuinely-fresh
     // clients that have never synced (SPAP-7).
     public readonly lastSyncedVectorClock?: Record<string, number> | null,
+    /** Actual `lastModified` recorded by the downloaded remote file. */
+    public readonly remoteLastModified?: number,
   ) {
     super(`Local data conflict: ${unsyncedCount} unsynced changes would be lost`);
   }
@@ -110,6 +112,53 @@ export class LockAcquisitionTimeoutError extends Error {
 
 export class UnknownSyncStateError extends Error {
   override name = 'UnknownSyncStateError';
+}
+
+export class ForceUploadFailedError extends Error {
+  override name = 'ForceUploadFailedError';
+}
+
+export class ForceUploadPendingOpsError extends Error {
+  override name = 'ForceUploadPendingOpsError';
+}
+
+/**
+ * The file-sync target changed (provider switch, account switch behind the same
+ * provider id, or an identity-affecting config/folder change) while a file
+ * upload was in flight — detected by a bumped adapter target generation before a
+ * remote write. The in-flight write carries the previous target's merged data,
+ * so it is abandoned rather than committed to the new target. The next sync
+ * re-reads and re-uploads against the current target from zero. Transient by
+ * design; not a corruption. (Task 2, docs/plans/2026-07-13-sync-simplification-plan.md.)
+ */
+export class FileSyncTargetChangedError extends Error {
+  override name = 'FileSyncTargetChangedError';
+
+  constructor(capturedGeneration: number, currentGeneration: number) {
+    super(
+      `File sync target changed mid-operation (generation ${capturedGeneration} → ${currentGeneration}); write abandoned.`,
+    );
+  }
+}
+
+/**
+ * The global sync epoch changed (provider switch, account/target move, or a
+ * destructive config operation such as an encryption change) while a sync
+ * cycle was in flight — detected by comparing the epoch captured at cycle
+ * start against `SyncProviderManager.syncEpoch` before a write. The stale
+ * cycle's remaining applies/acks/cursor writes are abandoned so they cannot
+ * land against the new epoch/target; the next sync runs against the current
+ * config from scratch. Transient by design; not a corruption. (#9074 — the
+ * cross-provider generalization of {@link FileSyncTargetChangedError}.)
+ */
+export class SyncEpochChangedError extends Error {
+  override name = 'SyncEpochChangedError';
+
+  constructor(capturedEpoch: number, currentEpoch: number, context: string) {
+    super(
+      `Sync epoch changed mid-cycle (${capturedEpoch} → ${currentEpoch}) at ${context}; write abandoned.`,
+    );
+  }
 }
 
 /**

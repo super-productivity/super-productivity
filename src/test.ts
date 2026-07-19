@@ -24,6 +24,7 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { asyncScheduler } from 'rxjs';
+import { clearDeferredActions } from './app/op-log/capture/operation-capture.meta-reducer';
 
 import { getTestBed, TestBed } from '@angular/core/testing';
 import {
@@ -101,6 +102,12 @@ beforeEach(() => {
     configurable: true,
     writable: true,
   });
+
+  // The deferred-action buffer is module-level state shared by every spec in
+  // the Karma context. Actions left in it leak into later spec FILES, where
+  // the phantom-change guard (#8751) reads it and silently skips compaction
+  // and snapshot saves — an order-dependent failure that passes standalone.
+  clearDeferredActions();
 });
 
 // Mock browser dialogs globally for tests

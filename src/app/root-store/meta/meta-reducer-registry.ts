@@ -2,6 +2,7 @@ import { MetaReducer } from '@ngrx/store';
 import { isDevMode } from '@angular/core';
 import { operationCaptureMetaReducer } from '../../op-log/capture/operation-capture.meta-reducer';
 import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
+import { loadAllDataFailureGuardMetaReducer } from '../../op-log/apply/load-all-data-failure-guard.meta-reducer';
 import { undoTaskDeleteMetaReducer } from './undo-task-delete.meta-reducer';
 import { taskSharedCrudMetaReducer } from './task-shared-meta-reducers/task-shared-crud.reducer';
 import { taskBatchUpdateMetaReducer } from './task-shared-meta-reducers/task-batch-update.reducer';
@@ -33,6 +34,12 @@ import { actionLoggerReducer } from './action-logger.reducer';
  * ## Phase 2: Bulk Operations
  * Unwraps bulk dispatches for hydration/sync into individual actions.
  * Must run early so all subsequent meta-reducers see individual actions.
+ *
+ * ## Phase 2.5: LoadAllData Failure Guard (#9140)
+ * Converts a reducer throw on loadAllData into a collected failure during
+ * hydration so startup can fall back to op-log replay instead of silently
+ * freezing the store. Must wrap every reducer that handles loadAllData,
+ * i.e. precede Phases 3-8. Pure pass-through outside hydration.
  *
  * ## Phase 3: Undo/Delete Capture
  * Captures task context before deletion for undo functionality.
@@ -90,6 +97,16 @@ export const META_REDUCERS: MetaReducer[] = [
   // - Remote sync (operations from other clients)
   // Must run early so all subsequent reducers see individual actions.
   bulkOperationsMetaReducer,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHASE 2.5: LOAD-ALL-DATA FAILURE GUARD (#9140)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // While the hydrator's failure collector is active, converts a reducer throw
+  // on loadAllData into a collected failure (returning the previous state) so
+  // startup can fall back to op-log replay instead of bricking to an empty
+  // store with a dead state observable. Must wrap every reducer that handles
+  // loadAllData, i.e. run before Phases 3-8. Pure pass-through otherwise.
+  loadAllDataFailureGuardMetaReducer,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 3: UNDO/DELETE CAPTURE

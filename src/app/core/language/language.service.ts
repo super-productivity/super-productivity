@@ -60,9 +60,9 @@ export class LanguageService {
     this._isRTL.set(this._checkIsRTL(lng));
     this._translateService.use(lng);
 
-    // Register the UI language as a *fallback* only; DateTimeFormatService owns
-    // the adapter locale and keeps an explicit dateTimeLocale override winning.
-    // Setting the adapter locale directly here would clobber that override (#8565).
+    // Register the UI language for ISO text labels and as the locale fallback.
+    // DateTimeFormatService owns the adapter locale so an explicit date/time
+    // override keeps winning (#8565).
     this._dateTimeFormatService.setUiLanguage(lng);
   }
 

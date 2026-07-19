@@ -28,13 +28,16 @@ export class LocalFileSyncAndroid extends LocalFileSyncBase {
     return false;
   }
 
+  /**
+   * Opens the SAF folder picker and returns the picked URI WITHOUT persisting
+   * it (#9075). The caller (sync settings form) holds the URI in its model as
+   * `safFolderUri` and persists it via the normal settings-Save path
+   * (`setProviderConfig`), so Cancel abandons the pick and a sync firing
+   * between pick and Save still targets the old folder. Throws on cancel.
+   */
   async setupSaf(): Promise<string> {
     try {
-      const uri = await this._deps.saf.selectFolder();
-      await this.privateCfg.upsertPartial({
-        safFolderUri: uri,
-      });
-      return uri;
+      return await this._deps.saf.selectFolder();
     } catch (error) {
       this.logger.err('Failed to setup SAF', toSyncLogError(error));
       throw error;

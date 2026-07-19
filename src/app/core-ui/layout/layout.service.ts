@@ -61,7 +61,7 @@ export class LayoutService {
     select(selectIsShowIssuePanel),
   );
 
-  readonly selectedTimeView = signal<'week' | 'month'>('week');
+  readonly selectedTimeView = signal<'week' | 'month' | 'day'>('week');
   readonly isWorkViewScrolled = signal<boolean>(false);
   readonly isShowAddTaskBar = toSignal(this.isShowAddTaskBar$, { initialValue: false });
 
@@ -168,6 +168,7 @@ export class LayoutService {
   focusTaskInViewWhenReady(
     taskId: string,
     onSuccess?: (el: HTMLElement) => void,
+    onFailure?: () => void,
     retriesLeft: number = LayoutService._TASK_FOCUS_MAX_RETRIES,
   ): void {
     if (this._pendingTaskRevealTimeout) {
@@ -182,12 +183,13 @@ export class LayoutService {
     }
 
     if (retriesLeft <= 0) {
+      onFailure?.();
       return;
     }
 
     this._pendingTaskRevealTimeout = window.setTimeout(() => {
       this._pendingTaskRevealTimeout = undefined;
-      this.focusTaskInViewWhenReady(taskId, onSuccess, retriesLeft - 1);
+      this.focusTaskInViewWhenReady(taskId, onSuccess, onFailure, retriesLeft - 1);
     }, LayoutService._TASK_FOCUS_RETRY_DELAY);
   }
 

@@ -92,7 +92,9 @@ describe('ScheduleComponent', () => {
     );
 
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      localization: signal({ firstDayOfWeek: 1 }),
+      // Pin the date locale so Intl-formatted headers are deterministic across
+      // runners (an en-GB runner would render "20 Jan", not "Jan 20").
+      localization: signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' }),
       cfg: signal(undefined),
     });
 
@@ -274,6 +276,22 @@ describe('ScheduleComponent', () => {
   });
 
   describe('goToPreviousPeriod', () => {
+    it('should go back exactly one day in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
+      component['_selectedDate'].set(new Date(2027, 5, 15)); // Jun 15, 2027 (future → no snap-to-today)
+      fixture.detectChanges();
+      expect(component.daysToShow().length).toBe(1);
+
+      component.goToPreviousPeriod();
+
+      const d = component['_selectedDate']();
+      expect(d?.getFullYear()).toBe(2027);
+      expect(d?.getMonth()).toBe(5);
+      expect(d?.getDate()).toBe(14); // back by exactly one day
+      expect(d?.getHours()).toBe(0); // normalized to midnight
+    });
+
     it('should navigate backward by the number of days currently shown', () => {
       // Arrange - view a future range that doesn't contain today
       mockScheduleService.getDaysToShow.and.returnValue([
@@ -343,6 +361,22 @@ describe('ScheduleComponent', () => {
   });
 
   describe('goToNextPeriod', () => {
+    it('should advance exactly one day in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
+      component['_selectedDate'].set(new Date(2027, 5, 15)); // Jun 15, 2027
+      fixture.detectChanges();
+      expect(component.daysToShow().length).toBe(1);
+
+      component.goToNextPeriod();
+
+      const d = component['_selectedDate']();
+      expect(d?.getFullYear()).toBe(2027);
+      expect(d?.getMonth()).toBe(5);
+      expect(d?.getDate()).toBe(16); // advanced by exactly one day
+      expect(d?.getHours()).toBe(0); // normalized to midnight
+    });
+
     it('should navigate forward by the number of days currently shown', () => {
       // Arrange
       const startDate = new Date(2026, 0, 20); // Jan 20, 2026
@@ -482,6 +516,67 @@ describe('ScheduleComponent', () => {
       expect(contextDate.getMonth()).toBe(0);
       expect(contextDate.getFullYear()).toBe(2026);
     });
+
+    it('should keep the reference live as time passes rather than freezing at first read', () => {
+      // The computed caches, and Date.now() is not reactive: without the refresh
+      // tick this pins the layout to whenever the view was first rendered.
+      let clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      // Round-trip through a date: the computed already ran against the real
+      // clock on init, and re-setting null over null would not invalidate it.
+      component['_selectedDate'].set(new Date(2026, 0, 21));
+      component['_selectedDate'].set(null);
+      expect(component['_contextNow']()).toBe(clock);
+
+      clock = new Date(2026, 0, 20, 17, 0, 0).getTime();
+      (mockScheduleService as any).scheduleRefreshTick.set(1);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
+
+    it('should keep using midnight when today sits later in the displayed week', () => {
+      // Week view can show a range that starts before today; day 0 is fully
+      // elapsed, so it stays the layout reference.
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+
+      component['_selectedDate'].set(new Date(2026, 0, 19));
+
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 19).setHours(0, 0, 0, 0));
+    });
+
+    it('should never anchor day 0 with a now that falls outside it', () => {
+      // contextNow anchors dayDates[0], so a now past that day's end would push
+      // every day-0 entry over its boundary and empty the column. Reachable with
+      // a custom start-of-next-day, where the logical "today" is still Jan 20
+      // while the wall clock already reads 02:00 on Jan 21.
+      const clock = new Date(2026, 0, 21, 2, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+
+      const contextNow = component['_contextNow']();
+      expect(contextNow).toBeGreaterThanOrEqual(
+        new Date(2026, 0, 20).setHours(0, 0, 0, 0),
+      );
+      expect(contextNow).toBeLessThan(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
+    });
+
+    it('should switch to the real now once the viewed day rolls over into today', () => {
+      // Viewing tomorrow at 22:00, then the app is left open past midnight. The
+      // view does not move, so the day it shows silently becomes today.
+      let clock = new Date(2026, 0, 20, 22, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      component['_selectedDate'].set(new Date(2026, 0, 21));
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
+
+      // Rollover happens at 00:00 and the user comes back at 09:00; only the
+      // refresh tick moves, exactly as in production.
+      clock = new Date(2026, 0, 21, 9, 0, 0).getTime();
+      (mockScheduleService as any).scheduleRefreshTick.set(1);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
   });
 
   describe('scheduleDays computed', () => {
@@ -524,10 +619,12 @@ describe('ScheduleComponent', () => {
     });
 
     it('should pass both contextNow and realNow when viewing a future date', () => {
-      // Arrange
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 7);
-      component['_selectedDate'].set(futureDate);
+      // Arrange - a week past the mocked today (2026-01-20). The clock is pinned
+      // so both timestamps can be named exactly; asserting only that they differ
+      // would pass for arbitrary wrong values.
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      component['_selectedDate'].set(new Date(2026, 0, 27));
       mockScheduleService.createScheduleDaysWithContext.calls.reset();
 
       // Act
@@ -536,10 +633,8 @@ describe('ScheduleComponent', () => {
       // Assert
       const callArgs =
         mockScheduleService.createScheduleDaysWithContext.calls.mostRecent().args[0];
-      expect(callArgs.contextNow).toBeDefined();
-      expect(callArgs.realNow).toBeDefined();
-      // contextNow should be different from realNow when viewing future
-      expect(callArgs.contextNow).not.toBe(callArgs.realNow);
+      expect(callArgs.contextNow).toBe(new Date(2026, 0, 27).setHours(0, 0, 0, 0));
+      expect(callArgs.realNow).toBe(clock);
     });
   });
 
@@ -725,6 +820,12 @@ describe('ScheduleComponent', () => {
   });
 
   describe('shouldEnableHorizontalScroll computed', () => {
+    it('should return false in day view', () => {
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect(component.shouldEnableHorizontalScroll()).toBe(false);
+    });
+
     it('should return false in month view regardless of window size', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
@@ -852,6 +953,101 @@ describe('ScheduleComponent', () => {
 
       // Assert - 10 days should round up to 2 weeks
       expect(weeks).toBe(2);
+    });
+  });
+
+  describe('day view persistence', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('persists the day view and reads it back', () => {
+      component.selectTimeView('day');
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect(localStorage.getItem('SELECTED_TIME_VIEW')).toBe('day');
+      // getTimeView is private; cast to reach it
+      expect((component as any).getTimeView()).toBe('day');
+    });
+
+    it('reads back month, and defaults to week for absent or unknown values', () => {
+      localStorage.setItem('SELECTED_TIME_VIEW', 'month');
+      expect((component as any).getTimeView()).toBe('month');
+
+      localStorage.removeItem('SELECTED_TIME_VIEW');
+      expect((component as any).getTimeView()).toBe('week');
+
+      localStorage.setItem('SELECTED_TIME_VIEW', 'not-a-view');
+      expect((component as any).getTimeView()).toBe('week');
+    });
+  });
+
+  describe('day view mode logic', () => {
+    it('shows exactly one day in day mode', () => {
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect((component as any)._daysToShowCount()).toBe(1);
+      // Verify the count is actually wired into the day range (the mock returns
+      // a fixed 1-element array regardless of args, so length alone is not proof).
+      expect(mockScheduleService.getDaysToShow).toHaveBeenCalledWith(1, null);
+      expect(component.daysToShow().length).toBe(1);
+      expect(component.isDayView()).toBe(true);
+      expect(component.isMonthView()).toBe(false);
+    });
+
+    it('renders the full single-date header when roomy', () => {
+      // Force the roomy (non-tablet) state so the full form is deterministic
+      // regardless of the test runner's window width.
+      component['_isTablet'] = signal(false);
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      // 2026-01-20 is a Tuesday (en-US locale pinned in beforeEach).
+      expect(component.headerTitle()).toBe('Tue, Jan 20, 2026');
+    });
+
+    it('compacts the day header to month and day when tight', () => {
+      component['_isTablet'] = signal(true);
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      // Compact form is month + day only (no weekday, no year).
+      expect(component.headerTitle()).toBe('Jan 20');
+    });
+
+    it('exposes mutually exclusive view-mode flags', () => {
+      mockLayoutService.selectedTimeView.set('week');
+      fixture.detectChanges();
+      expect(component.isWeekView()).toBe(true);
+      expect(component.isDayView()).toBe(false);
+      expect(component.isMonthView()).toBe(false);
+
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      expect(component.isDayView()).toBe(true);
+      expect(component.isWeekView()).toBe(false);
+      expect(component.isMonthView()).toBe(false);
+    });
+  });
+
+  describe('day view toggle rendering', () => {
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('renders a schedule-week (not schedule-month) with one day when in day view', () => {
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('schedule-week')).toBeTruthy();
+      expect(el.querySelector('schedule-month')).toBeFalsy();
+    });
+
+    it('has a day-view toggle button that selects day mode', () => {
+      const el: HTMLElement = fixture.nativeElement;
+      const dayBtn = el.querySelector<HTMLButtonElement>(
+        '.time-view-btn.e2e-day-view-btn',
+      );
+      expect(dayBtn).toBeTruthy();
+      dayBtn!.click();
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
     });
   });
 });

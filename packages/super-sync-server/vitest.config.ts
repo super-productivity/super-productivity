@@ -22,8 +22,11 @@ export default defineConfig({
       'tests/integration/multi-client-sync.integration.spec.ts',
       'tests/integration/snapshot-skip-optimization.integration.spec.ts',
       // Integration test that requires real PostgreSQL (run with vitest.integration.config.ts)
+      'tests/integration/registration-races.integration.spec.ts',
+      'tests/integration/clean-slate-atomicity-sql.integration.spec.ts',
       'tests/integration/snapshot-vector-clock-sql.integration.spec.ts',
       'tests/integration/conflict-detection-sql.integration.spec.ts',
+      'tests/integration/repair-causality.integration.spec.ts',
       // Tests password reset routes that don't exist - server uses passkey/magic link auth
       'tests/password-reset-api.spec.ts',
     ],

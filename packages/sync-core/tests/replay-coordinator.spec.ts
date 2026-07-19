@@ -269,6 +269,52 @@ describe('replayOperationBatch', () => {
     ]);
   });
 
+  it('skips reducer-failed operations during checkpointing and archive handling', async () => {
+    const op1 = createOperation('op-1');
+    const op2 = createOperation('op-2');
+    const op3 = createOperation('op-3');
+    const reducerError = new Error('reducer failed');
+    const onReducersCommitted = vi.fn(async () => undefined);
+    const archiveSideEffects: ArchiveSideEffectPort<ReplayAction> = {
+      handleOperation: vi.fn(async () => undefined),
+    };
+
+    const result = await replayOperationBatch({
+      ops: [op1, op2, op3],
+      dispatcher: { dispatch: vi.fn() },
+      createBulkApplyAction: (operations) => ({
+        type: '[Test] Bulk Apply',
+        operations,
+      }),
+      getReducerFailures: () => [{ op: op2, error: reducerError }],
+      remoteApplyWindow: createRemoteApplyWindow([]),
+      deferredLocalActions: createDeferredLocalActions([]),
+      archiveSideEffects,
+      operationToAction: (op) => ({ type: '[Test] Action', opId: op.id }),
+      onReducersCommitted,
+      yieldToEventLoop: vi.fn(async () => undefined),
+    });
+
+    expect(onReducersCommitted).toHaveBeenCalledOnce();
+    expect(onReducersCommitted).toHaveBeenCalledWith(
+      [op1, op3],
+      [{ op: op2, error: reducerError }],
+    );
+    expect(archiveSideEffects.handleOperation).toHaveBeenCalledTimes(2);
+    expect(archiveSideEffects.handleOperation).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ opId: 'op-1' }),
+    );
+    expect(archiveSideEffects.handleOperation).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ opId: 'op-3' }),
+    );
+    expect(result).toEqual({
+      appliedOps: [op1, op3],
+      reducerFailures: [{ op: op2, error: reducerError }],
+    });
+  });
+
   it('runs only archive side effects when skipReducerDispatch is set (retry path)', async () => {
     const callOrder: string[] = [];
     const ops = [createOperation('op-1'), createOperation('op-2')];

@@ -42,12 +42,27 @@ body:not(.isDarkTheme) {
   --everforest-aqua: #35a77c;
   --everforest-blue: #3a94c5;
   --everforest-purple: #df69ba;
+  --everforest-fg-muted: #64737b;
+  --everforest-link: #24795d;
+  --everforest-link-hover: #276b91;
+  --everforest-focus: #667800;
+  --everforest-code: #a94b12;
+  --everforest-success-text: #24795d;
+  --everforest-warning-text: #8a5a00;
+  --everforest-error-text: #b3433f;
+  --everforest-info-text: #276b91;
 
   /* Additional colors - Light */
   --everforest-bg-green: #dce5c2;
   --everforest-bg-red: #fbe3da;
   --everforest-bg-blue: #e0e9f0;
   --everforest-bg-yellow: #f4e6d0;
+
+  /* Public theme contract */
+  --surface-1: var(--everforest-bg0);
+  --surface-2: #fffbf0;
+  --ink: var(--everforest-fg);
+  --ink-on-channel: 92, 106, 114;
 
   /* ===============================
    * BACKGROUND COLORS - LIGHT
@@ -91,7 +106,7 @@ body:not(.isDarkTheme) {
 
   --text-color: var(--everforest-fg);
   --text-color-less-intense: rgba(92, 106, 114, 0.87);
-  --text-color-muted: var(--everforest-grey1);
+  --text-color-muted: var(--everforest-fg-muted);
   --text-color-more-intense: #3c474d;
   --text-color-most-intense: #2b3339;
 
@@ -118,7 +133,10 @@ body:not(.isDarkTheme) {
 
   /* Primary accent - Everforest green */
   --palette-accent-500: var(--everforest-green);
-  --c-accent: var(--everforest-green);
+  /* Keep the brighter green for filled/decorative accents; direct text,
+   * icons, and focus borders need the darker AA-safe state color. */
+  --c-accent: var(--everforest-focus);
+  --everforest-state-accent: var(--everforest-focus);
   --palette-accent-100: #e8edc0;
   --palette-accent-200: #d9e3a6;
   --palette-accent-300: #cad98c;
@@ -127,12 +145,13 @@ body:not(.isDarkTheme) {
   --palette-accent-700: #6d7f01;
   --palette-accent-800: #5d6e01;
   --palette-accent-900: #4d5d01;
+  --palette-accent-contrast-500: #000000;
 
   /* Secondary colors */
-  --c-success: var(--everforest-green);
-  --c-warning: var(--everforest-yellow);
-  --c-error: var(--everforest-red);
-  --c-info: var(--everforest-blue);
+  --c-success: var(--everforest-success-text);
+  --c-warning: var(--everforest-warning-text);
+  --c-error: var(--everforest-error-text);
+  --c-info: var(--everforest-info-text);
 
   /* Alternative accents */
   --everforest-accent-aqua: var(--everforest-aqua);
@@ -214,9 +233,9 @@ body:not(.isDarkTheme) {
    * ===============================*/
 
   --code-bg: var(--everforest-bg2);
-  --code-fg: var(--everforest-orange);
+  --code-fg: var(--everforest-code);
   --inline-code-bg: var(--everforest-bg2);
-  --inline-code-fg: var(--everforest-orange);
+  --inline-code-fg: var(--everforest-code);
 }
 
 /* ===============================
@@ -257,6 +276,12 @@ body.isDarkTheme {
   --everforest-bg-red: #514045;
   --everforest-bg-blue: #415058;
   --everforest-bg-yellow: #4d4c43;
+
+  /* Public theme contract */
+  --surface-1: var(--everforest-bg0);
+  --surface-2: var(--everforest-bg1);
+  --ink: var(--everforest-fg);
+  --ink-on-channel: 211, 198, 170;
 
   /* ===============================
    * BACKGROUND COLORS
@@ -300,7 +325,7 @@ body.isDarkTheme {
 
   --text-color: var(--everforest-fg);
   --text-color-less-intense: rgba(211, 198, 170, 0.87);
-  --text-color-muted: var(--everforest-grey1);
+  --text-color-muted: var(--everforest-grey2);
   --text-color-more-intense: var(--everforest-fg);
   --text-color-most-intense: #ffffff;
 
@@ -328,6 +353,7 @@ body.isDarkTheme {
   /* Primary accent - Everforest green */
   --palette-accent-500: var(--everforest-green);
   --c-accent: var(--everforest-green);
+  --everforest-state-accent: var(--everforest-green);
   --palette-accent-100: #d4dfcc;
   --palette-accent-200: #c2d4b3;
   --palette-accent-300: #b0c99a;
@@ -336,6 +362,7 @@ body.isDarkTheme {
   --palette-accent-700: #7a9162;
   --palette-accent-800: #697c55;
   --palette-accent-900: #586748;
+  --palette-accent-contrast-500: #000000;
 
   /* Secondary colors */
   --c-success: var(--everforest-green);
@@ -446,22 +473,25 @@ body .page-wrapper {
 /* Links with Everforest accent - different for light/dark */
 body:not(.isDarkTheme) a,
 body:not(.isDarkTheme) a[href] {
-  color: var(--everforest-aqua);
+  color: var(--everforest-link);
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 body:not(.isDarkTheme) a:hover,
 body:not(.isDarkTheme) a[href]:hover {
-  opacity: 0.9;
-  color: var(--everforest-blue);
+  color: var(--everforest-link-hover);
 }
 
 body.isDarkTheme a,
 body.isDarkTheme a[href] {
   color: var(--everforest-aqua);
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 body.isDarkTheme a:hover,
@@ -470,16 +500,26 @@ body.isDarkTheme a[href]:hover {
   color: var(--everforest-blue);
 }
 
-/* Smooth hover states */
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-  transition: background-color var(--transition-fast);
+/* Smooth hover states, scoped to the row under the pointer. */
+@media (hover: hover) {
+  body
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background-color: var(--task-c-selected-bg);
+    transition: background-color var(--transition-fast);
+  }
 }
 
 /* Focus visible for accessibility */
-*:focus-visible {
-  outline: 2px solid var(--c-accent);
+body:not(.isDarkTheme) *:focus-visible {
+  outline: 2px solid var(--everforest-focus);
+  outline-offset: 2px;
+}
+
+body.isDarkTheme *:focus-visible {
+  outline: 2px solid var(--everforest-green);
   outline-offset: 2px;
 }
 
@@ -488,7 +528,7 @@ body:not(.isDarkTheme) {
   --mat-theme-surface: var(--card-bg);
   --mat-theme-on-surface: var(--text-color);
   --mat-theme-background: var(--bg);
-  --mat-theme-primary: var(--everforest-green);
+  --mat-theme-primary: var(--everforest-state-accent);
 }
 
 /* Material overrides for Everforest theme - Dark mode */
@@ -497,29 +537,6 @@ body.isDarkTheme {
   --mat-theme-on-surface: var(--text-color);
   --mat-theme-background: var(--bg);
   --mat-theme-primary: var(--everforest-green);
-}
-
-/* Special Everforest styling classes */
-.everforest-red {
-  color: var(--everforest-red);
-}
-.everforest-orange {
-  color: var(--everforest-orange);
-}
-.everforest-yellow {
-  color: var(--everforest-yellow);
-}
-.everforest-green {
-  color: var(--everforest-green);
-}
-.everforest-aqua {
-  color: var(--everforest-aqua);
-}
-.everforest-blue {
-  color: var(--everforest-blue);
-}
-.everforest-purple {
-  color: var(--everforest-purple);
 }
 
 /* Code blocks and inline code */
@@ -536,16 +553,14 @@ pre {
 }
 
 /* Completed tasks - subtle green tint */
-.task-c.isDone,
-.sub-task-c.isDone {
+body task.isDone > swipe-block > .inner-wrapper > .box {
   background-color: var(--task-c-bg-done);
-  opacity: 0.85;
 }
 
 /* Active/current task highlight */
-.task-c.isCurrent {
+body task.isCurrent > swipe-block > .inner-wrapper > .box {
   background-color: var(--task-c-current-bg);
-  border-left: 3px solid var(--everforest-green);
+  border-left: 3px solid var(--everforest-state-accent);
 }
 
 /* Input fields */
@@ -559,27 +574,26 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--everforest-green);
-  outline: none;
+  border-color: var(--everforest-state-accent);
 }
 
 /* Success/warning/error states with Everforest colors */
 .success {
-  color: var(--everforest-green);
+  color: var(--c-success);
 }
 
 .warning {
-  color: var(--everforest-yellow);
+  color: var(--c-warning);
 }
 
 .error,
 .danger {
-  color: var(--everforest-red);
+  color: var(--c-error);
 }
 
 /* Info text */
 .info {
-  color: var(--everforest-blue);
+  color: var(--c-info);
 }
 
 /* Selected text */

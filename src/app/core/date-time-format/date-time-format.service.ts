@@ -1,7 +1,12 @@
 import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
-import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_LOCALE,
+  DateTimeLocale,
+  DateTimeLocales,
+} from 'src/app/core/locale.constants';
 import { TranslateService } from '@ngx-translate/core';
 
 @Injectable({
@@ -12,15 +17,46 @@ export class DateTimeFormatService {
   private _dateAdapter = inject(DateAdapter, { optional: true });
   private readonly _translateService = inject(TranslateService);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
-  // UI translation language, pushed in by LanguageService. Used only as the
-  // lowest-priority fallback when no explicit dateTimeLocale override is set.
-  // Kept as a signal so the locale effect re-runs when the language changes.
+  // UI translation language, pushed in by LanguageService. Used for ISO text
+  // labels and as a fallback when no explicit dateTimeLocale override is set.
+  // Kept as a signal so locale-dependent computed values update reactively.
   private readonly _uiLangSig = signal<string | null>(null);
 
   // Signal for the locale to use
   readonly currentLocale = computed<DateTimeLocale>(() => {
     return this._globalConfigService.localization()?.dateTimeLocale || this._localeSig();
   });
+
+  /**
+   * UI locale for ISO weekday labels. `null` preserves the existing formatter
+   * for every non-ISO option. The ISO option persists `sv` as a
+   * backward-compatible sync marker.
+   */
+  readonly isoTextLocale = computed<string | null>(() => {
+    const configuredLocale = this._globalConfigService.localization()?.dateTimeLocale;
+
+    if (configuredLocale !== DateTimeLocales.sv) {
+      return null;
+    }
+
+    return (
+      this._uiLangSig() ||
+      this._translateService.currentLang ||
+      this._translateService.defaultLang ||
+      DEFAULT_LANGUAGE
+    );
+  });
+
+  /**
+   * Locale for spelled-out weekday/month names (e.g. "Wed", "July"). Under the
+   * ISO 8601 option this resolves to the UI language, so names aren't shown in
+   * Swedish (the `sv` sync sentinel) — mirrors the calendar fix in `CustomDateAdapter`.
+   * Numeric dates and clock times must keep `currentLocale()` instead, so ISO
+   * stays YYYY-MM-DD and the 24h clock is preserved (#8987 follow-up).
+   */
+  readonly textLocale = computed<string>(
+    () => this.isoTextLocale() ?? this.currentLocale(),
+  );
 
   /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
   private readonly _testFormats = computed(() => {

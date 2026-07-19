@@ -3,6 +3,8 @@ import { IValidation } from 'typia';
 import type { SyncLogMeta } from '@sp/sync-core';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
+import { getDefaultWorkContextTheme } from '../../features/work-context/work-context-default-theme.util';
+import { WorkContextType } from '../../features/work-context/work-context.model';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { devError } from '../../util/dev-error';
@@ -271,6 +273,41 @@ export const autoFixTypiaErrors = (
         const created = Date.now();
         setValueByPath(data, keys, created);
         logAutoFixApplied(path, keys, 'tag-created-undefined-to-now', value, created);
+      } else if (
+        (keys[0] === 'tag' || keys[0] === 'project') &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        keys[3] === 'theme' &&
+        value == null
+      ) {
+        // A tag/project entity can be persisted with no `theme` at all (#9139).
+        // Left unrepaired it either dead-ends legacy migration ("Migration
+        // failed") or, on the hydration paths where validation is non-fatal,
+        // loads and crashes the theme pipeline on every launch.
+        //
+        // `== null` covers both undefined and an explicit null: the `setOne`
+        // 'replace' branch (lww-update.meta-reducer.ts) applies a remote entity
+        // verbatim, so a null theme is reachable, and typia reports it at this
+        // same path. Gating on `undefined` alone left it dead-ending migration.
+        //
+        // Deliberately NOT matched on `error.expected`: typia reports this as
+        // the generated name `Readonly<__type>.oNN`, whose ordinal shifts
+        // whenever the type graph changes. Keying on it would make this branch
+        // silently stop firing. Path + nullish value is stable.
+        const theme = {
+          ...getDefaultWorkContextTheme(
+            keys[0] === 'tag' ? WorkContextType.TAG : WorkContextType.PROJECT,
+            String(keys[2]),
+          ),
+        };
+        setValueByPath(data, keys, theme);
+        logAutoFixApplied(
+          path,
+          keys,
+          'work-context-theme-undefined-to-default',
+          value,
+          theme,
+        );
       } else if (
         keys[0] === 'metric' &&
         keys[1] === 'entities' &&

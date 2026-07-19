@@ -30,6 +30,7 @@ interface HabitDay {
   str: string;
   date: Date;
   dow: number;
+  weekdayLabel?: string;
 }
 
 @Component({
@@ -72,6 +73,10 @@ export class HabitTrackerComponent {
 
   days = computed(() => {
     const days: HabitDay[] = [];
+    const isoTextLocale = this._dateTimeFormatService.isoTextLocale();
+    const weekdayFormatter = isoTextLocale
+      ? new Intl.DateTimeFormat(isoTextLocale, { weekday: 'short' })
+      : null;
     const today = new Date();
     const offset = this.dayOffset();
     for (let i = 6; i >= 0; i--) {
@@ -81,6 +86,7 @@ export class HabitTrackerComponent {
         str: this._dateService.todayStr(d),
         date: d,
         dow: d.getDay(),
+        weekdayLabel: weekdayFormatter?.format(d),
       });
     }
     return days;
@@ -114,7 +120,9 @@ export class HabitTrackerComponent {
     const first = days[0].date;
     const last = days[days.length - 1].date;
 
-    const locale = this._dateTimeFormatService.currentLocale();
+    // Spelled-out `month: 'short'` name follows the UI language under the ISO
+    // 8601 option (the `sv` sentinel would otherwise leak Swedish). #8987 f/u.
+    const locale = this._dateTimeFormatService.textLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     const firstStr = first.toLocaleDateString(locale, formatOptions);
     const lastStr = last.toLocaleDateString(locale, formatOptions);

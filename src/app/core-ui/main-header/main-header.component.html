@@ -48,6 +48,13 @@
       }
 
       @if (isSyncIconEnabled()) {
+        <!--
+          matBadgeHidden only hides the badge VISUALLY (CSS) — MatBadge keeps an
+          aria description active regardless of hidden state. So at count 0 the
+          badge description must be empty (not a stale "0 conflicts" announced to
+          screen readers on every encounter). '' is the type-correct
+          "no description" value; MatBadge removes the aria-describedby for it.
+        -->
         <button
           class="sync-btn"
           [matBadge]="unreviewedConflictCount()"
@@ -59,7 +66,7 @@
             unreviewedConflictCount() > 0
               ? (T.F.SYNC.CONFLICT_REVIEW.BADGE_TOOLTIP
                 | translate: { count: unreviewedConflictCount() })
-              : null
+              : ''
           "
           [attr.aria-label]="syncTooltip() | translate"
           matTooltip="{{ syncTooltip() | translate }}"

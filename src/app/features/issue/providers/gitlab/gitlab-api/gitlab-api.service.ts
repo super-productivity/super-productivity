@@ -7,7 +7,7 @@ import {
   HttpRequest,
 } from '@angular/common/http';
 import { parseUrl, stringifyUrl } from 'query-string';
-import { EMPTY, forkJoin, Observable, of } from 'rxjs';
+import { EMPTY, Observable } from 'rxjs';
 import { SnackService } from 'src/app/core/snack/snack.service';
 
 import { GitlabCfg } from '../gitlab.model';
@@ -118,27 +118,20 @@ export class GitlabApiService {
     if (!this._isValidSettings(cfg)) {
       return EMPTY;
     }
-    return this._sendIssuePaginatedRequest$(
+    // NOTE: only the first page is fetched and issue comments are intentionally NOT
+    // loaded here. The search dropdown only needs id + title (the comment count already
+    // rides along via user_notes_count, and full notes are re-fetched in the detail view
+    // via getById$). A broad or empty search term can match thousands of issues, so
+    // paginating through all of them and then firing a /notes request per issue produced a
+    // burst of thousands of requests that GitLab rate-limited with a 429 — see #9034.
+    return this._sendIssueRequestFirstPage$(
       {
         url: `${this._apiLink(cfg)}/issues?search=${searchText}${this.getScopeParam(
           cfg,
         )}&order_by=updated_at${this.getCustomFilterParam(cfg)}`,
       },
       cfg,
-    ).pipe(
-      mergeMap((issues: GitlabIssue[]) => {
-        if (issues && issues.length) {
-          return forkJoin([
-            ...issues.map((issue) => this.getIssueWithComments$(issue, cfg)),
-          ]);
-        } else {
-          return of([]);
-        }
-      }),
-      map((issues: GitlabIssue[]) => {
-        return issues ? issues.map(mapGitlabIssueToSearchResult) : [];
-      }),
-    );
+    ).pipe(map((issues) => issues.map(mapGitlabIssueToSearchResult)));
   }
 
   getProjectIssues$(cfg: GitlabCfg): Observable<GitlabIssue[]> {
@@ -238,6 +231,21 @@ export class GitlabApiService {
       map((issues: GitlabOriginalIssue[]) =>
         issues ? issues.map((issue) => mapGitlabIssue(issue, cfg)) : [],
       ),
+    );
+  }
+
+  // Fetches only the first page of issues (no x-next-page follow-up) and maps the raw
+  // response body straight to GitlabIssue[]. Used for search, where fetching every page is
+  // both unnecessary and a rate-limit risk on large projects (see searchIssueInProject$).
+  private _sendIssueRequestFirstPage$(
+    params: HttpRequest<string> | any,
+    cfg: GitlabCfg,
+  ): Observable<GitlabIssue[]> {
+    return this._sendPaginatedRequestImpl$(params, cfg, 1).pipe(
+      map((res: any) => {
+        const issues: GitlabOriginalIssue[] = res && res.body ? res.body : [];
+        return issues.map((issue) => mapGitlabIssue(issue, cfg));
+      }),
     );
   }
 

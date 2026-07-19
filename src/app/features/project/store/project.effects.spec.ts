@@ -187,6 +187,35 @@ describe('ProjectEffects', () => {
     });
   });
 
+  describe('snackUpdateBaseSettings$', () => {
+    it('shows the "Project updated" snack for a normal updateProject', fakeAsync(() => {
+      effects.snackUpdateBaseSettings$.subscribe();
+
+      actions$.next(
+        updateProject({
+          project: { id: 'project-1', changes: { title: 'New title' } },
+        }),
+      );
+
+      tick(100);
+      expect(snackServiceSpy.open).toHaveBeenCalled();
+    }));
+
+    it('suppresses the snack when isSkipSnack is set (conflict-review flip)', fakeAsync(() => {
+      effects.snackUpdateBaseSettings$.subscribe();
+
+      actions$.next(
+        updateProject({
+          project: { id: 'project-1', changes: { title: 'Flipped title' } },
+          isSkipSnack: true,
+        }),
+      );
+
+      tick(100);
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+    }));
+  });
+
   describe('moveAllProjectToTodayListWhenBacklogIsDisabled$', () => {
     it('should dispatch moveAllProjectBacklogTasksToRegularList when backlog is disabled', (done) => {
       effects.moveAllProjectToTodayListWhenBacklogIsDisabled$.subscribe((action: any) => {

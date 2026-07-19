@@ -12,7 +12,7 @@ describe('vector-clock', () => {
   describe('limitVectorClockSize', () => {
     it('should return clock unchanged when size is within limit', () => {
       const clock = { clientA: 5, clientB: 3, clientC: 2 };
-      const result = limitVectorClockSize(clock, 'clientA');
+      const result = limitVectorClockSize(clock, ['clientA']);
 
       expect(result).toEqual(clock);
     });
@@ -24,7 +24,7 @@ describe('vector-clock', () => {
         clock[`client_${i}`] = 100 + i; // All have higher counters
       }
 
-      const result = limitVectorClockSize(clock, 'currentClient');
+      const result = limitVectorClockSize(clock, ['currentClient']);
 
       expect(Object.keys(result).length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
       expect(result['currentClient']).toBe(1);
@@ -44,12 +44,27 @@ describe('vector-clock', () => {
       }
       clock[currentClientId] = 9747; // Current client has high counter
 
-      const result = limitVectorClockSize(clock, currentClientId);
+      const result = limitVectorClockSize(clock, [currentClientId]);
 
       expect(Object.keys(result).length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
       expect(result[currentClientId]).toBe(9747);
       // Without protection, clientA should be pruned due to low counter
       expect(result['clientA']).toBeUndefined();
+    });
+
+    it('should preserve every id in the preserve list, not just the first (#9096)', () => {
+      // Import-author scenario: the author's counter is the lowest in the
+      // clock, so it survives only through the preserve list.
+      const clock: Record<string, number> = { importAuthor: 1, currentClient: 2 };
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 5; i++) {
+        clock[`client_${i}`] = 100 + i;
+      }
+
+      const result = limitVectorClockSize(clock, ['currentClient', 'importAuthor']);
+
+      expect(Object.keys(result).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(result['currentClient']).toBe(2);
+      expect(result['importAuthor']).toBe(1);
     });
 
     it('should limit to MAX_VECTOR_CLOCK_SIZE entries', () => {
@@ -64,7 +79,7 @@ describe('vector-clock', () => {
         clock[`client_${i}`] = 100 + i;
       }
 
-      const result = limitVectorClockSize(clock, currentClientId);
+      const result = limitVectorClockSize(clock, [currentClientId]);
 
       expect(Object.keys(result).length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
     });
@@ -78,7 +93,7 @@ describe('vector-clock', () => {
       for (let i = 0; i < overflow; i++) {
         clock[`client_${i}`] = 100 + i;
       }
-      limitVectorClockSize(clock, 'current');
+      limitVectorClockSize(clock, ['current']);
       sub.unsubscribe();
 
       expect(events.length).toBe(1);
@@ -89,7 +104,7 @@ describe('vector-clock', () => {
     it('should NOT emit on vectorClockPruned$ when within the limit', () => {
       const events: unknown[] = [];
       const sub = vectorClockPruned$.subscribe((e) => events.push(e));
-      limitVectorClockSize({ a: 1, b: 2 }, 'a');
+      limitVectorClockSize({ a: 1, b: 2 }, ['a']);
       sub.unsubscribe();
       expect(events.length).toBe(0);
     });
@@ -105,7 +120,7 @@ describe('vector-clock', () => {
         clock[`client_${i}`] = 100 + i;
       }
 
-      limitVectorClockSize(clock, 'current');
+      limitVectorClockSize(clock, ['current']);
 
       expect(warnSpy).toHaveBeenCalledTimes(1);
       const payload = warnSpy.calls.mostRecent().args[1] as {

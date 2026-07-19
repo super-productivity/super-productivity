@@ -13,13 +13,21 @@ export const buildRepeatQuickSettingOptions = (
   refDate: Date,
   locale: string,
   translateService: TranslateService,
+  // Locale for the spelled-out weekday name — pass DateTimeFormatService.textLocale().
+  // Required (no default) so a new caller has to make the choice consciously:
+  // under the ISO 8601 option `locale` is the `sv` sentinel, and silently reusing
+  // it here renders the weekday in Swedish (#8987). Numeric day/month below keep
+  // `locale` so ISO day-first ordering is preserved.
+  weekdayLocale: string,
 ): { value: RepeatQuickSetting; label: string }[] => {
   // Guard against an invalid Date slipping through (e.g. a non-DB date string).
   // An invalid date makes the weekOfMonth math NaN, so ORDINAL_KEYS[NaN-1] is
   // undefined and translate's `instant(undefined)` throws, crashing the whole
   // dialog (#7945). Fall back to "today" so options still render.
   const safeRefDate = isNaN(refDate.getTime()) ? new Date() : refDate;
-  const refWeekdayStr = safeRefDate.toLocaleDateString(locale, { weekday: 'long' });
+  const refWeekdayStr = safeRefDate.toLocaleDateString(weekdayLocale, {
+    weekday: 'long',
+  });
   const refDayStr = safeRefDate.toLocaleDateString(locale, { day: 'numeric' });
   const refDayAndMonthStr = safeRefDate.toLocaleDateString(locale, {
     day: 'numeric',

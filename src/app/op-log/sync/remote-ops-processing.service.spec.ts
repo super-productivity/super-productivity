@@ -8,6 +8,7 @@ import {
 } from '../persistence/schema-migration.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
@@ -36,6 +37,8 @@ import { OpLog } from '../../core/log';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import { HydrationStateService } from '../apply/hydration-state.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
@@ -125,10 +128,18 @@ describe('RemoteOpsProcessingService', () => {
     opLogStoreSpy.clearFullStateOpsExcept.and.resolveTo(0);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
       'getEntityFrontier',
+      'getEntityFrontierWithOps',
       'getSnapshotVectorClock',
       'getSnapshotEntityKeys',
       'getCurrentVectorClock',
     ]);
+    // Delegate to the getEntityFrontier spy so the many per-test frontier
+    // stubs keep driving the flow; retained ops default to empty (no
+    // no-pending crossing detection in these tests).
+    vectorClockServiceSpy.getEntityFrontierWithOps.and.callFake(async () => ({
+      frontier: await vectorClockServiceSpy.getEntityFrontier(),
+      retainedOpsByEntity: new Map<string, Operation[]>(),
+    }));
     operationApplierServiceSpy = jasmine.createSpyObj('OperationApplierService', [
       'applyOperations',
     ]);
@@ -155,7 +166,7 @@ describe('RemoteOpsProcessingService', () => {
         },
       ): Promise<{
         isSupersededOrDuplicate: boolean;
-        conflict: EntityConflict | null;
+        conflicts: EntityConflict[];
       }> => {
         const entityIdsToCheck = remoteOp.entityIds?.length
           ? remoteOp.entityIds
@@ -163,6 +174,7 @@ describe('RemoteOpsProcessingService', () => {
             ? [remoteOp.entityId]
             : [];
 
+        const conflicts: EntityConflict[] = [];
         for (const entityId of entityIdsToCheck) {
           const entityKey = toEntityKey(remoteOp.entityType, entityId);
           const localOpsForEntity = ctx.localPendingOpsByEntity.get(entityKey) || [];
@@ -193,12 +205,12 @@ describe('RemoteOpsProcessingService', () => {
 
           // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isSupersededOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflicts: [] };
           }
 
           // No pending ops = no conflict possible
@@ -208,20 +220,17 @@ describe('RemoteOpsProcessingService', () => {
 
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
-            return {
-              isSupersededOrDuplicate: false,
-              conflict: {
-                entityType: remoteOp.entityType,
-                entityId,
-                localOps: localOpsForEntity,
-                remoteOps: [remoteOp],
-                suggestedResolution: 'manual',
-              },
-            };
+            conflicts.push({
+              entityType: remoteOp.entityType,
+              entityId,
+              localOps: localOpsForEntity,
+              remoteOps: [remoteOp],
+              suggestedResolution: 'manual',
+            });
           }
         }
 
-        return { isSupersededOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflicts };
       },
     );
     validateStateServiceSpy = jasmine.createSpyObj('ValidateStateService', [
@@ -277,6 +286,11 @@ describe('RemoteOpsProcessingService', () => {
         { provide: OperationLogCompactionService, useValue: compactionServiceSpy },
         { provide: SyncImportFilterService, useValue: syncImportFilterServiceSpy },
         { provide: OperationWriteFlushService, useValue: writeFlushServiceSpy },
+        {
+          // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
+          provide: SyncProviderManager,
+          useValue: { assertSyncEpochUnchanged: () => undefined },
+        },
       ],
     });
 
@@ -425,6 +439,58 @@ describe('RemoteOpsProcessingService', () => {
         ],
       });
       expect(JSON.stringify(summary)).not.toContain('private');
+    });
+
+    // Producer freeze (journal half) for the conflict-review rollback: this is
+    // the only production entry point into autoResolveConflictsLWW, so if the
+    // flag is ever dropped the stable fleet silently starts persisting the
+    // discarded side of every conflict verbatim again. Delete that half of this
+    // test with the freeze. The disjoint-merge half is pinned the OTHER way:
+    // freezing it made concurrent disjoint-field edits lose one side by
+    // whole-entity LWW (#9095), so the merge must stay enabled here.
+    it('should freeze the journal producer but keep disjoint merge enabled on the production resolve path', async () => {
+      const localOp = {
+        id: 'local-op',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'local title' },
+      } as Operation;
+      const remoteOp = {
+        id: 'remote-op',
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'remote title' },
+        schemaVersion: 1,
+      } as Operation;
+      spyOn(service, 'detectConflicts').and.resolveTo({
+        nonConflicting: [],
+        conflicts: [
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            localOps: [localOp],
+            remoteOps: [remoteOp],
+            suggestedResolution: 'manual',
+          },
+        ],
+      });
+      conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
+        localWinOpsCreated: 0,
+      });
+      vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+
+      await service.processRemoteOps([remoteOp]);
+
+      expect(conflictResolutionServiceSpy.autoResolveConflictsLWW).toHaveBeenCalledWith(
+        jasmine.any(Array),
+        jasmine.any(Array),
+        jasmine.objectContaining({
+          disableConflictJournal: true,
+        }),
+      );
+      const resolveOptions =
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.calls.mostRecent().args[2];
+      expect(resolveOptions?.disableDisjointMerge).toBeFalsy();
     });
 
     it('should drop operations if migrateOperation returns null', async () => {
@@ -743,6 +809,7 @@ describe('RemoteOpsProcessingService', () => {
       expect(service.detectConflicts).toHaveBeenCalledWith(
         [migratedOp],
         jasmine.any(Map),
+        jasmine.any(Map),
       );
     });
 
@@ -784,6 +851,15 @@ describe('RemoteOpsProcessingService', () => {
         schemaVersion: 1,
       };
       const callOrder: string[] = [];
+      lockServiceSpy.request.and.callFake(
+        async <T>(name: string, callback: () => Promise<T>) => {
+          expect(name).toBe(LOCK_NAMES.UPLOAD);
+          callOrder.push('upload:start');
+          const value = await callback();
+          callOrder.push('upload:end');
+          return value;
+        },
+      );
       writeFlushServiceSpy.flushPendingWrites.and.callFake(async () => {
         callOrder.push('flush');
       });
@@ -823,6 +899,7 @@ describe('RemoteOpsProcessingService', () => {
       });
       expect(validationSpy).toHaveBeenCalledWith(true);
       expect(callOrder).toEqual([
+        'upload:start',
         'flush',
         'exclusive:start',
         'premerge',
@@ -830,7 +907,56 @@ describe('RemoteOpsProcessingService', () => {
         'deferred',
         'validation',
         'exclusive:end',
+        'upload:end',
       ]);
+    });
+
+    it('should keep the final full-state guard atomic with apply and drain buffered actions on abort', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-final-guard',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      const hydrationState = TestBed.inject(HydrationStateService);
+      const acquireHoldSpy = spyOn(
+        hydrationState,
+        'acquireApplyingRemoteOpsHold',
+      ).and.callThrough();
+      let wasApplyingDuringGuard = false;
+      let wasApplyingDuringDrain = true;
+      operationLogEffectsSpy.processDeferredActions.and.callFake(async () => {
+        wasApplyingDuringDrain = hydrationState.isApplyingRemoteOps();
+      });
+
+      const result = await service.processRemoteOps([syncImportOp], {
+        beforeFullStateApply: async () => {
+          wasApplyingDuringGuard = hydrationState.isApplyingRemoteOps();
+          return false;
+        },
+      });
+
+      expect(lockServiceSpy.request).toHaveBeenCalledWith(
+        LOCK_NAMES.UPLOAD,
+        jasmine.any(Function),
+      );
+      expect(writeFlushServiceSpy.flushThenRunExclusive).toHaveBeenCalledTimes(1);
+      expect(acquireHoldSpy).toHaveBeenCalledTimes(1);
+      expect(wasApplyingDuringGuard).toBeTrue();
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+      expect(
+        validateStateServiceSpy.validateAndRepairCurrentState,
+      ).not.toHaveBeenCalled();
+      expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledOnceWith({
+        callerHoldsOperationLogLock: true,
+      });
+      expect(wasApplyingDuringDrain).toBeFalse();
+      expect(result.fullStateApplyBlockedByLocalConflict).toBeTrue();
     });
 
     it('should propagate an already-held operation-log lock through full-state apply and validation', async () => {
@@ -852,13 +978,16 @@ describe('RemoteOpsProcessingService', () => {
         callerHoldsOperationLogLock: true,
       });
 
-      expect(applySpy).toHaveBeenCalledWith([syncImportOp], true);
+      expect(applySpy).toHaveBeenCalledWith([syncImportOp], true, {
+        skipDeferredActionDrain: true,
+      });
       expect(validationSpy).toHaveBeenCalledWith(true);
       expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledWith({
         callerHoldsOperationLogLock: true,
       });
       expect(writeFlushServiceSpy.flushThenRunExclusive).not.toHaveBeenCalled();
       expect(writeFlushServiceSpy.flushPendingWrites).not.toHaveBeenCalled();
+      expect(lockServiceSpy.request).not.toHaveBeenCalled();
     });
 
     it('should log incoming full-state op shape and prior receiver state for diagnostics', async () => {
@@ -1441,7 +1570,7 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteTaskOps, new Map());
+      const result = await service.detectConflicts(remoteTaskOps, new Map(), new Map());
 
       // TASK op should be non-conflicting (not a conflict!)
       expect(result.nonConflicting.length).toBe(1);
@@ -1478,12 +1607,48 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteOps, new Map());
+      const result = await service.detectConflicts(remoteOps, new Map(), new Map());
 
       // Should be detected as conflict (concurrent modifications to same entity)
       expect(result.conflicts.length).toBe(1);
       expect(result.conflicts[0].entityId).toBe('task-1');
       expect(result.nonConflicting.length).toBe(0);
+    });
+
+    it('should retain every per-entity conflict reported for one remote op (#8956)', async () => {
+      const remoteOp = createOp({
+        id: 'remote-multi',
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+      });
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [createOp({ id: 'local-1', entityId: 'task-1' })],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+        {
+          entityType: 'TASK',
+          entityId: 'task-2',
+          localOps: [createOp({ id: 'local-2', entityId: 'task-2' })],
+          remoteOps: [remoteOp],
+          suggestedResolution: 'manual',
+        },
+      ];
+      conflictResolutionServiceSpy.checkOpForConflicts.and.resolveTo({
+        isSupersededOrDuplicate: false,
+        conflicts,
+      });
+
+      const result = await service.detectConflicts([remoteOp], new Map(), new Map());
+
+      expect(result.conflicts.map((conflict) => conflict.entityId)).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+      expect(result.nonConflicting).toEqual([]);
     });
 
     it('should skip superseded remote ops (local is newer)', async () => {
@@ -1507,7 +1672,7 @@ describe('RemoteOpsProcessingService', () => {
         }),
       ];
 
-      const result = await service.detectConflicts(remoteOps, new Map());
+      const result = await service.detectConflicts(remoteOps, new Map(), new Map());
 
       // Should be skipped (superseded)
       expect(result.nonConflicting.length).toBe(0);

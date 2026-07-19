@@ -187,7 +187,9 @@
                     [cdkDragLockAxis]="'y'"
                   >
                     <collapsible
-                      [title]="section.title"
+                      [title]="
+                        section.title + ' (' + bySection.dict[section.id].length + ')'
+                      "
                       [isIconBefore]="true"
                       [isExpanded]="section.isExpanded"
                       (isExpandedChange)="

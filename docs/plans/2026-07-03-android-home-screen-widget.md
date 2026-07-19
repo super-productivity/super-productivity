@@ -59,8 +59,55 @@ punch-list. Re-implemented on current master (the PR's April base has drifted he
 
 - Widget reflects the app's last known state; cross-client freshness while the app is
   dead is phase 2 (WorkManager + SuperSync).
-- Day rollover while the app process is dead shows yesterday's list until next open
-  (native can't recompute "today"; selector handles rollover whenever JS is alive).
+- Day rollover while the app process is dead still shows yesterday's list until next
+  open (native can't recompute "today"; selector handles rollover whenever JS is
+  alive). Since #9098 the blob carries `validUntil` (the instant the snapshot stops
+  being today, offset included) plus `dayStr` for the label, so native can at least
+  _detect_ staleness via `now >= validUntil` and name the day it is actually showing
+  instead of claiming "Today". It cannot fix the list. Filtering natively would not
+  help: today's repeat instances do not exist as entities until Angular's day-change
+  effects materialize them, overdue carry-over runs there too, and `TODAY_TAG`
+  membership is virtual — so there is no persisted field a native filter could read
+  that would give the right answer even in principle. Only running the app can
+  produce today's list. Angular ships the **verdict**, never its inputs, so no platform
+  mirrors the app's calendar rules (iOS inherits `validUntil` unchanged).
+  Residual gaps, all bounded and deliberate:
+  - The label flips only on an Angular push, a widget tap, or the 30-min
+    `updatePeriodMillis`. That alarm is `ELAPSED_REALTIME_WAKEUP` but **inexact**
+    (`setInexactRepeating`), so Doze defers it to a maintenance window — and the launcher
+    paints the system-cached RemoteViews the instant you unlock, so first glance on a new
+    morning can still read "Today". The lie is bounded, not eliminated. 30 min is the
+    platform floor (`MIN_UPDATE_PERIOD`); lowering `updatePeriodMillis` does nothing.
+    `ACTION_DATE_CHANGED` cannot close it either: it is not on the API 26
+    implicit-broadcast exemption list, so a manifest receiver never fires at
+    `targetSdk 36` — and it fires at calendar midnight, not the user's logical boundary.
+  - Force-stop is **not** a gap in the above, contrary to an earlier reading of it. A
+    stopped package's widget is _masked_ by the system (`maskWidgetsViewsLocked` swaps in
+    `work_widget_mask_view` — a dimmed icon, tap-to-unstop) as well as having its
+    broadcasts cancelled, so it shows no task list at all and the header question is
+    moot. It follows that #9098's reported symptom — a stale list under "Today" — can
+    only occur in the Doze/app-standby band, which is exactly the band this fix works in.
+  - **An exact alarm at `validUntil` would close the remaining gap**, and the parts exist
+    (`SCHEDULE_EXACT_ALARM`; `BootReceiver` on boot + `MY_PACKAGE_REPLACED`; the
+    `canScheduleExactAlarms()`/`setAndAllowWhileIdle` pattern in
+    `ReminderNotificationHelper`, which is Doze-exempt where `setInexactRepeating` is
+    not). Deferred on **cost/scope** — it needs rescheduling on boot, package replace,
+    timezone change, start-of-next-day change and widget add/remove — not because it
+    would not work. `SyncReminderWorker` (already running every 15 min while the app is
+    dead) calling `refreshAll` is a cheaper variant, though it is gated on sync
+    credentials being configured.
+  - `validUntil` freezes the writer's timezone: the boundary resolves in whatever zone
+    the device was in at push time. West-travel expires it early (a false "outdated" —
+    the fail-safe direction); east-travel expires it late. The device timezone is not a
+    selector input, so it is recomputed only when one of the selector's own inputs
+    changes (today's task ids, a task, a project, todayStr, the offset) or on restart —
+    not by travelling, and not by unrelated state churn.
+  - A blob written before #9098 has no `validUntil`, so an install that auto-updates and
+    is never opened keeps showing "Today" over an old list — indefinitely, not for a
+    bounded window. Accepted: without a boundary the widget genuinely cannot know, and
+    an unopened app's list is stale regardless; it self-heals on the first push. Note
+    this is distinct from the `Outdated` (day-unknown) header, which fires only when the
+    snapshot is _known_ stale but its day is unreadable.
 - Hardcoded dark styling; Jetpack Glance / Material You is a follow-up view-layer swap.
 - Widget chrome strings are native `strings.xml` (English) — accepted for v1.
 - No task creation / undo from widget.

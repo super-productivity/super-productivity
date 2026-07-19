@@ -9,12 +9,13 @@ import {
   OperationSyncCapable,
   SyncProviderBase,
 } from './provider.interface';
+import { SyncEpochChangedError } from '../core/errors/sync-errors';
 
 describe('WrappedProviderService', () => {
   let service: WrappedProviderService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockFileBasedAdapter: jasmine.SpyObj<FileBasedSyncAdapterService>;
-  let providerConfigChanged$: Subject<void>;
+  let providerConfigChanged$: Subject<{ isTargetChanged: boolean }>;
 
   const createMockBaseProvider = (
     id: SyncProviderId,
@@ -66,11 +67,11 @@ describe('WrappedProviderService', () => {
   });
 
   beforeEach(() => {
-    providerConfigChanged$ = new Subject<void>();
+    providerConfigChanged$ = new Subject<{ isTargetChanged: boolean }>();
 
     mockProviderManager = jasmine.createSpyObj(
       'SyncProviderManager',
-      ['getEncryptAndCompressCfg', 'setProviderConfig'],
+      ['getEncryptAndCompressCfg', 'setProviderConfig', 'assertSyncEpochUnchanged'],
       { providerConfigChanged$ },
     );
     mockProviderManager.getEncryptAndCompressCfg.and.returnValue({
@@ -81,6 +82,7 @@ describe('WrappedProviderService', () => {
 
     mockFileBasedAdapter = jasmine.createSpyObj('FileBasedSyncAdapterService', [
       'createAdapter',
+      'invalidateAllTargets',
     ]);
 
     TestBed.configureTestingModule({
@@ -306,12 +308,102 @@ describe('WrappedProviderService', () => {
       expect(result1).toBe(mockAdapter1);
 
       // Simulate config change
-      providerConfigChanged$.next();
+      providerConfigChanged$.next({ isTargetChanged: false });
 
       // Next call should create a new adapter (cache was auto-cleared)
       const result2 = await service.getOperationSyncCapable(dropboxProvider);
       expect(result2).toBe(mockAdapter2);
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);
+    });
+
+    it('should invalidate file-adapter target state when the target moved', () => {
+      // A real target move (account switch behind the same provider id, folder
+      // change); the file adapter is keyed only by provider id, so its per-target
+      // state must be dropped or it leaks across targets (Task 2).
+      expect(mockFileBasedAdapter.invalidateAllTargets).not.toHaveBeenCalled();
+
+      providerConfigChanged$.next({ isTargetChanged: true });
+
+      expect(mockFileBasedAdapter.invalidateAllTargets).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT invalidate file-adapter target state on a config-only change', () => {
+      // The cursor lives in the file adapter's target state. Wiping it on a save
+      // that did not move the target (sync interval, compression, an encryption
+      // key rotation, the isEncryptionEnabled backfill, or Save with nothing
+      // changed) sends the next sync down the sinceSeq===0 snapshot-bootstrap
+      // path, which dead-ends in a spurious conflict dialog for any client
+      // holding unsynced ops.
+      providerConfigChanged$.next({ isTargetChanged: false });
+
+      expect(mockFileBasedAdapter.invalidateAllTargets).not.toHaveBeenCalled();
+    });
+
+    it('should still drop the adapter cache on a config-only change', () => {
+      // The cache holds the resolved encryption key/intent, so it must be
+      // rebuilt even when the target stayed put.
+      providerConfigChanged$.next({ isTargetChanged: false });
+
+      expect(service['_cache'].size).toBe(0);
+    });
+  });
+
+  describe('epoch-guarded delegate (#9074)', () => {
+    it('returns the unfenced provider when fenceEpoch is omitted', async () => {
+      const superSyncProvider = createMockOperationSyncProvider();
+
+      const result = await service.getOperationSyncCapable(superSyncProvider);
+
+      expect(result).toBe(superSyncProvider as unknown as OperationSyncCapable);
+      expect(mockProviderManager.assertSyncEpochUnchanged).not.toHaveBeenCalled();
+    });
+
+    it('re-asserts the captured epoch before every call and forwards on success', async () => {
+      const adapter = createMockSyncCapableAdapter();
+      (adapter.setLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve());
+      mockFileBasedAdapter.createAdapter.and.returnValue(adapter);
+      const provider = createMockFileProvider(SyncProviderId.Dropbox);
+
+      const guarded = (await service.getOperationSyncCapable(provider, {
+        fenceEpoch: 5,
+      })) as OperationSyncCapable;
+      await guarded.setLastServerSeq(123);
+
+      expect(mockProviderManager.assertSyncEpochUnchanged).toHaveBeenCalledWith(
+        5,
+        'provider.setLastServerSeq',
+      );
+      expect(adapter.setLastServerSeq).toHaveBeenCalledWith(123);
+    });
+
+    it('blocks the underlying call when the epoch has changed', async () => {
+      const adapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(adapter);
+      const provider = createMockFileProvider(SyncProviderId.Dropbox);
+      const guarded = (await service.getOperationSyncCapable(provider, {
+        fenceEpoch: 5,
+      })) as OperationSyncCapable;
+
+      mockProviderManager.assertSyncEpochUnchanged.and.throwError(
+        new SyncEpochChangedError(5, 6, 'provider.setLastServerSeq'),
+      );
+
+      expect(() => guarded.setLastServerSeq(123)).toThrowError(SyncEpochChangedError);
+      expect(adapter.setLastServerSeq).not.toHaveBeenCalled();
+    });
+
+    it('forwards non-function properties without asserting', async () => {
+      const adapter = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValue(adapter);
+      const provider = createMockFileProvider(SyncProviderId.Dropbox);
+
+      const guarded = (await service.getOperationSyncCapable(provider, {
+        fenceEpoch: 5,
+      })) as OperationSyncCapable;
+
+      expect(guarded.providerMode).toBe('fileSnapshotOps');
+      expect(guarded.supportsOperationSync).toBe(true);
+      expect(mockProviderManager.assertSyncEpochUnchanged).not.toHaveBeenCalled();
     });
   });
 });

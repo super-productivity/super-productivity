@@ -20,8 +20,15 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * - `requiredKeys` drives only (a) the meta-reducer's diagnostic warn (which
  *   missing schema-required fields to name in the log) and (b) the per-type
  *   on-disk heal branch in `auto-fix-typia-errors.ts`. Only TASK and
- *   SIMPLE_COUNTER have such a branch today; PROJECT/TAG rely on the generic
- *   recreate backfill alone, so their `requiredKeys` feed only the warn.
+ *   SIMPLE_COUNTER have a `requiredKeys`-driven branch; TAG/PROJECT have a
+ *   `theme`-specific one (#9139) that reads its defaults directly, not through
+ *   this table, so their `requiredKeys` feed only the warn.
+ *   `theme` is listed for TAG/PROJECT deliberately: the warn is gated on
+ *   `partialKeys.length > 0`, so omitting it would silence the diagnostic
+ *   ENTIRELY for a payload carrying title+taskIds but no theme — which is
+ *   exactly the #9139 corruption shape, on the one writer that still bypasses
+ *   `getDefaultWorkContextTheme`. With provenance still unknown, that is the
+ *   last signal that this path touched a themeless entity; do not remove it.
  *   List the schema-required fields that are NOT already coerced by an
  *   earlier generic branch in `autoFixTypiaErrors` (booleans → false,
  *   nullable → null) — mirroring TASK's curated list.
@@ -73,8 +80,8 @@ export const RECREATE_FALLBACK: Partial<Record<EntityType, RecreateFallback>> = 
       'projectId',
     ],
   },
-  PROJECT: { defaults: DEFAULT_PROJECT, requiredKeys: ['title', 'taskIds'] },
-  TAG: { defaults: DEFAULT_TAG, requiredKeys: ['title', 'taskIds'] },
+  PROJECT: { defaults: DEFAULT_PROJECT, requiredKeys: ['title', 'taskIds', 'theme'] },
+  TAG: { defaults: DEFAULT_TAG, requiredKeys: ['title', 'taskIds', 'theme'] },
   SIMPLE_COUNTER: {
     defaults: EMPTY_SIMPLE_COUNTER,
     // Curated like TASK: omit `icon` (nullable, healed by the undefined→null

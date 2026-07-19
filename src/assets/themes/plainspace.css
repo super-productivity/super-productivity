@@ -44,17 +44,17 @@ body {
   --palette-primary-300: #dca795;
   --palette-primary-400: #d28d75;
   --palette-primary-500: #c87154;
-  --palette-primary-600: #b15e44;
+  --palette-primary-600: #ae5b42;
   --palette-primary-700: #984a35;
   --palette-primary-800: #7e3b29;
   --palette-primary-900: #632c1e;
-  /* dark text on the light tints, warm-white on terracotta itself */
+  /* dark text through 500, warm-white on the deeper terracotta shades */
   --palette-primary-contrast-50: #1f1c17;
   --palette-primary-contrast-100: #1f1c17;
   --palette-primary-contrast-200: #1f1c17;
   --palette-primary-contrast-300: #1f1c17;
   --palette-primary-contrast-400: #1f1c17;
-  --palette-primary-contrast-500: #fffaf2;
+  --palette-primary-contrast-500: #1f1c17;
   --palette-primary-contrast-600: #fffaf2;
   --palette-primary-contrast-700: #fffaf2;
   --palette-primary-contrast-800: #fffaf2;
@@ -75,7 +75,7 @@ body {
   --palette-accent-contrast-100: #1f1c17;
   --palette-accent-contrast-200: #1f1c17;
   --palette-accent-contrast-300: #1f1c17;
-  --palette-accent-contrast-400: #fffaf2;
+  --palette-accent-contrast-400: #1f1c17;
   --palette-accent-contrast-500: #fffaf2;
   --palette-accent-contrast-600: #fffaf2;
   --palette-accent-contrast-700: #fffaf2;
@@ -130,7 +130,7 @@ body.isDarkTheme {
   --palette-primary-contrast-400: #1f1c17;
   --palette-primary-contrast-500: #1f1c17;
   --palette-primary-contrast-600: #1f1c17;
-  --palette-primary-contrast-700: #fffaf2;
+  --palette-primary-contrast-700: #1f1c17;
   --palette-primary-contrast-800: #fffaf2;
   --palette-primary-contrast-900: #fffaf2;
 
@@ -143,7 +143,7 @@ body.isDarkTheme {
   --palette-accent-500: #8fc7c2;
   --palette-accent-600: #79b4ae;
   --palette-accent-700: #639c96;
-  --palette-accent-800: #4f7f7a;
+  --palette-accent-800: #4d7c77;
   --palette-accent-900: #3c615d;
   --palette-accent-contrast-50: #18221f;
   --palette-accent-contrast-100: #18221f;
@@ -229,9 +229,23 @@ body.isDarkTheme::before {
  * ============================================================ */
 body,
 body.isDarkTheme {
-  /* Wobbly hand-drawn line used as a mask, so its ink comes from the
-     element's background-color (themeable) and the SVG is only the shape. */
-  --underline-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 10' preserveAspectRatio='none'%3E%3Cpath d='M2 7 C 40 4 90 8 140 6 C 190 4 240 8 298 5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* CSS-only wobbly ribbon, so uploaded copies need no embedded resource. */
+  --underline-hand-shape: polygon(
+    0 52%,
+    16% 30%,
+    34% 46%,
+    52% 24%,
+    70% 41%,
+    86% 28%,
+    100% 38%,
+    100% 78%,
+    86% 68%,
+    70% 80%,
+    52% 64%,
+    34% 84%,
+    16% 70%,
+    0 88%
+  );
 }
 
 /* Headings: the wobble hugs the text (fit-content + a small overshoot). */
@@ -253,8 +267,7 @@ body.isDarkTheme {
   height: 7px;
   background-color: var(--palette-primary-500);
   opacity: 0.9;
-  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
-  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  clip-path: var(--underline-hand-shape);
   pointer-events: none;
 }
 
@@ -273,8 +286,7 @@ body.isDarkTheme {
   height: 6px;
   background-color: var(--palette-primary-500);
   opacity: 0.45;
-  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
-  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  clip-path: var(--underline-hand-shape);
   pointer-events: none;
 }
 
@@ -325,8 +337,12 @@ body.isDarkTheme {
   background: var(--plainspace-selection);
 }
 
-/* Links carry the terracotta brand, like plainspace. */
-body a[href] {
+/* Links carry a contrast-safe terracotta shade in each mode. */
+body:not(.isDarkTheme) a[href] {
+  color: var(--palette-primary-700);
+}
+
+body.isDarkTheme a[href] {
   color: var(--palette-primary-500);
 }
 
@@ -394,8 +410,7 @@ board-panel header::after {
   height: 10px;
   background-color: var(--palette-primary-500);
   opacity: 0.9;
-  -webkit-mask: var(--underline-hand) center / 100% 100% no-repeat;
-  mask: var(--underline-hand) center / 100% 100% no-repeat;
+  clip-path: var(--underline-hand-shape);
   pointer-events: none;
 }
 /* Lift the cards a surface step so they read against the bare desk — in dark

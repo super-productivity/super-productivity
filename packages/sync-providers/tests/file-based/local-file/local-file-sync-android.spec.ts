@@ -69,13 +69,16 @@ describe('LocalFileSyncAndroid', () => {
     expect(await store.load()).toEqual({ safFolderUri: undefined });
   });
 
-  it('setupSaf stores selected URI', async () => {
+  it('setupSaf returns the selected URI WITHOUT persisting it (#9075)', async () => {
+    // Prepare-only: the URI lives in the settings form model until Save
+    // persists it via setProviderConfig. Persisting here would flip the live
+    // sync target before Save, with no rollback on Cancel.
     const store = fakeStore(null);
     const { provider, selectFolder } = makeProvider(store);
 
     await expect(provider.setupSaf()).resolves.toBe('content://uri');
     expect(selectFolder).toHaveBeenCalledTimes(1);
-    expect(await store.load()).toEqual({ safFolderUri: 'content://uri' });
+    expect(await store.load()).toBeNull();
   });
 
   it('uses targetPath directly as file adapter path', async () => {

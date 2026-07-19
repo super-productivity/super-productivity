@@ -22,7 +22,6 @@ import {
   JiraOriginalUser,
 } from './jira-api-responses';
 import { JiraCfg } from './jira.model';
-import { IPC } from '../../../../../../electron/shared-with-frontend/ipc-events.const';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { HANDLED_ERROR_PROP_STR, IS_ELECTRON } from '../../../../app.constants';
 import { from, Observable, of, throwError } from 'rxjs';
@@ -45,7 +44,6 @@ import { T } from '../../../../t.const';
 import { getErrorTxt } from '../../../../util/get-error-text';
 import { isOnline } from '../../../../util/is-online';
 import { GlobalProgressBarService } from '../../../../core-ui/global-progress-bar/global-progress-bar.service';
-import { IpcRendererEvent } from 'electron';
 import { SS } from '../../../../core/persistence/storage-keys.const';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogPromptComponent } from '../../../../ui/dialog-prompt/dialog-prompt.component';
@@ -53,12 +51,18 @@ import { stripTrailing } from '../../../../util/strip-trailing';
 import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
 import { formatJiraDate } from '../../../../util/format-jira-date';
 import { IssueLog } from '../../../../core/log';
+import { JiraElectronBridgeService } from './jira-electron-bridge.service';
+import {
+  JiraElectronRequestInit,
+  JiraRequestMethod,
+} from '../../../../../../electron/shared-with-frontend/jira-request.model';
 
 const BLOCK_ACCESS_KEY = 'SUP_BLOCK_JIRA_ACCESS';
 const API_VERSION = 'latest';
 
 interface JiraCallbackResponse {
   requestId?: string;
+  response?: unknown;
   error?: {
     statusCode?: number;
     status?: number;
@@ -106,6 +110,7 @@ export class JiraApiService {
   private _snackService = inject(SnackService);
   private _bannerService = inject(BannerService);
   private _matDialog = inject(MatDialog);
+  private _jiraElectronBridge = inject(JiraElectronBridgeService);
 
   private _requestsLog: { [key: string]: JiraRequestLogItem } = {};
   private _isBlockAccess: boolean = !!sessionStorage.getItem(BLOCK_ACCESS_KEY);
@@ -123,13 +128,6 @@ export class JiraApiService {
     );
 
   constructor() {
-    // set up callback listener for electron
-    if (IS_ELECTRON) {
-      window.ea.on(IPC.JIRA_CB_EVENT, (ev: IpcRendererEvent, ...args: unknown[]) => {
-        this._handleResponse(args[0] as JiraCallbackResponse);
-      });
-    }
-
     this._chromeExtensionInterfaceService.onReady$.subscribe(() => {
       this._isExtension = true;
       this._chromeExtensionInterfaceService.addEventListener(
@@ -685,10 +683,25 @@ export class JiraApiService {
 
     const requestToSend = { requestId, requestInit, url };
     if (IS_ELECTRON) {
-      window.ea.makeJiraRequest({
-        ...requestToSend,
-        jiraCfg,
-      });
+      // Wrap in Promise.resolve().then so a synchronous throw from
+      // _toElectronRequestInit is routed through _handleResponse (which clears
+      // the logged request) rather than escaping past the .catch.
+      void Promise.resolve()
+        .then(() =>
+          this._jiraElectronBridge.makeRequest({
+            requestId,
+            url,
+            requestInit: this._toElectronRequestInit(requestInit),
+            allowSelfSignedCertificate: jiraCfg.isAllowSelfSignedCertificate === true,
+          }),
+        )
+        .then((response) => this._handleResponse(response))
+        .catch((error: unknown) =>
+          this._handleResponse({
+            requestId,
+            error: { message: getErrorTxt(error) },
+          }),
+        );
     } else if (this._isExtension) {
       this._chromeExtensionInterfaceService.dispatchEvent(
         'SP_JIRA_REQUEST',
@@ -701,10 +714,9 @@ export class JiraApiService {
     this._globalProgressBarService.countUp(url);
     return from(promise).pipe(
       catchError((err) => {
-        IssueLog.log(err);
-        IssueLog.log(getErrorTxt(err));
         const errTxt = `Jira: ${getErrorTxt(err)}`;
         const status = extractHttpStatus(err);
+        IssueLog.err('Jira request failed', { status });
         if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
@@ -747,10 +759,9 @@ export class JiraApiService {
             [HANDLED_ERROR_PROP_STR]: 'Jira: Request timed out',
           }));
         }
-        IssueLog.log(err);
-        IssueLog.log(getErrorTxt(err));
         const errTxt = `Jira: ${getErrorTxt(err)}`;
         const status = extractHttpStatus(err);
+        IssueLog.err('Jira request failed', { status });
         if (!suppressErrorSnack && !(err as { jiraBlocked?: boolean }).jiraBlocked) {
           this._snackService.open({ type: 'ERROR', msg: errTxt });
         }
@@ -782,6 +793,19 @@ export class JiraApiService {
               )}`,
             }),
       },
+    };
+  }
+
+  private _toElectronRequestInit(requestInit: RequestInit): JiraElectronRequestInit {
+    const method = requestInit.method || 'GET';
+    if (method !== 'GET' && method !== 'POST' && method !== 'PUT') {
+      throw new Error('Invalid Jira request method');
+    }
+
+    return {
+      method: method as JiraRequestMethod,
+      headers: requestInit.headers as Record<string, string>,
+      ...(typeof requestInit.body === 'string' ? { body: requestInit.body } : {}),
     };
   }
 
@@ -866,7 +890,10 @@ export class JiraApiService {
         // NOTE: never log `currentRequest` — it holds `jiraCfg` (plaintext
         // password) and `requestInit.headers.authorization`. The log history
         // is exportable, so credentials must never reach it.
-        IssueLog.err('JIRA_RESPONSE_ERROR', res?.error, res?.requestId);
+        IssueLog.err('JIRA_RESPONSE_ERROR', {
+          requestId: res?.requestId,
+          status: res?.error?.status,
+        });
         // let msg =
         const blocked =
           res?.error && isUnauthorizedError(res.error) ? this._blockAccess() : undefined;
@@ -878,9 +905,9 @@ export class JiraApiService {
           // data can be invalid, that's why we check
           try {
             currentRequest.resolve(currentRequest.transform(res, currentRequest.jiraCfg));
-          } catch (e) {
+          } catch {
             // Do not log `currentRequest` (contains jiraCfg + auth header).
-            IssueLog.err('JIRA_TRANSFORM_ERROR', res?.requestId, e);
+            IssueLog.err('JIRA_TRANSFORM_ERROR', { requestId: res?.requestId });
             this._snackService.open({
               type: 'ERROR',
               msg: T.F.JIRA.S.INVALID_RESPONSE,
@@ -990,8 +1017,8 @@ async function streamToJsonIfPossible(stream: ReadableStream): Promise<unknown> 
   const text = await streamToString(stream);
   try {
     return JSON.parse(text);
-  } catch (e) {
-    IssueLog.err('Jira: Could not parse response', text);
+  } catch {
+    IssueLog.err('Jira: Could not parse response');
     return text;
   }
 }

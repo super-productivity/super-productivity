@@ -11,7 +11,13 @@ import { handleStorageQuotaError } from './sync-error-utils';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
-import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import {
+  ForceUploadFailedError,
+  ForceUploadPendingOpsError,
+  IncompleteRemoteOperationsError,
+  SyncEpochChangedError,
+} from '../core/errors/sync-errors';
+import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
@@ -59,6 +65,7 @@ export class ImmediateUploadService implements OnDestroy {
   private _sessionValidation = inject(SyncSessionValidationService);
   private _syncCycleGuard = inject(SyncCycleGuardService);
   private _snackService = inject(SnackService);
+  private _wrappedProvider = inject(WrappedProviderService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
@@ -207,7 +214,10 @@ export class ImmediateUploadService implements OnDestroy {
   }
 
   private async _performUploadInner(): Promise<void> {
+    // #9074: the (provider, epoch) pair MUST be read in one synchronous block
+    // — see the matching note in SyncWrapperService._syncBody.
     const provider = this._providerManager.getActiveProvider();
+    const fenceEpoch = this._providerManager.syncEpoch;
     if (!provider) {
       return;
     }
@@ -218,9 +228,16 @@ export class ImmediateUploadService implements OnDestroy {
       return;
     }
 
-    // Provider is already validated as OperationSyncCapable in _canUpload()
-    const syncCapableProvider =
-      provider as unknown as import('../sync-providers/provider.interface').OperationSyncCapable;
+    // Provider is already validated as OperationSyncCapable in _canUpload();
+    // the wrapper adds the per-cycle epoch guard (#9074) so a provider
+    // switch/encryption op mid-upload aborts before any remote/cursor write.
+    const syncCapableProvider = await this._wrappedProvider.getOperationSyncCapable(
+      provider,
+      { fenceEpoch },
+    );
+    if (!syncCapableProvider) {
+      return;
+    }
 
     return this._sessionValidation.withSession(async () => {
       try {
@@ -228,7 +245,9 @@ export class ImmediateUploadService implements OnDestroy {
 
         // Use sync service's uploadPendingOps which includes migration detection callback.
         // This ensures SYNC_IMPORT is created when switching to a new/empty server.
-        const result = await this._syncService.uploadPendingOps(syncCapableProvider);
+        const result = await this._syncService.uploadPendingOps(syncCapableProvider, {
+          fenceEpoch,
+        });
         if (result.kind === 'blocked_fresh_client') {
           OpLog.verbose('ImmediateUploadService: Upload blocked (fresh client)');
           return;
@@ -257,12 +276,15 @@ export class ImmediateUploadService implements OnDestroy {
         let totalUploadedCount = result.uploadedCount;
         let hasPermanentRejection = result.permanentRejectionCount > 0;
         let encryptionRequiredKeyMissing = result.encryptionRequiredKeyMissing === true;
+        let blockedByRejectedFullState = result.blockedByRejectedFullState === true;
         if (result.localWinOpsCreated > 0) {
           OpLog.verbose(
             `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
           );
-          const followUpResult =
-            await this._syncService.uploadPendingOps(syncCapableProvider);
+          const followUpResult = await this._syncService.uploadPendingOps(
+            syncCapableProvider,
+            { fenceEpoch },
+          );
           if (followUpResult.kind === 'blocked_incompatible') {
             OpLog.warn(
               'ImmediateUploadService: Local-win follow-up blocked by an incompatible operation',
@@ -281,6 +303,8 @@ export class ImmediateUploadService implements OnDestroy {
           hasPermanentRejection ||= followUpResult.permanentRejectionCount > 0;
           encryptionRequiredKeyMissing ||=
             followUpResult.encryptionRequiredKeyMissing === true;
+          blockedByRejectedFullState ||=
+            followUpResult.blockedByRejectedFullState === true;
         }
 
         // Read the validation latch BEFORE any IN_SYNC / deferred-checkmark
@@ -298,6 +322,11 @@ export class ImmediateUploadService implements OnDestroy {
         // Don't show checkmark when piggybacked ops exist - there may be more
         // remote ops pending. Let normal sync cycle confirm full sync state.
         if (hasPermanentRejection) {
+          this._providerManager.setSyncStatus('ERROR');
+          return;
+        }
+
+        if (blockedByRejectedFullState) {
           this._providerManager.setSyncStatus('ERROR');
           return;
         }
@@ -328,6 +357,29 @@ export class ImmediateUploadService implements OnDestroy {
           );
         }
       } catch (e) {
+        if (e instanceof SyncEpochChangedError) {
+          // #9074: a provider switch/encryption op landed mid-upload; this
+          // cycle is stale by design — silent skip, no ERROR status. The new
+          // epoch's own sync picks up whatever is still pending.
+          OpLog.verbose(
+            'ImmediateUploadService: Sync epoch changed mid-upload, abandoning stale cycle',
+          );
+          return;
+        }
+        if (e instanceof ForceUploadPendingOpsError) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+          return;
+        }
+
+        if (e instanceof ForceUploadFailedError) {
+          this._providerManager.setSyncStatus('ERROR');
+          this._snackService.open({
+            msg: T.F.SYNC.S.FORCE_UPLOAD_FAILED,
+            type: 'ERROR',
+          });
+          return;
+        }
+
         if (e instanceof IncompleteRemoteOperationsError) {
           this._providerManager.setSyncStatus('ERROR');
           if (!this._snackService.hasPendingPersistentAction()) {

@@ -35,7 +35,13 @@ body.isDarkTheme {
   --velvet-border: var(--velvet-fill-2);
   --velvet-border-strong: var(--velvet-fill-5);
   --velvet-fg: #e6e6e6;
-  --velvet-fg-muted: #7a7779;
+  --velvet-fg-muted: #858184;
+
+  /* Public theme contract */
+  --surface-1: var(--velvet-bg);
+  --surface-2: var(--velvet-surface);
+  --ink: var(--velvet-fg);
+  --ink-on-channel: 230, 230, 230;
 
   /* Fill scale — white-alpha overlays for tiles, hovers, borders, chips.
      Repeated rgba(255,255,255,*) literals throughout this file map to one of
@@ -96,7 +102,7 @@ body.isDarkTheme {
   --text-color-most-intense: #ffffff;
 
   --standard-note-fg: var(--velvet-fg);
-  --task-detail-value-color: rgba(237, 237, 237, 0.7);
+  --task-detail-value-color: rgba(237, 237, 237, 0.85);
 
   /* ===============================
    * BORDERS
@@ -177,7 +183,6 @@ body.isDarkTheme {
   --task-detail-bg: var(--velvet-fill-2);
   --task-detail-bg-hover: var(--velvet-fill-3);
   --task-detail-shadow: none;
-  --task-detail-value-color: rgba(237, 237, 237, 0.85);
 
   /* Input fields overrides */
   --input-bg: var(--velvet-fill-2);
@@ -350,7 +355,7 @@ body.isDarkTheme button[mat-raised-button][color='primary'] {
     var(--c-primary) 0%,
     color-mix(in srgb, var(--c-primary) 70%, black) 100%
   ) !important;
-  color: #ffffff !important;
+  color: var(--palette-primary-contrast-500) !important;
   /* Rest/hover top-inset alphas (0.12 → 0.16) are a tuned pair off the fill
      scale; tokenizing them collapses the +0.04 hover lift, so left inline. */
   box-shadow:
@@ -400,27 +405,17 @@ body.isDarkTheme a[href]:hover {
   color: color-mix(in srgb, var(--c-primary) 70%, white);
 }
 
-/* (task transitions and isCurrent border defined inline with bg rules below) */
-
-.task-c:hover,
-.sub-task-c:hover {
-  background-color: var(--task-c-selected-bg);
-}
-
-/* Coral focus ring with offset glow — Raycast uses a soft 2px coral outline
-   on every focusable element. Skip elements that have their own border-based
-   focus state, otherwise we get a doubled-border effect (1px coral border +
-   2px coral outline). */
+/* Coral focus ring with offset glow. */
 body.isDarkTheme *:focus-visible {
-  outline: 2px solid var(--c-primary);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--c-primary);
+  outline-offset: var(--focus-ring-offset);
   border-radius: 4px;
 }
 
-body.isDarkTheme task-detail-item .input-item:focus-visible,
-body.isDarkTheme task-detail-item .mat-expansion-panel:focus-visible,
-body.isDarkTheme task-detail-item .input-item:focus-within,
-body.isDarkTheme task-detail-item .mat-expansion-panel:focus-within,
+/* Task and detail hosts already expose their focused inner border. Keep that
+ * as the single coherent indicator instead of drawing a second outer ring. */
+body.isDarkTheme task-detail-item:focus-visible,
+body.isDarkTheme task-detail-item:focus,
 body.isDarkTheme task:focus-visible,
 body.isDarkTheme task:focus {
   outline: none !important;
@@ -618,7 +613,7 @@ body.isDarkTheme right-panel .edge-close-handle:hover mat-icon {
 
 /* Default task: very subtle bg — Raycast list rows are mostly transparent
    over the gradient, only revealing a bg on hover or selection. */
-body.isDarkTheme task .box {
+body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
   background: var(--velvet-fill-1) !important;
   transition:
     background-color 100ms ease-out,
@@ -626,14 +621,19 @@ body.isDarkTheme task .box {
 }
 
 /* Hover: subtle neutral pill, matches Raycast list rows on hover */
-body.isDarkTheme task:hover .box,
-body.isDarkTheme task .box:hover {
-  background: var(--velvet-fill-2) !important;
+@media (hover: hover) {
+  body.isDarkTheme
+    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    > swipe-block
+    > .inner-wrapper
+    > .box {
+    background: var(--velvet-fill-2) !important;
+  }
 }
 
 /* Selected: subtle neutral white-alpha gradient pill, like Raycast's
    actual selected list rows — no coral, no offset. */
-body.isDarkTheme task.isSelected .box {
+body.isDarkTheme task.isSelected > swipe-block > .inner-wrapper > .box {
   background: linear-gradient(
     180deg,
     var(--velvet-fill-5) 0%,
@@ -726,13 +726,13 @@ body.isDarkTheme task-detail-item .input-item.isFocused {
 
 /* Component CSS adds an accent border on :focus via:
      :host-context(.isNoTouchOnly):focus & { border-color: --palette-primary-400 !important }
-   Suppress entirely — no border on focused items, just the bg shift.
-   The body.isDarkTheme prefix already wins on specificity over the
+   Keep that visible with Velvet's active accent. The body.isDarkTheme prefix
+   already wins on specificity over the
    component's :host-context rule, so the .isNoTouchOnly variants are
    not needed. */
 body.isDarkTheme task-detail-item:focus .input-item,
 body.isDarkTheme task-detail-item:focus .mat-expansion-panel {
-  border-color: transparent !important;
+  border-color: var(--c-primary) !important;
 }
 
 /* Markdown notes inside task detail — same frosted treatment */
@@ -765,16 +765,14 @@ body.isDarkTheme .mat-mdc-chip:hover {
 
 /* Done-toggle (the round task-completion checkbox): coral-ringed when
    currently running. */
-body.isDarkTheme done-toggle button,
-body.isDarkTheme done-toggle .ico-btn {
-  transition: all 150ms cubic-bezier(0.2, 0, 0.13, 1) !important;
+body.isDarkTheme done-toggle .done-toggle-svg {
+  transition:
+    filter var(--transition-fast),
+    transform var(--transition-fast) !important;
 }
 
-body.isDarkTheme task.isCurrent done-toggle button,
-body.isDarkTheme task.isCurrent done-toggle .ico-btn {
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--c-primary) 25%, transparent),
-    0 0 12px color-mix(in srgb, var(--c-primary) 30%, transparent) !important;
+body.isDarkTheme task.isCurrent done-toggle.is-current:not(.is-done) .done-toggle-svg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c-primary) 45%, transparent));
 }
 
 /* Smooth Raycast-style transitions globally on interactive elements */
@@ -812,26 +810,12 @@ body.isDarkTheme task .sub-tasks task .box {
   background: var(--velvet-fill-1) !important; /* was 0.015, rounded up */
 }
 
-body.isDarkTheme task .sub-tasks task:hover .box {
-  background: var(--velvet-fill-2) !important;
-}
-
-body.isDarkTheme task .sub-tasks task.isSelected .box {
+body.isDarkTheme task .sub-tasks task.isSelected > swipe-block > .inner-wrapper > .box {
   background: linear-gradient(
     180deg,
     var(--velvet-fill-4) 0%,
     var(--velvet-fill-2) 100%
   ) !important;
-}
-
-/* Done tasks: muted but still legible. The dim opacity gives them the
-   subtle, calm feel Raycast uses for completed/dismissed items. */
-body.isDarkTheme task.isDone .first-line,
-body.isDarkTheme task.isDone .title-and-tags-wrapper {
-  opacity: 0.55;
-  text-decoration: line-through;
-  text-decoration-color: rgba(237, 237, 237, 0.4);
-  text-decoration-thickness: 1px;
 }
 
 /* Dialog titles: Raycast uses bold, tight, pulled-in dialog headers */
@@ -846,9 +830,9 @@ body.isDarkTheme [mat-dialog-title] {
 /* Mat-tab group (settings tabs): coral underline on active tab */
 body.isDarkTheme .mat-mdc-tab-group {
   --mdc-tab-indicator-active-indicator-color: var(--c-primary);
-  --mat-tab-header-active-label-text-color: var(--c-primary);
-  --mat-tab-header-active-focus-label-text-color: var(--c-primary);
-  --mat-tab-header-active-hover-label-text-color: var(--c-primary);
+  --mat-tab-header-active-label-text-color: var(--text-color-most-intense);
+  --mat-tab-header-active-focus-label-text-color: var(--text-color-most-intense);
+  --mat-tab-header-active-hover-label-text-color: var(--text-color-most-intense);
   --mat-tab-header-active-ripple-color: var(--c-primary);
 }
 
@@ -913,7 +897,11 @@ body.isDarkTheme .mdc-tooltip__surface {
 
 /* Drag-and-drop: neutral surface bg + a soft drop shadow to indicate
    "in-flight" — no accent tint. */
-body.isDarkTheme task.isDragReady:not(.cdk-drag-placeholder) .box,
+body.isDarkTheme
+  task.isDragReady:not(.cdk-drag-placeholder)
+  > swipe-block
+  > .inner-wrapper
+  > .box,
 body.isDarkTheme .cdk-drag-preview {
   background: var(--velvet-pane-5) !important;
   box-shadow:
@@ -925,4 +913,64 @@ body.isDarkTheme {
   --mat-theme-surface: var(--velvet-surface);
   --mat-theme-on-surface: var(--text-color);
   --mat-theme-background: var(--bg);
+}
+
+/* Accessibility and compatibility: replace translucent fill/pane ramps with
+ * solid surfaces when backdrop sampling is disabled or unavailable. */
+@media (prefers-reduced-transparency: reduce) {
+  body.isDarkTheme {
+    --velvet-frost: none;
+    --velvet-frost-strong: none;
+    --velvet-frost-deep: none;
+    --velvet-frost-tooltip: none;
+    --velvet-frost-tile: none;
+    --velvet-fill-1: var(--velvet-surface);
+    --velvet-fill-2: var(--velvet-surface-2);
+    --velvet-fill-3: var(--velvet-surface-3);
+    --velvet-fill-4: var(--velvet-surface-4);
+    --velvet-fill-5: #3a373a;
+    --velvet-fill-6: #464246;
+    --velvet-pane-1: var(--velvet-surface);
+    --velvet-pane-2: var(--velvet-surface-2);
+    --velvet-pane-3: var(--velvet-surface-3);
+    --velvet-pane-4: var(--velvet-surface-4);
+    --velvet-pane-5: #3a373a;
+  }
+
+  body.isDarkTheme banner .content-wrapper,
+  body.isDarkTheme right-panel .edge-close-handle,
+  body.isDarkTheme note .note,
+  body.isDarkTheme .standard-note {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  body.isDarkTheme.hasBgImage magic-side-nav .nav-sidenav {
+    background: var(--velvet-surface-2) !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  body.isDarkTheme {
+    --velvet-frost: none;
+    --velvet-frost-strong: none;
+    --velvet-frost-deep: none;
+    --velvet-frost-tooltip: none;
+    --velvet-frost-tile: none;
+    --velvet-fill-1: var(--velvet-surface);
+    --velvet-fill-2: var(--velvet-surface-2);
+    --velvet-fill-3: var(--velvet-surface-3);
+    --velvet-fill-4: var(--velvet-surface-4);
+    --velvet-fill-5: #3a373a;
+    --velvet-fill-6: #464246;
+    --velvet-pane-1: var(--velvet-surface);
+    --velvet-pane-2: var(--velvet-surface-2);
+    --velvet-pane-3: var(--velvet-surface-3);
+    --velvet-pane-4: var(--velvet-surface-4);
+    --velvet-pane-5: #3a373a;
+  }
+
+  body.isDarkTheme.hasBgImage magic-side-nav .nav-sidenav {
+    background: var(--velvet-surface-2) !important;
+  }
 }

@@ -192,6 +192,87 @@ describe('lwwUpdateMetaReducer', () => {
       expect(updatedTask.notes).toBe('Updated notes');
     });
 
+    it('should remove fields omitted from an explicit replacement snapshot (#8956)', () => {
+      const state = createMockState([{ notes: 'Must not be resurrected' }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Replacement title',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.title).toBe('Replacement title');
+      expect(updatedTask.notes).toBeUndefined();
+    });
+
+    it('should preserve omitted fields for an explicit partial merge (#8956)', () => {
+      const state = createMockState([{ notes: 'Keep this field' }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Merged title',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.title).toBe('Merged title');
+      expect(updatedTask.notes).toBe('Keep this field');
+    });
+
+    it('should strip the virtual TODAY tag from a replacement snapshot (#8990)', () => {
+      // TODAY membership is derived from dueDay/dueWithTime and must never be
+      // stored in tagIds (ARCHITECTURE-DECISIONS #2) — a legacy or corrupt
+      // producer's snapshot must not smuggle it in via replace semantics.
+      const state = createMockState([{ tagIds: ['keep-tag'] }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Replacement title',
+        tagIds: ['TODAY', 'keep-tag'],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      // Prevent devError from throwing (it calls alert + confirm → throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(updatedTask.tagIds).toEqual(['keep-tag']);
+    });
+
     it('should update modified timestamp', () => {
       const state = createMockState([{ modified: 1000 }]);
       const action = {
@@ -252,6 +333,40 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreatedTask.doneOn).toBe(12345);
     });
 
+    it('recreates a deleted SECTION from a [SECTION] LWW Update (project-delete recovery #9037)', () => {
+      const state = createMockState();
+      // The losing deleteProject cascade removed the project's section locally.
+      state[SECTION_FEATURE_NAME] = { ids: [], entities: {} };
+      const action = {
+        type: '[SECTION] LWW Update',
+        id: SECTION_ID,
+        contextId: PROJECT_ID,
+        contextType: WorkContextType.PROJECT,
+        title: 'Recovered Section',
+        taskIds: ['task-1'],
+        meta: {
+          isPersistent: true,
+          entityType: 'SECTION',
+          entityId: SECTION_ID,
+          recreatesEntityAfterDelete: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const section = updatedState[SECTION_FEATURE_NAME]?.entities[SECTION_ID] as Section;
+      expect(section).toBeDefined();
+      expect(section.id).toBe(SECTION_ID);
+      expect(section.title).toBe('Recovered Section');
+      expect(section.contextId).toBe(PROJECT_ID);
+      // Sections are not orphan-filtered by the meta-reducer; the snapshot's
+      // taskIds are preserved verbatim (producer strips dead refs upstream).
+      expect(section.taskIds).toEqual(['task-1']);
+      expect(updatedState[SECTION_FEATURE_NAME]?.ids).toContain(SECTION_ID);
+    });
+
     it('should add recreated entity to the ids array', () => {
       const state = createMockState();
       const action = {
@@ -265,6 +380,200 @@ describe('lwwUpdateMetaReducer', () => {
 
       const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
       expect(updatedState[TASK_FEATURE_NAME]?.ids).toContain('new-task-from-lww');
+    });
+
+    it('should ignore a project recovery after its parent project was deleted (#8997)', () => {
+      const state = createMockState();
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-project-task',
+        title: 'Delayed recovery',
+        projectId: PROJECT_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-project-task',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-project-task'],
+      ).toBeUndefined();
+    });
+
+    it('should not create a task from a delayed relationship patch (#8997)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'missing-task',
+        projectId: PROJECT_ID,
+        parentId: null,
+        subTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'missing-task',
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['missing-task']).toBeUndefined();
+    });
+
+    it('should not create a project from a delayed membership patch (#8997)', () => {
+      const state = createMockState();
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[PROJECT] LWW Update',
+        id: PROJECT_ID,
+        taskIds: [],
+        backlogTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: PROJECT_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID]).toBeUndefined();
+    });
+
+    it('should not move an existing task back into a deleted recovery project (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      delete state[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID];
+      state[PROJECT_FEATURE_NAME]!.ids = [INBOX_PROJECT.id];
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        title: 'Stale delayed recovery',
+        projectId: PROJECT_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const task = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
+      expect(task.projectId).toBe(INBOX_PROJECT.id);
+      expect(task.title).toBe('Original Title');
+    });
+
+    it('should ignore a subtask recreation while its parent task is absent (#8997)', () => {
+      const state = createMockState();
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-subtask',
+        title: 'Delayed subtask',
+        projectId: PROJECT_ID,
+        parentId: 'missing-parent',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-subtask',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-subtask'],
+      ).toBeUndefined();
+    });
+
+    it('should ignore a subtask recreation after its parent moved projects (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'delayed-subtask',
+        title: 'Delayed subtask',
+        projectId: PROJECT_ID,
+        parentId: TASK_ID,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: 'delayed-subtask',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities['delayed-subtask'],
+      ).toBeUndefined();
+    });
+
+    it('should exclude moved tasks from a project recovery snapshot (#8997)', () => {
+      const state = createMockState([{ projectId: INBOX_PROJECT.id }]);
+      const action = {
+        type: '[PROJECT] LWW Update',
+        id: PROJECT_ID,
+        taskIds: [TASK_ID],
+        backlogTaskIds: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: PROJECT_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_ID]?.taskIds).toEqual(
+        [],
+      );
+    });
+
+    it('should exclude rejected children from a final task relationship snapshot (#8997)', () => {
+      const state = createMockState([
+        { projectId: PROJECT_ID, subTaskIds: ['missing-child'] },
+      ]);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_ID,
+        parentId: null,
+        subTaskIds: ['missing-child'],
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.subTaskIds).toEqual([]);
     });
 
     // Regression for issue #7330: a partial LWW Update payload (e.g. only the
@@ -642,6 +951,47 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.title).toBe('Recreated Tag');
       // Backfilled from DEFAULT_TAG
       expect(recreated.taskIds).toEqual([]);
+    });
+
+    // Pins `theme` in RECREATE_FALLBACK.{TAG,PROJECT}.requiredKeys. Those
+    // entries look removable — they drive no backfill, since `defaults` is
+    // spread wholesale — but the warn is gated on `partialKeys.length > 0`, so
+    // dropping one silences the diagnostic ENTIRELY for a payload carrying
+    // title+taskIds and no theme. That is exactly the #9139 corruption shape,
+    // on the one writer that still bypasses getDefaultWorkContextTheme, and
+    // provenance is still unknown — so this is the last signal that path ran.
+    //
+    // Runs for BOTH types on purpose: covering only TAG left PROJECT's entry
+    // dead (dropping it passed 133/133), i.e. a diagnostic that could be lost
+    // without a single test going red.
+    (
+      [
+        ['TAG', 'themeless-tag', 'Themeless Tag'],
+        ['PROJECT', 'themeless-project', 'Themeless Project'],
+      ] as const
+    ).forEach(([entityType, entityId, title]) => {
+      it(`warns when a recreate payload for ${entityType} is missing ONLY \`theme\` (#9139)`, () => {
+        const warnSpy = spyOn(OpLog, 'warn').and.stub();
+        const state = createMockState();
+        const action = {
+          type: `[${entityType}] LWW Update`,
+          id: entityId,
+          title,
+          taskIds: [],
+          meta: {
+            isPersistent: true,
+            entityType,
+            entityId,
+          },
+        };
+
+        reducer(state, action);
+
+        expect(warnSpy).toHaveBeenCalled();
+        const warned = warnSpy.calls.allArgs().flat().join(' ');
+        expect(warned).toContain('missing required');
+        expect(warned).toContain('theme');
+      });
     });
   });
 
@@ -1166,6 +1516,189 @@ describe('lwwUpdateMetaReducer', () => {
       expect(globalConfig['misc']).toBeDefined();
     });
 
+    it('should preserve local-only sync settings from a remote replacement (#8956)', () => {
+      const state = createMockStateWithSingletons();
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: {
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: false,
+        },
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        sync: {
+          syncProvider: 'webDav',
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          syncInterval: 300000,
+          isManualSyncOnly: false,
+          isCompressionEnabled: true,
+        },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          isApplyingFromOtherClient: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(
+        jasmine.objectContaining({
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: true,
+        }),
+      );
+    });
+
+    it('should replay local-only sync settings from an own-client replacement', () => {
+      const state = createMockStateWithSingletons();
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: {
+          syncProvider: 'localFile',
+          isEnabled: true,
+          isEncryptionEnabled: true,
+          syncInterval: 600000,
+          isManualSyncOnly: true,
+          isCompressionEnabled: false,
+        },
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        sync: {
+          syncProvider: 'webdav',
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          syncInterval: 900000,
+          isManualSyncOnly: false,
+          isCompressionEnabled: true,
+        },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(
+        jasmine.objectContaining({
+          syncProvider: 'webdav',
+          isEnabled: false,
+          isEncryptionEnabled: false,
+          syncInterval: 900000,
+          isManualSyncOnly: false,
+          isCompressionEnabled: true,
+        }),
+      );
+    });
+
+    it('should retain the local sync section when a remote replacement omits it', () => {
+      const state = createMockStateWithSingletons();
+      const localSync = {
+        syncProvider: 'localFile',
+        isEnabled: true,
+        isEncryptionEnabled: true,
+        syncInterval: 600000,
+        isManualSyncOnly: true,
+        isCompressionEnabled: false,
+      };
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: localSync,
+      } as never;
+
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          isApplyingFromOtherClient: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.sync).toEqual(localSync);
+    });
+
+    it('should shallow-merge a patch-mode singleton payload instead of replacing (#8990)', () => {
+      // 'patch' payloads are partial deltas; replacing the whole feature state
+      // with one would wipe every untouched section. No current producer emits
+      // patch-mode singleton ops — this pins the guard.
+      const state = createMockStateWithSingletons();
+      const localSync = {
+        syncProvider: 'localFile',
+        isEnabled: true,
+      };
+      state[CONFIG_FEATURE_NAME] = {
+        ...(state[CONFIG_FEATURE_NAME] as object),
+        sync: localSync,
+      } as never;
+      const action = {
+        type: '[GLOBAL_CONFIG] LWW Update',
+        misc: { isDisableAnimations: true },
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG',
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const globalConfig = updatedState[CONFIG_FEATURE_NAME] as {
+        misc: Record<string, unknown>;
+        sync: Record<string, unknown>;
+      };
+      expect(globalConfig.misc).toEqual({ isDisableAnimations: true });
+      expect(globalConfig.sync).toEqual(localSync);
+    });
+
     it('should replace timeTracking state with LWW winning data', () => {
       const state = createMockStateWithSingletons();
       const action = {
@@ -1336,6 +1869,479 @@ describe('lwwUpdateMetaReducer', () => {
 
       expect(projectA.taskIds).not.toContain(TASK_ID);
       expect(projectB.taskIds).toContain(TASK_ID);
+    });
+
+    for (const invalidTarget of [
+      { label: 'missing', id: 'missing-project', isArchived: false },
+      { label: 'prototype-like', id: '__proto__', isArchived: false },
+      // #9025: an explicit null destination must retain the current project on
+      // the LWW replay path, mirroring the local `handleUpdateTask` strip.
+      // Previously null orphaned the task from every project list here.
+      { label: 'null', id: null, isArchived: false },
+    ]) {
+      it(`should retain the current project for a ${invalidTarget.label} target`, () => {
+        const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+        if (invalidTarget.isArchived) {
+          state[PROJECT_FEATURE_NAME]!.entities[PROJECT_B] = createMockProject({
+            id: PROJECT_B,
+            title: 'Archived Project',
+            taskIds: [],
+            isArchived: true,
+          });
+        }
+        const action = {
+          type: '[TASK] LWW Update',
+          id: TASK_ID,
+          projectId: invalidTarget.id,
+          title: 'Keep this title',
+          meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+        };
+
+        expect(() => reducer(state, action)).not.toThrow();
+
+        const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+        expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]).toEqual(
+          jasmine.objectContaining({
+            projectId: PROJECT_A,
+            title: 'Keep this title',
+          }),
+        );
+        expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual([
+          TASK_ID,
+        ]);
+      });
+    }
+
+    it('keeps the current project for a replace-mode snapshot with an explicit null (#9025)', () => {
+      // Invalid destinations are sanitized identically in every mode. A null is
+      // not a "clear" signal (tasks use '' for no-project), so even an
+      // authoritative replace snapshot keeps the task in its current project
+      // rather than orphaning it.
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        ...createMockTask(),
+        id: TASK_ID,
+        projectId: null,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
+    });
+
+    it('falls back to undefined for a null when the task’s own project is gone (#9025)', () => {
+      // The current-project fallback only applies when that project is itself
+      // valid; an already-orphaned task (its project deleted) resolves to
+      // undefined rather than keeping a dangling reference.
+      const state = createStateWithProjects('gone-project', [], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: null,
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(
+        updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId,
+      ).toBeUndefined();
+    });
+
+    it('should replay a move to an archived-but-existing project', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      state[PROJECT_FEATURE_NAME]!.entities[PROJECT_B] = createMockProject({
+        id: PROJECT_B,
+        title: 'Archived Project',
+        taskIds: [],
+        isArchived: true,
+      });
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Archived destination',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId).toBe(
+        PROJECT_B,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual(
+        [],
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
+    });
+
+    it('should move state-only subtasks with their parent when projectId changes', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'subtask1'],
+        entities: {
+          ...state[TASK_FEATURE_NAME]!.entities,
+          [TASK_ID]: createMockTask({
+            projectId: PROJECT_A,
+            subTaskIds: [],
+          }),
+          subtask1: createMockTask({
+            id: 'subtask1',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Updated Task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities.subtask1?.projectId).toBe(
+        PROJECT_B,
+      );
+    });
+
+    it('should replay only the authenticated move footprint on divergent state', () => {
+      // The move footprint is the authenticated meta.projectMoveFootprint (sourced from
+      // the encrypted payload), NOT the plaintext meta.entityIds envelope.
+      // 'receiver-child' is a divergent receiver-only child outside the footprint,
+      // so it must NOT be relocated.
+      const state = createStateWithProjects(
+        PROJECT_A,
+        [TASK_ID, 'captured-child', 'receiver-child'],
+        [],
+      );
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'captured-child', 'receiver-child'],
+        entities: {
+          [TASK_ID]: createMockTask({
+            projectId: PROJECT_A,
+            subTaskIds: [],
+          }),
+          ['captured-child']: createMockTask({
+            id: 'captured-child',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+          ['receiver-child']: createMockTask({
+            id: 'receiver-child',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Moved task',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          projectMoveFootprint: [TASK_ID, 'captured-child'],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['captured-child']?.projectId).toBe(
+        PROJECT_B,
+      );
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['receiver-child']?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual([
+        'receiver-child',
+      ]);
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
+    });
+
+    it('ignores a tampered meta.entityIds envelope and does not relocate an unrelated task (GHSA-8pxh-mgc7-gp3g)', () => {
+      // A compromised sync server appends an unrelated 'victim' task to the
+      // plaintext meta.entityIds envelope of a genuine, correctly-encrypted move
+      // op. 'victim' is a root task with no parent relationship to TASK_ID, so
+      // nothing authentic implicates it in the move — it must stay in PROJECT_A.
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID, 'victim'], []);
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'victim'],
+        entities: {
+          [TASK_ID]: createMockTask({ projectId: PROJECT_A, subTaskIds: [] }),
+          ['victim']: createMockTask({ id: 'victim', projectId: PROJECT_A }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Moved task',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          // Attacker-injected: 'victim' is not part of any authenticated footprint.
+          entityIds: [TASK_ID, 'victim'],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['victim']?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toContain(
+        'victim',
+      );
+      expect(
+        updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds,
+      ).not.toContain('victim');
+    });
+
+    it('relocates only the authenticated footprint when meta.entityIds is tampered alongside it (GHSA-8pxh-mgc7-gp3g)', () => {
+      // Production tamper shape: a genuine authenticated footprint
+      // (meta.projectMoveFootprint) plus a larger meta.entityIds envelope into which the
+      // server injected an unrelated 'victim'. Only the footprint members move.
+      const state = createStateWithProjects(
+        PROJECT_A,
+        [TASK_ID, 'captured-child', 'victim'],
+        [],
+      );
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'captured-child', 'victim'],
+        entities: {
+          [TASK_ID]: createMockTask({
+            projectId: PROJECT_A,
+            subTaskIds: ['captured-child'],
+          }),
+          ['captured-child']: createMockTask({
+            id: 'captured-child',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+          ['victim']: createMockTask({ id: 'victim', projectId: PROJECT_A }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Moved task',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          projectMoveFootprint: [TASK_ID, 'captured-child'],
+          entityIds: [TASK_ID, 'captured-child', 'victim'],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['captured-child']?.projectId).toBe(
+        PROJECT_B,
+      );
+      expect(updatedState[TASK_FEATURE_NAME]?.entities['victim']?.projectId).toBe(
+        PROJECT_A,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toContain(
+        'victim',
+      );
+    });
+
+    it('should repair stale project references without changing target backlog placement', () => {
+      const state = createStateWithProjects(PROJECT_A, [], [TASK_ID]);
+      state[PROJECT_FEATURE_NAME]!.entities[PROJECT_A] = createMockProject({
+        id: PROJECT_A,
+        taskIds: [],
+        backlogTaskIds: [TASK_ID],
+      });
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_A,
+        title: 'Same project',
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: TASK_ID,
+          entityIds: [TASK_ID],
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual(
+        [],
+      );
+      expect(
+        updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.backlogTaskIds,
+      ).toEqual([TASK_ID]);
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds).toEqual(
+        [],
+      );
+    });
+
+    for (const unsafeTaskId of ['constructor', '__proto__']) {
+      it(`should reject prototype-like task id ${unsafeTaskId}`, () => {
+        const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+        const action = {
+          type: '[TASK] LWW Update',
+          id: unsafeTaskId,
+          projectId: PROJECT_B,
+          title: 'Unsafe task',
+          meta: { isPersistent: true, entityType: 'TASK', entityId: unsafeTaskId },
+        };
+        spyOn(OpLog, 'warn');
+
+        expect(() => reducer(state, action)).not.toThrow();
+        expect(mockReducer).toHaveBeenCalledWith(state, action);
+      });
+    }
+
+    it('should reject a prototype-like parent task id', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        parentId: 'constructor',
+        projectId: PROJECT_A,
+        title: 'Unsafe parent',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      expect(() => reducer(state, action)).not.toThrow();
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.parentId).toBeFalsy();
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
+    });
+
+    it('should preserve an empty project id as a valid no-project assignment', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: '',
+        title: 'No project',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID]?.projectId).toBe('');
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual(
+        [],
+      );
+    });
+
+    it('should keep a directly updated subtask in its parent project', () => {
+      const state = createStateWithProjects(PROJECT_A, [TASK_ID], []);
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: [TASK_ID, 'subtask1'],
+        entities: {
+          ...state[TASK_FEATURE_NAME]!.entities,
+          [TASK_ID]: createMockTask({
+            projectId: PROJECT_A,
+            subTaskIds: ['subtask1'],
+          }),
+          subtask1: createMockTask({
+            id: 'subtask1',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: 'subtask1',
+        parentId: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Updated Subtask',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: 'subtask1' },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities.subtask1?.projectId).toBe(
+        PROJECT_A,
+      );
+    });
+
+    it('should move reverse-linked subtasks when recreating their parent', () => {
+      const state = createStateWithProjects(PROJECT_A, ['subtask1'], []);
+      state[TASK_FEATURE_NAME] = {
+        ...state[TASK_FEATURE_NAME]!,
+        ids: ['subtask1'],
+        entities: {
+          subtask1: createMockTask({
+            id: 'subtask1',
+            parentId: TASK_ID,
+            projectId: PROJECT_A,
+          }),
+        },
+      };
+      const action = {
+        type: '[TASK] LWW Update',
+        id: TASK_ID,
+        projectId: PROJECT_B,
+        title: 'Recreated Parent',
+        tagIds: [],
+        subTaskIds: [],
+        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+      };
+      spyOn(OpLog, 'log');
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(updatedState[TASK_FEATURE_NAME]?.entities.subtask1?.projectId).toBe(
+        PROJECT_B,
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A]?.taskIds).toEqual(
+        [],
+      );
+      expect(updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B]?.taskIds).toEqual([
+        TASK_ID,
+      ]);
     });
 
     it('should remove task from old project backlogTaskIds when projectId changes', () => {
@@ -1686,25 +2692,24 @@ describe('lwwUpdateMetaReducer', () => {
       expect(tagB.taskIds.filter((id) => id === TASK_ID).length).toBe(1);
     });
 
-    it('should handle tag that does not exist gracefully', () => {
-      // Task references a non-existent tag
-      const state = createStateWithTags([TAG_A], [TASK_ID], []);
-      const action = {
-        type: '[TASK] LWW Update',
-        id: TASK_ID,
-        tagIds: [TAG_A, 'non-existent-tag'],
-        title: 'Updated Task',
-        meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
-      };
+    for (const missingTagId of ['non-existent-tag', 'constructor', '__proto__']) {
+      it(`should handle missing or unsafe tag id ${missingTagId} gracefully`, () => {
+        const state = createStateWithTags([TAG_A], [TASK_ID], []);
+        const action = {
+          type: '[TASK] LWW Update',
+          id: TASK_ID,
+          tagIds: [TAG_A, missingTagId],
+          title: 'Updated Task',
+          meta: { isPersistent: true, entityType: 'TASK', entityId: TASK_ID },
+        };
 
-      // Should not throw
-      reducer(state, action);
+        expect(() => reducer(state, action)).not.toThrow();
 
-      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
-      const tagA = updatedState[TAG_FEATURE_NAME]?.entities[TAG_A] as Tag;
-
-      expect(tagA.taskIds).toContain(TASK_ID);
-    });
+        const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+        const tagA = updatedState[TAG_FEATURE_NAME]?.entities[TAG_A] as Tag;
+        expect(tagA.taskIds).toContain(TASK_ID);
+      });
+    }
 
     it('should not update tags when tagIds does not change', () => {
       const state = createStateWithTags([TAG_A, TAG_B], [TASK_ID], [TASK_ID]);

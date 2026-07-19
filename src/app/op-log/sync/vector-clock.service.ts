@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { VectorClock, EntityType } from '../core/operation.types';
+import { VectorClock, EntityType, Operation } from '../core/operation.types';
 import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
@@ -194,5 +194,45 @@ export class VectorClockService {
     }
 
     return map;
+  }
+
+  /**
+   * Gets the entity frontier together with every retained (non-rejected) op
+   * per entity, from ONE scan of the post-snapshot log.
+   *
+   * The retained ops let conflict detection reconstruct the LOCAL side of a
+   * conflict for entities with no pending ops (#9073): an incoming remote op
+   * is concurrent with the entity's whole retained history, not just the
+   * frontier op, so detection must not let a newer disjoint op mask an older
+   * overlapping one. Both maps MUST stay filter-identical (skip `rejectedAt`
+   * rows only) or the frontier's CONCURRENT verdict and the reconstructed
+   * conflict side would disagree.
+   */
+  async getEntityFrontierWithOps(): Promise<{
+    frontier: Map<string, VectorClock>;
+    retainedOpsByEntity: Map<string, Operation[]>;
+  }> {
+    const frontier = new Map<string, VectorClock>();
+    const retainedOpsByEntity = new Map<string, Operation[]>();
+
+    const snapshot = await this.opLogStore.loadStateCache();
+    const ops = await this.opLogStore.getOpsAfterSeq(snapshot?.lastAppliedOpSeq || 0);
+
+    for (const entry of ops) {
+      if (entry.rejectedAt) continue;
+
+      for (const id of getOpEntityIds(entry.op)) {
+        const key = toEntityKey(entry.op.entityType, id);
+        frontier.set(key, entry.op.vectorClock);
+        const retained = retainedOpsByEntity.get(key);
+        if (retained) {
+          retained.push(entry.op);
+        } else {
+          retainedOpsByEntity.set(key, [entry.op]);
+        }
+      }
+    }
+
+    return { frontier, retainedOpsByEntity };
   }
 }

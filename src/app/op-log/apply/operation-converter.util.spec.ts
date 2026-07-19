@@ -81,6 +81,98 @@ describe('operation-converter utility', () => {
       expect(action.meta.opType).toBe(OpType.Create);
     });
 
+    it('should surface the authenticated projectMoveFootprint onto meta.projectMoveFootprint', () => {
+      // The footprint rides inside the (encrypted) payload; convertOpToAction
+      // exposes it to reducers so they never trust the plaintext op.entityIds
+      // envelope. GHSA-8pxh-mgc7-gp3g.
+      const op = createMockOperation({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-456', title: 'Moved' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          projectMoveFootprint: ['task-456', 'subtask-1'],
+        } as any,
+      });
+      const action = convertOpToAction(op);
+
+      expect((action.meta as any).projectMoveFootprint).toEqual([
+        'task-456',
+        'subtask-1',
+      ]);
+    });
+
+    it('should not set meta.projectMoveFootprint when the LWW payload carries no footprint', () => {
+      const op = createMockOperation({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-456' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        } as any,
+      });
+      const action = convertOpToAction(op);
+
+      expect((action.meta as any).projectMoveFootprint).toBeUndefined();
+    });
+
+    describe('task-time sync payload validation', () => {
+      const createTaskTimeOp = (
+        payload: Record<string, unknown>,
+        entityId = 'task-1',
+      ): Operation =>
+        createMockOperation({
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          entityId,
+          payload,
+        });
+
+      it('should accept a valid task-time delta', () => {
+        const action = convertOpToAction(
+          createTaskTimeOp({
+            taskId: 'task-1',
+            date: '2024-02-29',
+            duration: 5000,
+          }),
+        );
+
+        expect((action as any).duration).toBe(5000);
+      });
+
+      it('should reject a taskId that differs from the canonical entityId', () => {
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-2',
+              date: '2024-01-15',
+              duration: 5000,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+      });
+
+      it('should reject impossible dates and negative durations', () => {
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-1',
+              date: '2024-02-30',
+              duration: 5000,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+        expect(() =>
+          convertOpToAction(
+            createTaskTimeOp({
+              taskId: 'task-1',
+              date: '2024-01-15',
+              duration: -1,
+            }),
+          ),
+        ).toThrowError(/Invalid task-time sync payload/);
+      });
+    });
+
     it('should handle Create operation', () => {
       const op = createMockOperation({
         opType: OpType.Create,
@@ -399,6 +491,145 @@ describe('operation-converter utility', () => {
 
         expect((action as any).today).toBe('2024-06-14');
       });
+
+      it('uses a timezone-independent UTC day near midnight', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 23, 30),
+          payload: { taskIds: ['task-1'] },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('replaces an invalid captured day with the deterministic fallback', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { taskIds: ['task-1'], today: '' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('replaces an impossible captured calendar day', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { taskIds: ['task-1'], today: '2024-99-99' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
+
+      it('uses a stable epoch fallback for a malformed legacy timestamp', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+          timestamp: Number.NaN,
+          payload: { taskIds: ['task-1'] },
+        });
+
+        expect(() => convertOpToAction(op)).not.toThrow();
+        expect((convertOpToAction(op) as any).today).toBe('1970-01-01');
+      });
+    });
+
+    describe('legacy convertToMainTask date backfill', () => {
+      it('injects replay-safe dates from the originating operation timestamp', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp,
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isPlanForToday: true,
+            isDone: true,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(timestamp);
+        expect(action.modified).toBe(timestamp);
+      });
+
+      it('preserves dates already captured by the originating action', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp: new Date(2024, 5, 15, 12, 0, 0, 0).getTime(),
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isDone: true,
+            today: '2024-06-14',
+            doneOn: 1718352000000,
+            modified: 1718352000000,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(1718352000000);
+        expect(action.modified).toBe(1718352000000);
+      });
+
+      it('replaces invalid captured dates and timestamps', () => {
+        const timestamp = Date.UTC(2024, 5, 14, 12);
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_CONVERT_TO_MAIN,
+          timestamp,
+          payload: {
+            task: { id: 'task-1', parentId: 'parent-1' },
+            isDone: true,
+            today: 'invalid',
+            doneOn: Number.POSITIVE_INFINITY,
+            modified: Number.NaN,
+          },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+        expect(action.doneOn).toBe(timestamp);
+        expect(action.modified).toBe(timestamp);
+      });
+    });
+
+    describe('legacy unscheduleTask date backfill', () => {
+      it('injects today when leaving the task in Today', () => {
+        const timestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          timestamp,
+          payload: { id: 'task-1', isLeaveInToday: true },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBe('2024-06-14');
+      });
+
+      it('does not inject today for a plain unschedule', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          payload: { id: 'task-1' },
+        });
+
+        const action = convertOpToAction(op) as any;
+
+        expect(action.today).toBeUndefined();
+      });
+
+      it('replaces an invalid captured day when leaving the task in Today', () => {
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UNSCHEDULE,
+          timestamp: Date.UTC(2024, 5, 14, 12),
+          payload: { id: 'task-1', isLeaveInToday: true, today: '' },
+        });
+
+        expect((convertOpToAction(op) as any).today).toBe('2024-06-14');
+      });
     });
 
     describe('updateTask done replay date backfill', () => {
@@ -463,6 +694,25 @@ describe('operation-converter utility', () => {
         expect(action.task.changes.dueDay).toBe('2024-06-14');
       });
 
+      it('replaces a non-finite doneOn timestamp', () => {
+        const timestamp = Date.UTC(2024, 5, 14, 12);
+        const op = createMockOperation({
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          timestamp,
+          payload: {
+            actionPayload: {
+              task: {
+                id: 'task-1',
+                changes: { isDone: true, doneOn: Number.NaN },
+              },
+            },
+            entityChanges: [],
+          },
+        });
+
+        expect((convertOpToAction(op) as any).task.changes.doneOn).toBe(timestamp);
+      });
+
       it('does not inject done fields for undone updates', () => {
         const op = createMockOperation({
           actionType: ActionType.TASK_SHARED_UPDATE,
@@ -520,6 +770,39 @@ describe('operation-converter utility', () => {
         const action = convertOpToAction(op);
 
         expect((action as any).id).toBe('task-1');
+      });
+
+      it('should expose the LWW payload mode in action metadata (#8956)', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            actionPayload: { id: 'task-1', title: 'Winning state' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+          },
+        });
+
+        const action = convertOpToAction(op);
+
+        expect(
+          (action.meta as typeof action.meta & { lwwUpdateMode?: string }).lwwUpdateMode,
+        ).toBe('replace');
+      });
+
+      it('should expose recreate-after-delete metadata (#8997)', () => {
+        const op = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            actionPayload: { id: 'task-1', projectId: 'project-1' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            recreatesEntityAfterDelete: true,
+          },
+        });
+
+        const action = convertOpToAction(op);
+
+        expect(action.meta.recreatesEntityAfterDelete).toBeTrue();
       });
 
       it('should fall back to legacy payload format when not MultiEntityPayload', () => {
