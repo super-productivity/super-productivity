@@ -302,10 +302,20 @@ export const detectConflictForEntity = async (
   // (WHERE entity_ids <> '{}') and it covers only the multi-entity minority instead of
   // every row. That is lossless: a single-entity op stores '{}', so its indexed
   // expression is just ARRAY['u:<id>'] and can never contain the real entity id a probe
-  // carries. The catch is that the query must then carry a matching
-  // `AND entity_ids <> '{}'` predicate, or Postgres cannot prove the partial index
-  // applies and ignores it. The outer user_id predicate stays load-bearing either way —
-  // the 'u:' prefix is a namespace, not a security boundary.
+  // carries. That losslessness is a claim about the DATA and holds by inspection:
+  // getStoredEntityIds collapses single-entity sets to [], entity_ids is NOT NULL
+  // DEFAULT '{}', and '{}' @> ARRAY[<id>] is false.
+  //
+  // UNMEASURED, and do not build on it until you have: whether the PARTIAL form is
+  // usable at all is a claim about the PLANNER, and nobody has run it. The query would
+  // have to carry a matching `AND entity_ids <> '{}'` and Postgres would have to prove
+  // that implies the index predicate — for an array `<>`, which is not something this
+  // comment has any evidence about. EXPLAIN it under force_generic_plan first (see the
+  // plan-cache note above). A comment asserting unmeasured planner behaviour is what
+  // preceded the outage; this paragraph is a lead to chase, not a design to trust.
+  //
+  // The outer user_id predicate stays load-bearing either way — the 'u:' prefix is a
+  // namespace, not a security boundary.
   //
   // Sequential, never Promise.all: `tx` is a single-connection interactive transaction
   // client and concurrent queries on it are unsafe.
