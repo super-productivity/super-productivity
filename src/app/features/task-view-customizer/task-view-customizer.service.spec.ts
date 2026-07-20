@@ -214,6 +214,56 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  it('should exclude tasks carrying a !-prefixed tag (untagged tasks pass)', () => {
+    const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, '!Tag A');
+    expect(filtered.map((t) => t.id)).toEqual(['Beta(Tag B)', 'Zebra(-)']);
+  });
+
+  it('should combine include and exclude terms', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.tag,
+      'Tag B, !Tag A',
+    );
+    expect(filtered.map((t) => t.id)).toEqual(['Beta(Tag B)']);
+  });
+
+  it('should require all comma-separated include terms (AND)', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.tag,
+      'Tag A, Tag B',
+    );
+    expect(filtered.map((t) => t.id)).toEqual(['Third Task(Tag A, Tag B)']);
+  });
+
+  it('should match any of several tags matching one term', () => {
+    // 'Tag' matches both 'Tag A' and 'Tag B'
+    const included = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, 'Tag');
+    expect(included.length).toBe(3);
+
+    const excluded = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, '!Tag');
+    expect(excluded.map((t) => t.id)).toEqual(['Zebra(-)']);
+  });
+
+  it('should ignore an exclude term matching no tag', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.tag,
+      '!Tag Three',
+    );
+    expect(filtered.length).toBe(4);
+  });
+
+  it('should tolerate whitespace around terms and the ! prefix', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.tag,
+      ' Tag A ,  ! Tag B ',
+    );
+    expect(filtered.map((t) => t.id)).toEqual(['Alpha(Tag A)']);
+  });
+
   it('should filter by project name', () => {
     const filtered = service['applyFilter'](
       mockTasks,

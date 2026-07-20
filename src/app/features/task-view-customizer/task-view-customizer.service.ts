@@ -263,11 +263,7 @@ export class TaskViewCustomizerService {
           return tasks.filter((t) => !t.tagIds.length);
         }
 
-        const tag = this._allTags.find((t) =>
-          t.title.toLowerCase().includes(value.toLowerCase().trim()),
-        );
-        if (!tag) return [];
-        return tasks.filter((task) => task.tagIds?.includes(tag.id));
+        return this._filterByTagTerms(tasks, value);
       case FILTER_OPTION_TYPE.project:
         const project = this._allProjects.find((p) =>
           p.title.toLowerCase().includes(value.toLowerCase().trim()),
@@ -573,6 +569,54 @@ export class TaskViewCustomizerService {
     }
 
     return grouped;
+  }
+
+  /**
+   * Tag filter with multi-term and exclusion support. The value is split on
+   * commas into terms; each term matches tags by case-insensitive substring
+   * (as the single-term filter always did). A `!` prefix turns a term into an
+   * exclusion: `work, !waiting` shows tasks carrying a work-tag but no
+   * waiting-tag; `!private` alone hides everything tagged private (untagged
+   * tasks pass).
+   *
+   * Semantics: every include term must be satisfied (AND); a task may not
+   * carry any tag matched by an exclude term. A term matching several tags
+   * matches any of them. An include term matching no tag yields an empty list
+   * (unchanged behavior); an exclude term matching no tag excludes nothing.
+   */
+  private _filterByTagTerms(
+    tasks: TaskWithSubTasks[],
+    value: string,
+  ): TaskWithSubTasks[] {
+    const terms = value
+      .split(',')
+      .map((term) => term.trim())
+      .filter((term) => term.length > 0);
+
+    const includeIdSets: Set<string>[] = [];
+    const excludedIds = new Set<string>();
+
+    for (const term of terms) {
+      const isExclude = term.startsWith('!');
+      const needle = (isExclude ? term.slice(1) : term).trim().toLowerCase();
+      if (!needle) continue;
+
+      const matchingTags = this._allTags.filter((t) =>
+        t.title.toLowerCase().includes(needle),
+      );
+      if (isExclude) {
+        matchingTags.forEach((t) => excludedIds.add(t.id));
+      } else {
+        if (!matchingTags.length) return [];
+        includeIdSets.push(new Set(matchingTags.map((t) => t.id)));
+      }
+    }
+
+    return tasks.filter((task) => {
+      const tagIds = task.tagIds ?? [];
+      if (tagIds.some((id) => excludedIds.has(id))) return false;
+      return includeIdSets.every((includeSet) => tagIds.some((id) => includeSet.has(id)));
+    });
   }
 
   private _filterByDateFields(
