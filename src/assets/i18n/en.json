@@ -1492,7 +1492,7 @@
         },
         "PASSWORD_SET_INFO": "🔒 Encryption password is set.",
         "SUPER_SYNC": {
-          "ACCESS_TOKEN_DESCRIPTION": "Paste the token you copied from the server login page",
+          "ACCESS_TOKEN_DESCRIPTION": "Paste a token for your SuperSync account. On another device, reuse this token or sign in again to get another one.",
           "BTN_CHANGE_PASSWORD": "Change Password",
           "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
           "BTN_ENABLE_ENCRYPTION": "Enable Encryption",
