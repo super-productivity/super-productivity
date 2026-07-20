@@ -93,7 +93,7 @@ test('toggle-visibility delegates to the shared toggle helper without sending IP
   assert.deepEqual(win.sent, []);
 });
 
-test('create-task forwards the decoded title from the path segment', () => {
+test('create-task forwards the decoded title from the path segment and shows the window', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
 
@@ -105,6 +105,11 @@ test('create-task forwards the decoded title from the path segment', () => {
       payload: { title: 'Buy milk', notes: undefined, projectId: undefined },
     },
   ]);
+  assert.equal(
+    showOrFocusCalls.length,
+    1,
+    'the success/error snack must actually be visible to the user',
+  );
 });
 
 test('create-task forwards title, notes, and projectId from query params', () => {
@@ -124,6 +129,20 @@ test('create-task forwards title, notes, and projectId from query params', () =>
   ]);
 });
 
+test('create-task action name is case-insensitive', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://Create-Task?title=Buy%20milk', win);
+
+  assert.deepEqual(win.sent, [
+    {
+      channel: 'ADD_TASK_FROM_APP_URI',
+      payload: { title: 'Buy milk', notes: undefined, projectId: undefined },
+    },
+  ]);
+});
+
 test('create-task with neither a path segment nor a title query param sends nothing', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
@@ -133,7 +152,7 @@ test('create-task with neither a path segment nor a title query param sends noth
   assert.deepEqual(win.sent, []);
 });
 
-test('complete-task forwards the title query param', () => {
+test('complete-task forwards the title query param and shows the window', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
 
@@ -142,6 +161,11 @@ test('complete-task forwards the title query param', () => {
   assert.deepEqual(win.sent, [
     { channel: 'COMPLETE_TASK_FROM_APP_URI', payload: { title: 'Buy milk' } },
   ]);
+  assert.equal(
+    showOrFocusCalls.length,
+    1,
+    'the success/error snack must actually be visible to the user',
+  );
 });
 
 test('complete-task without a title query param sends nothing', () => {

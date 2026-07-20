@@ -13,11 +13,13 @@ export interface AppUriCompleteTaskAction {
 export type AppUriTaskAction = AppUriAddTaskAction | AppUriCompleteTaskAction;
 
 /**
- * Parses the `com.super-productivity.app://add-task?title=...` and
+ * Parses the `com.super-productivity.app://create-task?title=...` and
  * `.../complete-task?title=...` custom URL scheme actions (used by iOS
- * Shortcuts' "Open URLs" action, and reachable via the same scheme on
- * Android). Returns `null` for any other/unrecognized URL, including the
- * existing `.../oauth-callback` action handled elsewhere.
+ * Shortcuts' "Open URLs" action). `create-task` (not `add-task`) matches the
+ * desktop Electron protocol action name — desktop's own `add-task` action
+ * already means something unrelated (opens the quick-add-task input bar).
+ * Returns `null` for any other/unrecognized URL, including the existing
+ * `.../oauth-callback` action handled elsewhere.
  */
 export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   let urlObj: URL;
@@ -31,12 +33,16 @@ export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   // component is not auto-lowercased (unlike http/https) — normalize
   // explicitly, matching OAuthCallbackHandlerService's own parsing.
   const action = urlObj.hostname.toLowerCase();
-  const title = urlObj.searchParams.get('title');
+  // A whitespace-only title (`title=%20`, or `title=+`, which a query string
+  // decodes to a space) must not silently become an empty needle — trimmed-
+  // empty means "no title", not "match every task" (see the completion
+  // matching in AppUriTaskActionsService).
+  const title = urlObj.searchParams.get('title')?.trim();
   if (!title) {
     return null;
   }
 
-  if (action === 'add-task') {
+  if (action === 'create-task') {
     return {
       type: 'add',
       title,

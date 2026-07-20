@@ -53,7 +53,10 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
 
   try {
     const urlObj = new URL(url);
-    const action = urlObj.hostname;
+    // Custom URL schemes are non-special per the WHATWG URL spec, so the
+    // host component is not auto-lowercased (unlike http/https) — normalize
+    // explicitly, matching the mobile-side parser's own handling.
+    const action = urlObj.hostname.toLowerCase();
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
 
     log('Protocol action:', action);
@@ -80,6 +83,12 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
           log('Creating task from protocol URL');
 
           if (mainWin && mainWin.webContents) {
+            // Surface the window so the success/error snack — the only
+            // feedback channel for a URL-triggered action — is actually
+            // seen, matching every other protocol action below. Without
+            // this, macOS's `open-url` path (and any platform started
+            // minimized to tray) never brings the window forward.
+            showOrFocus(mainWin);
             mainWin.webContents.send(IPC.ADD_TASK_FROM_APP_URI, {
               title: taskTitle,
               notes: urlObj.searchParams.get('notes') ?? undefined,
@@ -96,6 +105,8 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
           log('Completing task from protocol URL');
 
           if (mainWin && mainWin.webContents) {
+            // See the showOrFocus note in the `create-task` case above.
+            showOrFocus(mainWin);
             mainWin.webContents.send(IPC.COMPLETE_TASK_FROM_APP_URI, {
               title: taskTitle,
             });

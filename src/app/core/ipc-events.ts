@@ -1,4 +1,4 @@
-import { ipcEvent$ } from '../util/ipc-event';
+import { ipcEvent$, ipcEventReplay$ } from '../util/ipc-event';
 import { IPC } from '../../../electron/shared-with-frontend/ipc-events.const';
 import { map, filter } from 'rxjs/operators';
 import { EMPTY, Observable } from 'rxjs';
@@ -82,8 +82,14 @@ export const ipcShowAddTaskBar$: Observable<unknown> = IS_ELECTRON
   ? ipcEvent$(IPC.SHOW_ADD_TASK_BAR).pipe()
   : EMPTY;
 
+// `ipcEventReplay$` (not `ipcEvent$`): a cold Electron launch's protocol-URL
+// drain can fire before AppUriTaskActionsService has subscribed (Angular
+// bootstrap isn't instant), and a plain Subject silently drops a value with
+// no subscribers. The ReplaySubject(1) it's backed by ensures the first real
+// subscriber still gets it, mirroring the Capacitor side's
+// `pendingCapacitorAppUriAction$`.
 export const ipcAddTaskFromAppUri$: Observable<AddTaskFromAppUriPayload> = IS_ELECTRON
-  ? ipcEvent$(IPC.ADD_TASK_FROM_APP_URI).pipe(
+  ? ipcEventReplay$(IPC.ADD_TASK_FROM_APP_URI).pipe(
       map(([data]) => parseAddTaskFromAppUriPayload(data)),
       filter((data): data is AddTaskFromAppUriPayload => data !== null),
     )
@@ -91,7 +97,7 @@ export const ipcAddTaskFromAppUri$: Observable<AddTaskFromAppUriPayload> = IS_EL
 
 export const ipcCompleteTaskFromAppUri$: Observable<CompleteTaskFromAppUriPayload> =
   IS_ELECTRON
-    ? ipcEvent$(IPC.COMPLETE_TASK_FROM_APP_URI).pipe(
+    ? ipcEventReplay$(IPC.COMPLETE_TASK_FROM_APP_URI).pipe(
         map(([data]) => parseCompleteTaskFromAppUriPayload(data)),
         filter((data): data is CompleteTaskFromAppUriPayload => data !== null),
       )

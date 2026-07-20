@@ -545,13 +545,17 @@ if (IS_IOS_NATIVE) {
   // Handle app URL open (for OAuth callbacks, deep links, etc.)
   // OAuth callbacks are handled separately by OAuthCallbackHandlerService's
   // own `appUrlOpen` listener (Capacitor supports multiple listeners on the
-  // same event). This one only recognizes add-task/complete-task actions
+  // same event). This one only recognizes create-task/complete-task actions
   // (e.g. from an iOS Shortcut's "Open URLs" action) and hands them off to
   // AppUriTaskActionsService via the pending-action ReplaySubject, since
   // Angular's DI (and app data) may not exist yet on a cold launch.
   CapacitorApp.addListener('appUrlOpen', (event) => {
-    Log.log('iOS app URL open', event.url);
     const action = parseAppUriTaskAction(event.url);
+    // Never log the raw URL — it now carries the task title/notes, and log
+    // history is exportable in bug reports. Log that the event fired and
+    // whether it was recognized, matching OAuthCallbackHandlerService's own
+    // logging (which likewise never logs the callback URL).
+    Log.log('iOS app URL open', { recognized: !!action });
     if (action) {
       pendingCapacitorAppUriAction$.next(action);
     }

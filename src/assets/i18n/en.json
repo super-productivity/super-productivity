@@ -1962,6 +1962,7 @@
       },
       "S": {
         "ADDED_VIA_APP_URI": "Added task \"{{title}}\"",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Multiple tasks match \"{{title}}\" — be more specific",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
         "COMPLETED_VIA_APP_URI": "Completed task \"{{title}}\"",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
@@ -1975,6 +1976,7 @@
         "MOVED_TO_ARCHIVE": "Moved {{nr}} tasks to archive",
         "MOVED_TO_PROJECT": "Moved task \"{{taskTitle}}\" to project \"{{projectTitle}}\"",
         "NOT_FOUND_VIA_APP_URI": "No matching task found for \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Project not found — task \"{{title}}\" was not added",
         "REMINDER_ADDED": "Scheduled <strong>\"{{title}}\"</strong> at <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
