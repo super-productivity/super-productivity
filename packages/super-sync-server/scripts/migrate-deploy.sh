@@ -52,38 +52,73 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 # can hang forever; without this the CMD/initContainer paths never fail.
 STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-1800}"
 
-# Exempt the migrator from the production statement_timeout guardrail (#9191).
-#
-# DATABASE_URL carries `options=-c statement_timeout=60000` so a degenerate query
-# plan cannot hold a pool connection indefinitely (the 2026-07-20 outage held one
-# for 75 minutes). That cap rides into the migrator, where it is not merely
-# unhelpful but a dead end: a CREATE INDEX CONCURRENTLY on a large `operations`
-# table runs well past 60s and gets cancelled mid-build, leaving an INVALID index
-# — and every recovery path below inherits the same URL, so `prisma db execute`
-# fails identically, as do the by-hand statements print_manual_recovery tells the
-# operator to run. Nothing in the loop can succeed.
-#
-# STEP_TIMEOUT is the correct bound for migrations instead: it kills the client,
-# and it is the signal the CONCURRENTLY recovery logic already understands.
-#
-# Four cases, in order: an existing statement_timeout is rewritten to 0; an
-# existing `options` value is extended (never duplicated as a second `options`
-# param, which Prisma would silently resolve to one of the two); otherwise the
-# param is appended with the right separator.
+# Helm cannot inspect a DATABASE_URL stored in an existing Kubernetes Secret.
+# Its init container opts into this runtime check before migrations or the app
+# can start. Literal chart values are also rejected during template rendering.
+if [ "${REQUIRE_DATABASE_POOL_LIMITS:-false}" = "true" ]; then
+  if ! node -e '
+    try {
+      const url = new URL(process.env.DATABASE_URL);
+      const valid = ["connection_limit", "pool_timeout"].every((name) =>
+        /^[1-9][0-9]*$/.test(url.searchParams.get(name) ?? ""),
+      );
+      process.exit(valid ? 0 : 1);
+    } catch {
+      process.exit(1);
+    }
+  '; then
+    echo "ERROR: DATABASE_URL must include positive connection_limit and pool_timeout values." >&2
+    exit 1
+  fi
+fi
+
+# DATABASE_URL may cap application statements. Migrations use STEP_TIMEOUT
+# instead: a shorter statement_timeout can cancel CREATE INDEX CONCURRENTLY and
+# leave an INVALID index that every automated recovery step inherits. Append our
+# settings to the real `options` query parameter so they override earlier `-c`
+# values without mistaking credentials or another URL component for an option.
+# The application_name lets health-alert.sh ignore expected long-running DDL.
+# Connection option format: https://www.postgresql.org/docs/16/libpq-connect.html
 if [ -n "${DATABASE_URL:-}" ]; then
+  MIGRATOR_OPTIONS="-c%20statement_timeout%3D0"
   case "$DATABASE_URL" in
-    *statement_timeout*)
+    *\?options=*|*\&options=*)
       DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
-        sed -E 's/(statement_timeout(%3[Dd]|=))[0-9]+/\10/g')
+        sed -E "s/([?&]options=[^&]*)/\1%20${MIGRATOR_OPTIONS}/")
       ;;
-    *options=*)
+    *\?*) DATABASE_URL="${DATABASE_URL}&options=${MIGRATOR_OPTIONS}" ;;
+    *) DATABASE_URL="${DATABASE_URL}?options=${MIGRATOR_OPTIONS}" ;;
+  esac
+
+  # application_name is a first-class libpq connection parameter. Set that
+  # parameter directly: an existing value overrides a conflicting `options`
+  # setting regardless of their textual order in the URL.
+  case "$DATABASE_URL" in
+    *\?application_name=*|*\&application_name=*)
       DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
-        sed -E 's/(options=[^&]*)/\1%20-c%20statement_timeout%3D0/')
+        sed -E 's/([?&]application_name=)[^&#]*/\1supersync-migrator/')
       ;;
-    *\?*) DATABASE_URL="${DATABASE_URL}&options=-c%20statement_timeout%3D0" ;;
-    *) DATABASE_URL="${DATABASE_URL}?options=-c%20statement_timeout%3D0" ;;
+    *) DATABASE_URL="${DATABASE_URL}&application_name=supersync-migrator" ;;
   esac
   export DATABASE_URL
+fi
+
+# Printed manual-recovery commands re-enter through this narrow wrapper so
+# they receive the same timeout exemption without printing database secrets.
+if [ "${1:-}" = "--prisma" ]; then
+  shift
+  [ "$#" -gt 0 ] || { echo "ERROR: --prisma requires Prisma arguments." >&2; exit 2; }
+  exec npx prisma "$@"
+fi
+
+PRISMA_RECOVERY_CMD="sh scripts/migrate-deploy.sh --prisma"
+if [ "${MIGRATE_RECOVERY_RUNTIME:-}" = "compose" ]; then
+  # Keep DATABASE_URL (and its credentials) inside Compose. The host command
+  # works even when the URL comes entirely from compose defaults.
+  PRISMA_RECOVERY_CMD="docker compose run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma"
+  if [ "${MIGRATE_RECOVERY_BUILD_LOCAL:-false}" = "true" ]; then
+    PRISMA_RECOVERY_CMD="docker compose -f docker-compose.yml -f docker-compose.build.yml run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma"
+  fi
 fi
 
 if command -v timeout >/dev/null 2>&1; then
@@ -224,13 +259,13 @@ print_manual_recovery() {
   sql="$2"
   echo ""
   echo "Manual recovery for $name (copy-paste):"
-  echo "  npx prisma migrate resolve --rolled-back $(shell_quote "$name")"
+  echo "  $PRISMA_RECOVERY_CMD migrate resolve --rolled-back $(shell_quote "$name")"
   split_statements "$sql" > "$STMT_FILE"
   while IFS= read -r stmt; do
     [ -n "$stmt" ] || continue
-    echo "  printf '%s\\n' $(shell_quote "$stmt") | npx prisma db execute --schema $SCHEMA --stdin"
+    echo "  printf '%s\\n' $(shell_quote "$stmt") | $PRISMA_RECOVERY_CMD db execute --schema $SCHEMA --stdin"
   done < "$STMT_FILE"
-  echo "  npx prisma migrate resolve --applied $(shell_quote "$name")   # only after every statement above succeeds"
+  echo "  $PRISMA_RECOVERY_CMD migrate resolve --applied $(shell_quote "$name")   # only after every statement above succeeds"
 }
 
 # Copy-paste recovery for an interrupted bare CREATE INDEX CONCURRENTLY. An
@@ -246,12 +281,12 @@ print_bare_create_recovery() {
   echo ""
   echo "Manual recovery for $name (interrupted bare CREATE INDEX CONCURRENTLY, copy-paste):"
   if [ -n "$idx" ]; then
-    echo "  printf '%s\\n' $(shell_quote "DROP INDEX CONCURRENTLY IF EXISTS \"$idx\";") | npx prisma db execute --schema $SCHEMA --stdin"
+    echo "  printf '%s\\n' $(shell_quote "DROP INDEX CONCURRENTLY IF EXISTS \"$idx\";") | $PRISMA_RECOVERY_CMD db execute --schema $SCHEMA --stdin"
   else
     echo "  # Drop any INVALID index left by the interrupted build (see $sql), e.g.:"
     echo "  #   DROP INDEX CONCURRENTLY IF EXISTS \"<index_name>\";"
   fi
-  echo "  npx prisma migrate resolve --rolled-back $(shell_quote "$name")"
+  echo "  $PRISMA_RECOVERY_CMD migrate resolve --rolled-back $(shell_quote "$name")"
   echo "  # Then re-run the deploy; $name re-applies natively."
 }
 

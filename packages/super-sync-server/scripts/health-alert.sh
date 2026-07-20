@@ -15,6 +15,8 @@
 #   HEALTH_URL     - Health endpoint URL (default: read from .env DOMAIN)
 #   MAX_QUERY_SECONDS  - Alert if any query has been active longer (default: 120)
 #   POOL_WARN_PCT      - Alert if active backends exceed this % of the pool (default: 75)
+#   POSTGRES_SERVICE   - Bundled database service to health-check
+#                        (default: postgres; empty: none)
 
 # Do NOT use set -e — a monitoring script must never silently abort.
 set -uo pipefail
@@ -25,6 +27,17 @@ COMPOSE_DIR="${COMPOSE_DIR:-$(dirname "$SCRIPT_DIR")}"
 ALERT_EMAIL="${ALERT_EMAIL:-contact@super-productivity.com}"
 MAX_QUERY_SECONDS="${MAX_QUERY_SECONDS:-120}"
 POOL_WARN_PCT="${POOL_WARN_PCT:-75}"
+
+CONFIG_PROBLEMS=""
+DB_CONFIG_OK=true
+if ! [[ "$MAX_QUERY_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  CONFIG_PROBLEMS="${CONFIG_PROBLEMS}MAX_QUERY_SECONDS must be a positive integer\n"
+  DB_CONFIG_OK=false
+fi
+if ! [[ "$POOL_WARN_PCT" =~ ^([1-9]|[1-9][0-9]|100)$ ]]; then
+  CONFIG_PROBLEMS="${CONFIG_PROBLEMS}POOL_WARN_PCT must be an integer from 1 to 100\n"
+  DB_CONFIG_OK=false
+fi
 
 if [ ! -f "$COMPOSE_DIR/docker-compose.yml" ]; then
   echo "ERROR: $COMPOSE_DIR does not contain docker-compose.yml" >&2
@@ -52,7 +65,17 @@ if [ -f ".env" ]; then
 fi
 HEALTH_URL="${HEALTH_URL:-https://${DOMAIN:-localhost}/health}"
 
-PROBLEMS=""
+# An explicitly empty value means the deployment uses an external database.
+if [ "${POSTGRES_SERVICE+x}" != "x" ]; then
+  if grep -qE '^POSTGRES_SERVICE=' ".env" 2>/dev/null; then
+    POSTGRES_SERVICE=$(grep -m1 -E '^POSTGRES_SERVICE=' ".env" 2>/dev/null |
+      cut -d'=' -f2- | tr -d "\"' " || true)
+  else
+    POSTGRES_SERVICE="postgres"
+  fi
+fi
+
+PROBLEMS="$CONFIG_PROBLEMS"
 DOCKER_OK=true
 
 # 0. Check Docker daemon is accessible
@@ -63,7 +86,11 @@ fi
 
 if $DOCKER_OK; then
   # 1. Check if all containers are running and healthy
-  SERVICES=(supersync postgres caddy)
+  SERVICES=(supersync)
+  if [ -n "$POSTGRES_SERVICE" ]; then
+    SERVICES+=("$POSTGRES_SERVICE")
+  fi
+  SERVICES+=(caddy)
   for svc in "${SERVICES[@]}"; do
     STATE=$(docker compose ps --format '{{.State}}' "$svc" 2>/dev/null || echo "missing")
     HEALTH=$(docker compose ps --format '{{.Health}}' "$svc" 2>/dev/null || echo "")
@@ -98,97 +125,149 @@ if $DOCKER_OK; then
     fi
   done
 
-  # --- Database-level checks (#9191) ---------------------------------------
-  #
-  # Checks 1-5 are all liveness: is the process up, is the endpoint answering.
-  # They cannot see the failure mode that caused the 2026-07-20 outage and the
-  # two operations-table pool incidents before it, where every container stayed
-  # "running" and healthy while a degenerate query plan held connections until
-  # the pool was empty. That failure is bistable — below the capacity line
-  # nothing is visibly wrong, above it everything fails at once — so there is no
-  # gradual phase to notice. These three checks look at the pool directly.
-  #
-  # Best-effort by design: a failed psql must never mask checks 0-5, so every
-  # query falls back to empty and is skipped rather than alerting.
-  PG_ID=$(docker compose ps -q postgres 2>/dev/null | head -1 || true)
-  if [ -n "$PG_ID" ]; then
-    DB_USER=$(grep -E '^POSTGRES_USER=' ".env" 2>/dev/null | cut -d'=' -f2 | tr -d "\"' " || true)
-    DB_NAME=$(grep -E '^POSTGRES_DB=' ".env" 2>/dev/null | cut -d'=' -f2 | tr -d "\"' " || true)
-    DB_USER="${DB_USER:-supersync}"
-    DB_NAME="${DB_NAME:-supersync}"
+  # 6-8. Query the configured database from the app container so external
+  # PostgreSQL deployments use the same DATABASE_URL and Prisma client as the app.
+  if $DB_CONFIG_OK; then
+    DB_PROBE_JS=$(cat <<'NODE'
+const { PrismaClient } = require('@prisma/client');
 
-    pg_query() {
-      timeout 15 docker exec "$PG_ID" \
-        psql -U "$DB_USER" -d "$DB_NAME" -tAX -c "$1" 2>/dev/null | tr -d ' ' || true
-    }
+const prisma = new PrismaClient();
+const maxQuerySeconds = Number(process.env.HEALTH_MAX_QUERY_SECONDS);
 
-    # 6. Long-running queries. statement_timeout should cap these at 60s, so
-    # anything past MAX_QUERY_SECONDS means the guardrail is absent, overridden,
-    # or the session is exempt (the migrator legitimately is). Excludes idle
-    # backends and this script's own query.
-    LONG_Q=$(pg_query "
-      SELECT count(*) FROM pg_stat_activity
-      WHERE state = 'active' AND pid <> pg_backend_pid()
-        AND backend_type = 'client backend'
-        AND now() - query_start > interval '${MAX_QUERY_SECONDS} seconds';")
-    if [[ "$LONG_Q" =~ ^[0-9]+$ ]] && [ "$LONG_Q" -gt 0 ]; then
-      LONGEST=$(pg_query "
-        SELECT round(extract(epoch FROM max(now() - query_start)))
-        FROM pg_stat_activity
-        WHERE state = 'active' AND pid <> pg_backend_pid()
-          AND backend_type = 'client backend';")
-      PROBLEMS="${PROBLEMS}${LONG_Q} query(s) active longer than ${MAX_QUERY_SECONDS}s (longest: ${LONGEST:-?}s)\n"
-    fi
+const readPoolLimit = () => {
+  try {
+    const value = new URL(process.env.DATABASE_URL ?? '').searchParams.get(
+      'connection_limit',
+    );
+    const numericValue = Number(value);
+    return value && /^\d+$/.test(value) && numericValue > 0 && Number.isSafeInteger(numericValue)
+      ? String(numericValue)
+      : '';
+  } catch {
+    return '';
+  }
+};
 
-    # 7. Pool saturation, as a RATIO against the app's connection_limit rather
-    # than a fixed number: measured steady state (~0.75 downloads/sec) sits the
-    # same order of magnitude below the pathological-query ceiling (pool size ÷
-    # worst-case query duration), so the absolute margin is thin and a fixed
-    # threshold would not survive a pool resize.
-    #
-    # Read connection_limit from the RUNNING container's env, not from .env: the
-    # limit may come from the compose default instead, and .env may hold a stale
-    # value the container was not recreated for. Falling back to max_connections
-    # would silently under-report — with a pool of 60 against max_connections
-    # 120, a fully exhausted pool measures 50% and never alerts.
-    APP_ID=$(docker compose ps -q supersync 2>/dev/null | head -1 || true)
+const main = async () => {
+  console.log(`POOL_LIMIT=${readPoolLimit()}`);
+
+  const { activity, indexes } = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL statement_timeout = 10000');
+      const [activity] = await tx.$queryRawUnsafe(
+        `WITH active AS (
+       SELECT now() - query_start AS age
+       FROM pg_stat_activity
+       WHERE state = 'active'
+         AND pid <> pg_backend_pid()
+         AND backend_type = 'client backend'
+         AND datname = current_database()
+         AND usename = current_user
+         AND application_name IS DISTINCT FROM 'supersync-migrator'
+     )
+     SELECT
+       count(*) FILTER (
+         WHERE age > $1::integer * interval '1 second'
+       )::integer AS "longQueryCount",
+       COALESCE(round(extract(epoch FROM max(age))), 0)::integer AS "longest",
+       count(*)::integer AS "active"
+     FROM active`,
+        maxQuerySeconds,
+      );
+
+      const [indexes] = await tx.$queryRawUnsafe(
+        `SELECT COALESCE(
+       string_agg(i.indexrelid::regclass::text, ', ' ORDER BY i.indexrelid),
+       ''
+     ) AS "badIndex"
+     FROM pg_index i
+     WHERE i.indrelid = 'public.operations'::regclass
+       AND (NOT i.indisvalid OR NOT i.indisready OR NOT i.indislive)
+       AND NOT EXISTS (
+         SELECT 1
+         FROM pg_stat_progress_create_index p
+          WHERE p.index_relid = i.indexrelid
+       )`,
+      );
+
+      return { activity, indexes };
+    },
+    { maxWait: 5000, timeout: 12000 },
+  );
+
+  console.log(`LONG_Q=${activity.longQueryCount}`);
+  console.log(`LONGEST=${activity.longest}`);
+  console.log(`ACTIVE=${activity.active}`);
+  console.log(`BAD_INDEX=${indexes.badIndex}`);
+};
+
+main()
+  .catch((error) => {
+    console.error(
+      'Database probe failed:',
+      error instanceof Error ? error.message : String(error),
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
+NODE
+)
+
+    # Allow Prisma's 5s pool wait plus its 12s transaction bound to finish.
+    DB_OUTPUT=$(timeout 20 docker compose exec -T \
+      -e "HEALTH_MAX_QUERY_SECONDS=$MAX_QUERY_SECONDS" \
+      supersync node -e "$DB_PROBE_JS" 2>/dev/null)
+    DB_STATUS=$?
+
+    LONG_Q=""
+    LONGEST=""
+    ACTIVE=""
     POOL_LIMIT=""
-    if [ -n "$APP_ID" ]; then
-      POOL_LIMIT=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$APP_ID" 2>/dev/null |
-        grep -m1 '^DATABASE_URL=' | grep -oE 'connection_limit=[0-9]+' | cut -d'=' -f2 || true)
-    fi
-    if ! [[ "${POOL_LIMIT:-}" =~ ^[0-9]+$ ]]; then
-      # No explicit limit: Prisma defaults to host_cores * 2 + 1 (read from HOST
-      # cores, not the container cpu limit), which is unknowable from here. Report
-      # against max_connections and say so, rather than skipping the check.
-      POOL_LIMIT=$(pg_query "SHOW max_connections;")
-      POOL_LIMIT_NOTE=" — no connection_limit set, measured against max_connections"
-    fi
-    ACTIVE=$(pg_query "
-      SELECT count(*) FROM pg_stat_activity
-      WHERE state = 'active' AND pid <> pg_backend_pid()
-        AND backend_type = 'client backend';")
-    if [[ "${ACTIVE:-}" =~ ^[0-9]+$ ]] && [[ "${POOL_LIMIT:-}" =~ ^[0-9]+$ ]] && [ "$POOL_LIMIT" -gt 0 ]; then
-      PCT=$(( ACTIVE * 100 / POOL_LIMIT ))
-      if [ "$PCT" -ge "$POOL_WARN_PCT" ]; then
-        PROBLEMS="${PROBLEMS}Connection pool ${PCT}% saturated (${ACTIVE} active / ${POOL_LIMIT} limit)${POOL_LIMIT_NOTE:-}\n"
-      fi
+    BAD_IDX=""
+    HAVE_LONG_Q=false
+    HAVE_LONGEST=false
+    HAVE_ACTIVE=false
+    HAVE_POOL_LIMIT=false
+    HAVE_BAD_IDX=false
+    while IFS='=' read -r KEY VALUE; do
+      case "$KEY" in
+        LONG_Q) LONG_Q="$VALUE"; HAVE_LONG_Q=true ;;
+        LONGEST) LONGEST="$VALUE"; HAVE_LONGEST=true ;;
+        ACTIVE) ACTIVE="$VALUE"; HAVE_ACTIVE=true ;;
+        POOL_LIMIT) POOL_LIMIT="$VALUE"; HAVE_POOL_LIMIT=true ;;
+        BAD_INDEX) BAD_IDX="$VALUE"; HAVE_BAD_IDX=true ;;
+      esac
+    done <<< "$DB_OUTPUT"
+
+    if $HAVE_POOL_LIMIT && ! [[ "$POOL_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+      PROBLEMS="${PROBLEMS}DATABASE_URL has no valid connection_limit\n"
     fi
 
-    # 8. Invalid indexes. An interrupted CREATE INDEX CONCURRENTLY leaves an
-    # index that is unusable for reads but STILL maintained on every insert, and
-    # nothing else in the codebase reports it. If operations_entity_ids_gin were
-    # the invalid one, the conflict lookup's array branch would silently degrade
-    # to a sequential scan on every upload — worse than the outage this check
-    # exists to catch, and permanent until someone reindexes. indisready and
-    # indislive are the other two partial states the same interruption leaves.
-    BAD_IDX=$(pg_query "
-      SELECT string_agg(indexrelid::regclass::text, ', ')
-      FROM pg_index
-      WHERE (NOT indisvalid OR NOT indisready OR NOT indislive)
-        AND indrelid IN (SELECT oid FROM pg_class WHERE relnamespace = 'public'::regnamespace);")
-    if [ -n "${BAD_IDX:-}" ]; then
-      PROBLEMS="${PROBLEMS}Invalid/unusable index(es) present: ${BAD_IDX}\n"
+    DB_RESULTS_OK=true
+    if [ "$DB_STATUS" -ne 0 ] || ! $HAVE_LONG_Q || ! $HAVE_LONGEST ||
+      ! $HAVE_ACTIVE || ! $HAVE_POOL_LIMIT || ! $HAVE_BAD_IDX ||
+      ! [[ "$LONG_Q" =~ ^[0-9]+$ ]] ||
+      ! [[ "$LONGEST" =~ ^[0-9]*$ ]] ||
+      ! [[ "$ACTIVE" =~ ^[0-9]+$ ]]; then
+      DB_RESULTS_OK=false
+      PROBLEMS="${PROBLEMS}Database monitoring checks failed\n"
+    fi
+
+    if $DB_RESULTS_OK; then
+      if [ "$LONG_Q" -gt 0 ]; then
+        PROBLEMS="${PROBLEMS}${LONG_Q} query(s) active longer than ${MAX_QUERY_SECONDS}s (longest: ${LONGEST:-?}s)\n"
+      fi
+
+      if [[ "$POOL_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+        PCT=$(( ACTIVE * 100 / POOL_LIMIT ))
+        if [ "$PCT" -ge "$POOL_WARN_PCT" ]; then
+          PROBLEMS="${PROBLEMS}Connection pool ${PCT}% saturated (${ACTIVE} active / ${POOL_LIMIT} limit)\n"
+        fi
+      fi
+
+      if [ -n "$BAD_IDX" ]; then
+        PROBLEMS="${PROBLEMS}Invalid/unusable index(es) present: ${BAD_IDX}\n"
+      fi
     fi
   fi
 fi
@@ -229,19 +308,13 @@ if [ -n "$PROBLEMS" ]; then
       echo "$CURRENT_HASH" > "$ALERT_STATE_FILE"
       rm -f "$ALERT_STATE_DIR/mail-failed"
     else
-      # A failing alert path is indistinguishable from a healthy system: stderr
-      # from cron goes to the local mail spool, which is exactly what is broken
-      # when mail is broken. Leave a marker deploy.sh can surface instead. (#9191)
+      # Leave a marker deploy.sh can surface when cron cannot deliver mail.
       echo "ERROR: Failed to send alert email" >&2
       date -u +%Y-%m-%dT%H:%M:%SZ > "$ALERT_STATE_DIR/mail-failed"
     fi
   fi
 else
-  # All clear — send recovery notification, only delete state if mail succeeds.
-  # Also runs when only the mail-failed marker is present: a failed alert send
-  # leaves no state file, so without this the marker (and deploy.sh's warning)
-  # would survive every later healthy run and never clear. Retrying here doubles
-  # as the proof that delivery works again.
+  # A healthy retry also proves mail works again and clears a sticky failure marker.
   if [ -f "$ALERT_STATE_FILE" ] || [ -f "$ALERT_STATE_DIR/mail-failed" ]; then
     if printf 'SuperSync health check recovered at %s\n\nAll checks passing.\nServer: %s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(hostname)" \
@@ -255,5 +328,5 @@ else
   fi
 fi
 
-# Record last successful run for monitoring verification
+# Record the last completed run for deploy-time monitoring verification.
 date -u +%Y-%m-%dT%H:%M:%SZ > "$ALERT_STATE_DIR/last-run"

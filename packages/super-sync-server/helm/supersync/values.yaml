@@ -144,10 +144,12 @@ postgresql:
 
 # -- External database configuration (used when postgresql.enabled is false)
 externalDatabase:
-  # -- Full PostgreSQL connection URL (e.g. postgresql://user:pass@host:5432/dbname)
+  # -- Full PostgreSQL URL. Must include connection_limit and pool_timeout, e.g.
+  # postgresql://user:pass@host:5432/dbname?connection_limit=60&pool_timeout=10
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
-  # The secret must contain a DATABASE_URL key.
+  # The secret must contain a DATABASE_URL key with the same pool parameters;
+  # the migration init container fails fast when either parameter is absent.
   existingSecret: ""
 
 # -- Ingress configuration

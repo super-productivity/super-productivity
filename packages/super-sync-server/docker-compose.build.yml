@@ -11,3 +11,5 @@ services:
       args:
         VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}
     image: supersync:local
+    environment:
+      - MIGRATE_RECOVERY_BUILD_LOCAL=true

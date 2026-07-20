@@ -34,6 +34,7 @@ interface RunResult {
   resolveApplied: string[];
   resolveRolledBack: string[];
   databaseUrls: string[];
+  prismaCommands: string[];
 }
 
 let projectDir: string;
@@ -50,6 +51,7 @@ const writeMigration = (name: string, sql: string): void => {
 // marker files under $FAKE_STATE so the deploy→recover→retry cycle is modelled.
 const FAKE_NPX = `#!/bin/sh
 set -eu
+printf '%s\\n' "$*" >> "$FAKE_STATE/prisma_commands"
 shift # drop "prisma"
 sub="$1"; shift
 state="$FAKE_STATE"
@@ -133,11 +135,11 @@ echo "fake npx: unhandled args" >&2
 exit 99
 `;
 
-const run = (env: Record<string, string>): RunResult => {
+const run = (env: Record<string, string>, args: string[] = []): RunResult => {
   let status = 0;
   let stdout = '';
   try {
-    stdout = execFileSync('sh', [SCRIPT], {
+    stdout = execFileSync('sh', [SCRIPT, ...args], {
       cwd: projectDir,
       encoding: 'utf8',
       env: {
@@ -166,6 +168,7 @@ const run = (env: Record<string, string>): RunResult => {
     resolveApplied: read('applied_list').split('\n').filter(Boolean),
     resolveRolledBack: read('rolledback').split('\n').filter(Boolean),
     databaseUrls: read('database_urls').split('\n').filter(Boolean),
+    prismaCommands: read('prisma_commands').split('\n').filter(Boolean),
   };
 };
 
@@ -254,7 +257,11 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     const bareSql = `CREATE INDEX CONCURRENTLY "operations_bare_idx"
   ON "operations"("user_id", "server_seq");`;
     writeMigration(bare, bareSql);
-    const r = run({ FAKE_FAIL: bare, FAKE_CODE: 'P3009' });
+    const r = run({
+      FAKE_FAIL: bare,
+      FAKE_CODE: 'P3009',
+      MIGRATE_RECOVERY_RUNTIME: 'compose',
+    });
 
     expect(r.status).not.toBe(0);
     expect(r.stdout).toContain('not a recoverable drop-then-create');
@@ -262,6 +269,9 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
       'DROP INDEX CONCURRENTLY IF EXISTS "operations_bare_idx";',
     );
     expect(r.stdout).toContain(`migrate resolve --rolled-back '${bare}'`);
+    expect(r.stdout).toContain(
+      'docker compose run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma',
+    );
     expect(r.resolveApplied).toEqual([]);
     expect(r.resolveRolledBack).toEqual([]);
   });
@@ -423,15 +433,13 @@ CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx"
   });
 });
 
-// #9191: production caps statement_timeout at 60s via DATABASE_URL so a bad query
-// plan cannot hold a pool connection forever. That cap must NOT reach the migrator
-// — a CREATE INDEX CONCURRENTLY runs far longer than 60s, and because every
-// recovery path inherits the same URL, a cancelled build cannot be recovered
-// either, by the script or by hand. Migrations are bounded by STEP_TIMEOUT.
+// #9191: operators may cap application statements through DATABASE_URL. That cap
+// must not reach CREATE INDEX CONCURRENTLY or its automated recovery steps;
+// migrations are bounded by STEP_TIMEOUT instead.
 describe('migrate-deploy.sh statement_timeout exemption', () => {
   const BASE = 'postgresql://u:p@postgres:5432/supersync';
 
-  it('rewrites an existing statement_timeout to 0', () => {
+  it('overrides an existing statement_timeout with a final zero value', () => {
     const r = run({
       FAKE_FAIL: '',
       FAKE_CODE: 'P3018',
@@ -442,11 +450,47 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     expect(r.databaseUrls).not.toHaveLength(0);
     for (const url of r.databaseUrls) {
       expect(url).toContain('statement_timeout%3D0');
-      expect(url).not.toContain('60000');
+      expect(url).toMatch(/statement_timeout%3D60000.*statement_timeout%3D0/);
       // The pool settings are not ours to touch.
       expect(url).toContain('connection_limit=60');
       expect(url).toContain('pool_timeout=20');
     }
+  });
+
+  it('rejects a secret-backed URL without explicit pool guardrails', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?connection_limit=60`,
+      REQUIRE_DATABASE_POOL_LIMITS: 'true',
+    });
+
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain(
+      'DATABASE_URL must include positive connection_limit and pool_timeout values',
+    );
+    expect(r.prismaCommands).toEqual([]);
+  });
+
+  it('runs manual recovery commands through the protected Prisma wrapper', () => {
+    const r = run(
+      {
+        FAKE_FAIL: '',
+        FAKE_CODE: 'P3018',
+        DATABASE_URL: `${BASE}?connection_limit=60&pool_timeout=10&options=-c%20statement_timeout%3D60000`,
+        REQUIRE_DATABASE_POOL_LIMITS: 'true',
+      },
+      ['--prisma', 'migrate', 'resolve', '--rolled-back', ENCRYPTED_OPS],
+    );
+
+    expect(r.status).toBe(0);
+    expect(r.prismaCommands).toEqual([
+      `prisma migrate resolve --rolled-back ${ENCRYPTED_OPS}`,
+    ]);
+    expect(r.databaseUrls[0]).toMatch(/statement_timeout%3D60000.*statement_timeout%3D0/);
+    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toBe(
+      'supersync-migrator',
+    );
   });
 
   it('keeps the exemption on the recovery paths, not just the first deploy', () => {
@@ -480,6 +524,44 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     expect(url).toContain('connection_limit=60');
   });
 
+  it('does not mistake a URL component for the statement_timeout option', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `postgresql://statement_timeout:p@postgres:5432/supersync?connection_limit=60`,
+    });
+
+    expect(r.databaseUrls[0]).toContain('options=-c%20statement_timeout%3D0');
+  });
+
+  it('identifies every Prisma migration connection to monitoring', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?options=-c%20lock_timeout%3D5000`,
+    });
+
+    expect(r.databaseUrls).not.toHaveLength(0);
+    expect(
+      r.databaseUrls.every(
+        (url) =>
+          new URL(url).searchParams.get('application_name') === 'supersync-migrator',
+      ),
+    ).toBe(true);
+  });
+
+  it('replaces an existing application_name query parameter', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?application_name=existing-app`,
+    });
+
+    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toBe(
+      'supersync-migrator',
+    );
+  });
+
   it('appends with & when the URL already has a query string', () => {
     const r = run({
       FAKE_FAIL: '',
@@ -488,14 +570,16 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     });
 
     expect(r.databaseUrls[0]).toBe(
-      `${BASE}?connection_limit=60&options=-c%20statement_timeout%3D0`,
+      `${BASE}?connection_limit=60&options=-c%20statement_timeout%3D0&application_name=supersync-migrator`,
     );
   });
 
   it('appends with ? when the URL has no query string', () => {
     const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018', DATABASE_URL: BASE });
 
-    expect(r.databaseUrls[0]).toBe(`${BASE}?options=-c%20statement_timeout%3D0`);
+    expect(r.databaseUrls[0]).toBe(
+      `${BASE}?options=-c%20statement_timeout%3D0&application_name=supersync-migrator`,
+    );
   });
 
   it('does nothing when DATABASE_URL is unset', () => {

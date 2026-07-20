@@ -422,16 +422,8 @@ echo "    All containers healthy"
 
 # Verify HTTPS health check
 echo ""
-# Report on the alerting path itself (#9191).
-#
-# All three operations-table pool incidents were found by users reporting
-# problems, never by monitoring — and health-alert.sh has had checks that should
-# have caught at least the last one. The gap is that nothing installs it and
-# nothing notices when it stops working: the cron line lives only in a comment in
-# that script, and its stderr goes to the local mail spool, which is exactly what
-# is broken when mail is broken. So report, every deploy, whether the alerting is
-# actually running. Advisory only — never fail a deploy over it, and never edit
-# the operator's crontab from here.
+# Report whether the separately-installed alert cron is active and completing.
+# Advisory only: deploys never edit the operator's crontab. (#9191)
 report_monitoring_status() {
     local state_dir="$SERVER_DIR/.health-alert"
     local script_path="$SERVER_DIR/scripts/health-alert.sh"
@@ -439,7 +431,17 @@ report_monitoring_status() {
     echo ""
     echo "==> Monitoring status"
 
-    if ! crontab -l 2>/dev/null | grep -q 'health-alert\.sh'; then
+    if ! crontab -l 2>/dev/null | awk -v script="$script_path" '
+        NF >= 6 && $1 !~ /^#/ {
+            command_index = 6
+            while (command_index <= NF &&
+                   $command_index ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+                command_index++
+            }
+            if ($command_index == script) found = 1
+        }
+        END { exit(found ? 0 : 1) }
+    '; then
         echo "    WARNING: health-alert.sh is not in this user's crontab."
         echo "             Pool saturation and long-running queries will go unnoticed."
         echo "             Install with:"
@@ -448,24 +450,25 @@ report_monitoring_status() {
     fi
     echo "    health-alert.sh: cron installed"
 
-    # A stale last-run means the cron is present but not completing — a silent
-    # failure that looks identical to a healthy system from the outside.
+    # A stale last-run means the cron is present but not completing.
     if [ -f "$state_dir/last-run" ]; then
         local last_run age
         last_run=$(cat "$state_dir/last-run" 2>/dev/null || true)
         age=$(( $(date -u +%s) - $(date -u -d "$last_run" +%s 2>/dev/null || echo 0) ))
         if [ "$age" -gt 1800 ]; then
-            echo "    WARNING: last successful run was $last_run (>30m ago) — cron is not completing."
+            echo "    WARNING: last completed run was $last_run (>30m ago) — cron is not completing."
         else
             echo "    last run: $last_run"
         fi
     else
-        echo "    NOTE: no run recorded yet (expected within 5 minutes)."
+        echo "    WARNING: cron has no completed run recorded yet (expected within 5 minutes)."
     fi
 
     if [ -f "$state_dir/mail-failed" ]; then
         echo "    WARNING: alert email delivery FAILED at $(cat "$state_dir/mail-failed" 2>/dev/null)."
         echo "             Checks are running but nobody is being told. Verify \`mail\` works."
+    else
+        echo "    alert email: no recorded failure (verified only when mail is attempted)"
     fi
 }
 

@@ -255,6 +255,8 @@ describe('performance migrations', () => {
     expect(deployScript).toContain('prisma migrate deploy timed out');
     expect(deployScript).toContain('database migrations failed (exit $MIGRATE_STATUS)');
     expect(deployScript).toContain(externalDbStartCommand);
+    expect(deployScript).toContain('awk -v script="$script_path"');
+    expect(deployScript).toContain('$command_index == script');
     expect(deployScript).toContain('RUN_MIGRATIONS_ON_STARTUP');
     expect(deployScript.indexOf(migrationCommand)).toBeLessThan(
       deployScript.indexOf(startCommand),
@@ -265,6 +267,7 @@ describe('performance migrations', () => {
     expect(dockerfile).toContain('sh scripts/migrate-deploy.sh');
     expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=576');
     expect(composeBuildFile).toContain('VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}');
+    expect(composeBuildFile).toContain('MIGRATE_RECOVERY_BUILD_LOCAL=true');
     expect(buildAndPushScript).toContain('supersync_image_source_revision()');
     expect(buildAndPushScript).toContain('assert_clean_supersync_image_inputs');
     expect(buildAndPushScript).toContain('git -C "$REPO_ROOT" log -1 --format=%H');
@@ -283,6 +286,17 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain('VCS_REF=${{ steps.source-ref.outputs.revision }}');
     expect(dockerWorkflow).not.toContain('labels: ${{ steps.meta.outputs.labels }}');
     expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
+    expect(helmDeployment).toContain('connection_limit=60&pool_timeout=10');
+    expect(helmDeployment).toContain(
+      'externalDatabase.url must include connection_limit and pool_timeout',
+    );
+    expect(helmDeployment).toContain('REQUIRE_DATABASE_POOL_LIMITS');
+    expect(runtimeMigrateScript).toContain(
+      'DATABASE_URL must include positive connection_limit and pool_timeout values',
+    );
+    expect(runtimeMigrateScript).toContain(
+      '-f docker-compose.yml -f docker-compose.build.yml',
+    );
     // Architectural invariant (the actual bug class): the generic runtime
     // script must NOT hardcode any migration name or index DDL — that lockstep
     // coupling is what went stale and broke the production deploy. Behavioral
@@ -301,9 +315,11 @@ describe('performance migrations', () => {
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );
+    expect(composeFile).toContain('MIGRATE_RECOVERY_RUNTIME=compose');
     expect(composeFile).toContain(
       'SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}',
     );
+    expect(composeFile).toContain('connection_limit=60&pool_timeout=10');
     expect(composeFile).toContain(
       'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1"',
     );

@@ -14,13 +14,8 @@ x-logging: &default-logging
     max-size: '10m'
     max-file: '3'
 
-# The app log is the only one that has to answer "what did load look like before
-# this started?" during an incident. At incident volume 3×10m is ~3 hours, which
-# in the 2026-07-20 outage had already rotated past the start of the pile-up by
-# the time anyone was looking — the daily traffic shape could not be
-# reconstructed at all. 30 files is ~days of history for ~300 MB. Deliberately
-# NOT applied to postgres/caddy via the shared anchor: that would be ~900 MB
-# against a disk alert that fires at 85%, for logs no incident needed. (#9191)
+# Preserve several days of app history at incident volume (~300 MB), without
+# applying the same 10x increase to Postgres and Caddy. (#9191)
 x-logging-app: &app-logging
   driver: 'json-file'
   options:
@@ -36,25 +31,13 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=1900
       - HOST=${HOST:-0.0.0.0}
-      # The query params are load-bearing, not tuning (#9191):
-      #   statement_timeout - a degenerate query plan otherwise holds a pool
-      #     connection until someone kills it by hand (75 minutes, 2026-07-20).
-      #     Prisma's transaction timeout aborts only the client side, leaving the
-      #     backend running, so this is what makes pool exhaustion RECOVERABLE
-      #     rather than an absorbing state. It was absent in all three
-      #     operations-table pool incidents. Only the connection-string form
-      #     works — Prisma overrides role- and database-level settings.
-      #   connection_limit - Prisma otherwise defaults to host_cores * 2 + 1,
-      #     read from HOST cores, not the `cpus: '1.0'` limit below, so it
-      #     silently ignores the ceiling the postgres comment further down
-      #     assumes. max_connections is set well above this on purpose.
-      #   pool_timeout - fail a checkout fast instead of queueing behind an
-      #     already-saturated pool.
-      # Setting DATABASE_URL in .env REPLACES all of this. If you override it,
-      # carry these params across. scripts/migrate-deploy.sh deliberately resets
-      # statement_timeout to 0 for the migrator only.
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}?connection_limit=60&pool_timeout=20&options=-c%20statement_timeout%3D60000}
+      # Prisma sizes its default pool from host CPUs, not the container limit.
+      # Overriding DATABASE_URL replaces these bounds; carry them across. A global
+      # statement_timeout remains opt-in because the legacy snapshot-clock scan
+      # can legitimately exceed 60s on upgraded histories. See env.example. (#9191)
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}?connection_limit=60&pool_timeout=10}
       - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}
+      - MIGRATE_RECOVERY_RUNTIME=compose
       - JWT_SECRET=${JWT_SECRET}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:1900}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://app.super-productivity.com}
