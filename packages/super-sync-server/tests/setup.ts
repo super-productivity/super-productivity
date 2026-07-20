@@ -119,6 +119,14 @@ vi.mock('../src/db', () => {
       return false;
     }
     if (where.entityId !== undefined && op.entityId !== where.entityId) return false;
+    // entity_ids @> ARRAY[id] — the array branch of the single-entity conflict
+    // lookup (#8334). Split out of the old OR filter; see conflict.ts detectConflictForEntity.
+    if (
+      where.entityIds?.has !== undefined &&
+      !(Array.isArray(op.entityIds) && op.entityIds.includes(where.entityIds.has))
+    ) {
+      return false;
+    }
     if (where.clientId !== undefined) {
       if (typeof where.clientId === 'object' && where.clientId !== null) {
         if (where.clientId.not !== undefined && op.clientId === where.clientId.not) {
@@ -221,6 +229,16 @@ vi.mock('../src/db', () => {
             return { count };
           }),
           findUnique: vi.fn().mockImplementation(async (args: any) => {
+            // (user_id, server_seq) compound unique — used by the conflict lookup's
+            // array branch to fetch the winning row once its max serverSeq is known.
+            const compound = args.where?.userId_serverSeq;
+            if (compound) {
+              const match = Array.from(testData.operations.values()).find(
+                (op: any) =>
+                  op.userId === compound.userId && op.serverSeq === compound.serverSeq,
+              );
+              return applySelect(match, args.select) || null;
+            }
             // Check if operation with given ID exists
             return (
               applySelect(testData.operations.get(args.where?.id), args.select) || null
@@ -248,7 +266,19 @@ vi.mock('../src/db', () => {
               matchesWhere(op, args.where),
             ).length;
           }),
-          aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          aggregate: vi.fn().mockImplementation(async (args: any) => {
+            // The conflict lookup's array branch asks for _max.serverSeq over
+            // `entity_ids @> ARRAY[id]`; other callers still expect the _min default.
+            if (args?._max?.serverSeq) {
+              const seqs = Array.from(testData.operations.values())
+                .filter((op) => matchesWhere(op, args.where))
+                .map((op: any) => op.serverSeq);
+              return {
+                _max: { serverSeq: seqs.length ? Math.max(...seqs) : null },
+              };
+            }
+            return { _min: { serverSeq: 1 } };
+          }),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
         userSyncState: {

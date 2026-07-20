@@ -7,8 +7,8 @@ import type { Operation } from '../src/sync/sync.types';
  * (detectConflict → detectConflictForEntity). It exercises the REAL function
  * against a tx mock modelling how production persists ops: multi-entity ops carry
  * the full entity_ids array, single-entity ops store []. detectConflictForEntity
- * matches an entity via a Prisma `OR: [{entityId}, {entityIds:{has}}]` filter,
- * which the mock's findFirst reproduces.
+ * matches an entity with a scalar `entityId` lookup plus a separate
+ * `entityIds: { has }` max-serverSeq lookup, which the mock below reproduces.
  *
  * The batch lookup paths (raw unnest SQL) are validated separately against real
  * Postgres semantics and in conflict-detection.spec.ts.
@@ -23,26 +23,42 @@ type StoredRow = {
   vectorClock: Record<string, number>;
 };
 
-const makeTx = (rows: StoredRow[]): any => ({
-  operation: {
-    // Mirrors: where { userId, entityType, OR: [{entityId:X}, {entityIds:{has:X}}] }
-    findFirst: async ({ where }: any) => {
-      const target =
-        where.OR.find((c: any) => 'entityId' in c)?.entityId ??
-        where.OR.find((c: any) => c.entityIds?.has !== undefined)?.entityIds?.has;
-      return (
-        rows
-          .filter(
-            (r) =>
-              r.userId === where.userId &&
-              r.entityType === where.entityType &&
-              (r.entityId === target || r.entityIds.includes(target)),
-          )
-          .sort((a, b) => b.serverSeq - a.serverSeq)[0] ?? null
-      );
+// detectConflictForEntity issues the scalar and array halves as two separately
+// indexed queries (a single OR + ORDER BY ... LIMIT 1 degenerated into a full
+// history scan and took production down — see the PERF note in conflict.ts).
+// This mock mirrors that three-call shape and throws on the old OR filter so a
+// silent revert cannot pass here.
+const makeTx = (rows: StoredRow[]): any => {
+  const scoped = (where: any): StoredRow[] =>
+    rows.filter((r) => r.userId === where.userId && r.entityType === where.entityType);
+  return {
+    operation: {
+      // Scalar branch: where { userId, entityType, entityId }, orderBy serverSeq desc.
+      findFirst: async ({ where }: any) => {
+        if (where.OR) {
+          throw new Error('detectConflictForEntity must not use a combined OR filter');
+        }
+        return (
+          scoped(where)
+            .filter((r) => r.entityId === where.entityId)
+            .sort((a, b) => b.serverSeq - a.serverSeq)[0] ?? null
+        );
+      },
+      // Array branch: MAX(server_seq) over entity_ids @> ARRAY[id].
+      aggregate: async ({ where }: any) => {
+        const seqs = scoped(where)
+          .filter((r) => r.entityIds.includes(where.entityIds.has))
+          .map((r) => r.serverSeq);
+        return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
+      },
+      // Winning array-branch row, fetched by the (user_id, server_seq) unique key.
+      findUnique: async ({ where }: any) => {
+        const { userId, serverSeq } = where.userId_serverSeq;
+        return rows.find((r) => r.userId === userId && r.serverSeq === serverSeq) ?? null;
+      },
     },
-  },
-});
+  };
+};
 
 const staleOp = (entityId: string): Operation =>
   ({

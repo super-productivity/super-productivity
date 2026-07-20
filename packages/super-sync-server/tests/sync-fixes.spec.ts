@@ -144,7 +144,11 @@ vi.mock('../src/db', () => {
                 return true;
               }).length;
             }),
-            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+            // _max mirrors the conflict lookup's entity_ids branch; null matches the
+            // findFirst above, which finds no prior op for an entity either.
+            aggregate: vi
+              .fn()
+              .mockResolvedValue({ _min: { serverSeq: 1 }, _max: { serverSeq: null } }),
             findUnique: vi.fn().mockImplementation(async (args: any) => {
               if (args.where?.id) {
                 return (

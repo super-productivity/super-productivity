@@ -12,6 +12,7 @@ export const testState = {
   serverSeqCounter: 0,
   batchConflictQueryCount: 0,
   entityConflictFindFirstCount: 0,
+  entityConflictAggregateCount: 0,
   fullStateAuthorLookupCount: 0,
 };
 
@@ -23,6 +24,7 @@ export function resetTestState(): void {
   testState.serverSeqCounter = 0;
   testState.batchConflictQueryCount = 0;
   testState.entityConflictFindFirstCount = 0;
+  testState.entityConflictAggregateCount = 0;
   testState.fullStateAuthorLookupCount = 0;
 }
 

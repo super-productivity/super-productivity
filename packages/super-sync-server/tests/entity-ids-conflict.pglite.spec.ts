@@ -105,26 +105,46 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     return res.rows;
   };
 
-  // detectConflictForEntity() — single entity, Prisma `OR: [{entityId}, {entityIds:{has}}]`
-  // which Prisma renders as `entity_id = $1 OR entity_ids @> ARRAY[$1]`.
+  // detectConflictForEntity() — single entity. The scalar and entity_ids halves are
+  // two separately-indexed queries whose higher server_seq wins; they were one OR +
+  // ORDER BY ... LIMIT 1 until that scanned whole histories in production (see the
+  // PERF note in conflict.ts and conflict-entity-lookup-plan.pglite.spec.ts). The
+  // union SEMANTICS asserted below are identical either way, which is the point.
   const detectForEntity = async (
     entityType: string,
     id: string,
   ): Promise<LatestRow | null> => {
-    const res = await db.query<LatestRow>(
-      `SELECT o.entity_id AS "entityId",
-              o.client_id AS "clientId",
-              o.server_seq AS "serverSeq",
-              o.vector_clock AS "vectorClock"
-       FROM operations o
-       WHERE o.user_id = 1
-         AND o.entity_type = $1
-         AND (o.entity_id = $2 OR o.entity_ids @> ARRAY[$2]::text[])
-       ORDER BY o.server_seq DESC
-       LIMIT 1`,
+    const cols = `o.entity_id AS "entityId",
+                  o.client_id AS "clientId",
+                  o.server_seq AS "serverSeq",
+                  o.vector_clock AS "vectorClock"`;
+    const scalar = await db.query<LatestRow>(
+      `SELECT ${cols} FROM operations o
+       WHERE o.user_id = 1 AND o.entity_type = $1 AND o.entity_id = $2
+       ORDER BY o.server_seq DESC LIMIT 1`,
       [entityType, id],
     );
-    return res.rows[0] ?? null;
+    // The OFFSET 0 fence is deliberate — it is what Prisma's aggregate() emits and
+    // what keeps this off an ordered LIMIT-1 backward walk.
+    const arrayMax = await db.query<{ max: number | null }>(
+      `SELECT MAX(o.server_seq) AS max FROM (
+         SELECT server_seq FROM operations
+         WHERE user_id = 1 AND entity_type = $1 AND entity_ids @> ARRAY[$2]::text[]
+         OFFSET 0
+       ) o`,
+      [entityType, id],
+    );
+
+    const scalarRow = scalar.rows[0] ?? null;
+    const maxSeq = arrayMax.rows[0]?.max ?? null;
+    if (maxSeq === null || Number(maxSeq) <= Number(scalarRow?.serverSeq ?? -1)) {
+      return scalarRow;
+    }
+    const winner = await db.query<LatestRow>(
+      `SELECT ${cols} FROM operations o WHERE o.user_id = 1 AND o.server_seq = $1`,
+      [maxSeq],
+    );
+    return winner.rows[0] ?? null;
   };
 
   // prefetchLatestEntityOpsForBatch() — multi-entity-TYPE batch via a JOIN over

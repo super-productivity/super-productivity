@@ -219,24 +219,116 @@ export const detectConflictForEntity = async (
   // member of entity_ids. Single-entity ops store an empty array and are matched
   // via the scalar; pre-migration rows likewise fall back to the scalar (#8334).
   //
-  // PERF: the OR spans the entity_id btree + the entity_ids GIN, so the planner
-  // uses a BitmapOr + sort rather than an ordered LIMIT-1 walk. Bounded by one
-  // entity's stored version depth (op-log pruning keeps that small, so the sort is
-  // sub-ms in practice). If a real-Postgres EXPLAIN on a deep-history entity ever
-  // shows this hot path (run per single-entity upload) is a problem, split into two
-  // ordered LIMIT-1 lookups (scalar btree + entity_ids GIN) and take the higher
-  // server_seq — the array branch stays small because entity_ids is multi-entity-only.
-  // The batch unnest paths (detectConflictForEntities / prefetchLatestEntityOpsForBatch)
-  // carry the larger sort, so EXPLAIN those first under heavy-user latency.
-  const existingOp = await tx.operation.findFirst({
-    where: {
-      userId,
-      entityType: op.entityType,
-      OR: [{ entityId }, { entityIds: { has: entityId } }],
-    },
+  // PERF — this must stay TWO separately-indexed lookups. It was one Prisma filter
+  // (`OR: [{ entityId }, { entityIds: { has: entityId } }]` +
+  // `orderBy: { serverSeq: 'desc' }`), and that took production down. The OR spans
+  // two different indexes — the (user_id, entity_type, entity_id, server_seq) btree
+  // and the entity_ids GIN — and GIN cannot supply server_seq ordering, so the
+  // planner abandons BOTH index paths and walks (user_id, server_seq) backwards
+  // applying the OR as a filter, betting `LIMIT 1` is satisfied early. For an entity
+  // with no matching rows — the first-ever op for a new task, the single most common
+  // upload there is — that bet loses and it scans the user's entire operation
+  // history, worst for the deepest histories.
+  //
+  // Live evidence (sync.super-productivity.com): 47 backends stuck on exactly this
+  // query, the longest running 75 MINUTES, wait_event=DataFileRead, 61 of 66
+  // connections active → Prisma pool exhaustion → every user's upload AND download
+  // failing with "Unable to start a transaction in the given time". Not a missing
+  // index: every index on `operations` was valid. The previous comment here asserted
+  // the planner would pick a BitmapOr + sort instead; production disproved that.
+  //
+  // Why it looked fine and then wasn't: the planner only takes the walk when it has
+  // NO array-element statistics for entity_ids. Without them it falls back to a
+  // default `@>` selectivity (0.5%) and estimates ~150 of 30k rows match, so LIMIT 1
+  // looks like it exits after ~200 rows. Populate entity_ids on even 6 rows in 30k
+  // and ANALYZE, and the estimate drops to ~1 row and BitmapOr wins. Empty is the
+  // DEPLOYED state: entity_ids was added by 20260613000000 with no backfill, and
+  // getStoredEntityIds stores [] for every single-entity op. Statistics are also
+  // table-wide, so if ANALYZE's sample holds no non-empty array, every user's
+  // uploads degenerate at once — a cliff, not a gradual slope. Re-EXPLAIN on a
+  // table with populated entity_ids and you will wrongly conclude this is fine;
+  // conflict-entity-lookup-plan.pglite.spec.ts pins the real conditions.
+  //
+  // Carried over from the comment this replaces: the batch unnest paths
+  // (detectConflictForEntities / prefetchLatestEntityOpsForBatch) rest on the same
+  // missing entity_ids statistics. They are NOT exposed to this trap — no LIMIT, and
+  // DISTINCT ON forces full evaluation of the matching set, so the "LIMIT 1 exits
+  // early" bet cannot be made — but EXPLAIN them first if heavy-user latency returns.
+  //
+  // Scalar branch: the (user_id, entity_type, entity_id, server_seq) btree covers all
+  // three equality columns PLUS the sort column, so this is a direct index seek and a
+  // one-step backward walk. No trap — the ORDER BY is served by the index itself.
+  const scalarOp = await tx.operation.findFirst({
+    where: { userId, entityType: op.entityType, entityId },
     select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
     orderBy: { serverSeq: 'desc' },
   });
+
+  // Array branch — deliberately an aggregate, NOT
+  // `findFirst({ entityIds: { has: entityId }, orderBy: { serverSeq: 'desc' } })`.
+  // That naive form REINTRODUCES the incident above: GIN still cannot order, so the
+  // planner can still choose the LIMIT-driven backward walk (verified — it produces
+  // a byte-identical bad plan; pinned by conflict-entity-lookup-plan.pglite.spec.ts).
+  //
+  // Prisma compiles `aggregate` to `SELECT MAX(x) FROM (SELECT ... OFFSET 0) sub`,
+  // and that `OFFSET 0` is a Postgres planner optimization fence. Here the fence is
+  // exactly what we want: it FORBIDS the ordered LIMIT-1 walk and forces the GIN
+  // bitmap path, whose cost is bounded by actually-matching rows (zero, for a new
+  // entity). This is the SAME construct that caused a DIFFERENT incident in
+  // 410dac6785 (op-download minSeq), where a first-row index seek WAS wanted and the
+  // fence prevented it. Right here, wrong there — do not "optimize" this back into a
+  // findFirst. Sequential, never Promise.all: `tx` is a single-connection interactive
+  // transaction client and concurrent queries on it are unsafe.
+  //
+  // Verified against production Postgres (user with 88k ops, probing an entity id with
+  // zero matches — the pathological case): this branch plans as
+  // Aggregate → Bitmap Heap Scan → Bitmap Index Scan on operations_entity_ids_gin.
+  // Measured AFTER an ANALYZE and a GIN pending-list flush: old OR shape 12 buffers,
+  // this split 9 (scalar 4 + array 5). In that regime the two are COMPARABLE — the
+  // point of the split is not throughput, it is that neither branch offers the planner
+  // a LIMIT-driven early-exit bet, so it cannot degenerate into the backward walk no
+  // matter what the statistics say. (Wall-clock on a live server is too noisy to quote:
+  // the same old-shape query measured 255ms and 915ms on consecutive runs while its
+  // buffer count fell. Compare buffers, not milliseconds.)
+  //
+  // The old shape stays one autovacuum re-sample away from the incident plan: even
+  // post-ANALYZE the planner still estimates rows=96 for a zero-match `entity_ids @>`
+  // key, so the selectivity estimate is NOT fixed — the good plan is luck holding.
+  //
+  // LOAD-BEARING AND UNTESTED: the fence is a Prisma implementation detail. The PGlite
+  // spec hand-writes the SQL rather than invoking Prisma, so if a Prisma upgrade stops
+  // emitting `OFFSET 0`, the suite stays green while production silently regresses to
+  // the incident plan. On any Prisma major bump, re-run the EXPLAIN above before
+  // shipping.
+  const arrayBranchMax = await tx.operation.aggregate({
+    where: { userId, entityType: op.entityType, entityIds: { has: entityId } },
+    _max: { serverSeq: true },
+  });
+  const arrayBranchMaxSeq = arrayBranchMax._max.serverSeq ?? null;
+
+  // Fetch the array-branch row only when it actually beats the scalar branch.
+  // (user_id, server_seq) is UNIQUE, so this is a single indexed point lookup, and
+  // ties need no tie-break: an equal server_seq IS the same row.
+  //
+  // NEGATIVE_INFINITY, not -1: server_seq is >= 1 today, so -1 would work — but if a
+  // sentinel ever collided the array branch would lose to a non-existent scalar row
+  // and the op would be accepted as conflict-free, silently overwriting a remote edit.
+  // Sentinel-free comparison costs nothing and removes that failure mode entirely.
+  const arrayOp =
+    arrayBranchMaxSeq !== null &&
+    arrayBranchMaxSeq > (scalarOp?.serverSeq ?? Number.NEGATIVE_INFINITY)
+      ? await tx.operation.findUnique({
+          where: { userId_serverSeq: { userId, serverSeq: arrayBranchMaxSeq } },
+          select: {
+            actionType: true,
+            clientId: true,
+            vectorClock: true,
+            serverSeq: true,
+          },
+        })
+      : null;
+
+  const existingOp = arrayOp ?? scalarOp;
 
   // Histories written before schema v2 persist migrated task settings under
   // the raw `GLOBAL_CONFIG:misc` key. Consult that key as an alias when the

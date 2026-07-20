@@ -141,23 +141,10 @@ vi.mock('../src/db', async () => {
             .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
           return applyOperationSelect(ops[0], args.select) || null;
         }
-        if (args.where?.entityType && Array.isArray(args.where?.OR)) {
-          const targetEntityId =
-            args.where.OR.find((condition: any) => condition.entityId !== undefined)
-              ?.entityId ??
-            args.where.OR.find((condition: any) => condition.entityIds?.has !== undefined)
-              ?.entityIds.has;
-          const ops = Array.from(state.operations.values())
-            .filter(
-              (op: any) =>
-                op.userId === args.where.userId &&
-                op.entityType === args.where.entityType &&
-                (op.entityId === targetEntityId ||
-                  op.entityIds?.includes(targetEntityId)),
-            )
-            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return applyOperationSelect(ops[0], args.select) || null;
-        }
+        // Scalar branch of the single-entity conflict lookup. The entity_ids half is
+        // a separate aggregate() call; the two were one OR + ORDER BY ... LIMIT 1
+        // until that degenerated into a full history scan in production (see the
+        // PERF note in conflict.ts detectConflictForEntity).
         if (args.where?.entityId && args.where?.entityType) {
           const ops = Array.from(state.operations.values())
             .filter(
@@ -219,6 +206,22 @@ vi.mock('../src/db', async () => {
           .slice(0, args.take || 500);
       }),
       aggregate: vi.fn().mockImplementation(async (args: any) => {
+        // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+        // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max
+        // the generic branch below returns (see conflict.ts detectConflictForEntity).
+        const conflictEntityId = args.where?.entityIds?.has;
+        if (conflictEntityId !== undefined) {
+          const seqs = Array.from(state.operations.values())
+            .filter(
+              (op: any) =>
+                op.userId === args.where.userId &&
+                op.entityType === args.where.entityType &&
+                Array.isArray(op.entityIds) &&
+                op.entityIds.includes(conflictEntityId),
+            )
+            .map((op: any) => op.serverSeq);
+          return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
+        }
         const ops = Array.from(state.operations.values()).filter(
           (op: any) => args.where?.userId === op.userId,
         );
@@ -281,6 +284,16 @@ vi.mock('../src/db', async () => {
         return count;
       }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
+        // (user_id, server_seq) compound unique — fetches the conflict lookup's
+        // array-branch winner once its max serverSeq is known.
+        const compound = args.where?.userId_serverSeq;
+        if (compound) {
+          const match = Array.from(state.operations.values()).find(
+            (op: any) =>
+              op.userId === compound.userId && op.serverSeq === compound.serverSeq,
+          );
+          return applyOperationSelect(match, args.select) || null;
+        }
         if (args.where?.id) {
           return (
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
