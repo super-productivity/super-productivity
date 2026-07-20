@@ -261,7 +261,17 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > `packages/super-sync-server/tests/conflict-entity-lookup-plan.pglite.spec.ts` and the note
   > at `detectConflictForEntity` in `packages/super-sync-server/src/sync/conflict.ts`.
 
-- `detectConflictForEntities` / `prefetchLatestEntityOpsForBatch` (batch) — raw SQL unnesting `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id] END`, with a `entity_ids && ... OR entity_id = ANY(...)` prefilter so the `GIN(entity_ids)` index (migration `20260613000001`) and the existing `entity_id` btree stay usable.
+- `detectConflictForEntities` / `prefetchLatestEntityOpsForBatch` (batch) — raw SQL unnesting the **union** of both columns, `entity_ids || CASE WHEN entity_id IS NULL THEN '{}' ELSE ARRAY[entity_id] END`, deduped by `DISTINCT ON`, with an `entity_ids && ... OR entity_id = ANY(...)` prefilter so the `GIN(entity_ids)` index (migration `20260613000001`) and the existing `entity_id` btree stay usable.
+
+  > ⚠️ It must be a **union**, not the mutually exclusive
+  > `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id] END`
+  > this section used to document. The server does **not** enforce
+  > `entity_id === entityIds[0]`, so a multi-entity op can carry a scalar that is not a
+  > member of its own `entity_ids` (see `getStoredEntityIds`). The exclusive form drops
+  > that scalar whenever the array is non-empty, making the entity invisible to conflict
+  > lookups — a later concurrent write to it is wrongly accepted, which is **silent data
+  > loss**. That was the #8334 bug; the divergent-scalar case is the decisive test in
+  > `tests/integration/conflict-detection-sql.integration.spec.ts`.
 
 **Forward-only by design:** rows written before migration `20260613000000` have an empty `entity_ids` array and fall back to the scalar `entity_id` (= first entity) in the `CASE` expression / scalar branch above — there is no `UPDATE` backfill. Entities 2..n of already-stored multi-entity ops were never persisted and are unrecoverable, so they remain invisible to conflict detection until that entity gets a fresh write. This residual is bounded: client-side LWW is unaffected (the client persists the full op and `VectorClockService.getEntityFrontier()` fans each op out to **every** entity), and the server only builds an authoritative snapshot from non-encrypted ops (`replayOpsToState()` throws on encrypted ops), so the pre-fix gap could only surface a stale value to a fresh client on non-encrypted self-hosted servers.
 

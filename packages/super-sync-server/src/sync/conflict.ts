@@ -243,10 +243,19 @@ export const detectConflictForEntity = async (
 
   // Array branch — raw SQL, and the MATERIALIZED CTE is load-bearing.
   //
-  // The CTE wins STRUCTURALLY, not on cost: inside it the only predicate is
-  // `entity_ids @> ...`, so the composite btree has no usable leading column and GIN is
-  // the only index available at ANY cost estimate. MATERIALIZED is what stops the outer
-  // user_id / entity_type predicates being pushed down, which would hand the btree back.
+  // What the CTE removes structurally is the COMPETING BTREE: inside it the only
+  // predicate is `entity_ids @> ...`, so the composite btree has no usable leading
+  // column and GIN is the only INDEX available at any cost estimate. MATERIALIZED is
+  // what stops the outer user_id / entity_type predicates being pushed down, which
+  // would hand the btree back.
+  //
+  // That is NOT a guarantee that GIN is chosen. A sequential scan is always still
+  // available, and wins when the probed id is unselective — both plans have been
+  // reproduced on PG16 depending on row shape (see the cross-tenant note below, where a
+  // shared id produces a Seq Scan). GIN winning on production-shaped data is a MEASURED
+  // outcome, not a structural one. Re-measure after any change rather than trusting
+  // this paragraph; a confidently-worded comment asserting what the planner "will" do
+  // is what preceded the outage.
   // Every simpler form reads the whole (user_id, entity_type) slice instead: the
   // array-only `findFirst` + `orderBy` (the outage), Prisma's `aggregate({ _max })`, and
   // the flat `SELECT MAX(server_seq) ... AND @>`.

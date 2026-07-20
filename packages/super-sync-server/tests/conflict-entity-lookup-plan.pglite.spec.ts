@@ -19,9 +19,13 @@ import type { Operation } from '../src/sync/sync.types';
  * fail here instead of passing against a stale copy.
  *
  * MEASURE WITH `force_generic_plan`, NEVER WITH LITERALS. Prisma sends parameterized
- * prepared statements, so production runs a GENERIC plan that cannot see parameter
- * values; EXPLAIN with literal constants yields a CUSTOM plan nobody receives. This
- * file once tested with literals and that blind spot passed two designs that were
+ * prepared statements, and under the default `auto` Postgres builds CUSTOM plans for the
+ * first ~5 executions before settling on a GENERIC one that cannot see parameter values.
+ * A hot path lives in that steady state, so generic is the mode that matters — but note
+ * production does receive custom plans too, and this file does not cover them (a
+ * custom-plan-only regression is possible; see the rejected `server_seq >` narrowing in
+ * conflict.ts). `EXPLAIN` with literal constants is a third thing again, and is the trap:
+ * this file once tested that way and the blind spot passed two designs that were
  * catastrophic in production. EVERYTHING here — including the shim — goes through
  * explainGeneric. If you add a shape, use explainGeneric.
  *
@@ -420,12 +424,16 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     expect(result.hasConflict).toBe(false);
     expectWithinBudget(stats);
 
-    // Structural, and on the REAL template rather than a copy of it: inside the CTE the
-    // only predicate is `entity_ids @> ...`, so the composite btree has no usable
-    // leading column and GIN is the only index available AT ANY COST ESTIMATE. That is
-    // why the shape survives generic planning. Every regression form — inlining the
-    // CTE, flattening it, reinstating the OR — reaches the btree instead, so this
-    // catches them structurally even if a future seed stops blowing the budget.
+    // Asserted on the REAL template rather than a copy of it. Inside the CTE the only
+    // predicate is `entity_ids @> ...`, so the composite btree has no usable leading
+    // column and GIN is the only INDEX available at any cost estimate — that much is
+    // structural, and it is why every regression form (inlining the CTE, flattening it,
+    // reinstating the OR) reaches the btree instead and is caught here even if a future
+    // seed stops blowing the budget.
+    //
+    // It does NOT prove GIN is forced: a sequential scan remains available at any time
+    // and wins for an unselective id (a globally shared entity id does exactly that).
+    // This pins the MEASURED plan for this seed, not a guarantee.
     expect(stats.rawSql).toHaveLength(1);
     const arrayBranchPlan = stats.nodes[stats.sql.indexOf(stats.rawSql[0])];
     expect(arrayBranchPlan).toContain('operations_entity_ids_gin');
