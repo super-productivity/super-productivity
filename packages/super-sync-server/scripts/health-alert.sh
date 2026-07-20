@@ -215,7 +215,7 @@ HASH_INPUT=$(printf '%s' "$PROBLEMS" | sed \
    s/([0-9]* entries/(N entries/g
    s/at [0-9]*% on/at N% on/g
    s/HTTP [0-9]*/HTTP NNN/g
-   s/[0-9]* query(s) active longer than [0-9]*s (longest: [0-9]*s)/N query(s) active longer than Ns (longest: Ns)/g
+   s/[0-9]* query(s) active longer than [0-9]*s (longest: [0-9?]*s)/N query(s) active longer than Ns (longest: Ns)/g
    s/pool [0-9]*% saturated ([0-9]* active \/ [0-9]* limit)/pool N% saturated (N active \/ N limit)/g')
 CURRENT_HASH=$(printf '%s' "$HASH_INPUT" | sha256sum | cut -d' ' -f1)
 PREVIOUS_HASH=$(cat "$ALERT_STATE_FILE" 2>/dev/null || echo "none")
@@ -237,14 +237,20 @@ if [ -n "$PROBLEMS" ]; then
     fi
   fi
 else
-  # All clear — send recovery notification, only delete state if mail succeeds
-  if [ -f "$ALERT_STATE_FILE" ]; then
+  # All clear — send recovery notification, only delete state if mail succeeds.
+  # Also runs when only the mail-failed marker is present: a failed alert send
+  # leaves no state file, so without this the marker (and deploy.sh's warning)
+  # would survive every later healthy run and never clear. Retrying here doubles
+  # as the proof that delivery works again.
+  if [ -f "$ALERT_STATE_FILE" ] || [ -f "$ALERT_STATE_DIR/mail-failed" ]; then
     if printf 'SuperSync health check recovered at %s\n\nAll checks passing.\nServer: %s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(hostname)" \
         | timeout 30 mail -s "SuperSync OK: Health Check Recovered" "$ALERT_EMAIL" 2>/dev/null; then
       rm -f "$ALERT_STATE_FILE"
+      rm -f "$ALERT_STATE_DIR/mail-failed"
     else
       echo "ERROR: Failed to send recovery email" >&2
+      date -u +%Y-%m-%dT%H:%M:%SZ > "$ALERT_STATE_DIR/mail-failed"
     fi
   fi
 fi
