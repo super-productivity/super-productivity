@@ -781,6 +781,53 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     expect((await detect('scoped-target', {}, OTHER_USER_ID)).hasConflict).toBe(true);
   });
 
+  // The CTE matches entity_ids across ALL users and types; only the OUTER user_id /
+  // entity_type predicates restore isolation. Both were uncovered — replacing them with
+  // typed tautologies left all 915 tests green. The failure is silent rather than empty
+  // because server_seq is per-user: a leaked MAX still resolves to a REAL row of the
+  // requesting user through the (user_id, server_seq) point lookup, so an unrelated op
+  // becomes the conflict basis. Each case below seeds exactly that collision.
+  it('does not take the array-branch MAX from ANOTHER user', async () => {
+    await seed({
+      userId: OTHER_USER_ID,
+      id: 'op-cross-tenant',
+      serverSeq: 9001,
+      clientId: 'tenant-a',
+      entityId: 'tenant-a-primary',
+      entityIds: ['tenant-a-primary', 'cross-tenant-entity'],
+      vectorClock: { 'tenant-a': 1 },
+    });
+    // Same server_seq under the REQUESTING user, unrelated entity, concurrent clock.
+    // Reachable only if the CTE leaks the other tenant's sequence.
+    await seed({
+      id: 'op-decoy-same-seq',
+      serverSeq: 9001,
+      clientId: 'decoy',
+      entityId: 'unrelated-to-the-probe',
+      vectorClock: { decoy: 5 },
+    });
+
+    // USER_ID has never touched cross-tenant-entity, so nothing can conflict.
+    expect((await detect('cross-tenant-entity')).hasConflict).toBe(false);
+  });
+
+  it('does not take the array-branch MAX from another ENTITY TYPE', async () => {
+    // Same user and same entity id, but the only op carrying it is a PROJECT op while
+    // the incoming op is a TASK. Dropping the entity_type predicate fetches this very
+    // row (it belongs to USER_ID), and its concurrent clock invents a conflict.
+    await seed({
+      id: 'op-cross-type',
+      serverSeq: 9002,
+      clientId: 'other-type',
+      entityType: 'PROJECT',
+      entityId: 'proj-primary',
+      entityIds: ['proj-primary', 'cross-type-entity'],
+      vectorClock: { 'other-type': 9 },
+    });
+
+    expect((await detect('cross-type-entity')).hasConflict).toBe(false);
+  });
+
   it('ignores a full-state op (entity_id NULL, entity_ids {}) without erroring', async () => {
     await seed({ id: 'op-full', serverSeq: 8, clientId: 'other', entityId: null });
 

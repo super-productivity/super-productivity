@@ -253,9 +253,11 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > outage query, the naive array-only `LIMIT 1`, the flat `MAX`, Prisma's `aggregate({ _max })`
   > and the CTE with `MATERIALIZED` dropped **all** read the user's whole entity-type slice,
   > against 143 blocks and 0 discarded for the shipped form. The **816 blocks / 2500 rows
-  > discarded** figure is the outage query specifically, and it is the only one still pinned
-  > by a test (the `CANARY` case in `conflict-entity-lookup-plan.pglite.spec.ts`); the other
-  > four were measured during the investigation but are not guarded against regression.
+  > discarded** figure is the outage query specifically, pinned by the `CANARY` case in
+  > `conflict-entity-lookup-plan.pglite.spec.ts`. The other four are not unguarded: that
+  > spec rebuilds the array branch from the live tagged template, so dropping `MATERIALIZED`
+  > or flattening the `MAX` blows the block budget and fails there (verified by mutation).
+  > What is _not_ pinned is their individual historical block counts.
   >
   > Measure any change here with `SET plan_cache_mode = force_generic_plan`. Prisma sends
   > parameterized prepared statements; under `auto` Postgres plans the first ~5 executions as
