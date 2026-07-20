@@ -204,9 +204,11 @@ export const resolveConflictForExistingOp = (
 };
 
 /**
- * Checks conflicts for the common single-entity upload path using Prisma's
- * typed model API. Multi-entity operations use the batched raw-SQL path above
- * to avoid one round trip per entity.
+ * Checks conflicts for the common single-entity upload path. TWO separately-indexed
+ * lookups: a typed `findFirst` on the scalar entity_id, plus a raw-SQL MATERIALIZED CTE
+ * over entity_ids — see the PERF note below, the combined filter caused an outage.
+ * Multi-entity operations use the batched raw-SQL path above instead, to avoid one round
+ * trip per entity.
  */
 export const detectConflictForEntity = async (
   userId: number,
@@ -261,10 +263,16 @@ export const detectConflictForEntity = async (
   // the flat `SELECT MAX(server_seq) ... AND @>`.
   //
   // Do NOT "simplify" this without measuring under `plan_cache_mode =
-  // force_generic_plan` — Prisma sends parameterized prepared statements, so EXPLAIN
-  // with literal constants shows a custom plan production never gets, and every one of
-  // those forms looks perfect that way. conflict-entity-lookup-plan.pglite.spec.ts
-  // measures it correctly and fails on a block budget.
+  // force_generic_plan`. Prisma sends parameterized prepared statements; under the
+  // default `auto` Postgres plans the first ~5 executions as CUSTOM, then compares the
+  // generic cost against the average custom cost and MAY switch to a generic plan. That
+  // is a cost comparison, not an automatic switch — a statement can stay on custom plans
+  // indefinitely. THIS statement was observed going generic on production
+  // (pg_prepared_statements: custom_plans=5, generic_plans=15), and a generic plan cannot
+  // see the parameter values. `EXPLAIN` with literal constants is different again, and
+  // every broken form above looks perfect that way.
+  // conflict-entity-lookup-plan.pglite.spec.ts measures the generic mode correctly and
+  // fails on a block budget; it does NOT cover custom plans.
   //
   // Adding `server_seq > <scalar seq>` to narrow the CTE was evaluated and REJECTED:
   // under generic planning the bound is invisible, so it lands as a post-GIN Filter
@@ -305,9 +313,10 @@ export const detectConflictForEntity = async (
   `;
   // INVARIANT: an aggregate with no GROUP BY returns exactly one row, so the `?.`
   // fold below is unreachable and `maxSeq` is null only when nothing matched. Add a
-  // GROUP BY, or go back to Prisma's aggregate(), and zero rows becomes possible —
-  // at which point this reads as "no prior op" and the upload is ACCEPTED. The
-  // failure mode is silent acceptance of a conflicting write, not an error. No
+  // GROUP BY and zero rows becomes possible — at which point this reads as "no prior
+  // op" and the upload is ACCEPTED. (Prisma's bare `aggregate()` is NOT such a case:
+  // it returns one object with `_max.serverSeq: null`, so it fails differently. The
+  // failure mode is silent acceptance of a conflicting write, not an error.) No
   // runtime guard here on purpose (it could never fire today); if you change the
   // shape of this query, change this fold with it.
   const arrayBranchMaxSeq = arrayBranchRows[0]?.maxSeq ?? null;

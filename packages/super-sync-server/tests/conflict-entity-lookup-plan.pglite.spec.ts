@@ -19,10 +19,12 @@ import type { Operation } from '../src/sync/sync.types';
  * fail here instead of passing against a stale copy.
  *
  * MEASURE WITH `force_generic_plan`, NEVER WITH LITERALS. Prisma sends parameterized
- * prepared statements, and under the default `auto` Postgres builds CUSTOM plans for the
- * first ~5 executions before settling on a GENERIC one that cannot see parameter values.
- * A hot path lives in that steady state, so generic is the mode that matters — but note
- * production does receive custom plans too, and this file does not cover them (a
+ * prepared statements; under the default `auto` Postgres plans the first ~5 executions as
+ * CUSTOM, then compares the generic cost against the average custom cost and MAY switch to
+ * a generic plan — a cost comparison, not an automatic switch, so a statement can stay on
+ * custom plans indefinitely. THIS one was observed going generic on production, and a
+ * generic plan cannot see parameter values, so that is the mode this file covers.
+ * Production also serves custom plans and this file does NOT cover them (a
  * custom-plan-only regression is possible; see the rejected `server_seq >` narrowing in
  * conflict.ts). `EXPLAIN` with literal constants is a third thing again, and is the trap:
  * this file once tested that way and the blind spot passed two designs that were
@@ -86,7 +88,10 @@ const CREATE_TABLE = `
     id             text PRIMARY KEY,
     user_id        integer NOT NULL,
     client_id      text NOT NULL,
-    server_seq     bigint NOT NULL,
+    -- integer, NOT bigint: production maps serverSeq as Prisma Int. Declaring bigint
+    -- here made MAX() return bigint, which the shim's Number() coercion then hid, so
+    -- dropping the ::int cast from the production SQL would have stayed green.
+    server_seq     integer NOT NULL,
     action_type    text NOT NULL,
     entity_type    text NOT NULL,
     entity_id      text,

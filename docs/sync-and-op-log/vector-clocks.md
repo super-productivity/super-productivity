@@ -168,7 +168,7 @@ With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both si
 
 ### Server-Side Flow
 
-1. Server finds the latest operation for the same entity (`findFirst` by `entityType + entityId`, ordered by `serverSeq desc`)
+1. Server finds the latest operation for the same entity — **two separately-indexed lookups**, a scalar `findFirst` plus a raw-SQL `MATERIALIZED` CTE over `entity_ids`, taking whichever has the higher `serverSeq`. Deliberately NOT one combined filter; see the multi-entity section below for why that caused an outage.
 2. Compares incoming clock vs existing clock using the **full unpruned** incoming clock
 3. Possible outcomes:
    - `GREATER_THAN` → **accept** (incoming op causally succeeds existing)
@@ -255,9 +255,12 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > 816 blocks and 2500 rows discarded, against 143 blocks and 0 discarded for the shipped form.
   >
   > Measure any change here with `SET plan_cache_mode = force_generic_plan`. Prisma sends
-  > parameterized prepared statements, so Postgres settles on a **generic** plan after ~5
-  > executions, and `EXPLAIN` with literal constants builds a custom plan that makes every one
-  > of those broken shapes look perfect. See
+  > parameterized prepared statements; under `auto` Postgres plans the first ~5 executions as
+  > custom, then compares the generic cost against the average custom cost and **may** switch
+  > to a generic plan — a cost comparison, not an automatic switch, so some statements stay on
+  > custom plans indefinitely. This one was observed going generic on production, and a
+  > generic plan cannot see the parameter values. `EXPLAIN` with literal constants is
+  > different again and makes every one of those broken shapes look perfect. See
   > `packages/super-sync-server/tests/conflict-entity-lookup-plan.pglite.spec.ts` and the note
   > at `detectConflictForEntity` in `packages/super-sync-server/src/sync/conflict.ts`.
 
