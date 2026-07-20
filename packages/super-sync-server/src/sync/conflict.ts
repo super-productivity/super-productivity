@@ -243,24 +243,19 @@ export const detectConflictForEntity = async (
 
   // Array branch — raw SQL, and the MATERIALIZED CTE is load-bearing.
   //
-  // MEASURE WITH `SET plan_cache_mode = force_generic_plan`, NEVER WITH LITERALS.
-  // Prisma sends parameterized prepared statements, so Postgres builds a GENERIC plan
-  // that cannot see the parameter values; EXPLAIN with literal constants yields a
-  // CUSTOM plan production never receives. Every simpler form measures perfect under
-  // literals and reads the whole (user_id, entity_type) slice under generic planning —
-  // the array-only `findFirst` + `orderBy` (the outage), Prisma's
-  // `aggregate({ _max })` (`MAX(...) FROM (... OFFSET 0)`), and the natural-looking
-  // flat `SELECT MAX(server_seq) ... WHERE user_id=$ AND entity_type=$ AND @>`. The
-  // last two drop LIMIT's early-exit bet but still get the composite btree with
-  // `entity_ids @> $` demoted to a Filter.
-  //
   // The CTE wins STRUCTURALLY, not on cost: inside it the only predicate is
-  // `entity_ids @> ...`, so the composite btree has no usable leading column and GIN
-  // is the only index available at ANY cost estimate. MATERIALIZED stops the outer
-  // user_id / entity_type predicates being pushed down, which would hand the btree
-  // back. All four forms are measured against this one in
-  // conflict-entity-lookup-plan.pglite.spec.ts, which fails on a block budget if any
-  // of them is reintroduced — including dropping the MATERIALIZED keyword alone.
+  // `entity_ids @> ...`, so the composite btree has no usable leading column and GIN is
+  // the only index available at ANY cost estimate. MATERIALIZED is what stops the outer
+  // user_id / entity_type predicates being pushed down, which would hand the btree back.
+  // Every simpler form reads the whole (user_id, entity_type) slice instead: the
+  // array-only `findFirst` + `orderBy` (the outage), Prisma's `aggregate({ _max })`, and
+  // the flat `SELECT MAX(server_seq) ... AND @>`.
+  //
+  // Do NOT "simplify" this without measuring under `plan_cache_mode =
+  // force_generic_plan` — Prisma sends parameterized prepared statements, so EXPLAIN
+  // with literal constants shows a custom plan production never gets, and every one of
+  // those forms looks perfect that way. conflict-entity-lookup-plan.pglite.spec.ts
+  // measures it correctly and fails on a block budget.
   //
   // Adding `server_seq > <scalar seq>` to narrow the CTE was evaluated and REJECTED:
   // under generic planning the bound is invisible, so it lands as a post-GIN Filter
@@ -269,18 +264,23 @@ export const detectConflictForEntity = async (
   // full-index scan across every user's history.
   //
   // Isolation: the CTE matches by entity id across ALL users and the outer WHERE
-  // enforces the user boundary, so this is CORRECT but NOT cost-bounded per user.
-  // Entity ids are not all client-generated nanoids — the client hard-codes globally
-  // shared ids that are byte-identical for every user on the server: 'TODAY',
-  // 'EM_URGENT', 'EM_IMPORTANT', 'KANBAN_IN_PROGRESS' (tag.const.ts), 'INBOX_PROJECT'
-  // (project.const.ts), 'EISENHOWER_MATRIX', 'KANBAN_DEFAULT' (boards.const.ts), plus
-  // the fixed GLOBAL_CONFIG keys. `updateBoard({ id: 'KANBAN_DEFAULT' })` is
-  // single-entity, so it routes here and probes that literal across every tenant. At
-  // 200k ops / 2000 tenants that measured 3885 blocks to reach the 10 rows belonging
-  // to the probing user, against 4 blocks for a genuinely unique id — it scales with
-  // total server population, bounded by nothing. The fix is a btree_gin composite
-  // index on (user_id, entity_ids); it needs a real-Postgres EXPLAIN to confirm, as
-  // PGlite has no btree_gin.
+  // enforces the user boundary, so this is CORRECT but NOT cost-bounded per user. Some
+  // entity ids are byte-identical across every tenant: the bulk `sortBoards` action
+  // (boards.actions.ts) stores the hard-coded 'EISENHOWER_MATRIX' / 'KANBAN_DEFAULT'
+  // ids (boards.const.ts) in entity_ids, so probing one walks every tenant's matching
+  // rows and the cost scales with total server population, bounded by nothing.
+  // Single-entity writes against a shared id — updateTag({ id: 'TODAY' }),
+  // updateBoard({ id: 'KANBAN_DEFAULT' }) — are NOT a vector: getStoredEntityIds
+  // persists '{}' for them, so they never enter the GIN under that id at all.
+  //
+  // The fix is a GIN index on the expression (ARRAY['u:' || user_id] || entity_ids),
+  // which makes the probe flat. It needs no btree_gin extension (the operand is text[],
+  // served by the built-in array_ops) and is measurable in PGlite. Not done here
+  // because it is a real tradeoff, not a free win: this predicate must be rewritten to
+  // match the expression or the index is simply ignored, and it indexes EVERY row
+  // rather than only the multi-entity minority, so every insert maintains it. The outer
+  // user_id predicate stays load-bearing either way — the 'u:' prefix is a namespace,
+  // not a security boundary.
   //
   // Sequential, never Promise.all: `tx` is a single-connection interactive transaction
   // client and concurrent queries on it are unsafe.

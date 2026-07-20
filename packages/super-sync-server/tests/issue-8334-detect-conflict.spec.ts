@@ -22,6 +22,15 @@ type StoredRow = {
   clientId: string;
   serverSeq: number;
   vectorClock: Record<string, number>;
+  /**
+   * REQUIRED, not optional, on purpose. detectConflictForEntity reads
+   * existingOp.actionType to let two CONCURRENT time-tracking deltas merge instead of
+   * conflicting. A row shape that can omit it makes actionType silently `undefined` on
+   * the array branch, which is exactly how that merge gets lost without a red test.
+   * The merge itself is covered against real Postgres in
+   * conflict-entity-lookup-plan.pglite.spec.ts; this only keeps the mock honest.
+   */
+  actionType: string;
 };
 
 // detectConflictForEntity issues the scalar and array halves as two separately
@@ -46,9 +55,23 @@ const makeTx = (rows: StoredRow[]): any => {
         );
       },
       // Winning array-branch row, fetched by the (user_id, server_seq) unique key.
-      findUnique: async ({ where }: any) => {
+      // Honours `select` so that dropping a column from the production query — most
+      // consequentially actionType, see StoredRow — actually changes what this returns.
+      findUnique: async ({ where, select }: any) => {
         const { userId, serverSeq } = where.userId_serverSeq;
-        return rows.find((r) => r.userId === userId && r.serverSeq === serverSeq) ?? null;
+        const row = rows.find((r) => r.userId === userId && r.serverSeq === serverSeq);
+        if (!row) return null;
+        if (!select) return row;
+        return Object.fromEntries(
+          Object.entries(select)
+            .filter(([, isSelected]) => isSelected)
+            .map(([key]) => {
+              if (!(key in row)) {
+                throw new Error(`Mock row has no column "${key}"`);
+              }
+              return [key, row[key as keyof StoredRow]];
+            }),
+        );
       },
     },
     // Array branch: MAX(server_seq) over `entity_ids @> ARRAY[id]`, issued as raw
@@ -87,6 +110,7 @@ const staleOp = (entityId: string): Operation =>
 const multiEntityRow: StoredRow = {
   userId: 1,
   entityType: 'TASK',
+  actionType: 'UPDATE_TASK',
   entityId: 'task-1',
   entityIds: ['task-1', 'task-2'],
   clientId: 'A',
@@ -109,6 +133,7 @@ describe('#8334 detectConflict single-entity path', () => {
     const oldRow: StoredRow = {
       userId: 1,
       entityType: 'TASK',
+      actionType: 'UPDATE_TASK',
       entityId: 'task-3',
       entityIds: [], // pre-migration: empty array, only scalar persisted
       clientId: 'A',
