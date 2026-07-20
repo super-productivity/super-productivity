@@ -650,6 +650,38 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     expect((await detect('reverse-entity')).hasConflict).toBe(false);
   });
 
+  it('takes the NEWEST of several SCALAR matches, not the oldest', async () => {
+    // Every other case here gives an entity at most one scalar row, which makes the
+    // scalar branch's `orderBy: { serverSeq: 'desc' }` unobservable: asc and desc return
+    // the same row. Flipping it to 'asc' passed the whole server suite. That is a silent
+    // data-loss bug, not a style issue — conflict detection would compare the incoming
+    // clock against a STALE one, so an op that is a clean successor of the OLD state but
+    // CONCURRENT with the current one is accepted and overwrites a remote edit.
+    //
+    // Two scalar rows for one entity, chosen so the verdict differs by row:
+    //   vs seq 31 {cC:5} -> CONCURRENT (incoming has cA/cB, stored has cC) -> conflict
+    //   vs seq 30 {cB:1} -> GREATER_THAN (incoming is a clean successor)   -> accepted
+    await seed({
+      id: 'op-scalar-older',
+      serverSeq: 30,
+      clientId: 'cB',
+      entityId: 'scalar-order-entity',
+      vectorClock: { cB: 1 },
+    });
+    await seed({
+      id: 'op-scalar-newer',
+      serverSeq: 31,
+      clientId: 'cC',
+      entityId: 'scalar-order-entity',
+      vectorClock: { cC: 5 },
+    });
+
+    expect(
+      (await detect('scalar-order-entity', { vectorClock: { cA: 1, cB: 1 } }))
+        .hasConflict,
+    ).toBe(true);
+  });
+
   it('takes the NEWEST of several array-branch matches, not the oldest', async () => {
     // Two stored ops mention the same entity via entity_ids. The aggregate must be
     // MAX: against the newer row the incoming clock is CONCURRENT (conflict), against
