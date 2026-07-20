@@ -182,7 +182,7 @@ jobs:
         # .ruby-version file in the repo the action errors out rather than
         # using system Ruby. bundler-cache runs `bundle install` and caches the
         # ~210-gem fastlane tree so it isn't reinstalled each run.
-        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1.316.0
+        uses: ruby/setup-ruby@003a5c4d8d6321bd302e38f6f0ec593f77f06600 # v1.319.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
