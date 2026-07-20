@@ -231,6 +231,27 @@ describe('SuperSync HTTP contract schemas', () => {
     expect(parsed.capabilities?.causalRepairSnapshots).toBe(true);
   });
 
+  it('accepts legacy fractional schema versions in download responses', () => {
+    const operation = {
+      ...createValidOperation(),
+      schemaVersion: 1.5,
+    };
+    const parsed = SuperSyncDownloadOpsResponseSchema.parse({
+      ops: [
+        {
+          serverSeq: 1,
+          op: operation,
+          receivedAt: 1234567890,
+        },
+      ],
+      hasMore: false,
+      latestSeq: 1,
+    });
+
+    expect(parsed.ops[0].op.schemaVersion).toBe(1.5);
+    expect(() => SuperSyncOperationSchema.parse(operation)).toThrow();
+  });
+
   it('requires an operation ID for destructive clean-slate snapshots', () => {
     expect(() =>
       SuperSyncUploadSnapshotRequestSchema.parse({

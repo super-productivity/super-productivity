@@ -149,6 +149,18 @@ export const SuperSyncServerOperationSchema = z
   })
   .passthrough();
 
+// Legacy servers accepted finite numeric schema versions before integer
+// validation was added. Keep download parsing transport-compatible so the
+// client can classify unsupported versions per operation without rejecting
+// and permanently wedging the entire response page.
+const SuperSyncDownloadOperationSchema = SuperSyncOperationResponseSchema.extend({
+  schemaVersion: z.number(),
+});
+
+const SuperSyncDownloadServerOperationSchema = SuperSyncServerOperationSchema.extend({
+  op: SuperSyncDownloadOperationSchema,
+});
+
 export const SuperSyncUploadResultSchema = z
   .object({
     opId: z.string(),
@@ -171,7 +183,7 @@ export const SuperSyncUploadOpsResponseSchema = z
 
 export const SuperSyncDownloadOpsResponseSchema = z
   .object({
-    ops: z.array(SuperSyncServerOperationSchema),
+    ops: z.array(SuperSyncDownloadServerOperationSchema),
     hasMore: z.boolean(),
     latestSeq: z.number(),
     gapDetected: z.boolean().optional(),
