@@ -5,6 +5,10 @@
  * test infrastructure after the migration to Prisma.
  */
 import { vi, beforeEach } from 'vitest';
+import {
+  isEntityArrayBranchQuery,
+  entityArrayBranchRows,
+} from './sync.service.test-state';
 
 // In-memory storage for test data
 interface TestData {
@@ -119,8 +123,10 @@ vi.mock('../src/db', () => {
       return false;
     }
     if (where.entityId !== undefined && op.entityId !== where.entityId) return false;
-    // entity_ids @> ARRAY[id] — the array branch of the single-entity conflict
-    // lookup (#8334). Split out of the old OR filter; see conflict.ts detectConflictForEntity.
+    // entity_ids @> ARRAY[id]. No production caller uses this via the typed API any
+    // more — detectConflictForEntity's array branch is raw SQL (see the $queryRaw
+    // mock below) — but keep the matcher generic so this shim stays a faithful
+    // stand-in for Prisma's filter semantics.
     if (
       where.entityIds?.has !== undefined &&
       !(Array.isArray(op.entityIds) && op.entityIds.includes(where.entityIds.has))
@@ -266,19 +272,7 @@ vi.mock('../src/db', () => {
               matchesWhere(op, args.where),
             ).length;
           }),
-          aggregate: vi.fn().mockImplementation(async (args: any) => {
-            // The conflict lookup's array branch asks for _max.serverSeq over
-            // `entity_ids @> ARRAY[id]`; other callers still expect the _min default.
-            if (args?._max?.serverSeq) {
-              const seqs = Array.from(testData.operations.values())
-                .filter((op) => matchesWhere(op, args.where))
-                .map((op: any) => op.serverSeq);
-              return {
-                _max: { serverSeq: seqs.length ? Math.max(...seqs) : null },
-              };
-            }
-            return { _min: { serverSeq: 1 } };
-          }),
+          aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
         userSyncState: {
@@ -330,7 +324,16 @@ vi.mock('../src/db', () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-        $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+        $queryRaw: vi
+          .fn()
+          .mockImplementation(async (strings: any, ...params: unknown[]) => {
+            // Single-entity conflict lookup, array branch (raw SQL since the fix for
+            // the full-history scan). Everything else keeps the storage-total default.
+            if (isEntityArrayBranchQuery(strings)) {
+              return entityArrayBranchRows(testData.operations, params);
+            }
+            return [{ total: BigInt(0) }];
+          }),
         // The upload transaction writes the storage counter atomically via
         // $executeRaw to keep the data write and the counter delta in a single
         // commit. Default mock is a no-op; specs that care about counter

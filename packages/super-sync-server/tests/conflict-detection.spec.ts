@@ -8,6 +8,8 @@ vi.mock('../src/db', async () => {
   const {
     applyOperationSelect,
     hasOperationUniqueConflict,
+    isEntityArrayBranchQuery,
+    entityArrayBranchRows,
     testState: state,
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
@@ -102,23 +104,7 @@ vi.mock('../src/db', async () => {
           .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
           .slice(0, args.take || 500);
       }),
-      // Array branch of the single-entity conflict lookup: MAX(server_seq) over
-      // `entity_ids @> ARRAY[id]`, kept separate from the scalar findFirst above.
-      aggregate: vi.fn().mockImplementation(async (args: any) => {
-        const targetId = args.where?.entityIds?.has;
-        if (targetId === undefined || !args._max?.serverSeq) return { _max: {} };
-        state.entityConflictAggregateCount++;
-        const seqs = Array.from(state.operations.values())
-          .filter(
-            (op: any) =>
-              op.userId === args.where.userId &&
-              op.entityType === args.where.entityType &&
-              Array.isArray(op.entityIds) &&
-              op.entityIds.includes(targetId),
-          )
-          .map((op: any) => op.serverSeq);
-        return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
-      }),
+      aggregate: vi.fn().mockResolvedValue({ _max: {} }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         // (user_id, server_seq) compound unique — fetches the array branch's winner.
         const compound = args.where?.userId_serverSeq;
@@ -196,6 +182,12 @@ vi.mock('../src/db', async () => {
     $executeRaw: vi.fn().mockResolvedValue(0),
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+      // `entity_ids @> ARRAY[id]`, kept separate from the scalar findFirst above.
+      if (isEntityArrayBranchQuery(strings)) {
+        state.entityConflictArrayQueryCount++;
+        return entityArrayBranchRows(state.operations, params);
+      }
       // Full-state op uploads aggregate prior vector clocks via $queryRaw.
       if (sql.includes('jsonb_each_text(vector_clock)')) {
         const [txUserId, beforeServerSeq] = params as [number, number];

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectConflict, getStoredEntityIds } from '../src/sync/conflict';
+import { isEntityArrayBranchQuery } from './sync.service.test-state';
 import type { Operation } from '../src/sync/sync.types';
 
 /**
@@ -7,8 +8,8 @@ import type { Operation } from '../src/sync/sync.types';
  * (detectConflict → detectConflictForEntity). It exercises the REAL function
  * against a tx mock modelling how production persists ops: multi-entity ops carry
  * the full entity_ids array, single-entity ops store []. detectConflictForEntity
- * matches an entity with a scalar `entityId` lookup plus a separate
- * `entityIds: { has }` max-serverSeq lookup, which the mock below reproduces.
+ * matches an entity with a scalar `entityId` lookup plus a separate raw-SQL
+ * max-serverSeq lookup over `entity_ids`, which the mock below reproduces.
  *
  * The batch lookup paths (raw unnest SQL) are validated separately against real
  * Postgres semantics and in conflict-detection.spec.ts.
@@ -44,18 +45,28 @@ const makeTx = (rows: StoredRow[]): any => {
             .sort((a, b) => b.serverSeq - a.serverSeq)[0] ?? null
         );
       },
-      // Array branch: MAX(server_seq) over entity_ids @> ARRAY[id].
-      aggregate: async ({ where }: any) => {
-        const seqs = scoped(where)
-          .filter((r) => r.entityIds.includes(where.entityIds.has))
-          .map((r) => r.serverSeq);
-        return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
-      },
       // Winning array-branch row, fetched by the (user_id, server_seq) unique key.
       findUnique: async ({ where }: any) => {
         const { userId, serverSeq } = where.userId_serverSeq;
         return rows.find((r) => r.userId === userId && r.serverSeq === serverSeq) ?? null;
       },
+    },
+    // Array branch: MAX(server_seq) over `entity_ids @> ARRAY[id]`, issued as raw
+    // SQL (a MATERIALIZED CTE) so the planner is forced onto the GIN index.
+    $queryRaw: async (strings: TemplateStringsArray, ...params: unknown[]) => {
+      if (!isEntityArrayBranchQuery(strings)) {
+        throw new Error(`Unexpected raw query: ${strings.join('?')}`);
+      }
+      const [entityId, userId, entityType] = params as [string, number, string];
+      const seqs = rows
+        .filter(
+          (r) =>
+            r.userId === userId &&
+            r.entityType === entityType &&
+            r.entityIds.includes(entityId),
+        )
+        .map((r) => r.serverSeq);
+      return [{ maxSeq: seqs.length ? Math.max(...seqs) : null }];
     },
   };
 };

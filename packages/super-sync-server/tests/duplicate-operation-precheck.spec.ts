@@ -430,9 +430,6 @@ describe('Duplicate Operation Pre-check', () => {
       const tx = {
         operation: {
           deleteMany: vi.fn(),
-          // entity_ids branch of the conflict lookup: no multi-entity op stored, so
-          // no max — keeps the array branch from consuming a findUnique mock slot.
-          aggregate: vi.fn().mockResolvedValue({ _max: { serverSeq: null } }),
           findUnique: vi
             .fn()
             .mockResolvedValueOnce(null)
@@ -471,6 +468,10 @@ describe('Duplicate Operation Pre-check', () => {
         user: {
           update: vi.fn(),
         },
+        // entity_ids branch of the conflict lookup (raw SQL): no multi-entity op
+        // stored, so no max — keeps the array branch from consuming a findUnique
+        // mock slot.
+        $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
       };
 
       vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback: any) =>
@@ -510,9 +511,6 @@ describe('Duplicate Operation Pre-check', () => {
       const tx = {
         operation: {
           deleteMany: vi.fn(),
-          // entity_ids branch of the conflict lookup: no multi-entity op stored, so
-          // no max — keeps the array branch from consuming a findUnique mock slot.
-          aggregate: vi.fn().mockResolvedValue({ _max: { serverSeq: null } }),
           findUnique: vi
             .fn()
             .mockResolvedValueOnce(null)
@@ -551,6 +549,10 @@ describe('Duplicate Operation Pre-check', () => {
         user: {
           update: vi.fn(),
         },
+        // entity_ids branch of the conflict lookup (raw SQL): no multi-entity op
+        // stored, so no max — keeps the array branch from consuming a findUnique
+        // mock slot.
+        $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
       };
 
       vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback: any) =>
@@ -581,9 +583,6 @@ describe('Duplicate Operation Pre-check', () => {
       const tx = {
         operation: {
           deleteMany: vi.fn(),
-          // entity_ids branch of the conflict lookup: no multi-entity op stored, so
-          // no max — keeps the array branch from consuming a findUnique mock slot.
-          aggregate: vi.fn().mockResolvedValue({ _max: { serverSeq: null } }),
           findUnique: vi.fn().mockResolvedValue(null),
           findFirst: vi.fn().mockResolvedValue(null),
           createMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -599,6 +598,10 @@ describe('Duplicate Operation Pre-check', () => {
         user: {
           update: vi.fn(),
         },
+        // entity_ids branch of the conflict lookup (raw SQL): no multi-entity op
+        // stored, so no max — keeps the array branch from consuming a findUnique
+        // mock slot.
+        $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
       };
 
       vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback: any) =>
@@ -641,9 +644,6 @@ describe('Duplicate Operation Pre-check', () => {
       const tx = {
         operation: {
           deleteMany: vi.fn(),
-          // entity_ids branch of the conflict lookup: no multi-entity op stored, so
-          // no max — keeps the array branch from consuming a findUnique mock slot.
-          aggregate: vi.fn().mockResolvedValue({ _max: { serverSeq: null } }),
           findUnique: vi.fn().mockResolvedValue(null),
           findFirst: vi
             .fn()
@@ -668,6 +668,10 @@ describe('Duplicate Operation Pre-check', () => {
         user: {
           update: vi.fn(),
         },
+        // entity_ids branch of the conflict lookup (raw SQL): no multi-entity op
+        // stored, so no max — keeps the array branch from consuming a findUnique
+        // mock slot.
+        $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
       };
 
       vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback: any) =>

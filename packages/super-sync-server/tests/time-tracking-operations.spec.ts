@@ -26,6 +26,8 @@ vi.mock('../src/db', async () => {
   const {
     applyOperationSelect,
     hasOperationUniqueConflict,
+    isEntityArrayBranchQuery,
+    entityArrayBranchRows,
     testState: state,
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
@@ -82,7 +84,7 @@ vi.mock('../src/db', async () => {
           );
         }
         // Scalar branch of the single-entity conflict lookup (#8334). The entity_ids
-        // half is a separate aggregate() call; the two were one OR + ORDER BY ...
+        // half is a separate $queryRaw call; the two were one OR + ORDER BY ...
         // LIMIT 1 until that degenerated into a full history scan in production
         // (see the PERF note in conflict.ts detectConflictForEntity).
         if (args.where?.entityId && args.where?.entityType) {
@@ -167,22 +169,6 @@ vi.mock('../src/db', async () => {
         }).length;
       }),
       aggregate: vi.fn().mockImplementation(async (args: any) => {
-        // Array branch of the single-entity conflict lookup: MAX(server_seq) over
-        // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max
-        // the generic branch below returns.
-        const conflictEntityId = args.where?.entityIds?.has;
-        if (conflictEntityId !== undefined) {
-          const seqs = Array.from(state.operations.values())
-            .filter(
-              (op: any) =>
-                op.userId === args.where.userId &&
-                op.entityType === args.where.entityType &&
-                Array.isArray(op.entityIds) &&
-                op.entityIds.includes(conflictEntityId),
-            )
-            .map((op: any) => op.serverSeq);
-          return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
-        }
         const ops = Array.from(state.operations.values()).filter(
           (op: any) => args.where?.userId === op.userId,
         );
@@ -300,6 +286,15 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
+    // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+    // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max the
+    // aggregate() mock above returns. Raw SQL since the full-history-scan fix.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      if (!isEntityArrayBranchQuery(strings)) {
+        throw new Error(`Unexpected raw query: ${String(strings)}`);
+      }
+      return entityArrayBranchRows(state.operations, params);
+    }),
     // Upload transaction writes the storage counter atomically via $executeRaw.
     $executeRaw: vi.fn().mockResolvedValue(0),
   });

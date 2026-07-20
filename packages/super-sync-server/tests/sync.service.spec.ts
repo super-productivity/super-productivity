@@ -10,6 +10,8 @@ vi.mock('../src/db', async () => {
   const {
     applyOperationSelect,
     hasOperationUniqueConflict,
+    isEntityArrayBranchQuery,
+    entityArrayBranchRows,
     testState: state,
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
@@ -206,22 +208,6 @@ vi.mock('../src/db', async () => {
           .slice(0, args.take || 500);
       }),
       aggregate: vi.fn().mockImplementation(async (args: any) => {
-        // Array branch of the single-entity conflict lookup: MAX(server_seq) over
-        // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max
-        // the generic branch below returns (see conflict.ts detectConflictForEntity).
-        const conflictEntityId = args.where?.entityIds?.has;
-        if (conflictEntityId !== undefined) {
-          const seqs = Array.from(state.operations.values())
-            .filter(
-              (op: any) =>
-                op.userId === args.where.userId &&
-                op.entityType === args.where.entityType &&
-                Array.isArray(op.entityIds) &&
-                op.entityIds.includes(conflictEntityId),
-            )
-            .map((op: any) => op.serverSeq);
-          return { _max: { serverSeq: seqs.length ? Math.max(...seqs) : null } };
-        }
         const ops = Array.from(state.operations.values()).filter(
           (op: any) => args.where?.userId === op.userId,
         );
@@ -432,6 +418,12 @@ vi.mock('../src/db', async () => {
     // returning their existing default shape.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+      // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max the
+      // aggregate() mock returns (see conflict.ts detectConflictForEntity).
+      if (isEntityArrayBranchQuery(strings)) {
+        return entityArrayBranchRows(state.operations, params);
+      }
       if (sql.includes('FROM user_sync_state') && sql.includes('FOR UPDATE')) {
         const [txUserId] = params as [number];
         return [
