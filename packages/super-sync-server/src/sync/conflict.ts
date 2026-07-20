@@ -294,6 +294,13 @@ export const detectConflictForEntity = async (
     FROM cand
     WHERE user_id = ${userId} AND entity_type = ${op.entityType}
   `;
+  // INVARIANT: an aggregate with no GROUP BY returns exactly one row, so the `?.`
+  // fold below is unreachable and `maxSeq` is null only when nothing matched. Add a
+  // GROUP BY, or go back to Prisma's aggregate(), and zero rows becomes possible —
+  // at which point this reads as "no prior op" and the upload is ACCEPTED. The
+  // failure mode is silent acceptance of a conflicting write, not an error. No
+  // runtime guard here on purpose (it could never fire today); if you change the
+  // shape of this query, change this fold with it.
   const arrayBranchMaxSeq = arrayBranchRows[0]?.maxSeq ?? null;
 
   // Fetch the array-branch row only when it actually beats the scalar branch.
@@ -313,6 +320,13 @@ export const detectConflictForEntity = async (
       })
     : null;
 
+  // This `??` carries TWO meanings: "the array branch did not win" and "the array
+  // branch won but its row was not there". Only the first is reachable — the MAX came
+  // from a row in this transaction's snapshot and (user_id, server_seq) is unique, so
+  // at RepeatableRead the row cannot vanish under us. If the isolation level is ever
+  // lowered, the second case silently falls back to the STALE scalar row and accepts a
+  // write that should have conflicted. Retiring the separate findUnique (see the
+  // row-returning CTE, #9197) removes this ambiguity rather than guarding it.
   const existingOp = arrayOp ?? scalarOp;
 
   // Histories written before schema v2 persist migrated task settings under
