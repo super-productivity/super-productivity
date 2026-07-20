@@ -46,11 +46,14 @@ import type { Operation } from '../src/sync/sync.types';
  *    inserts land in the GIN pending list (fastupdate defaults to on) which `@>` must
  *    scan linearly: same data, same query, 140 blocks and a 14x larger index (1120 kB
  *    vs 72 kB). VACUUM flushes the pending list and restores 2 blocks, so the real cost
- *    OSCILLATES between the two across the autovacuum cycle, bounded above by
- *    gin_pending_list_limit rather than by anything in this seed. This suite therefore
- *    seeds in production order and never vacuums: it measures the WORST realistic
- *    steady state, which is what a regression budget should sit above. Setting
- *    fastupdate=off removes the oscillation and pins the array branch at 2 blocks.
+ *    OSCILLATES across the autovacuum cycle. This suite therefore seeds in production
+ *    order and never vacuums, measuring the dirty end of that cycle rather than the
+ *    freshly-vacuumed end — but 140 is NOT a ceiling: the pending list is bounded by
+ *    gin_pending_list_limit (4MB default), not by anything in this seed, so a
+ *    production write burst can be worse. The budget below is calibrated to catch the
+ *    mis-plan, NOT to certify a maximum. Setting fastupdate=off stops new entries
+ *    queueing — it does not flush what is already pending, which still needs a VACUUM —
+ *    and so removes the oscillation going forward.
  *
  * REMAINING FIDELITY LIMIT: PGlite is not the production cluster — different major
  * version, and it reports every block as a cache hit, so these counts cannot model
@@ -488,6 +491,8 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
 
   const TIME_DELTA_ACTION = '[TimeTracking] Sync time spent';
   const OTHER_USER_ID = 7;
+  /** Own tenant, so the legacy-misc row seeded for USER_ID cannot mask the gate. */
+  const POST_SPLIT_USER_ID = 8;
 
   const seed = async (op: {
     id: string;
@@ -778,7 +783,16 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
   it('does not alias a POST-split misc write onto tasks', async () => {
     // The alias is gated on the fixed v1→v2 split boundary; a v2+ misc write is
     // disjoint from tasks and must not fabricate a conflict.
+    //
+    // MUST probe exactly 'tasks'. detectConflictForEntity enters the legacy-misc branch
+    // only for entityId === 'tasks', so probing any other id (this once read
+    // 'tasks-v2-only') never reaches the gate and passes no matter what the gate does —
+    // verified: breaking it to `lte` left all 915 tests green.
+    //
+    // Runs as its OWN user because the preceding test leaves a schema_version 1 misc row
+    // for USER_ID in the shared table, which would legitimately alias and mask this.
     await seed({
+      userId: POST_SPLIT_USER_ID,
       id: 'op-modern-misc',
       serverSeq: 11,
       clientId: 'other',
@@ -789,7 +803,8 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     });
 
     expect(
-      (await detect('tasks-v2-only', { entityType: 'GLOBAL_CONFIG' })).hasConflict,
+      (await detect('tasks', { entityType: 'GLOBAL_CONFIG' }, POST_SPLIT_USER_ID))
+        .hasConflict,
     ).toBe(false);
   });
 });
