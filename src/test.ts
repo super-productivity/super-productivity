@@ -25,6 +25,7 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { asyncScheduler } from 'rxjs';
 import { clearDeferredActions } from './app/op-log/capture/operation-capture.meta-reducer';
+import { _resetDevErrorState } from './app/util/dev-error';
 
 import { getTestBed, TestBed } from '@angular/core/testing';
 import {
@@ -108,6 +109,18 @@ beforeEach(() => {
   // the phantom-change guard (#8751) reads it and silently skips compaction
   // and snapshot saves — an order-dependent failure that passes standalone.
   clearDeferredActions();
+
+  // The dialog spies below are created once at module load, so reset their
+  // call history before every spec to prevent assertions from passing on a
+  // stale call from an unrelated test. Re-arm devError's alert latch as well
+  // so legitimate alerts remain observable regardless of spec order.
+  if (jasmine.isSpy(window.alert)) {
+    (window.alert as jasmine.Spy).calls.reset();
+  }
+  if (jasmine.isSpy(window.confirm)) {
+    (window.confirm as jasmine.Spy).calls.reset();
+  }
+  _resetDevErrorState();
 });
 
 // Mock browser dialogs globally for tests
