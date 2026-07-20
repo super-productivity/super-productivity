@@ -33,6 +33,7 @@ interface RunResult {
   executedSql: string;
   resolveApplied: string[];
   resolveRolledBack: string[];
+  databaseUrls: string[];
 }
 
 let projectDir: string;
@@ -52,6 +53,9 @@ set -eu
 shift # drop "prisma"
 sub="$1"; shift
 state="$FAKE_STATE"
+# Record the URL every prisma invocation actually receives, so the migrator's
+# statement_timeout exemption can be asserted on the recovery paths too.
+printf '%s\\n' "\${DATABASE_URL:-<unset>}" >> "$state/database_urls"
 case "$sub" in
   migrate)
     action="$1"; shift
@@ -161,6 +165,7 @@ const run = (env: Record<string, string>): RunResult => {
     executedSql: read('executed_sql'),
     resolveApplied: read('applied_list').split('\n').filter(Boolean),
     resolveRolledBack: read('rolledback').split('\n').filter(Boolean),
+    databaseUrls: read('database_urls').split('\n').filter(Boolean),
   };
 };
 
@@ -415,5 +420,88 @@ CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx"
 
     expect(r.status).toBe(0);
     expect(r.resolveApplied).toEqual(expect.arrayContaining([ENCRYPTED_OPS, second]));
+  });
+});
+
+// #9191: production caps statement_timeout at 60s via DATABASE_URL so a bad query
+// plan cannot hold a pool connection forever. That cap must NOT reach the migrator
+// — a CREATE INDEX CONCURRENTLY runs far longer than 60s, and because every
+// recovery path inherits the same URL, a cancelled build cannot be recovered
+// either, by the script or by hand. Migrations are bounded by STEP_TIMEOUT.
+describe('migrate-deploy.sh statement_timeout exemption', () => {
+  const BASE = 'postgresql://u:p@postgres:5432/supersync';
+
+  it('rewrites an existing statement_timeout to 0', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?connection_limit=60&pool_timeout=20&options=-c%20statement_timeout%3D60000`,
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.databaseUrls).not.toHaveLength(0);
+    for (const url of r.databaseUrls) {
+      expect(url).toContain('statement_timeout%3D0');
+      expect(url).not.toContain('60000');
+      // The pool settings are not ours to touch.
+      expect(url).toContain('connection_limit=60');
+      expect(url).toContain('pool_timeout=20');
+    }
+  });
+
+  it('keeps the exemption on the recovery paths, not just the first deploy', () => {
+    writeMigration(ENCRYPTED_OPS, ENCRYPTED_OPS_SQL);
+    const r = run({
+      FAKE_FAIL: ENCRYPTED_OPS,
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?options=-c%20statement_timeout%3D60000`,
+    });
+
+    expect(r.status).toBe(0);
+    // deploy → resolve → db execute → resolve → deploy: several invocations, and
+    // the out-of-band `db execute` is the one that actually builds the index.
+    expect(r.databaseUrls.length).toBeGreaterThan(1);
+    expect(r.databaseUrls.every((u) => u.includes('statement_timeout%3D0'))).toBe(true);
+  });
+
+  it('extends an existing options value instead of adding a second options param', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?options=-c%20lock_timeout%3D5000&connection_limit=60`,
+    });
+
+    const url = r.databaseUrls[0];
+    expect(url).toContain('statement_timeout%3D0');
+    // Prisma resolves a duplicated param to one of the two — silently dropping
+    // either the pre-existing setting or our exemption.
+    expect(url.match(/options=/g)).toHaveLength(1);
+    expect(url).toContain('lock_timeout%3D5000');
+    expect(url).toContain('connection_limit=60');
+  });
+
+  it('appends with & when the URL already has a query string', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?connection_limit=60`,
+    });
+
+    expect(r.databaseUrls[0]).toBe(
+      `${BASE}?connection_limit=60&options=-c%20statement_timeout%3D0`,
+    );
+  });
+
+  it('appends with ? when the URL has no query string', () => {
+    const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018', DATABASE_URL: BASE });
+
+    expect(r.databaseUrls[0]).toBe(`${BASE}?options=-c%20statement_timeout%3D0`);
+  });
+
+  it('does nothing when DATABASE_URL is unset', () => {
+    const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018' });
+
+    expect(r.status).toBe(0);
+    expect(r.databaseUrls).toEqual(['<unset>']);
   });
 });

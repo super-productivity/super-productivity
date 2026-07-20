@@ -422,12 +422,60 @@ echo "    All containers healthy"
 
 # Verify HTTPS health check
 echo ""
+# Report on the alerting path itself (#9191).
+#
+# All three operations-table pool incidents were found by users reporting
+# problems, never by monitoring — and health-alert.sh has had checks that should
+# have caught at least the last one. The gap is that nothing installs it and
+# nothing notices when it stops working: the cron line lives only in a comment in
+# that script, and its stderr goes to the local mail spool, which is exactly what
+# is broken when mail is broken. So report, every deploy, whether the alerting is
+# actually running. Advisory only — never fail a deploy over it, and never edit
+# the operator's crontab from here.
+report_monitoring_status() {
+    local state_dir="$SERVER_DIR/.health-alert"
+    local script_path="$SERVER_DIR/scripts/health-alert.sh"
+
+    echo ""
+    echo "==> Monitoring status"
+
+    if ! crontab -l 2>/dev/null | grep -q 'health-alert\.sh'; then
+        echo "    WARNING: health-alert.sh is not in this user's crontab."
+        echo "             Pool saturation and long-running queries will go unnoticed."
+        echo "             Install with:"
+        echo "               (crontab -l 2>/dev/null; echo \"*/5 * * * * ALERT_EMAIL=you@example.com $script_path\") | crontab -"
+        return
+    fi
+    echo "    health-alert.sh: cron installed"
+
+    # A stale last-run means the cron is present but not completing — a silent
+    # failure that looks identical to a healthy system from the outside.
+    if [ -f "$state_dir/last-run" ]; then
+        local last_run age
+        last_run=$(cat "$state_dir/last-run" 2>/dev/null || true)
+        age=$(( $(date -u +%s) - $(date -u -d "$last_run" +%s 2>/dev/null || echo 0) ))
+        if [ "$age" -gt 1800 ]; then
+            echo "    WARNING: last successful run was $last_run (>30m ago) — cron is not completing."
+        else
+            echo "    last run: $last_run"
+        fi
+    else
+        echo "    NOTE: no run recorded yet (expected within 5 minutes)."
+    fi
+
+    if [ -f "$state_dir/mail-failed" ]; then
+        echo "    WARNING: alert email delivery FAILED at $(cat "$state_dir/mail-failed" 2>/dev/null)."
+        echo "             Checks are running but nobody is being told. Verify \`mail\` works."
+    fi
+}
+
 echo "==> Verifying HTTPS health check..."
 for i in {1..6}; do
     if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
         echo ""
         echo "==> Deployment successful!"
         echo "    Service is healthy at $HEALTH_URL"
+        report_monitoring_status
         exit 0
     fi
     echo "    Waiting... (attempt $i/6)"

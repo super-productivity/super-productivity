@@ -222,6 +222,53 @@ Possible causes:
 
 **Investigate**: `snapshot-analysis`, correlation with op count
 
+## Alerting (health-alert.sh)
+
+The reports above are things you go and read. `health-alert.sh` is the only thing
+that comes and finds you, and it is **the piece that has to be installed** — it
+is not started by `deploy.sh` and nothing else runs it:
+
+```bash
+(crontab -l 2>/dev/null; echo "*/5 * * * * ALERT_EMAIL=you@example.com /path/to/super-sync-server/scripts/health-alert.sh") | crontab -
+```
+
+`deploy.sh` reports at the end of every deploy whether this cron exists, whether
+it is still completing, and whether alert email is being delivered. If it says
+the cron is missing, nothing is watching the server.
+
+### What it checks
+
+| #   | Check                                                            | Fires when                                                            |
+| --- | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 0–3 | Docker daemon, container state/health, OOM kills, restart counts | a container is down, unhealthy, OOM-killed, or crash-looping          |
+| 4   | `/health` endpoint                                               | HTTP != 200                                                           |
+| 5   | Disk usage                                                       | > 85%                                                                 |
+| 6   | Long-running queries                                             | any query `active` > `MAX_QUERY_SECONDS` (default 120)                |
+| 7   | Pool saturation                                                  | active backends ≥ `POOL_WARN_PCT`% (default 75) of `connection_limit` |
+| 8   | Invalid indexes                                                  | any index in `public` is not valid/ready/live                         |
+
+Checks 6–8 exist because 0–5 are all **liveness** checks and cannot see the
+failure mode that has now caused three `operations`-table incidents: every
+container stays running and healthy while a degenerate query plan holds
+connections until the pool is empty. That failure is bistable — below the
+capacity ceiling nothing looks wrong, above it everything fails at once — so
+there is no gradual phase for a liveness check to notice.
+
+Check 7 is deliberately a **ratio** against `connection_limit`, not a fixed
+number: measured steady state sits the same order of magnitude below the
+pathological-query ceiling (pool size ÷ worst-case query duration), so the
+absolute margin is thin and a fixed threshold would not survive a pool resize.
+
+Check 8 matters more than it looks. An interrupted `CREATE INDEX CONCURRENTLY`
+leaves an index that is **unusable for reads but still maintained on every
+insert**. If `operations_entity_ids_gin` were the invalid one, the conflict
+lookup would silently degrade to a sequential scan on every upload, permanently,
+and nothing else in the codebase would report it.
+
+Repeat alerts for the same problem are suppressed by a content hash, so counts
+and durations are normalised out — you get one mail per distinct problem, plus a
+recovery mail when it clears.
+
 ## Automation
 
 You can set up cron jobs for regular monitoring:

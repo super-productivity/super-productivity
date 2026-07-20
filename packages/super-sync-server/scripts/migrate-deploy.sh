@@ -52,6 +52,40 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 # can hang forever; without this the CMD/initContainer paths never fail.
 STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-1800}"
 
+# Exempt the migrator from the production statement_timeout guardrail (#9191).
+#
+# DATABASE_URL carries `options=-c statement_timeout=60000` so a degenerate query
+# plan cannot hold a pool connection indefinitely (the 2026-07-20 outage held one
+# for 75 minutes). That cap rides into the migrator, where it is not merely
+# unhelpful but a dead end: a CREATE INDEX CONCURRENTLY on a large `operations`
+# table runs well past 60s and gets cancelled mid-build, leaving an INVALID index
+# — and every recovery path below inherits the same URL, so `prisma db execute`
+# fails identically, as do the by-hand statements print_manual_recovery tells the
+# operator to run. Nothing in the loop can succeed.
+#
+# STEP_TIMEOUT is the correct bound for migrations instead: it kills the client,
+# and it is the signal the CONCURRENTLY recovery logic already understands.
+#
+# Four cases, in order: an existing statement_timeout is rewritten to 0; an
+# existing `options` value is extended (never duplicated as a second `options`
+# param, which Prisma would silently resolve to one of the two); otherwise the
+# param is appended with the right separator.
+if [ -n "${DATABASE_URL:-}" ]; then
+  case "$DATABASE_URL" in
+    *statement_timeout*)
+      DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
+        sed -E 's/(statement_timeout(%3[Dd]|=))[0-9]+/\10/g')
+      ;;
+    *options=*)
+      DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
+        sed -E 's/(options=[^&]*)/\1%20-c%20statement_timeout%3D0/')
+      ;;
+    *\?*) DATABASE_URL="${DATABASE_URL}&options=-c%20statement_timeout%3D0" ;;
+    *) DATABASE_URL="${DATABASE_URL}?options=-c%20statement_timeout%3D0" ;;
+  esac
+  export DATABASE_URL
+fi
+
 if command -v timeout >/dev/null 2>&1; then
   with_timeout() {
     wt_rc=0
