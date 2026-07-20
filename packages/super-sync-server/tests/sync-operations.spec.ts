@@ -10,6 +10,8 @@ vi.mock('../src/db', async () => {
   const {
     applyOperationSelect,
     hasOperationUniqueConflict,
+    isEntityArrayBranchQuery,
+    entityArrayBranchRows,
     testState: state,
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
@@ -290,11 +292,19 @@ vi.mock('../src/db', async () => {
     },
     // Upload transaction writes the storage counter atomically via $executeRaw.
     $executeRaw: vi.fn().mockResolvedValue(0),
-    // Full-state op uploads aggregate prior vector clocks via $queryRaw inside
-    // the same transaction. Dispatch based on the SQL text so other $queryRaw
-    // callers (storage counter, etc.) keep working.
+    // Raw queries issued inside the upload transaction. Every shape must be
+    // recognised explicitly and anything else must THROW: this mock used to fall
+    // through to a `total` row, which conflict.ts reads via
+    // `arrayBranchRows[0]?.maxSeq ?? null` as "no array-branch match". That silently
+    // disabled the array branch for every conflict assertion in this file.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+      // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+      // `entity_ids @> ARRAY[id]`, scoped to ONE entity.
+      if (isEntityArrayBranchQuery(strings)) {
+        return entityArrayBranchRows(state.operations, params);
+      }
+      // Full-state op uploads aggregate prior vector clocks in the same transaction.
       if (sql.includes('jsonb_each_text(vector_clock)')) {
         const [userId, beforeServerSeq] = params;
         const aggregate = new Map<string, number>();
@@ -316,7 +326,7 @@ vi.mock('../src/db', async () => {
           max_counter: BigInt(max_counter),
         }));
       }
-      return [{ total: BigInt(0) }];
+      throw new Error(`Unmocked raw query in upload tx: ${sql}`);
     }),
   });
 

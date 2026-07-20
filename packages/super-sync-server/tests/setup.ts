@@ -324,15 +324,21 @@ vi.mock('../src/db', () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
+        // Every raw query issued inside the transaction must be recognised here and
+        // anything unknown must THROW. A tolerant default is how the array branch
+        // stayed silently stubbed out: conflict.ts reads an unrecognised row via
+        // `arrayBranchRows[0]?.maxSeq ?? null`, i.e. as "no match", so the branch
+        // disappears instead of failing.
         $queryRaw: vi
           .fn()
           .mockImplementation(async (strings: any, ...params: unknown[]) => {
             // Single-entity conflict lookup, array branch (raw SQL since the fix for
-            // the full-history scan). Everything else keeps the storage-total default.
+            // the full-history scan).
             if (isEntityArrayBranchQuery(strings)) {
               return entityArrayBranchRows(testData.operations, params);
             }
-            return [{ total: BigInt(0) }];
+            const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+            throw new Error(`Unmocked raw query in tx: ${sql}`);
           }),
         // The upload transaction writes the storage counter atomically via
         // $executeRaw to keep the data write and the counter delta in a single

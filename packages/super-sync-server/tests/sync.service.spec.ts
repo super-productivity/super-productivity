@@ -144,7 +144,7 @@ vi.mock('../src/db', async () => {
           return applyOperationSelect(ops[0], args.select) || null;
         }
         // Scalar branch of the single-entity conflict lookup. The entity_ids half is
-        // a separate aggregate() call; the two were one OR + ORDER BY ... LIMIT 1
+        // a separate $queryRaw call; the two were one OR + ORDER BY ... LIMIT 1
         // until that degenerated into a full history scan in production (see the
         // PERF note in conflict.ts detectConflictForEntity).
         if (args.where?.entityId && args.where?.entityType) {
@@ -419,8 +419,8 @@ vi.mock('../src/db', async () => {
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: any[]) => {
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
       // Array branch of the single-entity conflict lookup: MAX(server_seq) over
-      // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max the
-      // aggregate() mock returns (see conflict.ts detectConflictForEntity).
+      // `entity_ids @> ARRAY[id]`, scoped to ONE entity — not a user-wide max
+      // (see conflict.ts detectConflictForEntity).
       if (isEntityArrayBranchQuery(strings)) {
         return entityArrayBranchRows(state.operations, params);
       }
@@ -502,7 +502,11 @@ vi.mock('../src/db', async () => {
           max_counter: BigInt(max_counter),
         }));
       }
-      return [{ total: BigInt(0) }];
+      // Unrecognised raw queries must THROW, never return a plausible-looking row.
+      // conflict.ts reads an unknown shape via `arrayBranchRows[0]?.maxSeq ?? null`
+      // as "no array-branch match", so a tolerant default silently deletes the
+      // branch under test instead of failing.
+      throw new Error(`Unmocked raw query in tx: ${sql}`);
     }),
   });
 

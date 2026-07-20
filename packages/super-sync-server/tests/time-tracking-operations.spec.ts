@@ -287,8 +287,8 @@ vi.mock('../src/db', async () => {
       }),
     },
     // Array branch of the single-entity conflict lookup: MAX(server_seq) over
-    // `entity_ids @> ARRAY[id]`, scoped to one entity — NOT the user-wide max the
-    // aggregate() mock above returns. Raw SQL since the full-history-scan fix.
+    // `entity_ids @> ARRAY[id]`, scoped to ONE entity — not a user-wide max.
+    // Raw SQL since the full-history-scan fix.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
       if (!isEntityArrayBranchQuery(strings)) {
         throw new Error(`Unexpected raw query: ${String(strings)}`);

@@ -275,11 +275,12 @@ export const detectConflictForEntity = async (
   // 'EM_URGENT', 'EM_IMPORTANT', 'KANBAN_IN_PROGRESS' (tag.const.ts), 'INBOX_PROJECT'
   // (project.const.ts), 'EISENHOWER_MATRIX', 'KANBAN_DEFAULT' (boards.const.ts), plus
   // the fixed GLOBAL_CONFIG keys. `updateBoard({ id: 'KANBAN_DEFAULT' })` is
-  // single-entity, so it routes here and probes that literal across every tenant —
-  // measured 3752 blocks to reach 20 relevant rows at 200k ops / 2000 tenants, scaling
-  // with total server population and bounded by nothing. The fix is a btree_gin
-  // composite index on (user_id, entity_ids); it needs a real-Postgres EXPLAIN to
-  // confirm, as PGlite has no btree_gin.
+  // single-entity, so it routes here and probes that literal across every tenant. At
+  // 200k ops / 2000 tenants that measured 3885 blocks to reach the 10 rows belonging
+  // to the probing user, against 4 blocks for a genuinely unique id — it scales with
+  // total server population, bounded by nothing. The fix is a btree_gin composite
+  // index on (user_id, entity_ids); it needs a real-Postgres EXPLAIN to confirm, as
+  // PGlite has no btree_gin.
   //
   // Sequential, never Promise.all: `tx` is a single-connection interactive transaction
   // client and concurrent queries on it are unsafe.

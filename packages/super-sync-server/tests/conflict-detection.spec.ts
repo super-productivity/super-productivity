@@ -66,7 +66,7 @@ vi.mock('../src/db', async () => {
           );
         }
         // Single-entity conflict lookup, scalar branch: where { userId, entityType,
-        // entityId }. The entity_ids half is a separate aggregate() call below — the
+        // entityId }. The entity_ids half is a separate $queryRaw call below — the
         // two were one OR filter until it degenerated into a full history scan in
         // production (see the PERF note in conflict.ts detectConflictForEntity).
         // Scalar-only lookup (other callers): where { userId, entityType, entityId }.
@@ -104,7 +104,6 @@ vi.mock('../src/db', async () => {
           .sort((a: any, b: any) => a.serverSeq - b.serverSeq)
           .slice(0, args.take || 500);
       }),
-      aggregate: vi.fn().mockResolvedValue({ _max: {} }),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
         // (user_id, server_seq) compound unique — fetches the array branch's winner.
         const compound = args.where?.userId_serverSeq;
@@ -216,6 +215,12 @@ vi.mock('../src/db', async () => {
         return [{ lastSeq: state.userSyncStates.get(txUserId)?.lastSeq ?? 0 }];
       }
 
+      // Anything left must be the batched multi-entity conflict lookup. Assert that
+      // rather than assuming it: falling through and reinterpreting an unrelated
+      // query as this one is how a mock silently answers a call it never modelled.
+      if (!sql.includes('DISTINCT ON')) {
+        throw new Error(`Unmocked raw query in tx: ${sql}`);
+      }
       const [userId, entityType, entityIdsSql] = params as [number, string, Prisma.Sql];
       state.batchConflictQueryCount++;
       if (!Array.isArray(entityIdsSql.values)) {

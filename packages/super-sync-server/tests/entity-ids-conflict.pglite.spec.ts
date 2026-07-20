@@ -105,48 +105,6 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     return res.rows;
   };
 
-  // detectConflictForEntity() — single entity. The scalar and entity_ids halves are
-  // two separately-indexed queries whose higher server_seq wins; they were one OR +
-  // ORDER BY ... LIMIT 1 until that scanned whole histories in production (see the
-  // PERF note in conflict.ts and conflict-entity-lookup-plan.pglite.spec.ts). The
-  // union SEMANTICS asserted below are identical either way, which is the point.
-  const detectForEntity = async (
-    entityType: string,
-    id: string,
-  ): Promise<LatestRow | null> => {
-    const cols = `o.entity_id AS "entityId",
-                  o.client_id AS "clientId",
-                  o.server_seq AS "serverSeq",
-                  o.vector_clock AS "vectorClock"`;
-    const scalar = await db.query<LatestRow>(
-      `SELECT ${cols} FROM operations o
-       WHERE o.user_id = 1 AND o.entity_type = $1 AND o.entity_id = $2
-       ORDER BY o.server_seq DESC LIMIT 1`,
-      [entityType, id],
-    );
-    // The OFFSET 0 fence is deliberate — it is what Prisma's aggregate() emits and
-    // what keeps this off an ordered LIMIT-1 backward walk.
-    const arrayMax = await db.query<{ max: number | null }>(
-      `SELECT MAX(o.server_seq) AS max FROM (
-         SELECT server_seq FROM operations
-         WHERE user_id = 1 AND entity_type = $1 AND entity_ids @> ARRAY[$2]::text[]
-         OFFSET 0
-       ) o`,
-      [entityType, id],
-    );
-
-    const scalarRow = scalar.rows[0] ?? null;
-    const maxSeq = arrayMax.rows[0]?.max ?? null;
-    if (maxSeq === null || Number(maxSeq) <= Number(scalarRow?.serverSeq ?? -1)) {
-      return scalarRow;
-    }
-    const winner = await db.query<LatestRow>(
-      `SELECT ${cols} FROM operations o WHERE o.user_id = 1 AND o.server_seq = $1`,
-      [maxSeq],
-    );
-    return winner.rows[0] ?? null;
-  };
-
   // prefetchLatestEntityOpsForBatch() — multi-entity-TYPE batch via a JOIN over
   // (entity_type, entity_id) pairs.
   const prefetchForPairs = async (
@@ -312,35 +270,6 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
       const byEntity = Object.fromEntries(rows.map((r) => [r.entityId, r.serverSeq]));
 
       expect(byEntity).toEqual({ 'task-1': 3, 'task-2': 1, 'task-3': 2 });
-    });
-  });
-
-  describe('detectConflictForEntity (Prisma OR / entity_ids @> ARRAY[id])', () => {
-    it('finds a multi-entity op via its non-first entity', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-
-      const row = await detectForEntity('TASK', 'task-2');
-
-      expect(row).not.toBeNull();
-      expect(row?.clientId).toBe('A');
-    });
-
-    it('returns null for an unrelated entity', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-
-      expect(await detectForEntity('TASK', 'task-9')).toBeNull();
     });
   });
 

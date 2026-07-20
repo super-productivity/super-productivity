@@ -5,80 +5,62 @@ import { isEntityArrayBranchQuery } from './sync.service.test-state';
 import type { Operation } from '../src/sync/sync.types';
 
 /**
- * Production incident regression: the single-entity conflict lookup scanned a
- * user's ENTIRE operation history on every upload of a not-yet-seen entity.
- *
- * detectConflictForEntity used to match the entity with one Prisma filter —
- * `OR: [{ entityId }, { entityIds: { has: entityId } }]` + `orderBy serverSeq desc`
- * — which Postgres receives as
- *
- *   ... WHERE user_id=$1 AND entity_type=$2
- *         AND (entity_id=$3 OR entity_ids @> $4)
- *       ORDER BY server_seq DESC LIMIT 1
- *
- * The OR spans two different indexes (the (user_id, entity_type, entity_id,
- * server_seq) btree and the entity_ids GIN) and GIN cannot supply server_seq
- * ordering, so the planner may abandon both index paths and walk (user_id,
- * server_seq) BACKWARDS applying the OR as a filter, betting the LIMIT 1 resolves
- * early. For an entity with no matching rows — the first-ever op for a new task,
- * the single most common upload — the bet loses and it reads the whole history.
- *
- * Live evidence (sync.super-productivity.com): 47 backends stuck on exactly this
- * query, longest running 75 minutes, wait_event=DataFileRead, 61/66 connections
- * active → Prisma pool exhaustion → all uploads AND downloads failing. Every index
- * was valid; this was never a missing-index problem.
- *
- * WHAT DECIDES THE BET — READ THIS BEFORE RE-TESTING (measured below, and the
- * reason the previous "the planner uses a BitmapOr + sort" comment looked true):
- * the planner only takes the backward walk when it has NO array-element statistics
- * for entity_ids. With none it falls back to a default `@>` selectivity (0.5%) and
- * estimates ~150 of 30_000 rows match, so LIMIT 1 looks like it exits after ~200
- * rows. Populate entity_ids on even 6 rows in 30_000 and ANALYZE, and the estimate
- * drops to ~1 row, the walk prices itself out, and BitmapOr wins.
- *
- * That is not an exotic state — it is the deployed one. `entity_ids` was added by
- * migration 20260613000000 with NO backfill (forward-only, see schema.prisma), and
- * getStoredEntityIds stores [] for every single-entity op, i.e. the vast majority.
- * Statistics are also TABLE-wide, not per-user: if ANALYZE's sample happens to
- * contain no non-empty array, EVERY user's uploads degenerate at once, which is why
- * this detonates suddenly rather than degrading gradually.
- *
- * So the seed below leaves entity_ids empty on every row on purpose. Do not
- * "improve" it by populating the column — that silently disarms this regression.
+ * Production incident regression: the single-entity conflict lookup read a user's
+ * entire (user_id, entity_type) slice on every upload of a not-yet-seen entity.
+ * The mechanism, the rejected alternatives and the isolation caveat are documented
+ * once, at detectConflictForEntity in src/sync/conflict.ts — not repeated here.
  *
  * This spec runs the REAL detectConflictForEntity against in-process Postgres
  * (PGlite — no Docker, no DATABASE_URL) through a tx shim that renders each Prisma
- * call as the SQL Prisma emits, EXPLAIN (ANALYZE, BUFFERS)-ing every one and summing
- * what they touched. Reverting the split in conflict.ts makes the shim emit the old
- * OR query again and the row/block budgets below blow out by ~100x.
+ * call as the SQL Prisma emits and EXPLAINs it. The array branch is NOT rebuilt from
+ * a constant: the shim reconstructs it from the actual tagged-template text, so the
+ * SQL under test is byte-for-byte what conflict.ts sends. That is what lets a change
+ * to the aggregate (MAX -> MIN), the fence (dropping MATERIALIZED) or the CTE shape
+ * fail here instead of passing against a stale copy.
  *
  * MEASURE WITH `force_generic_plan`, NEVER WITH LITERALS. Prisma sends parameterized
  * prepared statements, so production runs a GENERIC plan that cannot see parameter
  * values; EXPLAIN with literal constants yields a CUSTOM plan nobody receives. This
- * file used to test only with literals, and that blind spot passed two designs that
- * were catastrophic in production. The raw-shape block below now uses explainGeneric
- * throughout — keep it that way.
+ * file once tested with literals and that blind spot passed two designs that were
+ * catastrophic in production. EVERYTHING here — including the shim — goes through
+ * explainGeneric. If you add a shape, use explainGeneric.
  *
- * KNOWN FIDELITY LIMITS — two things this spec CANNOT prove, so do not read a green
- * run as covering them:
+ * WHY THE SEED SHAPE IS WHAT IT IS — do not "simplify" it:
  *
- *  1. At this scale PGlite's planner does not reproduce the production mis-costing
- *     that made the flat `MAX(...) FROM (... OFFSET 0)` form abandon GIN for the
- *     entity btree (~80 vs ~875). The flat form is rejected on the production EXPLAIN
- *     recorded in conflict.ts, not here.
- *  2. `MATERIALIZED`'s EFFECT is unpinned. Dropping the keyword still plans as GIN in
- *     PGlite at 30k rows, so no plan assertion here can detect its removal; the
- *     'sends the array branch as a MATERIALIZED CTE' test guards the SQL TEXT only.
- *     It is load-bearing on production, where inlining lets the outer user_id /
- *     entity_type predicates push into the CTE and hand the composite btree a usable
- *     leading column. Verify by EXPLAIN against real Postgres before touching it.
+ *  - entity_ids stays '{}' on EVERY row. The planner only mis-plans when it has no
+ *    array-element statistics for entity_ids, falling back to a default `@>`
+ *    selectivity. That is the DEPLOYED state: entity_ids was added by migration
+ *    20260613000000 with no backfill, and getStoredEntityIds stores [] for every
+ *    single-entity op. Populating the column here silently disarms the regression.
+ *  - MANY users and MANY entity types. This is the load-bearing part. With one user
+ *    and one entity_type the GIN estimate (which scales with the whole table) and the
+ *    btree-slice estimate (N / (users x entity_types)) cover the SAME rows, so GIN
+ *    always wins on cost and no regression is detectable. That degenerate shape is
+ *    why this suite could not catch the outage. At 20k rows for the probed user plus
+ *    20k spread over ~20k other users across 8 entity types, PGlite reproduces the
+ *    production plan node-for-node and every regression below lands ~400x over budget.
  *
- * The CTE is preferred precisely because its plan is forced STRUCTURALLY — inside the
- * CTE no index has a usable leading column except GIN — rather than won on cost.
+ * REMAINING FIDELITY LIMIT: PGlite is not the production cluster. It has no btree_gin,
+ * so the composite (user_id, entity_ids) index proposed in conflict.ts as the fix for
+ * the shared-literal-id scan cannot be evaluated here at all.
  */
 
-const SEEDED_OPS = 30_000;
+const OWN_OPS = 20_000;
+const OTHER_OPS = 20_000;
 const USER_ID = 1;
+/** Entity types are spread across the seed so the btree slice is N/(users x types). */
+const ENTITY_TYPES = [
+  'TASK',
+  'PROJECT',
+  'TAG',
+  'NOTE',
+  'BOARD',
+  'GLOBAL_CONFIG',
+  'SIMPLE_COUNTER',
+  'TASK_REPEAT_CFG',
+];
+/** seq % ENTITY_TYPES.length === 0 => 'TASK', so this row is in the probed slice. */
+const DEEP_ENTITY_SEQ = 16;
 
 const CREATE_TABLE = `
   CREATE TABLE operations (
@@ -111,11 +93,9 @@ const INSERT_COLS =
   'schema_version,vector_clock';
 
 /**
- * The array branch exactly as conflict.ts issues it, with positional params in
- * tagged-template order. MATERIALIZED is load-bearing: it stops the outer user_id /
- * entity_type predicates being pushed into the CTE, where they would give the
- * (user_id, entity_type, entity_id, server_seq) btree a usable leading column and
- * hand the planner back the scan this whole fix exists to prevent.
+ * The array branch as conflict.ts issues it, with positional params in tagged-template
+ * order. Used only by the raw-shape comparisons below; the end-to-end tests reconstruct
+ * this from the real template instead, so the two are cross-checked against each other.
  */
 const ARRAY_BRANCH_SQL = `
   WITH cand AS MATERIALIZED (
@@ -134,6 +114,7 @@ type PlanStats = {
   rawSql: string[];
 };
 type PlanNode = Record<string, unknown>;
+type Measured = { blocks: number; rowsFiltered: number; nodes: string };
 
 const newStats = (): PlanStats => ({ blocks: 0, rowsFiltered: 0, sql: [], rawSql: [] });
 
@@ -144,7 +125,7 @@ const newStats = (): PlanStats => ({ blocks: 0, rowsFiltered: 0, sql: [], rawSql
  * so a parent already includes everything its children read. Summing every node
  * double-counts the same buffers once per level of nesting, inflating deep plans
  * (the CTE form nests one level deeper than the flat one) and biasing the budgets
- * against the new code. The ROOT node's value is the true total — see explainOn.
+ * against the new code. The ROOT node's value is the true total.
  */
 const accumulatePlan = (node: PlanNode, stats: PlanStats, nodes: string[]): void => {
   stats.rowsFiltered += (node['Rows Removed by Filter'] as number) ?? 0;
@@ -161,46 +142,34 @@ const rootBlocks = (node: PlanNode): number =>
   ((node['Shared Hit Blocks'] as number) ?? 0) +
   ((node['Shared Read Blocks'] as number) ?? 0);
 
-const explainOn = async (
-  db: PGlite,
-  sql: string,
-  params: unknown[],
-): Promise<{ blocks: number; rowsFiltered: number; nodes: string }> => {
-  const res = await db.query<Record<string, unknown>>(
-    `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
-    params,
-  );
-  const plan = (res.rows[0]['QUERY PLAN'] as PlanNode[])[0].Plan as PlanNode;
-  const stats = newStats();
-  const nodes: string[] = [];
-  accumulatePlan(plan, stats, nodes);
-  return {
-    blocks: rootBlocks(plan),
-    rowsFiltered: stats.rowsFiltered,
-    nodes: nodes.join(' -> '),
-  };
+const toSqlLiteral = (value: unknown): string => {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (Array.isArray(value)) {
+    return `ARRAY[${value.map(toSqlLiteral).join(',')}]::text[]`;
+  }
+  return `'${String(value).replace(/'/g, "''")}'`;
 };
 
 /**
- * The same EXPLAIN, but through PREPARE/EXECUTE under `force_generic_plan` — the
- * ONLY faithful way to see what production gets. Prisma sends parameterized
- * prepared statements, so Postgres eventually builds a generic plan that cannot
- * see parameter values; an EXPLAIN with literals yields a custom plan that
- * production never receives, and two designs that looked perfect under literals
- * were catastrophic under generic planning on the real table.
+ * EXPLAIN through PREPARE/EXECUTE under `force_generic_plan` — the ONLY faithful way
+ * to see what production gets. The params are rendered as literals for EXECUTE, but
+ * the PLAN is built at PREPARE time with the values invisible, which is exactly the
+ * situation Prisma puts Postgres in.
  */
 let preparedCounterId = 0;
 const explainGeneric = async (
   db: PGlite,
   sql: string,
-  literalArgs: string,
-): Promise<{ blocks: number; rowsFiltered: number; nodes: string }> => {
+  params: readonly unknown[],
+): Promise<Measured> => {
   const name = `plan_probe_${preparedCounterId++}`;
+  const args = params.map(toSqlLiteral).join(', ');
   await db.exec(`SET plan_cache_mode = force_generic_plan`);
   await db.exec(`PREPARE ${name} AS ${sql}`);
   try {
     const res = await db.query<Record<string, unknown>>(
-      `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE ${name}(${literalArgs})`,
+      `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE ${name}${args ? `(${args})` : ''}`,
     );
     const plan = (res.rows[0]['QUERY PLAN'] as PlanNode[])[0].Plan as PlanNode;
     const stats = newStats();
@@ -234,17 +203,42 @@ const incomingOp = (
     ...overrides,
   }) as unknown as Operation;
 
+/** Column list per Prisma `select` key. An unmapped key must fail loudly, not vanish. */
+const COLUMN_SQL: Record<string, string> = {
+  actionType: 'action_type AS "actionType"',
+  clientId: 'client_id AS "clientId"',
+  vectorClock: 'vector_clock AS "vectorClock"',
+  serverSeq: 'server_seq AS "serverSeq"',
+  entityId: 'entity_id AS "entityId"',
+  entityType: 'entity_type AS "entityType"',
+};
+
+/**
+ * Honouring `select` is load-bearing, not cosmetic: conflict.ts reads
+ * existingOp.actionType to let concurrent time-tracking deltas merge. A shim that
+ * always returned every column would keep passing if actionType were dropped from
+ * the array-branch select, which is a silent rejection of tracked time.
+ */
+const selectCols = (select?: Record<string, boolean>): string => {
+  if (!select) return Object.values(COLUMN_SQL).join(', ');
+  const cols = Object.entries(select)
+    .filter(([, isSelected]) => isSelected)
+    .map(([key]) => {
+      const col = COLUMN_SQL[key];
+      if (!col) throw new Error(`Shim has no column mapping for select key "${key}"`);
+      return col;
+    });
+  if (cols.length === 0) throw new Error('Shim received an empty select');
+  return cols.join(', ');
+};
+
 /**
  * Renders the Prisma calls detectConflictForEntity makes as the SQL Prisma emits,
  * EXPLAIN-ing each one into `stats`. It deliberately also renders the OLD combined
- * OR filter: reverting the fix must fail this spec on the row/block BUDGET (proving
- * the plan degenerated), not on an unsupported-shape error.
+ * OR filter: reverting the fix must fail this spec on the BUDGET (proving the plan
+ * degenerated), not on an unsupported-shape error.
  */
 const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
-  const SELECT_COLS =
-    'action_type AS "actionType", client_id AS "clientId", ' +
-    'vector_clock AS "vectorClock", server_seq AS "serverSeq"';
-
   // Prisma renders `entityIds: { has: x }` as `entity_ids @> ARRAY[x]`.
   const renderConditions = (where: Record<string, any>, params: unknown[]): string[] => {
     const push = (value: unknown): string => `$${params.push(value)}`;
@@ -274,15 +268,17 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
     sql: string,
     params: unknown[],
   ): Promise<Record<string, unknown>[]> => {
-    const measured = await explainOn(db, sql, params);
+    const measured = await explainGeneric(db, sql, params);
     stats.blocks += measured.blocks;
     stats.rowsFiltered += measured.rowsFiltered;
     stats.sql.push(sql);
     return (await db.query<Record<string, unknown>>(sql, params)).rows;
   };
 
-  const normalize = (row?: Record<string, unknown>): Record<string, unknown> | null =>
-    row ? { ...row, serverSeq: Number(row.serverSeq) } : null;
+  const normalize = (row?: Record<string, unknown>): Record<string, unknown> | null => {
+    if (!row) return null;
+    return 'serverSeq' in row ? { ...row, serverSeq: Number(row.serverSeq) } : row;
+  };
 
   return {
     operation: {
@@ -296,7 +292,8 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
               ? 'ORDER BY server_seq ASC'
               : '';
         const rows = await runMeasured(
-          `SELECT ${SELECT_COLS} FROM operations WHERE ${conds.join(' AND ')} ${order} LIMIT 1`,
+          `SELECT ${selectCols(args.select)} FROM operations` +
+            ` WHERE ${conds.join(' AND ')} ${order} LIMIT 1`,
           params,
         );
         return normalize(rows[0]);
@@ -304,27 +301,44 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
       findUnique: async (args: Record<string, any>) => {
         const { userId, serverSeq } = args.where.userId_serverSeq;
         const rows = await runMeasured(
-          `SELECT ${SELECT_COLS} FROM operations WHERE user_id = $1 AND server_seq = $2 LIMIT 1`,
+          `SELECT ${selectCols(args.select)} FROM operations` +
+            ` WHERE user_id = $1 AND server_seq = $2 LIMIT 1`,
           [userId, serverSeq],
         );
         return normalize(rows[0]);
       },
     },
-    // Array branch. conflict.ts issues this as a Prisma tagged template; the shim
-    // rebuilds the identical SQL with positional params in template order
-    // (entityId, userId, entityType) so what is EXPLAINed is what production runs.
+    // Array branch. Rebuilt from the REAL tagged template — the literal text
+    // conflict.ts sends, with `$n` substituted in template order — so the aggregate,
+    // the MATERIALIZED fence and the CTE structure are all under test here rather
+    // than compared against a copy that can drift.
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       if (!isEntityArrayBranchQuery(strings)) {
         throw new Error(`Unexpected raw query: ${strings.join('?')}`);
       }
-      // Record the REAL template text (not the reconstruction) so a test can assert
-      // on what conflict.ts actually sends.
-      stats.rawSql.push(strings.join('?'));
-      const rows = await runMeasured(ARRAY_BRANCH_SQL, values);
+      const sql = strings.reduce(
+        (acc, part, i) => acc + part + (i < values.length ? `$${i + 1}` : ''),
+        '',
+      );
+      stats.rawSql.push(sql);
+      const rows = await runMeasured(sql, values);
       const max = rows[0]?.maxSeq;
       return [{ maxSeq: max === null || max === undefined ? null : Number(max) }];
     },
   };
+};
+
+// Post-fix both branches are index lookups bounded by actually-matching rows.
+// Measured on this seed: the array branch reads 2 blocks and the scalar 3, filtering
+// nothing. Every regression form below reads 806 blocks and filters 2500 — the probed
+// user's whole TASK slice — so one budget separates them by ~400x. Budgets are the
+// metric, not plan names: plan shapes are row-count and version dependent, "how much
+// did it actually read" is not.
+const MAX_BLOCKS = 100;
+
+const expectWithinBudget = (measured: { blocks: number; rowsFiltered: number }): void => {
+  expect(measured.rowsFiltered).toBe(0);
+  expect(measured.blocks).toBeLessThan(MAX_BLOCKS);
 };
 
 describe('detectConflictForEntity does not scan the history (PGlite)', () => {
@@ -338,34 +352,40 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     // entity_ids stays '{}' on EVERY row — see the header note. Populating it here
     // gives the planner array statistics and disarms the regression.
     let rows: string[] = [];
-    for (let seq = 1; seq <= SEEDED_OPS; seq++) {
+    const flush = async (): Promise<void> => {
+      if (rows.length === 0) return;
+      await db.exec(`INSERT INTO operations (${INSERT_COLS}) VALUES ${rows.join(',')}`);
+      rows = [];
+    };
+    const entityTypeFor = (n: number): string => ENTITY_TYPES[n % ENTITY_TYPES.length];
+
+    for (let seq = 1; seq <= OWN_OPS; seq++) {
       rows.push(
-        `('op-${seq}', ${USER_ID}, 'seed-client', ${seq}, '[Task] Update', 'TASK',` +
-          ` 'task-${seq}', '{}', 1, '{"seed-client":${seq}}')`,
+        `('op-${seq}', ${USER_ID}, 'seed-client', ${seq}, '[Task] Update',` +
+          ` '${entityTypeFor(seq)}', 'task-${seq}', '{}', 1, '{"seed-client":${seq}}')`,
       );
-      if (rows.length === 1000) {
-        await db.exec(`INSERT INTO operations (${INSERT_COLS}) VALUES ${rows.join(',')}`);
-        rows = [];
-      }
+      if (rows.length === 1000) await flush();
     }
+    // A second population of comparable size spread over ~20k OTHER users, so the
+    // per-user btree slice is a small fraction of the table the GIN estimate sees.
+    for (let i = 1; i <= OTHER_OPS; i++) {
+      rows.push(
+        `('other-${i}', ${1000 + i}, 'seed-other', ${i}, '[Task] Update',` +
+          ` '${entityTypeFor(i)}', 'otask-${i}', '{}', 1, '{"seed-other":${i}}')`,
+      );
+      if (rows.length === 1000) await flush();
+    }
+    await flush();
 
     // Index after the bulk load, then ANALYZE so the planner works from real
     // statistics rather than defaults on an unanalyzed table.
     await db.exec(CREATE_INDEXES);
     await db.exec('ANALYZE operations');
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
     await db.close();
   });
-
-  // Post-fix both branches are index lookups that match nothing: 0 rows filtered,
-  // ~12 blocks, flat in history size. The old single-OR query filters all 30_000
-  // rows across ~1366 blocks and grows linearly (measured 22x at 5k ops, 114x at
-  // 30k, 191x at 50k). Budgets are the metric, not plan names — plan shapes are
-  // row-count and version dependent, "how much did it actually read" is not.
-  const MAX_ROWS_FILTERED = SEEDED_OPS / 100;
-  const MAX_BLOCKS = 100;
 
   it('reads a bounded amount for a BRAND-NEW entity (the incident case)', async () => {
     const stats = newStats();
@@ -380,17 +400,26 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     );
 
     expect(result.hasConflict).toBe(false);
-    expect(stats.rowsFiltered).toBeLessThan(MAX_ROWS_FILTERED);
-    expect(stats.blocks).toBeLessThan(MAX_BLOCKS);
+    expectWithinBudget(stats);
+  });
+
+  it('reads a bounded amount for an entity deep in the history', async () => {
+    const stats = newStats();
+
+    await detectConflictForEntity(
+      USER_ID,
+      incomingOp(`task-${DEEP_ENTITY_SEQ}`),
+      `task-${DEEP_ENTITY_SEQ}`,
+      makeMeasuringTx(db, stats) as never,
+    );
+
+    expectWithinBudget(stats);
   });
 
   it('sends the array branch as a MATERIALIZED CTE', async () => {
-    // A TEXT guard, not a plan guard, and deliberately so: PGlite at 30k rows plans
-    // `AS NOT MATERIALIZED` identically, so no behavioural assertion in this file
-    // fails if the keyword is dropped (see KNOWN FIDELITY LIMITS in the header). On
-    // production the keyword is what stops user_id / entity_type inlining into the
-    // CTE and handing the composite btree a usable leading column. Until that is
-    // reproducible in-process, pin the text so an accidental removal is not silent.
+    // A text guard on top of the behavioural budget test below: the budget proves the
+    // keyword's EFFECT, this pins its presence so a removal is never silent even if a
+    // future seed stops reproducing the mis-plan.
     const stats = newStats();
 
     await detectConflictForEntity(
@@ -407,92 +436,25 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     expect(stats.rawSql[0]).toMatch(/FROM cand\s+WHERE user_id =/);
   });
 
-  it('reads a bounded amount for an entity deep in the history', async () => {
-    const stats = newStats();
-
-    await detectConflictForEntity(
-      USER_ID,
-      incomingOp('task-17'),
-      'task-17',
-      makeMeasuringTx(db, stats) as never,
-    );
-
-    expect(stats.rowsFiltered).toBeLessThan(MAX_ROWS_FILTERED);
-    expect(stats.blocks).toBeLessThan(MAX_BLOCKS);
-  });
-
   /**
    * EVERY assertion here runs under `force_generic_plan`. Testing these shapes with
    * literal constants — which this block used to do — is what let two broken designs
-   * through: both planned beautifully as custom plans and scanned the whole history
-   * as generic ones. Prisma only ever sends parameterized prepared statements, so the
-   * generic plan is the one that matters. If you add a shape, use explainGeneric.
+   * through: both planned beautifully as custom plans and read the whole slice as
+   * generic ones.
    */
   describe('raw query shapes under force_generic_plan (what production actually gets)', () => {
     const MISSING = 'task-brand-new';
-    const ARGS = `${USER_ID}, 'TASK', '${MISSING}'`;
+    const ARRAY_ARGS = [MISSING, USER_ID, 'TASK'];
+    const SLICE_ARGS = [USER_ID, 'TASK', MISSING];
 
-    it('OLD combined OR + LIMIT 1 degenerates into a full backward walk', async () => {
-      const old = await explainGeneric(
-        db,
-        `SELECT server_seq FROM operations
-           WHERE user_id = $1 AND entity_type = $2
-             AND (entity_id = $3 OR entity_ids @> ARRAY[$3]::text[])
-           ORDER BY server_seq DESC LIMIT 1`,
-        ARGS,
-      );
-
-      // The incident, reproduced: every row read and discarded.
-      expect(old.rowsFiltered).toBe(SEEDED_OPS);
-      expect(old.nodes).toContain('Backward');
-    });
-
-    it('the NAIVE array-only fix reintroduces the same walk (do not "simplify" to this)', async () => {
-      // `findFirst({ entityIds: { has }, orderBy: { serverSeq: 'desc' } })`. GIN still
-      // cannot order, so the planner makes the same losing bet.
-      const naive = await explainGeneric(
-        db,
-        `SELECT server_seq FROM operations
-           WHERE user_id = $1 AND entity_type = $2 AND entity_ids @> ARRAY[$3]::text[]
-           ORDER BY server_seq DESC LIMIT 1`,
-        ARGS,
-      );
-
-      expect(naive.rowsFiltered).toBe(SEEDED_OPS);
-      expect(naive.nodes).toContain('Backward');
-    });
-
-    it('the split lookups each stay bounded by actually-matching rows', async () => {
-      const scalar = await explainGeneric(
-        db,
-        `SELECT server_seq FROM operations
-           WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
-           ORDER BY server_seq DESC LIMIT 1`,
-        ARGS,
-      );
-      const array = await explainGeneric(
-        db,
-        // Same param order as conflict.ts: entityId first, inside the CTE.
-        ARRAY_BRANCH_SQL,
-        `'${MISSING}', ${USER_ID}, 'TASK'`,
-      );
-
-      expect(scalar.rowsFiltered).toBe(0);
-      expect(array.rowsFiltered).toBe(0);
-      expect(scalar.blocks + array.blocks).toBeLessThan(MAX_BLOCKS);
-    });
-
-    it('the array branch reaches the GIN index, never the entity btree', async () => {
+    it('the shipped CTE stays bounded and reaches GIN, never the entity btree', async () => {
       // The load-bearing claim. Inside the CTE the only predicate is
       // `entity_ids @> ...`, so the composite btree has no usable leading column and
       // GIN is the only index available AT ANY COST ESTIMATE — this is structural,
       // not a costing accident, which is why it survives generic planning.
-      const array = await explainGeneric(
-        db,
-        ARRAY_BRANCH_SQL,
-        `'${MISSING}', ${USER_ID}, 'TASK'`,
-      );
+      const array = await explainGeneric(db, ARRAY_BRANCH_SQL, ARRAY_ARGS);
 
+      expectWithinBudget(array);
       expect(array.nodes).toContain('operations_entity_ids_gin');
       expect(array.nodes).not.toContain(
         'operations_user_id_entity_type_entity_id_server_seq_idx',
@@ -500,38 +462,92 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
       expect(array.nodes).not.toContain('Backward');
     });
 
-    it('adding a server_seq bound does NOT improve the generic plan (why there is none)', async () => {
-      // A review proposed bounding the array branch with `server_seq > <scalar seq>`,
-      // measured at 495 -> 9 buffers. That gain is a CUSTOM-plan artifact: with the
-      // value visible the planner knows the bound is selective. Under generic
-      // planning the value is invisible, so the bound cannot drive an index — it
-      // lands as a post-GIN Filter and buys nothing. Measured separately on a
-      // multi-user seed, inside the CTE it is actively harmful: with no user_id
-      // predicate available there, a custom plan bitmap-scans (user_id, server_seq)
-      // on `server_seq > $4` alone — no leading-column bound, i.e. a full index scan
-      // across EVERY user's history. Hence: no bound. Revisit only with a generic
-      // plan from production showing otherwise.
-      const bounded = await explainGeneric(
+    it('the scalar branch stays bounded on its own composite btree', async () => {
+      const scalar = await explainGeneric(
         db,
-        `WITH cand AS MATERIALIZED (
-           SELECT user_id, entity_type, server_seq
-           FROM operations
-           WHERE entity_ids @> ARRAY[$1]::text[] AND server_seq > $4
-         )
-         SELECT MAX(server_seq)::int AS "maxSeq"
-         FROM cand
-         WHERE user_id = $2 AND entity_type = $3`,
-        `'${MISSING}', ${USER_ID}, 'TASK', 1`,
+        `SELECT server_seq FROM operations
+           WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
+           ORDER BY server_seq DESC LIMIT 1`,
+        SLICE_ARGS,
       );
 
-      // Still GIN — the bound changed nothing the planner could act on.
-      expect(bounded.nodes).toContain('operations_entity_ids_gin');
+      expectWithinBudget(scalar);
+    });
+
+    /**
+     * Every form that has been proposed, shipped or "simplified" into over the life of
+     * this query. All four abandon GIN under generic planning and read the probed
+     * user's whole entity_type slice; the budget catches each one.
+     */
+    const REGRESSION_SHAPES: Array<{ name: string; sql: string; args: unknown[] }> = [
+      {
+        name: 'the CTE with AS MATERIALIZED dropped (inlining hands back the btree)',
+        sql: `
+          WITH cand AS (
+            SELECT user_id, entity_type, server_seq
+            FROM operations
+            WHERE entity_ids @> ARRAY[$1]::text[]
+          )
+          SELECT MAX(server_seq)::int AS "maxSeq"
+          FROM cand
+          WHERE user_id = $2 AND entity_type = $3`,
+        args: ARRAY_ARGS,
+      },
+      {
+        name: 'the flat MAX form (the natural "why is there a CTE?" simplification)',
+        sql: `SELECT MAX(server_seq)::int AS "maxSeq" FROM operations
+              WHERE user_id = $1 AND entity_type = $2
+                AND entity_ids @> ARRAY[$3]::text[]`,
+        args: SLICE_ARGS,
+      },
+      {
+        name: "Prisma's aggregate({ _max }) form (MAX(...) FROM (... OFFSET 0))",
+        sql: `SELECT MAX(server_seq)::int AS "maxSeq" FROM (
+                SELECT server_seq FROM operations
+                WHERE user_id = $1 AND entity_type = $2
+                  AND entity_ids @> ARRAY[$3]::text[]
+                OFFSET 0
+              ) sub`,
+        args: SLICE_ARGS,
+      },
+      {
+        name: 'the OLD combined OR + LIMIT 1 (the outage)',
+        sql: `SELECT server_seq FROM operations
+              WHERE user_id = $1 AND entity_type = $2
+                AND (entity_id = $3 OR entity_ids @> ARRAY[$3]::text[])
+              ORDER BY server_seq DESC LIMIT 1`,
+        args: SLICE_ARGS,
+      },
+      {
+        name: 'the NAIVE array-only fix (GIN still cannot order)',
+        sql: `SELECT server_seq FROM operations
+              WHERE user_id = $1 AND entity_type = $2
+                AND entity_ids @> ARRAY[$3]::text[]
+              ORDER BY server_seq DESC LIMIT 1`,
+        args: SLICE_ARGS,
+      },
+    ];
+
+    it.each(REGRESSION_SHAPES)('blows the budget: $name', async ({ sql, args }) => {
+      const regressed = await explainGeneric(db, sql, args);
+
+      // Not "worse than the CTE" but "over the budget the shipped query is measured
+      // against", so this fails for the same reason the end-to-end tests would.
+      expect(regressed.blocks).toBeGreaterThan(MAX_BLOCKS);
+      // It read and discarded the probed user's whole entity_type slice.
+      expect(regressed.rowsFiltered).toBe(OWN_OPS / ENTITY_TYPES.length);
+      expect(regressed.nodes).toContain(
+        'operations_user_id_entity_type_entity_id_server_seq_idx',
+      );
     });
   });
 });
 
 describe('detectConflictForEntity behaviour is unchanged by the query split (PGlite)', () => {
   let db: PGlite;
+
+  const TIME_DELTA_ACTION = '[TimeTracking] Sync time spent';
+  const OTHER_USER_ID = 7;
 
   const seed = async (op: {
     id: string;
@@ -540,16 +556,20 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     entityId: string | null;
     entityIds?: string[];
     entityType?: string;
+    actionType?: string;
     schemaVersion?: number;
+    userId?: number;
     vectorClock?: Record<string, number>;
   }): Promise<void> => {
     await db.query(
       `INSERT INTO operations (${INSERT_COLS})
-       VALUES ($1,${USER_ID},$2,$3,'[Task] Update',$4,$5,$6,$7,$8)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         op.id,
+        op.userId ?? USER_ID,
         op.clientId,
         op.serverSeq,
+        op.actionType ?? '[Task] Update',
         op.entityType ?? 'TASK',
         op.entityId,
         op.entityIds ?? [],
@@ -562,9 +582,10 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
   const detect = (
     entityId: string,
     opOverrides: Partial<Record<string, unknown>> = {},
+    userId: number = USER_ID,
   ): Promise<{ hasConflict: boolean }> =>
     detectConflictForEntity(
-      USER_ID,
+      userId,
       incomingOp(entityId, opOverrides),
       entityId,
       makeMeasuringTx(db, newStats()) as never,
@@ -689,8 +710,77 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     expect((await detect('reverse-entity')).hasConflict).toBe(false);
   });
 
+  it('takes the NEWEST of several array-branch matches, not the oldest', async () => {
+    // Two stored ops mention the same entity via entity_ids. The aggregate must be
+    // MAX: against the newer row the incoming clock is CONCURRENT (conflict), against
+    // the older one it is GREATER_THAN (clean successor). MIN therefore accepts an op
+    // that overwrites a concurrent remote edit — silently, with no error anywhere.
+    await seed({
+      id: 'op-max-older',
+      serverSeq: 12,
+      clientId: 'cB',
+      entityId: 'max-primary',
+      entityIds: ['max-primary', 'max-target'],
+      vectorClock: { cB: 1 },
+    });
+    await seed({
+      id: 'op-max-newer',
+      serverSeq: 13,
+      clientId: 'cC',
+      entityId: 'max-primary',
+      entityIds: ['max-primary', 'max-target'],
+      vectorClock: { cC: 7 },
+    });
+
+    expect(
+      (await detect('max-target', { vectorClock: { cA: 4, cB: 1 } })).hasConflict,
+    ).toBe(true);
+  });
+
+  it('carries actionType from the ARRAY branch so concurrent time deltas still merge', async () => {
+    // Timer deltas are additive and commute, so two CONCURRENT deltas must NOT be
+    // reported as a conflict — resolveConflictForExistingOp only reaches that rule if
+    // the stored row's actionType survives the array-branch select. Dropping
+    // actionType there silently rejects tracked time, and only a delta routed through
+    // the ARRAY branch (reachable via entity_ids, not the scalar) exercises it.
+    await seed({
+      id: 'op-delta-remote',
+      serverSeq: 14,
+      clientId: 'cB',
+      actionType: TIME_DELTA_ACTION,
+      entityId: 'delta-primary',
+      entityIds: ['delta-primary', 'delta-target'],
+      vectorClock: { cB: 5 },
+    });
+
+    const result = await detect('delta-target', {
+      actionType: TIME_DELTA_ACTION,
+      vectorClock: { cA: 3 },
+    });
+
+    expect(result.hasConflict).toBe(false);
+  });
+
+  it('scopes the array-branch row fetch to the REQUESTING user', async () => {
+    // Every other case here runs as user 1, so a findUnique that ignored its userId
+    // argument would be invisible. Under a different user the winning row is only
+    // reachable when the point lookup is scoped correctly; otherwise it returns null,
+    // the conflict disappears, and a concurrent remote edit is overwritten.
+    await seed({
+      userId: OTHER_USER_ID,
+      id: 'op-other-user',
+      serverSeq: 42,
+      clientId: 'other',
+      entityId: 'scoped-primary',
+      entityIds: ['scoped-primary', 'scoped-target'],
+      vectorClock: { other: 1 },
+    });
+
+    expect((await detect('scoped-target', {}, OTHER_USER_ID)).hasConflict).toBe(true);
+  });
+
   it('ignores a full-state op (entity_id NULL, entity_ids {}) without erroring', async () => {
-    await seed({ id: 'op-full', serverSeq: 7, clientId: 'other', entityId: null });
+    await seed({ id: 'op-full', serverSeq: 8, clientId: 'other', entityId: null });
 
     expect((await detect('some-entity-after-full-state')).hasConflict).toBe(false);
   });
@@ -700,7 +790,7 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     // GLOBAL_CONFIG:tasks; that alias lookup must survive the query split.
     await seed({
       id: 'op-legacy-misc',
-      serverSeq: 8,
+      serverSeq: 10,
       clientId: 'other',
       entityId: 'misc',
       entityType: 'GLOBAL_CONFIG',
@@ -718,7 +808,7 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     // disjoint from tasks and must not fabricate a conflict.
     await seed({
       id: 'op-modern-misc',
-      serverSeq: 9,
+      serverSeq: 11,
       clientId: 'other',
       entityId: 'misc',
       entityType: 'GLOBAL_CONFIG',

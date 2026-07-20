@@ -144,9 +144,7 @@ vi.mock('../src/db', () => {
                 return true;
               }).length;
             }),
-            aggregate: vi
-              .fn()
-              .mockResolvedValue({ _min: { serverSeq: 1 }, _max: { serverSeq: null } }),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
             findUnique: vi.fn().mockImplementation(async (args: any) => {
               if (args.where?.id) {
                 return (
