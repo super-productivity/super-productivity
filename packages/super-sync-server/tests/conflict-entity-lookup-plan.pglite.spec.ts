@@ -38,11 +38,23 @@ import type { Operation } from '../src/sync/sync.types';
  *    always wins on cost and no regression is detectable. That degenerate shape is
  *    why this suite could not catch the outage. At 20k rows for the probed user plus
  *    20k spread over ~20k other users across 8 entity types, PGlite reproduces the
- *    production plan node-for-node and every regression below lands ~400x over budget.
+ *    production plan node-for-node and every regression lands ~6x over budget.
+ *  - THE INDEXES ARE CREATED BEFORE THE ROWS. This is not cosmetic ordering. Building
+ *    the GIN after a bulk load produces a compact, pending-list-free index, and the
+ *    array branch then measures 2 blocks — a number production only sees right after a
+ *    vacuum. In production the index pre-exists and rows arrive one op at a time, so
+ *    inserts land in the GIN pending list (fastupdate defaults to on) which `@>` must
+ *    scan linearly: same data, same query, 140 blocks and a 14x larger index (1120 kB
+ *    vs 72 kB). VACUUM flushes the pending list and restores 2 blocks, so the real cost
+ *    OSCILLATES between the two across the autovacuum cycle, bounded above by
+ *    gin_pending_list_limit rather than by anything in this seed. This suite therefore
+ *    seeds in production order and never vacuums: it measures the WORST realistic
+ *    steady state, which is what a regression budget should sit above. Setting
+ *    fastupdate=off removes the oscillation and pins the array branch at 2 blocks.
  *
- * REMAINING FIDELITY LIMIT: PGlite is not the production cluster. It has no btree_gin,
- * so the composite (user_id, entity_ids) index proposed in conflict.ts as the fix for
- * the shared-literal-id scan cannot be evaluated here at all.
+ * REMAINING FIDELITY LIMIT: PGlite is not the production cluster — different major
+ * version, and it reports every block as a cache hit, so these counts cannot model
+ * cold-cache I/O.
  */
 
 const OWN_OPS = 20_000;
@@ -92,31 +104,24 @@ const INSERT_COLS =
   'id,user_id,client_id,server_seq,action_type,entity_type,entity_id,entity_ids,' +
   'schema_version,vector_clock';
 
-/**
- * The array branch as conflict.ts issues it, with positional params in tagged-template
- * order. Used only by the raw-shape comparisons below; the end-to-end tests reconstruct
- * this from the real template instead, so the two are cross-checked against each other.
- */
-const ARRAY_BRANCH_SQL = `
-  WITH cand AS MATERIALIZED (
-    SELECT user_id, entity_type, server_seq
-    FROM operations
-    WHERE entity_ids @> ARRAY[$1]::text[]
-  )
-  SELECT MAX(server_seq)::int AS "maxSeq"
-  FROM cand
-  WHERE user_id = $2 AND entity_type = $3`;
-
 type PlanStats = {
   blocks: number;
   rowsFiltered: number;
   sql: string[];
   rawSql: string[];
+  /** Plan node types + index names, per measured query, parallel to `sql`. */
+  nodes: string[];
 };
 type PlanNode = Record<string, unknown>;
 type Measured = { blocks: number; rowsFiltered: number; nodes: string };
 
-const newStats = (): PlanStats => ({ blocks: 0, rowsFiltered: 0, sql: [], rawSql: [] });
+const newStats = (): PlanStats => ({
+  blocks: 0,
+  rowsFiltered: 0,
+  sql: [],
+  rawSql: [],
+  nodes: [],
+});
 
 /**
  * Walks the plan tree for node names and filtered-row counts.
@@ -272,6 +277,7 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
     stats.blocks += measured.blocks;
     stats.rowsFiltered += measured.rowsFiltered;
     stats.sql.push(sql);
+    stats.nodes.push(measured.nodes);
     return (await db.query<Record<string, unknown>>(sql, params)).rows;
   };
 
@@ -329,12 +335,18 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
 };
 
 // Post-fix both branches are index lookups bounded by actually-matching rows.
-// Measured on this seed: the array branch reads 2 blocks and the scalar 3, filtering
-// nothing. Every regression form below reads 806 blocks and filters 2500 — the probed
-// user's whole TASK slice — so one budget separates them by ~400x. Budgets are the
-// metric, not plan names: plan shapes are row-count and version dependent, "how much
-// did it actually read" is not.
-const MAX_BLOCKS = 100;
+// Measured on this seed, seeded in production order: the array branch reads 140 blocks
+// (GIN pending list — see the header) and the scalar 3, both filtering NOTHING. Every
+// regression form reads 816 blocks and filters 2500, the probed user's whole TASK slice.
+//
+// `rowsFiltered === 0` is the load-bearing assertion; the budget is the backstop. The
+// filtered count is the regression's actual signature — "read the user's history and
+// threw it away" — and it is scale-free, so it keeps its meaning if the seed changes.
+// The block budget is NOT scale-free: it sits ~2x above the measured 143 and ~5.7x below
+// the regressions, a margin that only holds for THIS seed's user/entity-type ratio. If
+// you change the seed, re-derive it — and the canary test below exists to fail loudly if
+// the seed ever stops reproducing the mis-plan at all.
+const MAX_BLOCKS = 300;
 
 const expectWithinBudget = (measured: { blocks: number; rowsFiltered: number }): void => {
   expect(measured.rowsFiltered).toBe(0);
@@ -348,6 +360,9 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     db = new PGlite();
     await db.waitReady;
     await db.exec(CREATE_TABLE);
+    // BEFORE the rows, as in production — see the header note. Building the GIN after
+    // the load yields a pending-list-free index that measures 2 blocks instead of 140.
+    await db.exec(CREATE_INDEXES);
 
     // entity_ids stays '{}' on EVERY row — see the header note. Populating it here
     // gives the planner array statistics and disarms the regression.
@@ -377,9 +392,9 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     }
     await flush();
 
-    // Index after the bulk load, then ANALYZE so the planner works from real
-    // statistics rather than defaults on an unanalyzed table.
-    await db.exec(CREATE_INDEXES);
+    // ANALYZE so the planner works from real statistics rather than defaults on an
+    // unanalyzed table. Deliberately NOT VACUUM: that would flush the GIN pending list
+    // and measure the freshly-vacuumed best case instead of the steady state.
     await db.exec('ANALYZE operations');
   }, 120_000);
 
@@ -401,6 +416,20 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
 
     expect(result.hasConflict).toBe(false);
     expectWithinBudget(stats);
+
+    // Structural, and on the REAL template rather than a copy of it: inside the CTE the
+    // only predicate is `entity_ids @> ...`, so the composite btree has no usable
+    // leading column and GIN is the only index available AT ANY COST ESTIMATE. That is
+    // why the shape survives generic planning. Every regression form — inlining the
+    // CTE, flattening it, reinstating the OR — reaches the btree instead, so this
+    // catches them structurally even if a future seed stops blowing the budget.
+    expect(stats.rawSql).toHaveLength(1);
+    const arrayBranchPlan = stats.nodes[stats.sql.indexOf(stats.rawSql[0])];
+    expect(arrayBranchPlan).toContain('operations_entity_ids_gin');
+    expect(arrayBranchPlan).not.toContain(
+      'operations_user_id_entity_type_entity_id_server_seq_idx',
+    );
+    expect(arrayBranchPlan).not.toContain('Backward');
   });
 
   it('reads a bounded amount for an entity deep in the history', async () => {
@@ -416,130 +445,41 @@ describe('detectConflictForEntity does not scan the history (PGlite)', () => {
     expectWithinBudget(stats);
   });
 
-  it('sends the array branch as a MATERIALIZED CTE', async () => {
-    // A text guard on top of the behavioural budget test below: the budget proves the
-    // keyword's EFFECT, this pins its presence so a removal is never silent even if a
-    // future seed stops reproducing the mis-plan.
-    const stats = newStats();
-
-    await detectConflictForEntity(
-      USER_ID,
-      incomingOp('task-brand-new'),
-      'task-brand-new',
-      makeMeasuringTx(db, stats) as never,
+  /**
+   * A CANARY, not a test of the source. It EXPLAINs a hardcoded copy of the OLD outage
+   * query — a string that exists only here — so it responds to no change in conflict.ts
+   * and proves nothing about the shipped code. Its one job is to prove that THIS SEED
+   * still reproduces the mis-plan, which is what gives the budget above its meaning.
+   *
+   * That job is real: the budget is an absolute, and its detection power depends on the
+   * seed's user/entity-type ratio. Shrink the seed, or collapse it toward one user and
+   * one entity type, and the regression's cost falls below MAX_BLOCKS while every other
+   * test in this file keeps passing — a suite that has silently stopped being able to
+   * fail. This fails instead.
+   *
+   * It replaced five near-identical shapes (the inlined CTE, the flat MAX, Prisma's
+   * aggregate form, the naive array-only fix, and this one). They were the same
+   * hardcoded-string assertion five times over and responded to no source mutation,
+   * while the shipped query's own budget and structural plan assertions above cover
+   * those regressions where it counts — on the real SQL. Verified by mutation: inlining
+   * the CTE in conflict.ts fails the two end-to-end budget tests, not this block.
+   */
+  it('CANARY: the seed still reproduces the mis-plan the budget is calibrated against', async () => {
+    const regressed = await explainGeneric(
+      db,
+      `SELECT server_seq FROM operations
+         WHERE user_id = $1 AND entity_type = $2
+           AND (entity_id = $3 OR entity_ids @> ARRAY[$3]::text[])
+         ORDER BY server_seq DESC LIMIT 1`,
+      [USER_ID, 'TASK', 'task-brand-new'],
     );
 
-    expect(stats.rawSql).toHaveLength(1);
-    expect(stats.rawSql[0]).toContain('AS MATERIALIZED');
-    expect(stats.rawSql[0]).not.toContain('NOT MATERIALIZED');
-    // The outer user boundary must stay outside the CTE.
-    expect(stats.rawSql[0]).toMatch(/FROM cand\s+WHERE user_id =/);
-  });
-
-  /**
-   * EVERY assertion here runs under `force_generic_plan`. Testing these shapes with
-   * literal constants — which this block used to do — is what let two broken designs
-   * through: both planned beautifully as custom plans and read the whole slice as
-   * generic ones.
-   */
-  describe('raw query shapes under force_generic_plan (what production actually gets)', () => {
-    const MISSING = 'task-brand-new';
-    const ARRAY_ARGS = [MISSING, USER_ID, 'TASK'];
-    const SLICE_ARGS = [USER_ID, 'TASK', MISSING];
-
-    it('the shipped CTE stays bounded and reaches GIN, never the entity btree', async () => {
-      // The load-bearing claim. Inside the CTE the only predicate is
-      // `entity_ids @> ...`, so the composite btree has no usable leading column and
-      // GIN is the only index available AT ANY COST ESTIMATE — this is structural,
-      // not a costing accident, which is why it survives generic planning.
-      const array = await explainGeneric(db, ARRAY_BRANCH_SQL, ARRAY_ARGS);
-
-      expectWithinBudget(array);
-      expect(array.nodes).toContain('operations_entity_ids_gin');
-      expect(array.nodes).not.toContain(
-        'operations_user_id_entity_type_entity_id_server_seq_idx',
-      );
-      expect(array.nodes).not.toContain('Backward');
-    });
-
-    it('the scalar branch stays bounded on its own composite btree', async () => {
-      const scalar = await explainGeneric(
-        db,
-        `SELECT server_seq FROM operations
-           WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
-           ORDER BY server_seq DESC LIMIT 1`,
-        SLICE_ARGS,
-      );
-
-      expectWithinBudget(scalar);
-    });
-
-    /**
-     * Every form that has been proposed, shipped or "simplified" into over the life of
-     * this query. All four abandon GIN under generic planning and read the probed
-     * user's whole entity_type slice; the budget catches each one.
-     */
-    const REGRESSION_SHAPES: Array<{ name: string; sql: string; args: unknown[] }> = [
-      {
-        name: 'the CTE with AS MATERIALIZED dropped (inlining hands back the btree)',
-        sql: `
-          WITH cand AS (
-            SELECT user_id, entity_type, server_seq
-            FROM operations
-            WHERE entity_ids @> ARRAY[$1]::text[]
-          )
-          SELECT MAX(server_seq)::int AS "maxSeq"
-          FROM cand
-          WHERE user_id = $2 AND entity_type = $3`,
-        args: ARRAY_ARGS,
-      },
-      {
-        name: 'the flat MAX form (the natural "why is there a CTE?" simplification)',
-        sql: `SELECT MAX(server_seq)::int AS "maxSeq" FROM operations
-              WHERE user_id = $1 AND entity_type = $2
-                AND entity_ids @> ARRAY[$3]::text[]`,
-        args: SLICE_ARGS,
-      },
-      {
-        name: "Prisma's aggregate({ _max }) form (MAX(...) FROM (... OFFSET 0))",
-        sql: `SELECT MAX(server_seq)::int AS "maxSeq" FROM (
-                SELECT server_seq FROM operations
-                WHERE user_id = $1 AND entity_type = $2
-                  AND entity_ids @> ARRAY[$3]::text[]
-                OFFSET 0
-              ) sub`,
-        args: SLICE_ARGS,
-      },
-      {
-        name: 'the OLD combined OR + LIMIT 1 (the outage)',
-        sql: `SELECT server_seq FROM operations
-              WHERE user_id = $1 AND entity_type = $2
-                AND (entity_id = $3 OR entity_ids @> ARRAY[$3]::text[])
-              ORDER BY server_seq DESC LIMIT 1`,
-        args: SLICE_ARGS,
-      },
-      {
-        name: 'the NAIVE array-only fix (GIN still cannot order)',
-        sql: `SELECT server_seq FROM operations
-              WHERE user_id = $1 AND entity_type = $2
-                AND entity_ids @> ARRAY[$3]::text[]
-              ORDER BY server_seq DESC LIMIT 1`,
-        args: SLICE_ARGS,
-      },
-    ];
-
-    it.each(REGRESSION_SHAPES)('blows the budget: $name', async ({ sql, args }) => {
-      const regressed = await explainGeneric(db, sql, args);
-
-      // Not "worse than the CTE" but "over the budget the shipped query is measured
-      // against", so this fails for the same reason the end-to-end tests would.
-      expect(regressed.blocks).toBeGreaterThan(MAX_BLOCKS);
-      // It read and discarded the probed user's whole entity_type slice.
-      expect(regressed.rowsFiltered).toBe(OWN_OPS / ENTITY_TYPES.length);
-      expect(regressed.nodes).toContain(
-        'operations_user_id_entity_type_entity_id_server_seq_idx',
-      );
-    });
+    expect(regressed.blocks).toBeGreaterThan(MAX_BLOCKS);
+    // It read and discarded the probed user's whole entity_type slice.
+    expect(regressed.rowsFiltered).toBe(OWN_OPS / ENTITY_TYPES.length);
+    expect(regressed.nodes).toContain(
+      'operations_user_id_entity_type_entity_id_server_seq_idx',
+    );
   });
 });
 
