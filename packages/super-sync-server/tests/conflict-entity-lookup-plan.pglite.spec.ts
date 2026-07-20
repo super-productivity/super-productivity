@@ -44,7 +44,10 @@ import type { Operation } from '../src/sync/sync.types';
  *    always wins on cost and no regression is detectable. That degenerate shape is
  *    why this suite could not catch the outage. At 20k rows for the probed user plus
  *    20k spread over ~20k other users across 8 entity types, PGlite reproduces the
- *    production plan node-for-node and every regression lands ~6x over budget.
+ *    SHAPE of the production mis-plan (same nodes, same discarded-row signature) and
+ *    the regression lands ~2.7x over the block budget — 816 against MAX_BLOCKS 300.
+ *    Node-for-node identity with production is NOT claimed; see the fidelity limit
+ *    below.
  *  - THE INDEXES ARE CREATED BEFORE THE ROWS. This is not cosmetic ordering. Building
  *    the GIN after a bulk load produces a compact, pending-list-free index, and the
  *    array branch then measures 2 blocks — a number production only sees right after a
@@ -88,9 +91,10 @@ const CREATE_TABLE = `
     id             text PRIMARY KEY,
     user_id        integer NOT NULL,
     client_id      text NOT NULL,
-    -- integer, NOT bigint: production maps serverSeq as Prisma Int. Declaring bigint
-    -- here made MAX() return bigint, which the shim's Number() coercion then hid, so
-    -- dropping the ::int cast from the production SQL would have stayed green.
+    -- integer, NOT bigint: production maps serverSeq as Prisma Int, so this matches the
+    -- deployed column type. It is a FIDELITY fix and nothing more — it does not make
+    -- dropping the production ::int cast catchable, because over an integer column MAX()
+    -- already returns integer and the cast is a no-op either way.
     server_seq     integer NOT NULL,
     action_type    text NOT NULL,
     entity_type    text NOT NULL,
@@ -101,9 +105,12 @@ const CREATE_TABLE = `
   );
 `;
 
-// Index set mirrors prisma/schema.prisma + the migrations: 0_init (the
-// (user_id, server_seq) unique the backward walk rides on), 20260511000000 (the
-// entity btree) and 20260613000001 (the entity_ids GIN).
+// A deliberate SUBSET of prisma/schema.prisma + the migrations — the three indexes this
+// lookup can actually ride: 0_init (the (user_id, server_seq) unique the backward walk
+// rides on), 20260511000000 (the entity btree) and 20260613000001 (the entity_ids GIN).
+// Production also has a PK on id plus (user_id, client_id) and (user_id, received_at)
+// btrees; they are left out because no predicate here can use them. Add them if a new
+// shape could.
 const CREATE_INDEXES = `
   CREATE UNIQUE INDEX operations_user_id_server_seq_key
     ON operations (user_id, server_seq);
@@ -348,14 +355,19 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
 
 // Post-fix both branches are index lookups bounded by actually-matching rows.
 // Measured on this seed, seeded in production order: the array branch reads 140 blocks
-// (GIN pending list — see the header) and the scalar 3, both filtering NOTHING. Every
-// regression form reads 816 blocks and filters 2500, the probed user's whole TASK slice.
+// (GIN pending list — see the header) and the scalar 3, both filtering NOTHING. The
+// regression form pinned by the CANARY below — the combined OR that caused the outage —
+// reads 816 blocks and filters 2500, the probed user's whole TASK slice. (The other
+// broken shapes named in conflict.ts degrade the same way, but only this one is
+// measured here.)
 //
 // `rowsFiltered === 0` is the load-bearing assertion; the budget is the backstop. The
 // filtered count is the regression's actual signature — "read the user's history and
 // threw it away" — and it is scale-free, so it keeps its meaning if the seed changes.
-// The block budget is NOT scale-free: it sits ~2x above the measured 143 and ~5.7x below
-// the regressions, a margin that only holds for THIS seed's user/entity-type ratio. If
+// The block budget is NOT scale-free: it sits ~2x above the measured 143 and only ~2.7x
+// below the regression's 816, a margin that holds only for THIS seed's
+// user/entity-type ratio. (The wider ~5.7x is regression-to-measured, not
+// regression-to-budget — the real headroom is the smaller number.) If
 // you change the seed, re-derive it — and the canary test below exists to fail loudly if
 // the seed ever stops reproducing the mis-plan at all.
 const MAX_BLOCKS = 300;

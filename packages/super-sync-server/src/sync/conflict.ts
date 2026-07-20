@@ -231,8 +231,10 @@ export const detectConflictForEntity = async (
   // early). For an entity with no matching rows — the first-ever op for a new task,
   // the single most common upload there is — nothing bounds that work and it reads
   // the user's whole slice. The batch unnest paths (detectConflictForEntities /
-  // prefetchLatestEntityOpsForBatch) are NOT exposed: no LIMIT, and DISTINCT ON
-  // forces full evaluation, so the early-exit bet cannot be made.
+  // prefetchLatestEntityOpsForBatch) cannot make that EARLY-EXIT bet — no LIMIT, and
+  // DISTINCT ON forces full evaluation. They carry the same two-index OR, though, so
+  // the SLICE-SCAN degeneracy is not excluded for them, and nothing EXPLAINs either
+  // batch query today (#9205).
   //
   // Scalar branch: the (user_id, entity_type, entity_id, server_seq) btree covers all
   // three equality columns PLUS the sort column, so this is a direct index seek and a
@@ -253,14 +255,14 @@ export const detectConflictForEntity = async (
   //
   // That is NOT a guarantee that GIN is chosen. A sequential scan is always still
   // available, and wins when the probed id is unselective — both plans have been
-  // reproduced on PG16 depending on row shape (see the cross-tenant note below, where a
-  // shared id produces a Seq Scan). GIN winning on production-shaped data is a MEASURED
+  // reproduced on PG16 depending on row shape. GIN winning on production-shaped data is a MEASURED
   // outcome, not a structural one. Re-measure after any change rather than trusting
   // this paragraph; a confidently-worded comment asserting what the planner "will" do
   // is what preceded the outage.
   // Every simpler form reads the whole (user_id, entity_type) slice instead: the
-  // array-only `findFirst` + `orderBy` (the outage), Prisma's `aggregate({ _max })`, and
-  // the flat `SELECT MAX(server_seq) ... AND @>`.
+  // array-only `findFirst` + `orderBy`, Prisma's `aggregate({ _max })`, and the flat
+  // `SELECT MAX(server_seq) ... AND @>`. (The outage itself was the combined OR
+  // described above, not any of these.)
   //
   // Do NOT "simplify" this without measuring under `plan_cache_mode =
   // force_generic_plan`. Prisma sends parameterized prepared statements; under the
@@ -287,17 +289,23 @@ export const detectConflictForEntity = async (
   // ids (boards.const.ts) in entity_ids, so probing one walks every tenant's matching
   // rows and the cost scales with total server population, bounded by nothing.
   // Single-entity writes against a shared id — updateTag({ id: 'TODAY' }),
-  // updateBoard({ id: 'KANBAN_DEFAULT' }) — are NOT a vector: getStoredEntityIds
-  // persists '{}' for them, so they never enter the GIN under that id at all.
+  // updateBoard({ id: 'KANBAN_DEFAULT' }) — do not POPULATE the GIN under that id:
+  // getStoredEntityIds persists '{}' for them. They are still a PROBE vector, though.
+  // Each one routes through detectConflictForEntity and probes that shared literal, so
+  // it walks every tenant's matching rows without contributing any of its own.
   //
   // The fix is a GIN index on the expression (ARRAY['u:' || user_id] || entity_ids),
   // which makes the probe flat. It needs no btree_gin extension (the operand is text[],
   // served by the built-in array_ops) and is measurable in PGlite. Not done here
   // because it is a real tradeoff, not a free win: this predicate must be rewritten to
-  // match the expression or the index is simply ignored, and it indexes EVERY row
-  // rather than only the multi-entity minority, so every insert maintains it. The outer
-  // user_id predicate stays load-bearing either way — the 'u:' prefix is a namespace,
-  // not a security boundary.
+  // match the expression or the index is simply ignored. Make it PARTIAL
+  // (WHERE entity_ids <> '{}') and it covers only the multi-entity minority instead of
+  // every row. That is lossless: a single-entity op stores '{}', so its indexed
+  // expression is just ARRAY['u:<id>'] and can never contain the real entity id a probe
+  // carries. The catch is that the query must then carry a matching
+  // `AND entity_ids <> '{}'` predicate, or Postgres cannot prove the partial index
+  // applies and ignores it. The outer user_id predicate stays load-bearing either way —
+  // the 'u:' prefix is a namespace, not a security boundary.
   //
   // Sequential, never Promise.all: `tx` is a single-connection interactive transaction
   // client and concurrent queries on it are unsafe.
@@ -312,13 +320,15 @@ export const detectConflictForEntity = async (
     WHERE user_id = ${userId} AND entity_type = ${op.entityType}
   `;
   // INVARIANT: an aggregate with no GROUP BY returns exactly one row, so the `?.`
-  // fold below is unreachable and `maxSeq` is null only when nothing matched. Add a
-  // GROUP BY and zero rows becomes possible — at which point this reads as "no prior
-  // op" and the upload is ACCEPTED. (Prisma's bare `aggregate()` is NOT such a case:
-  // it returns one object with `_max.serverSeq: null`, so it fails differently. The
-  // failure mode is silent acceptance of a conflicting write, not an error.) No
-  // runtime guard here on purpose (it could never fire today); if you change the
-  // shape of this query, change this fold with it.
+  // fold below is unreachable and `maxSeq` is null only when nothing matched.
+  // `GROUP BY user_id` would NOT break that: zero groups arise only when zero rows
+  // matched, which folds to null and correctly reads as "no prior op" — the same
+  // outcome as `MAX` over no rows. What DOES break it is any grouping that can return
+  // more than one row (`GROUP BY server_seq`, say), because `[0]` then takes an
+  // arbitrary group instead of the maximum and can under-report the latest op — silent
+  // acceptance of a conflicting write, not an error. No runtime guard here on purpose
+  // (it could never fire today); if you change the shape of this query, change this
+  // fold with it.
   const arrayBranchMaxSeq = arrayBranchRows[0]?.maxSeq ?? null;
 
   // Fetch the array-branch row only when it actually beats the scalar branch.

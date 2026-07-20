@@ -251,8 +251,11 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > The obvious escalations are broken too. Two ordered `LIMIT 1` lookups still leave the
   > array side unable to order on GIN. Measured under generic planning on a 40k-row seed, the
   > outage query, the naive array-only `LIMIT 1`, the flat `MAX`, Prisma's `aggregate({ _max })`
-  > and the CTE with `MATERIALIZED` dropped **all** read the user's whole entity-type slice —
-  > 816 blocks and 2500 rows discarded, against 143 blocks and 0 discarded for the shipped form.
+  > and the CTE with `MATERIALIZED` dropped **all** read the user's whole entity-type slice,
+  > against 143 blocks and 0 discarded for the shipped form. The **816 blocks / 2500 rows
+  > discarded** figure is the outage query specifically, and it is the only one still pinned
+  > by a test (the `CANARY` case in `conflict-entity-lookup-plan.pglite.spec.ts`); the other
+  > four were measured during the investigation but are not guarded against regression.
   >
   > Measure any change here with `SET plan_cache_mode = force_generic_plan`. Prisma sends
   > parameterized prepared statements; under `auto` Postgres plans the first ~5 executions as
@@ -276,7 +279,7 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > loss**. That was the #8334 bug; the divergent-scalar case is the decisive test in
   > `tests/integration/conflict-detection-sql.integration.spec.ts`.
 
-**Forward-only by design:** rows written before migration `20260613000000` have an empty `entity_ids` array and fall back to the scalar `entity_id` (= first entity) in the `CASE` expression / scalar branch above — there is no `UPDATE` backfill. Entities 2..n of already-stored multi-entity ops were never persisted and are unrecoverable, so they remain invisible to conflict detection until that entity gets a fresh write. This residual is bounded: client-side LWW is unaffected (the client persists the full op and `VectorClockService.getEntityFrontier()` fans each op out to **every** entity), and the server only builds an authoritative snapshot from non-encrypted ops (`replayOpsToState()` throws on encrypted ops), so the pre-fix gap could only surface a stale value to a fresh client on non-encrypted self-hosted servers.
+**Forward-only by design:** rows written before migration `20260613000000` have an empty `entity_ids` array, so they are reached only by their scalar `entity_id` (= first entity) — via the scalar arm of the batch union above, or the scalar branch of the single-entity lookup. (Not via the exclusive `CASE` form: that is the removed #8334 bug documented in the warning above, not the current shape.) There is no `UPDATE` backfill. Entities 2..n of already-stored multi-entity ops were never persisted and are unrecoverable, so they remain invisible to conflict detection until that entity gets a fresh write. This residual is bounded: client-side LWW is unaffected (the client persists the full op and `VectorClockService.getEntityFrontier()` fans each op out to **every** entity), and the server only builds an authoritative snapshot from non-encrypted ops (`replayOpsToState()` throws on encrypted ops), so the pre-fix gap could only surface a stale value to a fresh client on non-encrypted self-hosted servers.
 
 ### The `SyncImportFilterService` Algorithm
 
