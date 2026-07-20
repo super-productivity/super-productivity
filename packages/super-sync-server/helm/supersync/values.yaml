@@ -108,6 +108,8 @@ postgresql:
   # -- Deploy a PostgreSQL instance alongside SuperSync.
   # Set to false and configure externalDatabase to use an external PostgreSQL.
   enabled: true
+  # -- Maximum Prisma connections when using the bundled 512Mi PostgreSQL.
+  connectionLimit: 20
   image:
     # -- PostgreSQL image repository
     repository: postgres
@@ -144,12 +146,13 @@ postgresql:
 
 # -- External database configuration (used when postgresql.enabled is false)
 externalDatabase:
-  # -- Full PostgreSQL URL. Must include connection_limit and pool_timeout, e.g.
+  # -- Full PostgreSQL URL. Must include exactly one positive connection_limit
+  # and pool_timeout value. A pre-upgrade hook validates both before replacing
+  # a running pod, and the migration init container rechecks them, e.g.
   # postgresql://user:pass@host:5432/dbname?connection_limit=60&pool_timeout=10
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
-  # The secret must contain a DATABASE_URL key with the same pool parameters;
-  # the migration init container fails fast when either parameter is absent.
+  # The secret must contain a DATABASE_URL key with the same pool parameters.
   existingSecret: ""
 
 # -- Ingress configuration

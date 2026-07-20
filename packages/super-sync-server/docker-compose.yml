@@ -14,7 +14,7 @@ x-logging: &default-logging
     max-size: '10m'
     max-file: '3'
 
-# Preserve several days of app history at incident volume (~300 MB), without
+# Preserve about a day of app history at incident volume (~300 MB), without
 # applying the same 10x increase to Postgres and Caddy. (#9191)
 x-logging-app: &app-logging
   driver: 'json-file'

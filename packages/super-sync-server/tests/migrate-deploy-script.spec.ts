@@ -35,6 +35,7 @@ interface RunResult {
   resolveRolledBack: string[];
   databaseUrls: string[];
   prismaCommands: string[];
+  timeoutCommands: string[];
 }
 
 let projectDir: string;
@@ -56,7 +57,7 @@ shift # drop "prisma"
 sub="$1"; shift
 state="$FAKE_STATE"
 # Record the URL every prisma invocation actually receives, so the migrator's
-# statement_timeout exemption can be asserted on the recovery paths too.
+# statement_timeout guardrail can be asserted on the recovery paths too.
 printf '%s\\n' "\${DATABASE_URL:-<unset>}" >> "$state/database_urls"
 case "$sub" in
   migrate)
@@ -169,6 +170,7 @@ const run = (env: Record<string, string>, args: string[] = []): RunResult => {
     resolveRolledBack: read('rolledback').split('\n').filter(Boolean),
     databaseUrls: read('database_urls').split('\n').filter(Boolean),
     prismaCommands: read('prisma_commands').split('\n').filter(Boolean),
+    timeoutCommands: read('timeout_commands').split('\n').filter(Boolean),
   };
 };
 
@@ -270,7 +272,7 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     );
     expect(r.stdout).toContain(`migrate resolve --rolled-back '${bare}'`);
     expect(r.stdout).toContain(
-      'docker compose run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma',
+      'docker compose run --rm --no-deps -T -e "MIGRATE_STEP_TIMEOUT=1800" supersync sh scripts/migrate-deploy.sh --prisma',
     );
     expect(r.resolveApplied).toEqual([]);
     expect(r.resolveRolledBack).toEqual([]);
@@ -282,7 +284,7 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     // that: run the wrapped command, then exit 143 as if the step was TERMed.
     // migrate-deploy.sh must normalize this to its timeout branch.
     const fakeTimeout = join(binDir, 'timeout');
-    writeFileSync(fakeTimeout, '#!/bin/sh\nshift\n"$@"\nexit 143\n');
+    writeFileSync(fakeTimeout, '#!/bin/sh\nshift 3\n"$@"\nexit 143\n');
     chmodSync(fakeTimeout, 0o755);
 
     const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018' });
@@ -299,7 +301,7 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     // recovery, because raising the timeout alone cannot rebuild an INVALID
     // index left by the aborted build.
     const fakeTimeout = join(binDir, 'timeout');
-    writeFileSync(fakeTimeout, '#!/bin/sh\nshift\n"$@"\nexit 143\n');
+    writeFileSync(fakeTimeout, '#!/bin/sh\nshift 3\n"$@"\nexit 143\n');
     chmodSync(fakeTimeout, 0o755);
     const bare = '20260701000000_add_bare_concurrent_index';
     const bareSql = `CREATE INDEX CONCURRENTLY "operations_bare_idx"
@@ -433,24 +435,25 @@ CREATE INDEX CONCURRENTLY "operations_payload_bytes_unbackfilled_idx"
   });
 });
 
-// #9191: operators may cap application statements through DATABASE_URL. That cap
-// must not reach CREATE INDEX CONCURRENTLY or its automated recovery steps;
-// migrations are bounded by STEP_TIMEOUT instead.
-describe('migrate-deploy.sh statement_timeout exemption', () => {
+// #9191: operators may cap application statements through DATABASE_URL. Migrations
+// use the larger, finite MIGRATE_STEP_TIMEOUT budget instead so PostgreSQL cannot
+// keep running a query after its Prisma client has been terminated.
+describe('migrate-deploy.sh statement_timeout guardrail', () => {
   const BASE = 'postgresql://u:p@postgres:5432/supersync';
 
-  it('overrides an existing statement_timeout with a final zero value', () => {
+  it('overrides an existing statement_timeout with the finite migration budget', () => {
     const r = run({
       FAKE_FAIL: '',
       FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL: `${BASE}?connection_limit=60&pool_timeout=20&options=-c%20statement_timeout%3D60000`,
     });
 
     expect(r.status).toBe(0);
     expect(r.databaseUrls).not.toHaveLength(0);
     for (const url of r.databaseUrls) {
-      expect(url).toContain('statement_timeout%3D0');
-      expect(url).toMatch(/statement_timeout%3D60000.*statement_timeout%3D0/);
+      expect(url).toContain('statement_timeout%3D2000');
+      expect(url).toMatch(/statement_timeout%3D60000.*statement_timeout%3D2000/);
       // The pool settings are not ours to touch.
       expect(url).toContain('connection_limit=60');
       expect(url).toContain('pool_timeout=20');
@@ -467,7 +470,27 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
 
     expect(r.status).not.toBe(0);
     expect(r.stdout).toContain(
-      'DATABASE_URL must include positive connection_limit and pool_timeout values',
+      'DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each',
+    );
+    expect(r.prismaCommands).toEqual([]);
+  });
+
+  it.each([
+    'connection_limit=60&connection_limit=0&pool_timeout=10',
+    'connection_limit=60&pool_timeout=10&pool_timeout=0',
+    'connection_limit=9007199254740992&pool_timeout=10',
+    'connection_limit=60&pool_timeout=9007199254740992',
+  ])('rejects invalid pool guardrails in %s', (query) => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      DATABASE_URL: `${BASE}?${query}`,
+      REQUIRE_DATABASE_POOL_LIMITS: 'true',
+    });
+
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain(
+      'DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each',
     );
     expect(r.prismaCommands).toEqual([]);
   });
@@ -477,6 +500,7 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
       {
         FAKE_FAIL: '',
         FAKE_CODE: 'P3018',
+        MIGRATE_STEP_TIMEOUT: '7',
         DATABASE_URL: `${BASE}?connection_limit=60&pool_timeout=10&options=-c%20statement_timeout%3D60000`,
         REQUIRE_DATABASE_POOL_LIMITS: 'true',
       },
@@ -487,17 +511,44 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     expect(r.prismaCommands).toEqual([
       `prisma migrate resolve --rolled-back ${ENCRYPTED_OPS}`,
     ]);
-    expect(r.databaseUrls[0]).toMatch(/statement_timeout%3D60000.*statement_timeout%3D0/);
-    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toBe(
-      'supersync-migrator',
+    expect(r.databaseUrls[0]).toMatch(
+      /statement_timeout%3D60000.*statement_timeout%3D2000/,
+    );
+    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toMatch(
+      /^supersync-migrator-[0-9a-f-]{36}$/,
     );
   });
 
-  it('keeps the exemption on the recovery paths, not just the first deploy', () => {
+  it('bounds manual recovery commands with the same client timeout wrapper', () => {
+    const timeoutPath = join(binDir, 'timeout');
+    writeFileSync(
+      timeoutPath,
+      '#!/bin/sh\ncase "$*" in *"npx prisma"*) printf \'%s\\n\' "$*" >> "$FAKE_STATE/timeout_commands" ;; esac\nexit 124\n',
+    );
+    chmodSync(timeoutPath, 0o755);
+
+    const r = run(
+      {
+        FAKE_FAIL: '',
+        FAKE_CODE: 'P3018',
+        MIGRATE_STEP_TIMEOUT: '7',
+      },
+      ['--prisma', 'migrate', 'resolve', '--rolled-back', ENCRYPTED_OPS],
+    );
+
+    expect(r.status).toBe(124);
+    expect(r.timeoutCommands).toEqual([
+      `-k 5 7 npx prisma migrate resolve --rolled-back ${ENCRYPTED_OPS}`,
+    ]);
+    expect(r.prismaCommands).toEqual([]);
+  });
+
+  it('keeps the guardrail on the recovery paths, not just the first deploy', () => {
     writeMigration(ENCRYPTED_OPS, ENCRYPTED_OPS_SQL);
     const r = run({
       FAKE_FAIL: ENCRYPTED_OPS,
       FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL: `${BASE}?options=-c%20statement_timeout%3D60000`,
     });
 
@@ -505,20 +556,23 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     // deploy → resolve → db execute → resolve → deploy: several invocations, and
     // the out-of-band `db execute` is the one that actually builds the index.
     expect(r.databaseUrls.length).toBeGreaterThan(1);
-    expect(r.databaseUrls.every((u) => u.includes('statement_timeout%3D0'))).toBe(true);
+    expect(r.databaseUrls.every((u) => u.includes('statement_timeout%3D2000'))).toBe(
+      true,
+    );
   });
 
   it('extends an existing options value instead of adding a second options param', () => {
     const r = run({
       FAKE_FAIL: '',
       FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL: `${BASE}?options=-c%20lock_timeout%3D5000&connection_limit=60`,
     });
 
     const url = r.databaseUrls[0];
-    expect(url).toContain('statement_timeout%3D0');
+    expect(url).toContain('statement_timeout%3D2000');
     // Prisma resolves a duplicated param to one of the two — silently dropping
-    // either the pre-existing setting or our exemption.
+    // either the pre-existing setting or our guardrail.
     expect(url.match(/options=/g)).toHaveLength(1);
     expect(url).toContain('lock_timeout%3D5000');
     expect(url).toContain('connection_limit=60');
@@ -528,10 +582,11 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
     const r = run({
       FAKE_FAIL: '',
       FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL: `postgresql://statement_timeout:p@postgres:5432/supersync?connection_limit=60`,
     });
 
-    expect(r.databaseUrls[0]).toContain('options=-c%20statement_timeout%3D0');
+    expect(r.databaseUrls[0]).toContain('options=-c%20statement_timeout%3D2000');
   });
 
   it('identifies every Prisma migration connection to monitoring', () => {
@@ -543,11 +598,17 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
 
     expect(r.databaseUrls).not.toHaveLength(0);
     expect(
-      r.databaseUrls.every(
-        (url) =>
-          new URL(url).searchParams.get('application_name') === 'supersync-migrator',
+      r.databaseUrls.every((url) =>
+        /^supersync-migrator-[0-9a-f-]{36}$/.test(
+          new URL(url).searchParams.get('application_name') ?? '',
+        ),
       ),
     ).toBe(true);
+    expect(
+      new Set(
+        r.databaseUrls.map((url) => new URL(url).searchParams.get('application_name')),
+      ).size,
+    ).toBe(1);
   });
 
   it('replaces an existing application_name query parameter', () => {
@@ -557,29 +618,84 @@ describe('migrate-deploy.sh statement_timeout exemption', () => {
       DATABASE_URL: `${BASE}?application_name=existing-app`,
     });
 
-    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toBe(
-      'supersync-migrator',
+    expect(new URL(r.databaseUrls[0]).searchParams.get('application_name')).toMatch(
+      /^supersync-migrator-[0-9a-f-]{36}$/,
     );
+  });
+
+  it('collapses duplicate protected parameters so later values cannot override them', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
+      DATABASE_URL: `${BASE}?options=-c%20lock_timeout%3D5000&options=-c%20statement_timeout%3D60000&application_name=first&application_name=last`,
+    });
+
+    const url = new URL(r.databaseUrls[0]);
+    const options = url.searchParams.getAll('options');
+    expect(options).toHaveLength(1);
+    expect(options[0]).toBe(
+      '-c lock_timeout=5000 -c statement_timeout=60000 -c statement_timeout=2000',
+    );
+    expect(url.searchParams.getAll('application_name')).toEqual([
+      expect.stringMatching(/^supersync-migrator-[0-9a-f-]{36}$/),
+    ]);
   });
 
   it('appends with & when the URL already has a query string', () => {
     const r = run({
       FAKE_FAIL: '',
       FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL: `${BASE}?connection_limit=60`,
     });
 
-    expect(r.databaseUrls[0]).toBe(
-      `${BASE}?connection_limit=60&options=-c%20statement_timeout%3D0&application_name=supersync-migrator`,
+    expect(r.databaseUrls[0]).toContain(
+      `${BASE}?connection_limit=60&options=-c%20statement_timeout%3D2000&application_name=supersync-migrator-`,
     );
   });
 
   it('appends with ? when the URL has no query string', () => {
-    const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018', DATABASE_URL: BASE });
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '7',
+      DATABASE_URL: BASE,
+    });
 
-    expect(r.databaseUrls[0]).toBe(
-      `${BASE}?options=-c%20statement_timeout%3D0&application_name=supersync-migrator`,
+    expect(r.databaseUrls[0]).toContain(
+      `${BASE}?options=-c%20statement_timeout%3D2000&application_name=supersync-migrator-`,
     );
+  });
+
+  it.each(['0', '01', '-1', '1.5', 'abc', '2147484', '99999999999999999999'])(
+    'rejects invalid MIGRATE_STEP_TIMEOUT=%s before invoking Prisma',
+    (timeout) => {
+      const r = run({
+        FAKE_FAIL: '',
+        FAKE_CODE: 'P3018',
+        MIGRATE_STEP_TIMEOUT: timeout,
+        DATABASE_URL: BASE,
+      });
+
+      expect(r.status).not.toBe(0);
+      expect(r.stdout).toContain(
+        'MIGRATE_STEP_TIMEOUT must be an integer from 1 to 2147483 seconds',
+      );
+      expect(r.prismaCommands).toEqual([]);
+    },
+  );
+
+  it('clamps the database timeout to one second for a short client budget', () => {
+    const r = run({
+      FAKE_FAIL: '',
+      FAKE_CODE: 'P3018',
+      MIGRATE_STEP_TIMEOUT: '3',
+      DATABASE_URL: BASE,
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.databaseUrls[0]).toContain('statement_timeout%3D1000');
   });
 
   it('does nothing when DATABASE_URL is unset', () => {

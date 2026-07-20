@@ -67,3 +67,13 @@ Create the fully qualified name for the PostgreSQL resources.
 {{- define "supersync.postgresql.fullname" -}}
 {{- printf "%s-postgresql" (include "supersync.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
+
+{{/* Validate and render the built-in database's Prisma connection limit. */}}
+{{- define "supersync.postgresqlConnectionLimit" -}}
+{{- $value := toString .Values.postgresql.connectionLimit -}}
+{{- $safeLength := or (lt (len $value) 16) (and (eq (len $value) 16) (le $value "9007199254740991")) -}}
+{{- if not (and (regexMatch "^[1-9][0-9]*$" $value) $safeLength) -}}
+{{- fail "postgresql.connectionLimit must be a positive integer" -}}
+{{- end -}}
+{{- $value -}}
+{{- end }}

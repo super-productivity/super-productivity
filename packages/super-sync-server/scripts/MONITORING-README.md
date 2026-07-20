@@ -265,10 +265,13 @@ insert**. If `operations_entity_ids_gin` were the invalid one, the conflict
 lookup would silently degrade to a sequential scan on every upload, permanently,
 and nothing else in the codebase would report it.
 
-The known migrator is excluded from the long-query check, and indexes currently
-listed in `pg_stat_progress_create_index` are excluded from check 8. Its own
-`MIGRATE_STEP_TIMEOUT` and deploy exit status monitor intentional long-running DDL
-without generating incident/recovery noise.
+The known migrator is excluded from the long-query check. Indexes currently
+listed in `pg_stat_progress_create_index`, and invalid indexes observed while the
+migrator is active, are excluded from check 8. The latter also covers
+`DROP INDEX CONCURRENTLY`, which has no progress-view entry. Each migration run
+has a unique database application id; its finite database/client timeouts and
+targeted backend cleanup bound interrupted DDL without generating
+incident/recovery noise.
 
 Repeat alerts for the same problem are suppressed by a content hash, so counts
 and durations are normalised out — you get one mail per distinct problem, plus a

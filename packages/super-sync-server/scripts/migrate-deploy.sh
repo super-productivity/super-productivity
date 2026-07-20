@@ -48,95 +48,170 @@ MIGRATIONS_DIR="prisma/migrations"
 # The real infinite-loop backstop is the LAST_RECOVERED guard below; this is
 # just a tight upper bound. Overridable for emergencies.
 MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
-# Per-step timeout. A CONCURRENTLY build blocked by a long-running transaction
-# can hang forever; without this the CMD/initContainer paths never fail.
+# Per-step client timeout. PostgreSQL also receives a per-statement timeout five
+# seconds shorter. If cumulative work still reaches the client deadline, the
+# wrapper terminates only the backend carrying this run's unique application id.
 STEP_TIMEOUT="${MIGRATE_STEP_TIMEOUT:-1800}"
+case "$STEP_TIMEOUT" in
+  ''|0*|*[!0-9]*)
+    echo "ERROR: MIGRATE_STEP_TIMEOUT must be an integer from 1 to 2147483 seconds." >&2
+    exit 2
+    ;;
+esac
+if [ "${#STEP_TIMEOUT}" -gt 7 ] || [ "$STEP_TIMEOUT" -gt 2147483 ]; then
+  echo "ERROR: MIGRATE_STEP_TIMEOUT must be an integer from 1 to 2147483 seconds." >&2
+  exit 2
+fi
+if [ "$STEP_TIMEOUT" -gt 5 ]; then
+  STATEMENT_TIMEOUT_SECONDS=$((STEP_TIMEOUT - 5))
+else
+  STATEMENT_TIMEOUT_SECONDS=1
+fi
+STATEMENT_TIMEOUT_MS=$((STATEMENT_TIMEOUT_SECONDS * 1000))
 
-# Helm cannot inspect a DATABASE_URL stored in an existing Kubernetes Secret.
-# Its init container opts into this runtime check before migrations or the app
-# can start. Literal chart values are also rejected during template rendering.
+# Helm cannot inspect a DATABASE_URL stored in an existing Kubernetes Secret,
+# so its migration init container requests the same check at runtime.
 if [ "${REQUIRE_DATABASE_POOL_LIMITS:-false}" = "true" ]; then
   if ! node -e '
     try {
       const url = new URL(process.env.DATABASE_URL);
-      const valid = ["connection_limit", "pool_timeout"].every((name) =>
-        /^[1-9][0-9]*$/.test(url.searchParams.get(name) ?? ""),
-      );
+      const valid = ["connection_limit", "pool_timeout"].every((name) => {
+        const values = url.searchParams.getAll(name);
+        const value = values[0];
+        return values.length === 1 && /^[1-9][0-9]*$/.test(value) &&
+          Number.isSafeInteger(Number(value));
+      });
       process.exit(valid ? 0 : 1);
     } catch {
       process.exit(1);
     }
   '; then
-    echo "ERROR: DATABASE_URL must include positive connection_limit and pool_timeout values." >&2
+    echo "ERROR: DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each." >&2
     exit 1
   fi
 fi
 
-# DATABASE_URL may cap application statements. Migrations use STEP_TIMEOUT
-# instead: a shorter statement_timeout can cancel CREATE INDEX CONCURRENTLY and
-# leave an INVALID index that every automated recovery step inherits. Append our
-# settings to the real `options` query parameter so they override earlier `-c`
-# values without mistaking credentials or another URL component for an option.
-# The application_name lets health-alert.sh ignore expected long-running DDL.
+# DATABASE_URL may cap application statements. Migrations use a statement
+# timeout just below STEP_TIMEOUT instead: a shorter application cap can cancel
+# CREATE INDEX CONCURRENTLY and leave an INVALID index, while an unlimited cap
+# can leave PostgreSQL working after a killed client. Collapse protected query
+# parameters so a duplicate cannot override the final settings. The
+# application_name lets health-alert.sh ignore expected long-running DDL.
 # Connection option format: https://www.postgresql.org/docs/16/libpq-connect.html
 if [ -n "${DATABASE_URL:-}" ]; then
-  MIGRATOR_OPTIONS="-c%20statement_timeout%3D0"
-  case "$DATABASE_URL" in
-    *\?options=*|*\&options=*)
-      DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
-        sed -E "s/([?&]options=[^&]*)/\1%20${MIGRATOR_OPTIONS}/")
-      ;;
-    *\?*) DATABASE_URL="${DATABASE_URL}&options=${MIGRATOR_OPTIONS}" ;;
-    *) DATABASE_URL="${DATABASE_URL}?options=${MIGRATOR_OPTIONS}" ;;
-  esac
+  if ! MIGRATOR_APPLICATION_NAME=$(node -e \
+    "process.stdout.write('supersync-migrator-' + require('node:crypto').randomUUID())"); then
+    echo "ERROR: could not generate a unique database migrator identifier." >&2
+    exit 1
+  fi
+  export MIGRATOR_APPLICATION_NAME
+  if ! MIGRATOR_DATABASE_URL=$(
+    MIGRATOR_SOURCE_DATABASE_URL="$DATABASE_URL" \
+      MIGRATOR_STATEMENT_TIMEOUT_MS="$STATEMENT_TIMEOUT_MS" \
+      MIGRATOR_APPLICATION_NAME="$MIGRATOR_APPLICATION_NAME" \
+      node <<'NODE'
+try {
+  const url = new URL(process.env.MIGRATOR_SOURCE_DATABASE_URL);
+  const options = url.searchParams.getAll('options').filter(Boolean);
+  options.push(
+    `-c statement_timeout=${process.env.MIGRATOR_STATEMENT_TIMEOUT_MS}`,
+  );
 
-  # application_name is a first-class libpq connection parameter. Set that
-  # parameter directly: an existing value overrides a conflicting `options`
-  # setting regardless of their textual order in the URL.
-  case "$DATABASE_URL" in
-    *\?application_name=*|*\&application_name=*)
-      DATABASE_URL=$(printf '%s' "$DATABASE_URL" |
-        sed -E 's/([?&]application_name=)[^&#]*/\1supersync-migrator/')
-      ;;
-    *) DATABASE_URL="${DATABASE_URL}&application_name=supersync-migrator" ;;
-  esac
+  url.searchParams.delete('options');
+  url.searchParams.append('options', options.join(' '));
+  url.searchParams.delete('application_name');
+  url.searchParams.append(
+    'application_name',
+    process.env.MIGRATOR_APPLICATION_NAME,
+  );
+  url.search = url.searchParams.toString().replace(/\+/g, '%20');
+  process.stdout.write(url.toString());
+} catch {
+  process.exit(1);
+}
+NODE
+  ); then
+    echo "ERROR: DATABASE_URL is not a valid PostgreSQL URL." >&2
+    exit 1
+  fi
+  DATABASE_URL="$MIGRATOR_DATABASE_URL"
   export DATABASE_URL
 fi
 
-# Printed manual-recovery commands re-enter through this narrow wrapper so
-# they receive the same timeout exemption without printing database secrets.
-if [ "${1:-}" = "--prisma" ]; then
-  shift
-  [ "$#" -gt 0 ] || { echo "ERROR: --prisma requires Prisma arguments." >&2; exit 2; }
-  exec npx prisma "$@"
-fi
-
-PRISMA_RECOVERY_CMD="sh scripts/migrate-deploy.sh --prisma"
+PRISMA_RECOVERY_CMD="MIGRATE_STEP_TIMEOUT=$STEP_TIMEOUT sh scripts/migrate-deploy.sh --prisma"
 if [ "${MIGRATE_RECOVERY_RUNTIME:-}" = "compose" ]; then
   # Keep DATABASE_URL (and its credentials) inside Compose. The host command
   # works even when the URL comes entirely from compose defaults.
-  PRISMA_RECOVERY_CMD="docker compose run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma"
+  PRISMA_RECOVERY_CMD="docker compose run --rm --no-deps -T -e \"MIGRATE_STEP_TIMEOUT=$STEP_TIMEOUT\" supersync sh scripts/migrate-deploy.sh --prisma"
   if [ "${MIGRATE_RECOVERY_BUILD_LOCAL:-false}" = "true" ]; then
-    PRISMA_RECOVERY_CMD="docker compose -f docker-compose.yml -f docker-compose.build.yml run --rm --no-deps -T supersync sh scripts/migrate-deploy.sh --prisma"
+    PRISMA_RECOVERY_CMD="docker compose -f docker-compose.yml -f docker-compose.build.yml run --rm --no-deps -T -e \"MIGRATE_STEP_TIMEOUT=$STEP_TIMEOUT\" supersync sh scripts/migrate-deploy.sh --prisma"
   fi
 fi
 
-if command -v timeout >/dev/null 2>&1; then
-  with_timeout() {
-    wt_rc=0
-    timeout "$STEP_TIMEOUT" "$@" || wt_rc=$?
-    # GNU coreutils `timeout` exits 124 on expiry; BusyBox `timeout` (shipped by
-    # the node:*-alpine runtime image) instead lets the child die from the
-    # default SIGTERM and returns 128+15=143. Normalize so the single 124
-    # timeout branch is reached on both. Under this wrapper a 143 is timeout's
-    # own SIGTERM, not an unrelated external kill.
-    if [ "$wt_rc" -eq 143 ]; then
-      wt_rc=124
-    fi
-    return "$wt_rc"
-  }
-else
-  with_timeout() { "$@"; }
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "ERROR: timeout is required to bound database migration steps." >&2
+  exit 1
+fi
+
+terminate_migrator_backends() {
+  [ -n "${DATABASE_URL:-}" ] && [ -n "${MIGRATOR_APPLICATION_NAME:-}" ] || return 0
+
+  cleanup_status=0
+  MIGRATOR_TARGET_APPLICATION_NAME="$MIGRATOR_APPLICATION_NAME" \
+    timeout -k 2 10 node <<'NODE' || cleanup_status=$?
+const { PrismaClient } = require('@prisma/client');
+
+const target = process.env.MIGRATOR_TARGET_APPLICATION_NAME;
+const url = new URL(process.env.DATABASE_URL);
+url.searchParams.set('application_name', `${target}-cleanup`);
+const prisma = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+
+prisma
+  .$queryRawUnsafe(
+    `SELECT pg_terminate_backend(pid)
+       FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND usename = current_user
+        AND application_name = $1
+        AND pid <> pg_backend_pid()`,
+    target,
+  )
+  .catch(() => {
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
+NODE
+  if [ "$cleanup_status" -ne 0 ]; then
+    echo "WARNING: could not terminate the interrupted migrator database session." >&2
+  fi
+  return 0
+}
+
+with_timeout() {
+  wt_rc=0
+  timeout -k 5 "$STEP_TIMEOUT" "$@" || wt_rc=$?
+  case "$wt_rc" in
+    124|137|143) terminate_migrator_backends ;;
+  esac
+  # GNU coreutils `timeout` exits 124 on expiry; BusyBox `timeout` (shipped by
+  # the node:*-alpine runtime image) instead lets the child die from the
+  # default SIGTERM and returns 128+15=143. Normalize so the single 124 timeout
+  # branch is reached on both. Under this wrapper a 143 is timeout's own
+  # SIGTERM, not an unrelated external kill.
+  if [ "$wt_rc" -eq 143 ]; then
+    wt_rc=124
+  fi
+  return "$wt_rc"
+}
+
+# Printed manual-recovery commands re-enter through this narrow wrapper so
+# they receive the same finite bounds without printing database secrets.
+if [ "${1:-}" = "--prisma" ]; then
+  shift
+  [ "$#" -gt 0 ] || { echo "ERROR: --prisma requires Prisma arguments." >&2; exit 2; }
+  prisma_status=0
+  with_timeout npx prisma "$@" || prisma_status=$?
+  exit "$prisma_status"
 fi
 
 MIGRATE_LOG=""

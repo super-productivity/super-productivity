@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -14,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(currentDir, '../scripts/health-alert.sh');
+const DEPLOY_SCRIPT = join(currentDir, '../scripts/deploy.sh');
 
 const FAKE_DOCKER = `#!/bin/sh
 set -u
@@ -49,7 +51,7 @@ if [ "\${1:-}" = "exec" ]; then
     exit 0
   fi
   printf 'LONG_Q=%s\n' "\${FAKE_LONG_Q:-0}"
-  printf 'LONGEST=%s\n' "\${FAKE_LONGEST-}"
+  printf 'LONGEST=%s\n' "\${FAKE_LONGEST-0}"
   printf 'ACTIVE=%s\n' "\${FAKE_ACTIVE:-0}"
   printf 'POOL_LIMIT=%s\n' "\${FAKE_POOL_LIMIT-60}"
   printf 'BAD_INDEX=%s\n' "\${FAKE_BAD_INDEX-}"
@@ -129,6 +131,28 @@ const run = (env: Record<string, string> = {}): RunResult => {
   };
 };
 
+const runDeployMonitoringStatus = (): string => {
+  const deployScript = readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const match = deployScript.match(/report_monitoring_status\(\) \{[\s\S]*?\n\}/);
+  expect(match).not.toBeNull();
+
+  const runner = join(projectDir, 'report-monitoring-status.sh');
+  writeFileSync(runner, `${match?.[0] ?? ''}\nreport_monitoring_status\n`);
+  writeExecutable('crontab', '#!/bin/sh\nexit 1\n');
+
+  const result = spawnSync('bash', [runner], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      SERVER_DIR: projectDir,
+    },
+  });
+
+  expect(result.status).toBe(0);
+  return `${result.stdout ?? ''}${result.stderr ?? ''}`;
+};
+
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'sup-health-project-'));
   binDir = mkdtempSync(join(tmpdir(), 'sup-health-bin-'));
@@ -148,16 +172,25 @@ afterEach(() => {
 });
 
 describe('health-alert.sh configuration', () => {
-  it.each(['0', '-1', '1.5', 'abc'])(
+  it.each(['0', '-1', '1.5', 'abc', '2147483648', '99999999999999999999'])(
     'alerts without probing the database for invalid MAX_QUERY_SECONDS=%s',
     (value) => {
       const result = run({ MAX_QUERY_SECONDS: value });
 
-      expect(result.mailLog).toContain('MAX_QUERY_SECONDS must be a positive integer');
+      expect(result.mailLog).toContain(
+        'MAX_QUERY_SECONDS must be an integer from 1 to 2147483647',
+      );
       expect(result.dockerLog).not.toContain(' psql ');
       expect(result.dockerLog).not.toContain(' node -e ');
     },
   );
+
+  it('accepts the PostgreSQL integer upper bound for MAX_QUERY_SECONDS', () => {
+    const result = run({ MAX_QUERY_SECONDS: '2147483647' });
+
+    expect(result.output).not.toContain('MAX_QUERY_SECONDS must be');
+    expect(result.dockerLog).toContain(' node -e ');
+  });
 
   it.each(['0', '101', '75.5', 'abc'])(
     'alerts without probing the database for invalid POOL_WARN_PCT=%s',
@@ -210,10 +243,13 @@ describe('health-alert.sh service and database monitoring', () => {
 
   it('runs probes with Prisma inside the supersync container', () => {
     const result = run({ POSTGRES_SERVICE: '' });
+    const script = readFileSync(SCRIPT, 'utf8');
 
     expect(result.dockerLog).toContain('compose exec -T');
-    expect(result.dockerLog).toContain('supersync node -e');
+    expect(result.dockerLog).toContain('supersync timeout 18 node -e');
+    expect(script).toMatch(/DB_OUTPUT=\$\(timeout -k 5 20 docker compose exec/);
     expect(result.dockerLog).toContain("require('@prisma/client')");
+    expect(result.dockerLog).toContain('searchParams.getAll(');
     expect(result.dockerLog).not.toContain(' psql ');
   });
 
@@ -260,20 +296,22 @@ describe('health-alert.sh service and database monitoring', () => {
     );
   });
 
-  it('scopes SQL away from migrators and in-progress or non-operations indexes', () => {
+  it('scopes SQL away from migrators and transient or non-operations indexes', () => {
     const result = run();
 
     expect(result.status).toBe(0);
     expect(result.dockerLog).toContain('SET LOCAL statement_timeout');
     expect(result.dockerLog).toContain('timeout: 12000');
     expect(result.dockerLog).toContain(
-      "application_name IS DISTINCT FROM 'supersync-migrator'",
+      "application_name NOT LIKE 'supersync-migrator-%'",
     );
     expect(result.dockerLog).toContain('datname = current_database()');
     expect(result.dockerLog).toContain('usename = current_user');
     expect(result.dockerLog).toContain('pg_stat_progress_create_index');
-    expect(result.dockerLog).toContain("'public.operations'::regclass");
+    expect(result.dockerLog).toContain("'operations'::regclass");
+    expect(result.dockerLog).not.toContain("'public.operations'::regclass");
     expect(result.dockerLog).toContain('p.index_relid = i.indexrelid');
+    expect(result.dockerLog).toContain("application_name LIKE 'supersync-migrator-%'");
   });
 
   it('reports invalid operations indexes returned by the probe', () => {
@@ -283,15 +321,21 @@ describe('health-alert.sh service and database monitoring', () => {
       'Invalid/unusable index(es) present: operations_entity_ids_gin',
     );
   });
+
+  it('treats an empty longest-query duration as malformed probe output', () => {
+    const result = run({ FAKE_LONGEST: '' });
+
+    expect(result.mailLog).toContain('Database monitoring checks failed');
+  });
 });
 
 describe('health-alert.sh state handling', () => {
-  it('deduplicates volatile long-query alerts when the longest duration is unknown', () => {
-    run({ FAKE_LONG_Q: '1', FAKE_LONGEST: '' });
-    const second = run({ FAKE_LONG_Q: '27', FAKE_LONGEST: '' });
+  it('deduplicates volatile long-query counts and durations', () => {
+    run({ FAKE_LONG_Q: '1', FAKE_LONGEST: '130' });
+    const second = run({ FAKE_LONG_Q: '27', FAKE_LONGEST: '240' });
 
     expect(second.mailLog.match(/SuperSync health check failed/g)).toHaveLength(1);
-    expect(second.mailLog).toContain('longest: ?s');
+    expect(second.mailLog).toContain('longest: 130s');
   });
 
   it('sends recovery after mail failure and clears the sticky marker', () => {
@@ -306,5 +350,37 @@ describe('health-alert.sh state handling', () => {
     const recovered = run();
     expect(recovered.mailLog).toContain('All checks passing.');
     expect(existsSync(join(projectDir, '.health-alert', 'mail-failed'))).toBe(false);
+  });
+
+  it('retries failed delivery when an earlier problem remains active', () => {
+    run({ FAKE_BAD_INDEX: 'index-a' });
+    run({
+      FAKE_BAD_INDEX: 'index-a',
+      FAKE_LONG_Q: '1',
+      FAKE_LONGEST: '130',
+      FAKE_MAIL_EXIT: '1',
+    });
+    expect(existsSync(join(projectDir, '.health-alert', 'mail-failed'))).toBe(true);
+
+    const retried = run({ FAKE_BAD_INDEX: 'index-a' });
+    expect(retried.mailLog.match(/SuperSync health check failed/g)).toHaveLength(3);
+    expect(existsSync(join(projectDir, '.health-alert', 'mail-failed'))).toBe(false);
+
+    const deduplicated = run({ FAKE_BAD_INDEX: 'index-a' });
+    expect(deduplicated.mailLog.match(/SuperSync health check failed/g)).toHaveLength(3);
+  });
+
+  it('reports heartbeat and mail failure even without a current-user cron entry', () => {
+    const stateDir = join(projectDir, '.health-alert');
+    mkdirSync(stateDir);
+    writeFileSync(join(stateDir, 'last-run'), new Date().toISOString());
+    writeFileSync(join(stateDir, 'mail-failed'), '2026-07-20T12:00:00Z\n');
+
+    const output = runDeployMonitoringStatus();
+
+    expect(output).toContain("not in this user's crontab");
+    expect(output).toContain('recent completed run');
+    expect(output).toContain('alert email delivery FAILED');
+    expect(output).not.toContain('will go unnoticed');
   });
 });

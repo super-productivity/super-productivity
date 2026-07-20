@@ -427,6 +427,8 @@ echo ""
 report_monitoring_status() {
     local state_dir="$SERVER_DIR/.health-alert"
     local script_path="$SERVER_DIR/scripts/health-alert.sh"
+    local cron_installed=true
+    local recent_run=false
 
     echo ""
     echo "==> Monitoring status"
@@ -442,26 +444,35 @@ report_monitoring_status() {
         }
         END { exit(found ? 0 : 1) }
     '; then
+        cron_installed=false
         echo "    WARNING: health-alert.sh is not in this user's crontab."
-        echo "             Pool saturation and long-running queries will go unnoticed."
-        echo "             Install with:"
-        echo "               (crontab -l 2>/dev/null; echo \"*/5 * * * * ALERT_EMAIL=you@example.com $script_path\") | crontab -"
-        return
+    else
+        echo "    health-alert.sh: cron installed"
     fi
-    echo "    health-alert.sh: cron installed"
 
-    # A stale last-run means the cron is present but not completing.
+    # A fresh heartbeat is authoritative even when another user or scheduler
+    # runs the script and the current user's crontab has no matching entry.
     if [ -f "$state_dir/last-run" ]; then
         local last_run age
         last_run=$(cat "$state_dir/last-run" 2>/dev/null || true)
         age=$(( $(date -u +%s) - $(date -u -d "$last_run" +%s 2>/dev/null || echo 0) ))
         if [ "$age" -gt 1800 ]; then
-            echo "    WARNING: last completed run was $last_run (>30m ago) — cron is not completing."
+            echo "    WARNING: last completed run was $last_run (>30m ago) — health-alert.sh is not completing."
         else
+            recent_run=true
             echo "    last run: $last_run"
         fi
     else
-        echo "    WARNING: cron has no completed run recorded yet (expected within 5 minutes)."
+        echo "    WARNING: health-alert.sh has no completed run recorded yet (expected within 5 minutes)."
+    fi
+
+    if ! $cron_installed; then
+        if $recent_run; then
+            echo "    health-alert.sh: recent completed run found outside this user's crontab"
+        else
+            echo "             Monitoring is not confirmed active. Install with:"
+            echo "               (crontab -l 2>/dev/null; echo \"*/5 * * * * ALERT_EMAIL=you@example.com $script_path\") | crontab -"
+        fi
     fi
 
     if [ -f "$state_dir/mail-failed" ]; then

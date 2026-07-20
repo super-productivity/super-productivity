@@ -30,8 +30,10 @@ POOL_WARN_PCT="${POOL_WARN_PCT:-75}"
 
 CONFIG_PROBLEMS=""
 DB_CONFIG_OK=true
-if ! [[ "$MAX_QUERY_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
-  CONFIG_PROBLEMS="${CONFIG_PROBLEMS}MAX_QUERY_SECONDS must be a positive integer\n"
+if ! [[ "$MAX_QUERY_SECONDS" =~ ^[1-9][0-9]*$ ]] ||
+  [ "${#MAX_QUERY_SECONDS}" -gt 10 ] ||
+  [ "$MAX_QUERY_SECONDS" -gt 2147483647 ]; then
+  CONFIG_PROBLEMS="${CONFIG_PROBLEMS}MAX_QUERY_SECONDS must be an integer from 1 to 2147483647\n"
   DB_CONFIG_OK=false
 fi
 if ! [[ "$POOL_WARN_PCT" =~ ^([1-9]|[1-9][0-9]|100)$ ]]; then
@@ -136,9 +138,11 @@ const maxQuerySeconds = Number(process.env.HEALTH_MAX_QUERY_SECONDS);
 
 const readPoolLimit = () => {
   try {
-    const value = new URL(process.env.DATABASE_URL ?? '').searchParams.get(
+    const values = new URL(process.env.DATABASE_URL ?? '').searchParams.getAll(
       'connection_limit',
     );
+    if (values.length !== 1) return '';
+    const [value] = values;
     const numericValue = Number(value);
     return value && /^\d+$/.test(value) && numericValue > 0 && Number.isSafeInteger(numericValue)
       ? String(numericValue)
@@ -163,7 +167,7 @@ const main = async () => {
          AND backend_type = 'client backend'
          AND datname = current_database()
          AND usename = current_user
-         AND application_name IS DISTINCT FROM 'supersync-migrator'
+         AND application_name NOT LIKE 'supersync-migrator-%'
      )
      SELECT
        count(*) FILTER (
@@ -181,12 +185,20 @@ const main = async () => {
        ''
      ) AS "badIndex"
      FROM pg_index i
-     WHERE i.indrelid = 'public.operations'::regclass
+     WHERE i.indrelid = 'operations'::regclass
        AND (NOT i.indisvalid OR NOT i.indisready OR NOT i.indislive)
        AND NOT EXISTS (
          SELECT 1
          FROM pg_stat_progress_create_index p
           WHERE p.index_relid = i.indexrelid
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM pg_stat_activity m
+         WHERE m.datname = current_database()
+           AND m.usename = current_user
+           AND m.state = 'active'
+           AND m.application_name LIKE 'supersync-migrator-%'
        )`,
       );
 
@@ -214,9 +226,9 @@ NODE
 )
 
     # Allow Prisma's 5s pool wait plus its 12s transaction bound to finish.
-    DB_OUTPUT=$(timeout 20 docker compose exec -T \
+    DB_OUTPUT=$(timeout -k 5 20 docker compose exec -T \
       -e "HEALTH_MAX_QUERY_SECONDS=$MAX_QUERY_SECONDS" \
-      supersync node -e "$DB_PROBE_JS" 2>/dev/null)
+      supersync timeout 18 node -e "$DB_PROBE_JS" 2>/dev/null)
     DB_STATUS=$?
 
     LONG_Q=""
@@ -247,7 +259,7 @@ NODE
     if [ "$DB_STATUS" -ne 0 ] || ! $HAVE_LONG_Q || ! $HAVE_LONGEST ||
       ! $HAVE_ACTIVE || ! $HAVE_POOL_LIMIT || ! $HAVE_BAD_IDX ||
       ! [[ "$LONG_Q" =~ ^[0-9]+$ ]] ||
-      ! [[ "$LONGEST" =~ ^[0-9]*$ ]] ||
+      ! [[ "$LONGEST" =~ ^[0-9]+$ ]] ||
       ! [[ "$ACTIVE" =~ ^[0-9]+$ ]]; then
       DB_RESULTS_OK=false
       PROBLEMS="${PROBLEMS}Database monitoring checks failed\n"
@@ -255,7 +267,7 @@ NODE
 
     if $DB_RESULTS_OK; then
       if [ "$LONG_Q" -gt 0 ]; then
-        PROBLEMS="${PROBLEMS}${LONG_Q} query(s) active longer than ${MAX_QUERY_SECONDS}s (longest: ${LONGEST:-?}s)\n"
+        PROBLEMS="${PROBLEMS}${LONG_Q} query(s) active longer than ${MAX_QUERY_SECONDS}s (longest: ${LONGEST}s)\n"
       fi
 
       if [[ "$POOL_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
@@ -294,13 +306,13 @@ HASH_INPUT=$(printf '%s' "$PROBLEMS" | sed \
    s/([0-9]* entries/(N entries/g
    s/at [0-9]*% on/at N% on/g
    s/HTTP [0-9]*/HTTP NNN/g
-   s/[0-9]* query(s) active longer than [0-9]*s (longest: [0-9?]*s)/N query(s) active longer than Ns (longest: Ns)/g
+   s/[0-9]* query(s) active longer than [0-9]*s (longest: [0-9]*s)/N query(s) active longer than Ns (longest: Ns)/g
    s/pool [0-9]*% saturated ([0-9]* active \/ [0-9]* limit)/pool N% saturated (N active \/ N limit)/g')
 CURRENT_HASH=$(printf '%s' "$HASH_INPUT" | sha256sum | cut -d' ' -f1)
 PREVIOUS_HASH=$(cat "$ALERT_STATE_FILE" 2>/dev/null || echo "none")
 
 if [ -n "$PROBLEMS" ]; then
-  if [ "$CURRENT_HASH" != "$PREVIOUS_HASH" ]; then
+  if [ "$CURRENT_HASH" != "$PREVIOUS_HASH" ] || [ -f "$ALERT_STATE_DIR/mail-failed" ]; then
     # New or changed problem — send alert, only write state if mail succeeds
     if printf 'SuperSync health check failed at %s\n\nProblems found:\n%b\nServer: %s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PROBLEMS" "$(hostname)" \

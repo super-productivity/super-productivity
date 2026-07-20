@@ -185,6 +185,18 @@ describe('performance migrations', () => {
       join(currentDir, '../helm/supersync/templates/deployment.yaml'),
       'utf8',
     );
+    const helmValues = readFileSync(
+      join(currentDir, '../helm/supersync/values.yaml'),
+      'utf8',
+    );
+    const helmHelpers = readFileSync(
+      join(currentDir, '../helm/supersync/templates/_helpers.tpl'),
+      'utf8',
+    );
+    const helmDatabaseUrlCheck = readFileSync(
+      join(currentDir, '../helm/supersync/templates/database-url-check.yaml'),
+      'utf8',
+    );
     const dockerWorkflow = readFileSync(
       join(currentDir, '../../../.github/workflows/supersync-docker.yml'),
       'utf8',
@@ -286,17 +298,40 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain('VCS_REF=${{ steps.source-ref.outputs.revision }}');
     expect(dockerWorkflow).not.toContain('labels: ${{ steps.meta.outputs.labels }}');
     expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
-    expect(helmDeployment).toContain('connection_limit=60&pool_timeout=10');
-    expect(helmDeployment).toContain(
-      'externalDatabase.url must include connection_limit and pool_timeout',
+    expect(
+      helmDeployment.match(/include "supersync\.postgresqlConnectionLimit" \./g),
+    ).toHaveLength(2);
+    expect(helmHelpers).toContain(
+      'postgresql.connectionLimit must be a positive integer',
     );
-    expect(helmDeployment).toContain('REQUIRE_DATABASE_POOL_LIMITS');
+    expect(helmValues).toContain('connectionLimit: 20');
+    expect(helmDeployment).not.toContain('regexMatch');
+    expect(helmDeployment.match(/REQUIRE_DATABASE_POOL_LIMITS/g)).toHaveLength(1);
+    expect(helmDeployment.indexOf('REQUIRE_DATABASE_POOL_LIMITS')).toBeLessThan(
+      helmDeployment.indexOf('{{- if .Values.postgresql.enabled }}'),
+    );
+    expect(helmDatabaseUrlCheck).toContain('"helm.sh/hook": pre-upgrade');
+    expect(helmDatabaseUrlCheck).toContain("command: ['node', '-e']");
+    expect(helmDatabaseUrlCheck).toContain('Number.isSafeInteger');
+    expect(helmDatabaseUrlCheck).not.toContain('migrate-deploy.sh');
+    expect(helmDatabaseUrlCheck).not.toContain('activeDeadlineSeconds');
+    expect(helmDatabaseUrlCheck).toContain('.Values.externalDatabase.existingSecret');
+    expect(helmDatabaseUrlCheck).toContain(
+      'include "supersync.fullname" . | trunc 44 | trimSuffix "-"',
+    );
+    expect(helmDatabaseUrlCheck).toContain(
+      'app.kubernetes.io/component: database-url-check',
+    );
+    expect(helmDatabaseUrlCheck).not.toContain('supersync.selectorLabels');
     expect(runtimeMigrateScript).toContain(
-      'DATABASE_URL must include positive connection_limit and pool_timeout values',
+      'DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each',
     );
     expect(runtimeMigrateScript).toContain(
       '-f docker-compose.yml -f docker-compose.build.yml',
     );
+    expect(
+      runtimeMigrateScript.match(/MIGRATE_STEP_TIMEOUT=\$STEP_TIMEOUT/g),
+    ).toHaveLength(3);
     // Architectural invariant (the actual bug class): the generic runtime
     // script must NOT hardcode any migration name or index DDL — that lockstep
     // coupling is what went stale and broke the production deploy. Behavioral

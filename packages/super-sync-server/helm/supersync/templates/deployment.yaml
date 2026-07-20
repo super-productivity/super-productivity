@@ -1,11 +1,6 @@
 {{- if gt (.Values.replicaCount | int) 1 }}
   {{- fail "replicaCount > 1 is not supported: WebSocket connection state is in-memory and not shared across replicas" }}
 {{- end }}
-{{- if and (not .Values.postgresql.enabled) (not .Values.externalDatabase.existingSecret) }}
-  {{- if or (not (regexMatch `[?&]connection_limit=[1-9][0-9]*([&#]|$)` .Values.externalDatabase.url)) (not (regexMatch `[?&]pool_timeout=[1-9][0-9]*([&#]|$)` .Values.externalDatabase.url)) }}
-    {{- fail "externalDatabase.url must include connection_limit and pool_timeout" }}
-  {{- end }}
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,6 +45,8 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ['sh', '-c', 'sh scripts/migrate-deploy.sh']
           env:
+            - name: REQUIRE_DATABASE_POOL_LIMITS
+              value: "true"
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_USER
               value: {{ .Values.postgresql.username | quote }}
@@ -61,12 +58,8 @@ spec:
                   name: {{ .Values.postgresql.existingSecret | default (include "supersync.postgresql.fullname" .) }}
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit=60&pool_timeout=10"
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit={{ include "supersync.postgresqlConnectionLimit" . }}&pool_timeout=10"
             {{- else }}
-            {{- if .Values.externalDatabase.existingSecret }}
-            - name: REQUIRE_DATABASE_POOL_LIMITS
-              value: "true"
-            {{- end }}
             - name: DATABASE_URL
               {{- if .Values.externalDatabase.existingSecret }}
               valueFrom:
@@ -118,7 +111,7 @@ spec:
                   name: {{ .Values.postgresql.existingSecret | default (include "supersync.postgresql.fullname" .) }}
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit=60&pool_timeout=10"
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit={{ include "supersync.postgresqlConnectionLimit" . }}&pool_timeout=10"
             {{- else }}
             - name: DATABASE_URL
               {{- if .Values.externalDatabase.existingSecret }}
