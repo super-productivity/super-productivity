@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
-import { prefetchLatestEntityOpsForBatch } from '../src/sync/conflict';
+import {
+  getEntityConflictKey,
+  prefetchLatestEntityOpsForBatch,
+} from '../src/sync/conflict';
 import { CONFLICT_DETECTION_ENTITY_BATCH_SIZE } from '../src/sync/sync.types';
 import { testState, resetTestState } from './sync.service.test-state';
 
@@ -1638,9 +1641,11 @@ describe('SyncService', () => {
           tx as unknown as Prisma.TransactionClient,
         );
 
-        expect(latestByEntity.get(`TASK\u0000${boundaryPair.entityId}`)).toEqual(
-          boundaryRow,
-        );
+        expect(
+          latestByEntity.get(
+            getEntityConflictKey(boundaryPair.entityType, boundaryPair.entityId),
+          ),
+        ).toEqual(boundaryRow);
         expect(queriedBatchSizes).toEqual(expectedBatchSizes);
       },
     );

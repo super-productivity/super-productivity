@@ -344,17 +344,12 @@ describe('conflict helpers', () => {
         findFirst: vi
           .fn()
           .mockImplementation(
-            async (args: {
-              where: { schemaVersion?: { lt?: number; lte?: number } };
-            }) => {
-              const constraint = args.where.schemaVersion;
-              if (constraint?.lt !== undefined && storedSchemaVersion >= constraint.lt) {
-                return null;
-              }
-              if (constraint?.lte !== undefined && storedSchemaVersion > constraint.lte) {
-                return null;
-              }
-              return postSplitMiscRow;
+            async (args: { where: { schemaVersion?: { lt?: number } } }) => {
+              const exclusiveUpperBound = args.where.schemaVersion?.lt;
+              return exclusiveUpperBound !== undefined &&
+                storedSchemaVersion >= exclusiveUpperBound
+                ? null
+                : postSplitMiscRow;
             },
           ),
       },
@@ -386,16 +381,28 @@ describe('conflict helpers', () => {
   });
 
   it.each([
-    CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
-    CONFLICT_DETECTION_ENTITY_BATCH_SIZE + 1,
+    [
+      'clean exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      false,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting overflow batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE + 1,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE, 1],
+    ],
   ])(
-    'handles the boundary row and chunks correctly for %i entities',
-    async (entityCount) => {
-      const crossesBatchBoundary = entityCount > CONFLICT_DETECTION_ENTITY_BATCH_SIZE;
+    'handles the boundary row and chunks correctly for a %s (%i entities)',
+    async (_label, entityCount, boundaryHasConflict, expectedBatchSizes) => {
       const boundaryIndex = entityCount - 1;
-      const expectedBatchSizes = crossesBatchBoundary
-        ? [CONFLICT_DETECTION_ENTITY_BATCH_SIZE, 1]
-        : [CONFLICT_DETECTION_ENTITY_BATCH_SIZE];
       const entityIds = Array.from(
         { length: entityCount },
         (_, index) => `task-${index}`,
@@ -413,9 +420,9 @@ describe('conflict helpers', () => {
             return [
               {
                 entityId: boundaryEntityId,
-                clientId: crossesBatchBoundary ? 'client-b' : 'client-a',
+                clientId: boundaryHasConflict ? 'client-b' : 'client-a',
                 actionType: 'UPDATE_TASK',
-                vectorClock: crossesBatchBoundary ? { 'client-b': 1 } : { 'client-a': 0 },
+                vectorClock: boundaryHasConflict ? { 'client-b': 1 } : { 'client-a': 0 },
               },
             ];
           }),
@@ -429,7 +436,7 @@ describe('conflict helpers', () => {
       );
 
       expect(result).toMatchObject(
-        crossesBatchBoundary
+        boundaryHasConflict
           ? {
               hasConflict: true,
               conflictType: 'concurrent',
