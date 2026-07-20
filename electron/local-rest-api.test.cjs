@@ -245,6 +245,58 @@ test('Request is rejected while no token is configured yet', async () => {
   assert.equal(res.body.error.code, 'UNAUTHORIZED');
 });
 
+test('SP_FORCE_LOCAL_REST_API can use an explicit development token on a clean profile', async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalForce = process.env.SP_FORCE_LOCAL_REST_API;
+  const originalForceToken = process.env.SP_FORCE_LOCAL_REST_API_TOKEN;
+
+  process.env.NODE_ENV = 'DEV';
+  process.env.SP_FORCE_LOCAL_REST_API = '1';
+  process.env.SP_FORCE_LOCAL_REST_API_TOKEN = 'forced_dev_token_123';
+
+  try {
+    updateLocalRestApiConfig({
+      misc: {
+        isLocalRestApiEnabled: false,
+        localRestApiToken: undefined,
+      },
+    });
+
+    const res = await makeRequest({
+      method: 'GET',
+      path: '/tasks',
+      headers: {
+        Authorization: 'Bearer forced_dev_token_123',
+      },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+  } finally {
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+    if (originalForce === undefined) {
+      delete process.env.SP_FORCE_LOCAL_REST_API;
+    } else {
+      process.env.SP_FORCE_LOCAL_REST_API = originalForce;
+    }
+    if (originalForceToken === undefined) {
+      delete process.env.SP_FORCE_LOCAL_REST_API_TOKEN;
+    } else {
+      process.env.SP_FORCE_LOCAL_REST_API_TOKEN = originalForceToken;
+    }
+
+    updateLocalRestApiConfig({
+      misc: {
+        isLocalRestApiEnabled: false,
+      },
+    });
+  }
+});
+
 test.after(() => {
   // Disable API to shut down server
   updateLocalRestApiConfig({

@@ -40,9 +40,13 @@ import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
 import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
-import { FULL_STATE_OP_TYPES } from '../../../op-log/core/operation.types';
+import { FULL_STATE_OP_TYPES, Operation } from '../../../op-log/core/operation.types';
 
 const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
+
+const isGlobalConfigMiscOrFullStateOp = (op: Operation): boolean =>
+  (op.entityType === 'GLOBAL_CONFIG' && op.entityId === 'misc') ||
+  FULL_STATE_OP_TYPES.has(op.opType);
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -230,13 +234,7 @@ export class GlobalConfigEffects {
   setStartOfNextDayDiffOnBulkApply = createEffect(() =>
     this._actions$.pipe(
       ofType(bulkApplyOperations),
-      filter(({ operations }) =>
-        operations.some(
-          (op) =>
-            (op.entityType === 'GLOBAL_CONFIG' && op.entityId === 'misc') ||
-            FULL_STATE_OP_TYPES.has(op.opType),
-        ),
-      ),
+      filter(({ operations }) => operations.some(isGlobalConfigMiscOrFullStateOp)),
       withLatestFrom(this._store.select(selectMiscConfig)),
       map(([, misc]) => {
         const normalizedMisc = normalizeStartOfNextDayConfig(misc);
@@ -271,8 +269,9 @@ export class GlobalConfigEffects {
       this._actions$.pipe(
         ofType(loadAllData),
         filter(() => this._isElectron),
-        tap(({ appDataComplete }) => {
-          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
+        withLatestFrom(this._store.select(selectConfigFeatureState)),
+        tap(([, globalConfig]) => {
+          const cfg = globalConfig || DEFAULT_GLOBAL_CONFIG;
           // Send initial settings to electron for overlay initialization
           window.ea.sendSettingsUpdate(cfg);
         }),
@@ -280,13 +279,35 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 
+  notifyElectronAboutCfgChangeAfterBulkApply = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(bulkApplyOperations),
+        filter(() => this._isElectron),
+        filter(({ operations }) => operations.some(isGlobalConfigMiscOrFullStateOp)),
+        withLatestFrom(this._store.select(selectConfigFeatureState)),
+        tap(([, globalConfig]) => {
+          window.ea.sendSettingsUpdate(globalConfig);
+        }),
+      ),
+    { dispatch: false },
+  );
+
   ensureLocalRestApiToken$ = createEffect(() =>
     this._actions$.pipe(
-      ofType(loadAllData),
+      ofType(loadAllData, bulkApplyOperations),
       filter(() => this._isElectron),
-      concatMap(({ appDataComplete }) => {
-        const cfg = appDataComplete.globalConfig;
-        if (cfg?.misc?.isLocalRestApiEnabled && !cfg?.misc?.localRestApiToken) {
+      filter((action) => {
+        if (action.type === loadAllData.type) {
+          return true;
+        }
+        return (action as ReturnType<typeof bulkApplyOperations>).operations.some(
+          isGlobalConfigMiscOrFullStateOp,
+        );
+      }),
+      withLatestFrom(this._store.select(selectMiscConfig)),
+      concatMap(([, misc]) => {
+        if (misc.isLocalRestApiEnabled && !misc.localRestApiToken) {
           const localRestApiToken = generateLocalRestApiToken();
           return [
             updateGlobalConfigSection({

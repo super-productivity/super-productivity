@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
-import { randomUUID, timingSafeEqual } from 'crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
@@ -33,6 +33,7 @@ const pendingRequests = new Map<
 >();
 
 let localRestApiToken: string | undefined = undefined;
+let generatedForcedDevToken: string | undefined = undefined;
 
 const compareToken = (input: string, expected: string): boolean => {
   const inputBuffer = Buffer.from(input, 'utf8');
@@ -132,6 +133,22 @@ const ALLOWED_HOSTS = new Set([
 
 const isForceEnabledForDev = (): boolean =>
   process.env.NODE_ENV === 'DEV' && process.env.SP_FORCE_LOCAL_REST_API === '1';
+
+const getForcedDevToken = (): string => {
+  if (process.env.SP_FORCE_LOCAL_REST_API_TOKEN) {
+    return process.env.SP_FORCE_LOCAL_REST_API_TOKEN;
+  }
+
+  if (!generatedForcedDevToken) {
+    generatedForcedDevToken = randomBytes(32).toString('base64url');
+    warn(
+      '[local-rest-api] Generated temporary access token for SP_FORCE_LOCAL_REST_API=1: ' +
+        generatedForcedDevToken,
+    );
+  }
+
+  return generatedForcedDevToken;
+};
 
 const handleHttpRequest = async (
   req: IncomingMessage,
@@ -306,6 +323,7 @@ export const initLocalRestApi = (): void => {
 
   if (isForceEnabledForDev()) {
     warn('[local-rest-api] Enabled by SP_FORCE_LOCAL_REST_API=1 for DEV runtime');
+    localRestApiToken = getForcedDevToken();
     isEnabled = true;
     startServer();
   }
@@ -349,8 +367,9 @@ const stopServer = (): void => {
 };
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
-  localRestApiToken = cfg.misc.localRestApiToken;
   const isForcedForDev = isForceEnabledForDev();
+  localRestApiToken =
+    cfg.misc.localRestApiToken || (isForcedForDev ? getForcedDevToken() : undefined);
   const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
   if (nextEnabled === isEnabled) {
     if (nextEnabled && !isListening) {
