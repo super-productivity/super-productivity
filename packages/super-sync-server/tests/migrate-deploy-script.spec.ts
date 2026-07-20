@@ -12,8 +12,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Drives scripts/migrate-deploy.sh end-to-end with a fake `npx prisma` so the
-// generic CONCURRENTLY recovery logic is exercised without a real database.
+// Drives scripts/migrate-deploy.sh end-to-end with a fake `npx prisma` so its
+// guarded recovery paths are exercised without a real database.
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(currentDir, '../scripts/migrate-deploy.sh');
@@ -27,12 +27,19 @@ CREATE INDEX CONCURRENTLY "operations_user_id_server_seq_encrypted_idx"
 const PLAIN_MIGRATION = '20260601000000_add_plain_column';
 const PLAIN_SQL = `ALTER TABLE "operations" ADD COLUMN "foo" TEXT;`;
 
+const FASTUPDATE_MIGRATION = '20260720000000_disable_operation_entity_ids_gin_fastupdate';
+const FASTUPDATE_SQL = readFileSync(
+  join(currentDir, '../prisma/migrations', FASTUPDATE_MIGRATION, 'migration.sql'),
+  'utf8',
+);
+
 interface RunResult {
   status: number;
   stdout: string;
   executedSql: string;
   resolveApplied: string[];
   resolveRolledBack: string[];
+  deployAttempts: number;
 }
 
 let projectDir: string;
@@ -57,6 +64,7 @@ case "$sub" in
     action="$1"; shift
     case "$action" in
       deploy)
+        echo deploy >> "$state/deploy_attempts"
         for m in $FAKE_FAIL; do
           if [ ! -f "$state/applied_$m" ]; then
             case "$FAKE_CODE" in
@@ -69,7 +77,25 @@ case "$sub" in
                 echo "Database error:"
                 echo "ERROR: DROP INDEX CONCURRENTLY cannot run inside a transaction block"
                 ;;
+              LOCK_TIMEOUT)
+                if [ "\${FAKE_LOCK_TIMEOUT_ALWAYS:-0}" != "1" ] && [ -f "$state/lock_timeout_seen_$m" ]; then
+                  : > "$state/applied_$m"
+                  continue
+                fi
+                : > "$state/lock_timeout_seen_$m"
+                echo "Applying migration \\\`$m\\\`"
+                echo "Error: P3018"
+                echo "A migration failed to apply. New migrations cannot be applied before the error is recovered from."
+                echo "Migration name: $m"
+                echo "Database error code: 55P03"
+                echo "Database error:"
+                echo "ERROR: canceling statement due to lock timeout"
+                ;;
               P3009)
+                if [ -f "$state/rolledback_$m" ]; then
+                  : > "$state/applied_$m"
+                  continue
+                fi
                 echo "Error: P3009"
                 echo "migrate found failed migrations in the target database, new migrations will not be applied."
                 echo "The \\\`$m\\\` migration started at 2026-05-15 failed"
@@ -94,6 +120,11 @@ case "$sub" in
                 echo "The database server was reached but timed out."
                 echo "Context: Timed out trying to acquire a postgres advisory lock (SELECT pg_advisory_lock(72707369)). Elapsed: 10000ms."
                 ;;
+              DECOY_CODES)
+                echo "Applying migration \\\`$m\\\`"
+                echo "Error: P1001"
+                echo "Diagnostic context only: P3018 P3009 25001 55P03"
+                ;;
               *)
                 echo "Error: P1001"
                 echo "Can't reach database server"
@@ -109,7 +140,12 @@ case "$sub" in
         mode="$1"; name="$2"
         if [ "$mode" = "--rolled-back" ]; then
           echo "$name" >> "$state/rolledback"
-          exit "\${FAKE_ROLLEDBACK_EXIT:-0}"
+          rolledback_exit="\${FAKE_ROLLEDBACK_EXIT:-0}"
+          if [ "$rolledback_exit" -ne 0 ]; then
+            exit "$rolledback_exit"
+          fi
+          : > "$state/rolledback_$name"
+          exit 0
         fi
         echo "$name" >> "$state/applied_list"
         [ "\${FAKE_MARK:-1}" = "1" ] && : > "$state/applied_$name"
@@ -161,6 +197,7 @@ const run = (env: Record<string, string>): RunResult => {
     executedSql: read('executed_sql'),
     resolveApplied: read('applied_list').split('\n').filter(Boolean),
     resolveRolledBack: read('rolledback').split('\n').filter(Boolean),
+    deployAttempts: read('deploy_attempts').split('\n').filter(Boolean).length,
   };
 };
 
@@ -181,7 +218,7 @@ afterEach(() => {
   }
 });
 
-describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
+describe('migrate-deploy.sh recovery', () => {
   it('clean deploy with no failures exits 0 and runs no recovery', () => {
     const r = run({ FAKE_FAIL: '', FAKE_CODE: 'P3018' });
     expect(r.status).toBe(0);
@@ -224,6 +261,114 @@ describe('migrate-deploy.sh generic CONCURRENTLY recovery', () => {
     expect(r.status).not.toBe(0);
     expect(r.stdout).toContain('refusing to auto-resolve');
     expect(r.resolveApplied).toEqual([]);
+  });
+
+  it('rolls back and retries the bounded fastupdate migration natively after a lock timeout', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('clears the failed row and exits cleanly retryable after a repeated fastupdate lock timeout', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_LOCK_TIMEOUT_ALWAYS: '1',
+    });
+
+    expect(r.status).not.toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION, FASTUPDATE_MIGRATION]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+    expect(r.stdout).toContain(
+      'failed again after its bounded native retry and was left rolled back',
+    );
+  });
+
+  it('recovers a pre-existing failed fastupdate migration and retries it natively', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'P3009' });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('stops without retrying when rollback resolution fails for fastupdate', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_ROLLEDBACK_EXIT: '1',
+    });
+
+    expect(r.status).not.toBe(0);
+    expect(r.deployAttempts).toBe(1);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it.each([
+    {
+      label: 'an extra statement',
+      sql: `${FASTUPDATE_SQL}\nSELECT 1;`,
+    },
+    {
+      label: 'another index',
+      sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "another_gin" SET (fastupdate = off);`,
+    },
+    {
+      label: 'fastupdate enabled',
+      sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = on);`,
+    },
+  ])('refuses lock-timeout recovery for $label', ({ sql }) => {
+    writeMigration(FASTUPDATE_MIGRATION, sql);
+
+    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.deployAttempts).toBe(1);
+    expect(r.resolveRolledBack).toEqual([]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('does not recover the fastupdate shape for a non-lock P3018 failure', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'P3018' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.deployAttempts).toBe(1);
+    expect(r.resolveRolledBack).toEqual([]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('does not treat diagnostic code substrings as a recoverable error', () => {
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'DECOY_CODES' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.deployAttempts).toBe(1);
+    expect(r.resolveRolledBack).toEqual([]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
   });
 
   it('refuses a bare CREATE INDEX CONCURRENTLY (intentionally fail-loud, no DROP)', () => {

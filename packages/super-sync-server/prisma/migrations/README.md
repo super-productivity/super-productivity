@@ -8,10 +8,10 @@ block, so a CONCURRENTLY migration always fails the normal
 `scripts/migrate-deploy.sh` recovers from this generically: on that specific
 failure it reads the failing migration's name from Prisma's output, runs _that
 migration's own `migration.sql`_ out-of-band (no transaction,
-statement-by-statement), marks it applied, and retries. It hardcodes no
-migration names. Recovery is exercised by `tests/migrate-deploy-script.spec.ts`
-(behavioral, end-to-end) and `tests/migration-sql.spec.ts` (the migration SQL
-shapes the recovery relies on).
+statement-by-statement), marks it applied, and retries. The script also has one
+exact-shape recovery for the bounded `ALTER INDEX` described below. Recovery is
+exercised by `tests/migrate-deploy-script.spec.ts` (behavioral, end-to-end) and
+`tests/migration-sql.spec.ts` (the migration SQL shapes the recovery relies on).
 
 ## Prefer migrations that don't need recovery
 
@@ -27,6 +27,35 @@ Recovery is a safety net, not the happy path. Prefer, in order:
 Out-of-band recovery cost scales with the number of consecutive pending
 CONCURRENTLY migrations and the number of statements in each (one Prisma
 process per statement), so a large backlog deploy is intentionally slower.
+
+## Intentional exception: bounded `ALTER INDEX`
+
+`20260720000000_disable_operation_entity_ids_gin_fastupdate` has exactly two
+statements:
+
+```sql
+SET LOCAL lock_timeout = '1s';
+ALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);
+```
+
+The `ALTER INDEX` needs an `ACCESS EXCLUSIVE` lock on the GIN index. Without the
+short timeout, a waiting migration can queue new reads and writes behind it.
+`SET LOCAL` and the `ALTER` must stay in the same Prisma transaction, so this
+migration must never be split or executed out-of-band.
+
+A lock timeout leaves a failed Prisma migration record; a later deploy then
+sees only Prisma's cause-free `P3009`. Because the exact `ALTER` above is
+idempotent, the deploy script handles either state by marking the failed attempt
+rolled back and retrying it once through `prisma migrate deploy`. A repeated
+lock timeout or `P3009` is left rolled back; any different Prisma error fails
+loudly without being auto-resolved. The script never marks this migration
+applied itself.
+
+The following migration calls `gin_clean_pending_list` in a separate
+transaction, capped by a five-minute `statement_timeout`. Keep it separate so
+the index lock from the reloption change is released before cleanup starts. If
+cleanup times out, inspect database load, mark only that cleanup migration
+rolled back, and re-run the deploy; the cleanup call is safe to repeat.
 
 ## Rules for a recoverable CONCURRENTLY index migration
 

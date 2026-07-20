@@ -163,6 +163,60 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+    // This migration is already applied in production. Changing it to set the
+    // reloption or clean the pending list would break its Prisma checksum.
+    expect(migrationSql).not.toMatch(/\bALTER\s+INDEX\b|\bfastupdate\b/i);
+    expect(migrationSql).not.toMatch(/\bgin_clean_pending_list\b/i);
+  });
+
+  it('disables entity_ids GIN fastupdate in a lock-bounded forward migration', () => {
+    const migrationSql = readMigration(
+      '20260720000000_disable_operation_entity_ids_gin_fastupdate',
+    );
+    const lockTimeout = migrationSql.match(
+      /\bSET\s+LOCAL\s+lock_timeout\s*=\s*'(\d+)(ms|s)'\s*;/i,
+    );
+    const alterIndex = migrationSql.match(
+      /\bALTER\s+INDEX\s+"operations_entity_ids_gin"\s+SET\s*\(\s*fastupdate\s*=\s*off\s*\)\s*;/i,
+    );
+    const lockTimeoutMs =
+      Number(lockTimeout?.[1]) * (lockTimeout?.[2].toLowerCase() === 's' ? 1000 : 1);
+
+    expect(lockTimeout).not.toBeNull();
+    expect(lockTimeoutMs).toBeGreaterThan(0);
+    expect(lockTimeoutMs).toBeLessThanOrEqual(5000);
+    expect(alterIndex).not.toBeNull();
+    expect(alterIndex?.index ?? -1).toBeGreaterThan(lockTimeout?.index ?? -1);
+    expect(migrationSql).not.toMatch(/\bgin_clean_pending_list\b|\bVACUUM\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('cleans the entity_ids GIN pending list only after the ALTER migration commits', () => {
+    const alterMigrationName =
+      '20260720000000_disable_operation_entity_ids_gin_fastupdate';
+    const cleanupMigrationName =
+      '20260720000001_clean_operation_entity_ids_gin_pending_list';
+    const cleanupSql = readMigration(cleanupMigrationName);
+    const statementTimeout = cleanupSql.match(
+      /\bSET\s+LOCAL\s+statement_timeout\s*=\s*'(\d+)(ms|s)'\s*;/i,
+    );
+    const statementTimeoutMs =
+      Number(statementTimeout?.[1]) *
+      (statementTimeout?.[2].toLowerCase() === 's' ? 1000 : 1);
+
+    // Prisma wraps each migration independently, so the consecutive directory
+    // is a separate transaction and cannot extend the ALTER's exclusive lock.
+    expect(cleanupMigrationName > alterMigrationName).toBe(true);
+    const cleanup = cleanupSql.match(
+      /\bSELECT\s+(?:pg_catalog\.)?gin_clean_pending_list\s*\([^)]*operations_entity_ids_gin[^)]*\)\s*;/i,
+    );
+    expect(statementTimeout).not.toBeNull();
+    expect(statementTimeoutMs).toBeGreaterThan(0);
+    expect(statementTimeoutMs).toBeLessThanOrEqual(300_000);
+    expect(cleanup).not.toBeNull();
+    expect(cleanup?.index ?? -1).toBeGreaterThan(statementTimeout?.index ?? -1);
+    expect(cleanupSql).not.toMatch(/\bALTER\s+INDEX\b|\bfastupdate\b|\bVACUUM\b/i);
+    expect(cleanupSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
   it('runs migrations before replacing the app during compose deploys', () => {
