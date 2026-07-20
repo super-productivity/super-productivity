@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
 import { prefetchLatestEntityOpsForBatch } from '../src/sync/conflict';
+import { CONFLICT_DETECTION_ENTITY_BATCH_SIZE } from '../src/sync/sync.types';
 import { testState, resetTestState } from './sync.service.test-state';
 
 // Mock the database module with Prisma mocks
@@ -1589,23 +1590,60 @@ describe('SyncService', () => {
       expect(testState.userSyncStates.get(userId)?.lastSeq).toBe(1);
     });
 
-    it('should chunk large batch entity prefetch queries', async () => {
-      const entityPairs = Array.from({ length: 250 }, (_, index) => ({
-        entityType: 'TASK',
-        entityId: `task-${index}`,
-      }));
-      const tx = {
-        $queryRaw: vi.fn().mockResolvedValue([]),
-      };
+    it.each([
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE + 1,
+    ])(
+      'should include the boundary pair and chunk correctly for %i pairs',
+      async (pairCount) => {
+        const boundaryIndex = pairCount - 1;
+        const expectedBatchSizes =
+          pairCount > CONFLICT_DETECTION_ENTITY_BATCH_SIZE
+            ? [CONFLICT_DETECTION_ENTITY_BATCH_SIZE, 1]
+            : [CONFLICT_DETECTION_ENTITY_BATCH_SIZE];
+        const entityPairs = Array.from({ length: pairCount }, (_, index) => ({
+          entityType: 'TASK',
+          entityId: `task-${index}`,
+        }));
+        const boundaryPair = entityPairs[boundaryIndex];
+        const boundaryRow = {
+          ...boundaryPair,
+          clientId: 'other-client',
+          actionType: 'UPDATE_TASK',
+          vectorClock: { 'other-client': 1 },
+          serverSeq: 1,
+        };
+        const queriedBatchSizes: number[] = [];
+        const tx = {
+          $queryRaw: vi
+            .fn()
+            .mockImplementation(async (_strings: unknown, ...params: unknown[]) => {
+              const touchedPairValues = (params[0] as Prisma.Sql).values;
+              queriedBatchSizes.push(touchedPairValues.length / 2);
+              for (let index = 0; index < touchedPairValues.length; index += 2) {
+                if (
+                  touchedPairValues[index] === boundaryPair.entityType &&
+                  touchedPairValues[index + 1] === boundaryPair.entityId
+                ) {
+                  return [boundaryRow];
+                }
+              }
+              return [];
+            }),
+        };
 
-      await prefetchLatestEntityOpsForBatch(
-        userId,
-        entityPairs,
-        tx as unknown as Prisma.TransactionClient,
-      );
+        const latestByEntity = await prefetchLatestEntityOpsForBatch(
+          userId,
+          entityPairs,
+          tx as unknown as Prisma.TransactionClient,
+        );
 
-      expect(tx.$queryRaw).toHaveBeenCalledTimes(3);
-    });
+        expect(latestByEntity.get(`TASK\u0000${boundaryPair.entityId}`)).toEqual(
+          boundaryRow,
+        );
+        expect(queriedBatchSizes).toEqual(expectedBatchSizes);
+      },
+    );
 
     it('should create user sync state for first-time batch uploads', async () => {
       const service = new SyncService({ batchUpload: true });
