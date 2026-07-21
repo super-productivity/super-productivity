@@ -237,6 +237,10 @@ an entry is only ever marked `flipped` when an op was actually dispatched:
 - not for `delete-lost` / `delete-wins` — re-applying a delete or resurrecting
   a deleted entity needs delete/restore semantics a plain update cannot
   express (deferred);
+- not for `manual-merge` — the user already reviewed both sides and explicitly
+  picked one during a whole-dataset merge review, and the merged result was
+  force-uploaded; a later flip would silently diverge local state from the
+  uploaded merge;
 - not when the loser has no re-appliable field values (empty diffs, opaque
   `kind: 'action'` diffs);
 - not when the loser's changes touch unsafe fields (`FLIP_UNSAFE_FIELDS`):
@@ -252,3 +256,39 @@ an entry is only ever marked `flipped` when an op was actually dispatched:
 A flipped TASK title is dispatched with `isIgnoreShortSyntax: true` — it is a
 journaled literal value, not user input, so `#tag`/`+project`/`@schedule`
 tokens in the discarded title must NOT re-parse into cross-entity mutations.
+
+## Whole-dataset merge review (REVIEW DIFFERENCES)
+
+When sync hits a whole-dataset conflict (`LocalDataConflictError` — e.g. a
+CONCURRENT compacted snapshot with no incremental ops to LWW-merge), the
+conflict dialog offers a third path next to USE LOCAL / USE REMOTE:
+**REVIEW N DIFFERENCES**.
+
+- `whole-dataset-diff.util.ts` — pure diff of the local complete state (read
+  via the same snapshot path force-upload uses) against the downloaded remote
+  snapshot, per `REVIEWABLE_MODELS` slice: `differing` (per-field values,
+  NOISE_FIELDS-only differences excluded), `onlyLocal`, `onlyRemote`. Header
+  counts come from this diff, never from vector-clock sums. The dialog only
+  offers review when the error carries a NON-EMPTY remote snapshot — the
+  fresh-client path throws with `{}`, and a diff against it would misreport
+  everything as only-local.
+- `dialog-conflict-review.component` — blocking modal: differing → LOCAL /
+  REMOTE pick (preselected newest-wins by entity `modified`), only-local →
+  KEEP / DISCARD, only-remote → ADD / SKIP, with bulk bars. Cancel returns to
+  the 3-button dialog with sync still paused.
+- `whole-dataset-merge.service.ts` — APPLY MERGE builds the merged state from
+  the picks (`whole-dataset-merge.util.ts`; singleton slices and archives are
+  carried through from the local base unchanged), then, in this exact order:
+  1. applies it locally via `SyncHydrationService.hydrateFromRemoteSync`
+     (the same full-state hydrate path USE REMOTE uses, with SYNC_IMPORT
+     clean-slate semantics);
+  2. journals every NON-DEFAULT pick as reason `manual-merge`, status `kept`
+     (History tab; not flippable — see above). Journal-after-persist, but
+     BEFORE the upload: an upload failure is retried by normal sync and never
+     re-enters this flow, so journaling after it would lose the entries.
+     Nothing on the hydrate path clears the journal (`importCompleteBackup`'s
+     `clearAll` is a different path);
+  3. force-uploads via the `forceUploadLocalState` path so remote receives the
+     merged result. Apply-then-upload: if the upload fails the local apply is
+     NOT rolled back — the merged state is already local and normal sync retry
+     re-uploads it.

@@ -24,10 +24,10 @@ import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-downl
 import {
   AuthFailSPError,
   MissingCredentialsSPError,
+  ConflictData,
   NetworkUnavailableSPError,
   OperationIntegrityError,
   PotentialCorsError,
-  ConflictData,
   SyncProviderId,
   SyncStatus,
 } from '../../op-log/sync-exports';
@@ -1753,6 +1753,48 @@ describe('SyncWrapperService', () => {
           data: ConflictData;
         };
         expect(dialogConfig.data.remote.lastUpdate).toBe(remoteLastModified);
+      });
+
+      it('should offer REVIEW (reviewDiffProvider) when the conflict carries a remote snapshot', async () => {
+        const conflictError = new LocalDataConflictError(
+          3,
+          { task: { ids: ['remote-task'], entities: {} } },
+          { clientB: 5 },
+        );
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo();
+
+        await service.sync();
+
+        const dialogData = mockMatDialog.open.calls.mostRecent().args[1]!
+          .data as ConflictData;
+        expect(dialogData.reviewDiffProvider).toBeDefined();
+      });
+
+      it('should NOT offer REVIEW when the conflict carries an EMPTY remote snapshot (fresh-client path)', async () => {
+        // The fresh-client incremental-ops path throws LocalDataConflictError(0, {},
+        // undefined, null) — there is no snapshot to diff against. Offering review
+        // there would show a bogus "everything only-local" diff whose discards
+        // could drop real data.
+        const conflictError = new LocalDataConflictError(0, {}, undefined, null);
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(conflictError));
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of('USE_LOCAL'),
+        } as any);
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo();
+
+        await service.sync();
+
+        const dialogData = mockMatDialog.open.calls.mostRecent().args[1]!
+          .data as ConflictData;
+        expect(dialogData.reviewDiffProvider).toBeUndefined();
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {

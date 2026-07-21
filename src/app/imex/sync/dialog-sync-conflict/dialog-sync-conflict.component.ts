@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -24,6 +30,11 @@ import {
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import {
+  countWholeDatasetDiff,
+  WholeDatasetDiff,
+} from '../../../op-log/sync/whole-dataset-diff.util';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'dialog-sync-conflict',
@@ -41,6 +52,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
     ShortTimePipe,
     MatTooltip,
     CollapsibleComponent,
+    MatProgressSpinner,
   ],
 })
 export class DialogSyncConflictComponent {
@@ -76,8 +88,27 @@ export class DialogSyncConflictComponent {
     this.localChangeCount !== null &&
     this.localChangeCount > this.remoteChangeCount;
 
+  // SPAP-16 — lazily-computed whole-dataset diff for the "REVIEW DIFFERENCES" path.
+  readonly hasReviewOption = !!this.data.reviewDiffProvider;
+  readonly isComputingDiff = signal(false);
+  readonly reviewDiff = signal<WholeDatasetDiff | null>(null);
+  readonly reviewCounts = computed(() => {
+    const diff = this.reviewDiff();
+    return diff ? countWholeDatasetDiff(diff) : null;
+  });
+
   constructor() {
     this._matDialogRef.disableClose = true;
+    // Kick off diff computation immediately so the header counts + button label
+    // are ready without user interaction (spinner shown until resolved).
+    if (this.data.reviewDiffProvider) {
+      this.isComputingDiff.set(true);
+      void this.data
+        .reviewDiffProvider()
+        .then((diff) => this.reviewDiff.set(diff))
+        .catch(() => this.reviewDiff.set(null))
+        .finally(() => this.isComputingDiff.set(false));
+    }
   }
 
   close(res?: DialogConflictResolutionResult): void {

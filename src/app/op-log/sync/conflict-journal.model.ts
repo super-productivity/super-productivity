@@ -40,6 +40,7 @@ export type ConflictJournalReason =
   | 'delete-wins'
   | 'delete-lost'
   | 'disjoint-merge'
+  | 'manual-merge'
   | 'noise'
   | 'clock-corruption-suspected';
 

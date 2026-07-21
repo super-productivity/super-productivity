@@ -165,6 +165,16 @@ export interface ConflictData {
    */
   localUnsyncedOpsCount?: number;
   additional?: unknown;
+  /**
+   * SPAP-16 — lazily computes the whole-dataset entity diff (local complete
+   * state vs the downloaded remote snapshot) for the "REVIEW N DIFFERENCES"
+   * path. Memoized by the producer so the dialog (for header counts) and the
+   * wrapper (for the review modal) share one computation. Absent when the
+   * producer cannot supply a remote snapshot.
+   */
+  reviewDiffProvider?: () => Promise<
+    import('../../sync/whole-dataset-diff.util').WholeDatasetDiff
+  >;
 }
 
 // ============================================================================

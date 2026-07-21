@@ -130,6 +130,7 @@ const REASON_KEYS: ReadonlyMap<ConflictJournalReason, string> = new Map([
   ['delete-wins', CR.REASON_DELETE_WINS],
   ['delete-lost', CR.REASON_DELETE_LOST],
   ['disjoint-merge', CR.REASON_DISJOINT_MERGE],
+  ['manual-merge', CR.REASON_MANUAL_MERGE],
   ['noise', CR.REASON_NOISE],
   ['clock-corruption-suspected', CR.REASON_CLOCK_CORRUPTION],
 ]);

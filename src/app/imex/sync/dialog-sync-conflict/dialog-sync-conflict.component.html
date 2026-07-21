@@ -3,6 +3,24 @@
 <mat-dialog-content>
   <div [innerHTML]="T.F.SYNC.D_CONFLICT.TEXT | translate"></div>
 
+  @if (hasReviewOption) {
+    <p class="review-summary">
+      @if (isComputingDiff()) {
+        {{ T.F.SYNC.D_CONFLICT.REVIEW_COMPUTING | translate }}
+      } @else if (reviewCounts(); as c) {
+        {{
+          T.F.SYNC.D_CONFLICT.REVIEW_SUMMARY
+            | translate
+              : {
+                  differing: c.differing,
+                  onlyLocal: c.onlyLocal,
+                  onlyRemote: c.onlyRemote,
+                }
+        }}
+      }
+    </p>
+  }
+
   <table>
     <thead>
       <tr>
@@ -153,6 +171,26 @@
     >
       {{ T.G.CANCEL | translate }}
     </button>
+    @if (hasReviewOption) {
+      <button
+        (click)="close('REVIEW')"
+        [disabled]="isComputingDiff() || (reviewCounts()?.total ?? 0) === 0"
+        mat-stroked-button
+      >
+        @if (isComputingDiff()) {
+          <mat-progress-spinner
+            diameter="18"
+            mode="indeterminate"
+          ></mat-progress-spinner>
+        } @else {
+          <mat-icon>merge</mat-icon>
+        }
+        {{
+          T.F.SYNC.D_CONFLICT.REVIEW_DIFFERENCES
+            | translate: { count: reviewCounts()?.total ?? 0 }
+        }}
+      </button>
+    }
     <button
       (click)="close('USE_REMOTE')"
       [color]="isHighlightRemote && isHighlightRemoteChanges ? 'primary' : ''"

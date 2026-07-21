@@ -80,7 +80,11 @@ export interface AppDataCompleteLegacy extends AppBaseData {
   lastArchiveUpdate: number | null;
 }
 
-export type DialogConflictResolutionResult = 'USE_LOCAL' | 'USE_REMOTE' | false;
+export type DialogConflictResolutionResult =
+  | 'USE_LOCAL'
+  | 'USE_REMOTE'
+  | 'REVIEW'
+  | false;
 
 export type DialogPermissionResolutionResult = 'DISABLED_SYNC' | 'GRANTED_PERMISSION';
 

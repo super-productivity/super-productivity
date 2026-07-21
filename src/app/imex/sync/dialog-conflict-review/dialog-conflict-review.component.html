@@ -1,0 +1,205 @@
+<h1 mat-dialog-title>{{ T.F.SYNC.CONFLICT_MERGE.TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  <p class="subtitle">{{ T.F.SYNC.CONFLICT_MERGE.SUBTITLE | translate }}</p>
+
+  @if (!hasAny) {
+    <p class="empty">{{ T.F.SYNC.CONFLICT_MERGE.EMPTY | translate }}</p>
+  }
+
+  <!-- Changed on both sides -->
+  @if (differing.length) {
+    <section class="review-section">
+      <header class="section-header">
+        <h3>
+          {{
+            T.F.SYNC.CONFLICT_MERGE.SECTION_DIFFERING
+              | translate: { count: differing.length }
+          }}
+        </h3>
+        <div class="bulk-bar">
+          <button
+            mat-button
+            (click)="setAllDiffering('local')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_DIFFERING_LOCAL | translate }}
+          </button>
+          <button
+            mat-button
+            (click)="setAllDiffering('remote')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_DIFFERING_REMOTE | translate }}
+          </button>
+        </div>
+      </header>
+
+      @for (e of differing; track key(e)) {
+        <div
+          class="item"
+          [class.pick-local]="differingPick(e) === 'local'"
+          [class.pick-remote]="differingPick(e) === 'remote'"
+        >
+          <div class="item-title">{{ e.title }}</div>
+          <div class="diff-grid">
+            <div class="grid-head field-col">
+              {{ T.F.SYNC.CONFLICT_MERGE.COL_FIELD | translate }}
+            </div>
+            <div class="grid-head">
+              {{ T.F.SYNC.CONFLICT_MERGE.COL_LOCAL | translate }}
+            </div>
+            <div class="grid-head">
+              {{ T.F.SYNC.CONFLICT_MERGE.COL_REMOTE | translate }}
+            </div>
+            @for (d of e.fieldDiffs; track d.field) {
+              <div class="field-col">{{ d.field }}</div>
+              <div class="val local">{{ display(d.localVal) }}</div>
+              <div class="val remote">{{ display(d.remoteVal) }}</div>
+            }
+          </div>
+          <div class="pick-toggle">
+            <button
+              mat-stroked-button
+              [color]="differingPick(e) === 'local' ? 'primary' : ''"
+              (click)="setDiffering(e, 'local')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_LOCAL | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              [color]="differingPick(e) === 'remote' ? 'primary' : ''"
+              (click)="setDiffering(e, 'remote')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_REMOTE | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- Only on this device -->
+  @if (onlyLocal.length) {
+    <section class="review-section">
+      <header class="section-header">
+        <h3>
+          {{
+            T.F.SYNC.CONFLICT_MERGE.SECTION_ONLY_LOCAL
+              | translate: { count: onlyLocal.length }
+          }}
+        </h3>
+        <div class="bulk-bar">
+          <button
+            mat-button
+            (click)="setAllOnlyLocal('keep')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_KEEP_ALL | translate }}
+          </button>
+          <button
+            mat-button
+            (click)="setAllOnlyLocal('discard')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_DISCARD_ALL | translate }}
+          </button>
+        </div>
+      </header>
+      @for (e of onlyLocal; track key(e)) {
+        <div
+          class="item single"
+          [class.discarded]="onlyLocalPick(e) === 'discard'"
+        >
+          <div class="item-title">{{ e.title }}</div>
+          <div class="pick-toggle">
+            <button
+              mat-stroked-button
+              [color]="onlyLocalPick(e) === 'keep' ? 'primary' : ''"
+              (click)="setOnlyLocal(e, 'keep')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_KEEP | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              [color]="onlyLocalPick(e) === 'discard' ? 'primary' : ''"
+              (click)="setOnlyLocal(e, 'discard')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_DISCARD | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- Only on server -->
+  @if (onlyRemote.length) {
+    <section class="review-section">
+      <header class="section-header">
+        <h3>
+          {{
+            T.F.SYNC.CONFLICT_MERGE.SECTION_ONLY_REMOTE
+              | translate: { count: onlyRemote.length }
+          }}
+        </h3>
+        <div class="bulk-bar">
+          <button
+            mat-button
+            (click)="setAllOnlyRemote('add')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_ADD_ALL | translate }}
+          </button>
+          <button
+            mat-button
+            (click)="setAllOnlyRemote('skip')"
+          >
+            {{ T.F.SYNC.CONFLICT_MERGE.BULK_SKIP_ALL | translate }}
+          </button>
+        </div>
+      </header>
+      @for (e of onlyRemote; track key(e)) {
+        <div
+          class="item single"
+          [class.skipped]="onlyRemotePick(e) === 'skip'"
+        >
+          <div class="item-title">{{ e.title }}</div>
+          <div class="pick-toggle">
+            <button
+              mat-stroked-button
+              [color]="onlyRemotePick(e) === 'add' ? 'primary' : ''"
+              (click)="setOnlyRemote(e, 'add')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_ADD | translate }}
+            </button>
+            <button
+              mat-stroked-button
+              [color]="onlyRemotePick(e) === 'skip' ? 'primary' : ''"
+              (click)="setOnlyRemote(e, 'skip')"
+            >
+              {{ T.F.SYNC.CONFLICT_MERGE.PICK_SKIP | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    (click)="cancel()"
+    [disabled]="applying()"
+  >
+    {{ T.F.SYNC.CONFLICT_MERGE.CANCEL | translate }}
+  </button>
+  <button
+    mat-stroked-button
+    color="primary"
+    (click)="apply()"
+    [disabled]="applying()"
+  >
+    <mat-icon>merge</mat-icon>
+    {{
+      (applying() ? T.F.SYNC.CONFLICT_MERGE.APPLYING : T.F.SYNC.CONFLICT_MERGE.APPLY)
+        | translate
+    }}
+  </button>
+</mat-dialog-actions>

@@ -1,0 +1,125 @@
+:host {
+  display: block;
+}
+
+.subtitle {
+  margin: 0 0 16px;
+  opacity: 0.75;
+}
+
+.empty {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.review-section {
+  margin-bottom: 24px;
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    h3 {
+      margin: 0;
+    }
+  }
+
+  .bulk-bar {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+}
+
+.item {
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 8px 0;
+
+  &.pick-local {
+    border-left: 3px solid var(--c-primary, #29b6f6);
+  }
+
+  &.pick-remote {
+    border-right: 3px solid var(--c-primary, #29b6f6);
+  }
+
+  &.discarded,
+  &.skipped {
+    opacity: 0.55;
+  }
+
+  .item-title {
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+
+  &.single {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    .item-title {
+      margin-bottom: 0;
+    }
+  }
+}
+
+// Field diff grid: 3 columns on desktop, stacked local/remote on phones.
+.diff-grid {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 2fr 2fr;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+
+  .grid-head {
+    font-weight: bold;
+    opacity: 0.7;
+  }
+
+  .val {
+    overflow-wrap: anywhere;
+  }
+}
+
+.pick-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// Phone width: stack the diff grid into label + value rows.
+@media (max-width: 600px) {
+  .diff-grid {
+    grid-template-columns: 1fr;
+
+    .grid-head {
+      display: none;
+    }
+
+    .field-col {
+      font-weight: bold;
+      margin-top: 6px;
+    }
+
+    .val::before {
+      opacity: 0.6;
+      margin-right: 4px;
+    }
+
+    .val.local::before {
+      content: '⬇ ';
+    }
+
+    .val.remote::before {
+      content: '☁ ';
+    }
+  }
+}

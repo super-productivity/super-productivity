@@ -62,9 +62,14 @@ const FLIP_SUPPORTED_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
  * cannot express: `delete-lost` would have to re-apply a delete, `delete-wins`
  * would have to resurrect a deleted entity. Both are DEFERRED — until then the
  * entry stays reviewable but flip is refused instead of falsely succeeding.
+ *
+ * `manual-merge` is refused for a different reason: the user already reviewed
+ * both sides and explicitly picked one during a whole-dataset merge, and the
+ * merged result was force-uploaded to remote. A later flip would dispatch a
+ * bare update that silently diverges local state from the uploaded merge.
  */
 const FLIP_UNSUPPORTED_REASONS: ReadonlySet<ConflictJournalReason> =
-  new Set<ConflictJournalReason>(['delete-lost', 'delete-wins']);
+  new Set<ConflictJournalReason>(['delete-lost', 'delete-wins', 'manual-merge']);
 
 /**
  * Fields a bare `{id,changes}` update cannot safely re-apply, in two classes:

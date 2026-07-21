@@ -14,9 +14,11 @@ const buildConflictData = (overrides: {
   lastSyncedVectorClock?: VectorClock | null;
   localUnsyncedOpsCount?: number;
   remoteLastUpdate?: number | null;
+  reviewDiffProvider?: ConflictData['reviewDiffProvider'];
 }): ConflictData => ({
   reason: ConflictReason.NoLastSync,
   localUnsyncedOpsCount: overrides.localUnsyncedOpsCount,
+  reviewDiffProvider: overrides.reviewDiffProvider,
   remote: {
     lastUpdate:
       overrides.remoteLastUpdate === undefined ? 1000 : overrides.remoteLastUpdate,
@@ -258,6 +260,62 @@ describe('DialogSyncConflictComponent', () => {
       expect(typed.getConfirmationMessage('USE_REMOTE')).toContain(
         T.F.SYNC.D_CONFLICT.OVERWRITE_WARNING,
       );
+    });
+  });
+
+  describe('SPAP-16 review option', () => {
+    it('has no review option when no reviewDiffProvider is supplied', () => {
+      const component = createComponent(buildConflictData({}));
+      expect(component.hasReviewOption).toBe(false);
+      expect(component.reviewCounts()).toBeNull();
+    });
+
+    it('computes diff counts lazily from the provider (not vector-clock sums)', async () => {
+      let resolveDiff: (v: unknown) => void = () => {};
+      const provider = (): Promise<never> =>
+        new Promise((res) => {
+          resolveDiff = res as (v: unknown) => void;
+        }) as Promise<never>;
+
+      const component = createComponent(
+        buildConflictData({
+          localVectorClock: { clientA: 1000 },
+          remoteVectorClock: { clientA: 2000 },
+          reviewDiffProvider: provider,
+        }),
+      );
+
+      expect(component.hasReviewOption).toBe(true);
+      expect(component.isComputingDiff()).toBe(true);
+      expect(component.reviewCounts()).toBeNull();
+
+      resolveDiff({
+        differing: [{}, {}],
+        onlyLocal: [{}],
+        onlyRemote: [],
+      });
+      // Flush the then→catch→finally microtask chain.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(component.isComputingDiff()).toBe(false);
+      // Counts come from the diff buckets, NOT the vector clocks (1000/2000).
+      expect(component.reviewCounts()).toEqual({
+        differing: 2,
+        onlyLocal: 1,
+        onlyRemote: 0,
+        total: 3,
+      });
+    });
+
+    it('close("REVIEW") returns REVIEW without an overwrite confirmation', () => {
+      const component = createComponent(buildConflictData({}));
+      const dialogRef = TestBed.inject(MatDialogRef);
+      const matDialog = TestBed.inject(MatDialog);
+
+      component.close('REVIEW');
+
+      expect(matDialog.open).not.toHaveBeenCalled();
+      expect(dialogRef.close).toHaveBeenCalledWith('REVIEW');
     });
   });
 });

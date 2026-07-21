@@ -429,6 +429,13 @@ describe('SyncConflictUiService', () => {
     expect(service.canFlip(makeEntry({ reason: 'delete-wins' }))).toBe(false);
   });
 
+  it('canFlip() is false for manual-merge entries even with flippable field diffs', () => {
+    // manual-merge: the user already reviewed both sides and explicitly picked
+    // one during whole-dataset merge, and the merged state was force-uploaded.
+    // A later flip would silently diverge local from the uploaded merge result.
+    expect(service.canFlip(makeEntry({ reason: 'manual-merge' }))).toBe(false);
+  });
+
   it('flip() reports unsupported for delete-lost (no false success)', async () => {
     // delete-lost: the entity was resurrected, fieldDiffs is empty. A normal
     // update op cannot re-apply the delete, so flip must NOT mark the entry

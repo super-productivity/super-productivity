@@ -1,4 +1,4 @@
-import { DestroyRef, inject, Injectable } from '@angular/core';
+import { DestroyRef, inject, Injectable, Injector } from '@angular/core';
 import { BehaviorSubject, combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
@@ -81,6 +81,16 @@ import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-prov
 import { isSuperSyncWebSocketAccess } from '@sp/sync-providers/super-sync';
 import { isTransientNetworkError } from '@sp/sync-providers/http';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
+import {
+  StaleReviewError,
+  WholeDatasetMergeService,
+} from '../../op-log/sync/whole-dataset-merge.service';
+import { WholeDatasetDiff } from '../../op-log/sync/whole-dataset-diff.util';
+import { VectorClock } from '../../core/util/vector-clock';
+import {
+  ConflictReviewResult,
+  DialogConflictReviewComponent,
+} from './dialog-conflict-review/dialog-conflict-review.component';
 import type { UploadOutcome } from '../../op-log/core/types/sync-results.types';
 
 type CompletedUploadOutcome = Extract<UploadOutcome, { kind: 'completed' }>;
@@ -129,6 +139,14 @@ export class SyncWrapperService {
   private _syncCycleGuard = inject(SyncCycleGuardService);
   private _wrappedProvider = inject(WrappedProviderService);
   private _hydrationState = inject(HydrationStateService);
+  private _injector = inject(Injector);
+
+  // SPAP-16 — resolved lazily so the (heavy) merge service + its Store/snapshot
+  // dependency chain is only constructed when the REVIEW-differences path is
+  // actually used, not eagerly at wrapper construction.
+  private get _wholeDatasetMerge(): WholeDatasetMergeService {
+    return this._injector.get(WholeDatasetMergeService);
+  }
 
   syncState$ = this._providerManager.syncStatus$;
 
@@ -1454,61 +1472,120 @@ export class SyncWrapperService {
         localUnsyncedOpsCount: error.unsyncedCount,
       };
 
+      // SPAP-16 — memoized whole-dataset diff (local complete state vs remote
+      // snapshot). One computation is shared by the 3-button dialog (header
+      // counts) and the review modal.
+      const remoteSnapshot = error.remoteSnapshotState as
+        | Record<string, unknown>
+        | undefined;
+      let diffCache:
+        | Promise<{
+            diff: WholeDatasetDiff;
+            localState: Record<string, unknown>;
+            baselineVectorClock: VectorClock;
+          }>
+        | undefined;
+      const getDiffData = (): Promise<{
+        diff: WholeDatasetDiff;
+        localState: Record<string, unknown>;
+        baselineVectorClock: VectorClock;
+      }> => {
+        if (!diffCache) {
+          diffCache = this._wholeDatasetMerge.computeDiff(remoteSnapshot);
+        }
+        return diffCache;
+      };
+      // Only offer REVIEW when there is an actual snapshot to diff against. The
+      // fresh-client path throws with an EMPTY `{}` snapshot — a diff against it
+      // would misreport every local entity as "only-local" and its discards
+      // could drop real data.
+      if (remoteSnapshot && Object.keys(remoteSnapshot).length > 0) {
+        conflictData.reviewDiffProvider = async () => (await getDiffData()).diff;
+      }
+
       SyncLog.log(
         `SyncWrapperService: Showing conflict dialog for ${error.unsyncedCount} local changes vs remote snapshot`,
       );
 
-      const resolution = await firstValueFrom(this._openConflictDialog$(conflictData));
+      // Loop so that cancelling the review modal returns to the 3-button dialog
+      // with the conflict STILL unresolved (sync stays paused).
+      while (true) {
+        const resolution = await firstValueFrom(this._openConflictDialog$(conflictData));
 
-      // Get sync provider for the resolution operation
-      const rawProvider = this._providerManager.getActiveProvider();
-      const syncCapableProvider =
-        await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+        // Get sync provider for the resolution operation
+        const rawProvider = this._providerManager.getActiveProvider();
+        const syncCapableProvider =
+          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
 
-      if (!syncCapableProvider) {
-        SyncLog.err(
-          'SyncWrapperService: Cannot resolve conflict - provider not available',
-        );
-        return 'HANDLED_ERROR';
-      }
-
-      if (resolution === 'USE_LOCAL') {
-        // User chose to keep local data and upload it to remote
-        SyncLog.log(
-          'SyncWrapperService: User chose USE_LOCAL - uploading local state to overwrite remote',
-        );
-        const forceUploadResult =
-          await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
-        if (forceUploadResult.hasUnresolvedOps) {
-          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-          return 'HANDLED_ERROR';
-        }
-        this._providerManager.setSyncStatus('IN_SYNC');
-        return SyncStatus.InSync;
-      } else if (resolution === 'USE_REMOTE') {
-        // User chose to discard local data and download remote.
-        // Reset latch — read after forceDownloadRemoteState returns. (#7330)
-        SyncLog.log(
-          'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
-        );
-        this._sessionValidation.reset();
-        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
-        if (this._sessionValidation.hasFailed()) {
+        if (!syncCapableProvider) {
           SyncLog.err(
-            'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
+            'SyncWrapperService: Cannot resolve conflict - provider not available',
           );
-          this._providerManager.setSyncStatus('ERROR');
           return 'HANDLED_ERROR';
         }
-        this._providerManager.setSyncStatus('IN_SYNC');
-        return SyncStatus.InSync;
-      } else {
-        // User cancelled the dialog
-        SyncLog.log('SyncWrapperService: User cancelled first sync conflict dialog');
-        this._snackService.open({
-          msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_CANCELLED,
-        });
-        return 'HANDLED_ERROR';
+
+        if (resolution === 'USE_LOCAL') {
+          // User chose to keep local data and upload it to remote
+          SyncLog.log(
+            'SyncWrapperService: User chose USE_LOCAL - uploading local state to overwrite remote',
+          );
+          const forceUploadResult =
+            await this._opLogSyncService.forceUploadLocalState(syncCapableProvider);
+          if (forceUploadResult.hasUnresolvedOps) {
+            this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+            return 'HANDLED_ERROR';
+          }
+          this._providerManager.setSyncStatus('IN_SYNC');
+          return SyncStatus.InSync;
+        } else if (resolution === 'USE_REMOTE') {
+          // User chose to discard local data and download remote.
+          // Reset latch — read after forceDownloadRemoteState returns. (#7330)
+          SyncLog.log(
+            'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
+          );
+          this._sessionValidation.reset();
+          await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+          if (this._sessionValidation.hasFailed()) {
+            SyncLog.err(
+              'SyncWrapperService: USE_REMOTE applied but post-sync validation failed; reporting ERROR',
+            );
+            this._providerManager.setSyncStatus('ERROR');
+            return 'HANDLED_ERROR';
+          }
+          this._providerManager.setSyncStatus('IN_SYNC');
+          return SyncStatus.InSync;
+        } else if (resolution === 'REVIEW') {
+          // SPAP-16 — open the blocking per-item review modal.
+          SyncLog.log('SyncWrapperService: User chose REVIEW - opening merge review');
+          const { diff, localState, baselineVectorClock } = await getDiffData();
+          const reviewResult = await firstValueFrom(
+            this._openConflictReviewDialog$(diff),
+          );
+          if (!reviewResult) {
+            // Cancelled the review → back to the 3-button dialog, sync paused.
+            SyncLog.log(
+              'SyncWrapperService: Review cancelled - reopening conflict dialog',
+            );
+            continue;
+          }
+          await this._wholeDatasetMerge.applyMerge(
+            syncCapableProvider,
+            localState,
+            diff,
+            reviewResult.picks,
+            error.remoteVectorClock,
+            baselineVectorClock,
+          );
+          this._providerManager.setSyncStatus('IN_SYNC');
+          return SyncStatus.InSync;
+        } else {
+          // User cancelled the dialog
+          SyncLog.log('SyncWrapperService: User cancelled first sync conflict dialog');
+          this._snackService.open({
+            msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_CANCELLED,
+          });
+          return 'HANDLED_ERROR';
+        }
       }
     } catch (resolutionError) {
       if (resolutionError instanceof FileSyncTargetChangedError) {
@@ -1519,6 +1596,16 @@ export class SyncWrapperService {
           'SyncWrapperService: target changed mid-conflict-resolution, will re-sync against the current target',
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return 'HANDLED_ERROR';
+      }
+      if (resolutionError instanceof StaleReviewError) {
+        // SPAP-45: local data changed while the review modal was open; the picks
+        // are stale. applyMerge aborted before touching local state or the remote
+        // (no IN_SYNC). Pause and let the user re-resolve against fresh state.
+        this._snackService.open({
+          msg: T.F.SYNC.S.REVIEW_STALE_ABORTED,
+          type: 'ERROR',
+        });
         return 'HANDLED_ERROR';
       }
       // GHSA-9544-hjjr-fg8h: USE_LOCAL force-uploads, which refuses to send
@@ -1792,6 +1879,28 @@ export class SyncWrapperService {
     // Forward it as-is so _handleLocalDataConflict treats it as cancellation;
     // filtering it would leave firstValueFrom() to throw EmptyError (issue #7339).
     return this.lastConflictDialog.afterClosed();
+  }
+
+  /**
+   * SPAP-16 — opens the blocking per-item merge review modal. Resolves to the
+   * user's picks on APPLY, or `undefined` on CANCEL (caller re-opens the
+   * 3-button dialog with the conflict unresolved).
+   */
+  private _openConflictReviewDialog$(
+    diff: WholeDatasetDiff,
+  ): Observable<ConflictReviewResult> {
+    return this._matDialog
+      .open<
+        DialogConflictReviewComponent,
+        { diff: WholeDatasetDiff },
+        ConflictReviewResult
+      >(DialogConflictReviewComponent, {
+        restoreFocus: true,
+        disableClose: true,
+        maxWidth: '96vw',
+        data: { diff },
+      })
+      .afterClosed();
   }
 
   /**
