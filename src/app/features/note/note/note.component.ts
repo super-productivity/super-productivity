@@ -43,6 +43,7 @@ import {
 } from '../../../core/draft/local-draft.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
+import { getPhantomChangeRisk } from '../../../op-log/capture/phantom-change-guard.util';
 import { Log } from '../../../core/log';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
@@ -79,6 +80,11 @@ export class NoteComponent implements OnChanges {
   private readonly _localDraftService = inject(LocalDraftService);
   private readonly _operationWriteFlush = inject(OperationWriteFlushService);
   private readonly _operationCapture = inject(OperationCaptureService);
+
+  // Note ids whose fullscreen-open lifecycle is currently in flight. Serializes
+  // opens per note so a second click during the async draft/conflict prelude
+  // cannot stack a second editor loaded from the same stale snapshot (#8982).
+  private readonly _openingNoteIds = new Set<string>();
 
   note!: Note;
 
@@ -195,134 +201,176 @@ export class NoteComponent implements OnChanges {
       throw new Error('No note');
     }
     const note = this.note;
-    let contentToOpen = note.content;
-    const draftOrError = await this._localDraftService.loadDraft('NOTE', note.id);
-    // A failed read is not the same as "no draft": an unread recovery draft may
-    // exist, so all draft handling (including writes and clears) is skipped for
-    // this session rather than risking to overwrite or delete it.
-    const isDraftUnreadable = draftOrError === DRAFT_LOAD_ERROR;
-    const draft = isDraftUnreadable ? undefined : draftOrError;
-    if (isDraftUnreadable) {
-      Log.err('NoteComponent: Failed to load draft; draft handling disabled', note.id);
-    } else if (draft && draft.content === note.content) {
-      // The saved note already contains the draft, so it is no longer needed.
-      await this._localDraftService.clearDraft('NOTE', note.id);
-    } else if (draft && draft.baseContent === note.content) {
-      // Crash recovery: the draft was never saved — restore it.
-      contentToOpen = draft.content;
-    } else if (draft) {
-      // The note changed since the draft was created (e.g. through sync).
-      // Never auto-overwrite; let the user decide.
-      const isReviewDraft = await firstValueFrom(
-        this._matDialog
-          .open(DialogConfirmComponent, {
-            restoreFocus: true,
-            data: {
-              message: T.F.NOTE.D_DRAFT_CONFLICT.MSG,
-              okTxt: T.F.NOTE.D_DRAFT_CONFLICT.REVIEW_DRAFT,
-              cancelTxt: T.F.NOTE.D_DRAFT_CONFLICT.KEEP_SAVED,
-            },
-          })
-          .afterClosed(),
-      );
-      if (isReviewDraft === true) {
+    // Guard the whole per-note open lifecycle. Opening is async (draft load plus
+    // an optional conflict prompt), and a second click during that window would
+    // stack a second editor loaded from the same stale snapshot — closing the
+    // stale one after the first save then reverts it (#8982 review). Allow one
+    // open per note id at a time; released in `finally` once the editor is up or
+    // we bail out.
+    if (this._openingNoteIds.has(note.id)) {
+      return;
+    }
+    this._openingNoteIds.add(note.id);
+    try {
+      let contentToOpen = note.content;
+      const draftOrError = await this._localDraftService.loadDraft('NOTE', note.id);
+      // A failed read is not the same as "no draft": an unread recovery draft may
+      // exist, so all draft handling (including writes and clears) is skipped for
+      // this session rather than risking to overwrite or delete it.
+      const isDraftUnreadable = draftOrError === DRAFT_LOAD_ERROR;
+      const draft = isDraftUnreadable ? undefined : draftOrError;
+      if (isDraftUnreadable) {
+        Log.err('NoteComponent: Failed to load draft; draft handling disabled', note.id);
+      } else if (draft && draft.content === note.content) {
+        // The saved note already contains the draft, so it is no longer needed —
+        // but only when that content is DURABLY persisted. note.content reflects
+        // optimistic NgRx state here; a pending, failed, or sync-window-deferred
+        // write means the durable copy is not on disk yet, so clearing would drop
+        // the only recoverable copy (#8982 review). Keep the draft on any phantom
+        // risk, and clear only the copy this session owns (content === draft.content).
+        if (getPhantomChangeRisk(this._operationCapture) === null) {
+          await this._localDraftService.clearDraftIfContent(
+            'NOTE',
+            note.id,
+            draft.content,
+          );
+        }
+      } else if (draft && draft.baseContent === note.content) {
+        // Crash recovery: the draft was never saved — restore it.
         contentToOpen = draft.content;
-      } else if (isReviewDraft === false) {
-        // The user explicitly chose the saved version over the draft.
-        await this._localDraftService.clearDraft('NOTE', note.id);
-      } else {
-        // No decision (undefined from ESC / backdrop / closeAll). Abort opening
-        // the editor entirely: proceeding would let the checkpoint or a Discard
-        // overwrite/delete the still-unresolved draft. Leave it intact so the
-        // conflict prompt reappears on the next open.
+      } else if (draft) {
+        // The note changed since the draft was created (e.g. through sync).
+        // Never auto-overwrite; let the user decide.
+        const isReviewDraft = await firstValueFrom(
+          this._matDialog
+            .open(DialogConfirmComponent, {
+              restoreFocus: true,
+              data: {
+                message: T.F.NOTE.D_DRAFT_CONFLICT.MSG,
+                okTxt: T.F.NOTE.D_DRAFT_CONFLICT.REVIEW_DRAFT,
+                cancelTxt: T.F.NOTE.D_DRAFT_CONFLICT.KEEP_SAVED,
+              },
+            })
+            .afterClosed(),
+        );
+        if (isReviewDraft === true) {
+          contentToOpen = draft.content;
+        } else if (isReviewDraft === false) {
+          // The user explicitly chose the saved version over the draft.
+          await this._localDraftService.clearDraft('NOTE', note.id);
+        } else {
+          // No decision (undefined from ESC / backdrop / closeAll). Abort opening
+          // the editor entirely: proceeding would let the checkpoint or a Discard
+          // overwrite/delete the still-unresolved draft. Leave it intact so the
+          // conflict prompt reappears on the next open.
+          return;
+        }
+      }
+
+      // Revalidate the captured snapshot after the async draft/conflict waits,
+      // before opening. If the note was deleted or its content changed under us
+      // (e.g. through sync) while we awaited, the captured `note` is stale;
+      // opening it and dispatching its content on close would revert the newer
+      // content (#8982 review).
+      const current = this.note;
+      if (!current || current.id !== note.id || current.content !== note.content) {
         return;
       }
-    }
 
-    // Saves-and-closes on a navigation (resize across the mobile breakpoint,
-    // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
-    // (#8434).
-    const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
-      content: contentToOpen,
-      ...(contentToOpen !== note.content ? { originalContent: note.content } : {}),
-    });
-    // Checkpoint the editor contents locally so they survive a crash.
-    const contentChangedSub = isDraftUnreadable
-      ? undefined
-      : dialogRef.componentInstance.contentChanged.subscribe((content) =>
-          this._localDraftService.saveDraft({
-            entityType: 'NOTE',
-            entityId: note.id,
-            content,
-            baseContent: note.content,
-          }),
-        );
-    dialogRef.afterClosed().subscribe(async (res) => {
-      contentChangedSub?.unsubscribe();
-      if (!this.note) {
-        throw new Error('No note');
-      }
-      // This removes the project note if the note is made empty and saved by the user.
-      if (res?.action === 'DELETE') {
-        this._noteService.remove(this.note);
-        if (!isDraftUnreadable) {
+      // Saves-and-closes on a navigation (resize across the mobile breakpoint,
+      // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
+      // (#8434).
+      const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
+        content: contentToOpen,
+        ...(contentToOpen !== note.content ? { originalContent: note.content } : {}),
+      });
+      // Checkpoint the editor contents locally so they survive a crash.
+      const contentChangedSub = isDraftUnreadable
+        ? undefined
+        : dialogRef.componentInstance.contentChanged.subscribe((content) =>
+            this._localDraftService.saveDraft({
+              entityType: 'NOTE',
+              entityId: note.id,
+              content,
+              baseContent: note.content,
+            }),
+          );
+      dialogRef.afterClosed().subscribe(async (res) => {
+        contentChangedSub?.unsubscribe();
+        if (!this.note) {
+          throw new Error('No note');
+        }
+        // This removes the project note if the note is made empty and saved by the user.
+        if (res?.action === 'DELETE') {
+          this._noteService.remove(this.note);
+          if (!isDraftUnreadable) {
+            this._localDraftService.clearDraft('NOTE', note.id);
+          }
+        } else if (typeof res === 'string') {
+          if (!isDraftUnreadable && res === note.content) {
+            // Nothing unsaved: the editor is closing on the content already
+            // persisted (ESC on an unedited open, or an edit reverted before
+            // close). Keeping a draft here would arm a false "unsaved draft"
+            // conflict prompt if the note later changes on another device. Clear
+            // only once that content is durable (phantom-risk gate) and only the
+            // checkpoint this session owns (content === res) — a newer session's
+            // draft under the same key stays put.
+            if (getPhantomChangeRisk(this._operationCapture) === null) {
+              await this._localDraftService.clearDraftIfContent('NOTE', note.id, res);
+            }
+          } else if (!isDraftUnreadable) {
+            // Persist the draft (baseContent = the still-current note content) and
+            // AWAIT it BEFORE dispatching the note update, so a crash in the window
+            // between the two leaves a durable draft the next open restores via the
+            // baseContent === note.content branch. Best-effort: saveDraft swallows
+            // its own write errors, so this resolves even on failure — the flush
+            // below is what confirms durability, not this await.
+            await this._localDraftService.saveDraft({
+              entityType: 'NOTE',
+              entityId: note.id,
+              content: res,
+              baseContent: note.content,
+            });
+          }
+          // Uses the captured `note`, not `this.note`: the guard above ran before
+          // the await, so re-reading the instance field here would be reading it
+          // across the suspension point.
+          this._noteService.update(note.id, { content: res });
+          if (!isDraftUnreadable && res !== note.content) {
+            try {
+              // Clear only once the update is DURABLY persisted, not merely
+              // dispatched. flushPendingWrites() drains the op-capture pending
+              // counter (incremented synchronously by the meta-reducer, so it is
+              // already >=1 here) and re-acquires the write lock. Draining proves
+              // the write pipeline is idle, but NOT that the write succeeded, and
+              // does not cover a sync-window-deferred action that never bumped the
+              // counter — so gate on the full getPhantomChangeRisk predicate
+              // (unrecovered failure + pending writes + deferred actions), not the
+              // failure flag alone. Clear only the checkpoint this session owns
+              // (content === res): a newer editor may have checkpointed different
+              // content into the same key while the flush was in flight, and a
+              // key-only clear would destroy it (#8982 review). A crash anywhere
+              // before the clear also leaves the draft.
+              await this._operationWriteFlush.flushPendingWrites();
+              if (getPhantomChangeRisk(this._operationCapture) === null) {
+                await this._localDraftService.clearDraftIfContent('NOTE', note.id, res);
+              }
+            } catch (e) {
+              // Flush timed out (throws on MAX_WAIT_TIME) — keep the draft. Failing
+              // here must leave MORE recoverable state, never less; a later open
+              // still clears it via draft.content === note.content once persisted.
+              Log.err('NoteComponent: flush before draft clear failed; keeping draft', e);
+            }
+          }
+          // Discard — confirmed by the user in the dialog, so the draft goes too. Any
+          // other result (undefined from a force-close) keeps the draft recoverable.
+        } else if (res?.action === 'DISCARD' && !isDraftUnreadable) {
           this._localDraftService.clearDraft('NOTE', note.id);
         }
-      } else if (typeof res === 'string') {
-        if (!isDraftUnreadable && res === note.content) {
-          // Nothing unsaved: the editor is closing on the content already
-          // persisted (ESC on an unedited open, or an edit reverted before
-          // close). Keeping a draft here would arm a false "unsaved draft"
-          // conflict prompt if the note later changes on another device.
-          await this._localDraftService.clearDraft('NOTE', note.id);
-        } else if (!isDraftUnreadable) {
-          // Persist the draft (baseContent = the still-current note content) and
-          // AWAIT it BEFORE dispatching the note update, so a crash in the window
-          // between the two leaves a durable draft the next open restores via the
-          // baseContent === note.content branch. Best-effort: saveDraft swallows
-          // its own write errors, so this resolves even on failure — the flush
-          // below is what confirms durability, not this await.
-          await this._localDraftService.saveDraft({
-            entityType: 'NOTE',
-            entityId: note.id,
-            content: res,
-            baseContent: note.content,
-          });
-        }
-        // Uses the captured `note`, not `this.note`: the guard above ran before
-        // the await, so re-reading the instance field here would be reading it
-        // across the suspension point.
-        this._noteService.update(note.id, { content: res });
-        if (!isDraftUnreadable && res !== note.content) {
-          try {
-            // Clear only once the update is DURABLY persisted, not merely
-            // dispatched. flushPendingWrites() drains the op-capture pending
-            // counter (incremented synchronously by the meta-reducer, so it is
-            // already >=1 here) and re-acquires the write lock. Draining proves
-            // the write pipeline is idle, but NOT that the write succeeded — the
-            // persist effect decrements the counter in its `finally` even when
-            // the write threw and rolled back (operation-log.effects.ts), so the
-            // flush resolves on a failed persist too. Gate the clear on the
-            // divergence flag the effect sets in that catch: if live state is
-            // ahead of a durable op, keep the draft so the next open recovers
-            // it. A crash anywhere before the clear also leaves the draft.
-            await this._operationWriteFlush.flushPendingWrites();
-            if (!this._operationCapture.hasUnrecoveredPersistFailure()) {
-              await this._localDraftService.clearDraft('NOTE', note.id);
-            }
-          } catch (e) {
-            // Flush timed out (throws on MAX_WAIT_TIME) — keep the draft. Failing
-            // here must leave MORE recoverable state, never less; a later open
-            // still clears it via draft.content === note.content once persisted.
-            Log.err('NoteComponent: flush before draft clear failed; keeping draft', e);
-          }
-        }
-        // Discard — confirmed by the user in the dialog, so the draft goes too. Any
-        // other result (undefined from a force-close) keeps the draft recoverable.
-      } else if (res?.action === 'DISCARD' && !isDraftUnreadable) {
-        this._localDraftService.clearDraft('NOTE', note.id);
-      }
-    });
+      });
+    } finally {
+      this._openingNoteIds.delete(note.id);
+    }
   }
 
   trackByProjectId(i: number, project: Project): string {

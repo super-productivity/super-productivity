@@ -128,6 +128,36 @@ export class LocalDraftService {
   }
 
   /**
+   * Deletes the draft only if its stored content still equals `expectedContent`,
+   * in a single read-write transaction. Lets a save lifecycle clear the draft it
+   * owns without racing a newer editor session that checkpointed different
+   * content into the same key between this session's save and its flush: an
+   * older lifecycle's key-only clear would otherwise delete the newer session's
+   * checkpoint (#8982 review). A mismatch (newer content, or already gone) is a
+   * safe no-op — the owning session clears its own copy later.
+   */
+  async clearDraftIfContent(
+    entityType: LocalDraftEntityType,
+    entityId: string,
+    expectedContent: string,
+  ): Promise<void> {
+    try {
+      const profileId = await this._activeProfileId();
+      const key = this._key(profileId, entityType, entityId);
+      await this._withRetryOnClose(async (db) => {
+        const tx = db.transaction(DB_STORE_NAME, 'readwrite');
+        const existing = await tx.store.get(key);
+        if (existing && existing.content === expectedContent) {
+          await tx.store.delete(key);
+        }
+        await tx.done;
+      });
+    } catch (e) {
+      Log.err('LocalDraftService: Failed to conditionally clear draft', e);
+    }
+  }
+
+  /**
    * Deletes every draft belonging to a profile. Called from the profile-deletion
    * lifecycle (UserProfileService.deleteProfile) so a deleted profile does not
    * leave its (never-synced) draft contents behind. Drafts of other profiles are
@@ -206,16 +236,27 @@ export class LocalDraftService {
    */
   private async _pruneStaleDrafts(now: number = Date.now()): Promise<void> {
     await this._withRetryOnClose(async (db) => {
-      const all = await db.getAll(DB_STORE_NAME);
+      // Select and delete inside ONE read-write transaction so a concurrent
+      // save/checkpoint cannot refresh a key between the snapshot and its
+      // deletion: the getAll() snapshot and the deletes are consistent, and any
+      // interleaving write is serialized either fully before (seen here, and if
+      // fresh it survives) or fully after this transaction (#8982 review).
+      const tx = db.transaction(DB_STORE_NAME, 'readwrite');
+      const all = await tx.store.getAll();
       const cutoff = now - DRAFT_RETENTION_MS;
       const expiredKeys = all.filter((d) => d.updatedAt < cutoff).map((d) => d.key);
       const survivors = all
         .filter((d) => d.updatedAt >= cutoff)
         .sort((a, b) => b.updatedAt - a.updatedAt);
       const overflowKeys = survivors.slice(DRAFT_MAX_ENTRIES).map((d) => d.key);
-      await Promise.all(
-        [...expiredKeys, ...overflowKeys].map((key) => db.delete(DB_STORE_NAME, key)),
-      );
+      // Issue every delete request up front and await them together with tx.done
+      // (idb's canonical multi-write pattern) rather than awaiting each delete in
+      // turn: an await BETWEEN requests can let the transaction go inactive on
+      // WebKit/iOS, which this DB is already known to be touchy about (#6643).
+      await Promise.all([
+        ...[...expiredKeys, ...overflowKeys].map((key) => tx.store.delete(key)),
+        tx.done,
+      ]);
     });
   }
 

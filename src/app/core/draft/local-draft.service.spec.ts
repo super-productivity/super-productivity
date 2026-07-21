@@ -420,4 +420,86 @@ describe('LocalDraftService', () => {
     expect(draft?.content).toBe('survives');
     await service.clearDraft('NOTE', entityId);
   });
+
+  describe('clearDraftIfContent (owned-content clear)', () => {
+    it('clears the draft when the stored content still matches', async () => {
+      activeProfileId = 'profile-a';
+      const id = uniqueId();
+      await service.saveDraft({
+        entityType: 'NOTE',
+        entityId: id,
+        content: 'v1',
+        baseContent: 'base',
+      });
+
+      await service.clearDraftIfContent('NOTE', id, 'v1');
+
+      expect(await service.loadDraft('NOTE', id)).toBeUndefined();
+    });
+
+    it("leaves a newer session's draft under the same key when content no longer matches", async () => {
+      activeProfileId = 'profile-a';
+      const id = uniqueId();
+      // Session B has checkpointed newer content Y under the shared key while an
+      // older lifecycle A still believes it owns X. A's clear must NOT delete Y.
+      await service.saveDraft({
+        entityType: 'NOTE',
+        entityId: id,
+        content: 'Y-newer',
+        baseContent: 'base',
+      });
+
+      await service.clearDraftIfContent('NOTE', id, 'X-older');
+
+      // A key-only clear would have destroyed Y here; the content-conditional
+      // clear no-ops on the mismatch (#8982 review).
+      const survivor = await loadDraft(id);
+      expect(survivor?.content).toBe('Y-newer');
+      await service.clearDraft('NOTE', id);
+    });
+
+    it('is a safe no-op when the draft is already gone', async () => {
+      activeProfileId = 'profile-a';
+      await expectAsync(
+        service.clearDraftIfContent('NOTE', uniqueId(), 'whatever'),
+      ).toBeResolved();
+    });
+  });
+
+  it('does not prune a stale draft that is concurrently refreshed (atomic select+delete)', async () => {
+    activeProfileId = 'profile-a';
+    const staleId = uniqueId();
+    const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+    // Seed a draft old enough to be pruned.
+    await (service as any)._withRetryOnClose((db: any) =>
+      db.put('drafts', {
+        key: `profile-a:NOTE:${staleId}`,
+        entityType: 'NOTE',
+        entityId: staleId,
+        profileId: 'profile-a',
+        content: 'stale',
+        baseContent: 'base',
+        updatedAt: Date.now() - fifteenDaysMs,
+      }),
+    );
+
+    // Fire the prune and a concurrent refresh of the SAME key. The prune's single
+    // read-write transaction serializes against the save: the save lands either
+    // fully before the prune (fresh in the snapshot -> survives) or fully after
+    // it (re-created fresh). Either way the refreshed draft must survive. The old
+    // getAll-then-separate-delete code could delete the refreshed key.
+    await Promise.all([
+      (service as any)._pruneStaleDrafts(),
+      service.saveDraft({
+        entityType: 'NOTE',
+        entityId: staleId,
+        content: 'refreshed',
+        baseContent: 'base',
+      }),
+    ]);
+
+    const survivor = await loadDraft(staleId);
+    expect(survivor?.content).toBe('refreshed');
+    await service.clearDraft('NOTE', staleId);
+  });
 });

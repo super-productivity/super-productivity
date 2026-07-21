@@ -71,20 +71,27 @@ describe('NoteComponent editFullscreen', () => {
       'loadDraft',
       'saveDraft',
       'clearDraft',
+      'clearDraftIfContent',
     ]);
     localDraftService.loadDraft.and.resolveTo(undefined);
     localDraftService.saveDraft.and.resolveTo(undefined);
     localDraftService.clearDraft.and.resolveTo(undefined);
+    localDraftService.clearDraftIfContent.and.resolveTo(undefined);
 
     flushService = jasmine.createSpyObj('OperationWriteFlushService', [
       'flushPendingWrites',
     ]);
     flushService.flushPendingWrites.and.resolveTo(undefined);
 
+    // getPhantomChangeRisk() reads all three of these; default them to "no risk"
+    // (nothing pending/failed/deferred) so the durability gate is open unless a
+    // test explicitly arms one lever.
     captureService = jasmine.createSpyObj('OperationCaptureService', [
       'hasUnrecoveredPersistFailure',
+      'getPendingCount',
     ]);
     captureService.hasUnrecoveredPersistFailure.and.returnValue(false);
+    captureService.getPendingCount.and.returnValue(0);
 
     const clipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'resolveMarkdownImages',
@@ -123,10 +130,32 @@ describe('NoteComponent editFullscreen', () => {
 
     await editFullscreen();
 
-    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
+    // Owned-content clear: only the copy this session sees (content === the
+    // saved note) is dropped, and only because there is no phantom risk.
+    expect(localDraftService.clearDraftIfContent).toHaveBeenCalledWith(
+      'NOTE',
+      NOTE.id,
+      'saved content',
+    );
     const data = getFullscreenDialogData();
     expect(data.content).toBe('saved content');
     expect(data.originalContent).toBeUndefined();
+  });
+
+  it('keeps the draft on the open path when the "saved" note is not yet durable (phantom risk)', async () => {
+    // draft.content === note.content, so the open path would normally drop the
+    // draft as redundant. But note.content is optimistic NgRx state and a write
+    // is still pending, so the durable copy is not on disk — clearing here would
+    // delete the only recoverable copy. Arm the pending-write lever.
+    localDraftService.loadDraft.and.resolveTo(draftOf('saved content', 'anything'));
+    captureService.getPendingCount.and.returnValue(1);
+
+    await editFullscreen();
+
+    // Drop the getPhantomChangeRisk gate on the open-path clear and this clears a
+    // draft whose "saved" content is not durable -> expectation goes red.
+    expect(localDraftService.clearDraftIfContent).not.toHaveBeenCalled();
+    expect(getFullscreenDialogData().content).toBe('saved content');
   });
 
   it('should seed the dialog with the draft content on crash recovery (baseContent matches note)', async () => {
@@ -238,15 +267,20 @@ describe('NoteComponent editFullscreen', () => {
     expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
       content: 'final content',
     });
-    expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+    expect(localDraftService.clearDraftIfContent).not.toHaveBeenCalled();
 
     resolveFlush();
     await Promise.resolve();
     await Promise.resolve();
 
-    // Drop the `await` before clearDraft and it clears while the flush is still
-    // pending -> this expectation goes red.
-    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
+    // Drop the `await` before the clear and it clears while the flush is still
+    // pending -> this expectation goes red. Owned-content clear: only the draft
+    // this session saved (content === res) is removed.
+    expect(localDraftService.clearDraftIfContent).toHaveBeenCalledWith(
+      'NOTE',
+      NOTE.id,
+      'final content',
+    );
   });
 
   it('keeps the draft when the flush times out (fail-safe direction)', async () => {
@@ -285,9 +319,34 @@ describe('NoteComponent editFullscreen', () => {
     expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
       content: 'final content',
     });
-    // Drop the `!hasUnrecoveredPersistFailure()` guard and this clears a draft
-    // whose edit was never durably persisted -> this expectation goes red.
-    expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+    // Drop the getPhantomChangeRisk guard and this clears a draft whose edit was
+    // never durably persisted -> this expectation goes red.
+    expect(localDraftService.clearDraftIfContent).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft on save when the write is not durable beyond the failure flag (full phantom predicate)', async () => {
+    // The save-path clear must gate on the FULL getPhantomChangeRisk predicate,
+    // not hasUnrecoveredPersistFailure() alone. A write that is still pending or a
+    // sync-window-deferred action that never set the failure flag still means the
+    // edit is not durable, so the draft must survive. Drive the pending-write
+    // lever with the failure flag left false — the case the old failure-flag-only
+    // guard missed (#8982 review).
+    captureService.hasUnrecoveredPersistFailure.and.returnValue(false);
+    captureService.getPendingCount.and.returnValue(1);
+
+    await editFullscreen();
+
+    afterClosed$.next('final content');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(noteService.update).toHaveBeenCalledWith(NOTE.id, {
+      content: 'final content',
+    });
+    // Gate on hasUnrecoveredPersistFailure() alone (the old code) and this clears
+    // a draft whose edit is not durable -> red.
+    expect(localDraftService.clearDraftIfContent).not.toHaveBeenCalled();
   });
 
   it('clears the draft (does not save one) when closing on unchanged content', async () => {
@@ -300,9 +359,15 @@ describe('NoteComponent editFullscreen', () => {
     await Promise.resolve();
 
     expect(localDraftService.saveDraft).not.toHaveBeenCalled();
-    expect(localDraftService.clearDraft).toHaveBeenCalledWith('NOTE', NOTE.id);
-    // No durable-persistence gate needed for a no-op: nothing unsaved existed, so
-    // the flush is skipped entirely.
+    // Owned-content clear: the checkpoint this session mirrors (content === the
+    // saved note) is dropped; a newer session's draft under the same key is left.
+    expect(localDraftService.clearDraftIfContent).toHaveBeenCalledWith(
+      'NOTE',
+      NOTE.id,
+      'saved content',
+    );
+    // No flush needed for a no-op: the note is unchanged, so there is no new
+    // write to wait on before clearing.
     expect(flushService.flushPendingWrites).not.toHaveBeenCalled();
   });
 
@@ -358,5 +423,40 @@ describe('NoteComponent editFullscreen', () => {
     });
     expect(localDraftService.saveDraft).not.toHaveBeenCalled();
     expect(localDraftService.clearDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not stack a second editor when opened again while the first draft load is still pending', async () => {
+    let resolveLoad!: (v: LocalDraft | undefined) => void;
+    localDraftService.loadDraft.and.returnValue(new Promise((r) => (resolveLoad = r)));
+
+    const first = editFullscreen();
+    const second = editFullscreen(); // clicked again before the first load resolved
+
+    resolveLoad(undefined);
+    await first;
+    await second;
+
+    // The per-note open guard collapses the second open; without it two editors
+    // stack from the same stale snapshot and closing the stale one after the
+    // first save reverts it (#8982 review).
+    const fullscreenOpens = matDialog.open.calls
+      .allArgs()
+      .filter((args) => args[0] === DialogFullscreenMarkdownComponent);
+    expect(fullscreenOpens.length).toBe(1);
+  });
+
+  it('aborts opening when the note content changes under us during the async draft load (stale snapshot)', async () => {
+    let resolveLoad!: (v: LocalDraft | undefined) => void;
+    localDraftService.loadDraft.and.returnValue(new Promise((r) => (resolveLoad = r)));
+
+    const open = editFullscreen();
+    // A remote sync updates the note while we await the draft load.
+    component.noteSet = { ...NOTE, content: 'newer remote content' } as Note;
+    resolveLoad(undefined);
+    await open;
+
+    // Opening the captured (stale) snapshot and dispatching it on close would
+    // revert the newer content, so we bail before opening the editor.
+    expect(getFullscreenDialogData()).toBeUndefined();
   });
 });

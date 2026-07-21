@@ -415,6 +415,21 @@ export class UserProfileService {
       window.location.reload();
     } catch (error) {
       Log.err('UserProfileService: Failed to switch profile', error);
+      // Roll back the optimistic switch. Steps 4-5 persist and signal the target
+      // profile BEFORE the step-7 import commits; if the import fails, profile
+      // A's data is still live in the store while the persisted metadata and
+      // activeProfile() point at B. Any profile-keyed write — notably the
+      // crash-safe local drafts keyed off activeProfile() — would then be stored
+      // under B's namespace, hiding A's recovery copy and exposing it to B on
+      // overlapping ids (#8982 review). Restore A as the committed identity.
+      try {
+        this._metadata.set(metadata);
+        this.profiles.set(metadata.profiles);
+        this.activeProfile.set(currentProfile);
+        await this._storageService.saveProfileMetadata(metadata);
+      } catch (rollbackError) {
+        Log.err('UserProfileService: Failed to roll back profile switch', rollbackError);
+      }
       this._snackService.open({
         type: 'ERROR',
         msg: 'Failed to switch profile. Please try again.',
