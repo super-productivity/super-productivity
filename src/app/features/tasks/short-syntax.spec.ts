@@ -2509,6 +2509,72 @@ describe('shortSyntax recurrence', () => {
     expect(due.getDate()).toBe(15);
     expect(due.getHours()).toBe(15);
   });
+
+  // The *_CURRENT_* presets take their recurring weekday / day-of-month from
+  // the first occurrence, so an already-passed time must roll a whole period —
+  // letting chrono's forwardDate move it to tomorrow would silently change what
+  // "@weekly" recurs on, depending only on the time of day it was typed.
+  it('should keep today\'s weekday for "@weekly 6am" typed after 6am', async () => {
+    // Wed Jan 17 10:00
+    const r = await parse('Journal @weekly 6am');
+    expect(r?.repeatQuickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(3);
+    expect(due.getDate()).toBe(24);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should keep today as the "@weekly 6am" anchor when 6am is still ahead', async () => {
+    const r = await parse('Journal @weekly 6am', new Date(2024, 0, 17, 3, 0));
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(3);
+    expect(due.getDate()).toBe(17);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should keep today\'s day-of-month for "@monthly 6am" typed after 6am', async () => {
+    const r = await parse('Report @monthly 6am');
+    expect(r?.repeatQuickSetting).toBe('MONTHLY_CURRENT_DATE');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getMonth()).toBe(1);
+    expect(due.getDate()).toBe(17);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should keep today\'s date for "@yearly 6am" typed after 6am', async () => {
+    const r = await parse('Renew domain @yearly 6am');
+    expect(r?.repeatQuickSetting).toBe('YEARLY_CURRENT_DATE');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getFullYear()).toBe(2025);
+    expect(due.getMonth()).toBe(0);
+    expect(due.getDate()).toBe(17);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should skip a month lacking the anchor day when rolling "@monthly 6am" forward', async () => {
+    // Wed Jan 31 12:00 — February has no 31st, and clamping to Feb 29 would
+    // make the repeat engine recur on the 29th from then on
+    const r = await parse('Report @monthly 6am', new Date(2024, 0, 31, 12, 0));
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getMonth()).toBe(2);
+    expect(due.getDate()).toBe(31);
+    expect(due.getHours()).toBe(6);
+  });
+
+  it('should still let an explicit day beat the implied "@weekly" anchor', async () => {
+    const r = await parse('Journal @weekly monday');
+    expect(r?.repeatQuickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDay()).toBe(1);
+  });
+
+  it('should leave "@daily 6am" on chrono\'s next-day roll', async () => {
+    const r = await parse('Journal @daily 6am');
+    expect(r?.repeatQuickSetting).toBe('DAILY');
+    const due = new Date(r?.taskChanges.dueWithTime as number);
+    expect(due.getDate()).toBe(18);
+    expect(due.getHours()).toBe(6);
+  });
 });
 
 describe('shortSyntax natural language dates', () => {
