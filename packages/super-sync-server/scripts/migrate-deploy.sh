@@ -55,6 +55,15 @@ MIGRATIONS_DIR="prisma/migrations"
 # The real infinite-loop backstop is the LAST_RECOVERED guard below; this is
 # just a tight upper bound. Overridable for emergencies.
 MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
+# Validated for the same reason MAX_LOCK_ATTEMPTS is not settable at all: a
+# non-numeric value makes the `-ge` test error inside an `if`, which `set -e`
+# does not catch, so the guard silently never fires.
+case "$MAX_ATTEMPTS" in
+  ''|0*|*[!0-9]*)
+    echo "ERROR: MIGRATE_MAX_ATTEMPTS must be a positive integer." >&2
+    exit 2
+    ;;
+esac
 # Total native attempts at one lock-bounded migration before it is left rolled
 # back. Production 2026-07-21: a single retry lost one deploy outright and won
 # the next only on its second try, so one retry is a coin flip against a table
@@ -68,7 +77,9 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 # MIGRATE_STEP_TIMEOUT does NOT bound the loop — it is per-step, and every step
 # here is short. The only outer bound is deploy.sh's MIGRATION_TIMEOUT (900s
 # default); the image CMD and the Helm initContainer have no outer timeout at
-# all, so keep the budget small enough that this constant bounds those two.
+# all. Note the budget is PER MIGRATION (the counter resets when the failing
+# name changes), so a deploy with N pending lock-bounded migrations can reach
+# N x MAX_LOCK_ATTEMPTS attempts — keep that in mind before raising it.
 #
 # Not operator-settable: nothing needs to tune it, and the `-ge` test below
 # would error inside an `if` on a non-numeric value, which `set -e` does not
@@ -261,6 +272,14 @@ run_migrate_deploy() {
   with_timeout npx prisma migrate deploy >"$MIGRATE_LOG" 2>&1
   MIGRATE_STATUS=$?
   set -e
+  # Strip ANSI colour ONCE, here, so every later reader sees plain text. Prisma
+  # renders `Error: P3018` as `\e[1m\e[31mError: \e[39m\e[22m\e[31mP3018` under
+  # FORCE_COLOR / npm_config_color=always. That anchor is the first conjunct of
+  # all three failure detectors, so a single stray env var would otherwise
+  # disable EVERY recovery path at once — and would also poison
+  # parse_failing_migration, whose charset check rejects a name with escapes.
+  # ESC is built with printf because `\x1b` is a GNU sed extension BusyBox lacks.
+  sed -i "s/$(printf '\033')\[[0-9;]*m//g" "$MIGRATE_LOG"
   cat "$MIGRATE_LOG"
 }
 
@@ -619,6 +638,11 @@ while :; do
   fi
 
   if is_lock_timeout_failure; then
+    # A lock timeout can also abort a CONCURRENTLY build (an operator-supplied
+    # lock_timeout in DATABASE_URL applies to every migration), which leaves an
+    # INVALID index. Print the drop-index steps so the FIRST failure is
+    # actionable, matching the timeout and non-gate branches above.
+    emit_interrupted_recovery_hint
     fail_loudly "$name is not a lock-bounded ALTER INDEX migration; refusing to auto-resolve its lock timeout."
   fi
 

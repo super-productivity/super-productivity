@@ -417,8 +417,13 @@ describe('performance migrations', () => {
     // Reloption keywords are not index names, so the derived list cannot see a
     // hardcode like `fastupdate` — check the ones the migrations actually set.
     const reloptions = [
-      ...migrationSql.matchAll(/\bALTER\s+INDEX\s+"[^"]+"\s+SET\s*\(\s*([a-z_]+)/gi),
+      ...migrationSql.matchAll(
+        /\bALTER\s+INDEX\s+(?:IF\s+EXISTS\s+)?"[^"]+"\s+SET\s*\(\s*([a-z_]+)/gi,
+      ),
     ].map((match) => match[1]);
+    // Same sentinel role as above: this list has exactly one entry today, so a
+    // regex that quietly stopped matching would leave `[].filter(...)` green.
+    expect(reloptions).toContain('fastupdate');
     expect(reloptions.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
     // No migration directory name either.
     expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);

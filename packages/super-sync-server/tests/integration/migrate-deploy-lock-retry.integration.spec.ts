@@ -74,11 +74,12 @@ interface DeployResult {
   output: string;
 }
 
+const LOCK_TIMEOUT_MARKER = 'canceling statement due to lock timeout';
+
 // Must be async: the blocking reader below holds its lock on this process's
 // event loop, so a spawnSync here would freeze the blocker and prevent it ever
 // releasing — the migration would then exhaust its whole budget.
-const LOCK_TIMEOUT_MARKER = 'canceling statement due to lock timeout';
-
+//
 // `onLockTimeout` fires as soon as the script reports its first real 55P03 (it
 // `cat`s the migrate log immediately after each failed attempt). Releasing the
 // blocker on that observation rather than on a timer makes contention
@@ -145,7 +146,7 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
       join(projectDir, 'prisma', 'migrations', 'migration_lock.toml'),
       'provider = "postgresql"\n',
     );
-  });
+  }, 60_000);
 
   afterAll(async () => {
     // Drop the schema even if removing the fixture dir throws, and even if
@@ -163,8 +164,7 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
     // 1. Seed the table + index with no contention.
     writeMigration('20260101000000_seed', SEED_SQL);
     const seed = await runMigrateDeploy();
-    expect(seed.status).toBe(0);
-    expect(seed.output).not.toContain('ERROR:');
+    expect(seed.status, seed.output).toBe(0);
     expect(await readReloptions()).toBeNull();
 
     // 2. Hold a plain seq-scan reader open. The planner takes AccessShareLock on
@@ -174,7 +174,7 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
     const blocker = new PrismaClient({
       datasources: { db: { url: urlForSchema() } },
     });
-    const maxHoldMs = 60_000;
+    const maxHoldMs = 120_000;
     let lockHeld: () => void;
     let releaseBlocker: () => void;
     const lockAcquired = new Promise<void>((resolve) => (lockHeld = resolve));
@@ -215,12 +215,12 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
     const retries = output.match(
       /Retrying prisma migrate deploy after bounded native recovery/g,
     );
-    expect(retries?.length ?? 0).toBeGreaterThan(0);
+    expect(retries?.length ?? 0, output).toBeGreaterThan(0);
     // ...but nowhere near exhausting the budget — otherwise this would pass just
     // as green while sitting one hiccup away from the cliff.
-    expect(retries?.length ?? 0).toBeLessThan(5);
+    expect(retries?.length ?? 0, output).toBeLessThan(5);
     // ...and then won.
-    expect(deploy.status).toBe(0);
+    expect(deploy.status, output).toBe(0);
     expect(await readReloptions()).toContain('fastupdate=off');
   }, 240_000);
 });

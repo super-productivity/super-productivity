@@ -96,7 +96,13 @@ case "$sub" in
                 fi
                 echo $((seen + 1)) > "$state/lock_timeout_count_$m"
                 echo "Applying migration \\\`$m\\\`"
-                echo "Error: P3018"
+                if [ "\${FAKE_COLOR:-0}" = "1" ]; then
+                  # Prisma wraps the code in ANSI under FORCE_COLOR; the gates
+                  # must still fire, so the log is stripped at capture.
+                  printf '\\033[1m\\033[31mError: \\033[39m\\033[22m\\033[31mP3018\\033[39m\\n'
+                else
+                  echo "Error: P3018"
+                fi
                 echo "A migration failed to apply. New migrations cannot be applied before the error is recovered from."
                 echo "Migration name: $m"
                 echo "Database error code: 55P03"
@@ -184,6 +190,7 @@ const run = (env: Record<string, string>, args: string[] = []): RunResult => {
     stdout = execFileSync('sh', [SCRIPT, ...args], {
       cwd: projectDir,
       encoding: 'utf8',
+      timeout: 60_000,
       env: {
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         TMPDIR: stateDir,
@@ -327,6 +334,62 @@ describe('migrate-deploy.sh recovery', () => {
     );
   });
 
+  it('accepts a millisecond bound at the cap', () => {
+    // The reject cases below pin the ceiling, but nothing else accepts a `ms`
+    // value at all — deleting the whole millisecond alternation used to leave
+    // the suite green while silently refusing every documented ms migration.
+    const msMigration = '20260902000000_bound_in_ms';
+    writeMigration(
+      msMigration,
+      `SET LOCAL lock_timeout = '5000ms';\nALTER INDEX "users_email_key" SET (fillfactor = 90);`,
+    );
+
+    const r = run({ FAKE_FAIL: msMigration, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([msMigration]);
+  });
+
+  it('gives each lock-bounded migration its own retry budget in one deploy', () => {
+    // Nothing else uses two lock-bounded migrations, so the counter reset was
+    // dead code. This also pins the run-level cost: the budget is PER MIGRATION.
+    const second = '20260903000000_bound_users_fillfactor';
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+    writeMigration(
+      second,
+      `SET LOCAL lock_timeout = '1s';\nALTER INDEX "users_email_key" SET (fillfactor = 90);`,
+    );
+
+    const r = run({
+      FAKE_FAIL: `${FASTUPDATE_MIGRATION} ${second}`,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_LOCK_TIMEOUT_TIMES: '6',
+    });
+
+    // 6 failures each, then a win each: neither migration inherits the other's
+    // spent budget (which would exhaust at 10 and fail).
+    expect(r.status).toBe(0);
+    expect(r.resolveRolledBack).toHaveLength(12);
+    expect(r.deployAttempts).toBe(13);
+  });
+
+  it('recovers when Prisma colorizes its error output', () => {
+    // `^Error: P3018$` is the first conjunct of all three failure detectors, so
+    // an ANSI-wrapped code would disable every recovery path at once.
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_COLOR: '1',
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION]);
+  });
+
   it('retries a lock-bounded migration more than once (a single retry is a coin flip)', () => {
     // Production 2026-07-21: one deploy lost both of its two allowed attempts,
     // the next won on its second. A budget of one retry cannot survive that.
@@ -462,8 +525,28 @@ describe('migrate-deploy.sh recovery', () => {
     const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'LOCK_TIMEOUT' });
 
     expect(r.status).not.toBe(0);
+    // Assert the REASON, not just that it stopped — every other fail_loudly
+    // also yields a non-zero status with nothing resolved, so without this the
+    // block cannot tell "refused the lock timeout" from "refused the shape".
+    expect(r.stdout).toContain('refusing to auto-resolve its lock timeout');
     expect(r.deployAttempts).toBe(1);
     expect(r.resolveRolledBack).toEqual([]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('never auto-recovers a CONCURRENTLY migration that lock-timed-out', () => {
+    // The guard this pins is the only thing stopping a 55P03 on a CONCURRENTLY
+    // migration from falling through to out-of-band execution + `resolve
+    // --applied` — the shape of the 2026-05-18 missing-index outage (#7654).
+    // Reachable whenever DATABASE_URL carries an operator lock_timeout, which
+    // applies to migrations that set none themselves.
+    writeMigration(ENCRYPTED_OPS, ENCRYPTED_OPS_SQL);
+
+    const r = run({ FAKE_FAIL: ENCRYPTED_OPS, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain('refusing to auto-resolve its lock timeout');
     expect(r.resolveApplied).toEqual([]);
     expect(r.executedSql).toBe('');
   });
