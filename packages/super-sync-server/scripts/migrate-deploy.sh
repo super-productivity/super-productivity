@@ -60,19 +60,19 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 # the next only on its second try, so one retry is a coin flip against a table
 # under continuous load.
 #
-# Worst case is ~45-60s: each attempt is a `migrate resolve` plus a `migrate
-# deploy`, and Prisma CLI start (~1.6s each) already spaces the attempts several
-# seconds apart, so no explicit sleep is needed — the migration's own lock wait
-# is ~1s of that, i.e. a ~25% duty cycle of self-inflicted queueing.
+# Each attempt is a `migrate resolve` plus a `migrate deploy`, so two Prisma CLI
+# starts pace the loop; there is no explicit sleep. That spacing is INCIDENTAL —
+# a property of Prisma's startup cost, not of this script — so treat the duty
+# cycle of parked ACCESS EXCLUSIVE requests as un-guaranteed rather than tuned.
 #
-# Note MIGRATE_STEP_TIMEOUT does NOT bound this — it is per-step, and every step
+# MIGRATE_STEP_TIMEOUT does NOT bound the loop — it is per-step, and every step
 # here is short. The only outer bound is deploy.sh's MIGRATION_TIMEOUT (900s
 # default); the image CMD and the Helm initContainer have no outer timeout at
 # all, so keep the budget small enough that this constant bounds those two.
 #
-# Deliberately NOT operator-settable: a non-numeric value would make the `-ge`
-# test below error inside an `if`, which `set -e` does not catch — i.e. an
-# unbounded retry loop on exactly those two unbounded paths.
+# Not operator-settable: nothing needs to tune it, and the `-ge` test below
+# would error inside an `if` on a non-numeric value, which `set -e` does not
+# catch — an unbounded loop on exactly those two unbounded paths.
 MAX_LOCK_ATTEMPTS=10
 # Per-step client timeout. PostgreSQL also receives a per-statement timeout five
 # seconds shorter. If cumulative work still reaches the client deadline, the
@@ -369,32 +369,26 @@ split_statements() {
 # successful native retry must be what records it as applied), and re-running it
 # from scratch is free, so a lock timeout can safely be retried.
 #
-# Gated on SHAPE, never on a migration or index name. Naming nothing has been
-# this script's design goal since the recovery logic moved in-image (the HOST
-# copy is what went stale against the migrations it knew about and broke a
-# deploy). This copy is version-locked to prisma/migrations by the image build,
-# so a name here would not go stale the same way — but it is still a silent
-# coupling, and tests/migration-sql.spec.ts enforces its absence.
+# Gated on SHAPE, never on a migration or index name; absence of names is
+# enforced by tests/migration-sql.spec.ts. Rationale: prisma/migrations/README.md.
 #
-# Four properties make the retry safe, and all four are enforced below:
-#   - a SHORT lock_timeout bound. This is the load-bearing one: the point of the
-#     bound is to fail fast rather than queue new queries behind a waiting
+# Three properties are enforced below, and a fourth follows from them:
+#   - a SHORT lock_timeout bound (<= 5s). This is the load-bearing one: the point
+#     of the bound is to fail fast rather than queue new queries behind a waiting
 #     ACCESS EXCLUSIVE request, so a long value ('30min') — or a disabled one
 #     ('0', which means wait forever in PostgreSQL) — must never be retried at
 #     all, let alone MAX_LOCK_ATTEMPTS times;
 #   - exactly two statements, so Postgres wraps them in an implicit transaction
 #     and a lock timeout rolls the whole migration back with nothing partially
 #     applied;
-#   - an ALTER INDEX ... SET (reloption), which is idempotent on re-run;
-#   - no CONCURRENTLY. A SINGLE-statement migration gets no implicit
-#     transaction, so a lock timeout during a concurrent index build leaves an
-#     INVALID index that a blind retry would not clear.
-#
-# Note split_statements breaks on `;` at END OF LINE, so "two statements" alone
-# would not stop a second statement sharing the ALTER's line — it would still
-# end in `);`. What stops that is the ALTER pattern being fully anchored with a
-# PAREN-FREE option list: the ALTER's own `)` always lands inside the span, so
-# nothing can follow it. (The `;` exclusions are belt-and-braces on top.)
+#   - an ALTER INDEX ... SET (reloption), which is idempotent on re-run.
+# The fourth — no CONCURRENTLY — is NOT a separate check: it follows from the
+# ALTER pattern being fully anchored with a paren-free option list, so the
+# ALTER's own `)` always lands inside the span and nothing can follow it. That
+# matters because split_statements breaks on `;` at END OF LINE, so the
+# statement count alone would not stop a CONCURRENTLY build sharing the ALTER's
+# line — and a SINGLE-statement migration gets no implicit transaction, so a
+# lock timeout mid-build leaves an INVALID index a blind retry cannot clear.
 #
 # Matched with grep -Ei, like the CONCURRENTLY gates above, so that spacing and
 # keyword case are not load-bearing for a future migration author.
@@ -408,10 +402,10 @@ is_lock_bounded_migration() {
   third_stmt="$(sed -n '3p' "$STMT_FILE")"
 
   printf '%s\n' "$first_stmt" | grep -Eqi \
-    "^SET[[:space:]]+LOCAL[[:space:]]+lock_timeout[[:space:]]*=[[:space:]]*'([1-9][0-9]{0,3}ms|[1-5]s)';\$" ||
+    "^SET[[:space:]]+LOCAL[[:space:]]+lock_timeout[[:space:]]*=[[:space:]]*'(([1-9][0-9]{0,2}|[1-4][0-9]{3}|5000)ms|[1-5]s)';\$" ||
     return 1
   printf '%s\n' "$second_stmt" | grep -Eqi \
-    '^ALTER[[:space:]]+INDEX[[:space:]]+"[^";]+"[[:space:]]+SET[[:space:]]*\([^();]*\);$' ||
+    '^ALTER[[:space:]]+INDEX[[:space:]]+"[^"]+"[[:space:]]+SET[[:space:]]*\([^()]*\);$' ||
     return 1
   [ -z "$third_stmt" ]
 }

@@ -4,10 +4,15 @@
  * really fails with 55P03, and migrate-deploy.sh's shape gate really recognizes
  * it and really retries until it wins.
  *
- * The sibling unit spec drives a FAKE `npx prisma`, so it can only prove the
- * script's control flow. It cannot prove that the gate matches SQL Postgres
- * actually accepts, that Prisma's real 55P03 output matches the log anchors, or
- * that a plain seq-scan reader is enough to block the ALTER. This does.
+ * The sibling unit spec drives a FAKE `npx prisma` emitting a canned error, so
+ * nothing else in the repo proves that the script's log anchors
+ * (`^Database error code: 55P03$`, `^ERROR: canceling statement due to lock
+ * timeout$`) match what Prisma actually prints — if they drifted, the whole
+ * retry path would be dead in production with every unit test still green. Nor
+ * does anything else prove a plain seq-scan reader can starve the ALTER.
+ *
+ * It does NOT supersede the unit spec: that one reads the real committed
+ * migration.sql, whereas the shape here is written inline.
  */
 import { PrismaClient } from '@prisma/client';
 import { spawn } from 'node:child_process';
@@ -29,12 +34,25 @@ const TEST_SCHEMA = 'migrate_lock_retry_test';
 const TABLE = 'lock_retry_probe';
 const INDEX = 'lock_retry_probe_gin';
 
-const urlForSchema = (applicationName: string): string => {
+const urlForSchema = (): string => {
   const url = new URL(DATABASE_URL as string);
   url.searchParams.set('schema', TEST_SCHEMA);
-  url.searchParams.set('application_name', applicationName);
   return url.toString();
 };
+
+const withAdmin = async <T>(fn: (admin: PrismaClient) => Promise<T>): Promise<T> => {
+  const admin = new PrismaClient({ datasources: { db: { url: urlForSchema() } } });
+  try {
+    return await fn(admin);
+  } finally {
+    await admin.$disconnect();
+  }
+};
+
+const dropTestSchema = (): Promise<unknown> =>
+  withAdmin((admin) =>
+    admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${TEST_SCHEMA}" CASCADE`),
+  );
 
 const SEED_SQL = `CREATE TABLE "${TABLE}" ("id" SERIAL PRIMARY KEY, "tags" TEXT[] NOT NULL DEFAULT '{}');
 CREATE INDEX "${INDEX}" ON "${TABLE}" USING GIN ("tags");`;
@@ -59,28 +77,39 @@ interface DeployResult {
 // Must be async: the blocking reader below holds its lock on this process's
 // event loop, so a spawnSync here would freeze the blocker and prevent it ever
 // releasing — the migration would then exhaust its whole budget.
-const runMigrateDeploy = (): Promise<DeployResult> =>
+const LOCK_TIMEOUT_MARKER = 'canceling statement due to lock timeout';
+
+// `onLockTimeout` fires as soon as the script reports its first real 55P03 (it
+// `cat`s the migrate log immediately after each failed attempt). Releasing the
+// blocker on that observation rather than on a timer makes contention
+// guaranteed at any runner speed, instead of racing a wall clock.
+const runMigrateDeploy = (onLockTimeout?: () => void): Promise<DeployResult> =>
   new Promise((resolve, reject) => {
     const child = spawn('sh', [migrateScript], {
       cwd: projectDir,
       env: {
         ...process.env,
-        DATABASE_URL: urlForSchema('supersync-migrator-locktest'),
+        DATABASE_URL: urlForSchema(),
         MIGRATE_STEP_TIMEOUT: '60',
       },
     });
     let output = '';
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    let signalled = false;
+    const collect = (chunk: Buffer): void => {
+      output += chunk.toString();
+      if (!signalled && output.includes(LOCK_TIMEOUT_MARKER)) {
+        signalled = true;
+        onLockTimeout?.();
+      }
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
     child.on('error', reject);
     child.on('close', (status: number | null) => resolve({ status, output }));
   });
 
-const readReloptions = async (): Promise<string[] | null> => {
-  const admin = new PrismaClient({
-    datasources: { db: { url: urlForSchema('locktest-admin') } },
-  });
-  try {
+const readReloptions = (): Promise<string[] | null> =>
+  withAdmin(async (admin) => {
     const rows = await admin.$queryRawUnsafe<Array<{ reloptions: string[] | null }>>(
       `SELECT c.reloptions
          FROM pg_class c
@@ -90,13 +119,14 @@ const readReloptions = async (): Promise<string[] | null> => {
       TEST_SCHEMA,
     );
     return rows[0]?.reloptions ?? null;
-  } finally {
-    await admin.$disconnect();
-  }
-};
+  });
 
 describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
+    // A killed run (job timeout, worker crash) leaves the schema behind, and a
+    // leftover `_prisma_migrations` would make the next seed a no-op and fail
+    // confusingly. Drop first, don't only drop after.
+    await dropTestSchema();
     // Inside the package so `npx prisma` resolves through the normal upward
     // node_modules lookup.
     projectDir = mkdtempSync(join(packageDir, '.tmp-lock-retry-'));
@@ -118,23 +148,23 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
   });
 
   afterAll(async () => {
-    rmSync(projectDir, { recursive: true, force: true });
-    const admin = new PrismaClient({
-      datasources: { db: { url: urlForSchema('locktest-cleanup') } },
-    });
+    // Drop the schema even if removing the fixture dir throws, and even if
+    // beforeAll died before projectDir was assigned.
     try {
-      await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${TEST_SCHEMA}" CASCADE`);
+      if (projectDir) {
+        rmSync(projectDir, { recursive: true, force: true });
+      }
     } finally {
-      await admin.$disconnect();
+      await dropTestSchema();
     }
-  });
+  }, 60_000);
 
   it('retries through a real 55P03 lock timeout and applies the migration', async () => {
     // 1. Seed the table + index with no contention.
     writeMigration('20260101000000_seed', SEED_SQL);
     const seed = await runMigrateDeploy();
-    expect(seed.output).not.toContain('ERROR:');
     expect(seed.status).toBe(0);
+    expect(seed.output).not.toContain('ERROR:');
     expect(await readReloptions()).toBeNull();
 
     // 2. Hold a plain seq-scan reader open. The planner takes AccessShareLock on
@@ -142,11 +172,13 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
     //    holds it to end of transaction, which is exactly what starves the
     //    ALTER's 1s window in production.
     const blocker = new PrismaClient({
-      datasources: { db: { url: urlForSchema('locktest-blocker') } },
+      datasources: { db: { url: urlForSchema() } },
     });
-    const holdMs = 12_000;
+    const maxHoldMs = 60_000;
     let lockHeld: () => void;
+    let releaseBlocker: () => void;
     const lockAcquired = new Promise<void>((resolve) => (lockHeld = resolve));
+    const blockerReleased = new Promise<void>((resolve) => (releaseBlocker = resolve));
     const blockerDone = blocker
       .$transaction(
         async (tx) => {
@@ -154,9 +186,14 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
             `SELECT count(*) FROM "${TEST_SCHEMA}"."${TABLE}" WHERE "id" < 0`,
           );
           lockHeld();
-          await new Promise((resolve) => setTimeout(resolve, holdMs));
+          // Released on the first observed lock timeout; the timer is only a
+          // backstop so a broken run cannot hang the suite.
+          await Promise.race([
+            blockerReleased,
+            new Promise((resolve) => setTimeout(resolve, maxHoldMs)),
+          ]);
         },
-        { timeout: holdMs + 30_000, maxWait: 10_000 },
+        { timeout: maxHoldMs + 30_000, maxWait: 10_000 },
       )
       .finally(() => blocker.$disconnect());
 
@@ -164,18 +201,25 @@ describeWithDb('migrate-deploy.sh lock-bounded retry (real PostgreSQL)', () => {
     // can win before the reader has begun and the test proves nothing.
     await lockAcquired;
 
-    // 3. Deploy the lock-bounded migration while the reader holds its lock.
+    // 3. Deploy the lock-bounded migration while the reader holds its lock. The
+    //    blocker steps aside the moment the first attempt genuinely times out,
+    //    so contention is guaranteed and the retry wins regardless of how fast
+    //    or slow the runner is.
     writeMigration('20260101000001_bound', BOUND_SQL);
-    const deploy = await runMigrateDeploy();
+    const deploy = await runMigrateDeploy(() => releaseBlocker());
     await blockerDone;
 
     const output = deploy.output;
     // It must have genuinely lost the race at least once...
-    expect(output).toContain('canceling statement due to lock timeout');
-    expect(output).toContain(
-      'Retrying prisma migrate deploy after bounded native recovery',
+    expect(output).toContain(LOCK_TIMEOUT_MARKER);
+    const retries = output.match(
+      /Retrying prisma migrate deploy after bounded native recovery/g,
     );
-    // ...and then won, rather than exhausting the budget.
+    expect(retries?.length ?? 0).toBeGreaterThan(0);
+    // ...but nowhere near exhausting the budget — otherwise this would pass just
+    // as green while sitting one hiccup away from the cliff.
+    expect(retries?.length ?? 0).toBeLessThan(5);
+    // ...and then won.
     expect(deploy.status).toBe(0);
     expect(await readReloptions()).toContain('fastupdate=off');
   }, 240_000);

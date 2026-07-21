@@ -61,7 +61,7 @@ A migration is retried natively **only if** it has exactly two statements — a
 `SET LOCAL lock_timeout` of at most a few seconds, then a single
 `ALTER INDEX ... SET (...)`. Four properties are what make retrying safe:
 
-1. **A short bound**: `1ms`-`9999ms` or `1s`-`5s`. Anything longer is refused,
+1. **A short bound**: at most 5 seconds (`1ms`-`5000ms` or `1s`-`5s`). Anything longer is refused,
    and so is `'0'` — which in PostgreSQL means _no_ timeout, i.e. wait forever.
    Retrying an unbounded wait is the outage this whole section exists to avoid.
 2. **Exactly two statements**, so Postgres wraps them in an implicit

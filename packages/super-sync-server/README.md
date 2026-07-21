@@ -80,7 +80,7 @@ table requires more time. Exit code `124` from `deploy.sh` means the migration
 timed out — re-run after the blocking transaction clears. A lock-bounded
 reloption migration (one that sets its own short `lock_timeout`, such as the
 `operations_entity_ids_gin` one) instead fails fast rather than queueing
-traffic, and is retried natively up to 10 times in quick succession. If every
+traffic, and is retried natively a bounded number of times. If every
 attempt times out it is left rolled back — clear the blocking transaction and
 re-run the deploy.
 

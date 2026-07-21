@@ -346,12 +346,14 @@ describe('migrate-deploy.sh recovery', () => {
   });
 
   it('retries a lock-bounded migration under any migration and index name', () => {
-    // The gate is on SHAPE, not on a name: hardcoding either here is what went
-    // stale and broke a production deploy once already.
+    // The gate is on SHAPE, not on a name. Lowercase keywords and irregular
+    // spacing are deliberately tolerated too (grep -Ei + [[:space:]]), so a
+    // future author does not lose the retry path to formatting; at the upper
+    // bound of the allowed lock_timeout, which pins the accept side of the cap.
     const other = '20260901000000_bound_users_fillfactor';
     writeMigration(
       other,
-      `SET LOCAL lock_timeout = '2s';\nALTER INDEX "users_email_key" SET (fillfactor = 90);`,
+      `set local  lock_timeout='5s';\nalter  index "users_email_key"  set ( fillfactor = 90 );`,
     );
 
     const r = run({
@@ -426,7 +428,8 @@ describe('migrate-deploy.sh recovery', () => {
     {
       // split_statements breaks on `;` at END OF LINE, so a second statement
       // sharing the ALTER's line arrives as one chunk that still ends in `);`.
-      // Rejecting an interior `;` is what keeps CONCURRENTLY out.
+      // What rejects it is the ALTER pattern's anchored, PAREN-FREE option list:
+      // the ALTER's own `)` lands inside the span, so nothing can follow it.
       label: 'a CONCURRENTLY build smuggled onto the ALTER line',
       sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off); CREATE INDEX CONCURRENTLY "x" ON "operations"("user_id");`,
     },
@@ -441,6 +444,17 @@ describe('migrate-deploy.sh recovery', () => {
       // table behind its waiting ACCESS EXCLUSIVE request for 30 minutes.
       label: 'an oversized lock_timeout',
       sql: `SET LOCAL lock_timeout = '30min';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      // Just over the cap, in each unit — pins the boundary itself, so the two
+      // branches of the bound cannot drift apart (9999ms once meant ~10s while
+      // 6s was refused).
+      label: 'a bound just over the cap in seconds',
+      sql: `SET LOCAL lock_timeout = '6s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      label: 'a bound just over the cap in milliseconds',
+      sql: `SET LOCAL lock_timeout = '5001ms';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
     },
   ])('refuses lock-timeout recovery for $label', ({ sql }) => {
     writeMigration(FASTUPDATE_MIGRATION, sql);

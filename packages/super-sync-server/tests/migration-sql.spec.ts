@@ -401,28 +401,25 @@ describe('performance migrations', () => {
     // coverage of the recovery logic lives in migrate-deploy-script.spec.ts.
     expect(runtimeMigrateScript).toContain('npx prisma migrate deploy');
     expect(runtimeMigrateScript).not.toMatch(/_INDEX_MIGRATION=/);
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_server_seq_encrypted_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_payload_bytes_unbackfilled_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_full_state_server_seq_idx',
-    );
-    // The three names above are a legacy denylist, so the invariant passed
-    // vacuously when a NEW hardcode was added. Enforce it structurally instead,
-    // against every index name the migrations actually define, so a future
-    // hardcode of a name not on the list above cannot slip through either.
+    // Derived from the migrations themselves rather than a hand-kept denylist —
+    // the old three-name list passed vacuously when a NEW name was hardcoded.
+    const migrationSql = allMigrationSql();
     const indexNames = [
-      ...allMigrationSql().matchAll(
+      ...migrationSql.matchAll(
         /\b(?:CREATE|ALTER|DROP)\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"([^"]+)"/gi,
       ),
     ].map((match) => match[1]);
-    expect(indexNames.length).toBeGreaterThan(3);
-    for (const indexName of new Set(indexNames)) {
-      expect(runtimeMigrateScript).not.toContain(indexName);
-    }
+    // Sentinel: the name this script must never mention again. Guards against
+    // the extraction silently degrading to a handful of matches and passing.
+    expect(indexNames).toContain('operations_entity_ids_gin');
+    expect(indexNames.length).toBeGreaterThan(15);
+    expect(indexNames.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
+    // Reloption keywords are not index names, so the derived list cannot see a
+    // hardcode like `fastupdate` — check the ones the migrations actually set.
+    const reloptions = [
+      ...migrationSql.matchAll(/\bALTER\s+INDEX\s+"[^"]+"\s+SET\s*\(\s*([a-z_]+)/gi),
+    ].map((match) => match[1]);
+    expect(reloptions.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
     // No migration directory name either.
     expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);
     expect(composeFile).toContain(
