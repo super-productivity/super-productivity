@@ -31,11 +31,14 @@ export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
  * does accept it as a second allow-listed read root, so it is not inert.
  * Only ever reached through `getBackupDirForDisplay()`, which verifies it.
  *
- * shortcut: the package family name is hardcoded and cannot be verified from
- * source — the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML secret,
- * so nothing in CI would notice it drifting. Drift degrades gracefully (the
- * probe fails and we show BACKUP_DIR). Upgrade path if it ever changes: derive
- * `<name>_<publisherHash>` from the WindowsApps segment of process.execPath.
+ * shortcut: the package family name is hardcoded, and nothing in CI would
+ * notice it drifting — the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
+ * secret. Drift degrades gracefully (the probe fails and we show BACKUP_DIR).
+ * Verified against the shipped v18.15.1 appx on 2026-07-21: it is exactly
+ * `<Identity Name>` + '_' + PublisherId, where PublisherId is the first 8 bytes
+ * of SHA-256 over the UTF-16LE `<Identity Publisher>` in base32 (digits + a-z
+ * minus i/l/o/u), so it can be re-checked from any release artifact without a
+ * Windows machine.
  */
 const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Roaming',
