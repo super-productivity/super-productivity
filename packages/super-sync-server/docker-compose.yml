@@ -32,11 +32,14 @@ services:
       - PORT=1900
       - HOST=${HOST:-0.0.0.0}
       # Prisma sizes its default pool from host CPUs, not the container limit.
-      # Overriding DATABASE_URL replaces these bounds; carry them across. A global
-      # statement_timeout remains opt-in because the legacy snapshot-clock scan
-      # can legitimately exceed 60s on upgraded histories. See env.example. (#9191)
+      # Overriding DATABASE_URL replaces these bounds; carry them across. The
+      # migrator rejects missing/invalid bounds before a production deploy. A
+      # global statement_timeout remains opt-in because the legacy snapshot-clock
+      # scan can legitimately exceed 60s on upgraded histories. See env.example.
+      # (#9191)
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}?connection_limit=60&pool_timeout=10}
       - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}
+      - REQUIRE_DATABASE_POOL_LIMITS=true
       - MIGRATE_RECOVERY_RUNTIME=compose
       - JWT_SECRET=${JWT_SECRET}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:1900}

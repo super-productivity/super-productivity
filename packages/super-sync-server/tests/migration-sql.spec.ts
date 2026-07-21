@@ -350,6 +350,7 @@ describe('performance migrations', () => {
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );
+    expect(composeFile).toContain('REQUIRE_DATABASE_POOL_LIMITS=true');
     expect(composeFile).toContain('MIGRATE_RECOVERY_RUNTIME=compose');
     expect(composeFile).toContain(
       'SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}',
