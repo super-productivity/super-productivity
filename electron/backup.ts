@@ -22,6 +22,12 @@ import {
 } from './shared-with-frontend/backup-file-cleanup.util';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
+/**
+ * Where the Windows Store build's backups end up on disk *if* the package is
+ * virtualized — never a path we read or write ourselves, and not guaranteed to
+ * exist. Only for showing the user a location they can open outside the package
+ * sandbox; check `existsSync` before displaying it (#995, #9209).
+ */
 export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Roaming',
   `Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming`,
