@@ -55,6 +55,22 @@ jobs:
           ssh://git@github.com/
       - name: Install npm Packages
         run: npm i
+      - name: Verify Helm upgrade value compatibility
+        working-directory: packages/super-sync-server
+        run: |
+          set -euo pipefail
+          chart_args=(
+            supersync helm/supersync
+            --show-only templates/deployment.yaml
+            --set postgresql.password=test
+            --set supersync.secret.jwtSecret=01234567890123456789012345678901
+          )
+          helm template "${chart_args[@]}" --set postgresql.connectionLimit=null |
+            grep -Fq 'connection_limit=20&pool_timeout=10'
+          if helm template "${chart_args[@]}" --set postgresql.connectionLimit=0 >/dev/null 2>&1; then
+            echo 'connectionLimit=0 unexpectedly passed Helm validation' >&2
+            exit 1
+          fi
       - name: Run SuperSync Server Tests
         run: cd packages/super-sync-server && npm test
       - name: Apply PostgreSQL Test Schema
