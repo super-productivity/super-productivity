@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Subject, of } from 'rxjs';
 import { AppUriTaskActionsService } from './app-uri-task-actions.service';
 import { PENDING_CAPACITOR_APP_URI_ACTION } from './pending-capacitor-app-uri-action';
@@ -69,6 +69,10 @@ describe('AppUriTaskActionsService', () => {
 
   afterEach(() => {
     service.ngOnDestroy();
+    // provideMockStore's selector override patches the real, module-level
+    // selectAllTasksInActiveProjects in place. Without this reset, it leaks
+    // into every other spec file in the same Karma run that imports it directly.
+    TestBed.inject(MockStore).resetSelectors();
   });
 
   describe('add-task action', () => {
@@ -265,5 +269,6 @@ describe('AppUriTaskActionsService buffering', () => {
     expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {});
 
     service.ngOnDestroy();
+    TestBed.inject(MockStore).resetSelectors();
   });
 });
