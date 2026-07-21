@@ -24,21 +24,17 @@ import {
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
 
 /**
- * Where a *virtualized* MSIX package's writes to BACKUP_DIR physically land, so
- * that Explorer (which runs outside the package and does not see the
- * redirection) can be pointed at them. We never write here, and never read
- * backup files from here on our own initiative — but `BACKUP_LOAD_DATA` below
- * does accept it as a second allow-listed read root, so it is not inert.
- * Only ever reached through `getBackupDirForDisplay()`, which verifies it.
+ * Where a virtualized MSIX package's writes to BACKUP_DIR physically land, so
+ * Explorer (which runs outside the package and sees no redirection) can be
+ * pointed at them. Display-oriented but not inert: `BACKUP_LOAD_DATA` below
+ * also accepts it as an allow-listed read root.
  *
- * shortcut: the package family name is hardcoded, and nothing in CI would
- * notice it drifting — the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
- * secret. Drift degrades gracefully (the probe fails and we show BACKUP_DIR).
- * Verified against the shipped v18.15.1 appx on 2026-07-21: it is exactly
- * `<Identity Name>` + '_' + PublisherId, where PublisherId is the first 8 bytes
- * of SHA-256 over the UTF-16LE `<Identity Publisher>` in base32 (digits + a-z
- * minus i/l/o/u), so it can be re-checked from any release artifact without a
- * Windows machine.
+ * shortcut: the package family name is hardcoded and nothing in CI would notice
+ * it drifting (the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
+ * secret); drift just fails the probe and we show BACKUP_DIR. Verified against
+ * the shipped v18.15.1 appx on 2026-07-21 — it is `<Identity Name>_<PublisherId>`,
+ * PublisherId being base32(SHA-256(UTF-16LE Publisher)[0..8]), so any release
+ * artifact re-checks it without a Windows machine.
  */
 const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Roaming',
@@ -47,18 +43,15 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
 
 /**
  * The backup location to *show* the user, which is not always the one we write
- * to: a virtualized MSIX package has its AppData writes redirected into the
- * package's private LocalCache. That redirection applies only to virtualized
- * packages and, since Windows 10 1903, is decided per file — so it cannot be
- * known statically. Assuming it always applies is what made #9209 the mirror
- * image of #995.
+ * to. Redirection applies only to virtualized packages and, since Windows 10
+ * 1903, is decided per file — it cannot be known statically, and assuming it
+ * always applies is what made #9209 the mirror image of #995.
  *
  * shortcut: an install that flipped from virtualized to full-trust keeps a
- * stale LocalCache dir, which still wins the probe — the user would be shown
- * real but outdated backups. Accepted because restore reads BACKUP_DIR either
- * way, so only manual recovery is affected. Upgrade path if it gets reported:
- * probe for the newest filename in BACKUP_DIR (timestamps sort lexically)
- * rather than for the directory, which pins where the last write actually went.
+ * stale LocalCache dir that still wins the probe, showing real but outdated
+ * backups. Accepted — restore reads BACKUP_DIR either way, so only manual
+ * recovery is affected. Upgrade path: probe for the newest filename in
+ * BACKUP_DIR (timestamps sort lexically) instead of for the directory.
  */
 export const getBackupDirForDisplay = (): string =>
   process.windowsStore && existsSync(BACKUP_DIR_WINSTORE)

@@ -30,6 +30,9 @@ npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
 npm test                       # all unit tests (Jasmine/Karma, .spec.ts co-located)
 npm run test:file <filepath>   # single spec
+npm run test:electron          # main-process tests — `electron/*.test.cjs`, NOT .spec.ts
+                               # (tsconfig.electron.json excludes *.spec.ts, so a spec
+                               #  placed under electron/ silently never runs)
 npm run e2e                    # all E2E (Playwright, slow)
 npm run e2e:file <path> -- --retries=0   # single E2E (~20s/test); add --grep "name" for one test
 npm start                      # Electron dev
