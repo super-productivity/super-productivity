@@ -60,34 +60,20 @@ MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
 # the next only on its second try, so one retry is a coin flip against a table
 # under continuous load.
 #
-# Worst case is ~80-160s: 10 `migrate deploy` plus 10 `migrate resolve` runs
-# (Prisma CLI start dominates, ~1.6s each) plus 9 sleeps. Note MIGRATE_STEP_TIMEOUT
-# does NOT bound this — it is per-step, and every step here is short. The only
-# outer bound is deploy.sh's MIGRATION_TIMEOUT (900s default, so ~1/6 of the
-# budget); the image CMD and the Helm initContainer have no outer timeout at all.
-# Keep the budget small enough that those two paths stay bounded by this constant.
+# Worst case is ~45-60s: each attempt is a `migrate resolve` plus a `migrate
+# deploy`, and Prisma CLI start (~1.6s each) already spaces the attempts several
+# seconds apart, so no explicit sleep is needed — the migration's own lock wait
+# is ~1s of that, i.e. a ~25% duty cycle of self-inflicted queueing.
+#
+# Note MIGRATE_STEP_TIMEOUT does NOT bound this — it is per-step, and every step
+# here is short. The only outer bound is deploy.sh's MIGRATION_TIMEOUT (900s
+# default); the image CMD and the Helm initContainer have no outer timeout at
+# all, so keep the budget small enough that this constant bounds those two.
 #
 # Deliberately NOT operator-settable: a non-numeric value would make the `-ge`
 # test below error inside an `if`, which `set -e` does not catch — i.e. an
 # unbounded retry loop on exactly those two unbounded paths.
 MAX_LOCK_ATTEMPTS=10
-# Pause between those attempts. Each attempt parks an ACCESS EXCLUSIVE request
-# that queues new queries on the table for up to the migration's own
-# lock_timeout, so the pause is what caps that self-inflicted queueing; the
-# blocker is ordinary traffic, so a flat wait samples it as well as any backoff
-# would. Validated below, because it multiplies the same wall-clock budget that
-# MAX_LOCK_ATTEMPTS is hardcoded to protect.
-LOCK_RETRY_SLEEP="${MIGRATE_LOCK_RETRY_SLEEP:-5}"
-case "$LOCK_RETRY_SLEEP" in
-  ''|*[!0-9]*)
-    echo "ERROR: MIGRATE_LOCK_RETRY_SLEEP must be an integer from 0 to 60 seconds." >&2
-    exit 2
-    ;;
-esac
-if [ "${#LOCK_RETRY_SLEEP}" -gt 2 ] || [ "$LOCK_RETRY_SLEEP" -gt 60 ]; then
-  echo "ERROR: MIGRATE_LOCK_RETRY_SLEEP must be an integer from 0 to 60 seconds." >&2
-  exit 2
-fi
 # Per-step client timeout. PostgreSQL also receives a per-statement timeout five
 # seconds shorter. If cumulative work still reaches the client deadline, the
 # wrapper terminates only the backend carrying this run's unique application id.
@@ -635,7 +621,6 @@ while :; do
     fi
     echo ""
     echo "==> Retrying prisma migrate deploy after bounded native recovery for $name (attempt $((LOCK_ATTEMPTS + 1)) of $MAX_LOCK_ATTEMPTS)..."
-    sleep "$LOCK_RETRY_SLEEP"
     continue
   fi
 

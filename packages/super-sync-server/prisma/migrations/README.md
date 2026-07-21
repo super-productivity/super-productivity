@@ -87,7 +87,7 @@ migration must never be split or executed out-of-band.
 A lock timeout leaves a failed Prisma migration record; a later deploy then sees
 only Prisma's cause-free `P3009`. The deploy script handles either state by
 marking the failed attempt rolled back and retrying through
-`prisma migrate deploy`, up to 10 attempts a few seconds apart (one retry is not
+`prisma migrate deploy`, up to 10 attempts (one retry is not
 enough — production lost a whole deploy to exactly that in July 2026). After the
 last attempt the migration is left **rolled back**, so re-running the deploy is
 always safe. Any different Prisma error fails loudly without being

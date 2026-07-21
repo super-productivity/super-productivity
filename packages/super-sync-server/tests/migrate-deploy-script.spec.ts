@@ -284,7 +284,6 @@ describe('migrate-deploy.sh recovery', () => {
     const r = run({
       FAKE_FAIL: FASTUPDATE_MIGRATION,
       FAKE_CODE: 'LOCK_TIMEOUT',
-      MIGRATE_LOCK_RETRY_SLEEP: '0',
       MIGRATE_STEP_TIMEOUT: '7',
       DATABASE_URL:
         'postgresql://u:p@postgres:5432/supersync?options=-c%20statement_timeout%3D60000',
@@ -313,7 +312,6 @@ describe('migrate-deploy.sh recovery', () => {
       FAKE_FAIL: FASTUPDATE_MIGRATION,
       FAKE_CODE: 'LOCK_TIMEOUT',
       FAKE_LOCK_TIMEOUT_ALWAYS: '1',
-      MIGRATE_LOCK_RETRY_SLEEP: '0',
     });
 
     expect(r.status).not.toBe(0);
@@ -338,7 +336,6 @@ describe('migrate-deploy.sh recovery', () => {
       FAKE_FAIL: FASTUPDATE_MIGRATION,
       FAKE_CODE: 'LOCK_TIMEOUT',
       FAKE_LOCK_TIMEOUT_TIMES: '4',
-      MIGRATE_LOCK_RETRY_SLEEP: '0',
     });
 
     expect(r.status).toBe(0);
@@ -347,28 +344,6 @@ describe('migrate-deploy.sh recovery', () => {
     expect(r.resolveApplied).toEqual([]);
     expect(r.executedSql).toBe('');
   });
-
-  // An EMPTY value is not tested: `${MIGRATE_LOCK_RETRY_SLEEP:-5}` treats it as
-  // unset and falls back to the default, matching MIGRATE_STEP_TIMEOUT.
-  it.each(['abc', '-1', '600'])(
-    'refuses to start with an out-of-range MIGRATE_LOCK_RETRY_SLEEP (%s)',
-    (sleepValue) => {
-      // This knob multiplies the same wall-clock budget MAX_LOCK_ATTEMPTS is
-      // hardcoded to protect, and the Helm initContainer has no outer timeout,
-      // so a bad value must stop the deploy rather than stretch it.
-      writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
-
-      const r = run({
-        FAKE_FAIL: '',
-        FAKE_CODE: 'P3018',
-        MIGRATE_LOCK_RETRY_SLEEP: sleepValue,
-      });
-
-      expect(r.status).toBe(2);
-      expect(r.stdout).toContain('MIGRATE_LOCK_RETRY_SLEEP must be an integer');
-      expect(r.deployAttempts).toBe(0);
-    },
-  );
 
   it('retries a lock-bounded migration under any migration and index name', () => {
     // The gate is on SHAPE, not on a name: hardcoding either here is what went
@@ -382,7 +357,6 @@ describe('migrate-deploy.sh recovery', () => {
     const r = run({
       FAKE_FAIL: other,
       FAKE_CODE: 'LOCK_TIMEOUT',
-      MIGRATE_LOCK_RETRY_SLEEP: '0',
     });
 
     expect(r.status).toBe(0);
@@ -398,7 +372,6 @@ describe('migrate-deploy.sh recovery', () => {
     const r = run({
       FAKE_FAIL: FASTUPDATE_MIGRATION,
       FAKE_CODE: 'P3009',
-      MIGRATE_LOCK_RETRY_SLEEP: '0',
     });
 
     expect(r.status).toBe(0);
