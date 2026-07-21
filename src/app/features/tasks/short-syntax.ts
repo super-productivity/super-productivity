@@ -149,16 +149,30 @@ const WEEKDAY_UNITS: Record<string, number> = {
 // followed by whitespace, end-of-input, or trailing punctuation ("water
 // plants @every friday.") — chrono is equally punctuation-tolerant for plain
 // dates, so without this the dot would demote the whole phrase to a plain
-// "friday" date.
-export const SHORT_SYNTAX_REPEAT_REG_EX = new RegExp(
-  '^(?:(daily|weekly|monthly|yearly|annually)' +
-    '|every\\s+(' +
-    'days?|weeks?|months?|years?|weekdays?|workdays?' +
-    '|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?' +
-    '|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun' +
-    '|\\d{1,2}(?:st|nd|rd|th)' +
-    '))(?=[\\s.,;:!?]|$)',
-  'i',
+// "friday" date. The ordinal suffix is deliberately not checked against the
+// number ("@every 15st" parses as the 15th): typos should still hit the
+// recurrence people meant, not fall back to a plain date.
+const REPEAT_PHRASE_SOURCE =
+  '(?:(daily|weekly|monthly|yearly|annually)' +
+  '|every\\s+(' +
+  'days?|weeks?|months?|years?|weekdays?|workdays?' +
+  '|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?' +
+  '|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun' +
+  '|\\d{1,2}(?:st|nd|rd|th)' +
+  '))(?=[\\s.,;:!?]|$)';
+
+const SHORT_SYNTAX_REPEAT_REG_EX = new RegExp('^' + REPEAT_PHRASE_SOURCE, 'i');
+
+// The same grammar re-anchored to the trigger char, for removing a recurrence
+// phrase from raw input (the clear-repeat button). Derived rather than
+// hand-written so the button can only ever delete text the parser would have
+// consumed — a second, broader grammar here silently eats phrases that fall
+// through to the plain-date path ("@every 2 weeks", "@every quarter"). The
+// leading `\s*` also lets trailing punctuation join the preceding word, the
+// way applyRepeatSyntax does ("Water plants @every friday." → "Water plants.").
+export const SHORT_SYNTAX_REPEAT_REMOVAL_REG_EX = new RegExp(
+  `\\s*\\${CH_DUE}` + REPEAT_PHRASE_SOURCE,
+  'gi',
 );
 
 interface RepeatSyntaxResult {
@@ -244,8 +258,12 @@ const getNextWeekdayDate = (now: Date, weekday: number): Date => {
 };
 
 // Next date with the given day-of-month, today or later; months without that
-// day (e.g. "every 31st" in February) are skipped, matching how the monthly
-// repeat engine clamps occurrences.
+// day (e.g. "every 31st" in February) are skipped rather than clamped to the
+// month's last day. The repeat engine takes the recurring day-of-month from
+// the start date (`startDateDate.getDate()` in get-next-repeat-occurrence.util)
+// and only clamps from there, so clamping here would turn "@every 31st" typed
+// in February into a permanent "every 28th". Skipping costs one late first
+// occurrence (Mar 31); every later month then clamps as usual (Apr 30, May 31).
 const getNextDayOfMonthDate = (now: Date, dayOfMonth: number): Date | null => {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   for (let i = 0; i < 24; i++) {
@@ -777,12 +795,37 @@ const applyRepeatSyntax = async (
   tracked.trim();
   const hasTime = !!parsedDateResult && parsedDateResult.start.isCertain('hour');
 
+  // A time-only remainder ("6am") says nothing about which day the recurrence
+  // falls on — but chrono's forwardDate has already slid an already-passed time
+  // to tomorrow. The *_CURRENT_* presets mean "today's weekday / today's date"
+  // and the repeat cycle derives both from the first occurrence, so taking
+  // chrono's date verbatim would make "@weekly 6am" typed on a Wednesday
+  // morning recur on Thursdays. Pin them to today and let the roll-forward
+  // below advance a whole period instead, exactly like "@every wednesday 6am".
+  const isTimeOnlyMatch =
+    hasTime &&
+    !!parsedDateResult &&
+    !parsedDateResult.start.isCertain('day') &&
+    !parsedDateResult.start.isCertain('weekday');
+  const anchorWeekday =
+    weekday ??
+    (isTimeOnlyMatch && quickSetting === 'WEEKLY_CURRENT_WEEKDAY'
+      ? now.getDay()
+      : undefined);
+  const anchorDayOfMonth =
+    dayOfMonth ??
+    (isTimeOnlyMatch && quickSetting === 'MONTHLY_CURRENT_DATE'
+      ? now.getDate()
+      : undefined);
+
   let anchorDate =
-    weekday !== undefined
-      ? getNextWeekdayDate(now, weekday)
-      : dayOfMonth !== undefined
-        ? getNextDayOfMonthDate(now, dayOfMonth)
-        : null;
+    anchorWeekday !== undefined
+      ? getNextWeekdayDate(now, anchorWeekday)
+      : anchorDayOfMonth !== undefined
+        ? getNextDayOfMonthDate(now, anchorDayOfMonth)
+        : isTimeOnlyMatch && quickSetting === 'YEARLY_CURRENT_DATE'
+          ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0)
+          : null;
 
   if (anchorDate) {
     if (hasTime && parsedDateResult) {
@@ -792,16 +835,18 @@ const applyRepeatSyntax = async (
       // task due in the past — advance one period, like chrono's forwardDate
       // does for the plain "@friday 3pm" form
       if (anchorDate.getTime() <= now.getTime()) {
-        if (weekday !== undefined) {
+        if (quickSetting === 'WEEKLY_CURRENT_WEEKDAY') {
           anchorDate.setDate(anchorDate.getDate() + 7);
-        } else if (dayOfMonth !== undefined) {
+        } else if (quickSetting === 'YEARLY_CURRENT_DATE') {
+          anchorDate.setFullYear(anchorDate.getFullYear() + 1);
+        } else if (anchorDayOfMonth !== undefined) {
           const rolled = getNextDayOfMonthDate(
             new Date(
               anchorDate.getFullYear(),
               anchorDate.getMonth(),
               anchorDate.getDate() + 1,
             ),
-            dayOfMonth,
+            anchorDayOfMonth,
           );
           if (rolled) {
             rolled.setHours(parsed.getHours(), parsed.getMinutes(), 0, 0);

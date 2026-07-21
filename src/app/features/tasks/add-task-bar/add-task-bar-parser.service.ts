@@ -2,7 +2,11 @@ import { inject, Injectable } from '@angular/core';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
-import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
+import {
+  SHORT_SYNTAX_REPEAT_REMOVAL_REG_EX,
+  SHORT_SYNTAX_TIME_REG_EX,
+  shortSyntax,
+} from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
@@ -395,12 +399,11 @@ export class AddTaskBarParserService {
         break;
 
       case 'repeat':
-        // Remove recurrence syntax (e.g., @daily @every friday); like the
-        // 'date' case, a trailing time token ("3pm") is left in place
-        cleanedInput = cleanedInput.replace(
-          /\s*@(?:(?:daily|weekly|monthly|yearly|annually)\b|every\s+\S+)/gi,
-          '',
-        );
+        // Remove recurrence syntax (e.g., @daily @every friday). Uses the
+        // parser's own grammar so a phrase the parser did not treat as a
+        // recurrence ("@every 2 weeks") is left untouched; like the 'date'
+        // case, a trailing time token ("3pm") is left in place
+        cleanedInput = cleanedInput.replace(SHORT_SYNTAX_REPEAT_REMOVAL_REG_EX, '');
         break;
 
       case 'estimate':

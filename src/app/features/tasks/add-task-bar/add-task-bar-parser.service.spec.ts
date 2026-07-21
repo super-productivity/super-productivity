@@ -1744,5 +1744,26 @@ describe('AddTaskBarParserService', () => {
         'Meet @dailystandup',
       );
     });
+
+    // The button renders for any repeat setting, including menu-selected ones,
+    // so it must not delete phrases the parser never treated as a recurrence
+    it('should leave phrases the parser does not read as a recurrence', () => {
+      const untouched = [
+        'Review @every 2 weeks',
+        'Review @every 3 days',
+        'Ship @every quarter',
+      ];
+      for (const input of untouched) {
+        expect(service.removeShortSyntaxFromInput(input, 'repeat'))
+          .withContext(input)
+          .toBe(input);
+      }
+    });
+
+    it('should keep trailing punctuation joined like the parser does', () => {
+      expect(
+        service.removeShortSyntaxFromInput('Water plants @every friday.', 'repeat'),
+      ).toBe('Water plants.');
+    });
   });
 });
