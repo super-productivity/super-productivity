@@ -132,7 +132,9 @@ bootstrapApplication(AppComponent, {
   providers: [
     // Await the browser's own regional locale (en-AU, en-CA, … — navigator-only
     // variants backing "System default") before first render, for the same
-    // pure-pipe reason as above. Never rejects, so it cannot block bootstrap.
+    // pure-pipe reason as above. Never rejects and self-limits to a short
+    // timeout, so a failed or stalled chunk load degrades to the default locale
+    // instead of failing bootstrap or holding up first render indefinitely.
     provideAppInitializer(() => registerNavigatorLocale()),
     // Provide configuration for TranslateHttpLoader
     {
@@ -365,9 +367,9 @@ bootstrapApplication(AppComponent, {
   initializeMatMenuTouchFix();
 
   // Lazily load and register remaining locales during idle time. The
-  // navigator-only regional variants are NOT loaded here — only the matched
-  // navigator.language entry is ever needed, and the app initializer above
-  // already registered it before first render.
+  // navigator-only regional variants are NOT loaded here — only the entry
+  // matching the browser culture language is ever needed, and the app
+  // initializer above already registered it before first render.
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {

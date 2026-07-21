@@ -135,7 +135,7 @@ export const LocaleImportFns: Record<
 };
 
 /**
- * Angular locale data for common `navigator.language` region variants that
+ * Angular locale data for common browser-culture region variants that
  * are NOT user-selectable in the dropdown — they back the "System default"
  * option, which follows the browser's regional locale (see
  * `DateTimeFormatService`). English regions need their own data because
@@ -152,7 +152,8 @@ export const LocaleImportFns: Record<
  *
  * Keys are snake_case forms of the browser culture tag (`en-AU` -> `en_au`);
  * `registerNavigatorLocale` (locale-registration.ts, awaited by an app
- * initializer before first render) matches `navigator.language` against them.
+ * initializer before first render) matches the browser culture language against
+ * them — the same `getBrowserCultureLang()` value the pipe's locale resolves to.
  * Registration itself passes no id — each data file self-reports its BCP-47
  * id, which `registerLocaleData` normalizes to lowercase.
  */

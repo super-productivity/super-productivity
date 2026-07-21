@@ -1,6 +1,8 @@
 import { formatDate, registerLocaleData } from '@angular/common';
 import localeEn from '@angular/common/locales/en';
+import { TranslateService } from '@ngx-translate/core';
 import { registerDefaultLocale, registerNavigatorLocale } from './locale-registration';
+import { NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS } from './locale.constants';
 
 /**
  * Exercises the production registration path used by main.ts (module-scope
@@ -42,6 +44,36 @@ describe('locale-registration', () => {
 
     it('resolves without throwing for a locale outside the navigator-fallback map', async () => {
       await expectAsync(registerNavigatorLocale('th-TH')).toBeResolved();
+    });
+
+    it('defaults to the same browser locale the date pipe resolves (getBrowserCultureLang, not navigator.language)', async () => {
+      // Reading navigator.language instead would register data for a locale the
+      // pipe never asks for whenever the two disagree.
+      spyOn(TranslateService, 'getBrowserCultureLang').and.returnValue('en-NZ');
+      await registerNavigatorLocale();
+      expect(formatDate(onePm, 'shortTime', 'en-NZ')).toMatch(/^1:00/);
+    });
+
+    it('resolves without throwing when the browser reports no culture language', async () => {
+      spyOn(TranslateService, 'getBrowserCultureLang').and.returnValue(undefined);
+      await expectAsync(registerNavigatorLocale()).toBeResolved();
+    });
+
+    it('gives up on a stalled chunk load instead of holding up bootstrap', async () => {
+      // en-IE is 12h; asserting the en-GB 24h fallback proves the stalled load
+      // was abandoned rather than awaited (and that we did not hang here).
+      const origLoad = NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS['en_ie'];
+      NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS['en_ie'] = () => new Promise(() => {});
+      jasmine.clock().install();
+      try {
+        const pending = registerNavigatorLocale('en-IE');
+        jasmine.clock().tick(1500);
+        await expectAsync(pending).toBeResolved();
+        expect(formatDate(onePm, 'shortTime', 'en-IE')).toBe('13:00');
+      } finally {
+        jasmine.clock().uninstall();
+        NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS['en_ie'] = origLoad;
+      }
     });
   });
 });
