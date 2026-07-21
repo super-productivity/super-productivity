@@ -26,6 +26,8 @@ vi.mock('../src/db', async () => {
   const {
     applyOperationSelect,
     hasOperationUniqueConflict,
+    isEntityArrayBranchQuery,
+    entityArrayBranchRows,
     testState: state,
   } = await import('./sync.service.test-state');
   const { Prisma: PrismaModule } = await import('@prisma/client');
@@ -81,24 +83,10 @@ vi.mock('../src/db', async () => {
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
           );
         }
-        // Single-entity conflict lookup: where { userId, entityType,
-        // OR: [{ entityId: X }, { entityIds: { has: X } }] } (#8334).
-        if (Array.isArray(args.where?.OR) && args.where?.entityType) {
-          const targetId =
-            args.where.OR.find((c: any) => 'entityId' in c)?.entityId ??
-            args.where.OR.find((c: any) => c.entityIds?.has !== undefined)?.entityIds
-              ?.has;
-          const ops = Array.from(state.operations.values())
-            .filter(
-              (op: any) =>
-                op.userId === args.where.userId &&
-                op.entityType === args.where.entityType &&
-                (op.entityId === targetId ||
-                  (Array.isArray(op.entityIds) && op.entityIds.includes(targetId))),
-            )
-            .sort((a: any, b: any) => b.serverSeq - a.serverSeq);
-          return applyOperationSelect(ops[0], args.select) || null;
-        }
+        // Scalar branch of the single-entity conflict lookup (#8334). The entity_ids
+        // half is a separate $queryRaw call; the two were one OR + ORDER BY ...
+        // LIMIT 1 until that degenerated into a full history scan in production
+        // (see the PERF note in conflict.ts detectConflictForEntity).
         if (args.where?.entityId && args.where?.entityType) {
           const ops = Array.from(state.operations.values())
             .filter(
@@ -194,6 +182,15 @@ vi.mock('../src/db', async () => {
       }),
       deleteMany: vi.fn().mockImplementation(async () => ({ count: 0 })),
       findUnique: vi.fn().mockImplementation(async (args: any) => {
+        // (user_id, server_seq) compound unique — fetches the array-branch winner.
+        const compound = args.where?.userId_serverSeq;
+        if (compound) {
+          const match = Array.from(state.operations.values()).find(
+            (op: any) =>
+              op.userId === compound.userId && op.serverSeq === compound.serverSeq,
+          );
+          return applyOperationSelect(match, args.select) || null;
+        }
         if (args.where?.id) {
           return (
             applyOperationSelect(state.operations.get(args.where.id), args.select) || null
@@ -289,6 +286,15 @@ vi.mock('../src/db', async () => {
         return state.users.get(args.where.id) || null;
       }),
     },
+    // Array branch of the single-entity conflict lookup: MAX(server_seq) over
+    // `entity_ids @> ARRAY[id]`, scoped to ONE entity — not a user-wide max.
+    // Raw SQL since the full-history-scan fix.
+    $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      if (!isEntityArrayBranchQuery(strings)) {
+        throw new Error(`Unexpected raw query: ${String(strings)}`);
+      }
+      return entityArrayBranchRows(state.operations, params);
+    }),
     // Upload transaction writes the storage counter atomically via $executeRaw.
     $executeRaw: vi.fn().mockResolvedValue(0),
   });

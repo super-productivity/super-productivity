@@ -39,10 +39,10 @@ export const getDailyStateInfo = (
     | 'IMPACT_MISMATCH'
     | 'DRIFT';
 
-  if (isHighProductivity && isHighSustainability) {
-    stateKey = 'DEEP_FLOW';
-  } else if (isHighSustainability && isLowImpact && isExtendedFocus) {
+  if (isHighSustainability && isLowImpact && isExtendedFocus) {
     stateKey = 'IMPACT_MISMATCH';
+  } else if (isHighProductivity && isHighSustainability) {
+    stateKey = 'DEEP_FLOW';
   } else if (isMidProductivity && isHighSustainability) {
     stateKey = 'STEADY';
   } else if (isHighProductivity) {

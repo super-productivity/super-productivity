@@ -1,5 +1,5 @@
 /**
- * Integration test for the multi-entity conflict-detection raw SQL (#8334).
+ * Integration tests for the conflict-detection raw SQL (#8334, #9194).
  *
  * Runs the ACTUAL `detectConflict` / `prefetchLatestEntityOpsForBatch` functions
  * (not a copy of the SQL, not a mock) against a REAL PostgreSQL database. Unit
@@ -8,11 +8,13 @@
  * unnest, the `&&` / `= ANY` prefilter, the `DISTINCT ON` latest-per-entity pick,
  * and the empty-array → scalar fallback for pre-migration rows.
  *
- * The decisive case is "divergent scalar": a stored op whose scalar `entity_id`
+ * The decisive #8334 case is "divergent scalar": a stored op whose scalar `entity_id`
  * is NOT a member of its own `entity_ids`. The previous mutually-exclusive
  * `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id]`
  * dropped that scalar from the batch lookup, so a later concurrent op touching it
- * was wrongly accepted (silent data loss). The union covers it.
+ * was wrongly accepted (silent data loss). The union covers it. The #9194 case
+ * also verifies the single-entity array winner and compound Prisma lookup against
+ * real PostgreSQL rather than the PGlite transaction shim.
  *
  * Prerequisites (same as snapshot-vector-clock-sql.integration.spec.ts):
  *   - PostgreSQL running (see docker-compose.yaml), schema applied (prisma db push)
@@ -40,7 +42,7 @@ import { Operation, VectorClock } from '../../src/sync/sync.types';
 const DATABASE_URL = process.env.DATABASE_URL;
 const describeWithDb = DATABASE_URL ? describe : describe.skip;
 
-describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () => {
+describeWithDb('Conflict detection SQL (PostgreSQL)', () => {
   let prisma: PrismaClient;
   const TEST_USER_ID = 99998; // Unlikely to collide with real data
   const TEST_EMAIL = `test-conflict-sql-${Date.now()}@test.local`;
@@ -141,6 +143,35 @@ describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () =>
 
     expect(result.hasConflict).toBe(true);
     expect(result.conflictType).toBe('concurrent');
+  });
+
+  it('detects a single-entity conflict through a stored entity_ids member', async () => {
+    await insertOp({
+      serverSeq: 1,
+      clientId: 'A',
+      entityId: 'task-scalar',
+      entityIds: ['task-scalar', 'task-array-only'],
+      vectorClock: { A: 1 },
+    });
+
+    const incomingOp: Operation = {
+      id: `incoming-single-B-${Date.now()}`,
+      clientId: 'B',
+      actionType: '[Task] Update',
+      opType: 'UPD',
+      entityType: 'TASK',
+      entityId: 'task-array-only',
+      payload: {},
+      vectorClock: { B: 1 },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+    };
+
+    const result = await detectConflict(TEST_USER_ID, incomingOp, tx());
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('concurrent');
+    expect(result.existingClock).toEqual({ A: 1 });
   });
 
   it('detects a conflict on a stored op whose scalar entity_id is NOT in its entity_ids (the union fix)', async () => {

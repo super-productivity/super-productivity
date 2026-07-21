@@ -46,7 +46,9 @@ test.describe('Sections', () => {
   const clickAddSection = async (
     page: import('@playwright/test').Page,
   ): Promise<void> => {
-    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu).not.toHaveClass(/mat-menu-panel-animating/);
+    await menu.getByRole('menuitem', { name: 'Add Section' }).click();
   };
 
   /** Fill the dialog-prompt input and submit. */
@@ -221,7 +223,7 @@ test.describe('Sections', () => {
     await wrapper.waitFor({ state: 'visible', timeout: 5000 });
     await wrapper.dispatchEvent('contextmenu');
 
-    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    await clickAddSection(page);
     await submitPromptDialog(page, 'Right-Click Section');
 
     await expect(sectionByTitle(page, 'Right-Click Section')).toBeVisible();

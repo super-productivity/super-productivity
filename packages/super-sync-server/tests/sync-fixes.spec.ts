@@ -170,7 +170,9 @@ vi.mock('../src/db', () => {
             upsert: vi.fn().mockResolvedValue({}),
             count: vi.fn().mockResolvedValue(1),
           },
-          $queryRaw: vi.fn().mockResolvedValue([]),
+          // maxSeq null mirrors the conflict lookup's entity_ids branch, matching the
+          // findFirst above, which finds no prior op for an entity either.
+          $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
           // Upload transaction writes the storage counter atomically via $executeRaw.
           $executeRaw: vi.fn().mockResolvedValue(0),
         };

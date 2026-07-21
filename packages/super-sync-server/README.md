@@ -77,7 +77,10 @@ Some migrations use `CREATE INDEX CONCURRENTLY`, which can block on long-running
 transactions on a busy database. Run deploys off-hours when applying schema
 changes, and raise `MIGRATION_TIMEOUT` (seconds, default `900`) if a large
 table requires more time. Exit code `124` from `deploy.sh` means the migration
-timed out — re-run after the blocking transaction clears.
+timed out — re-run after the blocking transaction clears. The
+`operations_entity_ids_gin` reloption migration instead has its own one-second
+index-lock timeout; if its one automatic retry also times out, clear the
+blocking transaction and re-run the deploy.
 
 If a deploy was interrupted after Prisma recorded a migration as failed, later
 deploys can stop with `P3009`. Prisma can also stop migrations with `P3018`
@@ -85,7 +88,21 @@ when they contain `CREATE/DROP INDEX CONCURRENTLY` statements, which cannot run
 in one transaction block. `scripts/migrate-deploy.sh` handles the safe
 drop-then-create concurrent-index case generically: it resolves the failed row
 when needed, applies the migration SQL outside Prisma migrate, marks the
-migration applied, and retries `migrate deploy`.
+migration applied, and retries `migrate deploy`. It also retries the exact
+lock-bounded `operations_entity_ids_gin` reloption migration natively; all
+other failed migration shapes stop for manual review.
+
+An application rollback does not require changing this index setting. If
+measured insert latency regresses after this rollout, restore PostgreSQL's
+default in a separately approved database change:
+
+```bash
+printf '%s\n' \
+  'BEGIN;' \
+  "SET LOCAL lock_timeout = '1s';" \
+  'ALTER INDEX "operations_entity_ids_gin" RESET (fastupdate);' \
+  'COMMIT;' | npx prisma db execute --schema prisma/schema.prisma --stdin
+```
 
 > **Existing databases created before the `0_init` baseline:** the migration
 > chain now begins with a `0_init` baseline that creates the base tables, so a
@@ -106,13 +123,29 @@ migration applied, and retries `migrate deploy`.
 >   ```
 >
 > - **Database created with `prisma db push`** (no migration history): its
->   schema already matches the latest `schema.prisma`, so baseline the whole
->   chain by marking every existing migration as applied.
+>   logical schema already matches the latest `schema.prisma`, but `db push`
+>   cannot represent the `operations_entity_ids_gin` storage reloption. Apply
+>   that database-only state and drain the old pending list before baselining
+>   the whole chain. The explicit transaction keeps `SET LOCAL` scoped to the
+>   `ALTER`; if its lock timeout fires, retry this off-hours.
 >
 >   ```bash
->   for m in prisma/migrations/*/; do
->     npx prisma migrate resolve --applied "$(basename "$m")"
->   done
+>   (
+>     set -e
+>     printf '%s\n' \
+>       'BEGIN;' \
+>       "SET LOCAL lock_timeout = '1s';" \
+>       'ALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);' \
+>       'COMMIT;' | npx prisma db execute --schema prisma/schema.prisma --stdin
+>     printf '%s\n' \
+>       'BEGIN;' \
+>       "SET LOCAL statement_timeout = '300s';" \
+>       "SELECT gin_clean_pending_list('operations_entity_ids_gin');" \
+>       'COMMIT;' | npx prisma db execute --schema prisma/schema.prisma --stdin
+>     for m in prisma/migrations/*/; do
+>       npx prisma migrate resolve --applied "$(basename "$m")"
+>     done
+>   )
 >   ```
 >
 > Fresh databases need none of this — `migrate deploy` applies `0_init` and the

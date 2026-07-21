@@ -94,7 +94,6 @@ export class MetricComponent {
               ? calculateSustainabilityScore(
                   item.focusedMinutes,
                   item.totalWorkMinutes,
-                  600,
                   item.energyCheckin,
                 )
               : null,

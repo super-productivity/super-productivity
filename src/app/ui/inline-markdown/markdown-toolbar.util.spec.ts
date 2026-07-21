@@ -316,8 +316,15 @@ describe('markdown-toolbar.util', () => {
     it('should use selection as link text', () => {
       const result = insertLink('hello world', 0, 5);
       expect(result.text).toBe('[hello](https://) world');
-      expect(result.selectionStart).toBe(9); // URL position
-      expect(result.selectionEnd).toBe(17); // URL selected
+      expect(result.selectionStart).toBe(8); // URL position
+      expect(result.selectionEnd).toBe(16); // URL selected
+    });
+
+    it('should select exactly the url placeholder', () => {
+      const result = insertLink('hello world', 0, 5);
+      expect(result.text.substring(result.selectionStart, result.selectionEnd)).toBe(
+        'https://',
+      );
     });
   });
 
@@ -332,8 +339,15 @@ describe('markdown-toolbar.util', () => {
     it('should use selection as alt text', () => {
       const result = insertImage('hello world', 0, 5);
       expect(result.text).toBe('![hello](https://) world');
-      expect(result.selectionStart).toBe(10); // URL position
-      expect(result.selectionEnd).toBe(18); // URL selected
+      expect(result.selectionStart).toBe(9); // URL position
+      expect(result.selectionEnd).toBe(17); // URL selected
+    });
+
+    it('should select exactly the url placeholder', () => {
+      const result = insertImage('hello world', 0, 5);
+      expect(result.text.substring(result.selectionStart, result.selectionEnd)).toBe(
+        'https://',
+      );
     });
   });
 

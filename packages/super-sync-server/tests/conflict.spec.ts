@@ -1,18 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  detectConflictForEntities,
   getConflictEntityIds,
+  getEntityConflictKey,
   isSameDuplicateOperation,
   isSameIncomingOperation,
   isSameDuplicateTimestamp,
+  prefetchLatestEntityOpsForBatch,
   pruneVectorClockForStorage,
   resolveConflictForExistingOp,
   stableJsonStringify,
 } from '../src/sync/conflict';
 import {
+  CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   DuplicateOperationCandidate,
   MAX_VECTOR_CLOCK_SIZE,
   Operation,
 } from '../src/sync/sync.types';
+
+const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
 
 const op = (overrides: Partial<Operation> = {}): Operation => ({
   id: 'op-1',
@@ -69,10 +76,13 @@ describe('conflict helpers', () => {
     ).toBe(true);
   });
 
-  it('includes a divergent scalar entityId in the incoming conflict set', () => {
+  it('builds a deduplicated incoming conflict set that includes a divergent scalar', () => {
     expect(
       getConflictEntityIds(op({ entityId: 'task-scalar', entityIds: ['task-array'] })),
     ).toEqual(['task-scalar', 'task-array']);
+    expect(
+      getConflictEntityIds(op({ entityId: 'task-1', entityIds: ['task-1'] })),
+    ).toEqual(['task-1']);
   });
 
   it.each([false, true])(
@@ -122,6 +132,12 @@ describe('conflict helpers', () => {
     expect(isSameDuplicateOperation(duplicateCandidate(), 1, incoming, 60_000)).toBe(
       false,
     );
+  });
+
+  it('rejects an otherwise-identical duplicate operation from a different user', () => {
+    expect(
+      isSameDuplicateOperation(duplicateCandidate({ userId: 2 }), 1, op(), 60_000),
+    ).toBe(false);
   });
 
   it('accepts batch retries with identical entityIds', () => {
@@ -255,12 +271,12 @@ describe('conflict helpers', () => {
   it('accepts concurrent additive task-time deltas for the same task', () => {
     const result = resolveConflictForExistingOp(
       op({
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         vectorClock: { 'client-a': 1 },
       }),
       'task-1',
       {
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         clientId: 'client-b',
         vectorClock: { 'client-b': 1 },
       },
@@ -269,15 +285,42 @@ describe('conflict helpers', () => {
     expect(result).toEqual({ hasConflict: false });
   });
 
+  it.each([
+    ['incoming delta', TASK_TIME_DELTA_ACTION_TYPE, 'UPDATE_TASK'],
+    ['stored delta', 'UPDATE_TASK', TASK_TIME_DELTA_ACTION_TYPE],
+  ])(
+    'keeps a one-sided task-time delta conflicting (%s)',
+    (_label, incomingActionType, storedActionType) => {
+      const result = resolveConflictForExistingOp(
+        op({
+          actionType: incomingActionType,
+          vectorClock: { 'client-a': 1 },
+        }),
+        'task-1',
+        {
+          actionType: storedActionType,
+          clientId: 'client-b',
+          vectorClock: { 'client-b': 1 },
+        },
+      );
+
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { 'client-b': 1 },
+      });
+    },
+  );
+
   it('still rejects a causally stale additive task-time delta', () => {
     const result = resolveConflictForExistingOp(
       op({
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         vectorClock: { 'client-a': 1 },
       }),
       'task-1',
       {
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         clientId: 'client-a',
         vectorClock: { 'client-a': 2 },
       },
@@ -285,6 +328,42 @@ describe('conflict helpers', () => {
 
     expect(result.hasConflict).toBe(true);
     expect(result.conflictType).toBe('superseded');
+  });
+
+  it('does not alias a post-split misc row during batch prefetch', async () => {
+    const storedSchemaVersion = 2;
+    const postSplitMiscRow = {
+      actionType: '[Global Config] Update',
+      clientId: 'client-b',
+      vectorClock: { 'client-b': 1 },
+      serverSeq: 1,
+    };
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      operation: {
+        findFirst: vi
+          .fn()
+          .mockImplementation(
+            async (args: { where: { schemaVersion?: { lt?: number } } }) => {
+              const exclusiveUpperBound = args.where.schemaVersion?.lt;
+              return exclusiveUpperBound !== undefined &&
+                storedSchemaVersion >= exclusiveUpperBound
+                ? null
+                : postSplitMiscRow;
+            },
+          ),
+      },
+    };
+
+    const latestByEntity = await prefetchLatestEntityOpsForBatch(
+      1,
+      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
+      tx as unknown as Prisma.TransactionClient,
+    );
+
+    expect(latestByEntity.has(getEntityConflictKey('GLOBAL_CONFIG', 'tasks'))).toBe(
+      false,
+    );
   });
 
   it('classifies less-than vector clocks as superseded', () => {
@@ -300,6 +379,74 @@ describe('conflict helpers', () => {
       existingClock: { 'client-a': 2 },
     });
   });
+
+  it.each([
+    [
+      'clean exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      false,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting overflow batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE + 1,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE, 1],
+    ],
+  ])(
+    'handles the boundary row and chunks correctly for a %s (%i entities)',
+    async (_label, entityCount, boundaryHasConflict, expectedBatchSizes) => {
+      const boundaryIndex = entityCount - 1;
+      const entityIds = Array.from(
+        { length: entityCount },
+        (_, index) => `task-${index}`,
+      );
+      const boundaryEntityId = entityIds[boundaryIndex];
+      const queriedBatchSizes: number[] = [];
+      const tx = {
+        $queryRaw: vi
+          .fn()
+          .mockImplementation(async (_strings: unknown, ...params: unknown[]) => {
+            const queriedEntityIds = (params[2] as Prisma.Sql).values;
+            queriedBatchSizes.push(queriedEntityIds.length);
+            if (!queriedEntityIds.includes(boundaryEntityId)) return [];
+
+            return [
+              {
+                entityId: boundaryEntityId,
+                clientId: boundaryHasConflict ? 'client-b' : 'client-a',
+                actionType: 'UPDATE_TASK',
+                vectorClock: boundaryHasConflict ? { 'client-b': 1 } : { 'client-a': 0 },
+              },
+            ];
+          }),
+      };
+
+      const result = await detectConflictForEntities(
+        1,
+        op({ vectorClock: { 'client-a': 1 } }),
+        entityIds,
+        tx as unknown as Prisma.TransactionClient,
+      );
+
+      expect(result).toMatchObject(
+        boundaryHasConflict
+          ? {
+              hasConflict: true,
+              conflictType: 'concurrent',
+              existingClock: { 'client-b': 1 },
+            }
+          : { hasConflict: false },
+      );
+      expect(queriedBatchSizes).toEqual(expectedBatchSizes);
+    },
+  );
 
   it('stable-stringifies object keys recursively', () => {
     expect(stableJsonStringify({ z: 1, a: { b: 2, a: 1 } })).toBe(

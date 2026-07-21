@@ -5,6 +5,10 @@
  * test infrastructure after the migration to Prisma.
  */
 import { vi, beforeEach } from 'vitest';
+import {
+  isEntityArrayBranchQuery,
+  entityArrayBranchRows,
+} from './sync.service.test-state';
 
 // In-memory storage for test data
 interface TestData {
@@ -119,6 +123,16 @@ vi.mock('../src/db', () => {
       return false;
     }
     if (where.entityId !== undefined && op.entityId !== where.entityId) return false;
+    // entity_ids @> ARRAY[id]. No production caller uses this via the typed API any
+    // more — detectConflictForEntity's array branch is raw SQL (see the $queryRaw
+    // mock below) — but keep the matcher generic so this shim stays a faithful
+    // stand-in for Prisma's filter semantics.
+    if (
+      where.entityIds?.has !== undefined &&
+      !(Array.isArray(op.entityIds) && op.entityIds.includes(where.entityIds.has))
+    ) {
+      return false;
+    }
     if (where.clientId !== undefined) {
       if (typeof where.clientId === 'object' && where.clientId !== null) {
         if (where.clientId.not !== undefined && op.clientId === where.clientId.not) {
@@ -221,6 +235,16 @@ vi.mock('../src/db', () => {
             return { count };
           }),
           findUnique: vi.fn().mockImplementation(async (args: any) => {
+            // (user_id, server_seq) compound unique — used by the conflict lookup's
+            // array branch to fetch the winning row once its max serverSeq is known.
+            const compound = args.where?.userId_serverSeq;
+            if (compound) {
+              const match = Array.from(testData.operations.values()).find(
+                (op: any) =>
+                  op.userId === compound.userId && op.serverSeq === compound.serverSeq,
+              );
+              return applySelect(match, args.select) || null;
+            }
             // Check if operation with given ID exists
             return (
               applySelect(testData.operations.get(args.where?.id), args.select) || null
@@ -300,7 +324,22 @@ vi.mock('../src/db', () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-        $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+        // Every raw query issued inside the transaction must be recognised here and
+        // anything unknown must THROW. A tolerant default is how the array branch
+        // stayed silently stubbed out: conflict.ts reads an unrecognised row via
+        // `arrayBranchRows[0]?.maxSeq ?? null`, i.e. as "no match", so the branch
+        // disappears instead of failing.
+        $queryRaw: vi
+          .fn()
+          .mockImplementation(async (strings: any, ...params: unknown[]) => {
+            // Single-entity conflict lookup, array branch (raw SQL since the fix for
+            // the full-history scan).
+            if (isEntityArrayBranchQuery(strings)) {
+              return entityArrayBranchRows(testData.operations, params);
+            }
+            const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+            throw new Error(`Unmocked raw query in tx: ${sql}`);
+          }),
         // The upload transaction writes the storage counter atomically via
         // $executeRaw to keep the data write and the counter delta in a single
         // commit. Default mock is a no-op; specs that care about counter

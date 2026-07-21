@@ -168,7 +168,7 @@ With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both si
 
 ### Server-Side Flow
 
-1. Server finds the latest operation for the same entity (`findFirst` by `entityType + entityId`, ordered by `serverSeq desc`)
+1. Server finds the latest operation for the same entity — **two separately-indexed lookups**, a scalar `findFirst` plus a raw-SQL `MATERIALIZED` CTE over `entity_ids`, taking whichever has the higher `serverSeq`. Deliberately NOT one combined filter; see the multi-entity section below for why that caused an outage.
 2. Compares incoming clock vs existing clock using the **full unpruned** incoming clock
 3. Possible outcomes:
    - `GREATER_THAN` → **accept** (incoming op causally succeeds existing)
@@ -237,10 +237,51 @@ To make that symmetric, the `operations` row stores:
 
 The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` **or** a member of `entity_ids`:
 
-- `detectConflictForEntity` (single) — Prisma `where: { OR: [{ entityId }, { entityIds: { has: entityId } }] }`, ordered by `server_seq`. The `OR` spans the `entity_id` btree and the `entity_ids` GIN, so the planner uses a `BitmapOr` + sort bounded by the entity's stored version depth (op-log pruning keeps that small). If a real-Postgres `EXPLAIN` on a deep-history entity ever shows this hot path is a problem, the escalation is two ordered `LIMIT 1` lookups (scalar btree + `entity_ids` GIN) taking the higher `server_seq` — the array side stays small because the column is multi-entity-only.
-- `detectConflictForEntities` / `prefetchLatestEntityOpsForBatch` (batch) — raw SQL unnesting `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id] END`, with a `entity_ids && ... OR entity_id = ANY(...)` prefilter so the `GIN(entity_ids)` index (migration `20260613000001`) and the existing `entity_id` btree stay usable.
+- `detectConflictForEntity` (single) — **two separately-indexed lookups, never one combined filter.** A scalar `findFirst` on `{ userId, entityType, entityId }` ordered by `server_seq` (served end to end by the `(user_id, entity_type, entity_id, server_seq)` btree), plus a raw-SQL `MATERIALIZED` CTE taking `MAX(server_seq)` over `entity_ids @> ARRAY[id]`, with the winning row then fetched by the `(user_id, server_seq)` unique key.
 
-**Forward-only by design:** rows written before migration `20260613000000` have an empty `entity_ids` array and fall back to the scalar `entity_id` (= first entity) in the `CASE` expression / scalar branch above — there is no `UPDATE` backfill. Entities 2..n of already-stored multi-entity ops were never persisted and are unrecoverable, so they remain invisible to conflict detection until that entity gets a fresh write. This residual is bounded: client-side LWW is unaffected (the client persists the full op and `VectorClockService.getEntityFrontier()` fans each op out to **every** entity), and the server only builds an authoritative snapshot from non-encrypted ops (`replayOpsToState()` throws on encrypted ops), so the pre-fix gap could only surface a stale value to a fresh client on non-encrypted self-hosted servers.
+  > ⚠️ **Do not "simplify" this back into one query.** It used to be
+  > `where: { OR: [{ entityId }, { entityIds: { has: entityId } }] }` + `orderBy: { serverSeq: 'desc' }`,
+  > and on 2026-07-20 that caused a total sync outage — 47 stuck backends, longest 75 minutes,
+  > 61/66 connections consumed. The `OR` spans two different indexes and GIN cannot supply
+  > `server_seq` ordering, so the planner abandons **both** index paths and walks the user's
+  > history. Nothing bounds that walk when the entity has no matching rows — i.e. the
+  > first-ever op for a new task, the most common upload there is. Op-log pruning does **not**
+  > bound it; that assumption is what this paragraph used to assert, and it was wrong.
+  >
+  > The obvious escalations are broken too. Two ordered `LIMIT 1` lookups still leave the
+  > array side unable to order on GIN. Measured under generic planning on a 40k-row seed, the
+  > outage query, the naive array-only `LIMIT 1`, the flat `MAX`, Prisma's `aggregate({ _max })`
+  > and the CTE with `MATERIALIZED` dropped **all** read the user's whole entity-type slice,
+  > against 143 blocks and 0 discarded for the shipped form. The **816 blocks / 2500 rows
+  > discarded** figure is the outage query specifically, pinned by the `CANARY` case in
+  > `conflict-entity-lookup-plan.pglite.spec.ts`. The other four are not unguarded: that
+  > spec rebuilds the array branch from the live tagged template, so dropping `MATERIALIZED`
+  > or flattening the `MAX` blows the block budget and fails there (verified by mutation).
+  > What is _not_ pinned is their individual historical block counts.
+  >
+  > Measure any change here with `SET plan_cache_mode = force_generic_plan`. Prisma sends
+  > parameterized prepared statements; under `auto` Postgres plans the first ~5 executions as
+  > custom, then compares the generic cost against the average custom cost and **may** switch
+  > to a generic plan — a cost comparison, not an automatic switch, so some statements stay on
+  > custom plans indefinitely. This one was observed going generic on production, and a
+  > generic plan cannot see the parameter values. `EXPLAIN` with literal constants is
+  > different again and makes every one of those broken shapes look perfect. See
+  > `packages/super-sync-server/tests/conflict-entity-lookup-plan.pglite.spec.ts` and the note
+  > at `detectConflictForEntity` in `packages/super-sync-server/src/sync/conflict.ts`.
+
+- `detectConflictForEntities` / `prefetchLatestEntityOpsForBatch` (batch) — raw SQL unnesting the **union** of both columns, `entity_ids || CASE WHEN entity_id IS NULL THEN '{}' ELSE ARRAY[entity_id] END`, deduped by `DISTINCT ON`, with an `entity_ids && ... OR entity_id = ANY(...)` prefilter so the `GIN(entity_ids)` index (migration `20260613000001`) and the existing `entity_id` btree stay usable.
+
+  > ⚠️ It must be a **union**, not the mutually exclusive
+  > `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id] END`
+  > this section used to document. The server does **not** enforce
+  > `entity_id === entityIds[0]`, so a multi-entity op can carry a scalar that is not a
+  > member of its own `entity_ids` (see `getStoredEntityIds`). The exclusive form drops
+  > that scalar whenever the array is non-empty, making the entity invisible to conflict
+  > lookups — a later concurrent write to it is wrongly accepted, which is **silent data
+  > loss**. That was the #8334 bug; the divergent-scalar case is the decisive test in
+  > `tests/integration/conflict-detection-sql.integration.spec.ts`.
+
+**Forward-only by design:** rows written before migration `20260613000000` have an empty `entity_ids` array, so they are reached only by their scalar `entity_id` (= first entity) — via the scalar arm of the batch union above, or the scalar branch of the single-entity lookup. (Not via the exclusive `CASE` form: that is the removed #8334 bug documented in the warning above, not the current shape.) There is no `UPDATE` backfill. Entities 2..n of already-stored multi-entity ops were never persisted and are unrecoverable, so they remain invisible to conflict detection until that entity gets a fresh write. This residual is bounded: client-side LWW is unaffected (the client persists the full op and `VectorClockService.getEntityFrontier()` fans each op out to **every** entity), and the server only builds an authoritative snapshot from non-encrypted ops (`replayOpsToState()` throws on encrypted ops), so the pre-fix gap could only surface a stale value to a fresh client on non-encrypted self-hosted servers.
 
 ### The `SyncImportFilterService` Algorithm
 

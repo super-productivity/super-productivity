@@ -1,9 +1,12 @@
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
 describe('formatDateForPlugin', () => {
-  const testDate = new Date('2026-01-16T14:30:00Z');
+  // NOTE: constructed in LOCAL time — formatDateForPlugin formats in the local
+  // timezone, so a fixed UTC instant would land on Jan 17 in timezones ahead of
+  // UTC (e.g. Australia/Sydney) and break the day-of-month assertions below.
+  const testDate = new Date(2026, 0, 16, 14, 30, 0);
   const testTimestamp = testDate.getTime();
-  const testISOString = '2026-01-16T14:30:00Z';
+  const testISOString = testDate.toISOString();
 
   describe('short format', () => {
     it('should format date with short format in English', () => {

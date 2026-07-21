@@ -51,10 +51,19 @@ describe('metric-scoring.util', () => {
       expect(high - low).toBeLessThanOrEqual(55);
     });
 
-    it('soft-caps focus beyond the target to avoid perfect scores from overwork', () => {
-      const score = calculateProductivityScore(4, 360, 600);
-      expect(score).toBeGreaterThanOrEqual(97);
-      expect(score).toBeLessThan(100);
+    it('gives full but no extra focus credit beyond the target', () => {
+      const atTarget = calculateProductivityScore(4, 240, 600);
+      const beyondTarget = calculateProductivityScore(4, 360, 600);
+      expect(atTarget).toBe(100);
+      expect(beyondTarget).toBe(100);
+    });
+
+    it('never decreases when focus continues past the target', () => {
+      const atTarget = calculateProductivityScore(3, 240, 360);
+      const justPastTarget = calculateProductivityScore(3, 241, 360);
+      const farPastTarget = calculateProductivityScore(3, 300, 360);
+      expect(justPastTarget).toBeGreaterThanOrEqual(atTarget);
+      expect(farPastTarget).toBeGreaterThanOrEqual(justPastTarget);
     });
 
     it('keeps progress as a secondary factor relative to consistent impact', () => {
@@ -67,41 +76,41 @@ describe('metric-scoring.util', () => {
 
   describe('calculateSustainabilityScore', () => {
     it('establishes a balanced baseline for typical workdays', () => {
-      const score = calculateSustainabilityScore(240, 420, 600, 2);
+      const score = calculateSustainabilityScore(240, 420, 2);
       expectApproximately(score, 49, 3);
     });
 
     it('applies only a mild penalty when focus exceeds the target slightly', () => {
-      const baseline = calculateSustainabilityScore(240, 420, 600, 2);
-      const excessiveFocus = calculateSustainabilityScore(300, 420, 600, 2);
+      const baseline = calculateSustainabilityScore(240, 420, 2);
+      const excessiveFocus = calculateSustainabilityScore(300, 420, 2);
       expect(excessiveFocus).toBeLessThanOrEqual(baseline);
     });
 
     it('rewards high energy levels while keeping effort reasonable', () => {
-      const score = calculateSustainabilityScore(240, 420, 600, 3);
+      const score = calculateSustainabilityScore(240, 420, 3);
       expectApproximately(score, 73, 3);
     });
 
     it('penalizes very excessive focus more than mild excess', () => {
-      const mildlyExcessive = calculateSustainabilityScore(300, 420, 600, 2);
-      const veryExcessive = calculateSustainabilityScore(360, 420, 600, 2);
+      const mildlyExcessive = calculateSustainabilityScore(300, 420, 2);
+      const veryExcessive = calculateSustainabilityScore(360, 420, 2);
       expect(veryExcessive).toBeLessThan(mildlyExcessive);
     });
 
     it('keeps extreme focus scores within a reasonable range', () => {
-      const score = calculateSustainabilityScore(480, 420, 600, 2);
+      const score = calculateSustainabilityScore(480, 420, 2);
       expect(score).toBeGreaterThan(0);
       expect(score).toBeLessThan(50);
     });
 
     it('penalizes overwork even when focus time is optimal', () => {
-      const score = calculateSustainabilityScore(240, 600, 600, 2);
+      const score = calculateSustainabilityScore(240, 600, 2);
       expect(score).toBeGreaterThan(0);
       expect(score).toBeLessThan(40);
     });
 
-    it('detects burnout risk when long days combine with exhaustion', () => {
-      const score = calculateSustainabilityScore(360, 600, 600, 1);
+    it('detects burnout risk when long days combine with low energy', () => {
+      const score = calculateSustainabilityScore(360, 600, 1);
       expect(score).toBeLessThanOrEqual(30);
     });
   });

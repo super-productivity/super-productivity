@@ -98,7 +98,7 @@ export const humanizeTimestamp = (
     return translateService.instant(T.GLOBAL_RELATIVE_TIME.PAST.MONTHS, {
       count: diffMonths,
     });
-  } else if (diffYears === 1) {
+  } else if (diffYears <= 1) {
     return translateService.instant(T.GLOBAL_RELATIVE_TIME.PAST.A_YEAR);
   } else {
     return translateService.instant(T.GLOBAL_RELATIVE_TIME.PAST.YEARS, {
