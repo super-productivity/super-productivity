@@ -239,14 +239,14 @@ If it says the cron is missing, nothing is watching the server.
 
 ### What it checks
 
-| #   | Check                                                            | Fires when                                                            |
-| --- | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 0–3 | Docker daemon, container state/health, OOM kills, restart counts | a container is down, unhealthy, OOM-killed, or crash-looping          |
-| 4   | `/health` endpoint                                               | HTTP != 200                                                           |
-| 5   | Disk usage                                                       | > 85%                                                                 |
-| 6   | Long-running queries                                             | any query `active` > `MAX_QUERY_SECONDS` (default 120)                |
-| 7   | Pool saturation                                                  | active backends ≥ `POOL_WARN_PCT`% (default 75) of `connection_limit` |
-| 8   | Invalid operations indexes                                       | a non-building index is not valid/ready/live                          |
+| #   | Check                                                            | Fires when                                                               |
+| --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 0–3 | Docker daemon, container state/health, OOM kills, restart counts | a container is down, unhealthy, OOM-killed, or crash-looping             |
+| 4   | `/health` endpoint                                               | HTTP != 200                                                              |
+| 5   | Disk usage                                                       | > 85%                                                                    |
+| 6   | Long-running queries                                             | any query `active` > `MAX_QUERY_SECONDS` (default 120)                   |
+| 7   | Pool saturation                                                  | connections in use ≥ `POOL_WARN_PCT`% (default 75) of `connection_limit` |
+| 8   | Invalid operations indexes                                       | a non-building index is not valid/ready/live                             |
 
 Checks 0–5 detect the outage once containers or `/health` fail. Checks 6–8 inspect
 the database through the app container and catch the precursor while the server
@@ -266,12 +266,12 @@ lookup would silently degrade to a sequential scan on every upload, permanently,
 and nothing else in the codebase would report it.
 
 The known migrator is excluded from the long-query check. Indexes currently
-listed in `pg_stat_progress_create_index`, and invalid indexes observed while the
-migrator is active, are excluded from check 8. The latter also covers
-`DROP INDEX CONCURRENTLY`, which has no progress-view entry. Each migration run
-has a unique database application id; its finite database/client timeouts and
-targeted backend cleanup bound interrupted DDL without generating
-incident/recovery noise.
+listed in `pg_stat_progress_create_index`, and invalid indexes carrying the
+exact DDL lock held by an active migrator, are excluded from check 8. The latter
+also covers `DROP INDEX CONCURRENTLY`, which has no progress-view entry, without
+hiding unrelated invalid indexes. Each migration run has a unique database
+application id; its finite database/client timeouts and targeted backend cleanup
+bound interrupted DDL without generating incident/recovery noise.
 
 Repeat alerts for the same problem are suppressed by a content hash, so counts
 and durations are normalised out — you get one mail per distinct problem, plus a

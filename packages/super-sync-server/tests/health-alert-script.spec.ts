@@ -52,7 +52,7 @@ if [ "\${1:-}" = "exec" ]; then
   fi
   printf 'LONG_Q=%s\n' "\${FAKE_LONG_Q:-0}"
   printf 'LONGEST=%s\n' "\${FAKE_LONGEST-0}"
-  printf 'ACTIVE=%s\n' "\${FAKE_ACTIVE:-0}"
+  printf 'POOL_IN_USE=%s\n' "\${FAKE_POOL_IN_USE:-0}"
   printf 'POOL_LIMIT=%s\n' "\${FAKE_POOL_LIMIT-60}"
   printf 'BAD_INDEX=%s\n' "\${FAKE_BAD_INDEX-}"
   exit 0
@@ -275,7 +275,7 @@ describe('health-alert.sh service and database monitoring', () => {
   it.each(['', 'not-a-number', '0'])(
     'alerts when the running DATABASE_URL connection_limit is %j',
     (poolLimit) => {
-      const result = run({ FAKE_ACTIVE: '120', FAKE_POOL_LIMIT: poolLimit });
+      const result = run({ FAKE_POOL_IN_USE: '120', FAKE_POOL_LIMIT: poolLimit });
 
       expect(result.mailLog).toContain('DATABASE_URL has no valid connection_limit');
       expect(result.mailLog).not.toContain('Connection pool');
@@ -284,15 +284,15 @@ describe('health-alert.sh service and database monitoring', () => {
     },
   );
 
-  it('alerts when active connections reach the configured pool percentage', () => {
+  it('alerts when connections in use reach the configured pool percentage', () => {
     const result = run({
-      FAKE_ACTIVE: '45',
+      FAKE_POOL_IN_USE: '45',
       FAKE_POOL_LIMIT: '60',
       POOL_WARN_PCT: '75',
     });
 
     expect(result.mailLog).toContain(
-      'Connection pool 75% saturated (45 active / 60 limit)',
+      'Connection pool 75% saturated (45 in use / 60 limit)',
     );
   });
 
@@ -308,9 +308,12 @@ describe('health-alert.sh service and database monitoring', () => {
     expect(result.dockerLog).toContain('datname = current_database()');
     expect(result.dockerLog).toContain('usename = current_user');
     expect(result.dockerLog).toContain('pg_stat_progress_create_index');
+    expect(result.dockerLog).toContain('JOIN pg_locks l');
     expect(result.dockerLog).toContain("'operations'::regclass");
     expect(result.dockerLog).not.toContain("'public.operations'::regclass");
     expect(result.dockerLog).toContain('p.index_relid = i.indexrelid');
+    expect(result.dockerLog).toContain('l.relation = i.indexrelid');
+    expect(result.dockerLog).toContain("l.mode = 'ShareUpdateExclusiveLock'");
     expect(result.dockerLog).toContain("application_name LIKE 'supersync-migrator-%'");
   });
 

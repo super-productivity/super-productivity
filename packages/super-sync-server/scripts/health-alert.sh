@@ -14,7 +14,7 @@
 #   COMPOSE_DIR    - Path to docker-compose.yml directory (default: script directory's parent)
 #   HEALTH_URL     - Health endpoint URL (default: read from .env DOMAIN)
 #   MAX_QUERY_SECONDS  - Alert if any query has been active longer (default: 120)
-#   POOL_WARN_PCT      - Alert if active backends exceed this % of the pool (default: 75)
+#   POOL_WARN_PCT      - Alert if connections in use exceed this % of the pool (default: 75)
 #   POSTGRES_SERVICE   - Bundled database service to health-check
 #                        (default: postgres; empty: none)
 
@@ -159,10 +159,16 @@ const main = async () => {
     async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL statement_timeout = 10000');
       const [activity] = await tx.$queryRawUnsafe(
-        `WITH active AS (
-       SELECT now() - query_start AS age
+        `WITH pool_sessions AS (
+       SELECT CASE
+         WHEN state = 'active' THEN now() - query_start
+       END AS active_age
        FROM pg_stat_activity
-       WHERE state = 'active'
+       WHERE state IN (
+         'active',
+         'idle in transaction',
+         'idle in transaction (aborted)'
+       )
          AND pid <> pg_backend_pid()
          AND backend_type = 'client backend'
          AND datname = current_database()
@@ -171,11 +177,11 @@ const main = async () => {
      )
      SELECT
        count(*) FILTER (
-         WHERE age > $1::integer * interval '1 second'
+         WHERE active_age > $1::integer * interval '1 second'
        )::integer AS "longQueryCount",
-       COALESCE(round(extract(epoch FROM max(age))), 0)::integer AS "longest",
-       count(*)::integer AS "active"
-     FROM active`,
+       COALESCE(round(extract(epoch FROM max(active_age))), 0)::integer AS "longest",
+       count(*)::integer AS "poolInUse"
+     FROM pool_sessions`,
         maxQuerySeconds,
       );
 
@@ -195,6 +201,11 @@ const main = async () => {
        AND NOT EXISTS (
          SELECT 1
          FROM pg_stat_activity m
+         JOIN pg_locks l
+           ON l.pid = m.pid
+          AND l.locktype = 'relation'
+          AND l.relation = i.indexrelid
+          AND l.mode = 'ShareUpdateExclusiveLock'
          WHERE m.datname = current_database()
            AND m.usename = current_user
            AND m.state = 'active'
@@ -209,7 +220,7 @@ const main = async () => {
 
   console.log(`LONG_Q=${activity.longQueryCount}`);
   console.log(`LONGEST=${activity.longest}`);
-  console.log(`ACTIVE=${activity.active}`);
+  console.log(`POOL_IN_USE=${activity.poolInUse}`);
   console.log(`BAD_INDEX=${indexes.badIndex}`);
 };
 
@@ -233,19 +244,19 @@ NODE
 
     LONG_Q=""
     LONGEST=""
-    ACTIVE=""
+    POOL_IN_USE=""
     POOL_LIMIT=""
     BAD_IDX=""
     HAVE_LONG_Q=false
     HAVE_LONGEST=false
-    HAVE_ACTIVE=false
+    HAVE_POOL_IN_USE=false
     HAVE_POOL_LIMIT=false
     HAVE_BAD_IDX=false
     while IFS='=' read -r KEY VALUE; do
       case "$KEY" in
         LONG_Q) LONG_Q="$VALUE"; HAVE_LONG_Q=true ;;
         LONGEST) LONGEST="$VALUE"; HAVE_LONGEST=true ;;
-        ACTIVE) ACTIVE="$VALUE"; HAVE_ACTIVE=true ;;
+        POOL_IN_USE) POOL_IN_USE="$VALUE"; HAVE_POOL_IN_USE=true ;;
         POOL_LIMIT) POOL_LIMIT="$VALUE"; HAVE_POOL_LIMIT=true ;;
         BAD_INDEX) BAD_IDX="$VALUE"; HAVE_BAD_IDX=true ;;
       esac
@@ -257,10 +268,10 @@ NODE
 
     DB_RESULTS_OK=true
     if [ "$DB_STATUS" -ne 0 ] || ! $HAVE_LONG_Q || ! $HAVE_LONGEST ||
-      ! $HAVE_ACTIVE || ! $HAVE_POOL_LIMIT || ! $HAVE_BAD_IDX ||
+      ! $HAVE_POOL_IN_USE || ! $HAVE_POOL_LIMIT || ! $HAVE_BAD_IDX ||
       ! [[ "$LONG_Q" =~ ^[0-9]+$ ]] ||
       ! [[ "$LONGEST" =~ ^[0-9]+$ ]] ||
-      ! [[ "$ACTIVE" =~ ^[0-9]+$ ]]; then
+      ! [[ "$POOL_IN_USE" =~ ^[0-9]+$ ]]; then
       DB_RESULTS_OK=false
       PROBLEMS="${PROBLEMS}Database monitoring checks failed\n"
     fi
@@ -271,9 +282,9 @@ NODE
       fi
 
       if [[ "$POOL_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
-        PCT=$(( ACTIVE * 100 / POOL_LIMIT ))
+        PCT=$(( POOL_IN_USE * 100 / POOL_LIMIT ))
         if [ "$PCT" -ge "$POOL_WARN_PCT" ]; then
-          PROBLEMS="${PROBLEMS}Connection pool ${PCT}% saturated (${ACTIVE} active / ${POOL_LIMIT} limit)\n"
+          PROBLEMS="${PROBLEMS}Connection pool ${PCT}% saturated (${POOL_IN_USE} in use / ${POOL_LIMIT} limit)\n"
         fi
       fi
 
@@ -307,7 +318,7 @@ HASH_INPUT=$(printf '%s' "$PROBLEMS" | sed \
    s/at [0-9]*% on/at N% on/g
    s/HTTP [0-9]*/HTTP NNN/g
    s/[0-9]* query(s) active longer than [0-9]*s (longest: [0-9]*s)/N query(s) active longer than Ns (longest: Ns)/g
-   s/pool [0-9]*% saturated ([0-9]* active \/ [0-9]* limit)/pool N% saturated (N active \/ N limit)/g')
+   s/pool [0-9]*% saturated ([0-9]* in use \/ [0-9]* limit)/pool N% saturated (N in use \/ N limit)/g')
 CURRENT_HASH=$(printf '%s' "$HASH_INPUT" | sha256sum | cut -d' ' -f1)
 PREVIOUS_HASH=$(cat "$ALERT_STATE_FILE" 2>/dev/null || echo "none")
 
