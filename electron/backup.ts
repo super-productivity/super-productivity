@@ -22,16 +22,45 @@ import {
 } from './shared-with-frontend/backup-file-cleanup.util';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
+
 /**
- * Where the Windows Store build's backups end up on disk *if* the package is
- * virtualized — never a path we read or write ourselves, and not guaranteed to
- * exist. Only for showing the user a location they can open outside the package
- * sandbox; check `existsSync` before displaying it (#995, #9209).
+ * Where a *virtualized* MSIX package's writes to BACKUP_DIR physically land, so
+ * that Explorer (which runs outside the package and does not see the
+ * redirection) can be pointed at them. We never write here, and never read
+ * backup files from here on our own initiative — but `BACKUP_LOAD_DATA` below
+ * does accept it as a second allow-listed read root, so it is not inert.
+ * Only ever reached through `getBackupDirForDisplay()`, which verifies it.
+ *
+ * shortcut: the package family name is hardcoded and cannot be verified from
+ * source — the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML secret,
+ * so nothing in CI would notice it drifting. Drift degrades gracefully (the
+ * probe fails and we show BACKUP_DIR). Upgrade path if it ever changes: derive
+ * `<name>_<publisherHash>` from the WindowsApps segment of process.execPath.
  */
-export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
+const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Roaming',
   `Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming`,
 );
+
+/**
+ * The backup location to *show* the user, which is not always the one we write
+ * to: a virtualized MSIX package has its AppData writes redirected into the
+ * package's private LocalCache. That redirection applies only to virtualized
+ * packages and, since Windows 10 1903, is decided per file — so it cannot be
+ * known statically. Assuming it always applies is what made #9209 the mirror
+ * image of #995.
+ *
+ * shortcut: an install that flipped from virtualized to full-trust keeps a
+ * stale LocalCache dir, which still wins the probe — the user would be shown
+ * real but outdated backups. Accepted because restore reads BACKUP_DIR either
+ * way, so only manual recovery is affected. Upgrade path if it gets reported:
+ * probe for the newest filename in BACKUP_DIR (timestamps sort lexically)
+ * rather than for the directory, which pins where the last write actually went.
+ */
+export const getBackupDirForDisplay = (): string =>
+  process.windowsStore && existsSync(BACKUP_DIR_WINSTORE)
+    ? BACKUP_DIR_WINSTORE
+    : BACKUP_DIR;
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 export function initBackupAdapter(): void {
