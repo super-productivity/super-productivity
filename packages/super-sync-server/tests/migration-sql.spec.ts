@@ -206,7 +206,16 @@ describe('performance migrations', () => {
 
     // Prisma wraps each migration independently, so the consecutive directory
     // is a separate transaction and cannot extend the ALTER's exclusive lock.
-    expect(cleanupMigrationName > alterMigrationName).toBe(true);
+    // Ordered against the real migration directory — comparing the two literals
+    // above to each other would be a tautology that nothing could ever fail.
+    const migrationNames = readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(migrationNames).toContain(alterMigrationName);
+    expect(migrationNames.indexOf(cleanupMigrationName)).toBeGreaterThan(
+      migrationNames.indexOf(alterMigrationName),
+    );
     const cleanup = cleanupSql.match(
       /\bSELECT\s+(?:pg_catalog\.)?gin_clean_pending_list\s*\([^)]*operations_entity_ids_gin[^)]*\)\s*;/i,
     );
@@ -401,6 +410,21 @@ describe('performance migrations', () => {
     expect(runtimeMigrateScript).not.toContain(
       'operations_user_id_full_state_server_seq_idx',
     );
+    // The three names above are a legacy denylist, so the invariant passed
+    // vacuously when a NEW hardcode was added. Enforce it structurally instead,
+    // against every index name the migrations actually define, so a future
+    // hardcode of a name not on the list above cannot slip through either.
+    const indexNames = [
+      ...allMigrationSql().matchAll(
+        /\b(?:CREATE|ALTER|DROP)\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"([^"]+)"/gi,
+      ),
+    ].map((match) => match[1]);
+    expect(indexNames.length).toBeGreaterThan(3);
+    for (const indexName of new Set(indexNames)) {
+      expect(runtimeMigrateScript).not.toContain(indexName);
+    }
+    // No migration directory name either.
+    expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );
