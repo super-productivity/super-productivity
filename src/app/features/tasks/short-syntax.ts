@@ -1063,26 +1063,40 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
 };
 
 /**
- * Extracts markdown links [text](url) from title.
- * Returns the URLs found and a title with markdown links replaced by their display text.
+ * Collapses every markdown link `[text](url)` in `tracked` down to its display
+ * text (dropping the '[' and the '](url)') and returns the URLs found plus the
+ * raw positions of the dropped characters.
+ *
+ * This is the single definition of "what markdown removal does": the plain-URL
+ * scan reads `tracked.text` *after* this ran, so the text it searches can never
+ * drift from the text the tracker actually holds.
  */
-const extractMarkdownLinks = (
-  title: string,
-): { urls: string[]; titleWithoutMarkdown: string } => {
-  if (!title.includes('](')) {
-    return { urls: [], titleWithoutMarkdown: title };
+const collapseMarkdownLinks = (
+  tracked: TrackedTitle,
+): { urls: string[]; ranges: TextRange[] } => {
+  if (!tracked.text.includes('](')) {
+    return { urls: [], ranges: [] };
   }
   const urls: string[] = [];
-  const titleWithoutMarkdown = title.replace(
-    SHORT_SYNTAX_MARKDOWN_LINK_REG_EX,
-    (_match, text: string, url: string) => {
-      if (url) {
-        urls.push(url);
-      }
-      return text;
-    },
-  );
-  return { urls, titleWithoutMarkdown };
+  const ranges: TextRange[] = [];
+  // Right-to-left so earlier removals don't shift later match positions; both
+  // lists are built back to front to end up in reading order.
+  const matches = [...tracked.text.matchAll(SHORT_SYNTAX_MARKDOWN_LINK_REG_EX)];
+  for (const m of matches.reverse()) {
+    const start = m.index as number;
+    const displayText = m[1];
+    const url = m[2];
+    if (url) {
+      urls.unshift(url);
+    }
+    const tailStart = start + 1 + displayText.length;
+    const tailEnd = start + m[0].length;
+    ranges.unshift(...tracked.rawRanges(tailStart, tailEnd));
+    tracked.remove(tailStart, tailEnd);
+    ranges.unshift(...tracked.rawRanges(start, start + 1));
+    tracked.remove(start, start + 1);
+  }
+  return { urls, ranges };
 };
 
 const parseUrlAttachments = (
@@ -1102,13 +1116,15 @@ const parseUrlAttachments = (
 
   const titleBefore = tracked.text;
 
-  // 1. Extract markdown links first — they take priority over plain URL matching
-  // This prevents the plain URL regex from greedily including the closing ')' of
-  // markdown syntax like [text](https://example.com/)
-  const { urls: markdownUrls, titleWithoutMarkdown } = extractMarkdownLinks(titleBefore);
-
-  // 2. Then match remaining plain URLs in the title (after markdown links are replaced)
-  const plainUrlMatches = titleWithoutMarkdown.match(SHORT_SYNTAX_URL_REG_EX) || [];
+  // 1. Collapse markdown links first — they take priority over plain URL
+  // matching, which would otherwise greedily include the closing ')' of
+  // markdown syntax like [text](https://example.com/).
+  // 2. Then match the remaining plain URLs in what is left.
+  // Both run on a scratch tracker: nothing may be removed from the real title
+  // until we know there is a URL to extract.
+  const scratch = new TrackedTitle(titleBefore);
+  const { urls: markdownUrls } = collapseMarkdownLinks(scratch);
+  const plainUrlMatches = scratch.text.match(SHORT_SYNTAX_URL_REG_EX) || [];
 
   const allUrls = [...markdownUrls, ...plainUrlMatches];
   if (allUrls.length === 0) {
@@ -1127,18 +1143,11 @@ const parseUrlAttachments = (
   const ranges: TextRange[] = [];
   let cleanedTitle = titleBefore;
   if (config.urlBehavior === 'extract') {
-    // In extract mode: replace markdown links with display text, remove plain URLs
-    if (markdownUrls.length > 0) {
-      // A markdown link keeps its display text: drop '[' and '](url)'.
-      // Right-to-left so earlier removals don't shift later match positions.
-      const mdMatches = [...tracked.text.matchAll(SHORT_SYNTAX_MARKDOWN_LINK_REG_EX)];
-      for (const m of mdMatches.reverse()) {
-        const mdStart = m.index as number;
-        const displayText = m[1];
-        tracked.remove(mdStart + 1 + displayText.length, mdStart + m[0].length);
-        tracked.remove(mdStart, mdStart + 1);
-      }
-    }
+    // In extract mode: replace markdown links with display text, remove plain
+    // URLs. The same collapse the scratch tracker ran, now on the real one, so
+    // the '[' and '](url)' it drops are highlighted like any other stripped
+    // token.
+    ranges.push(...collapseMarkdownLinks(tracked).ranges);
     // Remove every occurrence of each plain URL (normalized the same way the
     // attachment path is: trimmed, trailing punctuation stripped)
     for (const url of plainUrlMatches) {

@@ -2175,6 +2175,45 @@ describe('shortSyntax', () => {
         expect(r?.attachments[1].path).toBe('https://b.com');
         expect(r?.taskChanges.title).toBe('docs and');
       });
+
+      // The stripped characters are the '[' and the '](url)' — the display
+      // text stays, so the highlight must cover the brackets, not the label.
+      it('should highlight the stripped markdown syntax around the display text', async () => {
+        const title = 'Check [docs](https://example.com/docs) for details';
+        const r = await shortSyntax(
+          { ...TASK, title },
+          { ...CONFIG, urlBehavior: 'extract' },
+        );
+        expect(r?.parsedRanges).toEqual([
+          { type: 'url', start: 6, end: 7 },
+          { type: 'url', start: 11, end: 38 },
+        ]);
+        expect(title.slice(6, 7)).toBe('[');
+        expect(title.slice(11, 38)).toBe('](https://example.com/docs)');
+      });
+
+      it('should highlight markdown syntax and a plain URL in the same title', async () => {
+        const title = '[docs](https://a.com) and https://b.com';
+        const r = await shortSyntax(
+          { ...TASK, title },
+          { ...CONFIG, urlBehavior: 'extract' },
+        );
+        expect(r?.parsedRanges).toEqual([
+          { type: 'url', start: 0, end: 1 },
+          { type: 'url', start: 5, end: 21 },
+          { type: 'url', start: 26, end: 39 },
+        ]);
+        expect(title.slice(5, 21)).toBe('](https://a.com)');
+        expect(title.slice(26, 39)).toBe('https://b.com');
+      });
+
+      it('should not touch the title when a markdown link carries no URL', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'Add [Website]()' },
+          { ...CONFIG, urlBehavior: 'extract' },
+        );
+        expect(r).toBeUndefined();
+      });
     });
   });
 

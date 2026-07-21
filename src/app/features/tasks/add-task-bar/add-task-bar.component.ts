@@ -5,7 +5,6 @@ import {
   Component,
   computed,
   DestroyRef,
-  effect,
   ElementRef,
   HostListener,
   inject,
@@ -64,7 +63,6 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { ShortSyntaxSegment, splitTextByRanges } from '../short-syntax-ranges';
-import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -135,7 +133,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _markdownPasteService = inject(MarkdownPasteService);
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
-  private readonly _customThemeService = inject(CustomThemeService);
   readonly stateService = inject(AddTaskBarStateService);
 
   T = T;
@@ -278,18 +275,35 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   actionsComponent = viewChild(AddTaskBarActionsComponent);
 
   // Segments of the raw input for the highlight overlay behind the textarea.
-  // Ranges are pinned to the text they were parsed from (the parse is async);
-  // until the current text's parse lands, the whole input renders as plain.
+  // Ranges are pinned to the text they were parsed from (the parse is async),
+  // so they are only ever applied to that exact text or to the part of a newer
+  // text they cannot have moved in.
   highlightSegments = computed<ShortSyntaxSegment[]>(() => {
     const txt = this.stateService.inputTxt();
     if (!txt || this.isSearchMode()) {
       return [];
     }
     const highlight = this.stateService.syntaxHighlight();
-    if (!highlight || highlight.forText !== txt || highlight.ranges.length === 0) {
+    if (!highlight || highlight.ranges.length === 0) {
       return [{ text: txt, type: null }];
     }
-    return splitTextByRanges(txt, highlight.ranges);
+    if (highlight.forText === txt) {
+      return splitTextByRanges(txt, highlight.ranges);
+    }
+    // The parse is async, so every keystroke renders once with ranges from the
+    // previous text. Dropping them all blanks the highlights for a frame
+    // (visible flicker), so keep the ones the edit cannot have moved: those
+    // that end inside the unchanged common prefix. A highlight is then never
+    // mispositioned, only at most one keystroke stale.
+    let common = 0;
+    const max = Math.min(highlight.forText.length, txt.length);
+    while (common < max && highlight.forText[common] === txt[common]) {
+      common++;
+    }
+    const stillValid = highlight.ranges.filter((r) => r.end <= common);
+    return stillValid.length
+      ? splitTextByRanges(txt, stillValid)
+      : [{ text: txt, type: null }];
   });
 
   // The overlay must track the textarea's scroll position (cdkTextareaAutosize
@@ -309,48 +323,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this.highlightSegments();
     this.syncHighlightScroll();
   });
-
-  // Custom themes are arbitrary user CSS and can style the textarea and the
-  // overlay div differently (e.g. glass.css sets a font on `*`), so static CSS
-  // cannot guarantee the two layers stay metric-identical. Mirror every
-  // text-layout-affecting computed style of the textarea onto the overlay on
-  // view init and theme switches (never per keystroke — computed typography
-  // cannot change while typing, and getComputedStyle forces a style recalc).
-  // Theme stylesheets load via async <link>, so the theme trigger re-syncs
-  // once more a moment later.
-  private readonly _overlayTypographySyncEffect = effect((onCleanup) => {
-    this._customThemeService.activeRef();
-    this._syncOverlayTypography();
-    const timeoutId = window.setTimeout(() => this._syncOverlayTypography(), 300);
-    onCleanup(() => window.clearTimeout(timeoutId));
-  });
-
-  private _syncOverlayTypography(): void {
-    const inputElement = this.inputEl()?.nativeElement;
-    const overlay = this.highlightEl()?.nativeElement;
-    if (!inputElement || !overlay) {
-      return;
-    }
-    const cs = getComputedStyle(inputElement);
-    const style = overlay.style;
-    style.fontFamily = cs.fontFamily;
-    style.fontSize = cs.fontSize;
-    style.fontWeight = cs.fontWeight;
-    style.fontStyle = cs.fontStyle;
-    style.fontStretch = cs.fontStretch;
-    style.lineHeight = cs.lineHeight;
-    style.letterSpacing = cs.letterSpacing;
-    style.wordSpacing = cs.wordSpacing;
-    style.textTransform = cs.textTransform;
-    style.textIndent = cs.textIndent;
-    style.tabSize = cs.tabSize;
-    style.fontKerning = cs.fontKerning;
-    style.fontVariant = cs.fontVariant;
-    style.fontFeatureSettings = cs.fontFeatureSettings;
-    style.direction = cs.direction;
-    style.textAlign = cs.textAlign;
-    style.wordBreak = cs.wordBreak;
-  }
 
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
