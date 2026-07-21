@@ -78,6 +78,18 @@ export class AppUriTaskActionsService implements OnDestroy {
   }
 
   private _handleAdd(action: AppUriAddTaskAction): void {
+    const title = action.title.trim();
+    if (!title) {
+      // A whitespace-only title (e.g. `?title=%20`) reaches here unrejected on
+      // the Electron path, since the protocol handler's `if (taskTitle)` check
+      // treats a space as truthy. Refuse rather than creating a blank task.
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.TASK.S.EMPTY_TITLE_VIA_APP_URI,
+      });
+      return;
+    }
+
     if (action.projectId) {
       const projectExists = this._projectService
         .list()
@@ -91,13 +103,13 @@ export class AppUriTaskActionsService implements OnDestroy {
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.TASK.S.PROJECT_NOT_FOUND_VIA_APP_URI,
-          translateParams: { title: action.title },
+          translateParams: { title },
         });
         return;
       }
     }
 
-    this._taskService.add(action.title, false, {
+    this._taskService.add(title, false, {
       ...(action.notes ? { notes: action.notes } : {}),
       ...(action.projectId ? { projectId: action.projectId } : {}),
     });
@@ -105,7 +117,7 @@ export class AppUriTaskActionsService implements OnDestroy {
     this._snackService.open({
       type: 'SUCCESS',
       msg: T.F.TASK.S.ADDED_VIA_APP_URI,
-      translateParams: { title: action.title },
+      translateParams: { title },
     });
   }
 

@@ -50,6 +50,14 @@ const replayHandlerMap: { [key: string]: Observable<unknown[]> } = {};
  * the first subscriber rather than silently dropped. Use only for channels
  * where replaying the last value to a late subscriber is correct — most
  * `ipcEvent$` channels are fired repeatedly and should NOT replay stale data.
+ *
+ * Never consume one of these from an `@ngrx/effects` effect. NgRx's default
+ * effects error handler re-subscribes a failing effect on error (up to
+ * `MAX_NUMBER_OF_RETRY_ATTEMPTS` times), and re-subscribing to a
+ * `ReplaySubject` replays its buffered value again, so a single IPC message
+ * can produce multiple downstream actions/side effects instead of one. A
+ * plain `Subject` (via `ipcEvent$`) doesn't have this problem since it has
+ * nothing to replay.
  */
 export const ipcEventReplay$ = (evName: string): Observable<unknown[]> => {
   if (!IS_ELECTRON) {

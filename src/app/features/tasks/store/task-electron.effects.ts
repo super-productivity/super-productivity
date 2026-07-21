@@ -27,11 +27,9 @@ import {
   unPauseFocusSession,
 } from '../../focus-mode/store/focus-mode.actions';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
-import { ipcAddTaskFromAppUri$ } from '../../../core/ipc-events';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { TaskLog } from '../../../core/log';
 
 // TODO send message to electron when current task changes here
 
@@ -195,24 +193,6 @@ export class TaskElectronEffects {
             progress,
             progressBarMode: 'normal',
           });
-        }),
-      ),
-    { dispatch: false },
-  );
-
-  handleAddTaskFromProtocol$ = createEffect(
-    () =>
-      ipcAddTaskFromAppUri$.pipe(
-        tap((data) => {
-          // Double-check data validity as defensive programming
-          if (!data || !data.title || typeof data.title !== 'string') {
-            TaskLog.err('handleAddTaskFromProtocol$ received invalid data', {
-              hasData: !!data,
-              titleType: typeof data?.title,
-            });
-            return;
-          }
-          this._taskService.add(data.title);
         }),
       ),
     { dispatch: false },

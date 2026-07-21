@@ -83,6 +83,12 @@ describe('AppUriTaskActionsService', () => {
         notes: 'whole milk',
       });
 
+      // Regression: TaskService.add was previously called twice for a single
+      // fired action (task-electron.effects.ts had its own, now-removed
+      // ipcAddTaskFromAppUri$ subscriber). This only guards against this
+      // service double-calling internally, not against some other class
+      // independently subscribing to the same shared observable again.
+      expect(taskService.add).toHaveBeenCalledTimes(1);
       expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {
         notes: 'whole milk',
       });
@@ -93,6 +99,24 @@ describe('AppUriTaskActionsService', () => {
           translateParams: { title: 'Buy milk' },
         }),
       );
+    });
+
+    it('shows an error and never adds a task for a whitespace-only title', () => {
+      pendingAction$.next({ type: 'add', title: '   ' });
+
+      expect(taskService.add).not.toHaveBeenCalled();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.TASK.S.EMPTY_TITLE_VIA_APP_URI,
+        }),
+      );
+    });
+
+    it('trims surrounding whitespace from an otherwise-valid title', () => {
+      pendingAction$.next({ type: 'add', title: '  Buy milk  ' });
+
+      expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {});
     });
 
     it('passes through a projectId that exists', () => {
