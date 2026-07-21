@@ -31,4 +31,19 @@ describe('splitTextByRanges', () => {
   it('should return no segments for empty text', () => {
     expect(splitTextByRanges('', [])).toEqual([]);
   });
+
+  // The segments are concatenated back into the overlay, so re-emitting the
+  // overlapped text would lengthen the mirror and shift every later highlight.
+  it('should skip an overlapping range instead of re-emitting its text', () => {
+    const segments = splitTextByRanges('abcdefgh', [
+      { start: 2, end: 6, type: 'tag' },
+      { start: 4, end: 7, type: 'due' },
+    ]);
+    expect(segments.map((s) => s.text).join('')).toBe('abcdefgh');
+    expect(segments).toEqual([
+      { text: 'ab', type: null },
+      { text: 'cdef', type: 'tag' },
+      { text: 'gh', type: null },
+    ]);
+  });
 });
