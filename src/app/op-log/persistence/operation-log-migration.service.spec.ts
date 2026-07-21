@@ -30,10 +30,7 @@ describe('OperationLogMigrationService', () => {
       'getOpsAfterSeq',
       'deleteOpsWhere',
       'clearAllOperations',
-      'append',
-      'getLastSeq',
-      'saveStateCache',
-      'setVectorClock',
+      'appendOperationAndSnapshot',
     ]);
 
     mockLegacyPfDb = jasmine.createSpyObj('LegacyPfDbService', [
@@ -394,16 +391,12 @@ describe('OperationLogMigrationService', () => {
               schemaVersion: CURRENT_SCHEMA_VERSION,
             };
 
-            await mockOpLogStore.append(migrationOp as any);
-            const lastSeq = await mockOpLogStore.getLastSeq();
-            await mockOpLogStore.saveStateCache({
+            await mockOpLogStore.appendOperationAndSnapshot(migrationOp as any, 'local', {
               state: legacyData,
-              lastAppliedOpSeq: lastSeq,
               vectorClock: migrationOp.vectorClock,
               compactedAt: Date.now(),
               schemaVersion: CURRENT_SCHEMA_VERSION,
             });
-            await mockOpLogStore.setVectorClock(migrationOp.vectorClock);
             mockStore.dispatch(loadAllData({ appDataComplete: legacyData as any }));
 
             dialogRef.componentInstance.status.set('complete');
@@ -411,10 +404,7 @@ describe('OperationLogMigrationService', () => {
         );
 
         // Mock opLogStore methods used during migration
-        mockOpLogStore.append.and.resolveTo(1);
-        mockOpLogStore.getLastSeq.and.resolveTo(1);
-        mockOpLogStore.saveStateCache.and.resolveTo();
-        mockOpLogStore.setVectorClock.and.resolveTo();
+        mockOpLogStore.appendOperationAndSnapshot.and.resolveTo(1);
       });
 
       it('should call persistClientId with legacy client ID when it exists', async () => {
@@ -430,7 +420,7 @@ describe('OperationLogMigrationService', () => {
           'legacyClientId1234',
         );
         expect(mockClientIdService.getOrGenerateClientId).not.toHaveBeenCalled();
-        expect(mockOpLogStore.append).toHaveBeenCalled();
+        expect(mockOpLogStore.appendOperationAndSnapshot).toHaveBeenCalled();
       });
 
       it('should generate new client ID and NOT call persistClientId when legacy ID is null', async () => {
@@ -442,7 +432,7 @@ describe('OperationLogMigrationService', () => {
 
         expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalled();
         expect(mockClientIdService.persistClientId).not.toHaveBeenCalled();
-        expect(mockOpLogStore.append).toHaveBeenCalled();
+        expect(mockOpLogStore.appendOperationAndSnapshot).toHaveBeenCalled();
       });
     });
   });

@@ -108,6 +108,13 @@ interface StateCacheEntry {
   snapshotEntityKeys?: string[];
 }
 
+interface ReplayAnchorSnapshot {
+  state: unknown;
+  vectorClock: VectorClock;
+  compactedAt: number;
+  schemaVersion?: number;
+}
+
 export interface RawRebuildIncompleteEntry {
   incomplete: true;
   startedAt: number;
@@ -755,6 +762,69 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
+   * Atomically appends an operation and installs its matching replay anchor.
+   * The snapshot frontier and working clock cannot move independently from
+   * the operation, so a concurrent tab's later append remains replayable and
+   * its clock advancement cannot be overwritten by a follow-up write.
+   */
+  async appendOperationAndSnapshot(
+    op: Operation,
+    source: 'local' | 'remote',
+    snapshot: ReplayAnchorSnapshot,
+  ): Promise<number> {
+    const vectorClock = await this.pruneClockForStorage(snapshot.vectorClock);
+    return this._appendOperationAndSnapshot(op, source, snapshot, vectorClock);
+  }
+
+  private async _appendOperationAndSnapshot(
+    op: Operation,
+    source: 'local' | 'remote',
+    snapshot: ReplayAnchorSnapshot,
+    vectorClock: VectorClock,
+  ): Promise<number> {
+    await this._ensureInit();
+    const storeNames: OpLogStoreName[] = [
+      STORE_NAMES.OPS,
+      STORE_NAMES.STATE_CACHE,
+      STORE_NAMES.VECTOR_CLOCK,
+    ];
+    if (isFullStateOpType(op.opType)) {
+      storeNames.push(STORE_NAMES.META);
+    }
+    try {
+      const seq = await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        const entry = this._buildStoredEntry(op, source);
+        const writtenSeq = await tx.add(STORE_NAMES.OPS, entry);
+        await this._recordFullStateOpInTx(tx, entry.op, writtenSeq);
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          id: SINGLETON_KEY,
+          state: snapshot.state,
+          lastAppliedOpSeq: writtenSeq,
+          vectorClock,
+          compactedAt: snapshot.compactedAt,
+          ...(snapshot.schemaVersion === undefined
+            ? {}
+            : { schemaVersion: snapshot.schemaVersion }),
+        } satisfies StateCacheEntry);
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          {
+            clock: vectorClock,
+            lastUpdate: snapshot.compactedAt,
+          } satisfies VectorClockEntry,
+          SINGLETON_KEY,
+        );
+        return writtenSeq;
+      });
+      this._vectorClockCache = { ...vectorClock };
+      this._invalidateUnsyncedCache();
+      return seq;
+    } catch (e) {
+      this._handleAppendError(e);
+    }
+  }
+
+  /**
    * Atomically installs a validated legacy recovery as one replay anchor.
    * A crash must never leave the recovery operation without its matching
    * snapshot/vector clock, because the fail-closed recovery guard will then
@@ -764,42 +834,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     op: Operation,
     state: unknown,
   ): Promise<number> {
-    await this._ensureInit();
-    const now = Date.now();
-    try {
-      const seq = await this._adapter.transaction(
-        [STORE_NAMES.OPS, STORE_NAMES.STATE_CACHE, STORE_NAMES.VECTOR_CLOCK],
-        'readwrite',
-        async (tx) => {
-          const writtenSeq = await tx.add(
-            STORE_NAMES.OPS,
-            this._buildStoredEntry(op, 'local'),
-          );
-          await tx.put(STORE_NAMES.STATE_CACHE, {
-            id: SINGLETON_KEY,
-            state,
-            lastAppliedOpSeq: writtenSeq,
-            vectorClock: op.vectorClock,
-            compactedAt: now,
-            schemaVersion: op.schemaVersion,
-          } satisfies StateCacheEntry);
-          await tx.put(
-            STORE_NAMES.VECTOR_CLOCK,
-            {
-              clock: op.vectorClock,
-              lastUpdate: now,
-            } satisfies VectorClockEntry,
-            SINGLETON_KEY,
-          );
-          return writtenSeq;
-        },
-      );
-      this._vectorClockCache = { ...op.vectorClock };
-      this._invalidateUnsyncedCache();
-      return seq;
-    } catch (e) {
-      this._handleAppendError(e);
-    }
+    const snapshot = {
+      state,
+      vectorClock: op.vectorClock,
+      compactedAt: Date.now(),
+      schemaVersion: op.schemaVersion,
+    };
+    return this._appendOperationAndSnapshot(op, 'local', snapshot, op.vectorClock);
   }
 
   async appendBatch(

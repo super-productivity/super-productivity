@@ -209,10 +209,11 @@ export class SyncHydrationService {
         incrementVectorClock(mergedClock, clientId),
       );
 
-      let lastSeq: number;
+      let syncImportOp: Operation | undefined;
+      let lastSeq: number | undefined;
 
       if (createSyncImportOp) {
-        // 4b. Create and append SYNC_IMPORT operation
+        // 4b. Create the SYNC_IMPORT operation
         // This is used for explicit "use local/remote" conflict resolution where we want
         // "clean slate" semantics that discard concurrent ops from other clients.
         OpLog.normal('SyncHydrationService: Creating SYNC_IMPORT with merged clock', {
@@ -222,7 +223,7 @@ export class SyncHydrationService {
           mergedClockSize: Object.keys(mergedClock).length,
         });
 
-        const op: Operation = {
+        syncImportOp = {
           id: uuidv7(),
           actionType: ActionType.LOAD_ALL_DATA,
           opType: OpType.SyncImport,
@@ -234,19 +235,6 @@ export class SyncHydrationService {
           schemaVersion: CURRENT_SCHEMA_VERSION,
           syncImportReason: syncImportReason ?? 'FILE_IMPORT',
         };
-
-        // 5. Append operation to SUP_OPS and use the seq append() returns as the
-        // operation's own sequence number. Re-reading getLastSeq() here (a
-        // separate reverse-cursor read) returns the GLOBAL op-log tail, which a
-        // concurrent tab's append can push past this op — this path does not
-        // hold the sp_op_log Web Lock that other tabs' local-op capture appends
-        // under. The re-read seq would then be too high, so state_cache's
-        // lastAppliedOpSeq is persisted past the concurrent op and the next
-        // boot's tail replay (getOpsAfterSeq) silently skips it. append()'s
-        // return value is exactly this op's seq, so it is race-free and also
-        // drops a redundant transaction. (#8337)
-        lastSeq = await this.opLogStore.append(op, 'remote');
-        OpLog.normal('SyncHydrationService: Persisted SYNC_IMPORT operation');
       } else {
         // 4b-alt. Skip SYNC_IMPORT creation for file-based sync bootstrap.
         // This avoids "clean slate" semantics so concurrent ops from other clients
@@ -326,18 +314,22 @@ export class SyncHydrationService {
       // baseline remains intact and mid-hydration local actions can safely drain
       // against it; there is no cache-only or ops-only restart state.
       if (createSyncImportOp) {
-        await this.opLogStore.saveStateCache({
+        if (!syncImportOp) {
+          throw new Error('SYNC_IMPORT operation was not created');
+        }
+        await this.opLogStore.appendOperationAndSnapshot(syncImportOp, 'remote', {
           state: dataToLoad,
-          lastAppliedOpSeq: lastSeq,
           vectorClock: clockForStorage,
           compactedAt: Date.now(),
         });
         hooks?.afterSnapshotCachePersisted?.();
-
-        // The SYNC_IMPORT was appended with source='remote', so update the
-        // working clock separately on this legacy full-state-import path.
-        await this.opLogStore.setVectorClock(clockForStorage);
+        OpLog.normal(
+          'SyncHydrationService: Atomically persisted SYNC_IMPORT and snapshot',
+        );
       } else {
+        if (lastSeq === undefined) {
+          throw new Error('File snapshot operation-log frontier was not captured');
+        }
         // Reject superseded local ops atomically with the state replacement.
         const rejectOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
         const appendResult = await this.opLogStore.commitFileSnapshotBaseline({

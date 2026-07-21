@@ -2,13 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { OperationLogMigrationService } from '../../persistence/operation-log-migration.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { LegacyPfDbService } from '../../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../../core/util/client-id.service';
 import { LanguageService } from '../../../core/language/language.service';
-import { ActionType, OpType } from '../../core/operation.types';
+import { ActionType, Operation, OpType } from '../../core/operation.types';
 import { resetTestUuidCounter } from './helpers/test-client.helper';
+import { createValidAppData } from '../../validation/state-validity-test-utils';
+import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
+import { LanguageCode } from '../../../core/locale.constants';
 
 /**
  * Integration tests for Operation Log Migration Service.
@@ -38,15 +42,19 @@ describe('Legacy Data Migration Integration', () => {
       'loadClientId',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
+      'loadClientId',
       'getOrGenerateClientId',
+      'persistClientId',
+      'clearCache',
     ]);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockTranslateService = jasmine.createSpyObj('TranslateService', [
       'instant',
       'getBrowserCultureLang',
       'getBrowserLang',
+      'use',
     ]);
-    mockLanguageService = jasmine.createSpyObj('LanguageService', ['setLng']);
+    mockLanguageService = jasmine.createSpyObj('LanguageService', ['setLng', 'detect']);
 
     // Default mocks - no legacy data by default
     mockLegacyPfDb.hasUsableEntityData.and.returnValue(Promise.resolve(false));
@@ -227,6 +235,99 @@ describe('Legacy Data Migration Integration', () => {
       expect(ops.length).toBe(2);
       expect(ops[0].op.id).toBe('genesis-valid');
       expect(ops[1].op.id).toBe('normal-op');
+    });
+  });
+
+  describe('Successful migration persistence', () => {
+    it('replays a second-tab append after restart without regressing its clock', async () => {
+      const legacyClientId = 'legacyClient';
+      const legacyData = createValidAppData();
+      mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
+      mockLegacyPfDb.acquireMigrationLock.and.resolveTo(true);
+      mockLegacyPfDb.releaseMigrationLock.and.resolveTo();
+      mockLegacyPfDb.loadAllEntityData.and.resolveTo(legacyData);
+      mockLegacyPfDb.loadMetaModel.and.resolveTo({
+        vectorClock: { [legacyClientId]: 5 },
+      });
+      mockLegacyPfDb.loadClientId.and.resolveTo(legacyClientId);
+      mockClientIdService.loadClientId.and.resolveTo(legacyClientId);
+      mockClientIdService.getOrGenerateClientId.and.resolveTo(legacyClientId);
+      mockClientIdService.persistClientId.and.resolveTo();
+      mockTranslateService.use.and.returnValue(of({}));
+      mockLanguageService.detect.and.returnValue(LanguageCode.en);
+
+      const dialogRef = {
+        componentInstance: {
+          status: { set: jasmine.createSpy('statusSet') },
+          error: { set: jasmine.createSpy('errorSet') },
+        },
+        afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
+        close: jasmine.createSpy('close'),
+      };
+      mockMatDialog.open.and.returnValue(dialogRef as never);
+      spyOn(
+        migrationService as unknown as {
+          _createAutoBackup: () => Promise<void>;
+        },
+        '_createAutoBackup',
+      ).and.resolveTo();
+
+      const secondTabStore = TestBed.runInInjectionContext(
+        () => new OperationLogStoreService(),
+      );
+      await secondTabStore.init();
+      const concurrentOp: Operation = {
+        id: 'second-tab-after-migration',
+        actionType: '[Task] Update Task' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-from-second-tab',
+        payload: { title: 'Second tab' },
+        clientId: legacyClientId,
+        vectorClock: { [legacyClientId]: 6 },
+        timestamp: Date.now(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      };
+      let concurrentAppend: Promise<number> | undefined;
+      const appendFromSecondTab = async (): Promise<void> => {
+        concurrentAppend ??= secondTabStore.appendWithVectorClockOverwrite(
+          concurrentOp,
+          'local',
+        );
+        await concurrentAppend;
+      };
+
+      const realAppend = opLogStore.append.bind(opLogStore);
+      spyOn(opLogStore, 'append').and.callFake(async (op, source, options) => {
+        const seq = await realAppend(op, source, options);
+        await appendFromSecondTab();
+        return seq;
+      });
+      const realAtomicAppend = opLogStore.appendOperationAndSnapshot.bind(opLogStore);
+      spyOn(opLogStore, 'appendOperationAndSnapshot').and.callFake(
+        async (op, source, snapshot) => {
+          const seq = await realAtomicAppend(op, source, snapshot);
+          await appendFromSecondTab();
+          return seq;
+        },
+      );
+
+      await migrationService.checkAndMigrate();
+
+      const restartedStore = TestBed.runInInjectionContext(
+        () => new OperationLogStoreService(),
+      );
+      await restartedStore.init();
+      const cache = await restartedStore.loadStateCache();
+      expect(cache?.lastAppliedOpSeq).toBe(1);
+      const replayTail = await restartedStore.getOpsAfterSeq(
+        cache?.lastAppliedOpSeq ?? 0,
+      );
+      expect(replayTail.map((entry) => entry.op.id)).toEqual([concurrentOp.id]);
+      expect(replayTail[0].seq).toBe(2);
+      expect(await restartedStore.getVectorClock()).toEqual({
+        [legacyClientId]: 6,
+      });
     });
   });
 });

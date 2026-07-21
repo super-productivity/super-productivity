@@ -360,6 +360,19 @@ describe('OperationLogStoreService', () => {
       expect(await service.getVectorClock()).toEqual(op.vectorClock);
     });
 
+    it('should preserve the full recovery clock in the atomic replay anchor', async () => {
+      const vectorClock = createBloatedClock({ testClient: 1 });
+      const op = createTestOperation({
+        id: 'legacy-recovery-full-clock-op',
+        vectorClock,
+      });
+
+      await service.appendRecoveryOperationAndSnapshot(op, { task: {} });
+
+      expect((await service.loadStateCache())?.vectorClock).toEqual(vectorClock);
+      expect(await service.getVectorClock()).toEqual(vectorClock);
+    });
+
     it('should roll back the recovery operation when its snapshot write fails', async () => {
       const op = createTestOperation({ id: 'failed-legacy-recovery-op' });
       const adapter = (

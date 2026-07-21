@@ -275,25 +275,16 @@ export class OperationLogMigrationService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
-    // 5. Persist to operation log and use the seq append() returns as this op's
-    // own sequence number, rather than re-reading getLastSeq() (a separate
-    // reverse-cursor read that returns the GLOBAL op-log tail). A concurrent
-    // tab's append could push that tail past this op — this path does not hold
-    // the sp_op_log Web Lock other tabs' capture appends under — so the re-read
-    // seq would persist lastAppliedOpSeq too high and the next boot's tail
-    // replay would silently skip the concurrent op. append()'s return is
-    // exactly this op's seq. (#8337)
-    const lastSeq = await this.opLogStore.append(migrationOp);
-
-    await this.opLogStore.saveStateCache({
+    // 5. Persist the genesis operation, its exact snapshot frontier, and the
+    // working clock in one transaction. There is no post-append interval where
+    // a later tab write can be skipped by the snapshot frontier or have its
+    // clock advancement overwritten by a follow-up migration write.
+    await this.opLogStore.appendOperationAndSnapshot(migrationOp, 'local', {
       state: dataToMigrate,
-      lastAppliedOpSeq: lastSeq,
       vectorClock: migrationOp.vectorClock,
       compactedAt: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
-
-    await this.opLogStore.setVectorClock(migrationOp.vectorClock);
 
     // 6. Dispatch to NgRx store
     this.store.dispatch(loadAllData({ appDataComplete: dataToMigrate }));
