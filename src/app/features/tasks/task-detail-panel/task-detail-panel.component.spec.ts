@@ -396,13 +396,23 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         set: { template: '', imports: [], schemas: [NO_ERRORS_SCHEMA] },
       })
       .compileComponents();
+  });
 
+  // The fixture is created INSIDE fakeAsync on purpose. The suite runs zoneless
+  // (src/test.ts provides provideZonelessChangeDetection globally), and
+  // ComponentFixture.autoDetectDefault is `true` whenever zoneless is enabled —
+  // so createComponent()/setInput() schedule an ApplicationRef tick. Created in
+  // the async beforeEach, that tick can fire before the spec body, running
+  // ngAfterViewInit outside the fake zone: its delay(50) then registers a REAL
+  // timer that tick() can never flush, and the focusItem spy is installed too
+  // late to observe the call. That is an order/load-dependent flake that fails
+  // roughly like "focusItem ... was never called" (it defeated an earlier
+  // tick(50) -> tick(100) fix, because the timer was never in the fake clock).
+  it('focuses the notes section without entering edit mode', fakeAsync(() => {
     fixture = TestBed.createComponent(TaskDetailPanelComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('task', fakeTask('B'));
-  });
 
-  it('focuses the notes section without entering edit mode', fakeAsync(() => {
     // Provide a notes wrapper so the real focus path (not the devError branch) runs.
     const noteItem = makeItem();
     (
