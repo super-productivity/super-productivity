@@ -115,6 +115,14 @@
     tab-size: 8;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    // `inherit`, not a fixed value: the app's RTL comes from `[dir]` on a shared
+    // ancestor (app.component.html), which both layers must keep following. What
+    // this pins is that they follow the SAME source — a theme rule targeting the
+    // textarea alone (`textarea { text-align: center }`) would otherwise move the
+    // glyphs out from under the backgrounds.
+    direction: inherit;
+    text-align: inherit;
+    word-break: inherit;
   }
 
   // Positioning context for the textarea + its highlight overlay; sized purely
@@ -157,6 +165,14 @@
       font-kerning: inherit;
       font-variant: inherit;
       font-feature-settings: inherit;
+      // Wrapping and bidi too: `span { white-space: nowrap }` collapses the
+      // mirror to a single line, so every highlight past the first wrap lands on
+      // the wrong text.
+      white-space: inherit;
+      overflow-wrap: inherit;
+      word-break: inherit;
+      direction: inherit;
+      text-align: inherit;
     }
 
     .syntax-highlight {

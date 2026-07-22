@@ -2212,6 +2212,38 @@ describe('shortSyntax', () => {
         );
         expect(r).toBeUndefined();
       });
+
+      // A URL-less link must survive whether or not the title happens to hold
+      // another URL — otherwise unrelated text decides if the user keeps those
+      // characters, and nothing is extracted in exchange for dropping them.
+      it('should keep a URL-less markdown link when another URL is extracted', async () => {
+        const title = 'Add [Website]() https://a.com';
+        const r = await shortSyntax(
+          { ...TASK, title },
+          { ...CONFIG, urlBehavior: 'extract' },
+        );
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://a.com');
+        expect(r?.taskChanges.title).toBe('Add [Website]()');
+        expect(r?.parsedRanges).toEqual([{ type: 'url', start: 16, end: 29 }]);
+        expect(title.slice(16, 29)).toBe('https://a.com');
+      });
+
+      it('should collapse only the markdown links that carry a URL', async () => {
+        const title = '[a]() [b](https://b.com)';
+        const r = await shortSyntax(
+          { ...TASK, title },
+          { ...CONFIG, urlBehavior: 'extract' },
+        );
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://b.com');
+        expect(r?.taskChanges.title).toBe('[a]() b');
+        expect(r?.parsedRanges).toEqual([
+          { type: 'url', start: 6, end: 7 },
+          { type: 'url', start: 8, end: 24 },
+        ]);
+        expect(title.slice(8, 24)).toBe('](https://b.com)');
+      });
     });
   });
 

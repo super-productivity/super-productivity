@@ -950,6 +950,13 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
  * This is the single definition of "what markdown removal does": the plain-URL
  * scan reads `tracked.text` *after* this ran, so the text it searches can never
  * drift from the text the tracker actually holds.
+ *
+ * A match with an empty destination — `[text]()` — is left alone: it yields no
+ * URL, so extracting it would delete the user's characters without producing an
+ * attachment in return. Skipping it here is what makes that rule unconditional;
+ * the caller only reaches this function when *some* URL exists in the title, so
+ * collapsing every match would have let an unrelated URL elsewhere decide
+ * whether `[text]()` survived.
  */
 const collapseMarkdownLinks = (
   tracked: TrackedTitle,
@@ -966,9 +973,10 @@ const collapseMarkdownLinks = (
     const start = m.index as number;
     const displayText = m[1];
     const url = m[2];
-    if (url) {
-      urls.unshift(url);
+    if (!url) {
+      continue;
     }
+    urls.unshift(url);
     const tailStart = start + 1 + displayText.length;
     const tailEnd = start + m[0].length;
     ranges.unshift(...tracked.rawRanges(tailStart, tailEnd));
