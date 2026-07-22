@@ -11,7 +11,7 @@ import {
 } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
-import { join, normalize } from 'path';
+import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
@@ -316,7 +316,8 @@ export const createWindow = async ({
     ? customUrl
     : IS_DEV
       ? 'http://localhost:4200'
-      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
+      : pathToFileURL(path.join(__dirname, '../.tmp/angular-dist/browser/index.html'))
+          .href;
 
   // Capture the loaded URL so the navigation guard (initWinEventListeners →
   // will-navigate) can compare against the actual app origin, not a derived
