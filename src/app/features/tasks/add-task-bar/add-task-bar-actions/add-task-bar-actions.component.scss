@@ -155,30 +155,15 @@
     }
 
     &.has-value {
-      --mat-button-text-label-text-color: var(--text-color-most-intense);
-
-      background-color: var(--state-selected);
-
-      &:hover,
-      &:focus-visible {
-        background-color: var(--state-focus);
-      }
+      --mat-button-text-label-text-color: var(--text-color);
     }
 
     &.deadline-chip {
       color: var(--c-warn) !important;
-      background-color: var(--state-selected) !important;
 
       mat-icon {
         color: var(--c-warn) !important;
       }
-    }
-
-    // Project button is always active since we always have a project selected
-    &.project-btn {
-      --mat-button-text-label-text-color: var(--text-color-most-intense);
-
-      background-color: var(--state-selected);
     }
 
     // Highlight when menu is open

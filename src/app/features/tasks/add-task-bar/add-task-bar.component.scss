@@ -213,16 +213,16 @@
 
   .search-toggle-btn.active,
   .note-toggle-btn.active {
-    --mat-icon-button-icon-color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
 
-    background-color: var(--primary-light);
+    background-color: var(--state-selected);
   }
 
   // A collapsed note still holds its text — keep the icon undimmed and tinted so
   // it's clear a note is attached (distinct from the .active pill shown while the
   // note field is expanded).
   .note-toggle-btn.has-value:not(.active) {
-    --mat-icon-button-icon-color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
   }
 }
 
