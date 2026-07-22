@@ -41,6 +41,10 @@ export enum GROUP_OPTION_TYPE {
 
 export interface FilterOption extends BaseOption<FILTER_OPTION_TYPE> {
   preset: FILTER_SCHEDULE | FILTER_TIME | string | null;
+  /** IDs of tags to filter by (multi-tag mode). When set, `preset` is ignored. */
+  tagIds?: string[];
+  /** Logical operator applied when `tagIds` has ≥ 2 entries. Defaults to OR. */
+  tagFilterMode?: 'OR' | 'AND';
 }
 
 export enum FILTER_OPTION_TYPE {
