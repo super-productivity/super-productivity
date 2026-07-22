@@ -6,6 +6,7 @@ import {
   OPS_INDEXES,
 } from './db-keys.const';
 import { deleteDB, openDB } from 'idb';
+import { isIdbVersionError } from './op-log-errors.const';
 import { OpType } from '../core/operation.types';
 
 describe('runDbUpgrade', () => {
@@ -316,6 +317,13 @@ describe('runDbUpgrade', () => {
         await expectAsync(openDB(dbName, 9)).toBeRejectedWith(
           jasmine.objectContaining({ name: 'VersionError' }),
         );
+
+        // #9187: the rejection an old reader actually gets must be the one the
+        // user-facing classifier recognises. Asserting it here — on a real
+        // downgrade rather than a hand-built DOMException — is what keeps the
+        // dialog from falling back to "your storage may need to be cleared".
+        const rejection = await openDB(dbName, 9).catch((e: unknown) => e);
+        expect(isIdbVersionError(rejection)).toBe(true);
       } finally {
         await deleteDB(dbName);
       }

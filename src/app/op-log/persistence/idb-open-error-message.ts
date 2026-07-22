@@ -27,6 +27,43 @@ const originalMessageOf = (error: IndexedDBOpenError): string =>
  *
  * @see https://github.com/super-productivity/super-productivity/issues/9187
  */
+const versionErrorRecoverySteps = (ctx: IdbOpenErrorContext): string => {
+  // Snap and Flatpak are the likeliest way to end up here deliberately: both
+  // roll back with a single command (`snap revert`), and Snap `edge` tracks
+  // every master push. Sending those users to the website download would be
+  // wrong — they need their own update channel.
+  if (ctx.isSnap) {
+    return (
+      '1. Close this window.\n' +
+      '2. Update to the newest version: snap refresh super-productivity\n' +
+      '3. If you ran `snap revert` recently, that is what caused this.\n\n'
+    );
+  }
+  if (ctx.isFlatpak) {
+    return (
+      '1. Close this window.\n' +
+      '2. Update to the newest version: flatpak update com.super-productivity.app\n\n'
+    );
+  }
+  if (ctx.isElectron) {
+    return (
+      '1. Close this window.\n' +
+      '2. Start the newest version you have installed. If this keeps happening, ' +
+      'you likely have a second copy: an outdated desktop shortcut, a portable ' +
+      'executable, or an older install folder.\n' +
+      '3. Otherwise install the latest release from https://super-productivity.com ' +
+      'and launch it from there.\n\n'
+    );
+  }
+  // Web and mobile WebView share a branch: the reload hint is qualified so it
+  // stays true on Android/iOS, where there are no tabs and no Ctrl+Shift+R.
+  return (
+    '1. Make sure you are running the newest version of Super Productivity.\n' +
+    '2. In a web browser: reload with Ctrl+Shift+R (Cmd+Shift+R on Mac) and ' +
+    'close any other tabs running Super Productivity.\n\n'
+  );
+};
+
 const buildVersionErrorMessage = (
   error: IndexedDBOpenError,
   ctx: IdbOpenErrorContext,
@@ -36,17 +73,7 @@ const buildVersionErrorMessage = (
   'last used by a newer version. Older versions cannot read it.\n\n' +
   'Your data is safe. Do NOT clear your storage — that would delete it.\n\n' +
   'What to do:\n' +
-  (ctx.isElectron
-    ? '1. Close this window.\n' +
-      '2. Start the newest version you have installed. If this keeps happening, ' +
-      'you likely have a second copy: an outdated desktop shortcut, a portable ' +
-      'executable, or an older install folder.\n' +
-      '3. Otherwise install the latest release from https://super-productivity.com ' +
-      'and launch it from there.\n\n'
-    : '1. Reload the page with Ctrl+Shift+R (Cmd+Shift+R on Mac) to pick up the ' +
-      'newest version.\n' +
-      '2. If that does not help, close every other tab running Super Productivity ' +
-      'and reload again.\n\n') +
+  versionErrorRecoverySteps(ctx) +
   `Technical details: ${originalMessageOf(error)}`;
 
 /**

@@ -216,6 +216,11 @@ describe('OperationLogStoreService', () => {
 
       // Exactly one attempt — no exponential-backoff budget burned.
       expect(openSpy).toHaveBeenCalledTimes(1);
+      // NOTE: without the fail-fast break this spec dies on the 2s jasmine
+      // timeout (src/test.ts) rather than on the assertion above, because the
+      // non-lock budget sleeps 1s+2s+4s. Do NOT "repair" a slow run here by
+      // raising DEFAULT_TIMEOUT_INTERVAL — that would turn this into a
+      // 7-second passing test that no longer guards anything.
     });
   });
 
