@@ -23,6 +23,9 @@ describe('AddTaskBarParserService', () => {
       'updateAttachments',
       'updateDeadline',
       'updateDeadlineRemindOption',
+      'updateRepeatSetting',
+      'clearRepeatSetting',
+      'updateSyntaxHighlight',
       'isAutoDetected',
       'state',
     ]);
@@ -1551,6 +1554,216 @@ describe('AddTaskBarParserService', () => {
       expect(attachments.length).toBe(1);
       expect(attachments[0].path).toBe('//www.example.com');
       expect(attachments[0].type).toBe('LINK');
+    });
+  });
+
+  describe('repeat short syntax', () => {
+    const cfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const baseState = {
+      projectId: 'default-project',
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    };
+
+    it('should set repeat setting from "@every friday"', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      expect(mockStateService.updateRepeatSetting).toHaveBeenCalledWith(
+        'WEEKLY_CURRENT_WEEKDAY',
+      );
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Water plants');
+    });
+
+    it('should NOT set a repeat setting for interval phrases like "@every 2 weeks"', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Review @every 2 weeks',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      expect(mockStateService.updateRepeatSetting).not.toHaveBeenCalled();
+    });
+
+    it('should clear the repeat setting when the syntax is removed again', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      mockStateService.state.and.returnValue({
+        ...baseState,
+        repeatQuickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+      } as any);
+      await service.parseAndUpdateText('Water plants', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).toHaveBeenCalled();
+    });
+
+    it('should clear a syntax-set repeat setting when the input is emptied', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText(
+        'Water plants @every friday',
+        cfg,
+        [],
+        [],
+        defaultProject,
+      );
+      await service.parseAndUpdateText('', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).toHaveBeenCalled();
+    });
+
+    it('should preserve a menu-selected repeat setting on unrelated text', async () => {
+      mockStateService.state.and.returnValue({
+        ...baseState,
+        repeatQuickSetting: 'DAILY',
+      } as any);
+      await service.parseAndUpdateText('Plain task', cfg, [], [], defaultProject);
+      expect(mockStateService.clearRepeatSetting).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('syntax highlight ranges', () => {
+    const cfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const baseState = {
+      projectId: 'default-project',
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      repeatEvery: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    };
+
+    it('should publish ranges for detected tokens pinned to the input text', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Fix bug #urgent @friday';
+      await service.parseAndUpdateText(
+        text,
+        cfg,
+        [],
+        [{ id: 'tag-1', title: 'urgent' } as Tag],
+        defaultProject,
+      );
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg?.forText).toBe(text);
+      const highlighted = arg!.ranges.map((r) => ({
+        text: text.slice(r.start, r.end),
+        type: r.type,
+      }));
+      expect(highlighted).toEqual([
+        { text: '#urgent', type: 'tag' },
+        { text: '@friday', type: 'due' },
+      ]);
+    });
+
+    it('should include recurrence phrases in the due range', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Water plants @every friday';
+      await service.parseAndUpdateText(text, cfg, [], [], defaultProject);
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg?.ranges.length).toBe(1);
+      expect(text.slice(arg!.ranges[0].start, arg!.ranges[0].end)).toBe('@every friday');
+      expect(arg!.ranges[0].type).toBe('due');
+    });
+
+    it('should publish null when nothing is parsed', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText('Plain task', cfg, [], [], defaultProject);
+      expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
+    });
+
+    it('should publish null when the input is emptied', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      await service.parseAndUpdateText('', cfg, [], [], defaultProject);
+      expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('removeShortSyntaxFromInput repeat', () => {
+    it('should remove "@every friday"', () => {
+      expect(service.removeShortSyntaxFromInput('Water @every friday', 'repeat')).toBe(
+        'Water',
+      );
+    });
+
+    it('should remove "@daily"', () => {
+      expect(service.removeShortSyntaxFromInput('Journal @daily', 'repeat')).toBe(
+        'Journal',
+      );
+    });
+
+    it('should leave a trailing time token like the date case does', () => {
+      expect(service.removeShortSyntaxFromInput('Call @every friday 3pm', 'repeat')).toBe(
+        'Call 3pm',
+      );
+    });
+
+    it('should not eat words merely starting with a frequency word', () => {
+      expect(service.removeShortSyntaxFromInput('Meet @dailystandup', 'repeat')).toBe(
+        'Meet @dailystandup',
+      );
+    });
+
+    // The button renders for any repeat setting, including menu-selected ones,
+    // so it must not delete phrases the parser never treated as a recurrence
+    it('should leave phrases the parser does not read as a recurrence', () => {
+      const untouched = [
+        'Review @every 2 weeks',
+        'Review @every 3 days',
+        'Ship @every quarter',
+      ];
+      for (const input of untouched) {
+        expect(service.removeShortSyntaxFromInput(input, 'repeat'))
+          .withContext(input)
+          .toBe(input);
+      }
+    });
+
+    it('should keep trailing punctuation joined like the parser does', () => {
+      expect(
+        service.removeShortSyntaxFromInput('Water plants @every friday.', 'repeat'),
+      ).toBe('Water plants.');
     });
   });
 });

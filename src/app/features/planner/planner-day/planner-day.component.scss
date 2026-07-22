@@ -65,12 +65,13 @@
 
 .day-counts {
   display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
   justify-content: flex-end;
   align-items: center;
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-snug);
-  white-space: nowrap;
 
   mat-icon:last-of-type {
     margin-left: var(--s);
@@ -79,8 +80,9 @@
     font-size: var(--font-size-lg);
   }
 
-  .available-hours {
-    margin-left: var(--s-half);
+  .day-load {
+    min-width: 0;
+    text-align: end;
   }
 }
 

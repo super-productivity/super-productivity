@@ -336,7 +336,12 @@ export class AddTaskBarActionsComponent {
   }
 
   clearRepeatSetting(): void {
-    this.stateService.clearRepeatSetting();
+    const currentInput = this.stateService.inputTxt();
+    const cleanedInput = this._parserService.removeShortSyntaxFromInput(
+      currentInput,
+      'repeat',
+    );
+    this.stateService.clearRepeatSetting(cleanedInput);
     this.refocus.emit();
   }
 

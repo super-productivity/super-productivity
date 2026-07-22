@@ -2,9 +2,14 @@ import { inject, Injectable } from '@angular/core';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
-import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
+import {
+  SHORT_SYNTAX_REPEAT_REMOVAL_REG_EX,
+  SHORT_SYNTAX_TIME_REG_EX,
+  shortSyntax,
+} from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
@@ -23,6 +28,8 @@ interface PreviousParseResult {
   deadlineTime: string | null;
   deadlineRemindOption: TaskReminderOptionId | null;
   isDeadlineFromSyntax: boolean;
+  repeatQuickSetting: RepeatQuickSetting | null;
+  isRepeatFromSyntax: boolean;
 }
 
 @Injectable()
@@ -57,11 +64,16 @@ export class AddTaskBarParserService {
         this._stateService.updateDeadline(null, null);
         this._stateService.updateDeadlineRemindOption(null);
       }
+      if (this._previousParseResult?.isRepeatFromSyntax) {
+        this._stateService.clearRepeatSetting();
+      }
+      this._stateService.updateSyntaxHighlight(null);
       this._previousParseResult = null;
       return;
     }
 
     if (!config) {
+      this._stateService.updateSyntaxHighlight(null);
       this._previousParseResult = null;
       return;
     }
@@ -75,11 +87,21 @@ export class AddTaskBarParserService {
       allProjects,
       undefined,
       'replace',
+      true,
     );
 
     if (parseRunId !== this._parseRunId) {
       return;
     }
+
+    this._stateService.updateSyntaxHighlight(
+      parseResult && parseResult.parsedRanges.length
+        ? {
+            forText: text,
+            ranges: parseResult.parsedRanges,
+          }
+        : null,
+    );
 
     // Create current parse result data structure
     let currentResult: PreviousParseResult;
@@ -89,6 +111,8 @@ export class AddTaskBarParserService {
     // wiped on first parse.
     const wasDeadlineFromSyntax =
       this._previousParseResult?.isDeadlineFromSyntax ?? false;
+    // Same ownership rule for the repeat setting (menu-selected vs "@every ...")
+    const wasRepeatFromSyntax = this._previousParseResult?.isRepeatFromSyntax ?? false;
     const isDateExplicitlyCleared = currentState.isDateExplicitlyCleared === true;
     const defaultDueDate = isDateExplicitlyCleared
       ? null
@@ -121,6 +145,10 @@ export class AddTaskBarParserService {
           ? null
           : currentState.deadlineRemindOption || null,
         isDeadlineFromSyntax: false,
+        repeatQuickSetting: wasRepeatFromSyntax
+          ? null
+          : currentState.repeatQuickSetting || null,
+        isRepeatFromSyntax: false,
       };
     } else {
       // Extract parsed values
@@ -183,6 +211,15 @@ export class AddTaskBarParserService {
         deadlineRemindOption = currentState.deadlineRemindOption || null;
       }
 
+      let repeatQuickSetting: RepeatQuickSetting | null;
+      if (parseResult.repeatQuickSetting) {
+        repeatQuickSetting = parseResult.repeatQuickSetting;
+      } else if (wasRepeatFromSyntax) {
+        repeatQuickSetting = null;
+      } else {
+        repeatQuickSetting = currentState.repeatQuickSetting || null;
+      }
+
       currentResult = {
         cleanText: parseResult.taskChanges.title || text,
         projectId: parseResult.projectId || null,
@@ -197,6 +234,8 @@ export class AddTaskBarParserService {
         deadlineTime: deadlineTime,
         deadlineRemindOption: deadlineRemindOption,
         isDeadlineFromSyntax: hasParsedDeadline,
+        repeatQuickSetting,
+        isRepeatFromSyntax: !!parseResult.repeatQuickSetting,
       };
     }
 
@@ -308,6 +347,17 @@ export class AddTaskBarParserService {
       this._stateService.updateDeadlineRemindOption(currentResult.deadlineRemindOption);
     }
 
+    if (
+      !this._previousParseResult ||
+      this._previousParseResult.repeatQuickSetting !== currentResult.repeatQuickSetting
+    ) {
+      if (currentResult.repeatQuickSetting) {
+        this._stateService.updateRepeatSetting(currentResult.repeatQuickSetting);
+      } else if (currentState.repeatQuickSetting) {
+        this._stateService.clearRepeatSetting();
+      }
+    }
+
     // Store current result as previous for next comparison
     this._previousParseResult = currentResult;
   }
@@ -319,7 +369,7 @@ export class AddTaskBarParserService {
 
   removeShortSyntaxFromInput(
     currentInput: string,
-    type: 'tags' | 'date' | 'estimate' | 'urls' | 'deadline',
+    type: 'tags' | 'date' | 'estimate' | 'urls' | 'deadline' | 'repeat',
     specificTag?: string,
   ): string {
     if (!currentInput) return currentInput;
@@ -346,6 +396,14 @@ export class AddTaskBarParserService {
       case 'deadline':
         // Remove deadline date and time syntax (e.g., !today !16:30 !2024-01-15)
         cleanedInput = cleanedInput.replace(/\s*!\S+/g, '');
+        break;
+
+      case 'repeat':
+        // Remove recurrence syntax (e.g., @daily @every friday). Uses the
+        // parser's own grammar so a phrase the parser did not treat as a
+        // recurrence ("@every 2 weeks") is left untouched; like the 'date'
+        // case, a trailing time token ("3pm") is left in place
+        cleanedInput = cleanedInput.replace(SHORT_SYNTAX_REPEAT_REMOVAL_REG_EX, '');
         break;
 
       case 'estimate':

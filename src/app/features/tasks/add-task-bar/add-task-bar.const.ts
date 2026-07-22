@@ -133,4 +133,16 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'end of week',
   'end of month',
   'end of year',
+
+  // Recurrence
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+  'every day',
+  'every weekday',
+  'every week',
+  'every monday',
+  'every friday',
+  'every month',
 ];

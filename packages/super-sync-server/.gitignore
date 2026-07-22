@@ -16,3 +16,4 @@ backups/
 initdb.d/
 secrets/
 tde-keys/
+.tmp-lock-retry-*

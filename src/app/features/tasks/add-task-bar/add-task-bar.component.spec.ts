@@ -273,6 +273,61 @@ describe('AddTaskBarComponent', () => {
     component = fixture.componentInstance;
   });
 
+  describe('highlightSegments', () => {
+    it('splits the input by the ranges parsed from that exact text', () => {
+      component.stateService.updateInputTxt('Buy milk #shop');
+      component.stateService.updateSyntaxHighlight({
+        forText: 'Buy milk #shop',
+        ranges: [{ start: 9, end: 14, type: 'tag' }],
+      });
+
+      expect(component.highlightSegments()).toEqual([
+        { text: 'Buy milk ', type: null },
+        { text: '#shop', type: 'tag' },
+      ]);
+    });
+
+    // The parse is async: the keystroke paints before its ranges exist, so
+    // dropping every range on a mismatch blanks the overlay for a frame.
+    it('keeps ranges inside the unchanged common prefix while the parse catches up', () => {
+      component.stateService.updateSyntaxHighlight({
+        forText: 'Buy milk #shop',
+        ranges: [{ start: 9, end: 14, type: 'tag' }],
+      });
+      component.stateService.updateInputTxt('Buy milk #shop t');
+
+      expect(component.highlightSegments()).toEqual([
+        { text: 'Buy milk ', type: null },
+        { text: '#shop', type: 'tag' },
+        { text: ' t', type: null },
+      ]);
+    });
+
+    it('drops ranges the edit could have moved', () => {
+      component.stateService.updateSyntaxHighlight({
+        forText: 'Buy milk #shop',
+        ranges: [{ start: 9, end: 14, type: 'tag' }],
+      });
+      // Edit lands before the range, so its position is no longer trustworthy.
+      component.stateService.updateInputTxt('Buy some milk #shop');
+
+      expect(component.highlightSegments()).toEqual([
+        { text: 'Buy some milk #shop', type: null },
+      ]);
+    });
+
+    it('renders nothing in search mode', () => {
+      component.stateService.updateInputTxt('Buy milk #shop');
+      component.stateService.updateSyntaxHighlight({
+        forText: 'Buy milk #shop',
+        ranges: [{ start: 9, end: 14, type: 'tag' }],
+      });
+      component.isSearchMode.set(true);
+
+      expect(component.highlightSegments()).toEqual([]);
+    });
+  });
+
   describe('mobile keyboard positioning', () => {
     let hadTouchOnlyClass: boolean;
     let hadIOSClass: boolean;

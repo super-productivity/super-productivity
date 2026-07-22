@@ -77,10 +77,12 @@ Some migrations use `CREATE INDEX CONCURRENTLY`, which can block on long-running
 transactions on a busy database. Run deploys off-hours when applying schema
 changes, and raise `MIGRATION_TIMEOUT` (seconds, default `900`) if a large
 table requires more time. Exit code `124` from `deploy.sh` means the migration
-timed out — re-run after the blocking transaction clears. The
-`operations_entity_ids_gin` reloption migration instead has its own one-second
-index-lock timeout; if its one automatic retry also times out, clear the
-blocking transaction and re-run the deploy.
+timed out — re-run after the blocking transaction clears. A lock-bounded
+reloption migration (one that sets its own short `lock_timeout`, such as the
+`operations_entity_ids_gin` one) instead fails fast rather than queueing
+traffic, and is retried natively a bounded number of times. If every
+attempt times out it is left rolled back — clear the blocking transaction and
+re-run the deploy.
 
 If a deploy was interrupted after Prisma recorded a migration as failed, later
 deploys can stop with `P3009`. Prisma can also stop migrations with `P3018`
@@ -88,9 +90,9 @@ when they contain `CREATE/DROP INDEX CONCURRENTLY` statements, which cannot run
 in one transaction block. `scripts/migrate-deploy.sh` handles the safe
 drop-then-create concurrent-index case generically: it resolves the failed row
 when needed, applies the migration SQL outside Prisma migrate, marks the
-migration applied, and retries `migrate deploy`. It also retries the exact
-lock-bounded `operations_entity_ids_gin` reloption migration natively; all
-other failed migration shapes stop for manual review.
+migration applied, and retries `migrate deploy`. It also retries any
+lock-bounded reloption migration natively — recognized by its shape, never by
+name; all other failed migration shapes stop for manual review.
 
 An application rollback does not require changing this index setting. If
 measured insert latency regresses after this rollout, restore PostgreSQL's

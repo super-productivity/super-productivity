@@ -13,10 +13,10 @@ set -eu
 #
 # 1. For the transaction-block failure above, it runs a migration with the safe
 #    DROP+CREATE CONCURRENTLY shape out-of-band, marks it applied, and retries.
-# 2. For the exact two-statement SET LOCAL lock_timeout + ALTER INDEX
-#    fastupdate=off shape, it rolls back Prisma's failed record and retries once
-#    through Prisma. It never splits or marks that transactional migration
-#    applied itself.
+# 2. For the two-statement SET LOCAL lock_timeout + ALTER INDEX ... SET (...)
+#    shape, it rolls back Prisma's failed record and retries a bounded number of
+#    times through Prisma. It never splits or marks that transactional migration
+#    applied itself. The gate is on SHAPE, never on a migration or index name.
 #
 # Both paths discover the failing migration from Prisma's output and inspect
 # prisma/migrations/<name>/migration.sql. Anything matching neither guarded
@@ -55,6 +55,36 @@ MIGRATIONS_DIR="prisma/migrations"
 # The real infinite-loop backstop is the LAST_RECOVERED guard below; this is
 # just a tight upper bound. Overridable for emergencies.
 MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
+# Validated for the same reason MAX_LOCK_ATTEMPTS is not settable at all: a
+# non-numeric value makes the `-ge` test error inside an `if`, which `set -e`
+# does not catch, so the guard silently never fires.
+case "$MAX_ATTEMPTS" in
+  ''|0*|*[!0-9]*)
+    echo "ERROR: MIGRATE_MAX_ATTEMPTS must be a positive integer." >&2
+    exit 2
+    ;;
+esac
+# Total native attempts at one lock-bounded migration before it is left rolled
+# back. Production 2026-07-21: a single retry lost one deploy outright and won
+# the next only on its second try, so one retry is a coin flip against a table
+# under continuous load.
+#
+# Each attempt is a `migrate resolve` plus a `migrate deploy`, so two Prisma CLI
+# starts pace the loop; there is no explicit sleep. That spacing is INCIDENTAL —
+# a property of Prisma's startup cost, not of this script — so treat the duty
+# cycle of parked ACCESS EXCLUSIVE requests as un-guaranteed rather than tuned.
+#
+# MIGRATE_STEP_TIMEOUT does NOT bound the loop — it is per-step, and every step
+# here is short. The only outer bound is deploy.sh's MIGRATION_TIMEOUT (900s
+# default); the image CMD and the Helm initContainer have no outer timeout at
+# all. Note the budget is PER MIGRATION (the counter resets when the failing
+# name changes), so a deploy with N pending lock-bounded migrations can reach
+# N x MAX_LOCK_ATTEMPTS attempts — keep that in mind before raising it.
+#
+# Not operator-settable: nothing needs to tune it, and the `-ge` test below
+# would error inside an `if` on a non-numeric value, which `set -e` does not
+# catch — an unbounded loop on exactly those two unbounded paths.
+MAX_LOCK_ATTEMPTS=10
 # Per-step client timeout. PostgreSQL also receives a per-statement timeout five
 # seconds shorter. If cumulative work still reaches the client deadline, the
 # wrapper terminates only the backend carrying this run's unique application id.
@@ -225,6 +255,7 @@ MIGRATE_LOG=""
 MIGRATE_STATUS=0
 LAST_RECOVERED=""
 LAST_NATIVE_RETRY=""
+LOCK_ATTEMPTS=0
 
 STMT_FILE="$(mktemp "${TMPDIR:-/tmp}/supersync-stmts.XXXXXX")"
 cleanup() {
@@ -241,6 +272,14 @@ run_migrate_deploy() {
   with_timeout npx prisma migrate deploy >"$MIGRATE_LOG" 2>&1
   MIGRATE_STATUS=$?
   set -e
+  # Strip ANSI colour ONCE, here, so every later reader sees plain text. Prisma
+  # renders `Error: P3018` as `\e[1m\e[31mError: \e[39m\e[22m\e[31mP3018` under
+  # FORCE_COLOR / npm_config_color=always. That anchor is the first conjunct of
+  # all three failure detectors, so a single stray env var would otherwise
+  # disable EVERY recovery path at once — and would also poison
+  # parse_failing_migration, whose charset check rejects a name with escapes.
+  # ESC is built with printf because `\x1b` is a GNU sed extension BusyBox lacks.
+  sed -i "s/$(printf '\033')\[[0-9;]*m//g" "$MIGRATE_LOG"
   cat "$MIGRATE_LOG"
 }
 
@@ -343,11 +382,36 @@ split_statements() {
   ' "$1"
 }
 
-# This migration needs native Prisma transaction semantics: SET LOCAL must
-# apply to the ALTER, and a successful native retry must be what records the
-# migration as applied. Keep the gate exact so no unrelated failed migration is
-# ever rolled back automatically.
-is_retryable_fastupdate_migration() {
+# A lock-bounded migration: exactly two statements, a SET LOCAL lock_timeout
+# followed by a single ALTER INDEX ... SET (...). Such a migration needs native
+# Prisma transaction semantics (SET LOCAL must apply to the ALTER, and a
+# successful native retry must be what records it as applied), and re-running it
+# from scratch is free, so a lock timeout can safely be retried.
+#
+# Gated on SHAPE, never on a migration or index name; absence of names is
+# enforced by tests/migration-sql.spec.ts. Rationale: prisma/migrations/README.md.
+#
+# Three properties are enforced below, and a fourth follows from them:
+#   - a SHORT lock_timeout bound (<= 5s). This is the load-bearing one: the point
+#     of the bound is to fail fast rather than queue new queries behind a waiting
+#     ACCESS EXCLUSIVE request, so a long value ('30min') — or a disabled one
+#     ('0', which means wait forever in PostgreSQL) — must never be retried at
+#     all, let alone MAX_LOCK_ATTEMPTS times;
+#   - exactly two statements, so Postgres wraps them in an implicit transaction
+#     and a lock timeout rolls the whole migration back with nothing partially
+#     applied;
+#   - an ALTER INDEX ... SET (reloption), which is idempotent on re-run.
+# The fourth — no CONCURRENTLY — is NOT a separate check: it follows from the
+# ALTER pattern being fully anchored with a paren-free option list, so the
+# ALTER's own `)` always lands inside the span and nothing can follow it. That
+# matters because split_statements breaks on `;` at END OF LINE, so the
+# statement count alone would not stop a CONCURRENTLY build sharing the ALTER's
+# line — and a SINGLE-statement migration gets no implicit transaction, so a
+# lock timeout mid-build leaves an INVALID index a blind retry cannot clear.
+#
+# Matched with grep -Ei, like the CONCURRENTLY gates above, so that spacing and
+# keyword case are not load-bearing for a future migration author.
+is_lock_bounded_migration() {
   sql="$1"
   [ -f "$sql" ] || return 1
 
@@ -356,9 +420,13 @@ is_retryable_fastupdate_migration() {
   second_stmt="$(sed -n '2p' "$STMT_FILE")"
   third_stmt="$(sed -n '3p' "$STMT_FILE")"
 
-  [ "$first_stmt" = "SET LOCAL lock_timeout = '1s';" ] &&
-    [ "$second_stmt" = 'ALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);' ] &&
-    [ -z "$third_stmt" ]
+  printf '%s\n' "$first_stmt" | grep -Eqi \
+    "^SET[[:space:]]+LOCAL[[:space:]]+lock_timeout[[:space:]]*=[[:space:]]*'(([1-9][0-9]{0,2}|[1-4][0-9]{3}|5000)ms|[1-5]s)';\$" ||
+    return 1
+  printf '%s\n' "$second_stmt" | grep -Eqi \
+    '^ALTER[[:space:]]+INDEX[[:space:]]+"[^"]+"[[:space:]]+SET[[:space:]]*\([^()]*\);$' ||
+    return 1
+  [ -z "$third_stmt" ]
 }
 
 # Single-quote a value for safe shell paste (a'b -> 'a'\''b').
@@ -545,26 +613,37 @@ while :; do
 
   sql="$(migration_sql_path "$name")"
 
-  # ALTER INDEX ... fastupdate takes ACCESS EXCLUSIVE on the hot GIN index.
-  # Its 1s lock_timeout intentionally fails rather than queueing normal reads
-  # and writes behind a waiting DDL lock. Prisma records that timeout as a
-  # failed migration, so clear the failed row and retry the exact atomic,
-  # idempotent migration once using Prisma itself. Never split/execute it
+  # ALTER INDEX ... SET (...) takes ACCESS EXCLUSIVE on the target index. Its
+  # short lock_timeout intentionally fails rather than queueing normal reads and
+  # writes behind a waiting DDL lock — a waiting exclusive request blocks every
+  # new query on the table, which is the shape of a prior outage. So the fix for
+  # losing the race is MANY SHORT ATTEMPTS, never one long wait. Prisma records
+  # the timeout as a failed migration, so clear the failed row and retry the
+  # atomic, idempotent migration through Prisma itself. Never split/execute it
   # out-of-band: SET LOCAL would expire before the ALTER.
-  if is_retryable_fastupdate_migration "$sql" &&
+  if is_lock_bounded_migration "$sql" &&
     { is_lock_timeout_failure || is_stuck_failed_migration; }; then
     rollback_for_native_retry "$name"
-    if [ "$name" = "$LAST_NATIVE_RETRY" ]; then
-      fail_loudly "$name failed again after its bounded native retry and was left rolled back; inspect the Prisma error above, clear the blocker, and re-run the deploy." 1
+    if [ "$name" != "$LAST_NATIVE_RETRY" ]; then
+      LAST_NATIVE_RETRY="$name"
+      LOCK_ATTEMPTS=0
     fi
-    LAST_NATIVE_RETRY="$name"
+    LOCK_ATTEMPTS=$((LOCK_ATTEMPTS + 1))
+    if [ "$LOCK_ATTEMPTS" -ge "$MAX_LOCK_ATTEMPTS" ]; then
+      fail_loudly "$name could not take its lock in $LOCK_ATTEMPTS attempts and was left rolled back; inspect the Prisma error above, clear the blocker, and re-run the deploy." 1
+    fi
     echo ""
-    echo "==> Retrying prisma migrate deploy after bounded native recovery for $name..."
+    echo "==> Retrying prisma migrate deploy after bounded native recovery for $name (attempt $((LOCK_ATTEMPTS + 1)) of $MAX_LOCK_ATTEMPTS)..."
     continue
   fi
 
   if is_lock_timeout_failure; then
-    fail_loudly "$name is not the exact bounded fastupdate migration; refusing to auto-resolve its lock timeout."
+    # A lock timeout can also abort a CONCURRENTLY build (an operator-supplied
+    # lock_timeout in DATABASE_URL applies to every migration), which leaves an
+    # INVALID index. Print the drop-index steps so the FIRST failure is
+    # actionable, matching the timeout and non-gate branches above.
+    emit_interrupted_recovery_hint
+    fail_loudly "$name is not a lock-bounded ALTER INDEX migration; refusing to auto-resolve its lock timeout."
   fi
 
   attempt=$((attempt + 1))

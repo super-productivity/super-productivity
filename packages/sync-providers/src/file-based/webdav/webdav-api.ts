@@ -24,6 +24,15 @@ import type { WebdavPrivateCfg } from './webdav.model';
  */
 const STRONG_ETAG_RE = /^"[\x21\x23-\x7e\x80-\xff]*"$/;
 
+/**
+ * Content-coding suffixes Apache appends to the ETag it SERVES on a compressed
+ * response — `mod_deflate` under its default `DeflateAlterETag AddSuffix`, and
+ * `mod_brotli` likewise. The origin keeps comparing `If-Match` against the bare
+ * tag, so a client that echoes back what it was served can never satisfy the
+ * precondition (#9154, #9196).
+ */
+const CONTENT_CODING_ETAG_SUFFIX_RE = /-(?:gzip|br|deflate)"$/;
+
 export interface WebdavApiDeps {
   logger: SyncLogger;
   /**
@@ -61,6 +70,27 @@ export class WebdavApi {
 
   private _isStrongEtag(value: string): boolean {
     return STRONG_ETAG_RE.test(value);
+  }
+
+  /**
+   * `If-Match` value for a rev, offering the bare tag alongside the served one
+   * whenever the served tag carries a content-coding suffix.
+   *
+   * RFC 7232 lets `If-Match` carry a list and the precondition passes if ANY
+   * member matches, so we let the server pick whichever form it actually
+   * compares. This keeps the write atomic — no precondition is ever dropped —
+   * and costs no extra round trip. A genuine concurrent write still matches
+   * neither candidate and is rejected as before.
+   *
+   * Verified against Apache 2.4 + mod_dav + mod_deflate (list → 204, stale list
+   * → 412); sabre/dav, which evaluates `If-Match` for Nextcloud, splits the list
+   * the same way.
+   */
+  private _ifMatchValue(rev: string): string {
+    const bare = rev.replace(CONTENT_CODING_ETAG_SUFFIX_RE, '"');
+    // `""` would be a degenerate tag: a rev of `"-gzip"` is a tag in its own
+    // right, not a suffixed one.
+    return bare === rev || bare === '""' ? rev : `${rev}, ${bare}`;
   }
 
   private _isHttpStatus(error: unknown, status: number): boolean {
@@ -255,7 +285,7 @@ export class WebdavApi {
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/octet-stream',
       };
       if (!isForceOverwrite && strongExpectedRev) {
-        headers[WebDavHttpHeader.IF_MATCH] = strongExpectedRev;
+        headers[WebDavHttpHeader.IF_MATCH] = this._ifMatchValue(strongExpectedRev);
       } else if (!isForceOverwrite && expectedRev === null) {
         headers[WebDavHttpHeader.IF_NONE_MATCH] = '*';
       }

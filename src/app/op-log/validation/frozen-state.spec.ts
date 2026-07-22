@@ -53,6 +53,8 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
   const DO_NOT_EDIT =
     'FROZEN FIXTURE FAILED — do NOT add the field to the fixture. Type it ' +
     "optional (`?`) or backfill it in a migration. See this spec's docblock.\n";
+  const SECRET_KEY_RE =
+    /pass|token|api_?key|secret|encryptKey|clientId|userName|username|loginName/i;
 
   // structuredClone is load-bearing: migrateState returns `state` BY REFERENCE
   // when source === target, so without it every spec here shares one live
@@ -67,6 +69,27 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
       throw new Error(`migration of frozen fixture failed: ${migrated.error}`);
     }
     return migrated.data as AppDataComplete;
+  };
+
+  const findCredentialPaths = (state: typeof frozen.state): string[] => {
+    const found: string[] = [];
+    const walk = (value: unknown, path: string): void => {
+      if (!value || typeof value !== 'object') return;
+      Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
+        if (SECRET_KEY_RE.test(k) && typeof v === 'string' && v.length) {
+          found.push(`${path}.${k}`);
+        }
+        walk(v, `${path}.${k}`);
+      });
+    };
+    walk(state.globalConfig, 'globalConfig');
+    walk(state.issueProvider, 'issueProvider');
+    state.pluginUserData.forEach(({ id, data }) => {
+      // Plugin data is an opaque string, so nested credential keys cannot be
+      // inspected reliably. Keep the fixture's placeholder exact instead.
+      if (data !== '{}') found.push(`pluginUserData.${id}.data`);
+    });
+    return found;
   };
 
   it('validates after being migrated to the current schema version', () => {
@@ -174,23 +197,17 @@ describe('frozen prior-release state survives migrate -> validateFull', () => {
   // profile would commit live credentials, so fail loudly instead of relying on
   // the "do not regenerate" comment.
   it('carries no credentials', () => {
-    const SECRET_KEY_RE =
-      /pass|token|api_?key|secret|encryptKey|clientId|userName|username|loginName/i;
-    const found: string[] = [];
-    const walk = (value: unknown, path: string): void => {
-      if (!value || typeof value !== 'object') return;
-      Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
-        if (SECRET_KEY_RE.test(k) && typeof v === 'string' && v.length) {
-          found.push(`${path}.${k}`);
-        }
-        walk(v, `${path}.${k}`);
-      });
-    };
-    walk((frozen.state as { globalConfig: unknown }).globalConfig, 'globalConfig');
-    walk((frozen.state as { issueProvider: unknown }).issueProvider, 'issueProvider');
+    const found = findCredentialPaths(frozen.state);
 
     expect(found)
       .withContext(`non-empty credential-shaped fields: ${found.join(', ')}`)
       .toEqual([]);
+  });
+
+  it('detects credentials nested in serialized plugin data', () => {
+    const state = structuredClone(frozen.state);
+    state.pluginUserData[0].data = JSON.stringify({ token: 'secret' });
+
+    expect(findCredentialPaths(state)).toContain('pluginUserData.plugin-a.data');
   });
 });

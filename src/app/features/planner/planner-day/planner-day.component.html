@@ -9,11 +9,25 @@
   <!--<div class="day-estimate">{{ day.timeEstimate |roundDuration|msToString }}</div>-->
 
   <div class="day-counts">
-    <span>{{ day.timeEstimate | roundDuration | msToString }}</span>
+    @let plannedDuration = day.timeEstimate | roundDuration | msToString;
+    @let planned = plannedDuration === '-' ? '0m' : plannedDuration;
     @if (day.availableHours !== undefined) {
-      <span class="available-hours"
-        >/ {{ day.availableHours | roundDuration | msToString }}</span
-      >
+      @let availableDuration = day.availableHours | roundDuration | msToString;
+      @let available = availableDuration === '-' ? '0m' : availableDuration;
+      <span class="day-load">
+        {{
+          T.F.PLANNER.DAY_LOAD
+            | translate
+              : {
+                  planned,
+                  available,
+                }
+        }}
+      </span>
+    } @else {
+      <span class="day-load">
+        {{ T.F.PLANNER.PLANNED_LOAD | translate: { planned } }}
+      </span>
     }
 
     @if (day.itemsTotal > 5) {

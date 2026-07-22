@@ -206,7 +206,16 @@ describe('performance migrations', () => {
 
     // Prisma wraps each migration independently, so the consecutive directory
     // is a separate transaction and cannot extend the ALTER's exclusive lock.
-    expect(cleanupMigrationName > alterMigrationName).toBe(true);
+    // Ordered against the real migration directory — comparing the two literals
+    // above to each other would be a tautology that nothing could ever fail.
+    const migrationNames = readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(migrationNames).toContain(alterMigrationName);
+    expect(migrationNames.indexOf(cleanupMigrationName)).toBeGreaterThan(
+      migrationNames.indexOf(alterMigrationName),
+    );
     const cleanup = cleanupSql.match(
       /\bSELECT\s+(?:pg_catalog\.)?gin_clean_pending_list\s*\([^)]*operations_entity_ids_gin[^)]*\)\s*;/i,
     );
@@ -392,15 +401,32 @@ describe('performance migrations', () => {
     // coverage of the recovery logic lives in migrate-deploy-script.spec.ts.
     expect(runtimeMigrateScript).toContain('npx prisma migrate deploy');
     expect(runtimeMigrateScript).not.toMatch(/_INDEX_MIGRATION=/);
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_server_seq_encrypted_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_payload_bytes_unbackfilled_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_full_state_server_seq_idx',
-    );
+    // Derived from the migrations themselves rather than a hand-kept denylist —
+    // the old three-name list passed vacuously when a NEW name was hardcoded.
+    const migrationSql = allMigrationSql();
+    const indexNames = [
+      ...migrationSql.matchAll(
+        /\b(?:CREATE|ALTER|DROP)\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"([^"]+)"/gi,
+      ),
+    ].map((match) => match[1]);
+    // Sentinel: the name this script must never mention again. Guards against
+    // the extraction silently degrading to a handful of matches and passing.
+    expect(indexNames).toContain('operations_entity_ids_gin');
+    expect(indexNames.length).toBeGreaterThan(15);
+    expect(indexNames.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
+    // Reloption keywords are not index names, so the derived list cannot see a
+    // hardcode like `fastupdate` — check the ones the migrations actually set.
+    const reloptions = [
+      ...migrationSql.matchAll(
+        /\bALTER\s+INDEX\s+(?:IF\s+EXISTS\s+)?"[^"]+"\s+SET\s*\(\s*([a-z_]+)/gi,
+      ),
+    ].map((match) => match[1]);
+    // Same sentinel role as above: this list has exactly one entry today, so a
+    // regex that quietly stopped matching would leave `[].filter(...)` green.
+    expect(reloptions).toContain('fastupdate');
+    expect(reloptions.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
+    // No migration directory name either.
+    expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );

@@ -8,30 +8,49 @@
          textarea to rows*line-height and ignores its own padding, so the
          breathing room lives here while the field grows by a line at a time. -->
     <div class="main-input-wrap">
-      <textarea
-        #inputEl
-        class="main-input"
-        [(ngModel)]="stateService.inputTxt"
-        [tabindex]="tabindex()"
-        [mention]="tagMentions$ | async"
-        [mentionConfig]="mentionCfg$ | async"
-        [mentionListTemplate]="mentionListTemplate"
-        (listShownChange)="updateListShown($event)"
-        [matAutocomplete]="taskAutoCompleteEl"
-        [placeholder]="
-          isSearchMode()
-            ? (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH | translate)
-            : (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE | translate)
-        "
-        cdkTextareaAutosize
-        cdkAutosizeMinRows="1"
-        cdkAutosizeMaxRows="4"
-        rows="1"
-        spellcheck="false"
-        (keydown)="onInputKeydown($event)"
-        (input)="onInputChange($event)"
-        (paste)="onPaste($event)"
-      ></textarea>
+      <div class="main-input-stack">
+        <!-- Mirror overlay: paints a background behind detected short-syntax
+             spans; its text is transparent and the textarea's text renders on
+             top, so typography must stay identical to .main-input. -->
+        <!-- Every segment is a whitespace-tight span: bare text nodes here
+             would pick up the template's own indentation as a literal space
+             (Angular collapses static whitespace around interpolations) and
+             shift the mirrored text out of sync with the textarea. -->
+        <div
+          #highlightEl
+          class="main-input-highlight"
+          aria-hidden="true"
+        >
+          @for (seg of highlightSegments(); track $index) {
+            <span [class.syntax-highlight]="!!seg.type">{{ seg.text }}</span>
+          }
+        </div>
+        <textarea
+          #inputEl
+          class="main-input"
+          [(ngModel)]="stateService.inputTxt"
+          [tabindex]="tabindex()"
+          [mention]="tagMentions$ | async"
+          [mentionConfig]="mentionCfg$ | async"
+          [mentionListTemplate]="mentionListTemplate"
+          (listShownChange)="updateListShown($event)"
+          [matAutocomplete]="taskAutoCompleteEl"
+          [placeholder]="
+            isSearchMode()
+              ? (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_SEARCH | translate)
+              : (T.F.TASK.ADD_TASK_BAR.PLACEHOLDER_CREATE | translate)
+          "
+          cdkTextareaAutosize
+          cdkAutosizeMinRows="1"
+          cdkAutosizeMaxRows="4"
+          rows="1"
+          spellcheck="false"
+          (keydown)="onInputKeydown($event)"
+          (input)="onInputChange($event)"
+          (scroll)="syncHighlightScroll()"
+          (paste)="onPaste($event)"
+        ></textarea>
+      </div>
     </div>
 
     <div class="right-button-controls">

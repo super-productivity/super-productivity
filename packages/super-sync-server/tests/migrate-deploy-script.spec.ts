@@ -85,13 +85,24 @@ case "$sub" in
                 echo "ERROR: DROP INDEX CONCURRENTLY cannot run inside a transaction block"
                 ;;
               LOCK_TIMEOUT)
-                if [ "\${FAKE_LOCK_TIMEOUT_ALWAYS:-0}" != "1" ] && [ -f "$state/lock_timeout_seen_$m" ]; then
+                # Fails FAKE_LOCK_TIMEOUT_TIMES times (default 1), then applies,
+                # so a test can pin how many native retries actually happen.
+                times="\${FAKE_LOCK_TIMEOUT_TIMES:-1}"
+                seen=0
+                [ -f "$state/lock_timeout_count_$m" ] && seen=$(cat "$state/lock_timeout_count_$m")
+                if [ "\${FAKE_LOCK_TIMEOUT_ALWAYS:-0}" != "1" ] && [ "$seen" -ge "$times" ]; then
                   : > "$state/applied_$m"
                   continue
                 fi
-                : > "$state/lock_timeout_seen_$m"
+                echo $((seen + 1)) > "$state/lock_timeout_count_$m"
                 echo "Applying migration \\\`$m\\\`"
-                echo "Error: P3018"
+                if [ "\${FAKE_COLOR:-0}" = "1" ]; then
+                  # Prisma wraps the code in ANSI under FORCE_COLOR; the gates
+                  # must still fire, so the log is stripped at capture.
+                  printf '\\033[1m\\033[31mError: \\033[39m\\033[22m\\033[31mP3018\\033[39m\\n'
+                else
+                  echo "Error: P3018"
+                fi
                 echo "A migration failed to apply. New migrations cannot be applied before the error is recovered from."
                 echo "Migration name: $m"
                 echo "Database error code: 55P03"
@@ -179,6 +190,7 @@ const run = (env: Record<string, string>, args: string[] = []): RunResult => {
     stdout = execFileSync('sh', [SCRIPT, ...args], {
       cwd: projectDir,
       encoding: 'utf8',
+      timeout: 60_000,
       env: {
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         TMPDIR: stateDir,
@@ -273,7 +285,7 @@ describe('migrate-deploy.sh recovery', () => {
     expect(r.resolveApplied).toEqual([]);
   });
 
-  it('rolls back and retries the bounded fastupdate migration natively after a lock timeout', () => {
+  it('rolls back and retries a lock-bounded migration natively after a lock timeout', () => {
     writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
 
     const r = run({
@@ -300,7 +312,7 @@ describe('migrate-deploy.sh recovery', () => {
     expect(new Set(applicationNames).size).toBe(1);
   });
 
-  it('clears the failed row and exits cleanly retryable after a repeated fastupdate lock timeout', () => {
+  it('clears the failed row and exits cleanly retryable after a repeated lock timeout', () => {
     writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
 
     const r = run({
@@ -310,19 +322,122 @@ describe('migrate-deploy.sh recovery', () => {
     });
 
     expect(r.status).not.toBe(0);
-    expect(r.deployAttempts).toBe(2);
-    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION, FASTUPDATE_MIGRATION]);
+    // The retry budget is bounded and exhausted; the record is left rolled back
+    // after every attempt, so re-running the deploy is always safe.
+    expect(r.deployAttempts).toBe(10);
+    expect(r.resolveRolledBack).toHaveLength(10);
+    expect(new Set(r.resolveRolledBack)).toEqual(new Set([FASTUPDATE_MIGRATION]));
     expect(r.resolveApplied).toEqual([]);
     expect(r.executedSql).toBe('');
     expect(r.stdout).toContain(
-      'failed again after its bounded native retry and was left rolled back',
+      'could not take its lock in 10 attempts and was left rolled back',
     );
+  });
+
+  it('accepts a millisecond bound at the cap', () => {
+    // The reject cases below pin the ceiling, but nothing else accepts a `ms`
+    // value at all — deleting the whole millisecond alternation used to leave
+    // the suite green while silently refusing every documented ms migration.
+    const msMigration = '20260902000000_bound_in_ms';
+    writeMigration(
+      msMigration,
+      `SET LOCAL lock_timeout = '5000ms';\nALTER INDEX "users_email_key" SET (fillfactor = 90);`,
+    );
+
+    const r = run({ FAKE_FAIL: msMigration, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([msMigration]);
+  });
+
+  it('gives each lock-bounded migration its own retry budget in one deploy', () => {
+    // Nothing else uses two lock-bounded migrations, so the counter reset was
+    // dead code. This also pins the run-level cost: the budget is PER MIGRATION.
+    const second = '20260903000000_bound_users_fillfactor';
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+    writeMigration(
+      second,
+      `SET LOCAL lock_timeout = '1s';\nALTER INDEX "users_email_key" SET (fillfactor = 90);`,
+    );
+
+    const r = run({
+      FAKE_FAIL: `${FASTUPDATE_MIGRATION} ${second}`,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_LOCK_TIMEOUT_TIMES: '6',
+    });
+
+    // 6 failures each, then a win each: neither migration inherits the other's
+    // spent budget (which would exhaust at 10 and fail).
+    expect(r.status).toBe(0);
+    expect(r.resolveRolledBack).toHaveLength(12);
+    expect(r.deployAttempts).toBe(13);
+  });
+
+  it('recovers when Prisma colorizes its error output', () => {
+    // `^Error: P3018$` is the first conjunct of all three failure detectors, so
+    // an ANSI-wrapped code would disable every recovery path at once.
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_COLOR: '1',
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([FASTUPDATE_MIGRATION]);
+  });
+
+  it('retries a lock-bounded migration more than once (a single retry is a coin flip)', () => {
+    // Production 2026-07-21: one deploy lost both of its two allowed attempts,
+    // the next won on its second. A budget of one retry cannot survive that.
+    writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
+
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+      FAKE_LOCK_TIMEOUT_TIMES: '4',
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(5);
+    expect(r.resolveRolledBack).toHaveLength(4);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('retries a lock-bounded migration under any migration and index name', () => {
+    // The gate is on SHAPE, not on a name. Lowercase keywords and irregular
+    // spacing are deliberately tolerated too (grep -Ei + [[:space:]]), so a
+    // future author does not lose the retry path to formatting; at the upper
+    // bound of the allowed lock_timeout, which pins the accept side of the cap.
+    const other = '20260901000000_bound_users_fillfactor';
+    writeMigration(
+      other,
+      `set local  lock_timeout='5s';\nalter  index "users_email_key"  set ( fillfactor = 90 );`,
+    );
+
+    const r = run({
+      FAKE_FAIL: other,
+      FAKE_CODE: 'LOCK_TIMEOUT',
+    });
+
+    expect(r.status).toBe(0);
+    expect(r.deployAttempts).toBe(2);
+    expect(r.resolveRolledBack).toEqual([other]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
   });
 
   it('recovers a pre-existing failed fastupdate migration and retries it natively', () => {
     writeMigration(FASTUPDATE_MIGRATION, FASTUPDATE_SQL);
 
-    const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'P3009' });
+    const r = run({
+      FAKE_FAIL: FASTUPDATE_MIGRATION,
+      FAKE_CODE: 'P3009',
+    });
 
     expect(r.status).toBe(0);
     expect(r.deployAttempts).toBe(2);
@@ -349,16 +464,60 @@ describe('migrate-deploy.sh recovery', () => {
 
   it.each([
     {
+      // A third statement means the migration is no longer the atomic
+      // two-statement shape whose re-run is provably free.
       label: 'an extra statement',
       sql: `${FASTUPDATE_SQL}\nSELECT 1;`,
     },
     {
-      label: 'another index',
-      sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "another_gin" SET (fastupdate = off);`,
+      // Bounds the wrong GUC. Without a lock_timeout the ALTER queues every new
+      // query on the table behind its waiting ACCESS EXCLUSIVE request instead
+      // of failing fast, so retrying it is not the safe move.
+      label: 'a bound on the wrong setting',
+      sql: `SET LOCAL statement_timeout = '1s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
     },
     {
-      label: 'fastupdate enabled',
-      sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = on);`,
+      // No bound at all.
+      label: 'no lock_timeout bound',
+      sql: `ALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      // A CONCURRENTLY migration must never take this path: Postgres gives a
+      // single-statement migration no implicit transaction, so a lock timeout
+      // mid-build leaves an INVALID index a retry cannot clear.
+      label: 'a CONCURRENTLY index build',
+      sql: `SET LOCAL lock_timeout = '1s';\nDROP INDEX CONCURRENTLY IF EXISTS "operations_entity_ids_gin";`,
+    },
+    {
+      // split_statements breaks on `;` at END OF LINE, so a second statement
+      // sharing the ALTER's line arrives as one chunk that still ends in `);`.
+      // What rejects it is the ALTER pattern's anchored, PAREN-FREE option list:
+      // the ALTER's own `)` lands inside the span, so nothing can follow it.
+      label: 'a CONCURRENTLY build smuggled onto the ALTER line',
+      sql: `SET LOCAL lock_timeout = '1s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off); CREATE INDEX CONCURRENTLY "x" ON "operations"("user_id");`,
+    },
+    {
+      // '0' DISABLES lock_timeout in PostgreSQL — i.e. wait forever. Retrying
+      // that is the outage shape the bound exists to prevent, 10x over.
+      label: 'a disabled lock_timeout',
+      sql: `SET LOCAL lock_timeout = '0';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      // Likewise any long bound: the ALTER would queue every new query on the
+      // table behind its waiting ACCESS EXCLUSIVE request for 30 minutes.
+      label: 'an oversized lock_timeout',
+      sql: `SET LOCAL lock_timeout = '30min';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      // Just over the cap, in each unit — pins the boundary itself, so the two
+      // branches of the bound cannot drift apart (9999ms once meant ~10s while
+      // 6s was refused).
+      label: 'a bound just over the cap in seconds',
+      sql: `SET LOCAL lock_timeout = '6s';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
+    },
+    {
+      label: 'a bound just over the cap in milliseconds',
+      sql: `SET LOCAL lock_timeout = '5001ms';\nALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);`,
     },
   ])('refuses lock-timeout recovery for $label', ({ sql }) => {
     writeMigration(FASTUPDATE_MIGRATION, sql);
@@ -366,8 +525,28 @@ describe('migrate-deploy.sh recovery', () => {
     const r = run({ FAKE_FAIL: FASTUPDATE_MIGRATION, FAKE_CODE: 'LOCK_TIMEOUT' });
 
     expect(r.status).not.toBe(0);
+    // Assert the REASON, not just that it stopped — every other fail_loudly
+    // also yields a non-zero status with nothing resolved, so without this the
+    // block cannot tell "refused the lock timeout" from "refused the shape".
+    expect(r.stdout).toContain('refusing to auto-resolve its lock timeout');
     expect(r.deployAttempts).toBe(1);
     expect(r.resolveRolledBack).toEqual([]);
+    expect(r.resolveApplied).toEqual([]);
+    expect(r.executedSql).toBe('');
+  });
+
+  it('never auto-recovers a CONCURRENTLY migration that lock-timed-out', () => {
+    // The guard this pins is the only thing stopping a 55P03 on a CONCURRENTLY
+    // migration from falling through to out-of-band execution + `resolve
+    // --applied` — the shape of the 2026-05-18 missing-index outage (#7654).
+    // Reachable whenever DATABASE_URL carries an operator lock_timeout, which
+    // applies to migrations that set none themselves.
+    writeMigration(ENCRYPTED_OPS, ENCRYPTED_OPS_SQL);
+
+    const r = run({ FAKE_FAIL: ENCRYPTED_OPS, FAKE_CODE: 'LOCK_TIMEOUT' });
+
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain('refusing to auto-resolve its lock timeout');
     expect(r.resolveApplied).toEqual([]);
     expect(r.executedSql).toBe('');
   });

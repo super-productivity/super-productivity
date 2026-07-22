@@ -89,17 +89,110 @@
     padding: 10px var(--s) 10px var(--s2);
   }
 
+  // Typography shared by the textarea and its highlight overlay — the overlay
+  // mirrors the text to position highlight backgrounds under the real text, so
+  // any metric drift between the two misplaces the highlights.
+  //
+  // A textarea does NOT inherit typography: the UA sheet sets
+  // `font: 400 13.333px monospace`, and the `font` shorthand resets
+  // weight/style/variant/stretch/line-height. The overlay div inherits instead,
+  // so declaring only part of the set lets the two layers drift apart under any
+  // theme that styles the surrounding text. Both layers must therefore declare
+  // the FULL set — keep every property below, and add any new text-metric
+  // property to this block rather than to one layer.
+  %main-input-typography {
+    font-family: var(--font-primary-stack);
+    font-size: 16px;
+    font-weight: 400;
+    font-style: normal;
+    font-variant: normal;
+    font-stretch: normal;
+    line-height: 1.4;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-transform: none;
+    font-kerning: auto;
+    font-feature-settings: normal;
+    text-indent: 0;
+    tab-size: 8;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    // `inherit`, not a fixed value: the app's RTL comes from `[dir]` on a shared
+    // ancestor (app.component.html), which both layers must keep following. What
+    // this pins is that they follow the SAME source — a theme rule targeting the
+    // textarea alone (`textarea { text-align: center }`) would otherwise move the
+    // glyphs out from under the backgrounds.
+    direction: inherit;
+    text-align: inherit;
+    word-break: inherit;
+  }
+
+  // Positioning context for the textarea + its highlight overlay; sized purely
+  // by the textarea (its only in-flow child).
+  .main-input-stack {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .main-input-highlight {
+    @extend %main-input-typography;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    // Mirror the textarea's box as well as its typography — padding, border and
+    // box-sizing move the text origin, so a difference shifts every highlight.
+    box-sizing: border-box;
+    padding: 0;
+    border: 0;
+    // Only the highlight backgrounds may show; the visible glyphs are the
+    // textarea's own (rendered on top of this layer)
+    color: transparent;
+
+    // The segment spans must take their text metrics from this overlay, never
+    // from a theme rule. Custom themes are arbitrary CSS and a direct match on
+    // the spans — glass.css does `* { font-family: ... }` — beats inheritance,
+    // desyncing the mirrored text from the textarea. Explicit `inherit` at
+    // component specificity outranks any non-important theme rule on the spans
+    // themselves.
+    span {
+      font: inherit;
+      letter-spacing: inherit;
+      word-spacing: inherit;
+      text-transform: inherit;
+      font-kerning: inherit;
+      font-variant: inherit;
+      font-feature-settings: inherit;
+      // Wrapping and bidi too: `span { white-space: nowrap }` collapses the
+      // mirror to a single line, so every highlight past the first wrap lands on
+      // the wrong text.
+      white-space: inherit;
+      overflow-wrap: inherit;
+      word-break: inherit;
+      direction: inherit;
+      text-align: inherit;
+    }
+
+    .syntax-highlight {
+      border-radius: var(--radius-xs);
+      background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+    }
+  }
+
   .main-input {
+    @extend %main-input-typography;
     display: block;
     width: 100%;
-    font-size: 16px;
     box-sizing: border-box;
     border-style: solid;
     border-width: 0;
     outline: 0;
     // No padding — see .main-input-wrap for why the gutters must live there.
     padding: 0;
-    line-height: 1.4;
     resize: none;
     // cdkTextareaAutosize owns this field's height (it measures the content and
     // pins an exact px height), so the textarea must never paint its own
@@ -111,7 +204,7 @@
     overflow: hidden;
     background: transparent;
     color: inherit;
-    font-family: var(--font-primary-stack);
+    position: relative;
 
     &::placeholder {
       color: var(--text-color-muted);
