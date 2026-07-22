@@ -13,6 +13,7 @@ import { filterOutId } from '../../../util/filter-out-id';
 import { Update } from '@ngrx/entity';
 import { TaskLog } from '../../../core/log';
 import { devError } from '../../../util/dev-error';
+import { sumSubTaskTimeLeft } from '../util/sum-sub-task-time-left';
 
 export const getTaskById = (taskId: string, state: TaskState): Task => {
   if (!state.entities[taskId]) {
@@ -115,11 +116,7 @@ export const reCalcTimeEstimateForParentIfParent = (
     {
       id: parentId,
       changes: {
-        timeEstimate: subTasks.reduce(
-          (acc: number, st: Task) =>
-            acc + (st.isDone ? 0 : Math.max(0, st.timeEstimate - st.timeSpent)),
-          0,
-        ),
+        timeEstimate: sumSubTaskTimeLeft(subTasks),
       },
     },
     state,
