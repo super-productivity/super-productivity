@@ -1,6 +1,28 @@
 @use '../../../../../styles/_globals.scss' as *;
 @use '../../shared-tag-project-styles';
 
+:host {
+  display: block;
+  min-width: 0;
+  position: relative;
+
+  @include mq(xxs, max) {
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: 0;
+      width: var(--s3);
+      background: linear-gradient(to right, transparent, var(--bg-lighter));
+      pointer-events: none;
+    }
+  }
+}
+
+:host-context([dir='rtl'])::after {
+  background: linear-gradient(to left, transparent, var(--bg-lighter));
+}
+
 .clear-btn {
   opacity: 0.5;
   border-radius: var(--card-border-radius) !important;
@@ -62,6 +84,11 @@
 
   @include mq(xs) {
     gap: var(--s-quarter);
+  }
+
+  @include mq(xxs, max) {
+    // Reserve enough scrollable room for the final action to clear the edge cue.
+    padding-inline-end: var(--s3);
   }
 
   .action-btn {
