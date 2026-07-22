@@ -3,7 +3,7 @@
     <page-title></page-title>
 
     <nav class="action-nav-right">
-      <div class="counters-action-group">
+      <div class="header-action-group primary-action-group">
         @if (isTimeTrackingEnabled()) {
           <play-button
             [currentTask]="currentTask()"
@@ -13,6 +13,23 @@
           ></play-button>
         }
 
+        @if (showDesktopButtons()) {
+          <button
+            emlDrop
+            (click)="layoutService.showAddTaskBar()"
+            matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
+              kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
+            }}"
+            class="tour-addBtn"
+            color="primary"
+            mat-icon-button
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        }
+      </div>
+
+      <div class="header-action-group secondary-action-group counters-action-group">
         <!-- Focus button: keep the entry point discoverable on desktop and mobile. -->
         @if (isFocusButtonVisible()) {
           <focus-button></focus-button>
@@ -32,21 +49,6 @@
         }
       </div>
 
-      <!-- Desktop: Secondary action group -->
-      @if (showDesktopButtons()) {
-        <button
-          emlDrop
-          (click)="layoutService.showAddTaskBar()"
-          matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
-            kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
-          }}"
-          class="tour-addBtn"
-          mat-icon-button
-        >
-          <mat-icon>add</mat-icon>
-        </button>
-      }
-
       @if (isSyncIconEnabled()) {
         <!--
           matBadgeHidden only hides the badge VISUALLY (CSS) — MatBadge keeps an
@@ -56,7 +58,10 @@
           "no description" value; MatBadge removes the aria-describedby for it.
         -->
         <button
-          class="sync-btn"
+          class="sync-btn secondary-header-action"
+          [class.is-error]="syncIsEnabledAndReady() && syncState() === 'ERROR'"
+          [class.is-offline]="syncIsEnabledAndReady() && !isOnline()"
+          [class.is-in-progress]="syncIsEnabledAndReady() && isSyncInProgress()"
           [matBadge]="unreviewedConflictCount()"
           [matBadgeHidden]="unreviewedConflictCount() === 0"
           matBadgeColor="accent"
@@ -98,18 +103,21 @@
         </button>
       }
 
-      <plugin-work-context-header-btns></plugin-work-context-header-btns>
-      <plugin-header-btns></plugin-header-btns>
+      <plugin-work-context-header-btns
+        class="secondary-header-action"
+      ></plugin-work-context-header-btns>
+      <plugin-header-btns class="secondary-header-action"></plugin-header-btns>
 
       @if (isUserProfilesEnabled()) {
-        <user-profile-button></user-profile-button>
+        <user-profile-button class="secondary-header-action"></user-profile-button>
       }
 
       <!-- Desktop: Show all buttons inline -->
       @if (showDesktopButtons()) {
-        <plugin-side-panel-btns></plugin-side-panel-btns>
+        <plugin-side-panel-btns class="secondary-header-action"></plugin-side-panel-btns>
 
         <desktop-panel-buttons
+          class="secondary-header-action"
           [kb]="kb"
           [isRouteWithSidePanel]="isRouteWithSidePanel()"
           [isShowScheduleDayPanel]="isShowScheduleDayPanel()"
@@ -121,7 +129,7 @@
       <!-- Simple Counter Dropdown (mobile only) -->
       @if (isXs()) {
         @if (enabledSimpleCounters().length) {
-          <div class="mobile-dropdown-wrapper">
+          <div class="header-action-group secondary-action-group mobile-dropdown-wrapper">
             <button
               (click)="
                 isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
