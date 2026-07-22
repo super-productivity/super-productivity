@@ -30,13 +30,13 @@
   }
 
   .nav-button {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: var(--bottom-nav-height);
-    min-width: 64px;
+    min-width: 0;
     border-radius: var(--radius-xl);
     transition: var(--transition-standard);
 
@@ -77,8 +77,9 @@
   }
 
   .add-task-button {
-    width: 56px;
-    height: 56px;
+    flex: 0 0 var(--s7);
+    width: var(--s7);
+    height: var(--s7);
     margin-left: var(--s);
     margin-right: var(--s);
     margin-bottom: var(--s3);
@@ -95,10 +96,10 @@
     }
 
     &.smaller {
-      height: 40px;
+      height: var(--bottom-nav-height);
       margin-left: var(--s);
       margin-right: var(--s);
-      margin-bottom: 0px;
+      margin-bottom: 0;
     }
 
     mat-icon {
@@ -122,6 +123,12 @@
 .add-task-button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    // Keep the ring visible when the bar sits flush with the viewport edge.
+    outline-offset: calc(var(--focus-ring-offset) * -1);
+  }
 }
 
 @keyframes slide-up-from-bottom {

@@ -9,6 +9,7 @@
     [routerLink]="todayRoute"
     routerLinkActive="active"
     [routerLinkActiveOptions]="{ exact: false }"
+    [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
   >
     <mat-icon>wb_sunny</mat-icon>
   </button>
@@ -18,6 +19,7 @@
     class="nav-button"
     routerLink="/planner"
     routerLinkActive="active"
+    [attr.aria-label]="T.MH.PLANNER | translate"
   >
     <mat-icon>edit_calendar</mat-icon>
   </button>
@@ -29,6 +31,7 @@
     [class.hide-for-native]="isEntranceAnimating()"
     color="primary"
     (click)="showAddTaskBar()"
+    [attr.aria-label]="T.GCF.KEYBOARD.GLOBAL_ADD_TASK | translate"
   >
     <mat-icon>add</mat-icon>
   </button>
@@ -48,6 +51,7 @@
     mat-button
     class="nav-button"
     (click)="toggleMobileNav()"
+    [attr.aria-label]="T.MH.PROJECT_MENU | translate"
   >
     <mat-icon>menu</mat-icon>
   </button>
