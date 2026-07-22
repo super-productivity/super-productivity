@@ -109,7 +109,6 @@
   z-index: var(--z-time-wrapper);
   // note: fixes styles for empty time for very small mobile
   min-width: 25px;
-  //border: 1px solid red;
 
   @include mq(xxs) {
     min-width: 0;

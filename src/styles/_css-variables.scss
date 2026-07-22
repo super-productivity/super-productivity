@@ -390,7 +390,9 @@ body {
   // Ink (foreground)
   --ink-strong: rgb(0, 0, 0);
   --ink: rgb(44, 44, 44);
-  --ink-muted: rgba(44, 44, 44, 0.6);
+  // 0.66 remains visibly secondary while meeting WCAG AA against the default
+  // light surfaces (including white cards).
+  --ink-muted: rgba(44, 44, 44, 0.66);
   // RGB triplet (no `rgb()` wrapper) — keystone for `rgba(var(--ink-on-channel), α)` overlays.
   --ink-on-channel: 0, 0, 0;
 
@@ -501,6 +503,10 @@ body.isDarkTheme {
   --text-color: var(--ink);
   --text-color-muted: var(--ink-muted);
   --text-color-most-intense: var(--ink-strong);
+  // Keep links recognizably branded while anchoring arbitrary project palettes
+  // in mode-safe ink for normal-text contrast.
+  --link-color: color-mix(in srgb, var(--brand) 42%, var(--ink-strong));
+  --task-detail-value-color: var(--text-color-muted);
 
   // Borders / separators / scrim (Cat A)
   --separator-color: var(--separator);
@@ -649,11 +655,7 @@ body {
   --hover-controls-border: 1px solid;
   --hover-controls-border-opacity: 0.5;
 
-  // Task detail item (Cat B; `--task-detail-value-color` is broken — out of scope)
-  --task-detail-value-color: rgba(
-    var(--palette-foreground-secondary-text),
-    var(--palette-foreground-secondary-text-alpha, 1)
-  );
+  // Task detail item (Cat B)
   --task-detail-bg: var(--card-bg);
   --task-detail-bg-hover: #eeeeee;
 
@@ -730,8 +732,7 @@ body.isDarkTheme {
   --hover-controls-border: none;
   --hover-controls-border-opacity: 0;
 
-  // Task detail item (Cat B; broken token kept as-is per scope)
-  --task-detail-value-color: rgba(255, 255, 255, 0.7);
+  // Task detail item (Cat B)
   --task-detail-bg: var(--dark8);
   --task-detail-bg-hover: var(--dark12);
 
