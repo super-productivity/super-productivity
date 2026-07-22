@@ -85,7 +85,6 @@
   :host.isSelected.isSelected .inner-wrapper > & {
     transition: var(--transition-enter);
     transition-property: left, right, box-shadow;
-    border-color: var(--task-active-border-color);
     box-shadow: var(--task-selected-shadow);
     // because of the shadow, this looks better
     //bottom: 2px;
@@ -127,7 +126,6 @@
 
   :host.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent & {
     background: var(--task-c-current-bg);
-    border-color: var(--task-active-border-color);
     border-radius: var(--task-border-radius);
     box-shadow: var(--task-current-shadow);
     // because of the shadow, this looks better
