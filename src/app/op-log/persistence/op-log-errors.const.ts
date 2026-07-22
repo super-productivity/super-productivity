@@ -48,6 +48,19 @@ export const IDB_OPEN_ERROR_MSG =
   '[OpLogStore] Failed to open IndexedDB after multiple retries. See #6255.';
 
 /**
+ * Base message for the downgrade barrier. `IDB_OPEN_ERROR_MSG` must not be
+ * reused there: it claims retries that never ran, and the wrapper's `message`
+ * is the string that reaches `HANDLED_ERROR_PROP_STR`, `getErrorTxt` and the
+ * exported log history — i.e. exactly what a user pastes into a bug report.
+ * Correcting only the `Log.err` prefixes would leave the false claim in the
+ * copy most likely to be read.
+ *
+ * @see https://github.com/super-productivity/super-productivity/issues/9187
+ */
+export const IDB_OPEN_VERSION_BARRIER_MSG =
+  'Failed to open IndexedDB: rejected by the downgrade barrier, no retry attempted. See #9187.';
+
+/**
  * Pattern to detect "backing store" errors from the browser.
  * These errors indicate storage-level issues (disk I/O, file locks, corruption).
  * Used for heuristic error detection to show platform-specific guidance.

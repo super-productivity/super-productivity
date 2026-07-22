@@ -1,5 +1,6 @@
 import {
   IDB_OPEN_ERROR_MSG,
+  IDB_OPEN_VERSION_BARRIER_MSG,
   IDB_BACKING_STORE_PATTERN,
   isIdbVersionError,
 } from '../../persistence/op-log-errors.const';
@@ -55,10 +56,18 @@ export class IndexedDBOpenError extends Error {
    * Includes the original error's name and message so bug reports can
    * distinguish Chromium LevelDB locks, WebKit's "Connection to Indexed
    * Database server lost", quota errors, etc.
+   *
+   * The base string is chosen from the same classification the constructor
+   * records, so every consumer of the wrapper — console, `HANDLED_ERROR_PROP_STR`,
+   * exported logs — describes the barrier consistently. Classifying here rather
+   * than at each `Log.err` call site keeps that to one decision point.
    */
   private static _buildMessage(originalError: unknown): string {
+    const base = isIdbVersionError(originalError)
+      ? IDB_OPEN_VERSION_BARRIER_MSG
+      : IDB_OPEN_ERROR_MSG;
     const detail = IndexedDBOpenError._formatOriginal(originalError);
-    return detail ? `${IDB_OPEN_ERROR_MSG} | original: ${detail}` : IDB_OPEN_ERROR_MSG;
+    return detail ? `${base} | original: ${detail}` : base;
   }
 
   private static _formatOriginal(err: unknown): string {

@@ -61,7 +61,13 @@ export const distChannelSuffix = (channel: DistChannel | null | undefined): stri
   }
 };
 
-const detectChannel = (): DistChannel => {
+/**
+ * Resolves the running build's distribution channel. Exported because recovery
+ * advice has to differ per channel too (see `idb-open-error-message.ts`), not
+ * just the version suffix — telling a Microsoft Store or Flatpak user to
+ * download from the website points them at a build that cannot see their data.
+ */
+export const detectChannel = (): DistChannel => {
   if (IS_IOS) {
     return 'ios';
   }

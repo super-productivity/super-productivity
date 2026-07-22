@@ -203,6 +203,13 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
    * Open with exponential backoff. Lock-related errors get the full retry
    * window (they may clear); other errors fail faster so the hydrator can
    * surface the problem. Preserves the budgets/semantics of the existing store.
+   *
+   * NOTE: dormant in production today. Both stores call `_adapter.init()` only
+   * behind `if (!this._adapter.adoptConnection)`, and this adapter defines
+   * `adoptConnection` — so it runs on the connection the store hands it and
+   * never opens the database itself. Kept in step with the two live loops
+   * (`OperationLogStoreService`, `ArchiveStoreService`) so the path is already
+   * correct if the adapter ever takes ownership of the open.
    */
   private async _openDbWithRetry(): Promise<IDBPDatabase> {
     let maxRetries = IDB_OPEN_RETRIES;
@@ -236,12 +243,7 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
 
     const err = new IndexedDBOpenError(lastError);
     // See OperationLogStoreService: zero retries ran on the barrier path (#9187).
-    Log.err(
-      err.isVersionError
-        ? '[OpLogAdapter] IndexedDB open rejected by the downgrade barrier (no retry).'
-        : '[OpLogAdapter] IndexedDB open failed after all retries.',
-      err,
-    );
+    Log.err('[OpLogAdapter] IndexedDB open failed.', err);
     throw err;
   }
 

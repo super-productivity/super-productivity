@@ -33,8 +33,8 @@ import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { IS_ELECTRON } from '../../app.constants';
-import { environment } from '../../../environments/environment';
-import { buildIdbOpenErrorMessage, IdbOpenPlatform } from './idb-open-error-message';
+import { detectChannel, getAppVersionStr } from '../../util/get-app-version-str';
+import { buildIdbOpenErrorMessage } from './idb-open-error-message';
 import {
   BulkReplayReducerFailure,
   runWithBulkReplayFailureCollector,
@@ -1123,27 +1123,9 @@ export class OperationLogHydratorService {
    */
   private _showIndexedDBOpenError(error: IndexedDBOpenError): void {
     // Log full error details to console for debugging (can be copied by users).
-    // The barrier path breaks out after ONE attempt, and this is the log line
-    // that accompanies the dialog a user is about to screenshot — claiming
-    // retries here would misdirect #9187 triage more than the three store-side
-    // copies of the same sentence.
-    OpLog.err(
-      error.isVersionError
-        ? 'IndexedDB open rejected by the downgrade barrier (no retry). Original error:'
-        : 'IndexedDB open failed after all retries. Original error:',
-      error.originalError,
-    );
-
-    // Resolved once, here, so the mutual exclusion cannot be expressed wrongly
-    // downstream. Flatpak wins over Snap, preserving the long-standing
-    // precedence of the generic message's recovery-steps ternary.
-    const platform: IdbOpenPlatform = !IS_ELECTRON
-      ? 'web'
-      : window.ea?.isFlatpak?.()
-        ? 'flatpak'
-        : window.ea?.isSnap?.()
-          ? 'snap'
-          : 'electron';
+    // Deliberately does not mention retries — the barrier path breaks out after
+    // ONE attempt (#9187); `error.message` names which case this is.
+    OpLog.err('IndexedDB open failed. Original error:', error.originalError);
 
     // For backing-store errors (common during Linux session startup with autostart),
     // auto-reload once after the user dismisses the dialog. By the time the dialog
@@ -1166,8 +1148,14 @@ export class OperationLogHydratorService {
       }
     }
 
+    // `getAppVersionStr()` rather than the bare version: its channel suffix
+    // (e.g. `18.15.1P` vs `18.15.1W`) is what tells a user WHICH of two copies
+    // they just launched — the central question in a downgrade (#9187).
     alertDialog(
-      buildIdbOpenErrorMessage(error, { platform, appVersion: environment.version }),
+      buildIdbOpenErrorMessage(error, {
+        channel: detectChannel(),
+        appVersion: getAppVersionStr(),
+      }),
     );
   }
 

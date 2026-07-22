@@ -169,12 +169,7 @@ export class ArchiveStoreService {
     // from WebKit's iOS "Connection to Indexed Database server lost", #7415).
     const err = new IndexedDBOpenError(lastError);
     // See OperationLogStoreService: zero retries ran on the barrier path (#9187).
-    Log.err(
-      err.isVersionError
-        ? '[ArchiveStore] IndexedDB open rejected by the downgrade barrier (no retry).'
-        : '[ArchiveStore] IndexedDB open failed after all retries.',
-      err,
-    );
+    Log.err('[ArchiveStore] IndexedDB open failed.', err);
     throw err;
   }
 

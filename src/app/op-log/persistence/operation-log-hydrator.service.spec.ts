@@ -30,6 +30,7 @@ import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { environment } from '../../../environments/environment';
+import { getAppVersionStr } from '../../util/get-app-version-str';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogEffects } from '../capture/operation-log.effects';
@@ -2365,7 +2366,10 @@ describe('OperationLogHydratorService', () => {
         await expectAsync(service.hydrateStore()).toBeRejected();
 
         const msg = shownMessage();
-        expect(msg).toContain(environment.version);
+        // The channel-suffixed string, not the bare version: the suffix is what
+        // distinguishes two installed copies from each other (#9187).
+        expect(msg).toContain(getAppVersionStr());
+        expect(getAppVersionStr()).not.toBe(environment.version);
         expect(msg).toContain('newer version');
         // The raw browser text still reaches bug reports.
         expect(msg).toContain('The requested version (7) is less than');

@@ -117,7 +117,11 @@ describe('ArchiveStoreService', () => {
       // (1s+2s+4s) and dies on jasmine's 2s timeout before reaching here — so
       // the elapsed check is a second signal, not the only one. Do NOT
       // "repair" a slow run by raising DEFAULT_TIMEOUT_INTERVAL.
-      expect(Date.now() - startedAt).toBeLessThan(1500);
+      //
+      // 500ms, not 1500ms: the real path is ~1-20ms, and a PARTIAL regression
+      // (break moved one iteration late = one 1000ms backoff) would clear a
+      // 1500ms bound and the 2s timeout both, passing green.
+      expect(Date.now() - startedAt).toBeLessThan(500);
     });
   });
 });

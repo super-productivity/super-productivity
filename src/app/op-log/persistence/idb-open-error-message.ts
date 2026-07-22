@@ -1,23 +1,14 @@
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-
-/**
- * Which packaging the running build came from. One resolved value rather than
- * independent `isSnap`/`isFlatpak`/`isElectron` booleans: those can express
- * states that cannot exist (snap *and* flatpak), which left the mutual
- * exclusion living in the caller while two branch chains here disagreed on
- * precedence. A single discriminator makes that unrepresentable.
- *
- * `'web'` covers browsers AND the mobile WebViews — see the reload wording.
- */
-export type IdbOpenPlatform = 'flatpak' | 'snap' | 'electron' | 'web';
+import { DistChannel } from '../../util/get-app-version-str';
 
 /**
  * Platform facts the recovery text depends on. Passed in rather than probed
  * here so the builder stays pure and directly testable.
  */
 export interface IdbOpenErrorContext {
-  platform: IdbOpenPlatform;
-  /** Version of the build showing the dialog (`environment.version`). */
+  /** How this build was distributed — decides where "get the newer one" points. */
+  channel: DistChannel;
+  /** Version of the build showing the dialog (`getAppVersionStr()`). */
   appVersion: string;
 }
 
@@ -25,6 +16,17 @@ const originalMessageOf = (error: IndexedDBOpenError): string =>
   error.originalError instanceof Error
     ? error.originalError.message
     : String(error.originalError);
+
+/** Channels whose data lives in a user-reachable folder that can be copied. */
+const hasLocalDataFolder = (channel: DistChannel): boolean =>
+  channel !== 'web' &&
+  channel !== 'ios' &&
+  channel !== 'android-play' &&
+  channel !== 'android-fdroid';
+
+const storeSteps = (storeName: string): string =>
+  '1. Close this window.\n' +
+  `2. Update Super Productivity through ${storeName}, then open it again.\n\n`;
 
 /**
  * The downgrade barrier rejected an intact database: `DB_VERSION` 8-10 exist
@@ -34,35 +36,49 @@ const originalMessageOf = (error: IndexedDBOpenError): string =>
  * cleared", advice that would destroy perfectly good data and still not let
  * this build open it. The only fix is to run the newer build.
  *
+ * Branching on `DistChannel` rather than a local flavour of it matters for
+ * correctness, not tidiness: managed-store and sandboxed builds keep their data
+ * where a website download cannot see it, so "install the latest release from
+ * super-productivity.com" is actively wrong for them. No `default` arm — with
+ * `noImplicitReturns` a new channel is then a compile error here.
+ *
+ * Package identifiers per the store links in README.md — snapcraft.io/superproductivity
+ * and flathub.org/apps/com.super_productivity.SuperProductivity. They differ from
+ * both the top-level `appId` and the mac/Capacitor `com.super-productivity.app`;
+ * a wrong id here makes the one command we give the user fail outright.
+ *
  * @see https://github.com/super-productivity/super-productivity/issues/9187
  */
-const versionErrorRecoverySteps = (ctx: IdbOpenErrorContext): string => {
-  // Snap and Flatpak are the likeliest way to end up here deliberately: both
-  // roll back with a single command (`snap revert`), and Snap `edge` tracks
-  // every master push. Sending those users to the website download would be
-  // wrong — they need their own update channel.
-  // Package identifiers per the store links in README.md — snapcraft.io/superproductivity
-  // and flathub.org/apps/com.super_productivity.SuperProductivity. They differ from
-  // both the top-level `appId` and the mac/Capacitor `com.super-productivity.app`;
-  // a wrong id here makes the one command we give the user fail outright.
-  switch (ctx.platform) {
-    case 'flatpak':
+const versionErrorRecoverySteps = (channel: DistChannel): string => {
+  switch (channel) {
+    case 'linux-flatpak':
       return (
         '1. Close this window.\n' +
         '2. Update to the newest version:\n' +
         '   flatpak update com.super_productivity.SuperProductivity\n\n'
       );
-    case 'snap':
+    case 'linux-snap':
       return (
         '1. Close this window.\n' +
         '2. Update to the newest version: snap refresh superproductivity\n' +
         '3. If you ran `snap revert` recently, that is what caused this.\n\n'
       );
-    case 'electron':
-      // Snap and Flatpak get their own branch above because this text is
-      // actively wrong for them: their data lives inside the package sandbox
-      // (`SNAP_USER_COMMON`, see electron/start-app.ts), so a second copy
-      // installed from the website would not even share the database.
+    case 'win-store':
+      return storeSteps('the Microsoft Store');
+    case 'mac-store':
+    case 'ios':
+      return storeSteps('the App Store');
+    case 'android-play':
+      return storeSteps('Google Play');
+    case 'android-fdroid':
+      return storeSteps('F-Droid');
+    case 'win-nsis':
+    case 'win-portable':
+    case 'mac-dmg':
+    case 'linux-appimage':
+    case 'linux-native':
+      // Only these channels can have a second, stale copy sitting next to the
+      // current one — which is exactly how #9187 was reported (an old shortcut).
       return (
         '1. Close this window.\n' +
         '2. Start the newest version you have installed. If this keeps happening, ' +
@@ -72,12 +88,10 @@ const versionErrorRecoverySteps = (ctx: IdbOpenErrorContext): string => {
         'and launch it from there.\n\n'
       );
     case 'web':
-      // Browsers and the mobile WebViews share this branch, so the reload hint
-      // is qualified — Android/iOS have no tabs and no Ctrl+Shift+R.
       return (
         '1. Make sure you are running the newest version of Super Productivity.\n' +
-        '2. In a web browser: reload with Ctrl+Shift+R (Cmd+Shift+R on Mac) and ' +
-        'close any other tabs running Super Productivity.\n\n'
+        '2. Reload with Ctrl+Shift+R (Cmd+Shift+R on Mac) and close any other tabs ' +
+        'running Super Productivity.\n\n'
       );
   }
 };
@@ -95,19 +109,19 @@ const buildVersionErrorMessage = (
   'Nothing was changed or deleted. Do NOT clear your storage — that would ' +
   'erase the data this build simply cannot read.\n\n' +
   'What to do:\n' +
-  versionErrorRecoverySteps(ctx) +
+  versionErrorRecoverySteps(ctx.channel) +
   // Without this the message dead-ends: a user whose newer build is gone
   // (reinstall, replaced machine, restored profile) is told what NOT to do and
   // given no way forward, so they search the web, find "clear IndexedDB" and
-  // destroy recoverable data. Browsers and mobile WebViews get the warning
-  // rather than the copy instruction — there is no data folder to copy there.
-  (ctx.platform === 'web'
-    ? 'If you cannot get back to a newer version, do not clear this site’s ' +
-      'data — in the browser there is no copy to fall back on.\n\n'
-    : 'If you cannot run a newer version, make a copy of your Super Productivity ' +
+  // destroy recoverable data.
+  (hasLocalDataFolder(ctx.channel)
+    ? 'If you cannot run a newer version, make a copy of your Super Productivity ' +
       'data folder before resetting anything. That copy is what makes recovery ' +
-      'possible.\n\n') +
-  `Technical details: ${originalMessageOf(error)}`;
+      'possible.\n\n'
+    : 'If you cannot get back to a newer version, do not clear this app’s ' +
+      'data — there is no copy to fall back on here.\n\n') +
+  `Technical details: ${originalMessageOf(error)}\n\n` +
+  '(Check browser console for full error details)';
 
 /**
  * Generic "cannot open the database" guidance, with extra recovery steps for
@@ -132,9 +146,9 @@ const buildGenericErrorMessage = (
       'Recovery steps:\n' +
       '1. Close ALL browser tabs and windows\n' +
       '2. Restart the app\n' +
-      (ctx.platform === 'flatpak'
+      (ctx.channel === 'linux-flatpak'
         ? '3. If using Linux Flatpak with autostart, try disabling autostart and launching manually\n'
-        : ctx.platform === 'snap'
+        : ctx.channel === 'linux-snap'
           ? '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n'
           : '3. If using Linux with autostart, try disabling autostart and launching manually\n') +
       '4. If issue persists, check available disk space\n\n';
