@@ -47,6 +47,8 @@
 }
 
 .add-task-container {
+  --mat-button-text-label-text-tracking: var(--letter-spacing-normal);
+
   width: 100%;
   position: relative;
   background-color: var(--bg-lighter);
@@ -56,7 +58,7 @@
   border-radius: var(--card-border-radius);
 
   &.isGlobalBarVariant {
-    box-shadow: var(--whiteframe-shadow-12dp);
+    box-shadow: var(--whiteframe-shadow-6dp);
   }
 }
 
@@ -112,7 +114,8 @@
     font-family: var(--font-primary-stack);
 
     &::placeholder {
-      opacity: 0.6;
+      color: var(--text-color-muted);
+      opacity: 1;
     }
   }
 
@@ -124,14 +127,14 @@
     flex-shrink: 0;
   }
 
-  // The add (+) button and its dashed separator span the full height of the row
+  // The add (+) button and its separators span the full height of the row
   // (which grows with the wrapping input); the icon stays vertically centred.
   .separator-box {
     align-self: stretch;
     display: flex;
     align-items: stretch;
-    border-right: 1px dashed var(--extra-border-color);
-    border-left: 1px dashed var(--extra-border-color);
+    border-right: 1px solid var(--divider-color);
+    border-left: 1px solid var(--divider-color);
 
     // Reserve the button's space while the field is empty without letting it
     // show or take clicks. `visibility:hidden` is not enough here: mat-icon's
@@ -158,17 +161,19 @@
   }
 
   .switch-add-to-btn {
-    opacity: 0.6;
+    --mat-icon-button-icon-color: var(--text-color-muted);
+
+    transition: color var(--transition-fast);
 
     &:hover,
     &:focus-visible {
-      opacity: 1;
+      --mat-icon-button-icon-color: var(--text-color-most-intense);
     }
   }
 }
 
 // Wraps the two toggles (projected into the create-mode action bar or the search
-// info row) so a dashed divider sits to their right, separating them from the
+// info row) so a divider sits to their right, separating them from the
 // chips / search text that follow. Nesting the button rules here also lifts their
 // specificity above Material's .mat-mdc-icon-button so the size override wins.
 // These rules MUST live in the parent stylesheet: the buttons are projected via
@@ -178,7 +183,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  border-right: 1px dashed var(--extra-border-color);
+  border-right: 1px solid var(--divider-color);
   padding-right: var(--s-quarter);
   margin-right: var(--s-quarter);
 
@@ -193,27 +198,31 @@
     width: 36px;
     height: 36px;
     padding: 0;
-    opacity: 0.6;
+    --mat-icon-button-icon-color: var(--text-color-muted);
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
 
     &:hover,
     &:focus-visible {
-      opacity: 1;
+      --mat-icon-button-icon-color: var(--text-color-most-intense);
+
+      background-color: var(--state-hover);
     }
   }
 
   .search-toggle-btn.active,
   .note-toggle-btn.active {
-    opacity: 1;
-    background-color: var(--primary-light);
-    color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
+
+    background-color: var(--state-selected);
   }
 
   // A collapsed note still holds its text — keep the icon undimmed and tinted so
   // it's clear a note is attached (distinct from the .active pill shown while the
   // note field is expanded).
   .note-toggle-btn.has-value:not(.active) {
-    opacity: 1;
-    color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
   }
 }
 
@@ -223,7 +232,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  border-top: 1px dashed var(--extra-border-color);
+  border-top: 1px solid var(--divider-color);
   overflow-x: auto;
   overflow-y: hidden;
 
@@ -233,7 +242,7 @@
 }
 
 .note-input-section {
-  border-top: 1px dashed var(--extra-border-color);
+  border-top: 1px solid var(--divider-color);
   // Padding lives on the wrapper, not the textarea — same cdkTextareaAutosize
   // reason as .main-input-wrap (padding on the textarea desyncs the measured
   // wrap width from the rendered one and clips the height).
@@ -256,7 +265,8 @@
   line-height: 1.5;
 
   &::placeholder {
-    opacity: 0.6;
+    color: var(--text-color-muted);
+    opacity: 1;
   }
 }
 

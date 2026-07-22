@@ -2,26 +2,33 @@
 @use '../../shared-tag-project-styles';
 
 .clear-btn {
-  opacity: 0.5;
+  --mat-button-text-label-text-color: var(--text-color-muted);
+
   border-radius: var(--card-border-radius) !important;
-  margin-left: -8px;
-  min-width: 32px;
+  margin-left: calc(var(--s) * -1);
+  min-width: var(--s4);
   padding: 0;
   text-align: center;
   display: flex;
   justify-content: center;
   flex-shrink: 0;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
 
   @include mq(xs) {
-    margin-left: -8px;
+    margin-left: calc(var(--s) * -1);
   }
 
   mat-icon {
     margin: 0;
   }
 
-  &:hover {
-    opacity: 1;
+  &:hover,
+  &:focus-visible {
+    --mat-button-text-label-text-color: var(--text-color-most-intense);
+
+    background-color: var(--state-hover);
   }
 }
 
@@ -56,7 +63,7 @@
   padding-top: 0;
   display: flex;
   flex-wrap: nowrap;
-  border-top: 1px dashed var(--extra-border-color);
+  border-top: 1px solid var(--divider-color);
   overflow-x: auto;
   overflow-y: hidden;
 
@@ -65,8 +72,9 @@
   }
 
   .action-btn {
+    --mat-button-text-label-text-color: var(--text-color-muted);
+
     cursor: pointer;
-    opacity: 0.4;
     display: flex !important;
     align-items: center;
     overflow: hidden;
@@ -74,7 +82,10 @@
     min-width: 70px !important;
     flex-shrink: 0;
     // prevent dark theme being lighter than background
-    background: transparent !important;
+    background-color: transparent;
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
 
     ::ng-deep > mat-icon.hide {
       width: 0;
@@ -122,35 +133,38 @@
       }
     }
 
+    &:hover,
+    &:focus-visible {
+      --mat-button-text-label-text-color: var(--text-color-most-intense);
+
+      background-color: var(--state-hover);
+    }
+
     &.has-value {
-      background-color: var(--bg-lightest);
-      opacity: 1;
+      --mat-button-text-label-text-color: var(--text-color-most-intense);
+
+      @include darkTheme() {
+        font-weight: var(--font-weight-semibold);
+      }
+
+      mat-icon {
+        color: var(--brand);
+      }
     }
 
     &.deadline-chip {
       color: var(--c-warn) !important;
-      opacity: 1 !important;
-      background-color: var(--bg-lightest) !important;
 
       mat-icon {
         color: var(--c-warn) !important;
       }
     }
 
-    // Project button is always active since we always have a project selected
-    &.project-btn {
-      background-color: var(--bg-lightest);
-      opacity: 1;
-    }
-
     // Highlight when menu is open
     &.menu-open {
-      background-color: rgba(0, 0, 0, 0.05);
-      opacity: 1;
+      --mat-button-text-label-text-color: var(--text-color-most-intense);
 
-      @include darkTheme() {
-        background-color: var(--c-light-05);
-      }
+      background-color: var(--state-focus);
 
       mat-icon {
         color: inherit;

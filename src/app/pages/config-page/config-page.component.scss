@@ -8,6 +8,16 @@
   }
 
   .settings-tabs {
+    // Scope the typography refinement to Settings. These component tokens
+    // inherit into tab content without changing shared Material defaults.
+    --mat-tab-label-text-tracking: var(--letter-spacing-normal);
+    --mat-button-text-label-text-tracking: var(--letter-spacing-normal);
+    --mat-button-filled-label-text-tracking: var(--letter-spacing-normal);
+    --mat-button-protected-label-text-tracking: var(--letter-spacing-normal);
+    --mat-button-outlined-label-text-tracking: var(--letter-spacing-normal);
+    --mat-button-tonal-label-text-tracking: var(--letter-spacing-normal);
+    --mat-tab-header-inactive-label-text-color: var(--text-color-less-intense);
+
     // Prevent focus-induced scroll jumps: Material tab body containers default to
     // overflow:auto/hidden, which makes the browser's focus-scrolling algorithm
     // treat them as scroll boundaries and reset the parent scroll position.
@@ -22,17 +32,28 @@
       margin-bottom: var(--s2);
     }
 
+    ::ng-deep .mat-mdc-tab-labels {
+      justify-content: flex-start;
+    }
+
     ::ng-deep .mat-mdc-tab {
+      flex-grow: 0 !important;
       min-width: 120px;
+      border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
+      transition: background-color var(--transition-fast);
+
+      &.mdc-tab--active {
+        background-color: var(--state-selected);
+      }
 
       @include mq(md, max) {
         min-width: 48px;
-        padding: 0 12px;
+        padding: 0 var(--s);
       }
     }
 
     .tab-icon {
-      margin-inline-end: 8px;
+      margin-inline-end: var(--s);
       font-size: 20px;
       width: 20px;
       height: 20px;
@@ -54,9 +75,16 @@
 
   .tab-content {
     padding-top: var(--s2);
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: var(--component-max-width);
+    margin-inline: auto;
+
+    .section-title {
+      margin: 0 0 var(--s3);
+      font-size: var(--font-size-2xl);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-height-snug);
+      letter-spacing: var(--letter-spacing-tighter);
+    }
   }
 
   collapsible {
@@ -66,11 +94,9 @@
   .config-section {
     border: 1px solid var(--divider-color);
     break-inside: avoid;
-    margin-bottom: 10px;
+    margin-bottom: var(--s);
     border-radius: var(--card-border-radius);
     background: var(--card-bg);
-
-    background-color: var(--card-bg);
 
     .md-title {
       margin-top: 0;
@@ -81,14 +107,13 @@
     }
 
     ::ng-deep .isExpanded .collapsible-header {
-      font-weight: bold;
-
+      font-weight: var(--font-weight-semibold);
       border-color: var(--extra-border-color);
     }
   }
 
   .settings-col {
-    margin-bottom: 30px;
+    margin-bottom: var(--s4);
 
     &:last-child {
       margin-bottom: 0;
@@ -187,19 +212,18 @@
 }
 
 :host .config-section ::ng-deep {
-  $this-panel-padding-left-right: 12px;
-
   .collapsible-header {
-    font-size: 16px;
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-snug);
     margin-top: 0;
-    padding: 10px $this-panel-padding-left-right;
+    padding: var(--s) var(--s2);
   }
 
   .collapsible-panel {
     overflow: visible;
 
     > * {
-      padding: 0 $this-panel-padding-left-right;
+      padding: 0 var(--s2);
     }
   }
 }
