@@ -34,7 +34,7 @@ import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { IS_ELECTRON } from '../../app.constants';
 import { environment } from '../../../environments/environment';
-import { buildIdbOpenErrorMessage } from './idb-open-error-message';
+import { buildIdbOpenErrorMessage, IdbOpenPlatform } from './idb-open-error-message';
 import {
   BulkReplayReducerFailure,
   runWithBulkReplayFailureCollector,
@@ -1128,8 +1128,16 @@ export class OperationLogHydratorService {
       error.originalError,
     );
 
-    const isFlatpak = !!(IS_ELECTRON && window.ea?.isFlatpak?.());
-    const isSnap = !isFlatpak && !!(IS_ELECTRON && window.ea?.isSnap?.());
+    // Resolved once, here, so the mutual exclusion cannot be expressed wrongly
+    // downstream. Flatpak wins over Snap, preserving the long-standing
+    // precedence of the generic message's recovery-steps ternary.
+    const platform: IdbOpenPlatform = !IS_ELECTRON
+      ? 'web'
+      : window.ea?.isFlatpak?.()
+        ? 'flatpak'
+        : window.ea?.isSnap?.()
+          ? 'snap'
+          : 'electron';
 
     // For backing-store errors (common during Linux session startup with autostart),
     // auto-reload once after the user dismisses the dialog. By the time the dialog
@@ -1153,12 +1161,7 @@ export class OperationLogHydratorService {
     }
 
     alertDialog(
-      buildIdbOpenErrorMessage(error, {
-        isElectron: IS_ELECTRON,
-        isFlatpak,
-        isSnap,
-        appVersion: environment.version,
-      }),
+      buildIdbOpenErrorMessage(error, { platform, appVersion: environment.version }),
     );
   }
 

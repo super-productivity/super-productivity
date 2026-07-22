@@ -235,7 +235,13 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
     }
 
     const err = new IndexedDBOpenError(lastError);
-    Log.err('[OpLogAdapter] IndexedDB open failed after all retries.', err);
+    // See OperationLogStoreService: zero retries ran on the barrier path (#9187).
+    Log.err(
+      err.isVersionError
+        ? '[OpLogAdapter] IndexedDB open rejected by the downgrade barrier (no retry).'
+        : '[OpLogAdapter] IndexedDB open failed after all retries.',
+      err,
+    );
     throw err;
   }
 

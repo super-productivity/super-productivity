@@ -502,7 +502,15 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     // carries the formatted original detail, so logging the wrapper exposes
     // everything we need.
     const err = new IndexedDBOpenError(lastError);
-    Log.err('[OpLogStore] IndexedDB open failed after all retries.', err);
+    // The barrier path breaks out after ONE attempt — saying "after all
+    // retries" there would send #9187 triage looking for a 7s window that
+    // never happened. Log output is what bug reports carry.
+    Log.err(
+      err.isVersionError
+        ? '[OpLogStore] IndexedDB open rejected by the downgrade barrier (no retry).'
+        : '[OpLogStore] IndexedDB open failed after all retries.',
+      err,
+    );
     throw err;
   }
 

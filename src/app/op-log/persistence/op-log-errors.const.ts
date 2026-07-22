@@ -110,6 +110,11 @@ export const isLockRelatedIdbOpenError = (err: unknown): boolean => {
  * `DOMException` is checked alongside `Error` for the same reason as in
  * `isLockRelatedIdbOpenError` above.
  *
+ * Pass the ORIGINAL browser error. An already-wrapped `IndexedDBOpenError`
+ * overrides `name`, so it returns `false` here — read `.isVersionError` on the
+ * wrapper instead, or the caller silently falls back to the generic
+ * clear-your-storage dialog.
+ *
  * @see https://github.com/super-productivity/super-productivity/issues/9187
  */
 export const isIdbVersionError = (err: unknown): boolean =>

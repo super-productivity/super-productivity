@@ -136,8 +136,9 @@ describe('IndexedDBOpenError', () => {
       );
 
       expect(error.isVersionError).toBe(true);
-      // Not storage damage — must not be conflated with the backing-store path.
-      expect(error.isBackingStoreError).toBe(false);
+      // NOTE: deliberately no `isBackingStoreError` assertion here. It is false
+      // with or without this change (the message has no "backing store"), so it
+      // would pass against the unfixed code — a vacuous assertion.
     });
 
     it('should be false for other IndexedDB open failures', () => {

@@ -314,15 +314,23 @@ describe('runDbUpgrade', () => {
         });
         currentDb.close();
 
-        await expectAsync(openDB(dbName, 9)).toBeRejectedWith(
-          jasmine.objectContaining({ name: 'VersionError' }),
+        // One open, both assertions. On the success path the connection is
+        // closed before being discarded, so a regression that lets the
+        // downgrade through fails on the expectation rather than hanging the
+        // `finally`'s deleteDB on an open handle.
+        const rejection = await openDB(dbName, 9).then(
+          (db) => {
+            db.close();
+            return null;
+          },
+          (e: unknown) => e,
         );
 
+        expect(rejection).toEqual(jasmine.objectContaining({ name: 'VersionError' }));
         // #9187: the rejection an old reader actually gets must be the one the
         // user-facing classifier recognises. Asserting it here — on a real
         // downgrade rather than a hand-built DOMException — is what keeps the
         // dialog from falling back to "your storage may need to be cleared".
-        const rejection = await openDB(dbName, 9).catch((e: unknown) => e);
         expect(isIdbVersionError(rejection)).toBe(true);
       } finally {
         await deleteDB(dbName);
