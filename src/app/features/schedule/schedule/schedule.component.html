@@ -59,13 +59,13 @@
               } @else {
                 <mat-icon>check_box</mat-icon>
               }
-              @if (provider.color) {
+              <span class="cal-provider-row">
                 <span
                   class="cal-color-dot"
-                  [style.background]="provider.color"
+                  [style.background]="calProviderColor(provider)"
                 ></span>
-              }
-              {{ calProviderLabel(provider) }}
+                <span class="cal-provider-label">{{ calProviderLabel(provider) }}</span>
+              </span>
             </button>
           }
         </div>

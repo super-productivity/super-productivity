@@ -7,12 +7,21 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { fromEvent } from 'rxjs';
+import { combineLatest, fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
-import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
 import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
-import { IssueProvider } from '../../issue/issue.model';
+import { getCalendarProviderColor } from '../../issue/mapping-helper/get-issue-provider-color';
+import {
+  IssueProvider,
+  IssueProviderPluginType,
+  isPluginIssueProvider,
+} from '../../issue/issue.model';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import {
   MatMenu,
   MatMenuContent,
@@ -78,13 +87,25 @@ export class ScheduleComponent {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translate = inject(TranslateService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
+  private _pluginIssueProviderRegistry = inject(PluginIssueProviderRegistryService);
 
   readonly hiddenCalendarProviderIds = this._hiddenCalendarProviders.hiddenProviderIds;
   readonly enabledCalendarProviders = toSignal(
-    this._store
-      .select(selectCalendarProviders)
-      .pipe(map((ps) => ps.filter((p) => p.isEnabled))),
-    { initialValue: [] },
+    combineLatest([
+      this._store.select(selectCalendarProviders),
+      this._store
+        .select(selectEnabledIssueProviders)
+        .pipe(
+          map((providers) =>
+            providers.filter(
+              (p): p is IssueProviderPluginType =>
+                isPluginIssueProvider(p.issueProviderKey) &&
+                this._pluginIssueProviderRegistry.getUseAgendaView(p.issueProviderKey),
+            ),
+          ),
+        ),
+    ]).pipe(map(([ical, plugin]): IssueProvider[] => [...ical, ...plugin])),
+    { initialValue: [] as IssueProvider[] },
   );
   // Show the button with multiple providers, OR with a single provider that
   // is currently hidden — otherwise the user has no UI to re-enable the only
@@ -95,7 +116,17 @@ export class ScheduleComponent {
     const hidden = this.hiddenCalendarProviderIds();
     return providers.some((p) => hidden.includes(p.id));
   });
-  readonly calProviderLabel = (p: IssueProvider): string => getIssueProviderTooltip(p);
+  readonly calProviderLabel = (p: IssueProvider): string => {
+    const raw = getIssueProviderTooltip(p);
+    if (!/^(https?|webcals?|file):\/\//i.test(raw)) return raw;
+    try {
+      const u = new URL(raw.replace(/^webcals?:\/\//i, 'https://'));
+      return u.hostname || raw;
+    } catch {
+      return raw;
+    }
+  };
+  readonly calProviderColor = getCalendarProviderColor;
 
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
