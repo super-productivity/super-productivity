@@ -2,10 +2,13 @@
 @use '../task/task.component.mixins' as *;
 
 :host {
+  box-sizing: border-box;
   position: relative;
   z-index: 1;
   display: block;
+  min-height: 100%;
   padding-bottom: var(--s);
+  background: var(--card-bg);
 
   task-list {
     padding: 0;
@@ -32,12 +35,11 @@ progress-bar {
   display: flex;
   align-items: center;
   z-index: var(--z-right-panel);
-  border-radius: var(--card-border-radius);
+  border-radius: 0;
   margin: var(--s);
-  border-bottom: 2px solid var(--c-primary) !important;
+  border-bottom: 1px solid var(--divider-color);
 
   ::ng-deep textarea {
-    border: 2px solid red;
     font-weight: 600 !important;
   }
 

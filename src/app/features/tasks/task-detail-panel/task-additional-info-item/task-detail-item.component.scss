@@ -54,11 +54,12 @@
   border-bottom: 1px solid var(--divider-color);
   margin: 0 var(--s);
   border-radius: 0;
-  background: var(--task-detail-bg);
+  background: transparent;
   font-size: 14px;
 
-  :host-context(.isNoTouchOnly):focus & {
-    border-color: var(--palette-primary-400) !important;
+  :host-context(.isNoTouchOnly):focus-visible & {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: calc(-1 * var(--focus-ring-width));
   }
 }
 
@@ -66,11 +67,7 @@
   border: 1px solid var(--divider-color);
   margin: var(--s);
   border-radius: var(--card-border-radius);
-  box-shadow: var(--task-detail-shadow);
-
-  @include mq(xs, max) {
-    box-shadow: none;
-  }
+  background: var(--task-detail-bg);
 }
 
 .mat-expansion-panel::ng-deep .mat-expansion-panel-header {
@@ -150,17 +147,14 @@
   }
 
   &.isFocused .markdown-wrapper {
-    box-shadow: var(--whiteframe-shadow-3dp) !important;
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
   .markdown-unparsed,
   .markdown-parsed {
-    background: var(--bg-lightest);
+    background: transparent;
     color: inherit;
-
-    @include lightTheme() {
-      @include extraBorder();
-    }
   }
 }
 
