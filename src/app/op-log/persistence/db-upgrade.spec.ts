@@ -328,9 +328,15 @@ describe('runDbUpgrade', () => {
 
         expect(rejection).toEqual(jasmine.objectContaining({ name: 'VersionError' }));
         // #9187: the rejection an old reader actually gets must be the one the
-        // user-facing classifier recognises. Asserting it here — on a real
-        // downgrade rather than a hand-built DOMException — is what keeps the
-        // dialog from falling back to "your storage may need to be cleared".
+        // user-facing classifier recognises, or the dialog falls back to
+        // "your storage may need to be cleared".
+        //
+        // Scope of this oracle: a real downgrade through `openDB`, but on the
+        // fake-indexeddb engine `src/test.ts` installs — NOT Blink. Verified
+        // separately against Chromium 149, which returns
+        //   name: 'VersionError', instanceof DOMException && instanceof Error,
+        //   message: 'The requested version (7) is less than the existing version (10).'
+        // — byte-identical to the message in the #9187 report.
         expect(isIdbVersionError(rejection)).toBe(true);
       } finally {
         await deleteDB(dbName);
