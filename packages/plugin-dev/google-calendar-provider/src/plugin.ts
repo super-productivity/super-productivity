@@ -11,7 +11,7 @@ import type {
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
-  getOAuthToken(): Promise<string | null>;
+  getOAuthToken(tokenKey?: string): Promise<string | null>;
   clearOAuthToken(): Promise<void>;
 };
 
@@ -39,9 +39,12 @@ const MOBILE_CLIENT_ID =
 const IOS_CLIENT_ID =
   '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
 
+const SP_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
+
 // --- Config ---
 
 interface GoogleCalendarConfig {
+  [SP_OAUTH_TOKEN_KEY_CFG_KEY]?: string;
   readCalendarIds?: string[];
   writeCalendarId?: string;
   syncRangeWeeks?: string;
@@ -396,8 +399,11 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  async getHeaders(_config: Record<string, unknown>): Promise<Record<string, string>> {
-    const token = await PluginAPI.getOAuthToken();
+  async getHeaders(config: Record<string, unknown>): Promise<Record<string, string>> {
+    const cfg = migrateConfig(config);
+    const token = cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY]
+      ? await PluginAPI.getOAuthToken(cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY])
+      : await PluginAPI.getOAuthToken();
     if (!token) {
       throw new Error('Not authenticated. Please connect your Google account first.');
     }

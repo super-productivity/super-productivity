@@ -270,9 +270,12 @@ export class PluginBridgeService implements OnDestroy {
     registerConfigHandler: (handler: () => void) => void;
     registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
     unregisterIssueProvider: () => void;
-    startOAuthFlow: (config: OAuthFlowConfig) => Promise<OAuthTokenResult>;
-    getOAuthToken: () => Promise<string | null>;
-    clearOAuthToken: () => Promise<void>;
+    startOAuthFlow: (
+      config: OAuthFlowConfig,
+      tokenKey?: string,
+    ) => Promise<OAuthTokenResult>;
+    getOAuthToken: (tokenKey?: string) => Promise<string | null>;
+    clearOAuthToken: (tokenKey?: string) => Promise<void>;
     setSecret: (key: string, value: string) => Promise<void>;
     getSecret: (key: string) => Promise<string | null>;
     deleteSecret: (key: string) => Promise<void>;
@@ -361,15 +364,19 @@ export class PluginBridgeService implements OnDestroy {
       },
 
       // OAuth
-      startOAuthFlow: (config: OAuthFlowConfig): Promise<OAuthTokenResult> =>
-        this._pluginOAuthBridge.startOAuthFlow(pluginId, config),
-      getOAuthToken: (): Promise<string | null> =>
+      startOAuthFlow: (
+        config: OAuthFlowConfig,
+        tokenKey?: string,
+      ): Promise<OAuthTokenResult> =>
+        this._pluginOAuthBridge.startOAuthFlow(pluginId, config, tokenKey),
+      getOAuthToken: (tokenKey?: string): Promise<string | null> =>
         this._pluginOAuthBridge.getOAuthToken(
           pluginId,
           this._getOAuthConfigForPlugin(pluginId),
+          tokenKey,
         ),
-      clearOAuthToken: (): Promise<void> =>
-        this._pluginOAuthBridge.clearOAuthTokens(pluginId),
+      clearOAuthToken: (tokenKey?: string): Promise<void> =>
+        this._pluginOAuthBridge.clearOAuthToken(pluginId, tokenKey),
 
       // Secret storage (local-only, per-plugin, never synced)
       setSecret: (key: string, value: string): Promise<void> =>
@@ -482,6 +489,7 @@ export class PluginBridgeService implements OnDestroy {
         definition,
         (getHeaders) => this._pluginHttpService.createHttpHelper(getHeaders, httpOpts),
         this._tagService,
+        pluginId,
       );
       this._syncAdapterRegistry.register(registeredKey, adapter);
       PluginLog.log(
@@ -497,12 +505,24 @@ export class PluginBridgeService implements OnDestroy {
   async startOAuthFlow(
     pluginId: string,
     config: OAuthFlowConfig,
+    tokenKey?: string,
   ): Promise<OAuthTokenResult> {
-    return this._pluginOAuthBridge.startOAuthFlow(pluginId, config);
+    return this._pluginOAuthBridge.startOAuthFlow(pluginId, config, tokenKey);
   }
 
   async clearOAuthTokens(pluginId: string): Promise<void> {
     return this._pluginOAuthBridge.clearOAuthTokens(pluginId);
+  }
+
+  async clearOAuthToken(pluginId: string, tokenKey?: string): Promise<void> {
+    return this._pluginOAuthBridge.clearOAuthToken(pluginId, tokenKey);
+  }
+
+  async migrateLegacyOAuthTokenToScopedKey(
+    pluginId: string,
+    tokenKey: string,
+  ): Promise<boolean> {
+    return this._pluginOAuthBridge.migrateLegacyOAuthTokenToScopedKey(pluginId, tokenKey);
   }
 
   async request<T = unknown>(
@@ -577,10 +597,14 @@ export class PluginBridgeService implements OnDestroy {
     }
   }
 
-  async restoreAndCheckOAuthTokens(pluginId: string): Promise<boolean> {
+  async restoreAndCheckOAuthTokens(
+    pluginId: string,
+    tokenKey?: string,
+  ): Promise<boolean> {
     return this._pluginOAuthBridge.restoreAndCheckOAuthTokens(
       pluginId,
       this._getOAuthConfigForPlugin(pluginId),
+      tokenKey,
     );
   }
 
