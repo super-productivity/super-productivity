@@ -15,11 +15,10 @@
   // custom title bar (the header still owns the drag region + native
   // window controls); elsewhere it starts at viewport top.
   body > nav.action-nav-right.action-nav-right--teleported {
-    // --header-nav-button-gap is declared on <main-header>'s :host, but the
-    // strip is teleported to <body> and out of that scope, so the var would
-    // be undefined here (gap: 0 — everything cramped). Re-declare it. One
-    // value drives the spacing between every button in the strip.
+    // Header spacing tokens are declared on <main-header>'s :host, but the
+    // strip is teleported to <body> and out of that scope, so re-declare them.
     --header-nav-button-gap: var(--s);
+    --header-action-group-gap: var(--s2);
     display: flex;
     position: fixed;
     // Default: strip starts at viewport top (web, Mac, native-frame
@@ -47,12 +46,18 @@
     -webkit-app-region: no-drag;
     box-sizing: border-box;
 
-    // No extra margin-bottom here: the strip's `gap` already spaces this
-    // group from the buttons below it, so spacing stays uniform.
-    > .counters-action-group {
+    > .header-action-group {
       flex-direction: column;
       margin-right: 0;
       gap: var(--header-nav-button-gap);
+    }
+
+    > .primary-action-group,
+    > .counters-action-group {
+      margin-inline-end: 0;
+      margin-block-end: calc(
+        var(--header-action-group-gap) - var(--header-nav-button-gap)
+      );
     }
 
     // These wrapper custom-elements have no box of their own (height 0),

@@ -181,6 +181,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
 
       .project-settings-btn {
         opacity: 1;
+        color: var(--text-color-muted);
 
         /*display: none;*/
         /*@media (min-width: 600px) {*/
@@ -200,6 +201,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
 
       .task-filter-btn {
         position: relative;
+        color: var(--text-color-muted);
         transition: all 0.2s ease;
         overflow: visible !important;
 
@@ -222,6 +224,19 @@ import { KeyboardConfig } from '@sp/keyboard-config';
           cursor: not-allowed;
           background: transparent !important;
         }
+      }
+
+      :host-context(.wrapper:hover) .project-settings-btn,
+      :host-context(.wrapper:hover) .task-filter-btn:not(.isCustomized),
+      :host-context(.wrapper:focus-within) .project-settings-btn,
+      :host-context(.wrapper:focus-within) .task-filter-btn:not(.isCustomized),
+      .page-title-actions:is(:hover, :focus-within) .project-settings-btn,
+      .page-title-actions:is(:hover, :focus-within) .task-filter-btn:not(.isCustomized) {
+        color: var(--text-color);
+      }
+
+      .project-settings-btn[aria-expanded='true'] {
+        color: var(--brand);
       }
     `,
   ],

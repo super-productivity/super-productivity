@@ -15,7 +15,12 @@
   position: relative;
   user-select: none;
   --header-nav-button-gap: var(--s-half);
+  --header-action-group-gap: var(--s);
   --header-button-size: 40px;
+
+  @include mq(xs) {
+    --header-action-group-gap: var(--s2);
+  }
 }
 
 :host-context(.isMac.isElectron) {
@@ -111,12 +116,44 @@ button.isActive2 {
   transition: background var(--transition-standard);
 }
 
-.counters-action-group {
+.header-action-group {
   display: flex;
   align-items: center;
   gap: var(--header-nav-button-gap);
   flex-shrink: 0;
-  margin-right: calc(var(--s) * 1.5);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.primary-action-group {
+  margin-inline-end: calc(var(--header-action-group-gap) - var(--header-nav-button-gap));
+
+  ::ng-deep play-button .play-btn-wrapper {
+    margin: 0;
+  }
+
+  ::ng-deep play-button .pulse-circle {
+    display: none;
+  }
+}
+
+.secondary-action-group,
+.secondary-header-action {
+  color: var(--text-color-muted);
+
+  ::ng-deep button:not(.mat-accent):not(.isActive):not(.active) {
+    color: var(--text-color-muted);
+
+    &:is(:hover, :focus-visible):not(:disabled) {
+      color: var(--text-color);
+    }
+  }
+}
+
+.counters-action-group {
+  margin-inline-end: calc(var(--header-action-group-gap) - var(--header-nav-button-gap));
 
   ::ng-deep button {
     width: 36px;
@@ -151,19 +188,15 @@ button.isActive2 {
   // bypass Angular view encapsulation (and any containing-block surprises
   // from this file). See `nav.action-nav-right` rules there.
 
-  // Set 20px icon sizing for buttons outside counters-action-group
-  // (add button, panel buttons, etc.)
-  > button:not(.sync-btn) .mat-icon:not(.sync-state-ico),
-  ::ng-deep
-    > *:not(.counters-action-group):not(.sync-btn)
-    .mat-icon:not(.sync-state-ico) {
+  // Keep every header action on the same compact icon grid.
+  ::ng-deep button:not(.sync-btn) .mat-icon:not(.sync-state-ico) {
     font-size: 20px;
     width: 20px;
     height: 20px;
     line-height: 20px;
   }
 
-  > button.sync-btn .mat-icon:not(.sync-state-ico) {
+  ::ng-deep button.sync-btn .mat-icon:not(.sync-state-ico) {
     font-size: 24px;
     width: 24px;
     height: 24px;
@@ -279,9 +312,14 @@ page-title {
 }
 
 .spin {
-  animation: spin 1.5s linear infinite;
+  animation: spin calc(var(--transition-duration-l) * 4) linear infinite;
   will-change: transform;
   transform-origin: center center;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    will-change: auto;
+  }
 }
 
 @keyframes spin {
@@ -304,6 +342,20 @@ page-title {
 
 .sync-btn {
   position: relative;
+  color: var(--text-color-muted);
+
+  &:is(:hover, :focus-visible) {
+    color: var(--text-color);
+  }
+
+  &.is-in-progress {
+    color: var(--brand);
+  }
+
+  &.is-error,
+  &.is-offline {
+    color: var(--button-warn-label);
+  }
 }
 
 .sync-state-ico {

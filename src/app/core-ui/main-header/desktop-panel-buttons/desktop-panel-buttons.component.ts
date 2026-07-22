@@ -79,15 +79,16 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
         }
 
         &.isActive {
-          box-shadow: 0px -2px 3px 0px var(--separator-alpha);
-          background-color: transparent;
+          box-shadow: none;
+          color: var(--brand);
+          background-color: var(--state-selected);
 
           &::after {
             border-radius: 4px;
           }
 
           .mat-icon {
-            transform: rotate(45deg);
+            transform: none;
           }
         }
 
