@@ -1123,8 +1123,8 @@ export class OperationLogHydratorService {
    */
   private _showIndexedDBOpenError(error: IndexedDBOpenError): void {
     // Log full error details to console for debugging (can be copied by users).
-    // Deliberately does not mention retries — the barrier path breaks out after
-    // ONE attempt (#9187); `error.message` names which case this is.
+    // Deliberately does not mention retries — the barrier path stops as soon as
+    // it is hit (#9187); `error.message` names which case this is.
     OpLog.err('IndexedDB open failed. Original error:', error.originalError);
 
     // For backing-store errors (common during Linux session startup with autostart),

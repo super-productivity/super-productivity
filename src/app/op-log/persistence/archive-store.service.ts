@@ -168,7 +168,7 @@ export class ArchiveStoreService {
     // cause needed for diagnostics (e.g. distinguishing Chromium LevelDB locks
     // from WebKit's iOS "Connection to Indexed Database server lost", #7415).
     const err = new IndexedDBOpenError(lastError);
-    // See OperationLogStoreService: zero retries ran on the barrier path (#9187).
+    // See OperationLogStoreService: the barrier path stops retrying (#9187).
     Log.err('[ArchiveStore] IndexedDB open failed.', err);
     throw err;
   }

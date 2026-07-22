@@ -502,8 +502,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     // carries the formatted original detail, so logging the wrapper exposes
     // everything we need.
     const err = new IndexedDBOpenError(lastError);
-    // Deliberately does not mention retries: the barrier path breaks out after
-    // ONE attempt. `err.message` already names which case this is (#9187).
+    // Deliberately does not mention retries: the barrier path stops as soon as
+    // it is hit. `err.message` already names which case this is (#9187).
     Log.err('[OpLogStore] IndexedDB open failed.', err);
     throw err;
   }

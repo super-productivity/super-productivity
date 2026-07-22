@@ -242,7 +242,7 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
     }
 
     const err = new IndexedDBOpenError(lastError);
-    // See OperationLogStoreService: zero retries ran on the barrier path (#9187).
+    // See OperationLogStoreService: the barrier path stops retrying (#9187).
     Log.err('[OpLogAdapter] IndexedDB open failed.', err);
     throw err;
   }
