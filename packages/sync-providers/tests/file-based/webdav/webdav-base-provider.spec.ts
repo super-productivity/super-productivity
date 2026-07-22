@@ -296,6 +296,34 @@ describe('NextcloudProvider', () => {
     );
   });
 
+  it('uses Nextcloud canonical OC-ETag revisions', async () => {
+    const nativeHttp = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: {
+        ETag: '"strong-rev-gzip"',
+        ['OC-ETag']: '"strong-rev"',
+      },
+      data: 'real-payload',
+    });
+    const provider = new NextcloudProvider({
+      logger: NOOP_SYNC_LOGGER,
+      platformInfo: {
+        isNativePlatform: true,
+        isAndroidWebView: false,
+        isIosNative: false,
+      },
+      webFetch: () => globalThis.fetch as typeof fetch,
+      nativeHttp,
+      credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>(
+        validNextcloudCfg,
+      ),
+    });
+
+    const result = await provider.downloadFile('op-1.json');
+
+    expect(result.rev).toBe('"strong-rev"');
+  });
+
   it('_cfgOrError rejects missing serverUrl', async () => {
     const provider = new NextcloudProvider({
       logger: NOOP_SYNC_LOGGER,

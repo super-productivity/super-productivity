@@ -65,12 +65,17 @@ const makeApi = (
   adapter: MockAdapter,
   logger: SyncLogger = NOOP_SYNC_LOGGER,
   overrideCfg: WebdavPrivateCfg = cfg,
+  useCanonicalOcEtag = false,
 ): WebdavApi =>
   new WebdavApi({
     logger,
     getCfg: async () => overrideCfg,
     httpAdapter: adapter as unknown as WebDavHttpAdapter,
+    useCanonicalOcEtag,
   });
+
+const makeNextcloudApi = (adapter: MockAdapter): WebdavApi =>
+  makeApi(adapter, NOOP_SYNC_LOGGER, cfg, true);
 
 const okResponse = (
   data: string,
@@ -110,7 +115,10 @@ interface FakeDavFile {
  */
 const makeFakeDavServer = (
   file: FakeDavFile,
-  { etagSuffix = '' }: { etagSuffix?: string } = {},
+  {
+    etagSuffix = '',
+    exposeOcEtag = false,
+  }: { etagSuffix?: string; exposeOcEtag?: boolean } = {},
 ): MockAdapter => {
   const adapter = makeAdapter();
   let writes = 0;
@@ -121,7 +129,10 @@ const makeFakeDavServer = (
     const { method, headers, body } = raw as DavRequest;
 
     if (method === 'GET') {
-      return okResponse(file.body, 200, { etag: servedTag() });
+      return okResponse(file.body, 200, {
+        etag: servedTag(),
+        ...(exposeOcEtag ? { ['OC-ETag']: comparedTag() } : {}),
+      });
     }
     if (method === 'PUT') {
       const ifMatch = headers?.[WebDavHttpHeader.IF_MATCH];
@@ -189,6 +200,56 @@ describe('WebdavApi', () => {
       const result = await makeApi(adapter).download({ path: 'op-1.json' });
 
       expect(result.rev).toBe('"strong-rev"');
+    });
+
+    it('uses the canonical OC-ETag when Nextcloud HTTP ETag was rewritten', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, {
+          ETag: '"strong-rev-gzip"',
+          ['OC-ETag']: '"different-rev"',
+        }),
+      );
+
+      const result = await makeNextcloudApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe('"different-rev"');
+    });
+
+    it('ignores a matching OC-ETag for a generic WebDAV origin', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, {
+          ETag: '"strong-rev-gzip"',
+          ['OC-ETag']: '"strong-rev"',
+        }),
+      );
+
+      const result = await makeApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe('"strong-rev-gzip"');
+    });
+
+    it('uses a canonical OC-ETag when the HTTP ETag is not exposed', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, { ['OC-ETag']: '"strong-rev"' }),
+      );
+
+      const result = await makeNextcloudApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe('"strong-rev"');
+    });
+
+    it('uses the content hash when Nextcloud OC-ETag is not exposed', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(
+        okResponse('hello world', 200, { ETag: '"strong-rev-gzip"' }),
+      );
+
+      const result = await makeNextcloudApi(adapter).download({ path: 'op-1.json' });
+
+      expect(result.rev).toBe(await md5HashWasm('hello world'));
     });
 
     it('does not trust a weak ETag as an atomic revision', async () => {
@@ -313,32 +374,56 @@ describe('WebdavApi', () => {
     describe('servers that rewrite the ETag they serve (#9154 / #9196)', () => {
       it("completes the upload when the served ETag carries mod_deflate's -gzip suffix", async () => {
         const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
-        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
-        const api = makeApi(adapter);
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-gzip',
+          exposeOcEtag: true,
+        });
+        const api = makeNextcloudApi(adapter);
 
-        // The rev the rest of the app is handed is the mangled tag.
+        // Nextcloud supplies the canonical validator explicitly. The app must
+        // not reconstruct it from the opaque, content-coded HTTP ETag.
         const { rev } = await api.download({ path: 'op-1.json' });
-        expect(rev).toBe('"abc-gzip"');
+        expect(rev).toBe('"abc"');
 
         await api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev });
 
         expect(file.body).toBe('my new body');
-        // The write stays atomic and costs no retry: one conditional PUT that
-        // offers the server both spellings of the tag.
+        // The write stays atomic and costs no retry: one exact conditional PUT
+        // using the validator that Nextcloud itself supplied.
         const puts = putsOf(adapter);
         expect(puts).toHaveLength(1);
-        expect(puts[0]?.headers?.[WebDavHttpHeader.IF_MATCH]).toBe('"abc-gzip", "abc"');
+        expect(puts[0]?.headers?.[WebDavHttpHeader.IF_MATCH]).toBe('"abc"');
       });
 
       it('still refuses to overwrite a genuine concurrent write', async () => {
         const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
-        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
-        const api = makeApi(adapter);
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-gzip',
+          exposeOcEtag: true,
+        });
+        const api = makeNextcloudApi(adapter);
         const { rev } = await api.download({ path: 'op-1.json' });
 
         // Another client writes between our download and our upload.
         file.body = 'their body';
         file.tag = 'xyz';
+
+        await expect(
+          api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(file.body).toBe('their body');
+      });
+
+      it('does not treat a derived bare tag as the revision that was downloaded', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc-gzip' };
+        const adapter = makeFakeDavServer(file);
+        const api = makeNextcloudApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+
+        // Entity tags are opaque. `"abc"` is a distinct, newer revision — it
+        // must not match merely because the downloaded tag ended in `-gzip`.
+        file.body = 'their body';
+        file.tag = 'abc';
 
         await expect(
           api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev }),
@@ -363,8 +448,11 @@ describe('WebdavApi', () => {
         // The rev handed back after an upload is mangled too, so a fix that only
         // recovered once would 412 forever from the second upload on.
         const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
-        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
-        const api = makeApi(adapter);
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-gzip',
+          exposeOcEtag: true,
+        });
+        const api = makeNextcloudApi(adapter);
 
         const first = await api.download({ path: 'op-1.json' });
         const { rev } = await api.upload({

@@ -24,15 +24,6 @@ import type { WebdavPrivateCfg } from './webdav.model';
  */
 const STRONG_ETAG_RE = /^"[\x21\x23-\x7e\x80-\xff]*"$/;
 
-/**
- * Content-coding suffixes Apache appends to the ETag it SERVES on a compressed
- * response — `mod_deflate` under its default `DeflateAlterETag AddSuffix`, and
- * `mod_brotli` likewise. The origin keeps comparing `If-Match` against the bare
- * tag, so a client that echoes back what it was served can never satisfy the
- * precondition (#9154, #9196).
- */
-const CONTENT_CODING_ETAG_SUFFIX_RE = /-(?:gzip|br|deflate)"$/;
-
 export interface WebdavApiDeps {
   logger: SyncLogger;
   /**
@@ -42,6 +33,8 @@ export interface WebdavApiDeps {
    */
   getCfg: () => Promise<WebdavPrivateCfg>;
   httpAdapter: WebDavHttpAdapter;
+  /** Nextcloud's DAV layer exposes its canonical validator in `OC-ETag`. */
+  useCanonicalOcEtag?: boolean;
 }
 
 export class WebdavApi {
@@ -62,35 +55,38 @@ export class WebdavApi {
    * malformed values cannot safely drive `If-Match`, so callers fall back to a
    * content hash and the legacy best-effort check instead.
    */
-  private _readStrongEtag(headers: Record<string, string>): string | undefined {
-    const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === 'etag');
+  private _readStrongEtag(
+    headers: Record<string, string>,
+    headerName: string,
+  ): string | undefined {
+    const entry = Object.entries(headers).find(
+      ([name]) => name.toLowerCase() === headerName,
+    );
     const etag = entry?.[1]?.trim();
     return etag && STRONG_ETAG_RE.test(etag) ? etag : undefined;
   }
 
-  private _isStrongEtag(value: string): boolean {
-    return STRONG_ETAG_RE.test(value);
+  /**
+   * Returns a strong validator that can be echoed back exactly in `If-Match`.
+   *
+   * Nextcloud exposes its canonical validator as `OC-ETag`, specifically so it
+   * survives HTTP-server rewrites such as Apache's content-coding suffix
+   * (#9154, #9196). Only the dedicated Nextcloud provider enables that
+   * extension; generic WebDAV entity tags are opaque and must never be
+   * rewritten. If browser CORS hides `OC-ETag`, Nextcloud falls back to the
+   * existing content-hash check instead of trusting a potentially rewritten
+   * HTTP `ETag`.
+   */
+  private _readStrongRevision(headers: Record<string, string>): string | undefined {
+    if (this._deps.useCanonicalOcEtag) {
+      return this._readStrongEtag(headers, 'oc-etag');
+    }
+
+    return this._readStrongEtag(headers, 'etag');
   }
 
-  /**
-   * `If-Match` value for a rev, offering the bare tag alongside the served one
-   * whenever the served tag carries a content-coding suffix.
-   *
-   * RFC 7232 lets `If-Match` carry a list and the precondition passes if ANY
-   * member matches, so we let the server pick whichever form it actually
-   * compares. This keeps the write atomic — no precondition is ever dropped —
-   * and costs no extra round trip. A genuine concurrent write still matches
-   * neither candidate and is rejected as before.
-   *
-   * Verified against Apache 2.4 + mod_dav + mod_deflate (list → 204, stale list
-   * → 412); sabre/dav, which evaluates `If-Match` for Nextcloud, splits the list
-   * the same way.
-   */
-  private _ifMatchValue(rev: string): string {
-    const bare = rev.replace(CONTENT_CODING_ETAG_SUFFIX_RE, '"');
-    // `""` would be a degenerate tag: a rev of `"-gzip"` is a tag in its own
-    // right, not a suffixed one.
-    return bare === rev || bare === '""' ? rev : `${rev}, ${bare}`;
+  private _isStrongEtag(value: string): boolean {
+    return STRONG_ETAG_RE.test(value);
   }
 
   private _isHttpStatus(error: unknown, status: number): boolean {
@@ -219,7 +215,7 @@ export class WebdavApi {
 
       const hash = await this._computeContentHash(response.data);
       return {
-        rev: this._readStrongEtag(response.headers) ?? hash,
+        rev: this._readStrongRevision(response.headers) ?? hash,
         dataStr: response.data,
       };
     } catch (e) {
@@ -285,7 +281,7 @@ export class WebdavApi {
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/octet-stream',
       };
       if (!isForceOverwrite && strongExpectedRev) {
-        headers[WebDavHttpHeader.IF_MATCH] = this._ifMatchValue(strongExpectedRev);
+        headers[WebDavHttpHeader.IF_MATCH] = strongExpectedRev;
       } else if (!isForceOverwrite && expectedRev === null) {
         headers[WebDavHttpHeader.IF_NONE_MATCH] = '*';
       }
@@ -414,7 +410,7 @@ export class WebdavApi {
           `sync cycle will re-download and reconcile.`,
       );
     }
-    return this._readStrongEtag(remoteResponse.headers) ?? remoteHash;
+    return this._readStrongRevision(remoteResponse.headers) ?? remoteHash;
   }
 
   async remove(path: string): Promise<void> {
