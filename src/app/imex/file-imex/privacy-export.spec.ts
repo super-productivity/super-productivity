@@ -30,13 +30,6 @@ describe('privacyExport', () => {
       expect(result.token).not.toBe('abc123xyz');
     });
 
-    it('should mask localRestApiToken field', () => {
-      const input = { localRestApiToken: 'secret123' };
-      const result = JSON.parse(privacyExport(input));
-      expect(result.localRestApiToken).toMatch(/^localRestApiToken__\d+$/);
-      expect(result.localRestApiToken).not.toBe('secret123');
-    });
-
     it('should mask title field', () => {
       const input = { title: 'My Private Task' };
       const result = JSON.parse(privacyExport(input));

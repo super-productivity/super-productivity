@@ -28,7 +28,6 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
   isLocalRestApiEnabled?: boolean;
-  localRestApiToken?: string;
   // Desktop-only daily check for a newer GitHub release (#5463). Optional
   // because it was added later; a missing key means ON (see UpdateCheckService).
   isCheckForUpdates?: boolean;

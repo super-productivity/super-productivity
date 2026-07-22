@@ -6,12 +6,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Log } from '../../core/log';
 
-const isPromiseLike = (value: unknown): value is Promise<unknown> =>
-  value !== null &&
-  (typeof value === 'object' || typeof value === 'function') &&
-  'then' in value &&
-  typeof value.then === 'function';
-
 @Component({
   selector: 'formly-btn',
   templateUrl: './formly-btn.component.html',
@@ -23,8 +17,9 @@ export class FormlyBtnComponent extends FieldType<FormlyFieldConfig> {
   onClick(): void {
     if (this.to.onClick) {
       const r = this.to.onClick(this.field, this.form, this.model);
-      if (isPromiseLike(r)) {
+      if (r && 'then' in r) {
         r.then((v) => {
+          Log.log('update', v, this);
           this.formControl.setValue(v);
           this.form.markAsDirty();
         }).catch((err) => {
@@ -32,7 +27,6 @@ export class FormlyBtnComponent extends FieldType<FormlyFieldConfig> {
         });
       } else {
         this.formControl.setValue(r);
-        this.form.markAsDirty();
       }
     }
   }

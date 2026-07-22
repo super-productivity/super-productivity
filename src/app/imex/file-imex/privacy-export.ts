@@ -14,7 +14,6 @@ const KEY_TO_REPLACE = [
   'notes',
   'authCode',
   'accessToken',
-  'localRestApiToken',
   'host',
   'gitlabBaseUrl',
   'nextcloudBaseUrl',

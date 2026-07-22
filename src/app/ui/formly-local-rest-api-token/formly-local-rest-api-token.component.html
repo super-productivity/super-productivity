@@ -1,0 +1,21 @@
+<div class="local-rest-api-token">
+  @if (token()) {
+    <input
+      class="token-value"
+      type="text"
+      readonly
+      [value]="token()"
+      (focus)="$any($event.target).select()"
+      [attr.aria-label]="T.GCF.MISC.LOCAL_REST_API_TOKEN | translate"
+    />
+  }
+  <button
+    mat-stroked-button
+    color="primary"
+    type="button"
+    [disabled]="isRegenerating()"
+    (click)="regenerate()"
+  >
+    {{ T.GCF.MISC.LOCAL_REST_API_TOKEN_REGENERATE | translate }}
+  </button>
+</div>

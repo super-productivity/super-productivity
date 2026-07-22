@@ -31,7 +31,6 @@ import {
   selectMiscConfig,
 } from './global-config.reducer';
 import { mapKeyboardConfigToQwerty } from '../keyboard-shortcut.util';
-import { generateLocalRestApiToken } from '../local-rest-api-token.util';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
@@ -40,13 +39,9 @@ import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { Log } from '../../../core/log';
 import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
-import { FULL_STATE_OP_TYPES, Operation } from '../../../op-log/core/operation.types';
+import { FULL_STATE_OP_TYPES } from '../../../op-log/core/operation.types';
 
 const LAYOUT_DETECTION_TIMEOUT_MS = 1000;
-
-const isGlobalConfigMiscOrFullStateOp = (op: Operation): boolean =>
-  (op.entityType === 'GLOBAL_CONFIG' && op.entityId === 'misc') ||
-  FULL_STATE_OP_TYPES.has(op.opType);
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -234,7 +229,13 @@ export class GlobalConfigEffects {
   setStartOfNextDayDiffOnBulkApply = createEffect(() =>
     this._actions$.pipe(
       ofType(bulkApplyOperations),
-      filter(({ operations }) => operations.some(isGlobalConfigMiscOrFullStateOp)),
+      filter(({ operations }) =>
+        operations.some(
+          (op) =>
+            (op.entityType === 'GLOBAL_CONFIG' && op.entityId === 'misc') ||
+            FULL_STATE_OP_TYPES.has(op.opType),
+        ),
+      ),
       withLatestFrom(this._store.select(selectMiscConfig)),
       map(([, misc]) => {
         const normalizedMisc = normalizeStartOfNextDayConfig(misc);
@@ -269,56 +270,13 @@ export class GlobalConfigEffects {
       this._actions$.pipe(
         ofType(loadAllData),
         filter(() => this._isElectron),
-        withLatestFrom(this._store.select(selectConfigFeatureState)),
-        tap(([, globalConfig]) => {
-          const cfg = globalConfig || DEFAULT_GLOBAL_CONFIG;
+        tap(({ appDataComplete }) => {
+          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
           // Send initial settings to electron for overlay initialization
           window.ea.sendSettingsUpdate(cfg);
         }),
       ),
     { dispatch: false },
-  );
-
-  notifyElectronAboutCfgChangeAfterBulkApply = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(bulkApplyOperations),
-        filter(() => this._isElectron),
-        filter(({ operations }) => operations.some(isGlobalConfigMiscOrFullStateOp)),
-        withLatestFrom(this._store.select(selectConfigFeatureState)),
-        tap(([, globalConfig]) => {
-          window.ea.sendSettingsUpdate(globalConfig);
-        }),
-      ),
-    { dispatch: false },
-  );
-
-  ensureLocalRestApiToken$ = createEffect(() =>
-    this._actions$.pipe(
-      ofType(loadAllData, bulkApplyOperations),
-      filter(() => this._isElectron),
-      filter((action) => {
-        if (action.type === loadAllData.type) {
-          return true;
-        }
-        return (action as ReturnType<typeof bulkApplyOperations>).operations.some(
-          isGlobalConfigMiscOrFullStateOp,
-        );
-      }),
-      withLatestFrom(this._store.select(selectMiscConfig)),
-      concatMap(([, misc]) => {
-        if (misc.isLocalRestApiEnabled && !misc.localRestApiToken) {
-          const localRestApiToken = generateLocalRestApiToken();
-          return [
-            updateGlobalConfigSection({
-              sectionKey: 'misc',
-              sectionCfg: { localRestApiToken },
-            }),
-          ];
-        }
-        return [];
-      }),
-    ),
   );
 
   // Handle user profiles being enabled/disabled

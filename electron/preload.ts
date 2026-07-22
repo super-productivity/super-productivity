@@ -294,6 +294,9 @@ const ea: ElectronAPI = {
   },
   sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
     _send(IPC.LOCAL_REST_API_RESPONSE, payload),
+  getLocalRestApiToken: () => _invoke(IPC.LOCAL_REST_API_GET_TOKEN) as Promise<string>,
+  regenerateLocalRestApiToken: () =>
+    _invoke(IPC.LOCAL_REST_API_REGENERATE_TOKEN) as Promise<string>,
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

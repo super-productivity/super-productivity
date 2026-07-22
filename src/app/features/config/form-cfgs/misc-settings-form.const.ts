@@ -8,7 +8,6 @@ import { T } from '../../../t.const';
 import { IS_ELECTRON, IS_GNOME_WAYLAND } from '../../../app.constants';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { isUpdateCheckPossible } from '../../../core/update-check/is-update-check-possible.util';
-import { generateLocalRestApiToken } from '../local-rest-api-token.util';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
@@ -50,15 +49,6 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
               label: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED,
               description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
             },
-            hooks: {
-              onInit: (field) => {
-                field?.formControl?.valueChanges.subscribe((isEnabled) => {
-                  if (isEnabled && !field.model.localRestApiToken) {
-                    field.model.localRestApiToken = generateLocalRestApiToken();
-                  }
-                });
-              },
-            },
           },
           {
             type: 'tpl',
@@ -72,17 +62,11 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
             },
           },
           {
-            key: 'localRestApiToken',
-            type: 'btn',
+            // Keyless: the token is owned by the Electron main process and read
+            // over IPC, never stored in the synced misc config.
+            type: 'local-rest-api-token',
             expressions: {
               hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isLocalRestApiEnabled,
-            },
-            templateOptions: {
-              text: T.GCF.MISC.LOCAL_REST_API_TOKEN_REGENERATE,
-              btnStyle: 'stroked',
-              onClick: () => {
-                return generateLocalRestApiToken();
-              },
             },
           },
         ]

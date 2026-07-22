@@ -1,7 +1,9 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
@@ -32,8 +34,81 @@ const pendingRequests = new Map<
   }
 >();
 
+// The access token is owned by the main process, not the synced config: it
+// authenticates a loopback server that only exists on this one machine, so
+// syncing it would leak an authentication secret into the op-log and to every
+// other device for no benefit. It is persisted to a 0600 file under userData so
+// it survives restarts, and the renderer reads/regenerates it over IPC.
+const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const TOKEN_LENGTH = 32;
+// Largest multiple of the alphabet size that fits in a byte. Bytes at or above
+// it are discarded instead of folded in with `%`, which would make the first
+// `256 % 62` characters slightly more likely than the rest.
+const MAX_UNBIASED_BYTE = Math.floor(256 / TOKEN_ALPHABET.length) * TOKEN_ALPHABET.length;
+
 let localRestApiToken: string | undefined = undefined;
 let generatedForcedDevToken: string | undefined = undefined;
+
+// Alphanumeric so it survives being copied out of the settings UI and pasted
+// into a shell command without quoting.
+const generateToken = (): string => {
+  let token = '';
+  while (token.length < TOKEN_LENGTH) {
+    for (const byte of randomBytes(TOKEN_LENGTH)) {
+      if (byte >= MAX_UNBIASED_BYTE) {
+        continue;
+      }
+      token += TOKEN_ALPHABET[byte % TOKEN_ALPHABET.length];
+      if (token.length === TOKEN_LENGTH) {
+        break;
+      }
+    }
+  }
+  return token;
+};
+
+const getTokenFilePath = (): string =>
+  join(app.getPath('userData'), 'local-rest-api-token');
+
+const loadPersistedToken = (): string | undefined => {
+  try {
+    const filePath = getTokenFilePath();
+    if (!existsSync(filePath)) {
+      return undefined;
+    }
+    const token = readFileSync(filePath, 'utf8').trim();
+    return token || undefined;
+  } catch (error) {
+    warn('[local-rest-api] Failed to read access token file', error);
+    return undefined;
+  }
+};
+
+const persistToken = (token: string): void => {
+  try {
+    writeFileSync(getTokenFilePath(), token, { encoding: 'utf8', mode: 0o600 });
+  } catch (error) {
+    warn('[local-rest-api] Failed to persist access token file', error);
+  }
+};
+
+/** Returns the active token, generating and persisting one if none exists yet. */
+const ensureToken = (): string => {
+  if (!localRestApiToken) {
+    localRestApiToken = loadPersistedToken();
+  }
+  if (!localRestApiToken) {
+    localRestApiToken = generateToken();
+    persistToken(localRestApiToken);
+  }
+  return localRestApiToken;
+};
+
+const regenerateToken = (): string => {
+  localRestApiToken = generateToken();
+  persistToken(localRestApiToken);
+  return localRestApiToken;
+};
 
 const compareToken = (input: string, expected: string): boolean => {
   const inputBuffer = Buffer.from(input, 'utf8');
@@ -140,10 +215,13 @@ const getForcedDevToken = (): string => {
   }
 
   if (!generatedForcedDevToken) {
-    generatedForcedDevToken = randomBytes(32).toString('base64url');
-    warn(
+    generatedForcedDevToken = generateToken();
+    // Printed to stdout, never electron-log: the app has a user-visible log
+    // export and the house rule is to never write secrets into it.
+    console.log(
       '[local-rest-api] Generated temporary access token for SP_FORCE_LOCAL_REST_API=1: ' +
-        generatedForcedDevToken,
+        generatedForcedDevToken +
+        '\n[local-rest-api] Set SP_FORCE_LOCAL_REST_API_TOKEN to choose it explicitly.',
     );
   }
 
@@ -223,10 +301,12 @@ const handleHttpRequest = async (
     return;
   }
 
-  // Validate authorization token if enabled.
-  // The token is sent in the "Authorization" header as "Bearer <token>".
+  // Validate authorization token. The token is sent in the "Authorization"
+  // header as "Bearer <token>". RFC 7235 auth schemes are case-insensitive, so
+  // "bearer <token>" is accepted too.
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const bearerMatch = authHeader?.match(/^Bearer +(.+)$/i);
+  if (!bearerMatch) {
     writeJson(res, 401, {
       ok: false,
       error: {
@@ -237,7 +317,7 @@ const handleHttpRequest = async (
     return;
   }
 
-  const tokenToValidate = authHeader.substring(7); // "Bearer ".length === 7
+  const tokenToValidate = bearerMatch[1];
   if (!localRestApiToken || !compareToken(tokenToValidate, localRestApiToken)) {
     writeJson(res, 401, {
       ok: false,
@@ -305,6 +385,13 @@ export const initLocalRestApi = (): void => {
 
   ipcMain.on(IPC.LOCAL_REST_API_RESPONSE, handleResponse);
 
+  // The renderer reads and regenerates the token over IPC; it is never stored
+  // in the synced config.
+  ipcMain.handle(IPC.LOCAL_REST_API_GET_TOKEN, () =>
+    isForceEnabledForDev() ? getForcedDevToken() : ensureToken(),
+  );
+  ipcMain.handle(IPC.LOCAL_REST_API_REGENERATE_TOKEN, () => regenerateToken());
+
   server = createServer((req, res) => {
     void handleHttpRequest(req, res);
   });
@@ -368,9 +455,12 @@ const stopServer = (): void => {
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
-  localRestApiToken =
-    cfg.misc.localRestApiToken || (isForcedForDev ? getForcedDevToken() : undefined);
   const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  // Ensure a token exists whenever the server is (about to be) serving, so
+  // enabling the API never starts an unreachable server with no credential.
+  if (nextEnabled) {
+    localRestApiToken = isForcedForDev ? getForcedDevToken() : ensureToken();
+  }
   if (nextEnabled === isEnabled) {
     if (nextEnabled && !isListening) {
       startServer();
