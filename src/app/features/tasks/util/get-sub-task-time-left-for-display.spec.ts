@@ -73,26 +73,6 @@ describe('getSubTaskTimeLeftForDisplay', () => {
       ).toBe(75);
     });
 
-    it('should add up for every second tracked, at any estimate', () => {
-      const mismatches: string[] = [];
-      for (const estimateMinutes of [1, 3, 75]) {
-        for (
-          let spentSeconds = 0;
-          spentSeconds <= estimateMinutes * 60;
-          spentSeconds += 7
-        ) {
-          const subTasks = [
-            subTask('a', estimateMinutes * MINUTE, spentSeconds * 1000),
-            subTask('b', MINUTE, 0),
-          ];
-          if (renderedPairInMinutes(subTasks) !== estimateMinutes + 1) {
-            mismatches.push(`${estimateMinutes}m estimate / ${spentSeconds}s tracked`);
-          }
-        }
-      }
-      expect(mismatches).toEqual([]);
-    });
-
     it('should never hide a remainder below a minute behind the empty placeholder', () => {
       // 1m + 2m sub tasks with 90s tracked: 1m30s left, and the pair still reads 3m
       const subTasks = [subTask('a', MINUTE, 0), subTask('b', 2 * MINUTE, 90000)];

@@ -296,9 +296,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (t.timeEstimate && (t.timeSpent / t.timeEstimate) * 100) || 0;
   });
 
-  // Shown next to the sub tasks' summed time spent. Rounding both down separately
-  // would lose the partial minute they share, so the left cell is derived from the
-  // pair rather than rounded on its own. #9190
+  // Derived from the pair rather than rounded on its own — see the helper's doc. #9190
   subTaskTimeLeft = computed<number>(() =>
     getSubTaskTimeLeftForDisplay(this.task().subTasks),
   );

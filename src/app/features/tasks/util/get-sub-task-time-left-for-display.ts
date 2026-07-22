@@ -5,24 +5,18 @@ const MINUTE = 60000;
 const floorToFullMinute = (ms: number): number => Math.floor(ms / MINUTE) * MINUTE;
 
 /**
- * The time left to show next to a parent task's summed time spent.
+ * The time left to show next to a parent task's summed time spent. Both cells are
+ * rendered rounded down, so the left one is derived from the floored pair instead of
+ * being rounded on its own — otherwise the partial minute they share is dropped twice
+ * and the pair reads a minute short of the work it represents (#9190).
  *
- * Both cells are rendered rounded down to full minutes. Rounding them separately
- * loses the partial minute they share, so the pair reads a minute short of the work
- * it represents (#9190). Deriving the left cell from the floored pair keeps
- * `spent + left` on screen equal to the rounded down real total instead.
- *
- * The time left is summed here rather than read from the parent's stored
- * `timeEstimate`, which holds the same sum but is only refreshed on estimate edits,
- * done toggles and structural changes — a tracking tick updates the parent's time
- * spent alone. Reading it would leave the time left standing still while time is
- * tracked, and make the pair jump by a minute as the time spent crosses one. The
- * spec pins this sum against the reducer's own output.
- *
- * The pair adds up to the original estimate only while no sub task is done or over
- * it: a done sub task's unspent estimate is dropped and an over-run is clamped to 0,
- * while the spent sum keeps counting both. After that it adds up to time spent plus
- * what is genuinely left, which no rounding rule could recover anyway.
+ * Two things that look like simplifications but are not:
+ * - the two values are NOT always complementary. `timeEstimate` drops done sub tasks
+ *   and clamps over-runs to 0 while the spent sum counts both, so rounding the left
+ *   cell up instead reads a minute long in those states.
+ * - the time left is summed here rather than read from the parent's stored
+ *   `timeEstimate`, which holds the same sum but is not refreshed by a tracking tick,
+ *   so it would stand still while time is tracked.
  */
 export const getSubTaskTimeLeftForDisplay = (subTasks: Task[]): number => {
   if (!subTasks?.length) {
