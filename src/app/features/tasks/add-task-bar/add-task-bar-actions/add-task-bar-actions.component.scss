@@ -157,6 +157,10 @@
     &.has-value {
       --mat-button-text-label-text-color: var(--text-color-most-intense);
 
+      @include darkTheme() {
+        font-weight: var(--font-weight-semibold);
+      }
+
       mat-icon {
         color: var(--brand);
       }
