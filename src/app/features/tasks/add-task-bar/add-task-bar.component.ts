@@ -605,6 +605,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             ...quickSettingUpdates,
             title,
             quickSetting: state.repeatQuickSetting,
+            notes: taskData.notes,
             tagIds: taskData.tagIds ?? [],
             defaultEstimate: state.estimate || 0,
             startTime: state.time || undefined,

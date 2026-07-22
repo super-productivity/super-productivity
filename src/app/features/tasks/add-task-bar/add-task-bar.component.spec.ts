@@ -490,6 +490,24 @@ describe('AddTaskBarComponent', () => {
       expect(repeatCfg.startDate).toBe('2024-05-19');
     });
 
+    it('should copy entered notes to an inline repeat preset config (discussion #937)', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Daily standup');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updateRepeatSetting('DAILY');
+      component.stateService.noteTxt.set('  Join from the meeting room  ');
+
+      await component.addTask();
+
+      const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
+      expect(repeatCfg.notes).toBe('Join from the meeting room');
+    });
+
     it('seeds skipOverdue ON for an inline Daily repeat (#8644)', async () => {
       mockTaskService.add.and.returnValue('task-1');
       const addRepeatCfgSpy = spyOn(
