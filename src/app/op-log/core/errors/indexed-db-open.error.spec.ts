@@ -126,6 +126,37 @@ describe('IndexedDBOpenError', () => {
     });
   });
 
+  describe('isVersionError (#9187)', () => {
+    it('should be true for a downgrade-barrier VersionError', () => {
+      const error = new IndexedDBOpenError(
+        new DOMException(
+          'The requested version (7) is less than the existing version (10).',
+          'VersionError',
+        ),
+      );
+
+      expect(error.isVersionError).toBe(true);
+      // Not storage damage — must not be conflated with the backing-store path.
+      expect(error.isBackingStoreError).toBe(false);
+    });
+
+    it('should be false for other IndexedDB open failures', () => {
+      expect(new IndexedDBOpenError(new Error('QuotaExceededError')).isVersionError).toBe(
+        false,
+      );
+      expect(
+        new IndexedDBOpenError(new DOMException('nope', 'InvalidStateError'))
+          .isVersionError,
+      ).toBe(false);
+      expect(new IndexedDBOpenError(undefined).isVersionError).toBe(false);
+      // A message that merely mentions the words must not trigger it.
+      expect(
+        new IndexedDBOpenError(new Error('VersionError happened somewhere'))
+          .isVersionError,
+      ).toBe(false);
+    });
+  });
+
   describe('inheritance', () => {
     it('should be an instance of Error', () => {
       const error = new IndexedDBOpenError(new Error('test'));

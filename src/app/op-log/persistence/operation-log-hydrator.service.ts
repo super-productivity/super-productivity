@@ -33,6 +33,8 @@ import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { IS_ELECTRON } from '../../app.constants';
+import { environment } from '../../../environments/environment';
+import { buildIdbOpenErrorMessage } from './idb-open-error-message';
 import {
   BulkReplayReducerFailure,
   runWithBulkReplayFailureCollector,
@@ -1126,14 +1128,8 @@ export class OperationLogHydratorService {
       error.originalError,
     );
 
-    const originalMsg =
-      error.originalError instanceof Error
-        ? error.originalError.message
-        : String(error.originalError);
-
-    // Hoist platform detection — used in both branches below to avoid computing twice
-    const isFlatpak = IS_ELECTRON && window.ea?.isFlatpak?.();
-    const isSnap = !isFlatpak && IS_ELECTRON && window.ea?.isSnap?.();
+    const isFlatpak = !!(IS_ELECTRON && window.ea?.isFlatpak?.());
+    const isSnap = !isFlatpak && !!(IS_ELECTRON && window.ea?.isSnap?.());
 
     // For backing-store errors (common during Linux session startup with autostart),
     // auto-reload once after the user dismisses the dialog. By the time the dialog
@@ -1156,34 +1152,14 @@ export class OperationLogHydratorService {
       }
     }
 
-    // Second failure, or non-backing-store error: show full manual recovery instructions.
-    let message =
-      'Database Error - Cannot Load Data\n\n' +
-      'Super Productivity cannot open its database. ' +
-      'This may be caused by:\n\n' +
-      '- Low disk space\n' +
-      '- Temporary file lock (try closing other tabs)\n' +
-      '- Storage corruption\n\n';
-
-    if (error.isBackingStoreError) {
-      message +=
-        'Recovery steps:\n' +
-        '1. Close ALL browser tabs and windows\n' +
-        '2. Restart the app\n' +
-        (isFlatpak
-          ? '3. If using Linux Flatpak with autostart, try disabling autostart and launching manually\n'
-          : isSnap
-            ? '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n'
-            : '3. If using Linux with autostart, try disabling autostart and launching manually\n') +
-        '4. If issue persists, check available disk space\n\n';
-    }
-
-    message +=
-      'If the problem continues after restart, your browser storage may need to be cleared.\n\n' +
-      `Technical details: ${originalMsg}\n\n` +
-      '(Check browser console for full error details)';
-
-    alertDialog(message);
+    alertDialog(
+      buildIdbOpenErrorMessage(error, {
+        isElectron: IS_ELECTRON,
+        isFlatpak,
+        isSnap,
+        appVersion: environment.version,
+      }),
+    );
   }
 
   /**

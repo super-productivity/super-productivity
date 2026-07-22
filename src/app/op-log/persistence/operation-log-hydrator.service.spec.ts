@@ -29,6 +29,7 @@ import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { environment } from '../../../environments/environment';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogEffects } from '../capture/operation-log.effects';
@@ -2324,6 +2325,55 @@ describe('OperationLogHydratorService', () => {
       await expectAsync(service.hydrateStore()).toBeRejected();
 
       expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    // #9187: DB_VERSION 8-10 are deliberate downgrade barriers, so a
+    // VersionError means an old build is looking at an intact database. The
+    // generic dialog's "your browser storage may need to be cleared" would
+    // destroy that data and still not let this build open it.
+    describe('downgrade barrier (VersionError)', () => {
+      const arrangeVersionError = (): void => {
+        mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(
+          new IndexedDBOpenError(
+            new DOMException(
+              'The requested version (7) is less than the existing version (10).',
+              'VersionError',
+            ),
+          ),
+        );
+      };
+
+      const shownMessage = (): string =>
+        (window.alert as jasmine.Spy).calls.mostRecent().args[0] as string;
+
+      it('never tells the user to clear storage or blames corruption', async () => {
+        arrangeVersionError();
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        expect(window.alert).toHaveBeenCalledTimes(1);
+        const msg = shownMessage();
+        expect(msg).not.toContain('storage may need to be cleared');
+        expect(msg).not.toContain('Storage corruption');
+        expect(msg).not.toContain('Low disk space');
+        expect(msg).toContain('Do NOT clear your storage');
+      });
+
+      it('names the running version and keeps the technical detail', async () => {
+        arrangeVersionError();
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        const msg = shownMessage();
+        expect(msg).toContain(environment.version);
+        expect(msg).toContain('newer version');
+        // The raw browser text still reaches bug reports.
+        expect(msg).toContain('The requested version (7) is less than');
+      });
+
+      // No auto-reload assertion here: a VersionError is not a backing-store
+      // error, so the existing non-backing-store test above already covers it.
+      // Asserting it again passes with this branch deleted — a vacuous test.
     });
 
     it('should clear the reload key after successful hydration', async () => {

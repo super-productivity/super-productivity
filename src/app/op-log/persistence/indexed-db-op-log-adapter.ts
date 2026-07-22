@@ -32,7 +32,7 @@ import {
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { isLockRelatedIdbOpenError } from './op-log-errors.const';
+import { isIdbVersionError, isLockRelatedIdbOpenError } from './op-log-errors.const';
 
 const ADAPTER_NOT_INITIALIZED =
   'IndexedDbOpLogAdapter not initialized. Ensure init() is called.';
@@ -214,6 +214,10 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
         return await this._openDbOnce();
       } catch (e) {
         lastError = e;
+        // Downgrade barrier: retrying can't change the on-disk version (#9187).
+        if (isIdbVersionError(e)) {
+          break;
+        }
         if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
           maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
         }

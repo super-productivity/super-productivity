@@ -192,6 +192,31 @@ describe('OperationLogStoreService', () => {
       expect(initSpy).not.toHaveBeenCalled();
       expect((svc as unknown as { _db: unknown })._db).toBe(fakeDb);
     });
+
+    // #9187: an older build opening a database a newer build upgraded gets a
+    // VersionError. The version numbers can't change while we run, so the
+    // retry budget only delays the explanation behind a white screen.
+    it('fails fast without retrying when the downgrade barrier rejects the open', async () => {
+      const adapter = {
+        init: jasmine.createSpy('init').and.resolveTo(undefined),
+        adoptConnection: jasmine.createSpy('adoptConnection'),
+      } as unknown as OpLogDbAdapter;
+      const svc = freshServiceWith(adapter);
+      const openSpy = spyOn(
+        svc as unknown as { _openDbOnce: () => Promise<unknown> },
+        '_openDbOnce',
+      ).and.rejectWith(
+        new DOMException(
+          'The requested version (7) is less than the existing version (10).',
+          'VersionError',
+        ),
+      );
+
+      await expectAsync(svc.init()).toBeRejectedWithError(/Failed to open IndexedDB/);
+
+      // Exactly one attempt — no exponential-backoff budget burned.
+      expect(openSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('connection lifecycle handlers', () => {

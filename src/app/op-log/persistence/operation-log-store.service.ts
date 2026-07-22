@@ -34,6 +34,7 @@ import {
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
   OPERATION_LOG_STORE_NOT_INITIALIZED,
+  isIdbVersionError,
   isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
@@ -462,6 +463,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         return await this._openDbOnce();
       } catch (e) {
         lastError = e;
+
+        // Downgrade barrier: the on-disk version can't change while we run, so
+        // every retry fails identically. Surface it now (#9187).
+        if (isIdbVersionError(e)) {
+          break;
+        }
 
         // Classify the error on the first failure. If it doesn't look
         // lock-related, shrink the retry budget so we fail fast and let the

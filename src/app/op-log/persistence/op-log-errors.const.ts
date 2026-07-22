@@ -91,6 +91,30 @@ export const isLockRelatedIdbOpenError = (err: unknown): boolean => {
   return false;
 };
 
+/**
+ * Is this open error the downgrade barrier firing? The browser throws
+ * `VersionError` when the requested `DB_VERSION` is lower than the version
+ * already on disk, i.e. an older app build is opening a database that a newer
+ * build upgraded. `DB_VERSION` 8-10 exist purely as such barriers (see
+ * `db-keys.const.ts`), so this is a supported, deliberate rejection — not
+ * storage damage.
+ *
+ * Two consequences, both handled by callers:
+ * - Retrying is pointless: the version numbers cannot change while the app
+ *   runs, so every attempt fails identically. The open loops break out
+ *   immediately instead of burning the ~7s non-lock budget on a white screen.
+ * - The recovery advice must differ: the generic dialog blames disk space and
+ *   corruption and suggests clearing storage, which here would destroy intact
+ *   data and still not let the old build open it.
+ *
+ * `DOMException` is checked alongside `Error` for the same reason as in
+ * `isLockRelatedIdbOpenError` above.
+ *
+ * @see https://github.com/super-productivity/super-productivity/issues/9187
+ */
+export const isIdbVersionError = (err: unknown): boolean =>
+  (err instanceof DOMException || err instanceof Error) && err.name === 'VersionError';
+
 // ============================================================================
 // Connection Closing Errors (Issue #6643)
 // ============================================================================

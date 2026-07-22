@@ -1,6 +1,7 @@
 import {
   IDB_OPEN_ERROR_MSG,
   IDB_BACKING_STORE_PATTERN,
+  isIdbVersionError,
 } from '../../persistence/op-log-errors.const';
 import { HANDLED_ERROR_PROP_STR } from '../../../app.constants';
 
@@ -23,6 +24,15 @@ export class IndexedDBOpenError extends Error {
   /** True if the original error message contains "backing store" (Chromium LevelDB signal). */
   readonly isBackingStoreError: boolean;
 
+  /**
+   * True if an older app build tried to open a database a newer build already
+   * upgraded (the `DB_VERSION` downgrade barrier). The data is intact; only
+   * this build is too old to read it.
+   *
+   * @see https://github.com/super-productivity/super-productivity/issues/9187
+   */
+  readonly isVersionError: boolean;
+
   /** The original error that caused IndexedDB to fail. */
   readonly originalError: unknown;
 
@@ -38,6 +48,7 @@ export class IndexedDBOpenError extends Error {
     this[HANDLED_ERROR_PROP_STR] = this.message;
     this.originalError = originalError;
     this.isBackingStoreError = IndexedDBOpenError._checkBackingStoreError(originalError);
+    this.isVersionError = isIdbVersionError(originalError);
   }
 
   /**
