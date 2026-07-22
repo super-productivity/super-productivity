@@ -45,24 +45,31 @@
 .input-item,
 .mat-expansion-panel,
 :host::ng-deep .mat-expansion-panel:not([class*='mat-elevation-z']) {
-  box-shadow: var(--task-detail-shadow);
-
-  @include mq(xs, max) {
-    box-shadow: none;
-    border: 1px solid var(--extra-border-color) !important;
-  }
+  box-shadow: none;
 }
 
 .input-item,
 .mat-expansion-panel {
-  border: 1px solid transparent;
-  margin: var(--s);
-  border-radius: var(--card-border-radius);
+  border: 0;
+  border-bottom: 1px solid var(--divider-color);
+  margin: 0 var(--s);
+  border-radius: 0;
   background: var(--task-detail-bg);
   font-size: 14px;
 
   :host-context(.isNoTouchOnly):focus & {
     border-color: var(--palette-primary-400) !important;
+  }
+}
+
+.mat-expansion-panel.mat-expanded {
+  border: 1px solid var(--divider-color);
+  margin: var(--s);
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--task-detail-shadow);
+
+  @include mq(xs, max) {
+    box-shadow: none;
   }
 }
 

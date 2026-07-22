@@ -63,9 +63,9 @@
   top: 2px;
   transition: var(--transition-standard);
   transition-property: transform, box-shadow;
-  border: var(--task-border, 1px solid transparent);
+  border: var(--task-border, 1px solid var(--task-border-color));
   border-radius: var(--task-border-radius);
-  box-shadow: var(--task-shadow);
+  box-shadow: none;
 
   background: var(--task-c-bg);
 
@@ -85,6 +85,7 @@
   :host.isSelected.isSelected .inner-wrapper > & {
     transition: var(--transition-enter);
     transition-property: left, right, box-shadow;
+    border-color: var(--task-active-border-color);
     box-shadow: var(--task-selected-shadow);
     // because of the shadow, this looks better
     //bottom: 2px;
@@ -126,6 +127,7 @@
 
   :host.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent & {
     background: var(--task-c-current-bg);
+    border-color: var(--task-active-border-color);
     border-radius: var(--task-border-radius);
     box-shadow: var(--task-current-shadow);
     // because of the shadow, this looks better
@@ -176,11 +178,11 @@
 
   ::ng-deep .box {
     box-shadow: var(--task-shadow-sub-task);
+    border-color: var(--sub-task-border-color);
     border-radius: 0;
     top: -1px;
 
     @include lightTheme {
-      border-color: var(--extra-border-color);
       bottom: 0;
     }
 
