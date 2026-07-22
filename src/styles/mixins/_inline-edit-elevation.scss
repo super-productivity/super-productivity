@@ -5,7 +5,7 @@
   background: var(--card-bg);
   box-shadow: var(--whiteframe-shadow-4dp);
   color: var(--text-color-most-intense);
-  border: 1px solid var(--c-accent);
+  border: 1px solid var(--focus-ring-color);
   //border: 1px solid var(--extra-border-color);
 
   @include theming.darkTheme() {
