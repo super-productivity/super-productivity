@@ -155,7 +155,11 @@
     }
 
     &.has-value {
-      --mat-button-text-label-text-color: var(--text-color);
+      --mat-button-text-label-text-color: var(--text-color-most-intense);
+
+      mat-icon {
+        color: var(--brand);
+      }
     }
 
     &.deadline-chip {
