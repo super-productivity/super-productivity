@@ -9,8 +9,7 @@
   width: 260px;
   overflow: hidden;
   padding-inline: var(--s);
-  border-inline: 1px solid var(--divider-color);
-  background: var(--planner-days-bg, var(--bg));
+  border-inline-start: 1px solid var(--divider-color);
   // there needs to be enough space for the fab buttons
 
   padding-bottom: 96px;
@@ -22,8 +21,7 @@
     min-width: 100%;
     padding: 0;
     margin-bottom: var(--s2);
-    border-inline: none;
-    background: var(--bg);
+    border-inline-start: none;
   }
 }
 
@@ -37,7 +35,7 @@
 
   @include mq(xs, max) {
     margin-top: 0;
-    padding-block: var(--s-half);
+    padding: var(--s) 0 var(--s-half);
   }
 }
 
@@ -53,6 +51,8 @@
 
   .date {
     color: var(--text-color-muted);
+    font-size: var(--font-size-sm);
+    font-weight: normal;
   }
 
   mat-icon {
@@ -60,16 +60,6 @@
     width: var(--font-size-lg);
     height: var(--font-size-lg);
     font-size: var(--font-size-lg);
-  }
-
-  @include mq(xs, max) {
-    font-size: var(--font-size-md);
-
-    mat-icon {
-      width: var(--font-size-md);
-      height: var(--font-size-md);
-      font-size: var(--font-size-md);
-    }
   }
 }
 
@@ -91,10 +81,6 @@
 
   .available-hours {
     margin-left: var(--s-half);
-  }
-
-  @include mq(xs, max) {
-    font-size: var(--font-size-xs);
   }
 }
 
