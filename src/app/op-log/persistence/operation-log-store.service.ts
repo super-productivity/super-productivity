@@ -773,7 +773,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     snapshot: ReplayAnchorSnapshot,
   ): Promise<number> {
     const vectorClock = await this.pruneClockForStorage(snapshot.vectorClock);
-    return this._appendOperationAndSnapshot(op, source, snapshot, vectorClock);
+    return this._appendOperationAndSnapshot(op, source, snapshot, vectorClock, true);
   }
 
   private async _appendOperationAndSnapshot(
@@ -781,6 +781,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     source: 'local' | 'remote',
     snapshot: ReplayAnchorSnapshot,
     vectorClock: VectorClock,
+    rebaseOnDurable = false,
   ): Promise<number> {
     await this._ensureInit();
     const storeNames: OpLogStoreName[] = [
@@ -791,16 +792,38 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     if (isFullStateOpType(op.opType)) {
       storeNames.push(STORE_NAMES.META);
     }
+    let committedClock = vectorClock;
     try {
       const seq = await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        const entry = this._buildStoredEntry(op, source);
+        let operationToStore = op;
+        if (rebaseOnDurable) {
+          const currentClockEntry = await tx.get<VectorClockEntry>(
+            STORE_NAMES.VECTOR_CLOCK,
+            SINGLETON_KEY,
+          );
+          const durableClock = currentClockEntry?.clock ?? {};
+          operationToStore = {
+            ...op,
+            vectorClock: rebaseLocalClockOnDurable(
+              durableClock,
+              op.vectorClock,
+              op.clientId,
+            ),
+          };
+          committedClock = rebaseLocalClockOnDurable(
+            durableClock,
+            vectorClock,
+            op.clientId,
+          );
+        }
+        const entry = this._buildStoredEntry(operationToStore, source);
         const writtenSeq = await tx.add(STORE_NAMES.OPS, entry);
         await this._recordFullStateOpInTx(tx, entry.op, writtenSeq);
         await tx.put(STORE_NAMES.STATE_CACHE, {
           id: SINGLETON_KEY,
           state: snapshot.state,
           lastAppliedOpSeq: writtenSeq,
-          vectorClock,
+          vectorClock: committedClock,
           compactedAt: snapshot.compactedAt,
           ...(snapshot.schemaVersion === undefined
             ? {}
@@ -809,14 +832,14 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         await tx.put(
           STORE_NAMES.VECTOR_CLOCK,
           {
-            clock: vectorClock,
+            clock: committedClock,
             lastUpdate: snapshot.compactedAt,
           } satisfies VectorClockEntry,
           SINGLETON_KEY,
         );
         return writtenSeq;
       });
-      this._vectorClockCache = { ...vectorClock };
+      this._vectorClockCache = { ...committedClock };
       this._invalidateUnsyncedCache();
       return seq;
     } catch (e) {

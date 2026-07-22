@@ -373,6 +373,22 @@ describe('OperationLogStoreService', () => {
       expect(await service.getVectorClock()).toEqual(vectorClock);
     });
 
+    it('should rebase a stale replay anchor onto the durable clock', async () => {
+      await service.setVectorClock({ testClient: 2, concurrentClient: 4 });
+      const op = createTestOperation({ vectorClock: { testClient: 1 } });
+
+      await service.appendOperationAndSnapshot(op, 'local', {
+        state: { task: {} },
+        vectorClock: op.vectorClock,
+        compactedAt: Date.now(),
+      });
+
+      const expectedClock = { testClient: 3, concurrentClient: 4 };
+      expect((await service.getOpById(op.id))?.op.vectorClock).toEqual(expectedClock);
+      expect((await service.loadStateCache())?.vectorClock).toEqual(expectedClock);
+      expect(await service.getVectorClock()).toEqual(expectedClock);
+    });
+
     it('should roll back the recovery operation when its snapshot write fails', async () => {
       const op = createTestOperation({ id: 'failed-legacy-recovery-op' });
       const adapter = (
