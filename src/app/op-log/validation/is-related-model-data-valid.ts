@@ -120,6 +120,7 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
   const tagIds = new Set<string>((d.tag.ids as string[]) || []);
   const taskIds = new Set<string>((d.task.ids as string[]) || []);
   const taskRepeatCfgIds = new Set<string>((d.taskRepeatCfg?.ids as string[]) || []);
+  const issueProviderIds = new Set<string>((d.issueProvider.ids as string[]) || []);
   const archiveYoungTaskIds = new Set<string>(
     (d.archiveYoung.task?.ids as string[]) || [],
   );
@@ -127,7 +128,16 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
   const noteIds = new Set<string>((d.note.ids as string[]) || []);
 
   // Validate projects, tasks and tags relationships
-  if (!validateTasksToProjectsAndTags(d, projectIds, tagIds, taskIds, taskRepeatCfgIds)) {
+  if (
+    !validateTasksToProjectsAndTags(
+      d,
+      projectIds,
+      tagIds,
+      taskIds,
+      taskRepeatCfgIds,
+      issueProviderIds,
+    )
+  ) {
     return false;
   }
 
@@ -258,6 +268,7 @@ const validateTasksToProjectsAndTags = (
   tagIds: Set<string>,
   taskIds: Set<string>,
   taskRepeatCfgIds: Set<string>,
+  issueProviderIds: Set<string>,
 ): boolean => {
   // Track project-task relationships and ids for consistency validation
   const projectTaskMap = new Map<string, Set<string>>();
@@ -333,6 +344,18 @@ const validateTasksToProjectsAndTags = (
         {
           taskId: task.id,
           repeatCfgId: task.repeatCfgId,
+        },
+      );
+      return false;
+    }
+
+    // Check issue provider reference
+    if (task.issueProviderId && !issueProviderIds.has(task.issueProviderId)) {
+      _validityError(
+        `issueProviderId "${task.issueProviderId}" from task "${task.id}" not existing`,
+        {
+          taskId: task.id,
+          ipId: task.issueProviderId,
         },
       );
       return false;
