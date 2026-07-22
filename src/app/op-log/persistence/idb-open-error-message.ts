@@ -17,16 +17,21 @@ const originalMessageOf = (error: IndexedDBOpenError): string =>
     ? error.originalError.message
     : String(error.originalError);
 
-/** Channels whose data lives in a user-reachable folder that can be copied. */
-const hasLocalDataFolder = (channel: DistChannel): boolean =>
-  channel !== 'web' &&
-  channel !== 'ios' &&
-  channel !== 'android-play' &&
-  channel !== 'android-fdroid';
-
-const storeSteps = (storeName: string): string =>
+/**
+ * Recovery text that is true on every channel. Each sentence self-qualifies
+ * ("If you run it in a browser…"), so a sentence that does not apply reads as
+ * skippable rather than wrong — which is what makes this safe to hand to a
+ * mis-detected user.
+ */
+const UNIVERSAL_RECOVERY_STEPS =
   '1. Close this window.\n' +
-  `2. Update Super Productivity through ${storeName}, then open it again.\n\n`;
+  '2. Start the newest version of Super Productivity you have installed. If this ' +
+  'keeps happening, you likely have a second, older copy: an outdated shortcut, ' +
+  'a portable executable, or an old install folder.\n' +
+  '3. If you cannot find it, update the way you installed it — your app store, ' +
+  'package manager, or https://super-productivity.com\n' +
+  '4. If you run it in a browser: reload with Ctrl+Shift+R (Cmd+Shift+R on Mac) ' +
+  'and close any other tabs running Super Productivity.\n\n';
 
 /**
  * The downgrade barrier rejected an intact database: `DB_VERSION` 8-10 exist
@@ -36,11 +41,16 @@ const storeSteps = (storeName: string): string =>
  * cleared", advice that would destroy perfectly good data and still not let
  * this build open it. The only fix is to run the newer build.
  *
- * Branching on `DistChannel` rather than a local flavour of it matters for
- * correctness, not tidiness: managed-store and sandboxed builds keep their data
- * where a website download cannot see it, so "install the latest release from
- * super-productivity.com" is actively wrong for them. No `default` arm — with
- * `noImplicitReturns` a new channel is then a compile error here.
+ * Only Snap and Flatpak get their own text, and the reason is data location,
+ * not politeness: both keep the database inside the package sandbox, so
+ * "download it from the website" is actively WRONG there — a second install
+ * would not even see this data. Everywhere else the universal block is true,
+ * so it wins: `DistChannel`'s remaining detectors are UA sniffs and
+ * `process.mas`/`process.windowsStore` (the repo already records the former as
+ * unreliable), and a confident wrong instruction is worse than a general right
+ * one. `default` rather than an exhaustive switch for the same reason — an
+ * unknown or future channel must inherit safe text at RUNTIME, which matters
+ * more here than a compile error would.
  *
  * Package identifiers per the store links in README.md — snapcraft.io/superproductivity
  * and flathub.org/apps/com.super_productivity.SuperProductivity. They differ from
@@ -52,47 +62,23 @@ const storeSteps = (storeName: string): string =>
 const versionErrorRecoverySteps = (channel: DistChannel): string => {
   switch (channel) {
     case 'linux-flatpak':
+      // No sudo: polkit's org.freedesktop.Flatpak.app-update is
+      // `allow_active=yes`, and adding sudo would break --user installs.
       return (
         '1. Close this window.\n' +
         '2. Update to the newest version:\n' +
         '   flatpak update com.super_productivity.SuperProductivity\n\n'
       );
     case 'linux-snap':
+      // sudo IS required: snapd's io.snapcraft.snapd.manage is
+      // `auth_admin_keep`, so the bare command dies with "access denied".
       return (
         '1. Close this window.\n' +
-        '2. Update to the newest version: snap refresh superproductivity\n' +
+        '2. Update to the newest version: sudo snap refresh superproductivity\n' +
         '3. If you ran `snap revert` recently, that is what caused this.\n\n'
       );
-    case 'win-store':
-      return storeSteps('the Microsoft Store');
-    case 'mac-store':
-    case 'ios':
-      return storeSteps('the App Store');
-    case 'android-play':
-      return storeSteps('Google Play');
-    case 'android-fdroid':
-      return storeSteps('F-Droid');
-    case 'win-nsis':
-    case 'win-portable':
-    case 'mac-dmg':
-    case 'linux-appimage':
-    case 'linux-native':
-      // Only these channels can have a second, stale copy sitting next to the
-      // current one — which is exactly how #9187 was reported (an old shortcut).
-      return (
-        '1. Close this window.\n' +
-        '2. Start the newest version you have installed. If this keeps happening, ' +
-        'you likely have a second copy: an outdated desktop shortcut, a portable ' +
-        'executable, or an older install folder.\n' +
-        '3. Otherwise install the latest release from https://super-productivity.com ' +
-        'and launch it from there.\n\n'
-      );
-    case 'web':
-      return (
-        '1. Make sure you are running the newest version of Super Productivity.\n' +
-        '2. Reload with Ctrl+Shift+R (Cmd+Shift+R on Mac) and close any other tabs ' +
-        'running Super Productivity.\n\n'
-      );
+    default:
+      return UNIVERSAL_RECOVERY_STEPS;
   }
 };
 
@@ -113,15 +99,16 @@ const buildVersionErrorMessage = (
   // Without this the message dead-ends: a user whose newer build is gone
   // (reinstall, replaced machine, restored profile) is told what NOT to do and
   // given no way forward, so they search the web, find "clear IndexedDB" and
-  // destroy recoverable data.
-  (hasLocalDataFolder(ctx.channel)
-    ? 'If you cannot run a newer version, make a copy of your Super Productivity ' +
-      'data folder before resetting anything. That copy is what makes recovery ' +
-      'possible.\n\n'
-    : 'If you cannot get back to a newer version, do not clear this app’s ' +
-      'data — there is no copy to fall back on here.\n\n') +
-  `Technical details: ${originalMessageOf(error)}\n\n` +
-  '(Check browser console for full error details)';
+  // destroy recoverable data. Not forked per channel — this guards the
+  // anti-data-loss advice, so a mis-detected channel must not be able to flip
+  // it. The desktop half self-qualifies instead.
+  'If you cannot run a newer version, do NOT clear this app data — that is what ' +
+  'makes the loss permanent. On desktop, copy your Super Productivity data ' +
+  'folder somewhere safe before changing anything.\n\n' +
+  // No "check the console" pointer here: `Technical details` above already
+  // carries the whole error, and 5 of the 13 channels have no console a user
+  // can open. It stays in the generic branch, where it is true.
+  `Technical details: ${originalMessageOf(error)}`;
 
 /**
  * Generic "cannot open the database" guidance, with extra recovery steps for

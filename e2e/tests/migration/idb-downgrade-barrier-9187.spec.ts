@@ -179,10 +179,12 @@ test.describe('@migration #9187 IndexedDB downgrade barrier', () => {
       // not destroy data.
       expect(msg).toContain('This Version Is Too Old');
       expect(msg).toContain('Do NOT clear your storage');
-      // This harness is a browser, so the message takes the `web` branch. The
-      // desktop "copy your data folder first" variant has no meaning here (no
-      // folder to copy) and is covered by idb-open-error-message.spec.ts.
-      expect(msg).toContain('no copy to fall back on');
+      // The escape hatch that keeps the message from dead-ending. It is now
+      // channel-independent (see idb-open-error-message.ts), so this harness
+      // being a browser does not change which variant is asserted.
+      expect(msg).toContain('makes the loss permanent');
+      // The second-copy diagnosis — the sentence that actually explains #9187.
+      expect(msg).toContain('second, older copy');
       // The raw browser detail still reaches bug reports.
       expect(msg).toContain('is less than the existing version');
     } finally {

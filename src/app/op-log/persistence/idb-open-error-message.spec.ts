@@ -21,8 +21,8 @@ describe('buildIdbOpenErrorMessage', () => {
     // Swept across EVERY channel because this is the actual bug: whichever
     // branch a locked-out user lands in, none of them may repeat the advice
     // that would destroy the intact data. Listed exhaustively rather than
-    // sampled — a channel added to DistChannel without recovery text here is
-    // precisely the regression this guards.
+    // sampled so that a channel added to DistChannel is a visible diff here,
+    // even though the builder's `default` arm means it cannot go untexted.
     const ALL_CHANNELS: DistChannel[] = [
       'win-nsis',
       'win-portable',
@@ -49,12 +49,10 @@ describe('buildIdbOpenErrorMessage', () => {
         expect(msg).withContext(channel).toContain('Do NOT clear your storage');
         // The running version is what tells the user which copy is stale.
         expect(msg).withContext(channel).toContain('18.14.0W');
-        // Every channel must offer a way out that does not destroy data — copy
-        // the folder where one exists, and where none does (web/mobile) say
-        // plainly that clearing the data is unrecoverable.
-        expect(msg)
-          .withContext(channel)
-          .toMatch(/make a copy of your Super Productivity|no copy to fall back on/);
+        // Every channel must offer a way out that does not destroy data. This
+        // sentence is deliberately NOT forked per channel — it guards the
+        // anti-data-loss advice, so a mis-detected channel must not flip it.
+        expect(msg).withContext(channel).toContain('makes the loss permanent');
         // ...and every channel must actually name a way to get the newer build,
         // so no channel can fall through to a bare "What to do:" heading.
         expect(msg)
@@ -63,55 +61,55 @@ describe('buildIdbOpenErrorMessage', () => {
       });
     });
 
-    // The whole point of branching on DistChannel: a managed-store or
-    // sandboxed build keeps its data where a website download cannot see it,
-    // so pointing these users at super-productivity.com is wrong advice.
-    it('never sends store-managed or sandboxed builds to the website download', () => {
-      const MANAGED: DistChannel[] = [
-        'win-store',
-        'mac-store',
-        'ios',
-        'android-play',
-        'android-fdroid',
-        'linux-snap',
-        'linux-flatpak',
-      ];
+    // Snap and Flatpak keep the database inside the package sandbox, so a
+    // website download would not even see this data — those two are the only
+    // channels where a specific instruction beats the universal one.
+    it('sends only Snap and Flatpak down a channel-specific path', () => {
+      const specific = ALL_CHANNELS.filter(
+        (c) => c === 'linux-snap' || c === 'linux-flatpak',
+      );
+      const universal = ALL_CHANNELS.filter(
+        (c) => c !== 'linux-snap' && c !== 'linux-flatpak',
+      );
 
-      MANAGED.forEach((channel) => {
+      // Every other channel gets byte-identical text. This is the property that
+      // makes a mis-detected channel harmless: DistChannel's remaining
+      // detectors are UA sniffs and the unreliable process.mas/windowsStore
+      // flags, so being wrong must not change what the user is told.
+      const texts = new Set(
+        universal.map((channel) =>
+          buildIdbOpenErrorMessage(versionError(), ctx({ channel })),
+        ),
+      );
+      expect(texts.size).toBe(1);
+
+      specific.forEach((channel) => {
         const msg = buildIdbOpenErrorMessage(versionError(), ctx({ channel }));
 
-        expect(msg).withContext(channel).not.toContain('super-productivity.com');
+        expect(msg)
+          .withContext(channel)
+          .not.toBe([...texts][0]);
       });
     });
 
-    it('names the right store for each managed channel', () => {
-      const expected: [DistChannel, string][] = [
-        ['win-store', 'the Microsoft Store'],
-        ['mac-store', 'the App Store'],
-        ['ios', 'the App Store'],
-        ['android-play', 'Google Play'],
-        ['android-fdroid', 'F-Droid'],
-      ];
-
-      expected.forEach(([channel, storeName]) => {
-        const msg = buildIdbOpenErrorMessage(versionError(), ctx({ channel }));
-
-        expect(msg).withContext(channel).toContain(`through ${storeName}`);
-      });
-    });
-
-    // The package ids are asserted in FULL on purpose. A partial match (e.g.
-    // just 'flatpak update') passes with a wrong id, and a wrong id makes the
-    // single command we hand a locked-out user fail. Sources of truth are the
-    // store links in README.md; note they differ from the mac/Capacitor appId
-    // `com.super-productivity.app`, which is what a careless grep turns up.
-    it('points Snap users at their own update channel', () => {
+    // These two commands are the only channel-specific instructions left, so
+    // they carry the whole risk of being wrong. Asserted in FULL: a partial
+    // match (e.g. just 'flatpak update') passes with a wrong id, and a wrong id
+    // makes the single command we hand a locked-out user fail. Sources of truth
+    // are the store links in README.md; they differ from the mac/Capacitor
+    // appId `com.super-productivity.app`, which is what a careless grep finds.
+    //
+    // The sudo asymmetry is deliberate and verified against polkit policy:
+    // snapd's io.snapcraft.snapd.manage is `auth_admin_keep` (bare command dies
+    // with "access denied"), while org.freedesktop.Flatpak.app-update is
+    // `allow_active=yes` — adding sudo there would break --user installs.
+    it('points Snap users at their own update channel, with sudo', () => {
       const msg = buildIdbOpenErrorMessage(
         versionError(),
         ctx({ channel: 'linux-snap' }),
       );
 
-      expect(msg).toContain('snap refresh superproductivity');
+      expect(msg).toContain('sudo snap refresh superproductivity');
     });
 
     it('points Flatpak users at flatpak update with the real Flathub id', () => {
@@ -122,34 +120,22 @@ describe('buildIdbOpenErrorMessage', () => {
 
       expect(msg).toContain('flatpak update com.super_productivity.SuperProductivity');
       expect(msg).not.toContain('com.super-productivity.app');
+      expect(msg).not.toContain('sudo flatpak');
     });
 
-    it('tells self-installed desktop users to look for a second copy', () => {
-      const msg = buildIdbOpenErrorMessage(versionError(), ctx());
-
-      expect(msg).toContain('portable');
-      expect(msg).toContain('super-productivity.com');
-      expect(msg).not.toContain('snap refresh');
-    });
-
-    it('does not offer a data-folder copy where the user cannot reach one', () => {
-      (['web', 'ios', 'android-play', 'android-fdroid'] as DistChannel[]).forEach(
+    // The line that actually resolved #9187 (a stale desktop shortcut). It now
+    // reaches every channel rather than only the self-installed desktop ones,
+    // because the detector that used to gate it is not reliable enough to
+    // withhold the most useful sentence in the message.
+    it('offers the second-copy diagnosis on every channel', () => {
+      ALL_CHANNELS.filter((c) => c !== 'linux-snap' && c !== 'linux-flatpak').forEach(
         (channel) => {
           const msg = buildIdbOpenErrorMessage(versionError(), ctx({ channel }));
 
-          expect(msg).withContext(channel).not.toContain('data folder');
+          expect(msg).withContext(channel).toContain('second, older copy');
+          expect(msg).withContext(channel).toContain('portable executable');
         },
       );
-    });
-
-    it('gives browsers the reload hint and mobile the store instead', () => {
-      const web = buildIdbOpenErrorMessage(versionError(), ctx({ channel: 'web' }));
-      const ios = buildIdbOpenErrorMessage(versionError(), ctx({ channel: 'ios' }));
-
-      expect(web).toContain('Ctrl+Shift+R');
-      // Mobile WebViews have no tabs and no Ctrl+Shift+R, so the reload hint
-      // must not leak into their branch.
-      expect(ios).not.toContain('Ctrl+Shift+R');
     });
   });
 
