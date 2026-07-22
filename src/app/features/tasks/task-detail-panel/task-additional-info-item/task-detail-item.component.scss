@@ -45,29 +45,25 @@
 .input-item,
 .mat-expansion-panel,
 :host::ng-deep .mat-expansion-panel:not([class*='mat-elevation-z']) {
-  box-shadow: none;
+  box-shadow: var(--task-detail-shadow);
+
+  @include mq(xs, max) {
+    box-shadow: none;
+    border: 1px solid var(--extra-border-color) !important;
+  }
 }
 
 .input-item,
 .mat-expansion-panel {
-  border: 0;
-  border-bottom: 1px solid var(--divider-color);
-  margin: 0 var(--s);
-  border-radius: 0;
-  background: transparent;
-  font-size: 14px;
-
-  :host-context(.isNoTouchOnly):focus-visible & {
-    outline: var(--focus-ring-width) solid var(--focus-ring-color);
-    outline-offset: calc(-1 * var(--focus-ring-width));
-  }
-}
-
-.mat-expansion-panel.mat-expanded {
-  border: 1px solid var(--divider-color);
+  border: 1px solid transparent;
   margin: var(--s);
   border-radius: var(--card-border-radius);
   background: var(--task-detail-bg);
+  font-size: 14px;
+
+  :host-context(.isNoTouchOnly):focus & {
+    border-color: var(--palette-primary-400) !important;
+  }
 }
 
 .mat-expansion-panel::ng-deep .mat-expansion-panel-header {
@@ -147,14 +143,17 @@
   }
 
   &.isFocused .markdown-wrapper {
-    outline: var(--focus-ring-width) solid var(--focus-ring-color);
-    outline-offset: var(--focus-ring-offset);
+    box-shadow: var(--whiteframe-shadow-3dp) !important;
   }
 
   .markdown-unparsed,
   .markdown-parsed {
-    background: transparent;
+    background: var(--bg-lightest);
     color: inherit;
+
+    @include lightTheme() {
+      @include extraBorder();
+    }
   }
 }
 
