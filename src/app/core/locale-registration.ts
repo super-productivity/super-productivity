@@ -1,7 +1,9 @@
 import { registerLocaleData } from '@angular/common';
+import localeEnUs from '@angular/common/locales/en';
 import { TranslateService } from '@ngx-translate/core';
 import { Log } from './log';
 import {
+  DateTimeLocales,
   DEFAULT_LANGUAGE,
   DEFAULT_LOCALE_DATA,
   NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS,
@@ -19,9 +21,20 @@ const LOCALE_LOAD_TIMEOUT_MS = 1500;
  * 'en' id). Must run before Angular's first render: LocaleDatePipe is pure, so
  * a date rendered earlier would cache Angular's built-in en-US resolution for
  * the session. main.ts calls this at module scope, before bootstrapApplication.
+ *
+ * en-US is the one English region the en-GB-under-'en' seed above gets wrong:
+ * once 'en' is en-GB, an unregistered 'en-us' resolves through it and renders
+ * day-first/24h (frozen there by the pure pipe) until the idle loop registers
+ * en-US much later. On master, where 'en' was seeded only inside the bootstrap
+ * `.then`, the same lookup fell through to Angular's built-in en-US and was
+ * correct. So register en-US up front too, keeping an explicit "System default"
+ * or dropdown en-US choice month-first/12h from first paint. The data file
+ * self-reports 'en', so the explicit id is required — a keyless call would
+ * clobber the en-GB 'en' seed.
  */
 export const registerDefaultLocale = (): void => {
   registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
+  registerLocaleData(localeEnUs, DateTimeLocales.en_us);
 };
 
 /**
