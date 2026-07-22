@@ -36,10 +36,12 @@ describe('buildIdbOpenErrorMessage', () => {
         expect(msg).withContext(platform).toContain('Do NOT clear your storage');
         // The running version is what tells the user which copy is stale.
         expect(msg).withContext(platform).toContain('18.14.0');
-        // Every platform must offer a way out that does not destroy data.
+        // Every platform must offer a way out that does not destroy data —
+        // copy the folder on desktop, and on web (no folder to copy) at least
+        // say plainly that clearing site data is unrecoverable.
         expect(msg)
           .withContext(platform)
-          .toContain('make a copy of your Super Productivity');
+          .toMatch(/make a copy of your Super Productivity|no copy to fall back on/);
       });
     });
 
@@ -77,6 +79,9 @@ describe('buildIdbOpenErrorMessage', () => {
       // Android/iOS WebViews have no tabs and no Ctrl+Shift+R — the hint must
       // be qualified, not stated as an unconditional instruction.
       expect(msg).toContain('In a web browser:');
+      // ...and there is no data folder to copy in a browser or WebView, so the
+      // desktop escape hatch must not be handed to them as an instruction.
+      expect(msg).not.toContain('data folder');
     });
   });
 

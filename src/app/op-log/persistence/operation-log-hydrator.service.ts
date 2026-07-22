@@ -1122,9 +1122,15 @@ export class OperationLogHydratorService {
    * @see https://github.com/johannesjo/super-productivity/issues/6255
    */
   private _showIndexedDBOpenError(error: IndexedDBOpenError): void {
-    // Log full error details to console for debugging (can be copied by users)
+    // Log full error details to console for debugging (can be copied by users).
+    // The barrier path breaks out after ONE attempt, and this is the log line
+    // that accompanies the dialog a user is about to screenshot — claiming
+    // retries here would misdirect #9187 triage more than the three store-side
+    // copies of the same sentence.
     OpLog.err(
-      'IndexedDB open failed after all retries. Original error:',
+      error.isVersionError
+        ? 'IndexedDB open rejected by the downgrade barrier (no retry). Original error:'
+        : 'IndexedDB open failed after all retries. Original error:',
       error.originalError,
     );
 

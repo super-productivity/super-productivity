@@ -39,22 +39,44 @@ const bumpDbOneVersionAhead = async (page: Page): Promise<string> =>
   page.evaluate(
     async () =>
       new Promise<string>((resolve) => {
-        const timer = setTimeout(() => resolve('TIMEOUT'), 15000);
+        let wasBlocked = false;
+        const timer = setTimeout(
+          () => resolve(wasBlocked ? 'STUCK-BLOCKED' : 'TIMEOUT'),
+          15000,
+        );
         const done = (msg: string): void => {
           clearTimeout(timer);
           resolve(msg);
         };
 
+        // A versionless open never triggers an upgrade, so it cannot be blocked.
         const probe = indexedDB.open('SUP_OPS');
         probe.onerror = () => done('PROBE-ERROR');
-        probe.onblocked = () => done('PROBE-BLOCKED');
         probe.onsuccess = () => {
           const current = probe.result.version;
+          // A versionless open CREATES the database at version 1 if it is
+          // missing. Without this guard that silently yields a valid-looking
+          // `OK:1->2`, the relaunch upgrades 2->10 cleanly, and the real
+          // failure surfaces 45s later as "no dialog appeared" — a
+          // misdiagnosis. Fail here, where the cause is obvious.
+          if (!probe.result.objectStoreNames.contains('ops')) {
+            probe.result.close();
+            done('EMPTY-DB');
+            return;
+          }
           probe.result.close();
 
           const upgrade = indexedDB.open('SUP_OPS', current + 1);
           upgrade.onerror = () => done('UPGRADE-ERROR');
-          upgrade.onblocked = () => done('UPGRADE-BLOCKED');
+          // `blocked` is an INTERMEDIATE event, not a failure: it means another
+          // connection is still open, and the request proceeds to `success` on
+          // its own once that closes. Resolving here would abort a bump that was
+          // about to work — a live flake on slower CI, where the closed app
+          // page's connection can outlive `close()` by a moment. Record it and
+          // let the timer surface it only if it never clears.
+          upgrade.onblocked = () => {
+            wasBlocked = true;
+          };
           // No schema change needed — the version number itself is the barrier.
           upgrade.onupgradeneeded = () => {};
           upgrade.onsuccess = () => {
@@ -119,12 +141,21 @@ test.describe('@migration #9187 IndexedDB downgrade barrier', () => {
       });
 
       await relaunchPage.goto('/', { waitUntil: 'domcontentloaded' });
+
+      // Poll for OUR dialog, not merely for any dialog. This is a dev build
+      // (`angular.json` sets no defaultConfiguration, so `environment.production`
+      // is false), which arms `devError()` to fire its own alert — that would
+      // satisfy a bare `length > 0` and leave the find below empty on a single
+      // non-retried pass.
       await expect
-        .poll(() => dialogs.length, {
-          message: 'no dialog appeared — the downgrade failed silently',
-          timeout: 45000,
-        })
-        .toBeGreaterThan(0);
+        .poll(
+          () => dialogs.some((m) => m.includes('is less than the existing version')),
+          {
+            message: 'no downgrade dialog appeared — the barrier failed silently',
+            timeout: 45000,
+          },
+        )
+        .toBe(true);
 
       // Select by the technical detail, which BOTH the old and new wording
       // carry. Selecting by the new title instead would make a regression fail
@@ -148,7 +179,10 @@ test.describe('@migration #9187 IndexedDB downgrade barrier', () => {
       // not destroy data.
       expect(msg).toContain('This Version Is Too Old');
       expect(msg).toContain('Do NOT clear your storage');
-      expect(msg).toContain('make a copy of your Super Productivity');
+      // This harness is a browser, so the message takes the `web` branch. The
+      // desktop "copy your data folder first" variant has no meaning here (no
+      // folder to copy) and is covered by idb-open-error-message.spec.ts.
+      expect(msg).toContain('no copy to fall back on');
       // The raw browser detail still reaches bug reports.
       expect(msg).toContain('is less than the existing version');
     } finally {

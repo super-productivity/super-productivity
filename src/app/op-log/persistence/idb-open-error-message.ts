@@ -96,13 +96,17 @@ const buildVersionErrorMessage = (
   'erase the data this build simply cannot read.\n\n' +
   'What to do:\n' +
   versionErrorRecoverySteps(ctx) +
-  // Without this line the message dead-ends: a user whose newer build is gone
+  // Without this the message dead-ends: a user whose newer build is gone
   // (reinstall, replaced machine, restored profile) is told what NOT to do and
   // given no way forward, so they search the web, find "clear IndexedDB" and
-  // destroy recoverable data. One sentence turns that into a copy-first.
-  'If you cannot run a newer version, make a copy of your Super Productivity ' +
-  'data folder before resetting anything. That copy is what makes recovery ' +
-  'possible.\n\n' +
+  // destroy recoverable data. Browsers and mobile WebViews get the warning
+  // rather than the copy instruction — there is no data folder to copy there.
+  (ctx.platform === 'web'
+    ? 'If you cannot get back to a newer version, do not clear this site’s ' +
+      'data — in the browser there is no copy to fall back on.\n\n'
+    : 'If you cannot run a newer version, make a copy of your Super Productivity ' +
+      'data folder before resetting anything. That copy is what makes recovery ' +
+      'possible.\n\n') +
   `Technical details: ${originalMessageOf(error)}`;
 
 /**
