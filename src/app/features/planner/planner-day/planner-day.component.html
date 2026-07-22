@@ -87,9 +87,11 @@
   class="scheduled"
   [class.no-items]="day.scheduledIItems.length === 0"
 >
-  <div class="section-title">
-    <mat-icon>alarm</mat-icon>
-  </div>
+  @if (day.scheduledIItems.length > 0) {
+    <div class="section-title">
+      <mat-icon>alarm</mat-icon>
+    </div>
+  }
 
   <div
     class="scheduled-items"
@@ -147,11 +149,6 @@
           }
         }
       </div>
-    }
-
-    <!-- -->
-    @if (day.scheduledIItems.length === 0) {
-      <div class="empty">{{ T.F.PLANNER.PLAN_VIEW.NO_SCHEDULED_ITEMS | translate }}</div>
     }
   </div>
 </div>
