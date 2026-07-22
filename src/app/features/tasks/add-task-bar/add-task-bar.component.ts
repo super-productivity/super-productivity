@@ -27,6 +27,8 @@ import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
+import { SectionService } from '../../section/section.service';
+import { selectAllSections } from '../../section/store/section.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
 import { ProjectService } from '../../project/project.service';
@@ -45,7 +47,7 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, firstValueFrom, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import {
@@ -116,6 +118,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
 })
 export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskService = inject(TaskService);
+  private readonly _sectionService = inject(SectionService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
@@ -263,7 +266,43 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
+  // The project a "/" section suggestion would apply to: the typed
+  // "+Project" token when present, else the project the task will land in
+  // (work context / manual selection) — mirroring how the parser resolves a
+  // standalone "/Section" token.
+  private readonly _sectionMentionProjectId = computed(
+    () => this.stateService.state().projectId,
+  );
+
+  mentionCfg$ = combineLatest([
+    inject(MentionConfigService).mentionConfig$,
+    toObservable(this._sectionMentionProjectId),
+    this._store.select(selectAllSections),
+  ]).pipe(
+    map(([cfg, sectionProjectId, allSections]) => {
+      const sections = sectionProjectId
+        ? allSections.filter((s) => s.contextId === sectionProjectId)
+        : [];
+      if (!sections.length) {
+        return cfg;
+      }
+      return {
+        ...cfg,
+        mentions: [
+          ...(cfg.mentions || []),
+          {
+            items: sections.map((s) => ({
+              title: s.title,
+              id: s.id,
+              icon: 'view_agenda',
+            })),
+            labelKey: 'title',
+            triggerChar: '/',
+          },
+        ],
+      };
+    }),
+  );
 
   // View children
   inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('inputEl');
@@ -509,6 +548,36 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         taskData,
         this.isAddToBottom(),
       );
+
+      // Section membership lives on the section (taskIds), not the task —
+      // place the new task into the "+Project/Section" target if one parsed.
+      // Two dispatches for one gesture is the established pattern here: it
+      // mirrors drag-into-section (task-list.component), both ops replay
+      // deterministically, and the section reducer no-ops defensively if the
+      // section vanished concurrently.
+      // Skipped for backlog adds: sections only group the main list
+      // (undoneTasksBySection), so a backlogged task would carry an invisible
+      // section membership.
+      if (state.sectionId && state.projectId && !this.isAddToBacklog()) {
+        const targetSection = await firstValueFrom(
+          this._store.select(selectAllSections).pipe(
+            map((all) => all.find((s) => s.id === state.sectionId)),
+            first(),
+          ),
+        );
+        if (targetSection) {
+          // Respect the add-to-bottom toggle within the section, too
+          const afterTaskId = this.isAddToBottom()
+            ? targetSection.taskIds[targetSection.taskIds.length - 1] || null
+            : null;
+          this._sectionService.addTaskToSection(
+            state.sectionId,
+            taskId,
+            afterTaskId,
+            null,
+          );
+        }
+      }
 
       // Resolve remind option once for both scheduleTask and repeat config paths
       const resolvedRemindOption =
