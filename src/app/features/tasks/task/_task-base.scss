@@ -59,9 +59,9 @@
   top: 2px;
   transition: var(--transition-standard);
   transition-property: transform, box-shadow;
-  border: var(--task-border, 1px solid transparent);
+  border: var(--task-border, 1px solid var(--task-border-color));
   border-radius: var(--task-border-radius);
-  box-shadow: var(--task-shadow);
+  box-shadow: none;
 
   background: var(--task-c-bg);
 
@@ -172,11 +172,11 @@
 
   ::ng-deep .box {
     box-shadow: var(--task-shadow-sub-task);
+    border-color: var(--sub-task-border-color);
     border-radius: 0;
     top: -1px;
 
     @include lightTheme {
-      border-color: var(--extra-border-color);
       bottom: 0;
     }
 

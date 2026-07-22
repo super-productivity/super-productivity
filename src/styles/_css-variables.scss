@@ -519,10 +519,11 @@ body.isDarkTheme {
   --task-c-bg: var(--surface-2);
   --task-c-current-bg: var(--surface-3);
   --task-c-drag-drop-bg: var(--surface-3);
+  --task-border-color: var(--divider-color);
 
   // Task shadows (Cat A — same in both modes)
   --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
-  --task-current-shadow: var(--whiteframe-shadow-4dp);
+  --task-current-shadow: var(--whiteframe-shadow-1dp);
 
   // Chips / progress (Cat A)
   --chip-outline-color: rgba(125, 125, 125, 0.4);
@@ -623,10 +624,11 @@ body {
   --sub-task-c-bg-done: var(--task-c-bg);
   --task-c-bg-done: var(--task-c-bg);
   --sub-task-c-bg-in-selected: var(--task-c-bg);
+  --sub-task-border-color: var(--extra-border-color);
 
   // Task shadows (Cat B)
   --task-shadow-sub-task: none;
-  --task-selected-shadow: var(--whiteframe-shadow-3dp);
+  --task-selected-shadow: var(--whiteframe-shadow-1dp);
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(136, 136, 136, 0.4);
@@ -700,10 +702,11 @@ body.isDarkTheme {
   --sub-task-c-bg-done: var(--dark2);
   --task-c-bg-done: var(--dark1);
   --sub-task-c-bg-in-selected: var(--dark10);
+  --sub-task-border-color: transparent;
 
   // Task shadows (Cat B)
   --task-shadow-sub-task: var(--task-shadow);
-  --task-selected-shadow: var(--whiteframe-shadow-4dp);
+  --task-selected-shadow: var(--whiteframe-shadow-1dp);
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(150, 150, 150, 0.3);

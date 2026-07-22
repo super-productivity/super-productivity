@@ -217,7 +217,6 @@ button[mat-menu-item].nav-link.active {
   &.active {
     background: var(--sidenav-item-active-bg);
     color: var(--sidenav-active-text);
-    box-shadow: var(--whiteframe-shadow-1dp);
 
     .nav-icon {
       color: var(--sidenav-active-text);
@@ -322,7 +321,6 @@ button[mat-menu-item].nav-link.active {
     &.active {
       color: var(--sidenav-active-text) !important;
       background: var(--sidenav-item-active-bg) !important;
-      box-shadow: var(--whiteframe-shadow-1dp);
 
       &::after {
         position: absolute;
