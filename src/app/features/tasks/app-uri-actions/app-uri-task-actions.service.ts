@@ -19,6 +19,11 @@ import {
 } from '../util/parse-app-uri-task-action';
 import { PENDING_CAPACITOR_APP_URI_ACTION } from './pending-capacitor-app-uri-action';
 
+// Reject absurdly long title/notes coming from an external URL trigger, mirroring
+// the EML import path's `MAX_EML_BODY_LENGTH`. A generous cap: this is an abuse/
+// accident guard, not a UX limit.
+const MAX_APP_URI_INPUT_LENGTH = 100_000;
+
 /**
  * Handles `create-task`/`complete-task` actions coming from an external URL
  * scheme trigger (an iOS Shortcut's "Open URLs" action, or the equivalent
@@ -78,6 +83,17 @@ export class AppUriTaskActionsService implements OnDestroy {
   }
 
   private _handleAdd(action: AppUriAddTaskAction): void {
+    if (
+      action.title.length > MAX_APP_URI_INPUT_LENGTH ||
+      (action.notes?.length ?? 0) > MAX_APP_URI_INPUT_LENGTH
+    ) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,
+      });
+      return;
+    }
+
     const title = action.title.trim();
     if (!title) {
       // A whitespace-only title (e.g. `?title=%20`) reaches here unrejected on
@@ -109,10 +125,22 @@ export class AppUriTaskActionsService implements OnDestroy {
       }
     }
 
-    this._taskService.add(title, false, {
-      ...(action.notes ? { notes: action.notes } : {}),
-      ...(action.projectId ? { projectId: action.projectId } : {}),
-    });
+    // isIgnoreShortSyntax: a URL is untrusted external content, so the title is
+    // added verbatim rather than parsed for `+project`/`#tag`/`@date` tokens
+    // (mirrors eml-drop.service.ts). This keeps an explicit `projectId`
+    // authoritative — a `+project` in the title can't silently override the
+    // validated one — stops a URL from creating tags/projects, and keeps the
+    // SUCCESS snack's title matching what is actually stored.
+    this._taskService.add(
+      title,
+      false,
+      {
+        ...(action.notes ? { notes: action.notes } : {}),
+        ...(action.projectId ? { projectId: action.projectId } : {}),
+      },
+      false,
+      true,
+    );
 
     this._snackService.open({
       type: 'SUCCESS',
@@ -122,6 +150,14 @@ export class AppUriTaskActionsService implements OnDestroy {
   }
 
   private _handleComplete(action: AppUriCompleteTaskAction): void {
+    if (action.title.length > MAX_APP_URI_INPUT_LENGTH) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,
+      });
+      return;
+    }
+
     const needle = action.title.trim().toLowerCase();
     if (!needle) {
       // A whitespace-only title would otherwise match every task via

@@ -20,6 +20,14 @@ export type AppUriTaskAction = AppUriAddTaskAction | AppUriCompleteTaskAction;
  * already means something unrelated (opens the quick-add-task input bar).
  * Returns `null` for any other/unrecognized URL, including the existing
  * `.../oauth-callback` action handled elsewhere.
+ *
+ * The title is forwarded verbatim (untrimmed). A present-but-whitespace-only
+ * title is intentionally NOT rejected here: it is forwarded so
+ * `AppUriTaskActionsService` surfaces the empty-title error snack, matching the
+ * desktop protocol path (which forwards a truthy `' '`). A missing or empty
+ * (`title=`) param yields `null` — no action — mirroring desktop's truthy
+ * `if (taskTitle)` check. All trimming and empty/length validation lives in the
+ * service, so both platforms behave identically.
  */
 export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   let urlObj: URL;
@@ -33,11 +41,11 @@ export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   // component is not auto-lowercased (unlike http/https) — normalize
   // explicitly, matching OAuthCallbackHandlerService's own parsing.
   const action = urlObj.hostname.toLowerCase();
-  // A whitespace-only title (`title=%20`, or `title=+`, which a query string
-  // decodes to a space) must not silently become an empty needle — trimmed-
-  // empty means "no title", not "match every task" (see the completion
-  // matching in AppUriTaskActionsService).
-  const title = urlObj.searchParams.get('title')?.trim();
+  if (action !== 'create-task' && action !== 'complete-task') {
+    return null;
+  }
+
+  const title = urlObj.searchParams.get('title');
   if (!title) {
     return null;
   }
@@ -55,9 +63,5 @@ export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
     };
   }
 
-  if (action === 'complete-task') {
-    return { type: 'complete', title };
-  }
-
-  return null;
+  return { type: 'complete', title };
 };

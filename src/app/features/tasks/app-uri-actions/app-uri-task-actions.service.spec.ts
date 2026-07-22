@@ -89,9 +89,15 @@ describe('AppUriTaskActionsService', () => {
       // service double-calling internally, not against some other class
       // independently subscribing to the same shared observable again.
       expect(taskService.add).toHaveBeenCalledTimes(1);
-      expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {
-        notes: 'whole milk',
-      });
+      // isIgnoreShortSyntax (5th arg) is true: a URL is untrusted external
+      // content, so the title is added verbatim, not parsed for +project/#tag.
+      expect(taskService.add).toHaveBeenCalledWith(
+        'Buy milk',
+        false,
+        { notes: 'whole milk' },
+        false,
+        true,
+      );
       expect(snackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'SUCCESS',
@@ -113,10 +119,26 @@ describe('AppUriTaskActionsService', () => {
       );
     });
 
+    it('shows an error and never adds a task when notes exceed the length cap', () => {
+      pendingAction$.next({
+        type: 'add',
+        title: 'Buy milk',
+        notes: 'a'.repeat(100_001),
+      });
+
+      expect(taskService.add).not.toHaveBeenCalled();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,
+        }),
+      );
+    });
+
     it('trims surrounding whitespace from an otherwise-valid title', () => {
       pendingAction$.next({ type: 'add', title: '  Buy milk  ' });
 
-      expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {});
+      expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {}, false, true);
     });
 
     it('passes through a projectId that exists', () => {
@@ -126,9 +148,13 @@ describe('AppUriTaskActionsService', () => {
         projectId: 'proj-1',
       });
 
-      expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {
-        projectId: 'proj-1',
-      });
+      expect(taskService.add).toHaveBeenCalledWith(
+        'Buy milk',
+        false,
+        { projectId: 'proj-1' },
+        false,
+        true,
+      );
     });
 
     it('refuses to add (and shows an error) when the projectId does not exist', () => {
@@ -237,13 +263,33 @@ describe('AppUriTaskActionsService', () => {
     });
 
     it('shows an error and never queries the store for a whitespace-only title', () => {
+      const selectSpy = spyOn(TestBed.inject(MockStore), 'select').and.callThrough();
+
       pendingAction$.next({ type: 'complete', title: '   ' });
 
       expect(taskService.setDone).not.toHaveBeenCalled();
+      // The empty-needle guard must short-circuit before the store is touched —
+      // otherwise a whitespace title would `.includes('')`-match every task.
+      expect(selectSpy).not.toHaveBeenCalled();
       expect(snackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
           msg: T.F.TASK.S.NOT_FOUND_VIA_APP_URI,
+        }),
+      );
+    });
+
+    it('shows an error and never completes a task when the title exceeds the length cap', () => {
+      const selectSpy = spyOn(TestBed.inject(MockStore), 'select').and.callThrough();
+
+      pendingAction$.next({ type: 'complete', title: 'a'.repeat(100_001) });
+
+      expect(taskService.setDone).not.toHaveBeenCalled();
+      expect(selectSpy).not.toHaveBeenCalled();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,
         }),
       );
     });
@@ -290,7 +336,7 @@ describe('AppUriTaskActionsService buffering', () => {
     expect(taskService.add).not.toHaveBeenCalled();
 
     dataLoaded$.next(true);
-    expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {});
+    expect(taskService.add).toHaveBeenCalledWith('Buy milk', false, {}, false, true);
 
     service.ngOnDestroy();
     TestBed.inject(MockStore).resetSelectors();

@@ -44,30 +44,33 @@ describe('parseAppUriTaskAction', () => {
     ).toBeNull();
   });
 
-  it('returns null when the title query param is whitespace-only (%20)', () => {
+  // A present-but-whitespace-only title is forwarded (not nulled) so the service
+  // surfaces the empty-title error snack — matching the desktop path, which
+  // forwards a truthy ' '. The service does the trimming/rejection.
+  it('forwards a whitespace-only title (%20) for the service to reject', () => {
     expect(
       parseAppUriTaskAction('com.super-productivity.app://create-task?title=%20'),
-    ).toBeNull();
+    ).toEqual({ type: 'add', title: ' ' });
   });
 
-  it('returns null when the title query param is a lone "+" (decodes to a space)', () => {
+  it('forwards a lone "+" title (decodes to a space) for the service to reject', () => {
     expect(
       parseAppUriTaskAction('com.super-productivity.app://create-task?title=+'),
-    ).toBeNull();
+    ).toEqual({ type: 'add', title: ' ' });
   });
 
-  it('returns null for complete-task when the title is whitespace-only', () => {
+  it('forwards a whitespace-only complete-task title for the service to reject', () => {
     expect(
       parseAppUriTaskAction('com.super-productivity.app://complete-task?title=%20%20'),
-    ).toBeNull();
+    ).toEqual({ type: 'complete', title: '  ' });
   });
 
-  it('trims surrounding whitespace from an otherwise-valid title', () => {
+  it('forwards the title untrimmed (the service trims)', () => {
     expect(
       parseAppUriTaskAction(
         'com.super-productivity.app://create-task?title=%20Buy%20milk%20',
       ),
-    ).toEqual({ type: 'add', title: 'Buy milk' });
+    ).toEqual({ type: 'add', title: ' Buy milk ' });
   });
 
   it('returns null for unrelated actions (e.g. the existing oauth-callback)', () => {

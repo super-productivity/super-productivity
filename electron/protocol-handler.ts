@@ -2,6 +2,7 @@ import { App, BrowserWindow } from 'electron';
 import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { getIsAppReady } from './main-window';
 import { showOrFocus, toggleWindowVisibility } from './various-shared';
 
 export const PROTOCOL_NAME = 'superproductivity';
@@ -27,7 +28,12 @@ export const getProtocolAction = (url: string | undefined): string | null => {
     return null;
   }
   try {
-    return new URL(url).hostname;
+    // Custom URL schemes are non-special per the WHATWG URL spec, so the host is
+    // not auto-lowercased (unlike http/https). Normalize here so callers — the
+    // `second-instance` pre-focus exemption and the cold-start flag — match a
+    // mixed-case action (e.g. `Toggle-Visibility`) the same way `processProtocolUrl`
+    // does; otherwise those #7114 guards miss and the window shows-then-hides.
+    return new URL(url).hostname.toLowerCase();
   } catch {
     return null;
   }
@@ -39,9 +45,15 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
   // may be written to it.
   log('Processing protocol URL:', `${PROTOCOL_PREFIX}${getProtocolAction(url) ?? ''}`);
 
-  // Only process after window is ready
-  if (!mainWin || !mainWin.webContents) {
-    log('Window not ready, deferring protocol URL processing');
+  // Only process once the renderer can actually receive the message. A freshly
+  // created BrowserWindow already has `webContents` long before Angular boots and
+  // registers its `window.ea.on(...)` listeners, so a URL arriving in that gap
+  // would be `send()`-t into the void (no listener, no ReplaySubject yet) and
+  // silently dropped — the primary cold-launch case. Defer until the app signals
+  // ready (drained by the APP_READY hook in start-app.ts), mirroring the
+  // `getIsAppReady()` gate the REST API uses on its own external-automation path.
+  if (!mainWin || !mainWin.webContents || !getIsAppReady()) {
+    log('App not ready, deferring protocol URL processing');
     pendingUrls.push(url);
 
     // Process any pending protocol URLs after window is created
@@ -146,7 +158,15 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
         log('Unknown protocol action:', action);
     }
   } catch (error) {
-    log('Error processing protocol URL:', error);
+    // Log a non-identifying descriptor only — never the error object. Node's
+    // `ERR_INVALID_URL` carries an enumerable `input` property holding the raw
+    // URL (title/notes/credentials), which `console.log`/`util.inspect` print;
+    // the log is exportable, so this would leak user content (rule #9).
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    log('Error processing protocol URL:', code ?? 'unknown error');
   }
 };
 

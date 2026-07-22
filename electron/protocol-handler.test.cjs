@@ -12,6 +12,9 @@ const originalModuleLoad = Module._load;
 let showOrFocusCalls = [];
 let toggleVisibilityCalls = [];
 let logCalls = [];
+// Controls the mocked `getIsAppReady()`. Default true so the existing tests
+// exercise the ready path; the deferral test flips it to false.
+let isAppReady = true;
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -21,6 +24,9 @@ const installMocks = () => {
     }
     if (request === 'electron-log/main') {
       return { log: (...args) => logCalls.push(args) };
+    }
+    if (request === './main-window') {
+      return { getIsAppReady: () => isAppReady };
     }
     if (request === './various-shared') {
       return {
@@ -60,6 +66,7 @@ test.beforeEach(() => {
   showOrFocusCalls = [];
   toggleVisibilityCalls = [];
   logCalls = [];
+  isAppReady = true;
 });
 
 test('add-task shows the window and opens the add-task bar', () => {
@@ -177,6 +184,25 @@ test('complete-task without a title query param sends nothing', () => {
   assert.deepEqual(win.sent, []);
 });
 
+test('defers processing until the app is ready even when the window exists', (t) => {
+  // A freshly created BrowserWindow has webContents before Angular boots and
+  // registers its IPC listeners; sending now would be dropped. The URL must be
+  // deferred until the app signals ready.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+  isAppReady = false;
+
+  processProtocolUrl('superproductivity://create-task?title=Buy%20milk', win);
+
+  assert.deepEqual(win.sent, [], 'nothing is sent to a not-yet-listening renderer');
+  assert.equal(showOrFocusCalls.length, 0);
+  assert.ok(
+    JSON.stringify(logCalls).includes('deferring'),
+    'the URL should be logged as deferred',
+  );
+});
+
 test('does not log user content (the task title) to the exportable log', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
@@ -219,6 +245,12 @@ test('getProtocolAction extracts the action host, null for missing/invalid', () 
   assert.equal(
     getProtocolAction('superproductivity://create-task/Buy%20milk'),
     'create-task',
+  );
+  // Non-special-scheme hosts aren't auto-lowercased by URL, so a mixed-case
+  // action must be normalized here to match the switch and the #7114 guards.
+  assert.equal(
+    getProtocolAction('superproductivity://Toggle-Visibility'),
+    'toggle-visibility',
   );
   assert.equal(getProtocolAction(undefined), null);
   assert.equal(getProtocolAction('::: not a url :::'), null);
