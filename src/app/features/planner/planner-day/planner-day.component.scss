@@ -4,9 +4,13 @@
 :host {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   min-width: 260px;
   width: 260px;
   overflow: hidden;
+  padding-inline: var(--s);
+  border-inline: 1px solid var(--divider-color);
+  background: var(--planner-days-bg, var(--bg));
   // there needs to be enough space for the fab buttons
 
   padding-bottom: 96px;
@@ -18,73 +22,101 @@
     min-width: 100%;
     padding: 0;
     margin-bottom: var(--s2);
+    border-inline: none;
+    background: var(--bg);
   }
 }
 
 :host header {
-  margin-top: var(--s2);
-  margin-right: -4px;
-  margin-left: -4px;
-  border-radius: 8px;
-  //position: sticky;
-  //top: -2px;
-  //&.is-stuck {
-  //  background: white;
-  //  box-shadow: var(--whiteframe-shadow-2dp);
-  //  z-index: 10;
-  //}
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-half) var(--s);
+  margin-top: var(--s);
+  padding: var(--s) 0 var(--s-half);
+
+  @include mq(xs, max) {
+    margin-top: 0;
+    padding-block: var(--s-half);
+  }
 }
 
 .day-title {
-  font-size: 22px;
-  text-align: center;
-  font-weight: bold;
-  vertical-align: middle;
-  padding-top: var(--s);
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--s-half);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  white-space: nowrap;
 
   .date {
-    font-size: 12px;
+    color: var(--text-color-muted);
+  }
+
+  mat-icon {
+    flex-shrink: 0;
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    font-size: var(--font-size-lg);
+  }
+
+  @include mq(xs, max) {
+    font-size: var(--font-size-md);
+
+    mat-icon {
+      width: var(--font-size-md);
+      height: var(--font-size-md);
+      font-size: var(--font-size-md);
+    }
   }
 }
 
 .day-counts {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
-  padding: var(--s) 0;
-  border-radius: var(--card-border-radius);
-  font-size: 18px;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+  white-space: nowrap;
 
   mat-icon:last-of-type {
     margin-left: var(--s);
-    font-size: 16px;
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    font-size: var(--font-size-lg);
   }
 
   .available-hours {
     margin-left: var(--s-half);
-    font-size: 14px;
-    opacity: 0.7;
+  }
+
+  @include mq(xs, max) {
+    font-size: var(--font-size-xs);
   }
 }
 
 .progress-container {
-  margin: 0 auto;
-  width: 95%;
-  height: 4px;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: var(--s-half);
   position: relative;
-  margin-bottom: var(--s);
-}
-
-.day-estimate {
-  margin-top: var(--s);
-  font-size: 16px;
-  text-align: center;
 }
 
 .section-title {
   display: flex;
-  justify-content: center;
-  margin: 12px 0 var(--s);
+  align-items: center;
+  justify-content: flex-start;
+  margin: var(--s) 0 var(--s-half);
+  color: var(--text-color-muted);
+
+  mat-icon {
+    width: var(--planner-item-ico-size);
+    height: var(--planner-item-ico-size);
+    font-size: var(--planner-item-ico-size);
+  }
 }
 
 .normal-tasks,
@@ -98,7 +130,12 @@
 .scheduled,
 .deadlines {
   flex-grow: 1;
-  margin-top: var(--s2);
+  margin-top: var(--s);
+
+  &.no-items {
+    flex-grow: 0;
+    margin-top: var(--s-half);
+  }
 
   @include mq(xs, max) {
     &.no-items {
@@ -187,10 +224,14 @@
 }
 
 .empty {
-  text-align: center;
-  font-style: italic;
-  line-height: var(--planner-item-height);
-  height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--planner-item-height);
+  padding-inline: var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
 }
 
 .all-day-event {
