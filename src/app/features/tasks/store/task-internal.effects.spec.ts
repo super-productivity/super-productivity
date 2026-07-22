@@ -368,6 +368,67 @@ describe('TaskInternalEffects', () => {
       actions$.next(setCurrentTask({ id: 'task1' }));
     });
 
+    it('should not plan the started task when auto-add worked-on tasks is disabled', () => {
+      const task = createTask('task1', { isDone: false });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoAddWorkedOnToToday: false }),
+      );
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
+
+      let emitted = false;
+      effects.planStartedTaskForToday$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should not move a task with an existing due day to today when started', () => {
+      const task = createTask('task1', {
+        isDone: false,
+        dueDay: '2026-01-06',
+      });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
+
+      let emitted = false;
+      effects.planStartedTaskForToday$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should not move a task with a scheduled time to today when started', () => {
+      const task = createTask('task1', {
+        isDone: false,
+        dueWithTime: new Date('2026-01-06T09:00:00Z').getTime(),
+      });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
+
+      let emitted = false;
+      effects.planStartedTaskForToday$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      expect(emitted).toBe(false);
+    });
+
     it('should not plan the started task again when it is already in today', (done) => {
       const task = createTask('task1', { isDone: false, dueDay: '2026-01-05' });
 

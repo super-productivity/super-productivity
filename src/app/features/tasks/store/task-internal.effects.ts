@@ -100,8 +100,9 @@ export class TaskInternalEffects {
       withLatestFrom(
         this._store$.pipe(select(selectTaskFeatureState)),
         this._store$.pipe(select(selectTodayTaskIds)),
+        this._store$.pipe(select(selectTasksConfig)),
       ),
-      mergeMap(([, state, todayTaskIds]) => {
+      mergeMap(([, state, todayTaskIds, tasksCfg]) => {
         const currentTaskId = state.currentTaskId;
         if (!currentTaskId) {
           return EMPTY;
@@ -109,7 +110,10 @@ export class TaskInternalEffects {
 
         const currentTask = state.entities[currentTaskId] as Task | undefined;
         if (
+          !tasksCfg.isAutoAddWorkedOnToToday ||
           !currentTask ||
+          !!currentTask.dueDay ||
+          typeof currentTask.dueWithTime === 'number' ||
           todayTaskIds.includes(currentTaskId) ||
           (!!currentTask.parentId && todayTaskIds.includes(currentTask.parentId))
         ) {
