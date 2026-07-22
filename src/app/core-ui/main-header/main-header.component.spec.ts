@@ -63,7 +63,7 @@ import { SyncStatus } from '../../op-log/sync-exports';
       </div>
 
       <nav class="action-nav-right">
-        <div class="counters-action-group">
+        <div class="header-action-group secondary-action-group counters-action-group">
           <button type="button"></button>
           <button type="button"></button>
           <button type="button"></button>
