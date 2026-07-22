@@ -9,6 +9,22 @@ import { EMPTY_SIMPLE_COUNTER } from '../../simple-counter/simple-counter.const'
 import { nanoid } from 'nanoid';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 
+/** Built-in sound options shared between the static form config and the dialog component. */
+export const BUILT_IN_SOUND_OPTIONS: { label: string; value: string }[] = [
+  {
+    label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_COPPER_BELL,
+    value: 'copper-bell-ding.mp3',
+  },
+  {
+    label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_DING_SMALL_BELL,
+    value: 'ding-small-bell.mp3',
+  },
+  { label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_DONE1, value: 'done1.mp3' },
+  { label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_DONE2, value: 'done2.mp3' },
+  { label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_POSITIVE, value: 'positive.mp3' },
+  { label: T.F.SIMPLE_COUNTER.FORM.SOUND_TYPE_TICK, value: 'tick.mp3' },
+];
+
 export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
   title: T.F.SIMPLE_COUNTER.FORM.TITLE,
   key: 'EMPTY',
@@ -211,6 +227,37 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
             key: 'isHideButton',
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_IS_HIDE_BUTTON,
+            },
+          },
+          {
+            type: 'checkbox',
+            key: 'isAudioEnabled',
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_IS_AUDIO_ENABLED,
+            },
+          },
+          {
+            key: 'soundType',
+            type: 'select',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isAudioEnabled,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_SOUND_TYPE,
+              options: BUILT_IN_SOUND_OPTIONS,
+            },
+          },
+          {
+            key: 'soundVolume',
+            type: 'slider',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isAudioEnabled,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_SOUND_VOLUME,
+              type: 'number',
+              min: 0,
+              max: 100,
             },
           },
         ],

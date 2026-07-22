@@ -824,6 +824,14 @@ test.describe('@supersync SuperSync E2E', () => {
       // values render as "-" in the UI.
       const timeSpentA = await waitForTaskTimeSpent(clientA, taskName, 5000);
       console.log(`[TimeTrack Test] Client A recorded time: ${timeSpentA}ms`);
+      // Verify time was recorded on Client A
+      // Time is displayed in .time-wrapper .time-val
+      await taskLocatorA.scrollIntoViewIfNeeded();
+      await taskLocatorA.hover();
+      const timeValA = taskLocatorA.locator('.time-wrapper .time-val').first();
+      await expect(timeValA).toBeVisible({ timeout: 5000 });
+      const timeTextA = await timeValA.textContent();
+      console.log(`[TimeTrack Test] Client A recorded time: ${timeTextA}`);
 
       // ============ PHASE 5: Sync to Server ============
       await clientA.sync.syncAndWait();
@@ -857,6 +865,9 @@ test.describe('@supersync SuperSync E2E', () => {
       }
 
       await expectTaskVisible(clientB, taskName);
+      const taskLocatorB = getTaskElement(clientB, taskName);
+      await taskLocatorB.scrollIntoViewIfNeeded();
+      await taskLocatorB.hover();
 
       // Verify time synced to Client B
       const timeSpentB = await waitForTaskTimeSpent(clientB, taskName, 10000);
