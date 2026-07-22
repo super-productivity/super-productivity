@@ -1,6 +1,7 @@
-import { formatDate } from '@angular/common';
+import { formatDate, registerLocaleData } from '@angular/common';
+import localeEn from '@angular/common/locales/en';
 import { NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS } from './locale.constants';
-import { registerNavigatorLocale } from './locale-registration';
+import { registerDefaultLocale, registerNavigatorLocale } from './locale-registration';
 
 /**
  * Covers the registration half of the navigator-fallback fix: without their
@@ -28,6 +29,14 @@ describe('NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS', () => {
   };
 
   beforeAll(async () => {
+    // Register the en-GB baseline under the bare 'en' id first, matching prod
+    // (main.ts calls registerDefaultLocale before the app initializer). Without
+    // it, an unregistered en-* resolves through Angular's built-in en (=en-US,
+    // already 12h), so a 12h assertion would pass even if registration below
+    // were a no-op — vacuous for exactly the six 12h variants this fix exists
+    // for. With the en-GB (24h) baseline, "renders 12h" means the regional data
+    // genuinely won.
+    registerDefaultLocale();
     await Promise.all(
       Object.entries(NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS).map(async ([key, load]) => {
         const m = await load();
@@ -35,6 +44,13 @@ describe('NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS', () => {
         await registerNavigatorLocale(key.replace(/_/g, '-'));
       }),
     );
+  });
+
+  afterAll(() => {
+    // The locale registry is module-global across the Karma run. Restore 'en'
+    // to the baked-in en-US, matching locale-registration.spec's hygiene, so a
+    // sibling suite doesn't inherit this suite's en-GB baseline.
+    registerLocaleData(localeEn, 'en');
   });
 
   it('has a 12h/24h expectation for every registered variant', () => {
