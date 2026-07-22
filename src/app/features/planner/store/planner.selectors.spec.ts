@@ -643,6 +643,33 @@ describe('Planner Selectors - selectPlannerDays', () => {
     // timeEstimate = task (3600000) + timed event (7200000) = 10800000 ms = 3 hours
     expect(result[0].timeEstimate).toBe(10800000);
   });
+
+  it('should not count tracked time without an estimate as planned workload', () => {
+    const thirtyMinutes = 30 * 60 * 1000;
+    const task = createMockTask({
+      id: 'tracked-without-estimate',
+      timeSpent: thirtyMinutes,
+      timeSpentOnDay: { [today]: thirtyMinutes },
+      timeEstimate: 0,
+    });
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [task.id],
+      [],
+      [],
+      today,
+    );
+
+    const result = selector.projector(
+      createTasksMapFromTasksArray([task]),
+      emptyPlannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result[0].timeEstimate).toBe(0);
+  });
 });
 
 describe('Planner Selectors - selectAllTasksDueToday', () => {
