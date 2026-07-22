@@ -122,6 +122,7 @@ import {
   AddSubtaskInputCloseReason,
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
+import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
 
 @Component({
   selector: 'task',
@@ -294,6 +295,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     return (t.timeEstimate && (t.timeSpent / t.timeEstimate) * 100) || 0;
   });
+
+  // Shown next to the sub tasks' summed time spent. Rounding both down separately
+  // would lose the partial minute they share, so the left cell is derived from the
+  // pair rather than rounded on its own. #9190
+  subTaskTimeLeft = computed<number>(() =>
+    getSubTaskTimeLeftForDisplay(this.task().subTasks),
+  );
 
   // Checklist progress derived from markdown checklist in task notes (null = no checklist)
   checklistProgress = computed<ChecklistProgress | null>(() =>
