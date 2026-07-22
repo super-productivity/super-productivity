@@ -1,5 +1,6 @@
 import {
   APP_INITIALIZER,
+  provideAppInitializer,
   enableProdMode,
   EnvironmentInjector,
   ErrorHandler,
@@ -13,11 +14,11 @@ import { registerLocaleData } from '@angular/common';
 
 import { environment } from './environments/environment';
 import { IS_ELECTRON } from './app/app.constants';
+import { DEFAULT_LANGUAGE, LocaleImportFns } from './app/core/locale.constants';
 import {
-  DEFAULT_LANGUAGE,
-  DEFAULT_LOCALE_DATA,
-  LocaleImportFns,
-} from './app/core/locale.constants';
+  registerDefaultLocale,
+  registerNavigatorLocale,
+} from './app/core/locale-registration';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
 import { AndroidBackButtonService } from './app/features/android/android-back-button.service';
@@ -121,8 +122,20 @@ setLegacyKdfWarningHandler(() => {
   );
 });
 
+// Register default locale data before bootstrap: LocaleDatePipe is pure, so a
+// date rendered before registration would cache Angular's built-in en-US
+// resolution for the session (bootstrapApplication's .then runs after first
+// render, which is too late).
+registerDefaultLocale();
+
 bootstrapApplication(AppComponent, {
   providers: [
+    // Await the browser's own regional locale (en-AU, en-CA, … — navigator-only
+    // variants backing "System default") before first render, for the same
+    // pure-pipe reason as above. Never rejects and self-limits to a short
+    // timeout, so a failed or stalled chunk load degrades to the default locale
+    // instead of failing bootstrap or holding up first render indefinitely.
+    provideAppInitializer(() => registerNavigatorLocale()),
     // Provide configuration for TranslateHttpLoader
     {
       provide: TRANSLATE_HTTP_LOADER_CONFIG,
@@ -353,10 +366,10 @@ bootstrapApplication(AppComponent, {
   // Initialize touch fix for Material menus
   initializeMatMenuTouchFix();
 
-  // Register default locale immediately (statically imported, no network fetch)
-  registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
-
-  // Lazily load and register remaining locales during idle time
+  // Lazily load and register remaining locales during idle time. The
+  // navigator-only regional variants are NOT loaded here — only the entry
+  // matching the browser culture language is ever needed, and the app
+  // initializer above already registered it before first render.
   const registerRemainingLocales = (): void => {
     Object.keys(LocaleImportFns).forEach((locale) => {
       if (locale !== DEFAULT_LANGUAGE) {

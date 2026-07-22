@@ -134,6 +134,43 @@ export const LocaleImportFns: Record<
   vi: () => import('@angular/common/locales/vi'),
 };
 
+/**
+ * Angular locale data for common browser-culture region variants that
+ * are NOT user-selectable in the dropdown — they back the "System default"
+ * option, which follows the browser's regional locale (see
+ * `DateTimeFormatService`). English regions need their own data because
+ * Angular's `DatePipe` would otherwise fall back through `en` (registered as
+ * en-GB) and render 24h time for en-AU/en-CA/en-NZ users, while the
+ * `Intl`-based code paths already render 12h for the same locale.
+ *
+ * Kept separate from {@link DateTimeLocales} so the `DateTimeLocale` union
+ * stays limited to genuinely selectable locales. Scope is English regions
+ * only: English is the most common navigator.language and the one language
+ * whose bare code is pinned to en-GB. Other regional variants (es-MX,
+ * fr-CA, …) still fall back to their bare language code — not always
+ * region-correct, but out of scope here.
+ *
+ * Keys are snake_case forms of the browser culture tag (`en-AU` -> `en_au`);
+ * `registerNavigatorLocale` (locale-registration.ts, awaited by an app
+ * initializer before first render) matches the browser culture language against
+ * them — the same `getBrowserCultureLang()` value the pipe's locale resolves to.
+ * Registration itself passes no id — each data file self-reports its BCP-47
+ * id, which `registerLocaleData` normalizes to lowercase.
+ */
+export const NAVIGATOR_FALLBACK_LOCALE_IMPORT_FNS: Record<
+  string,
+  () => Promise<{ default: unknown }>
+> = {
+  en_au: () => import('@angular/common/locales/en-AU'),
+  en_ca: () => import('@angular/common/locales/en-CA'),
+  en_ie: () => import('@angular/common/locales/en-IE'),
+  en_in: () => import('@angular/common/locales/en-IN'),
+  en_nz: () => import('@angular/common/locales/en-NZ'),
+  en_ph: () => import('@angular/common/locales/en-PH'),
+  en_sg: () => import('@angular/common/locales/en-SG'),
+  en_za: () => import('@angular/common/locales/en-ZA'),
+};
+
 /** Default locale data, statically imported for instant availability */
 export const DEFAULT_LOCALE_DATA = localeEnGB;
 
