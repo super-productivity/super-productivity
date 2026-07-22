@@ -258,6 +258,21 @@ mat-option.isDone {
 
 // BUTTONS
 // -----------
+// Material 2's default 1.25px label tracking makes compact actions feel dated.
+// Use Material's public component tokens so every shared button variant follows
+// the app's restrained typography scale.
+.mat-mdc-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-raised-button,
+.mat-mdc-outlined-button,
+.mat-tonal-button {
+  --mat-button-text-label-text-tracking: var(--letter-spacing-normal);
+  --mat-button-filled-label-text-tracking: var(--letter-spacing-normal);
+  --mat-button-protected-label-text-tracking: var(--letter-spacing-normal);
+  --mat-button-outlined-label-text-tracking: var(--letter-spacing-normal);
+  --mat-button-tonal-label-text-tracking: var(--letter-spacing-normal);
+}
+
 // Ensure proper contrast for text and stroked buttons on standard backgrounds
 // Text buttons use theme colors directly on background, so we need good contrast
 .mat-mdc-button,
@@ -446,16 +461,11 @@ body .mat-mdc-button-base .mat-icon {
   cursor: grabbing;
 }
 
-.cdk-drop-list-disabled {
-  border: 4px solid red;
-}
-
 .cdk-drop-list-receiving {
   outline: 1px dashed var(--c-primary);
   border-color: var(--c-primary);
   border-radius: 6px;
   cursor: grabbing;
-  //border: 2px solid green;
 }
 
 // MAT MENU
@@ -465,10 +475,6 @@ body .mat-mdc-button-base .mat-icon {
 
 .mat-mdc-menu-content {
   padding: 0 !important;
-}
-
-.mat-mdc-menu-item.quick-access {
-  border: 1px solid red;
 }
 
 task.cdk-drag-preview .box {

@@ -28,9 +28,8 @@
 
   &.is-focused {
     transition: var(--transition-enter);
-    //z-index: var(--z-task-title-focus) !important;
-    z-index: 32 !important;
-    border: 1px solid var(--c-accent);
+    z-index: var(--z-task-title-focus) !important;
+    border: 1px solid var(--focus-ring-color);
     @include inlineEditElevation();
     box-shadow: var(--whiteframe-shadow-4dp);
   }

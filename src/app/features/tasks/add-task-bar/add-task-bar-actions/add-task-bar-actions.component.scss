@@ -76,20 +76,6 @@
     // prevent dark theme being lighter than background
     background: transparent !important;
 
-    //outline: 1px solid red;
-    //::ng-deep .mdc-button__label {
-    //  outline: 1px solid greenyellow;
-    //}
-    //::ng-deep span {
-    //  outline: 1px solid orchid;
-    //}
-    //::ng-deep mat-icon {
-    //  outline: 1px solid #007bff;
-    //}
-    //::ng-deep > mat-icon {
-    //  outline: 1px solid orange;
-    //}
-
     ::ng-deep > mat-icon.hide {
       width: 0;
       overflow: hidden;
