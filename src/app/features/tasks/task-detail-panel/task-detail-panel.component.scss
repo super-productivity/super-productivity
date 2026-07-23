@@ -135,6 +135,17 @@ progress-bar {
   margin-left: var(--s-quarter);
 }
 
+// Recurrence shown alongside the due date in the merged schedule item.
+.repeat-value {
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+    margin-right: var(--s-quarter);
+  }
+}
+
 .attachment-list-panel-content-wrapper {
   padding-bottom: var(--s);
 }

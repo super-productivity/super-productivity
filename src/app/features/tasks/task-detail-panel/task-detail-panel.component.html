@@ -157,7 +157,9 @@
     (collapseParent)="collapseParent()"
     (editActionTriggered)="scheduleTask()"
     (keyPress)="onItemKeyPress($event)"
-    [inputIcon]="task().dueWithTime || task().dueDay ? 'edit' : 'add'"
+    [inputIcon]="
+      task().dueWithTime || task().dueDay || task().repeatCfgId ? 'edit' : 'add'
+    "
     class="input-item"
     [class.color-warn]="isOverdue()"
   >
@@ -182,6 +184,15 @@
           } @else {
             {{ task().dueDay | localeDate: 'shortDate' : undefined : locale() }}
           }
+        </div>
+      }
+      @if (task().repeatCfgId && repeatCfgLabel()) {
+        <div
+          class="reminder-value repeat-value"
+          matTooltipPosition="left"
+        >
+          <mat-icon>repeat</mat-icon>
+          {{ repeatCfgLabel() }}
         </div>
       }
     </ng-container>
@@ -351,31 +362,6 @@
       <ng-container input-value></ng-container>
     </task-detail-item>
   }
-  @if (!task().parentId && !task().issueId) {
-    <task-detail-item
-      (collapseParent)="collapseParent()"
-      (editActionTriggered)="editTaskRepeatCfg()"
-      (keyPress)="onItemKeyPress($event)"
-      [inputIcon]="task().repeatCfgId ? 'edit' : 'add'"
-      class="input-item"
-    >
-      <ng-container input-title>
-        <mat-icon>repeat</mat-icon>
-        <span>{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}</span>
-      </ng-container>
-      <ng-container input-value>
-        @if (repeatCfgLabel()) {
-          <div
-            class="reminder-value"
-            matTooltipPosition="left"
-          >
-            {{ repeatCfgLabel() }}
-          </div>
-        }
-      </ng-container>
-    </task-detail-item>
-  }
-
   <task-detail-item
     #tagEditDetailItemElRef
     (collapseParent)="collapseParent()"
