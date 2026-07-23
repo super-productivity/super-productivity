@@ -3,6 +3,13 @@ import { expectNoGlobalError, expectTaskVisible } from '../utils/assertions';
 import { waitForAppReady, waitForStatePersistence } from '../utils/waits';
 
 test.describe('Production PWA offline reload', () => {
+  test.beforeAll(async ({ request }) => {
+    const response = await request.post('/__e2e/pwa/version/v1');
+    expect(response.ok()).toBeTruthy();
+    const body: unknown = await response.json();
+    expect(body).toEqual({ version: 'v1' });
+  });
+
   test('installs the worker and restores persisted data offline', async ({
     page,
     isolatedContext,

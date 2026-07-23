@@ -53,7 +53,7 @@
     "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync android",
     "buildFrontend:e2e": "npm run plugins:build && npm run env && ng build",
     "serveFrontend:e2e:prod": "npx http-server .tmp/angular-dist/browser -p 4242 -c-1 --proxy http://localhost:4242?",
-    "serveFrontend:e2e:pwa": "npx http-server dist/browser -p 4243 -c-1 --proxy http://localhost:4243?",
+    "serveFrontend:e2e:pwa": "node e2e/pwa/pwa-test-server.cjs",
     "e2e": "npm run e2e:all -- --grep-invert \"@supersync|@webdav\"",
     "e2e:all": "npx playwright test --config e2e/playwright.config.ts --reporter=line",
     "e2e:ci": "npm run e2e",
