@@ -1,10 +1,17 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { FieldType } from '@ngx-formly/material';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { Log } from '../../core/log';
+import { SnackService } from '../../core/snack/snack.service';
 
 /**
  * Displays the local REST API access token and lets the user regenerate it.
@@ -29,6 +36,8 @@ export class FormlyLocalRestApiTokenComponent
   readonly token = signal<string | null>(null);
   readonly isRegenerating = signal(false);
 
+  private readonly _snackService = inject(SnackService);
+
   ngOnInit(): void {
     void this._loadToken();
   }
@@ -42,7 +51,14 @@ export class FormlyLocalRestApiTokenComponent
       // Never log the token itself — the app has a user-visible log export.
       this.token.set(await window.ea.regenerateLocalRestApiToken());
     } catch (err) {
+      // The main process rejects when the new token could not be stored, and it
+      // keeps the old one live in that case. Say so instead of leaving the user
+      // to believe the token they are looking at was rotated.
       Log.err('Failed to regenerate local REST API token', err);
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.GCF.MISC.LOCAL_REST_API_TOKEN_REGENERATE_ERROR,
+      });
     } finally {
       this.isRegenerating.set(false);
     }
