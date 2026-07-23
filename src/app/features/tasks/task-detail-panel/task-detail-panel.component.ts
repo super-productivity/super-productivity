@@ -47,7 +47,6 @@ import { ICAL_TYPE, JIRA_TYPE } from '../../issue/issue.const';
 import { HISTORY_STATE, IS_ELECTRON } from '../../../app.constants';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
-import { IS_MOBILE } from '../../../util/is-mobile';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -95,6 +94,7 @@ import {
   AddSubtaskInputCloseReason,
 } from '../add-subtask-input/add-subtask-input.component';
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
+import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 
 @Component({
   selector: 'task-detail-panel',
@@ -129,6 +129,7 @@ import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable'
     TranslatePipe,
     IssueIconPipe,
     AddSubtaskInputComponent,
+    TaskContextMenuComponent,
   ],
 })
 export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -164,6 +165,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
   addSubtaskInput = viewChild(AddSubtaskInputComponent);
   addSubTaskBtn = viewChild<ElementRef<HTMLButtonElement>>('addSubTaskBtn');
+  taskContextMenu = viewChild(TaskContextMenuComponent);
 
   // The detail panel hosts its own inline subtask draft input rather than
   // delegating to the <task> row that renders the parent: in the Planner (and
@@ -187,7 +189,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     selectedItemIndex: signal(0),
     isFocusNotes: signal(false),
     isDragOver: signal(false),
-    isExpandedAttachmentPanel: signal(!IS_MOBILE),
+    isExpandedAttachmentPanel: signal(!this.layoutService.isXs()),
   };
 
   // Observable conversions
@@ -333,7 +335,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   // Panel expansion computed signals
   isExpandedIssuePanel = computed(() => {
-    return !IS_MOBILE && !!this.issueData();
+    return !this.layoutService.isXs() && !!this.issueData();
   });
 
   isExpandedNotesPanel = computed(() => {
@@ -342,9 +344,20 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     }
 
     const task = this.task();
-    return IS_MOBILE
+    return this.layoutService.isXs()
       ? this.isMarkdownChecklist()
       : !!task.notes || (!task.issueId && !task.attachments?.length);
+  });
+
+  isCurrent = computed(() => this.taskService.currentTaskId() === this.task().id);
+
+  isShowTrackingAction = computed(() => {
+    const task = this.task();
+    return (
+      this._globalConfigService.appFeatures().isTimeTrackingEnabled &&
+      !task.isDone &&
+      !task.subTasks?.length
+    );
   });
 
   // Task-based computed signals
@@ -612,6 +625,27 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     if (!defaultNotes || !$event || $event.trim() !== defaultNotes.trim()) {
       this.taskService.update(this.task().id, { notes: $event });
     }
+  }
+
+  toggleTaskDone(): void {
+    const task = this.task();
+    if (task.isDone) {
+      this.taskService.setUnDone(task.id);
+    } else {
+      this.taskService.setDone(task.id);
+    }
+  }
+
+  togglePlayPause(): void {
+    if (this.isCurrent()) {
+      this.taskService.pauseCurrent();
+    } else {
+      this.taskService.setCurrentId(this.task().id);
+    }
+  }
+
+  openTaskMenu(event: MouseEvent): void {
+    this.taskContextMenu()?.open(event);
   }
 
   estimateTime(): void {

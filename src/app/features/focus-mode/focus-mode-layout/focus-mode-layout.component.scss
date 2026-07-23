@@ -16,6 +16,14 @@
   // the focus ↔ break swap, regardless of what each row holds. --s2 is the gap
   // to the clock; --s8 is the content slot (one fab / control button tall).
   --focus-mode-edge-row-height: calc(var(--s2) + var(--s8));
+
+  &.has-mode-selector {
+    @include mq(xs, max) {
+      // Reserve the close button's top row on phones. Padding shifts the
+      // centered timer group just enough to keep it clear of the selector.
+      padding-top: calc(var(--s8) + var(--s2));
+    }
+  }
 }
 
 // ========== TOP CONTROLS (out of flow, pinned to the top) ==========
@@ -37,6 +45,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+
+  :host(.has-mode-selector) & {
+    @include mq(xs, max) {
+      top: calc(var(--s8) + var(--s));
+    }
+  }
 }
 
 // ========== ROW: TASK (reserved height, bottom-aligned toward the clock) ====

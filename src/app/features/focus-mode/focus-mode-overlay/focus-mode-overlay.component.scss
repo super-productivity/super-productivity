@@ -65,6 +65,10 @@ main {
     transition: opacity var(--transition-leave);
     //visibility: hidden;
     opacity: 0;
+
+    &:focus {
+      opacity: 1;
+    }
   }
 
   :host:hover & {

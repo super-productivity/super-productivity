@@ -12,10 +12,11 @@ import { T } from '../../../t.const';
 import { ScheduleService } from '../schedule.service';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
+import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'schedule-month',
-  imports: [ScheduleEventComponent],
+  imports: [ScheduleEventComponent, TranslatePipe],
   templateUrl: './schedule-month.component.html',
   styleUrl: './schedule-month.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

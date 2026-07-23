@@ -74,6 +74,7 @@ import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
 import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dialog-pomodoro-settings.component';
 import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dialog-flowtime-settings.component';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 
 @Component({
   selector: 'focus-mode-main',
@@ -112,6 +113,9 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     InputDurationSliderComponent,
     SegmentedButtonGroupComponent,
     FocusModeTaskSelectorComponent,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
   ],
   host: {
     ['[class.isSessionRunning]']: 'isSessionRunning()',

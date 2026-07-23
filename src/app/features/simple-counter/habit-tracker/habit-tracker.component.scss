@@ -6,6 +6,7 @@
   padding: var(--s);
   width: 100%;
   box-sizing: border-box;
+  container-type: inline-size;
 }
 
 .habit-tracker-container {
@@ -26,10 +27,23 @@
   padding: 0 var(--s-half);
   width: 100%;
   box-sizing: border-box;
-  min-width: 400px;
+  min-width: 0;
 
-  @include mq(xs, max) {
-    margin-bottom: 12px;
+  @container (max-width: #{$layout-xxxs - 1px}) {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: var(--s);
+
+    .nav-controls {
+      justify-content: center;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .range-label {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
   }
 
   [mat-icon-button] {

@@ -11,6 +11,7 @@ import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { ScheduleEventComponent } from '../schedule-event/schedule-event.component';
 import { ScheduleEvent } from '../schedule.model';
 import { SVEType } from '../schedule.const';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 describe('ScheduleMonthComponent', () => {
   let component: ScheduleMonthComponent;
@@ -36,7 +37,7 @@ describe('ScheduleMonthComponent', () => {
     registerLocaleData(localeSv, 'sv');
 
     await TestBed.configureTestingModule({
-      imports: [ScheduleMonthComponent],
+      imports: [ScheduleMonthComponent, TranslateModule.forRoot()],
       providers: [
         { provide: ScheduleService, useValue: mockScheduleService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
@@ -47,6 +48,12 @@ describe('ScheduleMonthComponent', () => {
         add: { imports: [ScheduleEventStubComponent] },
       })
       .compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('en', {
+      F: { SCHEDULE: { MORE_EVENTS: '{{count}} more events' } },
+    });
+    translateService.use('en');
 
     fixture = TestBed.createComponent(ScheduleMonthComponent);
     component = fixture.componentInstance;
@@ -179,6 +186,34 @@ describe('ScheduleMonthComponent', () => {
       expect(scheduleEventCmp.event).toBe(scheduleEvent);
       expect(scheduleEventCmp.isMonthView).toBe(true);
       expect(scheduleEventCmp.cdkDragDisabled).toBe(true);
+    });
+
+    it('should show how many events are hidden by the compact mobile layout', () => {
+      const events = [
+        createTaskScheduleEvent('task-1', '2026-01-15'),
+        createTaskScheduleEvent('task-2', '2026-01-15'),
+        createTaskScheduleEvent('task-3', '2026-01-15'),
+      ];
+      fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+      mockScheduleService.getEventsForDay.and.returnValue(events);
+
+      fixture.detectChanges();
+
+      const moreEvents = fixture.nativeElement.querySelector('.month-more-events');
+      expect(moreEvents).not.toBeNull();
+      expect(moreEvents.textContent.trim()).toBe('+2');
+      expect(moreEvents.getAttribute('aria-label')).toBe('2 more events');
+    });
+
+    it('should not show a hidden-event count when every event fits', () => {
+      fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+      mockScheduleService.getEventsForDay.and.returnValue([
+        createTaskScheduleEvent('task-1', '2026-01-15'),
+      ]);
+
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.month-more-events')).toBeNull();
     });
   });
 

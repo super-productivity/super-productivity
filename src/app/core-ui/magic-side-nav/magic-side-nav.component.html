@@ -23,6 +23,7 @@
   <div
     class="nav-backdrop-mobile"
     (click)="toggleMobileNav()"
+    aria-hidden="true"
     [@mobileBackdrop]
   ></div>
 }
@@ -39,7 +40,11 @@
     [class.animate]="animateWidth()"
     [class.resizing]="isResizing()"
     [style.width.px]="sidenavWidth()"
-    role="navigation"
+    [attr.role]="isMobile() ? 'dialog' : 'navigation'"
+    [attr.aria-modal]="isMobile() ? 'true' : null"
+    [attr.aria-label]="T.MH.PROJECT_MENU | translate"
+    [cdkTrapFocus]="isMobile()"
+    [cdkTrapFocusAutoCapture]="isMobile()"
     (keydown)="onNavKeyDown($event)"
     (swiperight)="onMobileNavSwipeRight()"
     swipeGesture

@@ -106,12 +106,9 @@
 
   :host:focus .inner-wrapper > & {
     border-radius: var(--task-border-radius);
-    // we don't want focus borders for touch only devices
-    @include noTouchOnly() {
-      border-color: var(--palette-primary-400);
-      border-width: 1px;
-      border-style: solid !important;
-    }
+    border-color: var(--palette-primary-400);
+    border-width: 1px;
+    border-style: solid !important;
   }
 
   :host:focus.mobile-highlight-searched-item .inner-wrapper > & {
@@ -191,12 +188,10 @@
   // _ngcontent attribute across all instances of the same component type.
   // This override is more specific (adds .sub-tasks) so it wins.
   :host:focus & .inner-wrapper > .box {
-    @include noTouchOnly() {
-      border-color: transparent;
+    border-color: transparent;
 
-      @include lightTheme {
-        border-color: var(--extra-border-color);
-      }
+    @include lightTheme {
+      border-color: var(--extra-border-color);
     }
   }
 

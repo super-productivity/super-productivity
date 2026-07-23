@@ -6,9 +6,51 @@
       [value]="task().title || ''"
       class="task-title"
     ></task-title>
-    <!--    <button mat-icon-button>-->
-    <!--      <mat-icon>more_vert</mat-icon>-->
-    <!--    </button>-->
+    @if (layoutService.isXs() && !isDialogMode()) {
+      <div class="mobile-task-actions">
+        <button
+          class="mobile-task-action --complete"
+          mat-button
+          (click)="toggleTaskDone()"
+          [attr.aria-label]="
+            (task().isDone ? T.F.TASK.CMP.MARK_UNDONE : T.F.TASK.CMP.MARK_DONE)
+              | translate
+          "
+        >
+          <span>{{ (task().isDone ? T.G.UNDO : T.G.COMPLETE) | translate }}</span>
+        </button>
+
+        @if (isShowTrackingAction()) {
+          <button
+            class="mobile-task-action --tracking"
+            mat-button
+            (click)="togglePlayPause()"
+            [attr.aria-label]="
+              (isCurrent() ? T.F.TASK.CMP.TRACK_TIME_STOP : T.F.TASK.CMP.TRACK_TIME)
+                | translate
+            "
+          >
+            <span>{{
+              (isCurrent() ? T.F.FOCUS_MODE.B.PAUSE : T.F.TASK.D_REMINDER_VIEW.START)
+                | translate
+            }}</span>
+          </button>
+        }
+
+        <button
+          class="mobile-task-action --more"
+          mat-button
+          (click)="openTaskMenu($event)"
+          [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+        >
+          <span>{{ T.G.MORE_ACTIONS | translate }}</span>
+        </button>
+      </div>
+      <task-context-menu
+        [isAdvancedControls]="true"
+        [task]="task()"
+      ></task-context-menu>
+    }
   </header>
 
   @if (isShowSubTasksPanel()) {

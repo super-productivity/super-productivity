@@ -273,16 +273,10 @@ progress-bar {
 }
 
 done-toggle {
-  --done-toggle-size: 34px;
+  --done-toggle-size: 40px;
 
   margin-left: var(--s);
   margin-right: 0;
-
-  @include verySmallMainContainer {
-    width: 8px;
-    min-width: 0;
-    opacity: 0;
-  }
 }
 
 //

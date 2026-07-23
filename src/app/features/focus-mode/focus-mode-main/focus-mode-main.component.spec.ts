@@ -654,6 +654,27 @@ describe('FocusModeMainComponent', () => {
       // Default setup has: mainState=Preparation
       expect(component.isShowModeSelector()).toBe(true);
     });
+
+    it('should mark the layout so mobile spacing can keep the close button clear', () => {
+      const layout = fixture.nativeElement.querySelector(
+        'focus-mode-layout',
+      ) as HTMLElement;
+
+      expect(layout.classList.contains('has-mode-selector')).toBe(true);
+    });
+  });
+
+  describe('accessible names', () => {
+    it('should label all icon-only preparation controls', () => {
+      const buttons = Array.from(
+        fixture.nativeElement.querySelectorAll('.play-actions button'),
+      ) as HTMLButtonElement[];
+
+      expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+        'F.FOCUS_MODE.START_FOCUS_SESSION',
+        'F.FOCUS_MODE.POMODORO_SETTINGS',
+      ]);
+    });
   });
 
   describe('selectMode', () => {
@@ -848,6 +869,31 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     component.selectMode(FocusModeMode.Countdown);
 
     expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should keep the primary session actions visible and group secondary actions', () => {
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.length).toBe(4);
+    expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+  });
+
+  it('should label every icon-only primary session action', () => {
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.every((button) => Boolean(button.getAttribute('aria-label')))).toBe(
+      true,
+    );
   });
 
   it('should pass isDefaultText=false to inline-markdown when task has notes', () => {

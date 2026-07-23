@@ -1,5 +1,5 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { ComponentRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { ComponentRef, NO_ERRORS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { EMPTY, of } from 'rxjs';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
@@ -27,14 +27,19 @@ const MOCK_TASK: TaskWithSubTasks = {
   attachments: [],
 };
 
-describe('TaskDetailPanelComponent paste handler', () => {
+describe('TaskDetailPanelComponent', () => {
   let component: TaskDetailPanelComponent;
   let fixture: ComponentFixture<TaskDetailPanelComponent>;
   let componentRef: ComponentRef<TaskDetailPanelComponent>;
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
   let mockAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
+  let mockTaskService: jasmine.SpyObj<TaskService>;
+  let isXs: WritableSignal<boolean>;
+  let currentTaskId: WritableSignal<string | null>;
 
   beforeEach(async () => {
+    isXs = signal(true);
+    currentTaskId = signal<string | null>(null);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'handlePasteWithProgress',
     ]);
@@ -42,21 +47,33 @@ describe('TaskDetailPanelComponent paste handler', () => {
       'addAttachment',
       'createFromDrop',
     ]);
-    const mockTaskService = jasmine.createSpyObj(
+    mockTaskService = jasmine.createSpyObj(
       'TaskService',
-      ['update', 'setSelectedId', 'focusTaskIfPossible', 'addSubTaskTo'],
+      [
+        'update',
+        'setSelectedId',
+        'focusTaskIfPossible',
+        'addSubTaskTo',
+        'setCurrentId',
+        'pauseCurrent',
+        'setDone',
+        'setUnDone',
+      ],
       {
         taskDetailPanelTargetPanel$: of(null),
         selectedTaskId: jasmine.createSpy().and.returnValue(null),
+        currentTaskId,
       },
     );
     const mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       isShowList: jasmine.createSpy().and.returnValue(true),
+      isXs,
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
       tasks: jasmine.createSpy().and.returnValue({}),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
+      appFeatures: signal({ isTimeTrackingEnabled: true }),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -224,6 +241,72 @@ describe('TaskDetailPanelComponent paste handler', () => {
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
   });
+
+  describe('mobile task actions', () => {
+    it('shows completion, time tracking, and more actions in the mobile header', () => {
+      const completeButton: HTMLButtonElement | null =
+        fixture.nativeElement.querySelector('.mobile-task-action.--complete');
+      const trackingButton: HTMLButtonElement | null =
+        fixture.nativeElement.querySelector('.mobile-task-action.--tracking');
+      const moreButton: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+        '.mobile-task-action.--more',
+      );
+
+      expect(completeButton).not.toBeNull();
+      expect(trackingButton).not.toBeNull();
+      expect(moreButton).not.toBeNull();
+      expect(completeButton?.textContent?.trim()).toBeTruthy();
+      expect(trackingButton?.textContent?.trim()).toBeTruthy();
+      expect(moreButton?.textContent?.trim()).toBeTruthy();
+
+      completeButton?.click();
+      expect(mockTaskService.setDone).toHaveBeenCalledWith(MOCK_TASK.id);
+
+      trackingButton?.click();
+      expect(mockTaskService.setCurrentId).toHaveBeenCalledWith(MOCK_TASK.id);
+
+      const openTaskMenuSpy = spyOn(component, 'openTaskMenu');
+      moreButton?.click();
+      expect(openTaskMenuSpy).toHaveBeenCalled();
+    });
+
+    it('offers undo for an already completed task', () => {
+      componentRef.setInput('task', { ...MOCK_TASK, isDone: true });
+      fixture.detectChanges();
+
+      const completeButton: HTMLButtonElement | null =
+        fixture.nativeElement.querySelector('.mobile-task-action.--complete');
+      completeButton?.click();
+
+      expect(mockTaskService.setUnDone).toHaveBeenCalledWith(MOCK_TASK.id);
+      expect(mockTaskService.setDone).not.toHaveBeenCalled();
+    });
+
+    it('switches the tracking action to pause for the current task', () => {
+      currentTaskId.set(MOCK_TASK.id);
+      fixture.detectChanges();
+
+      const trackingButton: HTMLButtonElement | null =
+        fixture.nativeElement.querySelector('.mobile-task-action.--tracking');
+      trackingButton?.click();
+
+      expect(mockTaskService.pauseCurrent).toHaveBeenCalled();
+      expect(mockTaskService.setCurrentId).not.toHaveBeenCalled();
+    });
+
+    it('hides the mobile task actions above the mobile breakpoint', () => {
+      isXs.set(false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.mobile-task-actions')).toBeNull();
+    });
+
+    it('uses the responsive layout signal for mobile panel defaults', () => {
+      expect(component.panelState.isExpandedAttachmentPanel()).toBeFalse();
+      expect(component.isExpandedIssuePanel()).toBeFalse();
+      expect(component.isExpandedNotesPanel()).toBeFalse();
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
@@ -262,7 +345,7 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -378,7 +461,7 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -475,7 +558,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
           useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },

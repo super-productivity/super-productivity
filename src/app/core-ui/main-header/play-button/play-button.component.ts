@@ -79,6 +79,7 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
         (click)="taskService.toggleStartTask()"
         [color]="currentTaskId() ? 'accent' : 'primary'"
         [matTooltip]="tooltipText() | translate"
+        [attr.aria-label]="tooltipText() | translate"
         matTooltipPosition="below"
         class="play-btn tour-playBtn mat-elevation-z3"
         mat-mini-fab

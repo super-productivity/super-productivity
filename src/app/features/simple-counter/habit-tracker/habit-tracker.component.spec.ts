@@ -77,6 +77,35 @@ describe('HabitTrackerComponent', () => {
     );
   });
 
+  it('keeps the navigation controls within a 320px-wide mobile layout', async () => {
+    const element = fixture.nativeElement as HTMLElement;
+    element.style.width = '320px';
+    document.body.appendChild(element);
+
+    try {
+      fixture.detectChanges();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const navigationBar = element.querySelector<HTMLElement>('.navigation-bar');
+
+      expect(navigationBar).not.toBeNull();
+      const navigationStyles = getComputedStyle(navigationBar!);
+      const hostStyles = getComputedStyle(element);
+      expect(navigationBar!.scrollWidth)
+        .withContext(
+          JSON.stringify({
+            hostClientWidth: element.clientWidth,
+            hostContainerType: hostStyles.containerType,
+            navigationClientWidth: navigationBar!.clientWidth,
+            navigationFlexDirection: navigationStyles.flexDirection,
+          }),
+        )
+        .toBeLessThanOrEqual(element.clientWidth);
+    } finally {
+      document.body.removeChild(element);
+    }
+  });
+
   it('should not open edit dialog on long-press if day is disabled', fakeAsync(() => {
     const disabledDate = '2026-05-19'; // Tuesday (disabled in mockCounter)
     const tuesdayDow = 2;

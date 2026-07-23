@@ -4,7 +4,13 @@
   <banner></banner>
 </header>
 @if (activePage()) {
-  <main>
+  <main
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="T.GCF.APP_FEATURES.FOCUS_MODE | translate"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="true"
+  >
     <button
       class="close-btn"
       mat-icon-button
