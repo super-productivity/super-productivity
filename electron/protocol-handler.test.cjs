@@ -159,6 +159,22 @@ test('create-task with neither a path segment nor a title query param sends noth
   assert.deepEqual(win.sent, []);
 });
 
+test('create-task with a present-but-empty title forwards it (renderer shows the error)', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  // `?title=` is present but empty. It must reach the renderer (which surfaces
+  // the empty-title error snack), not be silently dropped like a missing param.
+  processProtocolUrl('superproductivity://create-task?title=', win);
+
+  assert.deepEqual(win.sent, [
+    {
+      channel: 'ADD_TASK_FROM_APP_URI',
+      payload: { title: '', notes: undefined, projectId: undefined },
+    },
+  ]);
+});
+
 test('complete-task forwards the title query param and shows the window', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();
@@ -184,12 +200,11 @@ test('complete-task without a title query param sends nothing', () => {
   assert.deepEqual(win.sent, []);
 });
 
-test('defers processing until the app is ready even when the window exists', (t) => {
+test('defers until the app is ready, then delivers the queued URL on drain', () => {
   // A freshly created BrowserWindow has webContents before Angular boots and
   // registers its IPC listeners; sending now would be dropped. The URL must be
-  // deferred until the app signals ready.
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { processProtocolUrl } = loadModule();
+  // queued and then delivered once the app signals ready.
+  const { processProtocolUrl, processPendingProtocolUrls } = loadModule();
   const win = makeWin();
   isAppReady = false;
 
@@ -200,6 +215,21 @@ test('defers processing until the app is ready even when the window exists', (t)
   assert.ok(
     JSON.stringify(logCalls).includes('deferring'),
     'the URL should be logged as deferred',
+  );
+
+  // The APP_READY drain (start-app.ts) fires once the renderer has booted.
+  isAppReady = true;
+  processPendingProtocolUrls(win);
+
+  assert.deepEqual(
+    win.sent,
+    [
+      {
+        channel: 'ADD_TASK_FROM_APP_URI',
+        payload: { title: 'Buy milk', notes: undefined, projectId: undefined },
+      },
+    ],
+    'the queued URL is delivered once the app is ready',
   );
 });
 
@@ -220,6 +250,23 @@ test('does not log user content (the task title) to the exportable log', () => {
   assert.ok(
     !JSON.stringify(logCalls).includes('Secret'),
     'task title must not appear in any log line',
+  );
+});
+
+test('a malformed URL is caught and its content never reaches the log', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  // A space in the authority makes `new URL()` throw ERR_INVALID_URL, whose
+  // enumerable `input` property holds the full raw URL. The catch must log only
+  // a non-identifying code, never the error object.
+  processProtocolUrl('superproductivity://ho st/x?title=SECRET&notes=PRIVATE', win);
+
+  assert.deepEqual(win.sent, [], 'a malformed URL sends nothing');
+  const logged = JSON.stringify(logCalls);
+  assert.ok(
+    !logged.includes('SECRET') && !logged.includes('PRIVATE'),
+    'the raw URL (title/notes) must never reach the exportable log',
   );
 });
 

@@ -55,11 +55,10 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
   if (!mainWin || !mainWin.webContents || !getIsAppReady()) {
     log('App not ready, deferring protocol URL processing');
     pendingUrls.push(url);
-
-    // Process any pending protocol URLs after window is created
-    setTimeout(() => {
-      processPendingProtocolUrls(mainWin);
-    }, 10000);
+    // No retry timer: the `APP_READY` hook in start-app.ts owns the drain. A
+    // per-URL timer here re-queued still-not-ready URLs and multiplied ×N per
+    // wave, and if the renderer never signals ready it could not receive the
+    // message anyway.
     return;
   }
 
@@ -90,7 +89,11 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
           pathParts.length > 0
             ? decodeURIComponent(pathParts[0])
             : urlObj.searchParams.get('title');
-        if (taskTitle) {
+        // Forward when the title is present at all, including an empty/whitespace
+        // `?title=` (`!== null`, not truthiness): the renderer surfaces the
+        // empty-title error snack, so an empty title fails loudly rather than
+        // silently. A missing param (`null`) is a no-op.
+        if (taskTitle !== null) {
           // Don't log the title — the log is exportable and must not contain user content.
           log('Creating task from protocol URL');
 
@@ -112,7 +115,9 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
       }
       case 'complete-task': {
         const taskTitle = urlObj.searchParams.get('title');
-        if (taskTitle) {
+        // See the `create-task` note: forward a present-but-empty title so the
+        // renderer surfaces the error snack; a missing param is a no-op.
+        if (taskTitle !== null) {
           // Don't log the title — see note above.
           log('Completing task from protocol URL');
 

@@ -21,13 +21,12 @@ export type AppUriTaskAction = AppUriAddTaskAction | AppUriCompleteTaskAction;
  * Returns `null` for any other/unrecognized URL, including the existing
  * `.../oauth-callback` action handled elsewhere.
  *
- * The title is forwarded verbatim (untrimmed). A present-but-whitespace-only
- * title is intentionally NOT rejected here: it is forwarded so
+ * The title is forwarded verbatim (untrimmed). A present-but-empty or
+ * whitespace-only title is intentionally NOT rejected here: it is forwarded so
  * `AppUriTaskActionsService` surfaces the empty-title error snack, matching the
- * desktop protocol path (which forwards a truthy `' '`). A missing or empty
- * (`title=`) param yields `null` — no action — mirroring desktop's truthy
- * `if (taskTitle)` check. All trimming and empty/length validation lives in the
- * service, so both platforms behave identically.
+ * desktop protocol path. Only a missing `title` param (`null`) yields no action.
+ * All trimming and empty/length validation lives in the service, so both
+ * platforms behave identically.
  */
 export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   let urlObj: URL;
@@ -46,7 +45,7 @@ export const parseAppUriTaskAction = (url: string): AppUriTaskAction | null => {
   }
 
   const title = urlObj.searchParams.get('title');
-  if (!title) {
+  if (title === null) {
     return null;
   }
 

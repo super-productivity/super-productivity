@@ -38,10 +38,13 @@ describe('parseAppUriTaskAction', () => {
     expect(parseAppUriTaskAction('com.super-productivity.app://create-task')).toBeNull();
   });
 
-  it('returns null when the title query param is empty', () => {
+  // A present-but-empty `title=` is forwarded (not nulled) so the service
+  // surfaces the empty-title error snack, matching the desktop path. Only a
+  // completely missing param yields no action.
+  it('forwards a present-but-empty title (title=) for the service to reject', () => {
     expect(
       parseAppUriTaskAction('com.super-productivity.app://create-task?title='),
-    ).toBeNull();
+    ).toEqual({ type: 'add', title: '' });
   });
 
   // A present-but-whitespace-only title is forwarded (not nulled) so the service

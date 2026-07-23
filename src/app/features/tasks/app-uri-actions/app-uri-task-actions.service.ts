@@ -19,10 +19,13 @@ import {
 } from '../util/parse-app-uri-task-action';
 import { PENDING_CAPACITOR_APP_URI_ACTION } from './pending-capacitor-app-uri-action';
 
-// Reject absurdly long title/notes coming from an external URL trigger, mirroring
-// the EML import path's `MAX_EML_BODY_LENGTH`. A generous cap: this is an abuse/
-// accident guard, not a UX limit.
-const MAX_APP_URI_INPUT_LENGTH = 100_000;
+// Reject an over-long title/notes coming from an external URL trigger — a title
+// syncs as an op to every device, so an unbounded one is an abuse/accident
+// footgun. Caps match the EML import path's limits (title 300, body 100k); unlike
+// EML (a drag-dropped file, silently truncated) a URL is a single deliberate call,
+// so we reject with feedback rather than truncate.
+const MAX_APP_URI_TITLE_LENGTH = 300;
+const MAX_APP_URI_NOTES_LENGTH = 100_000;
 
 /**
  * Handles `create-task`/`complete-task` actions coming from an external URL
@@ -84,8 +87,8 @@ export class AppUriTaskActionsService implements OnDestroy {
 
   private _handleAdd(action: AppUriAddTaskAction): void {
     if (
-      action.title.length > MAX_APP_URI_INPUT_LENGTH ||
-      (action.notes?.length ?? 0) > MAX_APP_URI_INPUT_LENGTH
+      action.title.length > MAX_APP_URI_TITLE_LENGTH ||
+      (action.notes?.length ?? 0) > MAX_APP_URI_NOTES_LENGTH
     ) {
       this._snackService.open({
         type: 'ERROR',
@@ -150,7 +153,7 @@ export class AppUriTaskActionsService implements OnDestroy {
   }
 
   private _handleComplete(action: AppUriCompleteTaskAction): void {
-    if (action.title.length > MAX_APP_URI_INPUT_LENGTH) {
+    if (action.title.length > MAX_APP_URI_TITLE_LENGTH) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,

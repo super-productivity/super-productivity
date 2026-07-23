@@ -119,6 +119,18 @@ describe('AppUriTaskActionsService', () => {
       );
     });
 
+    it('shows an error and never adds a task when the title exceeds the length cap', () => {
+      pendingAction$.next({ type: 'add', title: 'a'.repeat(301) });
+
+      expect(taskService.add).not.toHaveBeenCalled();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.TASK.S.INPUT_TOO_LONG_VIA_APP_URI,
+        }),
+      );
+    });
+
     it('shows an error and never adds a task when notes exceed the length cap', () => {
       pendingAction$.next({
         type: 'add',
@@ -282,7 +294,7 @@ describe('AppUriTaskActionsService', () => {
     it('shows an error and never completes a task when the title exceeds the length cap', () => {
       const selectSpy = spyOn(TestBed.inject(MockStore), 'select').and.callThrough();
 
-      pendingAction$.next({ type: 'complete', title: 'a'.repeat(100_001) });
+      pendingAction$.next({ type: 'complete', title: 'a'.repeat(301) });
 
       expect(taskService.setDone).not.toHaveBeenCalled();
       expect(selectSpy).not.toHaveBeenCalled();
