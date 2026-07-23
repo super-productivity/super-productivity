@@ -33,22 +33,32 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          # Plugins that have an `npm test` script configured.
-          PLUGINS=(automations azure-devops-issue-provider caldav-calendar-provider clickup-issue-provider google-calendar-provider sync-md todoist-import)
+          # Derive runnable suites from package manifests so new plugin tests
+          # cannot be omitted from CI.
+          PACKAGE_JSONS=(packages/plugin-dev/*/package.json)
+          jq empty "${PACKAGE_JSONS[@]}"
+          mapfile -t PLUGINS < <(
+            for package_json in "${PACKAGE_JSONS[@]}"; do
+              if jq -e '.scripts.test? | type == "string" and length > 0' "$package_json" > /dev/null; then
+                plugin_dir="${package_json%/package.json}"
+                printf '%s\n' "${plugin_dir##*/}"
+              fi
+            done
+          )
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
           else
             # Three-dot: changes on the PR branch only, ignoring commits that
             # landed on master after the PR forked.
-            DIFF=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
-            # Shared package change → run every plugin's tests.
-            if printf '%s\n' "$DIFF" | grep -qE '^packages/(plugin-api|vite-plugin)/'; then
+            DIFF=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
+            # Shared package or workflow change → run every plugin's tests.
+            if grep -qE '^packages/(plugin-api|vite-plugin)/|^\.github/workflows/plugin-tests\.yml$' <<< "$DIFF"; then
               CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
             else
               CHANGED=""
               for p in "${PLUGINS[@]}"; do
-                if printf '%s\n' "$DIFF" | grep -q "^packages/plugin-dev/$p/"; then
+                if grep -q "^packages/plugin-dev/$p/" <<< "$DIFF"; then
                   CHANGED="${CHANGED}${p}"$'\n'
                 fi
               done
