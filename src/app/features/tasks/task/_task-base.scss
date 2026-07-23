@@ -111,12 +111,6 @@
     border-style: solid !important;
   }
 
-  :host:focus.mobile-highlight-searched-item .inner-wrapper > & {
-    border-color: var(--palette-primary-400);
-    border-width: 1px;
-    border-style: solid !important;
-  }
-
   :host.isCurrent.isCurrent.isCurrent.isCurrent.isCurrent & {
     background: var(--task-c-current-bg);
     border-radius: var(--task-border-radius);
@@ -188,14 +182,6 @@
   // _ngcontent attribute across all instances of the same component type.
   // This override is more specific (adds .sub-tasks) so it wins.
   :host:focus & .inner-wrapper > .box {
-    border-color: transparent;
-
-    @include lightTheme {
-      border-color: var(--extra-border-color);
-    }
-  }
-
-  :host:focus.mobile-highlight-searched-item & .inner-wrapper > .box {
     border-color: transparent;
 
     @include lightTheme {
