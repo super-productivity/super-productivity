@@ -1,4 +1,4 @@
-name: Android JVM Tests
+name: Android Native Tests
 
 # Keep this workflow present on every PR so it can be a required check. The
 # expensive setup and tests are skipped when no Android-affecting files changed.
@@ -11,14 +11,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-jvm-tests-${{ github.ref }}
+  group: android-native-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  android-jvm-tests:
-    name: Android JVM Tests (Play + F-Droid)
+  android-native-tests:
+    name: Android Native Tests (JVM + Emulator)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -97,3 +97,32 @@ jobs:
         if: steps.changes.outputs.android == 'true'
         working-directory: android
         run: ./gradlew :app:testPlayDebugUnitTest :app:testFdroidDebugUnitTest
+
+      - name: Enable KVM
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android instrumentation tests
+        if: steps.changes.outputs.android == 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: ./android
+          script: ./gradlew :app:connectedPlayDebugAndroidTest
+
+      - name: Upload instrumentation test results on failure
+        if: failure() && steps.changes.outputs.android == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-instrumentation-test-results-${{ github.run_id }}
+          path: |
+            android/app/build/reports/androidTests/connected/
+            android/app/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore
+          retention-days: 14

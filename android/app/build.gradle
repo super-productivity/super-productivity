@@ -22,7 +22,7 @@ android {
         compileSdk 36
         versionCode 18_15_01_9000
         versionName "18.15.1"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
                 defaultUrl     : "https://app.super-productivity.com",
