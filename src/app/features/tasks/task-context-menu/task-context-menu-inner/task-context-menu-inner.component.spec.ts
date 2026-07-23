@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { TaskContextMenuInnerComponent } from './task-context-menu-inner.component';
 import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { signal } from '@angular/core';
@@ -58,6 +59,8 @@ describe('TaskContextMenuInnerComponent', () => {
       'moveToProject',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
+      'moveToTop',
+      'moveToBottom',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     addSubtaskInputService = jasmine.createSpyObj<AddSubtaskInputService>(
@@ -437,5 +440,110 @@ describe('TaskContextMenuInnerComponent', () => {
         'project-b',
       );
     }));
+  });
+
+  // Shared fixture for moveToTop / moveToBottom tests: 3 parents with 2 subtasks each.
+  const mkParent = (id: string, title: string): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      title,
+      projectId: 'project-current',
+      parentId: undefined,
+      isDone: false,
+      subTaskIds: [`${id}-sub-1`, `${id}-sub-2`],
+    }) as Task;
+
+  const mkSub = (parentId: string, n: 1 | 2): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id: `${parentId}-sub-${n}`,
+      title: `${parentId} sub ${n}`,
+      projectId: 'project-current',
+      parentId,
+      isDone: false,
+      subTaskIds: [],
+    }) as Task;
+
+  const TASK_TOP = mkParent('task-top', 'Top');
+  const TASK_BOTTOM = mkParent('task-bottom', 'Bottom');
+  const SUB_BOT_2 = mkSub('task-bottom', 2);
+
+  describe('moveToTop() / moveToBottom()', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('isAdvancedControls', true);
+    });
+
+    it('moves the bottom task to the top via TaskService.moveToTop', () => {
+      // Fixture: TASK_TOP, TASK_MID, TASK_BOTTOM (with 2 subtasks each)
+      component.task = TASK_BOTTOM;
+
+      component.moveToTop();
+
+      expect(taskService.moveToTop).toHaveBeenCalledTimes(1);
+      expect(taskService.moveToTop).toHaveBeenCalledWith(
+        'task-bottom',
+        undefined, // parentId for top-level tasks
+        false, // isBacklog — same as moveToBottom call site
+      );
+      expect(taskService.moveToBottom).not.toHaveBeenCalled();
+    });
+
+    it('moves the top task to the bottom via TaskService.moveToBottom', () => {
+      component.task = TASK_TOP;
+
+      component.moveToBottom();
+
+      expect(taskService.moveToBottom).toHaveBeenCalledTimes(1);
+      expect(taskService.moveToBottom).toHaveBeenCalledWith('task-top', undefined, false);
+      expect(taskService.moveToTop).not.toHaveBeenCalled();
+    });
+
+    it('dispatches moveToTop even when the task is already at the top', () => {
+      component.task = TASK_TOP;
+
+      component.moveToTop();
+
+      expect(taskService.moveToTop).toHaveBeenCalledTimes(1);
+      expect(taskService.moveToTop).toHaveBeenCalledWith('task-top', undefined, false);
+    });
+
+    it('dispatches moveToBottom even when the task is already at the bottom', () => {
+      component.task = TASK_BOTTOM;
+
+      component.moveToBottom();
+
+      expect(taskService.moveToBottom).toHaveBeenCalledTimes(1);
+      expect(taskService.moveToBottom).toHaveBeenCalledWith(
+        'task-bottom',
+        undefined,
+        false,
+      );
+    });
+
+    it('does not render the move-to-top menu item for subtasks', () => {
+      // Fixture: SUB_BOT_2 is a subtask of TASK_BOTTOM (which itself has 2 subtasks)
+      component.task = SUB_BOT_2;
+      fixture.detectChanges();
+
+      // No menu item with the "arrow_upward" icon should be in the DOM.
+      const icons = fixture.debugElement.queryAll(By.css('mat-icon'));
+      const hasArrowUp = icons.some(
+        (de) => (de.nativeElement as HTMLElement).textContent?.trim() === 'arrow_upward',
+      );
+      expect(hasArrowUp).toBe(false);
+    });
+
+    it('does not render the move-to-bottom menu item for subtasks', () => {
+      component.task = SUB_BOT_2;
+      fixture.detectChanges();
+
+      const icons = fixture.debugElement.queryAll(By.css('mat-icon'));
+      const hasArrowDown = icons.some(
+        (de) =>
+          (de.nativeElement as HTMLElement).textContent?.trim() === 'arrow_downward',
+      );
+      expect(hasArrowDown).toBe(false);
+    });
   });
 });

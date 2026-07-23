@@ -1842,6 +1842,7 @@
         "MARK_DONE": "Mark as completed",
         "MARK_UNDONE": "Mark as not completed",
         "MOVE_TO_BACKLOG": "Move to backlog",
+        "MOVE_TO_BOTTOM": "Move to bottom",
         "MOVE_TO_OTHER_PROJECT": "Move to project",
         "MOVE_TO_REGULAR": "Move to regular list",
         "MOVE_TO_TOP": "Move to top",

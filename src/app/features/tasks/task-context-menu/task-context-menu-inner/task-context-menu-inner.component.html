@@ -167,6 +167,19 @@
       </span>
     </button>
   }
+
+  @if (isAdvancedControls() && !task.parentId && !task.isDone) {
+    <button
+      (click)="moveToBottom()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>arrow_downward</mat-icon>
+        {{ T.F.TASK.CMP.MOVE_TO_BOTTOM | translate }}
+      </span>
+    </button>
+  }
+
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
       (click)="addSubTask()"

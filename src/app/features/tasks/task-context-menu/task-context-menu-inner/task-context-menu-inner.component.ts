@@ -506,6 +506,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._taskService.moveToTop(this.task.id, this.task.parentId, false);
   }
 
+  moveToBottom(): void {
+    this._taskService.moveToBottom(this.task.id, this.task.parentId, false);
+  }
+
   @throttle(200, { leading: true, trailing: false })
   toggleDoneKeyboard(): void {
     this.toggleTaskDone();
