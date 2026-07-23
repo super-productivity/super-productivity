@@ -18,6 +18,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
 import { DEFAULT_TASK, TaskDetailTargetPanel, TaskWithSubTasks } from '../task.model';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
+import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -124,7 +125,11 @@ describe('TaskDetailPanelComponent', () => {
         { provide: Store, useValue: mockStore },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(TaskContextMenuComponent, {
+        set: { template: '', imports: [] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(TaskDetailPanelComponent);
     componentRef = fixture.componentRef;
