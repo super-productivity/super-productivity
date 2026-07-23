@@ -119,6 +119,8 @@ jobs:
         run: npm run e2e:ci
         env:
           E2E_WEBKIT_SMOKE: 'true'
+      - name: Test production PWA offline reload
+        run: npm run e2e:pwa
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
