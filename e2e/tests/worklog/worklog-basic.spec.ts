@@ -1,5 +1,6 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForStatePersistence } from '../../utils/waits';
+import { readFile } from 'node:fs/promises';
 
 /**
  * Worklog E2E Tests
@@ -99,6 +100,35 @@ test.describe('Worklog', () => {
         .filter({ hasText: taskName })
         .locator('td.worked .value-wrapper'),
     ).toHaveText('0:20');
+
+    // The persisted correction is also the value exported to CSV
+    await page
+      .locator('history .month-title button[aria-label="Export data"]')
+      .first()
+      .click();
+    const exportDialog = page.locator('dialog-worklog-export');
+    const previewRow = exportDialog.locator('table tr').filter({ hasText: taskName });
+    await expect(previewRow).toContainText('0:20');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      exportDialog.locator('a').filter({ hasText: 'Save to file' }).click(),
+    ]);
+    expect(await download.failure()).toBeNull();
+    expect(download.suggestedFilename()).toMatch(
+      /^tasks\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+
+    const downloadPath = await download.path();
+    if (!downloadPath) {
+      throw new Error('Worklog CSV download path is unavailable');
+    }
+    const csv = await readFile(downloadPath, 'utf8');
+    const rows = csv.replace(/^\uFEFF/, '').split(/\r?\n/);
+    expect(rows[0]).toBe('Date;Start;End;Worked;Titles');
+    expect(rows.find((row) => row.endsWith(`;${taskName}`))).toMatch(
+      /^\d{4}-\d{2}-\d{2}; - ; - ;0:20;/,
+    );
   });
 
   test('should navigate to worklog from side menu', async ({ page, workViewPage }) => {
