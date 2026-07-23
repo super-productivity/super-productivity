@@ -125,6 +125,54 @@ describe('MagicSideNavComponent mobile behavior', () => {
     ).toBe(true);
   });
 
+  it('provides an initially focused close button inside the mobile focus trap', async () => {
+    isXs.set(true);
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.componentInstance.showMobileMenuOverlay.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const closeButton = fixture.nativeElement.querySelector(
+      '.mobile-menu-close',
+    ) as HTMLButtonElement | null;
+
+    expect(closeButton).not.toBeNull();
+    expect(closeButton!.getAttribute('aria-label')).toBeTruthy();
+    expect(closeButton!.hasAttribute('cdkFocusInitial')).toBe(true);
+    expect(document.activeElement).toBe(closeButton);
+
+    closeButton!.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  it('keeps the close button below the top safe area without doubling native spacing', () => {
+    const wasNativeMobile = document.body.classList.contains('isNativeMobile');
+    document.body.classList.remove('isNativeMobile');
+    isXs.set(true);
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    (fixture.nativeElement as HTMLElement).style.setProperty('--safe-area-top', '24px');
+    fixture.componentInstance.showMobileMenuOverlay.set(true);
+    fixture.detectChanges();
+
+    try {
+      const drawer = fixture.nativeElement.querySelector('.nav-sidenav') as HTMLElement;
+      const closeButton = fixture.nativeElement.querySelector(
+        '.mobile-menu-close',
+      ) as HTMLButtonElement;
+
+      expect(getComputedStyle(closeButton).marginTop).toBe('24px');
+
+      document.body.classList.add('isNativeMobile');
+
+      expect(getComputedStyle(drawer).top).toBe('24px');
+      expect(getComputedStyle(closeButton).marginTop).toBe('0px');
+    } finally {
+      document.body.classList.toggle('isNativeMobile', wasNativeMobile);
+    }
+  });
+
   it('removes the mobile drawer and its focus trap while closed', () => {
     isXs.set(true);
     fixture = TestBed.createComponent(MagicSideNavComponent);

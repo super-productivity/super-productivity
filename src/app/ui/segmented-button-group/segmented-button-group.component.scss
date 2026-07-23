@@ -82,7 +82,9 @@
   min-width: 0;
   font-weight: 600;
   font-size: 15px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 
   @include mq(xs, max) {
     font-size: 14px;

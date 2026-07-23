@@ -645,7 +645,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   openTaskMenu(event: MouseEvent): void {
-    this.taskContextMenu()?.open(event);
+    const trigger = event.currentTarget;
+    this.taskContextMenu()?.open(
+      event,
+      event.detail === 0,
+      trigger instanceof HTMLElement ? trigger : undefined,
+    );
   }
 
   estimateTime(): void {

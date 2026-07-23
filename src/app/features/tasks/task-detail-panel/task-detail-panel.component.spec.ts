@@ -264,10 +264,6 @@ describe('TaskDetailPanelComponent', () => {
 
       trackingButton?.click();
       expect(mockTaskService.setCurrentId).toHaveBeenCalledWith(MOCK_TASK.id);
-
-      const openTaskMenuSpy = spyOn(component, 'openTaskMenu');
-      moreButton?.click();
-      expect(openTaskMenuSpy).toHaveBeenCalled();
     });
 
     it('offers undo for an already completed task', () => {
@@ -280,6 +276,58 @@ describe('TaskDetailPanelComponent', () => {
 
       expect(mockTaskService.setUnDone).toHaveBeenCalledWith(MOCK_TASK.id);
       expect(mockTaskService.setDone).not.toHaveBeenCalled();
+    });
+
+    it('uses the visible completion text as its accessible name', () => {
+      const completeButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        '.mobile-task-action.--complete',
+      );
+
+      expect(completeButton.getAttribute('aria-label')).toBe(
+        completeButton.textContent?.trim(),
+      );
+
+      componentRef.setInput('task', { ...MOCK_TASK, isDone: true });
+      fixture.detectChanges();
+
+      const undoButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        '.mobile-task-action.--complete',
+      );
+      expect(undoButton.getAttribute('aria-label')).toBe(undoButton.textContent?.trim());
+    });
+
+    it('keeps every mobile action at least 40px high', () => {
+      const buttons: HTMLButtonElement[] = Array.from(
+        fixture.nativeElement.querySelectorAll('.mobile-task-action'),
+      );
+
+      expect(buttons.length).toBe(3);
+      buttons.forEach((button) => {
+        expect(
+          Number.parseFloat(getComputedStyle(button).minHeight),
+        ).toBeGreaterThanOrEqual(40);
+      });
+    });
+
+    it('opens More as a menu and reports keyboard activation through the view child', () => {
+      const taskContextMenu = component.taskContextMenu();
+      expect(taskContextMenu).toBeDefined();
+      const open = spyOn(taskContextMenu!, 'open').and.callFake(() =>
+        taskContextMenu!.isOpen.set(true),
+      );
+
+      const moreButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        '.mobile-task-action.--more',
+      );
+
+      expect(moreButton.getAttribute('aria-haspopup')).toBe('menu');
+      expect(moreButton.getAttribute('aria-expanded')).toBe('false');
+
+      moreButton.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+      fixture.detectChanges();
+
+      expect(open).toHaveBeenCalledWith(jasmine.any(MouseEvent), true, moreButton);
+      expect(moreButton.getAttribute('aria-expanded')).toBe('true');
     });
 
     it('switches the tracking action to pause for the current task', () => {

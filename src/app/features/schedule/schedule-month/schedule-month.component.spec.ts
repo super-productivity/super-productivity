@@ -51,7 +51,12 @@ describe('ScheduleMonthComponent', () => {
 
     const translateService = TestBed.inject(TranslateService);
     translateService.setTranslation('en', {
-      F: { SCHEDULE: { MORE_EVENTS: '{{count}} more events' } },
+      F: {
+        SCHEDULE: {
+          MORE_EVENT: '{{count}} more event',
+          MORE_EVENTS: '{{count}} more events',
+        },
+      },
     });
     translateService.use('en');
 
@@ -203,6 +208,52 @@ describe('ScheduleMonthComponent', () => {
       expect(moreEvents).not.toBeNull();
       expect(moreEvents.textContent.trim()).toBe('+2');
       expect(moreEvents.getAttribute('aria-label')).toBe('2 more events');
+    });
+
+    it('should announce one hidden event with singular grammar', () => {
+      fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+      mockScheduleService.getEventsForDay.and.returnValue([
+        createTaskScheduleEvent('task-1', '2026-01-15'),
+        createTaskScheduleEvent('task-2', '2026-01-15'),
+      ]);
+
+      fixture.detectChanges();
+
+      const moreEvents = fixture.nativeElement.querySelector('.month-more-events');
+      expect(moreEvents.textContent.trim()).toBe('+1');
+      expect(moreEvents.getAttribute('aria-label')).toBe('1 more event');
+    });
+
+    it('should make the hidden-event count visible at the mobile breakpoint', () => {
+      const findMobileVisibilityRule = (
+        rules: CSSRuleList,
+        isInsideMobileQuery = false,
+      ): CSSStyleRule | undefined => {
+        for (const rule of Array.from(rules)) {
+          if (rule instanceof CSSMediaRule) {
+            const isMobileQuery =
+              isInsideMobileQuery || rule.conditionText.includes('max-width: 599px');
+            const match = findMobileVisibilityRule(rule.cssRules, isMobileQuery);
+            if (match) {
+              return match;
+            }
+          } else if (
+            isInsideMobileQuery &&
+            rule instanceof CSSStyleRule &&
+            rule.selectorText.includes('.month-more-events') &&
+            rule.style.display === 'block'
+          ) {
+            return rule;
+          }
+        }
+        return undefined;
+      };
+
+      const visibilityRule = Array.from(document.styleSheets)
+        .map((styleSheet) => findMobileVisibilityRule(styleSheet.cssRules))
+        .find((rule) => rule !== undefined);
+
+      expect(visibilityRule).toBeDefined();
     });
 
     it('should not show a hidden-event count when every event fits', () => {

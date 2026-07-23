@@ -21,7 +21,7 @@ progress-bar {
 .wrapper {
   transition: var(--transition-standard);
 
-  @media (max-width: #{$layout-xs}) {
+  @include mq(xs, max) {
     margin: var(--s-half);
     margin-bottom: var(--s);
   }
@@ -47,7 +47,7 @@ progress-bar {
     color: var(--text-color);
   }
 
-  @media (max-width: #{$layout-xs}) {
+  @include mq(xs, max) {
     flex-wrap: wrap;
 
     task-title {
@@ -67,6 +67,7 @@ progress-bar {
   .mobile-task-action {
     flex: 1 1 0;
     min-width: 0;
+    min-height: var(--s5);
   }
 }
 

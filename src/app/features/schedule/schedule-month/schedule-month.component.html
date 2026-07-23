@@ -34,7 +34,10 @@
             <span
               class="month-more-events"
               [attr.aria-label]="
-                T.F.SCHEDULE.MORE_EVENTS | translate: { count: dayEvents.length - 1 }
+                (dayEvents.length === 2
+                  ? T.F.SCHEDULE.MORE_EVENT
+                  : T.F.SCHEDULE.MORE_EVENTS
+                ) | translate: { count: dayEvents.length - 1 }
               "
               >+{{ dayEvents.length - 1 }}</span
             >

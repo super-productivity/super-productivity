@@ -1141,6 +1141,7 @@
       "INSERT_BEFORE": "Before",
       "LUNCH_BREAK": "Lunch Break",
       "MONTH": "Month",
+      "MORE_EVENT": "{{count}} more event",
       "MORE_EVENTS": "{{count}} more events",
       "NEXT_DAY": "Next Day",
       "NEXT_MONTH": "Next Month",

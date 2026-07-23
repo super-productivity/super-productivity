@@ -883,6 +883,31 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
   });
 
+  it('should open the secondary actions menu and toggle notes', async () => {
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const menuItems = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    );
+    const notesButton = menuItems.find((button) =>
+      button.textContent?.includes('F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS'),
+    );
+
+    expect(notesButton).toBeDefined();
+    expect(component.isFocusNotes()).toBe(false);
+
+    notesButton!.click();
+    fixture.detectChanges();
+
+    expect(component.isFocusNotes()).toBe(true);
+  });
+
   it('should label every icon-only primary session action', () => {
     const controls = fixture.nativeElement.querySelector(
       '.bottom-controls',
