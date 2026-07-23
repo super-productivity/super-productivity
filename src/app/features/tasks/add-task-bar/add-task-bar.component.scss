@@ -54,7 +54,10 @@
   background-color: var(--bg-lighter);
   color: var(--text-color-most-intense);
 
-  box-shadow: var(--whiteframe-shadow-3dp);
+  // Inline compose bar: a light lift so it still reads as actionable, without
+  // floating at 3dp inside the now-flat lists. The global floating variant keeps
+  // its stronger elevation below.
+  box-shadow: var(--whiteframe-shadow-1dp);
   border-radius: var(--card-border-radius);
 
   &.isGlobalBarVariant {

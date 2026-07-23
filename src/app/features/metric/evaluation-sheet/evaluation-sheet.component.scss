@@ -17,7 +17,8 @@
 reflection-note {
   padding: 12px;
   border-radius: var(--eval-border-radius);
-  box-shadow: var(--whiteframe-shadow-3dp);
+  // Flat cards: hairline border instead of a resting shadow (matches daily-summary).
+  border: 1px solid var(--extra-border-color);
   background-color: var(--card-bg);
 }
 
