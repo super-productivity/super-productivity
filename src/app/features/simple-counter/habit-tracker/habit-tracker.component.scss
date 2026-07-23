@@ -17,6 +17,12 @@
   margin: 0 auto;
 }
 
+@container (max-width: #{$layout-xxxs - 1px}) {
+  .habit-tracker-container {
+    width: 100%;
+  }
+}
+
 .navigation-bar {
   display: flex;
   align-items: center;

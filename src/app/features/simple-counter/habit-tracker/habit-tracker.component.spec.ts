@@ -106,6 +106,33 @@ describe('HabitTrackerComponent', () => {
     }
   });
 
+  it('fills the available mobile width when there are no enabled habits', async () => {
+    const element = fixture.nativeElement as HTMLElement;
+    element.style.width = '320px';
+    document.body.appendChild(element);
+    fixture.componentRef.setInput('simpleCounters', []);
+    fixture.componentRef.setInput('disabledSimpleCounters', [
+      { ...mockCounter, isEnabled: false },
+    ]);
+
+    try {
+      fixture.detectChanges();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const tracker = element.querySelector<HTMLElement>('.habit-tracker-container');
+      const hostStyles = getComputedStyle(element);
+      const availableWidth =
+        element.clientWidth -
+        Number.parseFloat(hostStyles.paddingLeft) -
+        Number.parseFloat(hostStyles.paddingRight);
+
+      expect(tracker).not.toBeNull();
+      expect(tracker!.getBoundingClientRect().width).toBeCloseTo(availableWidth, 0);
+    } finally {
+      document.body.removeChild(element);
+    }
+  });
+
   it('should not open edit dialog on long-press if day is disabled', fakeAsync(() => {
     const disabledDate = '2026-05-19'; // Tuesday (disabled in mockCounter)
     const tuesdayDow = 2;
