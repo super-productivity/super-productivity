@@ -12,6 +12,7 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { ScheduleEvent } from '../schedule.model';
 import { SVEType } from '../schedule.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 
 describe('ScheduleMonthComponent', () => {
   let component: ScheduleMonthComponent;
@@ -53,8 +54,10 @@ describe('ScheduleMonthComponent', () => {
     translateService.setTranslation('en', {
       F: {
         SCHEDULE: {
-          MORE_EVENT: '{{count}} more event',
-          MORE_EVENTS: '{{count}} more events',
+          MORE_EVENTS: {
+            ONE: '{{count}} more event',
+            OTHER: '{{count}} more events',
+          },
         },
       },
     });
@@ -206,8 +209,12 @@ describe('ScheduleMonthComponent', () => {
 
       const moreEvents = fixture.nativeElement.querySelector('.month-more-events');
       expect(moreEvents).not.toBeNull();
-      expect(moreEvents.textContent.trim()).toBe('+2');
-      expect(moreEvents.getAttribute('aria-label')).toBe('2 more events');
+      const visibleCount = moreEvents.querySelector('.month-more-events-count');
+      const accessibleCount = moreEvents.querySelector('.cdk-visually-hidden');
+      expect(moreEvents.getAttribute('aria-label')).toBeNull();
+      expect(visibleCount.textContent.trim()).toBe('+2');
+      expect(visibleCount.getAttribute('aria-hidden')).toBe('true');
+      expect(accessibleCount.textContent.trim()).toBe('2 more events');
     });
 
     it('should announce one hidden event with singular grammar', () => {
@@ -220,8 +227,40 @@ describe('ScheduleMonthComponent', () => {
       fixture.detectChanges();
 
       const moreEvents = fixture.nativeElement.querySelector('.month-more-events');
-      expect(moreEvents.textContent.trim()).toBe('+1');
-      expect(moreEvents.getAttribute('aria-label')).toBe('1 more event');
+      expect(
+        moreEvents.querySelector('.month-more-events-count').textContent.trim(),
+      ).toBe('+1');
+      expect(moreEvents.querySelector('.cdk-visually-hidden').textContent.trim()).toBe(
+        '1 more event',
+      );
+    });
+
+    it('should use the current language plural category for hidden events', async () => {
+      const translateService = TestBed.inject(TranslateService);
+      translateService.setTranslation('pl', {
+        F: {
+          SCHEDULE: {
+            MORE_EVENTS: {
+              FEW: 'Jeszcze {{count}} wydarzenia',
+              OTHER: 'Jeszcze {{count}} wydarzeń',
+            },
+          },
+        },
+      });
+      await firstValueFrom(translateService.use('pl'));
+      fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+      mockScheduleService.getEventsForDay.and.returnValue([
+        createTaskScheduleEvent('task-1', '2026-01-15'),
+        createTaskScheduleEvent('task-2', '2026-01-15'),
+        createTaskScheduleEvent('task-3', '2026-01-15'),
+      ]);
+
+      fixture.detectChanges();
+
+      const accessibleCount = fixture.nativeElement.querySelector(
+        '.month-more-events .cdk-visually-hidden',
+      );
+      expect(accessibleCount.textContent.trim()).toBe('Jeszcze 2 wydarzenia');
     });
 
     it('should make the hidden-event count visible at the mobile breakpoint', () => {
@@ -540,7 +579,7 @@ describe('ScheduleMonthComponent dayNumberByDay (SPAP-26)', () => {
     ]);
 
     await TestBed.configureTestingModule({
-      imports: [ScheduleMonthComponent],
+      imports: [ScheduleMonthComponent, TranslateModule.forRoot()],
       providers: [
         { provide: ScheduleService, useValue: scheduleServiceStub },
         {

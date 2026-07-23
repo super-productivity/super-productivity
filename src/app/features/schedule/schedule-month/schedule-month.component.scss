@@ -1,5 +1,8 @@
 @use 'angular-material-css-vars' as mat-css-vars;
+@use '@angular/cdk' as cdk;
 @use '../../../../styles/_globals.scss' as *;
+
+@include cdk.a11y-visually-hidden();
 
 .month-grid-container {
   display: grid;

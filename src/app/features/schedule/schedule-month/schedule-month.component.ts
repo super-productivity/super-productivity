@@ -8,11 +8,11 @@ import {
 import { ScheduleEvent } from '../schedule.model';
 import { ScheduleEventComponent } from '../schedule-event/schedule-event.component';
 import { safeFormatDate } from 'src/app/util/safe-format-date';
-import { T } from '../../../t.const';
 import { ScheduleService } from '../schedule.service';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
+import { getPluralKey } from '../../../util/get-plural-key';
 
 @Component({
   selector: 'schedule-month',
@@ -25,6 +25,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 export class ScheduleMonthComponent {
   private _scheduleService = inject(ScheduleService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _translateService = inject(TranslateService);
+  private _translateStore = inject(TranslateStore);
 
   readonly events = input<ScheduleEvent[] | null>([]);
   readonly daysToShow = input<string[]>([]);
@@ -82,8 +84,6 @@ export class ScheduleMonthComponent {
     return parseDbDateStr(days[middleIndex]);
   });
 
-  T: typeof T = T;
-
   getDayClass(day: string): string {
     return this._scheduleService.getDayClass(day, this.referenceMonth());
   }
@@ -98,6 +98,15 @@ export class ScheduleMonthComponent {
 
   getEventsForDay(day: string): ScheduleEvent[] {
     return this._scheduleService.getEventsForDay(day, this.events() || []);
+  }
+
+  getMoreEventsKey(count: number): string {
+    return getPluralKey(
+      this._translateService,
+      this._translateStore,
+      count,
+      'F.SCHEDULE.MORE_EVENTS',
+    );
   }
 
   getEventDayStr(ev: ScheduleEvent): string | null {
