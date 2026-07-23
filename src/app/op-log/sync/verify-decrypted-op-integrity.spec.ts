@@ -1,8 +1,13 @@
-import { assertDecryptedOpMetadataIntegrity } from './verify-decrypted-op-integrity';
+import {
+  assertDecryptedFullStateOpIntegrity,
+  assertDecryptedOpMetadataIntegrity,
+} from './verify-decrypted-op-integrity';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
+import { OpType } from '../core/operation.types';
+import frozen from '../validation/test-fixtures/frozen-state-v18.15.json';
 
 describe('assertDecryptedOpMetadataIntegrity', () => {
   const LWW_TASK = toLwwUpdateActionType('TASK');
@@ -211,5 +216,106 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
         assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
       ).not.toThrow();
     });
+  });
+});
+
+describe('assertDecryptedFullStateOpIntegrity', () => {
+  // This gate defends the encrypted-download path against an opType-promotion
+  // attack: a compromised server relabels a single-entity op as SYNC_IMPORT so its
+  // decrypted payload is applied as a full-state replacement. It must reject that,
+  // but must NOT reject a legitimate snapshot that merely predates a field a later
+  // version made required (rule 11) — doing so blocks recovery behind a "possible
+  // tampering" error (#9256). frozen-state-v18.15 is a real, validated full-state
+  // snapshot (see frozen-state.spec.ts), reused READ-ONLY here. GHSA-8pxh-mgc7-gp3g.
+  const JIRA_ID = 'ip-JIRA';
+
+  const createFullStateOp = (over: Partial<SyncOperation> = {}): SyncOperation => ({
+    id: 'op-full-1',
+    clientId: 'clientA',
+    actionType: 'LOAD_ALL_DATA',
+    opType: OpType.SyncImport,
+    entityType: 'TASK',
+    entityId: SINGLETON_ENTITY_ID,
+    payload: null,
+    vectorClock: { clientA: 1 },
+    timestamp: 1,
+    schemaVersion: frozen.__frozenAtSchemaVersion,
+    ...over,
+  });
+
+  const validSnapshot = (): Record<string, unknown> =>
+    structuredClone(frozen.state) as unknown as Record<string, unknown>;
+
+  const jiraCfgOf = (snapshot: Record<string, unknown>): Record<string, unknown> =>
+    (snapshot.issueProvider as { entities: Record<string, Record<string, unknown>> })
+      .entities[JIRA_ID];
+
+  it('accepts an untampered, fully-valid full-state snapshot', async () => {
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), validSnapshot()),
+    ).toBeResolved();
+  });
+
+  it('accepts a legitimate snapshot missing fields a later version made required (rule 11: JiraCfg.allowFetchFallback/altPublicLinkHost #7628) — regression for #9256', async () => {
+    const snapshot = validSnapshot();
+    const jira = jiraCfgOf(snapshot);
+    // Both required in v18.10 (#7628); a Jira provider configured earlier lacks
+    // them. They are now optional (layer 1), so strict validation passes.
+    delete jira.allowFetchFallback;
+    delete jira.altPublicLinkHost;
+
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeResolved();
+  });
+
+  it('heals a still-required field drifted deep inside a present root instead of rejecting', async () => {
+    const snapshot = validSnapshot();
+    // usePAT stays a REQUIRED boolean (not loosened): strict validation fails, but
+    // the drift is recoverable exactly as the real apply path heals it downstream
+    // (autoFixTypiaErrors boolean->false). Exercises the heal-before-reject path.
+    delete jiraCfgOf(snapshot).usePAT;
+
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeResolved();
+  });
+
+  it('still rejects a promoted single-entity payload (opType-promotion attack)', async () => {
+    // A single-entity LWW payload relabeled SYNC_IMPORT. It is not complete app
+    // data and auto-fix never fabricates the missing top-level sections, so it
+    // stays invalid and is rejected.
+    const promotedSingleEntity = { id: 'task-1', changes: { title: 'x' } };
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), promotedSingleEntity),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('still rejects a snapshot missing an entire top-level section (healing never manufactures sections)', async () => {
+    const snapshot = validSnapshot();
+    delete snapshot.task;
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('still rejects a present-but-mis-typed root (globalConfig: []) — heal must not fabricate a wrong-kind section', async () => {
+    // A present-but-degenerate container yields ONLY nested typia errors (no
+    // bare-root error), so without the container-kind guard autoFixTypiaErrors'
+    // globalConfig catch-all would rebuild the section from defaults and heal a
+    // malformed array-typed root into a "valid" snapshot.
+    const snapshot = validSnapshot();
+    snapshot.globalConfig = [];
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('ignores non-full-state ops (out of scope)', async () => {
+    const op = createFullStateOp({ opType: OpType.Update });
+    // A single-entity payload on a non-full-state op must pass untouched.
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(op, { id: 'task-1' }),
+    ).toBeResolved();
   });
 });

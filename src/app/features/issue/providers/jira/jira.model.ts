@@ -29,8 +29,11 @@ export interface JiraCfg extends BaseIssueProviderCfg {
   userName: string | null;
   password?: string | null;
   usePAT: boolean;
-  allowFetchFallback: boolean;
-  altPublicLinkHost: string | null;
+  // Optional so Jira providers created before #7628 (v18.10.0) still validate —
+  // data on disk predating these fields must not fail typia. Read sites treat a
+  // missing value as the DEFAULT_JIRA_CFG default (false / null). CLAUDE.md rule 11.
+  allowFetchFallback?: boolean;
+  altPublicLinkHost?: string | null;
 
   isAllowSelfSignedCertificate: boolean;
   searchJqlQuery: string;
