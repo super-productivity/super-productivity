@@ -91,7 +91,10 @@ describe('PluginIssueProviderAdapterService', () => {
     storeSpy = jasmine.createSpyObj('Store', ['select', 'pipe']);
 
     snackSpy = jasmine.createSpyObj('SnackService', ['open']);
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['removeMultipleTasks']);
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'removeMultipleTasks',
+      'getByIdOnce$',
+    ]);
     tagServiceSpy = jasmine.createSpyObj('TagService', [
       'tagsNoMyDayAndNoList',
       'addTag',
@@ -997,7 +1000,11 @@ describe('PluginIssueProviderAdapterService', () => {
     });
 
     describe('remote deletion handling', () => {
-      it('should auto-delete local task when getById returns 404 and no time tracked', async () => {
+      const mockCurrentTask = (task: Task | undefined): void => {
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(task as Task));
+      };
+
+      it('should use current tracked time instead of the stale request snapshot', async () => {
         const provider = createMockProvider({
           getById: jasmine
             .createSpy('getById')
@@ -1011,18 +1018,34 @@ describe('PluginIssueProviderAdapterService', () => {
           issueId: 'ISS-5',
           issueProviderId: PROVIDER_ID,
           timeSpent: 0,
+          title: 'Old title',
         } as unknown as Task;
+        mockCurrentTask({
+          ...task,
+          timeSpent: 1000,
+          title: 'Current title',
+        });
 
         const result = await service.getFreshDataForIssueTask(task);
 
         expect(result).toBeNull();
-        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
         expect(snackSpy.open).toHaveBeenCalledWith(
           jasmine.objectContaining({
-            type: 'CUSTOM',
-            ico: 'delete_forever',
+            type: 'WARNING',
+            translateParams: { taskTitle: 'Current title' },
           }),
         );
+
+        const snackParams = snackSpy.open.calls.mostRecent().args[0];
+        if (typeof snackParams === 'string') {
+          fail('Expected an actionable warning');
+          return;
+        }
+        const actionFn = snackParams.actionFn;
+        expect(actionFn).toBeDefined();
+        actionFn?.();
+        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
       });
 
       it('should auto-delete local task when getById returns 410 and no time tracked', async () => {
@@ -1040,6 +1063,7 @@ describe('PluginIssueProviderAdapterService', () => {
           issueProviderId: PROVIDER_ID,
           timeSpent: 0,
         } as unknown as Task;
+        mockCurrentTask(task);
 
         const result = await service.getFreshDataForIssueTask(task);
 
@@ -1053,7 +1077,37 @@ describe('PluginIssueProviderAdapterService', () => {
         );
       });
 
-      it('should not auto-delete task with time tracking on 404 but offer action', async () => {
+      it('should not auto-delete an untracked task after it was relinked', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        spyOn(console, 'log');
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          timeSpent: 0,
+        } as unknown as Task;
+        const relinkedTasks = [
+          { ...task, issueId: 'ISS-6' },
+          { ...task, issueProviderId: 'replacement-provider' },
+        ];
+        for (const relinkedTask of relinkedTasks) {
+          mockCurrentTask(relinkedTask);
+
+          const result = await service.getFreshDataForIssueTask(task);
+
+          expect(result).toBeNull();
+          expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+          expect(snackSpy.open).not.toHaveBeenCalled();
+        }
+      });
+
+      it('should not delete a retained task from an old warning after it was relinked', async () => {
         const provider = createMockProvider({
           getById: jasmine
             .createSpy('getById')
@@ -1069,17 +1123,25 @@ describe('PluginIssueProviderAdapterService', () => {
           timeSpent: 3600000,
           title: 'Tracked Task',
         } as unknown as Task;
+        mockCurrentTask(task);
+        await service.getFreshDataForIssueTask(task);
 
-        const result = await service.getFreshDataForIssueTask(task);
+        const snackParams = snackSpy.open.calls.mostRecent().args[0];
+        if (typeof snackParams === 'string') {
+          fail('Expected an actionable warning');
+          return;
+        }
+        const relinkedTasks = [
+          { ...task, issueId: 'ISS-6' },
+          { ...task, issueProviderId: 'replacement-provider' },
+        ];
+        for (const relinkedTask of relinkedTasks) {
+          mockCurrentTask(relinkedTask);
 
-        expect(result).toBeNull();
-        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
-        expect(snackSpy.open).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            type: 'WARNING',
-            actionStr: T.G.DELETE,
-          }),
-        );
+          snackParams.actionFn?.();
+
+          expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+        }
       });
 
       it('should not delete task on non-404 errors', async () => {
@@ -1121,6 +1183,7 @@ describe('PluginIssueProviderAdapterService', () => {
           issueProviderId: PROVIDER_ID,
           timeSpent: 0,
         } as unknown as Task;
+        mockCurrentTask(task);
 
         const result = await service.getFreshDataForIssueTask(task);
 
@@ -1134,7 +1197,7 @@ describe('PluginIssueProviderAdapterService', () => {
         );
       });
 
-      it('should offer delete action when issue state matches deletedStates with time tracked', async () => {
+      it('should retain and offer delete when deletedStates matches with time tracked', async () => {
         const provider = createMockProvider({
           getById: jasmine.createSpy('getById').and.resolveTo({
             id: 'ISS-5',
@@ -1153,6 +1216,7 @@ describe('PluginIssueProviderAdapterService', () => {
           timeSpent: 3600000,
           title: 'Tracked Task',
         } as unknown as Task;
+        mockCurrentTask(task);
 
         const result = await service.getFreshDataForIssueTask(task);
 
@@ -1209,6 +1273,7 @@ describe('PluginIssueProviderAdapterService', () => {
           issueProviderId: PROVIDER_ID,
           timeSpent: 0,
         } as unknown as Task;
+        mockCurrentTask(task);
 
         const result = await service.getFreshDataForIssueTask(task);
 
