@@ -40,8 +40,6 @@
     [class.animate]="animateWidth()"
     [class.resizing]="isResizing()"
     [style.width.px]="sidenavWidth()"
-    [attr.role]="isMobile() ? 'dialog' : 'navigation'"
-    [attr.aria-modal]="isMobile() ? 'true' : null"
     [attr.aria-label]="T.MH.PROJECT_MENU | translate"
     [cdkTrapFocus]="isMobile()"
     [cdkTrapFocusAutoCapture]="isMobile()"

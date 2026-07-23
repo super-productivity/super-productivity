@@ -103,7 +103,7 @@ describe('MagicSideNavComponent mobile behavior', () => {
     expect(fixture.componentInstance.isMobile()).toBe(true);
   });
 
-  it('exposes the open mobile drawer as a labelled modal with a focus trap', () => {
+  it('exposes the open mobile drawer as labelled navigation with a focus trap', () => {
     isXs.set(true);
     browserMatches = true;
     fixture = TestBed.createComponent(MagicSideNavComponent);
@@ -115,8 +115,9 @@ describe('MagicSideNavComponent mobile behavior', () => {
     ) as HTMLElement | null;
 
     expect(drawer).not.toBeNull();
-    expect(drawer!.getAttribute('role')).toBe('dialog');
-    expect(drawer!.getAttribute('aria-modal')).toBe('true');
+    expect(drawer!.tagName).toBe('NAV');
+    expect(drawer!.getAttribute('role')).toBeNull();
+    expect(drawer!.getAttribute('aria-modal')).toBeNull();
     expect(drawer!.getAttribute('aria-hidden')).toBeNull();
     expect(drawer!.getAttribute('aria-label')).toBeTruthy();
     expect(

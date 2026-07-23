@@ -108,7 +108,7 @@ describe('FocusModeOverlayComponent', () => {
     });
   });
 
-  it('exposes a modal dialog, traps focus, and restores focus on close', fakeAsync(() => {
+  it('contains the banner and page in one non-modal focus trap', fakeAsync(() => {
     const originButton = document.createElement('button');
     document.body.appendChild(originButton);
     document.body.classList.add('isMousePrimary');
@@ -119,13 +119,18 @@ describe('FocusModeOverlayComponent', () => {
     fixture.detectChanges();
     tick();
 
-    const main = fixture.nativeElement.querySelector('main') as HTMLElement;
+    const dialog = fixture.nativeElement.querySelector(
+      '.focus-mode-dialog',
+    ) as HTMLElement;
     const focusTrap = fixture.debugElement.query(By.directive(CdkTrapFocus));
 
-    expect(main.getAttribute('role')).toBe('dialog');
-    expect(main.getAttribute('aria-modal')).toBe('true');
-    expect(main.getAttribute('aria-label')).toBe('GCF.APP_FEATURES.FOCUS_MODE');
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBeNull();
+    expect(dialog.getAttribute('aria-label')).toBe('GCF.APP_FEATURES.FOCUS_MODE');
+    expect(dialog.querySelector('banner')).not.toBeNull();
     expect(focusTrap).not.toBeNull();
+    expect(focusTrap.nativeElement).toBe(dialog);
     expect(document.activeElement).toBe(
       fixture.nativeElement.querySelector('.close-btn'),
     );
