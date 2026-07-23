@@ -175,10 +175,10 @@
     border-color: var(--sub-task-border-color);
     border-radius: 0;
     top: -1px;
-
-    @include lightTheme {
-      bottom: 0;
-    }
+    // Overlap neighbours by 1px so adjacent subtask borders collapse to a single
+    // hairline. Was light-only (dark relied on a shadow); dark now uses a border
+    // too, so it needs the collapse as well.
+    bottom: 0;
 
     @include darkTheme {
       background: var(--sub-task-c-bg);
