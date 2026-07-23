@@ -41,21 +41,18 @@
   }
 }
 
-// SHARED
+// SHARED — flat rounded cards matching the task list; no resting shadow, and no
+// shape/elevation jump between collapsed and expanded (the chevron + revealed
+// content already signal the open state).
 .input-item,
 .mat-expansion-panel,
 :host::ng-deep .mat-expansion-panel:not([class*='mat-elevation-z']) {
-  box-shadow: var(--task-detail-shadow);
-
-  @include mq(xs, max) {
-    box-shadow: none;
-    border: 1px solid var(--extra-border-color) !important;
-  }
+  box-shadow: none;
 }
 
 .input-item,
 .mat-expansion-panel {
-  border: 1px solid transparent;
+  border: 1px solid var(--divider-color);
   margin: var(--s);
   border-radius: var(--card-border-radius);
   background: var(--task-detail-bg);

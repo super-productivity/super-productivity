@@ -15,7 +15,8 @@
   box-sizing: border-box;
   background: var(--bottom-nav-bg);
   border-top: 1px solid var(--separator-color);
-  box-shadow: var(--bottom-nav-shadow);
+  // Flat nav bar: the top divider separates it from content; a resting shadow on
+  // top of it just reads as a floating bar.
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--s);

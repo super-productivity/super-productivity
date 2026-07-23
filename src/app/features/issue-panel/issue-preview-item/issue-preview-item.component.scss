@@ -6,10 +6,12 @@
   align-items: center;
   padding: 0;
   border-radius: 6px;
-  //border: 1px solid;
 
   background: var(--task-c-bg);
-  box-shadow: var(--task-shadow);
+  // Flat row matching the task list: hairline border instead of a resting shadow.
+  // Routed through the --task-border switch so zen/lines stay borderless.
+  box-shadow: none;
+  border: var(--task-border, 1px solid var(--task-border-color));
   color: var(--text-color);
   //border-color: var(--extra-border-color);
 

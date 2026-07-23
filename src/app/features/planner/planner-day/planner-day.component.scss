@@ -145,7 +145,9 @@
 
 .normal-tasks-items > *,
 .deadline-items > * {
-  margin-bottom: var(--s);
+  // Match the main task list's inter-row rhythm (its .box is inset ~4px), rather
+  // than the roomier 8px, so planner and task-list spacing read the same.
+  margin-bottom: var(--s-half);
 }
 
 .scheduled-item {

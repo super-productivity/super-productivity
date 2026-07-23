@@ -76,9 +76,10 @@
 .repeat-task-cfg {
   margin-bottom: var(--s);
   padding: var(--s-half) var(--s2);
-  box-shadow: var(--task-shadow);
+  // Flat rows: match the task list's hairline border instead of a resting shadow.
+  box-shadow: none;
   background: var(--task-c-bg);
-  border: var(--task-border, none);
+  border: var(--task-border, 1px solid var(--task-border-color));
 }
 
 .repeat-task-cfg-content {
