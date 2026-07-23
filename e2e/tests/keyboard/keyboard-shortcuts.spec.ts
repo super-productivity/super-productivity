@@ -1,5 +1,6 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import { cssSelectors } from '../../constants/selectors';
+import { waitForStatePersistence } from '../../utils/waits';
 
 /**
  * Keyboard Shortcuts E2E Tests
@@ -20,6 +21,35 @@ test.describe('Keyboard Shortcuts', () => {
     await expect(addTaskInput).toHaveCount(0);
 
     await page.keyboard.press('Shift+A');
+    await expect(addTaskInput).toBeFocused();
+  });
+
+  test('should persist and apply a remapped add-task shortcut', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/config?section=keyboard');
+
+    const shortcutInput = page.getByRole('textbox', {
+      name: 'Add new task',
+      exact: true,
+    });
+    await expect(shortcutInput).toHaveValue('Shift+A');
+    await shortcutInput.focus();
+    await page.keyboard.press('Shift+V');
+    await expect(shortcutInput).toHaveValue('Shift+V');
+
+    await waitForStatePersistence(page);
+    await page.reload();
+    await expect(shortcutInput).toHaveValue('Shift+V');
+
+    await page.goto('/#/tag/TODAY/tasks');
+    await workViewPage.waitForTaskList();
+    const addTaskInput = page.locator(ADD_TASK_INPUT);
+    await expect(addTaskInput).toHaveCount(0);
+
+    await page.keyboard.press('Shift+V');
     await expect(addTaskInput).toBeFocused();
   });
 
