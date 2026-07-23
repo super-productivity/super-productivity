@@ -16,6 +16,30 @@
     ></datetime-picker>
   }
 
+  @if (canRepeat) {
+    <button
+      type="button"
+      mat-stroked-button
+      class="repeat-btn"
+      (click)="openRepeatDialog()"
+    >
+      <span class="repeat-btn-content">
+        <mat-icon>repeat</mat-icon>
+        <span class="repeat-label">
+          {{ T.F.TASK.D_SCHEDULE_TASK.REPEAT | translate }}:
+        </span>
+        <span class="repeat-val">
+          {{ repeatCfgLabel() || (T.F.TASK.D_SCHEDULE_TASK.DOES_NOT_REPEAT | translate) }}
+        </span>
+        @if (repeatCfgLabel()) {
+          <mat-icon class="repeat-affordance-icon">edit</mat-icon>
+        } @else {
+          <mat-icon class="repeat-affordance-icon">chevron_right</mat-icon>
+        }
+      </span>
+    </button>
+  }
+
   <div class="dialog-actions-and-warnings">
     @if (
       selectedTime &&

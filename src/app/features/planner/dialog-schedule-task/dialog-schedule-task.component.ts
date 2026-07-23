@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -49,6 +50,13 @@ import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
 import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
 import { DateTimePickerComponent } from '../../../ui/datetime-picker/datetime-picker.component';
+import { Observable, of } from 'rxjs';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
+import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
 
 @Component({
   selector: 'dialog-schedule-task',
@@ -76,6 +84,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     isSubmitOnQuickAccess?: boolean;
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
+  private _matDialog = inject(MatDialog);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
   private _snackService = inject(SnackService);
@@ -102,6 +112,46 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
+
+  // Recurrence only applies to top-level, non-issue tasks (mirrors the panel's
+  // Repeat row gating). Hidden in select-due-only mode, since that mode IS the
+  // repeat dialog's own start-date picker and a repeat button there is circular.
+  readonly canRepeat =
+    !this.data.isSelectDueOnly &&
+    !!this.data.task &&
+    !this.data.task.parentId &&
+    !this.data.task.issueId;
+
+  // Reactive label for the repeat button. Tracks the live task in the store so it
+  // flips from "does not repeat" to e.g. "Daily" the moment the repeat sub-dialog
+  // saves, without closing this dialog.
+  private _task$: Observable<Task | null> = this.data.task
+    ? this._taskService.getByIdLive$(this.data.task.id)
+    : of(null);
+  readonly repeatCfgLabel = toSignal(
+    this._task$.pipe(
+      map((task) => task?.repeatCfgId ?? null),
+      distinctUntilChanged(),
+      switchMap((repeatCfgId) =>
+        repeatCfgId
+          ? this._store.select(selectTaskRepeatCfgByIdAllowUndefined, { id: repeatCfgId })
+          : of(null),
+      ),
+      map((repeatCfg) => {
+        if (!repeatCfg) {
+          return null;
+        }
+        const [key, params] = getTaskRepeatInfoText(
+          repeatCfg,
+          this._dateTimeFormatService.currentLocale(),
+          this._dateTimeFormatService,
+          this._translateService,
+        );
+        return this._translateService.instant(key, params);
+      }),
+    ),
+    { initialValue: null },
+  );
 
   private _selectedDate = signal<Date | string | null>(null);
   private _selectedTime = signal<string | null>(null);
@@ -252,6 +302,24 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   dateSelected(newDate: Date): void {
     this.selectedDate = new Date(newDate);
+  }
+
+  openRepeatDialog(): void {
+    if (!this.data.task) {
+      return;
+    }
+    // Seed the recurrence start from the date the user is currently looking at in
+    // this dialog, falling back to the task's existing due day / creation date.
+    const targetDate = this.selectedDate
+      ? getDbDateStr(new Date(this.selectedDate))
+      : this.data.task.dueDay || getDbDateStr(new Date(this.data.task.created));
+    this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
+      restoreFocus: true,
+      data: {
+        task: this.data.task,
+        targetDate,
+      },
+    });
   }
 
   remove(): void {
