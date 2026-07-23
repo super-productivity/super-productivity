@@ -47,27 +47,9 @@ progress-bar {
     color: var(--text-color);
   }
 
-  @include mq(xs, max) {
-    flex-wrap: wrap;
-
-    task-title {
-      flex-basis: 100%;
-      min-width: 0;
-    }
-  }
-}
-
-.mobile-task-actions {
-  display: flex;
-  gap: var(--s-half);
-  width: 100%;
-  padding: 0 var(--s-half) var(--s-half);
-  box-sizing: border-box;
-
-  .mobile-task-action {
-    flex: 1 1 0;
-    min-width: 0;
-    min-height: var(--s5);
+  .task-detail-more-btn {
+    flex: 0 0 auto;
+    margin-inline-end: var(--s-half);
   }
 }
 
@@ -77,6 +59,9 @@ progress-bar {
   padding: var(--s);
   margin: 0;
   flex-grow: 1;
+  // Keep the title shrinkable next to the trailing overflow button so a long
+  // unbroken title wraps/truncates instead of pushing the button off-row.
+  min-width: 0;
   margin-top: var(--s-half);
   line-height: 1.4;
   min-height: 40px;

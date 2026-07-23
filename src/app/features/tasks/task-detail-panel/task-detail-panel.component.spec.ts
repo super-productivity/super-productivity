@@ -36,11 +36,9 @@ describe('TaskDetailPanelComponent', () => {
   let mockAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
   let isXs: WritableSignal<boolean>;
-  let currentTaskId: WritableSignal<string | null>;
 
   beforeEach(async () => {
     isXs = signal(true);
-    currentTaskId = signal<string | null>(null);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'handlePasteWithProgress',
     ]);
@@ -50,20 +48,10 @@ describe('TaskDetailPanelComponent', () => {
     ]);
     mockTaskService = jasmine.createSpyObj(
       'TaskService',
-      [
-        'update',
-        'setSelectedId',
-        'focusTaskIfPossible',
-        'addSubTaskTo',
-        'setCurrentId',
-        'pauseCurrent',
-        'setDone',
-        'setUnDone',
-      ],
+      ['update', 'setSelectedId', 'focusTaskIfPossible', 'addSubTaskTo'],
       {
         taskDetailPanelTargetPanel$: of(null),
         selectedTaskId: jasmine.createSpy().and.returnValue(null),
-        currentTaskId,
       },
     );
     const mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
@@ -74,7 +62,6 @@ describe('TaskDetailPanelComponent', () => {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
       tasks: jasmine.createSpy().and.returnValue({}),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
-      appFeatures: signal({ isTimeTrackingEnabled: true }),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -248,73 +235,18 @@ describe('TaskDetailPanelComponent', () => {
   });
 
   describe('mobile task actions', () => {
-    it('shows completion, time tracking, and more actions in the mobile header', () => {
-      const completeButton: HTMLButtonElement | null =
-        fixture.nativeElement.querySelector('.mobile-task-action.--complete');
-      const trackingButton: HTMLButtonElement | null =
-        fixture.nativeElement.querySelector('.mobile-task-action.--tracking');
+    it('shows a single more-actions button in the mobile header', () => {
       const moreButton: HTMLButtonElement | null = fixture.nativeElement.querySelector(
-        '.mobile-task-action.--more',
+        '.task-detail-more-btn',
       );
 
-      expect(completeButton).not.toBeNull();
-      expect(trackingButton).not.toBeNull();
       expect(moreButton).not.toBeNull();
-      expect(completeButton?.textContent?.trim()).toBeTruthy();
-      expect(trackingButton?.textContent?.trim()).toBeTruthy();
-      expect(moreButton?.textContent?.trim()).toBeTruthy();
-
-      completeButton?.click();
-      expect(mockTaskService.setDone).toHaveBeenCalledWith(MOCK_TASK.id);
-
-      trackingButton?.click();
-      expect(mockTaskService.setCurrentId).toHaveBeenCalledWith(MOCK_TASK.id);
+      expect(moreButton?.getAttribute('aria-label')).toBeTruthy();
+      expect(moreButton?.getAttribute('aria-haspopup')).toBe('menu');
+      expect(moreButton?.getAttribute('aria-expanded')).toBe('false');
     });
 
-    it('offers undo for an already completed task', () => {
-      componentRef.setInput('task', { ...MOCK_TASK, isDone: true });
-      fixture.detectChanges();
-
-      const completeButton: HTMLButtonElement | null =
-        fixture.nativeElement.querySelector('.mobile-task-action.--complete');
-      completeButton?.click();
-
-      expect(mockTaskService.setUnDone).toHaveBeenCalledWith(MOCK_TASK.id);
-      expect(mockTaskService.setDone).not.toHaveBeenCalled();
-    });
-
-    it('uses the visible completion text as its accessible name', () => {
-      const completeButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-        '.mobile-task-action.--complete',
-      );
-
-      expect(completeButton.getAttribute('aria-label')).toBe(
-        completeButton.textContent?.trim(),
-      );
-
-      componentRef.setInput('task', { ...MOCK_TASK, isDone: true });
-      fixture.detectChanges();
-
-      const undoButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-        '.mobile-task-action.--complete',
-      );
-      expect(undoButton.getAttribute('aria-label')).toBe(undoButton.textContent?.trim());
-    });
-
-    it('keeps every mobile action at least 40px high', () => {
-      const buttons: HTMLButtonElement[] = Array.from(
-        fixture.nativeElement.querySelectorAll('.mobile-task-action'),
-      );
-
-      expect(buttons.length).toBe(3);
-      buttons.forEach((button) => {
-        expect(
-          Number.parseFloat(getComputedStyle(button).minHeight),
-        ).toBeGreaterThanOrEqual(40);
-      });
-    });
-
-    it('opens More as a menu and reports keyboard activation through the view child', () => {
+    it('opens the actions menu and reports keyboard activation through the view child', () => {
       const taskContextMenu = component.taskContextMenu();
       expect(taskContextMenu).toBeDefined();
       const open = spyOn(taskContextMenu!, 'open').and.callFake(() =>
@@ -322,11 +254,8 @@ describe('TaskDetailPanelComponent', () => {
       );
 
       const moreButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-        '.mobile-task-action.--more',
+        '.task-detail-more-btn',
       );
-
-      expect(moreButton.getAttribute('aria-haspopup')).toBe('menu');
-      expect(moreButton.getAttribute('aria-expanded')).toBe('false');
 
       moreButton.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
       fixture.detectChanges();
@@ -335,23 +264,11 @@ describe('TaskDetailPanelComponent', () => {
       expect(moreButton.getAttribute('aria-expanded')).toBe('true');
     });
 
-    it('switches the tracking action to pause for the current task', () => {
-      currentTaskId.set(MOCK_TASK.id);
-      fixture.detectChanges();
-
-      const trackingButton: HTMLButtonElement | null =
-        fixture.nativeElement.querySelector('.mobile-task-action.--tracking');
-      trackingButton?.click();
-
-      expect(mockTaskService.pauseCurrent).toHaveBeenCalled();
-      expect(mockTaskService.setCurrentId).not.toHaveBeenCalled();
-    });
-
-    it('hides the mobile task actions above the mobile breakpoint', () => {
+    it('hides the mobile actions above the mobile breakpoint', () => {
       isXs.set(false);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('.mobile-task-actions')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.task-detail-more-btn')).toBeNull();
     });
 
     it('uses the responsive layout signal for mobile panel defaults', () => {

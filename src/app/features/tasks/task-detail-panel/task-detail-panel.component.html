@@ -7,44 +7,16 @@
       class="task-title"
     ></task-title>
     @if (layoutService.isXs() && !isDialogMode()) {
-      <div class="mobile-task-actions">
-        <button
-          class="mobile-task-action --complete"
-          mat-button
-          (click)="toggleTaskDone()"
-          [attr.aria-label]="(task().isDone ? T.G.UNDO : T.G.COMPLETE) | translate"
-        >
-          <span>{{ (task().isDone ? T.G.UNDO : T.G.COMPLETE) | translate }}</span>
-        </button>
-
-        @if (isShowTrackingAction()) {
-          <button
-            class="mobile-task-action --tracking"
-            mat-button
-            (click)="togglePlayPause()"
-            [attr.aria-label]="
-              (isCurrent() ? T.F.TASK.CMP.TRACK_TIME_STOP : T.F.TASK.CMP.TRACK_TIME)
-                | translate
-            "
-          >
-            <span>{{
-              (isCurrent() ? T.F.FOCUS_MODE.B.PAUSE : T.F.TASK.D_REMINDER_VIEW.START)
-                | translate
-            }}</span>
-          </button>
-        }
-
-        <button
-          class="mobile-task-action --more"
-          mat-button
-          (click)="openTaskMenu($event)"
-          [attr.aria-label]="T.G.MORE_ACTIONS | translate"
-          aria-haspopup="menu"
-          [attr.aria-expanded]="taskContextMenu()?.isOpen() ?? false"
-        >
-          <span>{{ T.G.MORE_ACTIONS | translate }}</span>
-        </button>
-      </div>
+      <button
+        mat-icon-button
+        class="task-detail-more-btn"
+        (click)="openTaskMenu($event)"
+        [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+        aria-haspopup="menu"
+        [attr.aria-expanded]="taskContextMenu()?.isOpen() ?? false"
+      >
+        <mat-icon>more_vert</mat-icon>
+      </button>
       <task-context-menu
         [isAdvancedControls]="true"
         [task]="task()"

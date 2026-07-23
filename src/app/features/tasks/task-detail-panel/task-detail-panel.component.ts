@@ -349,17 +349,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       : !!task.notes || (!task.issueId && !task.attachments?.length);
   });
 
-  isCurrent = computed(() => this.taskService.currentTaskId() === this.task().id);
-
-  isShowTrackingAction = computed(() => {
-    const task = this.task();
-    return (
-      this._globalConfigService.appFeatures().isTimeTrackingEnabled &&
-      !task.isDone &&
-      !task.subTasks?.length
-    );
-  });
-
   // Task-based computed signals
   isMarkdownChecklist = computed(() => {
     const notes = this.task().notes;
@@ -624,23 +613,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const defaultNotes = this.defaultTaskNotes();
     if (!defaultNotes || !$event || $event.trim() !== defaultNotes.trim()) {
       this.taskService.update(this.task().id, { notes: $event });
-    }
-  }
-
-  toggleTaskDone(): void {
-    const task = this.task();
-    if (task.isDone) {
-      this.taskService.setUnDone(task.id);
-    } else {
-      this.taskService.setDone(task.id);
-    }
-  }
-
-  togglePlayPause(): void {
-    if (this.isCurrent()) {
-      this.taskService.pauseCurrent();
-    } else {
-      this.taskService.setCurrentId(this.task().id);
     }
   }
 
