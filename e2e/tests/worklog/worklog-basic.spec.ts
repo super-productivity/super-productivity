@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForStatePersistence } from '../../utils/waits';
 
 /**
  * Worklog E2E Tests
@@ -29,9 +30,9 @@ test.describe('Worklog', () => {
   }) => {
     await workViewPage.waitForTaskList();
 
-    // Create and complete a task
+    // Create and complete a task with deterministic tracked time
     const taskName = `${testPrefix}-Worklog Task`;
-    await workViewPage.addTask(taskName);
+    await workViewPage.addTask(`${taskName} 10m/1h`);
 
     const task = taskPage.getTaskByText(taskName);
     await expect(task).toBeVisible({ timeout: 10000 });
@@ -69,9 +70,35 @@ test.describe('Worklog', () => {
     await expect(dayToggle).toBeVisible();
     await dayToggle.click();
     await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
+
+    const worklogRow = page
+      .locator('.task-summary-table tr')
+      .filter({ hasText: taskName });
+    await expect(worklogRow.locator('td.title button')).toBeVisible();
+    await expect(worklogRow.locator('td.worked .value-wrapper')).toHaveText('0:10');
+
+    // Correct the archived duration through the real inline editor
+    const durationEditor = worklogRow.locator('td.worked inline-input');
+    await durationEditor.click();
+    const durationInput = durationEditor.locator('input.duration-input');
+    await durationInput.fill('20m');
+    await durationInput.press('Enter');
+    await expect(worklogRow.locator('td.worked .value-wrapper')).toHaveText('0:20');
+
+    // The corrected archive value survives hydration
+    await waitForStatePersistence(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('history')).toBeVisible();
+    const reloadedDayToggle = page.locator('history .week-row .day-toggle').first();
+    await expect(reloadedDayToggle).toBeVisible();
+    await reloadedDayToggle.click();
+    await expect(reloadedDayToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(
-      page.locator('.task-summary-table td.title button').filter({ hasText: taskName }),
-    ).toBeVisible();
+      page
+        .locator('.task-summary-table tr')
+        .filter({ hasText: taskName })
+        .locator('td.worked .value-wrapper'),
+    ).toHaveText('0:20');
   });
 
   test('should navigate to worklog from side menu', async ({ page, workViewPage }) => {
