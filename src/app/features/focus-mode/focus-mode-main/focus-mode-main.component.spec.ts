@@ -26,6 +26,7 @@ import { By } from '@angular/platform-browser';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { MarkdownModule } from 'ngx-markdown';
 import { MentionConfigService } from '../../tasks/mention-config.service';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'focus-mode-task-selector',
@@ -155,6 +156,7 @@ describe('FocusModeMainComponent', () => {
         { provide: FocusModeService, useValue: focusModeServiceSpy },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: signal(false) } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -722,6 +724,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   let mainStateSignal: WritableSignal<FocusMainUIState>;
   let modeSignal: WritableSignal<FocusModeMode>;
   let isSessionRunningSignal: WritableSignal<boolean>;
+  let isXsSignal: WritableSignal<boolean>;
+  let mockIssueService: jasmine.SpyObj<IssueService>;
 
   const mockTask: TaskCopy = {
     id: 'task-1',
@@ -736,6 +740,10 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     timeSpentOnDay: {},
     attachments: [],
     tagIds: [],
+    issueType: 'GITHUB',
+    issueId: '123',
+    issueProviderId: 'provider-1',
+    issuePoints: 5,
   } as TaskCopy;
 
   beforeEach(async () => {
@@ -743,6 +751,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     mainStateSignal = signal(FocusMainUIState.InProgress);
     modeSignal = signal(FocusModeMode.Pomodoro);
     isSessionRunningSignal = signal(true);
+    isXsSignal = signal(true);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({
@@ -759,8 +768,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       'createFromDrop',
     ]);
 
-    const issueServiceSpy = jasmine.createSpyObj('IssueService', ['issueLink']);
-    issueServiceSpy.issueLink.and.returnValue(Promise.resolve('https://example.com'));
+    mockIssueService = jasmine.createSpyObj('IssueService', ['issueLink']);
+    mockIssueService.issueLink.and.returnValue(Promise.resolve('https://example.com'));
 
     const simpleCounterServiceSpy = jasmine.createSpyObj('SimpleCounterService', [''], {
       enabledSimpleCounters$: of([]),
@@ -805,11 +814,12 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
-        { provide: IssueService, useValue: issueServiceSpy },
+        { provide: IssueService, useValue: mockIssueService },
         { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: isXsSignal } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -871,7 +881,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(mockStore.dispatch).not.toHaveBeenCalled();
   });
 
-  it('should keep the primary session actions visible and group secondary actions', () => {
+  it('should keep the primary session actions visible and group secondary actions on mobile', () => {
     const controls = fixture.nativeElement.querySelector(
       '.bottom-controls',
     ) as HTMLElement;
@@ -881,6 +891,42 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
 
     expect(buttons.length).toBe(4);
     expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+  });
+
+  it('should restore direct secondary session actions and issue points on desktop', () => {
+    isXsSignal.set(false);
+    fixture.detectChanges();
+
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.length).toBe(6);
+    expect(controls.querySelector('.secondary-actions-menu-btn')).toBeNull();
+    expect(controls.querySelector('.reset-cycles-btn')).not.toBeNull();
+    expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
+    expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
+    expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+  });
+
+  it('should defer resolving the issue URL until the mobile More menu opens', async () => {
+    expect(mockIssueService.issueLink).not.toHaveBeenCalled();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockIssueService.issueLink).toHaveBeenCalledOnceWith(
+      'GITHUB',
+      '123',
+      'provider-1',
+    );
   });
 
   it('should open the secondary actions menu and toggle notes', async () => {
@@ -1104,6 +1150,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: signal(false) } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {

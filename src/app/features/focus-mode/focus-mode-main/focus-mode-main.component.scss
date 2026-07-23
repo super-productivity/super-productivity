@@ -282,8 +282,9 @@
 
 // ========== ROW 4 (In Progress): SESSION CONTROL ROW ==========
 // Back to Planning · Pause · Complete · More — one content-height bottom row.
-// Secondary actions live in the More menu. Keeps the hover/window-focus reveal
-// (--revealed-opacity) so it stays distraction-free, matching the rest of focus mode.
+// Secondary actions use the More menu on mobile and stay direct on wider screens.
+// Keeps the hover/window-focus reveal (--revealed-opacity) so it stays
+// distraction-free, matching the rest of focus mode.
 .bottom-controls {
   display: flex;
   justify-content: center;
