@@ -51,8 +51,11 @@
   }
 
   ::ng-deep {
+    // A 6-row month needs ~353px (40px header + ~313px month view); the previous
+    // 400px left ~47px of dead space between the grid and the time input. 360px
+    // fits the tallest month with a small buffer and no clipping.
     mat-calendar {
-      height: 400px;
+      height: 360px;
     }
 
     .mat-calendar-header {
@@ -175,13 +178,18 @@
 }
 
 .form-ctrl-wrapper {
-  margin: var(--s2) var(--s2) var(--s2);
+  margin: 0 var(--s2) var(--s2);
   display: flex;
   flex-direction: column;
-  gap: var(--s);
 
   mat-form-field {
     width: 100%;
+  }
+
+  // These fields never surface hints and always carry a valid value, so the
+  // reserved subscript row is pure dead space between the stacked inputs.
+  ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+    display: none;
   }
 
   .time-clear-btn {
