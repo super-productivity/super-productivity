@@ -25,6 +25,8 @@ import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-inpu
 import { Project } from '../../../project/project.model';
 import { Tag } from '../../../tag/tag.model';
 import { DEFAULT_TASK, Task } from '../../task.model';
+import { By } from '@angular/platform-browser';
+import { MatMenu } from '@angular/material/menu';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -317,6 +319,39 @@ describe('TaskContextMenuInnerComponent', () => {
       tick(100);
 
       expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    }));
+
+    it('should restore external focus only after the root menu closes', fakeAsync(() => {
+      component.task = {
+        id: 'T1',
+        title: 'Test',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      const trigger = document.createElement('button');
+      document.body.appendChild(trigger);
+      const triggerFocusSpy = spyOn(trigger, 'focus');
+      const getByIdSpy = spyOn(document, 'getElementById');
+
+      component.open(undefined, false, trigger);
+      fixture.detectChanges();
+      const menus = fixture.debugElement.queryAll(By.directive(MatMenu));
+      expect(menus.length).toBeGreaterThan(1);
+
+      menus[1].injector.get(MatMenu).closed.emit();
+      tick();
+
+      expect(triggerFocusSpy).not.toHaveBeenCalled();
+      expect(getByIdSpy).not.toHaveBeenCalled();
+
+      component.onClose();
+      tick();
+
+      expect(triggerFocusSpy).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(getByIdSpy).not.toHaveBeenCalled();
+      trigger.remove();
     }));
   });
 

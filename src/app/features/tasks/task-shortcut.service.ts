@@ -443,7 +443,7 @@ export class TaskShortcutService {
 
       const contextMenu: TaskContextMenuComponent | undefined =
         taskComponent.taskContextMenu();
-      return contextMenu?.isShowInner ?? false;
+      return contextMenu?.isOpen() ?? false;
     } catch (error) {
       return false;
     }
@@ -459,16 +459,13 @@ export class TaskShortcutService {
       const contextMenu: TaskContextMenuComponent | undefined =
         taskComponent.taskContextMenu();
 
-      // Close the context menu if it's open
-      if (contextMenu && contextMenu.isShowInner) {
-        // Set isShowInner to false to hide the context menu
-        contextMenu.isShowInner = false;
-
-        // Also trigger onClose on the inner component if available
+      if (contextMenu?.isOpen()) {
         const innerComponent: TaskContextMenuInnerComponent | undefined =
           contextMenu.taskContextMenuInner?.();
-        if (innerComponent && typeof innerComponent.onClose === 'function') {
+        if (innerComponent) {
           innerComponent.onClose();
+        } else {
+          contextMenu.onClose();
         }
       }
     } catch (error) {

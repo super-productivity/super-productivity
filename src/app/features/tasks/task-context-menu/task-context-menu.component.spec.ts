@@ -35,27 +35,26 @@ describe('TaskContextMenuComponent', () => {
       }
     ).taskContextMenuInner = () => innerMenu;
     const event = new MouseEvent('click');
+    const trigger = document.createElement('button');
 
-    component.open(event, true);
+    component.open(event, true, trigger);
 
-    expect(innerMenu.open).toHaveBeenCalledWith(event, true);
+    expect(innerMenu.open as jasmine.Spy).toHaveBeenCalledWith(event, true, trigger);
     expect(component.isOpen()).toBeTrue();
   });
 
-  it('restores focus to the supplied trigger after the inner menu closes', fakeAsync(() => {
+  it('closes without scheduling a second focus handoff', fakeAsync(() => {
     const trigger = document.createElement('button');
-    const taskRow = document.createElement('button');
-    document.body.append(taskRow, trigger);
+    const focusSpy = spyOn(trigger, 'focus');
+    document.body.append(trigger);
 
     component.open(undefined, false, trigger);
-    setTimeout(() => taskRow.focus());
     component.onClose();
     tick();
 
     expect(component.isOpen()).toBeFalse();
-    expect(document.activeElement).toBe(trigger);
+    expect(focusSpy).not.toHaveBeenCalled();
 
-    taskRow.remove();
     trigger.remove();
   }));
 });

@@ -310,6 +310,29 @@ describe('TaskShortcutService', () => {
   });
 
   describe('other shortcuts require focused task', () => {
+    it('should close an open context menu through its inner component', () => {
+      const innerMenu = {
+        onClose: jasmine.createSpy('onClose'),
+      };
+      const contextMenu = {
+        isOpen: signal(true),
+        taskContextMenuInner: () => innerMenu,
+      };
+      const mockTaskComponent = {
+        task: () => ({ id: 'focused-task-1' }),
+        openNotesPanel: jasmine.createSpy('openNotesPanel'),
+        taskContextMenu: () => contextMenu,
+      };
+      setFocusedTask('focused-task-1');
+      mockTaskFocusService.lastFocusedTaskComponent.set(mockTaskComponent);
+
+      const result = service.handleTaskShortcuts(createKeyboardEvent('N'));
+
+      expect(result).toBe(true);
+      expect(innerMenu.onClose).toHaveBeenCalledTimes(1);
+      expect(mockTaskComponent.openNotesPanel).toHaveBeenCalled();
+    });
+
     it('should delegate taskOpenNotesPanel shortcut to focused task component', () => {
       const mockTaskComponent = {
         task: () => ({ id: 'focused-task-1' }),
