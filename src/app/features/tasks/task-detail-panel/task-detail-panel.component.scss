@@ -135,15 +135,33 @@ progress-bar {
   margin-left: var(--s-quarter);
 }
 
-// Recurrence shown alongside the due date in the merged schedule item.
-.repeat-value {
+// Merged schedule item: the due date is the primary value, the recurrence a
+// secondary line stacked beneath it (instead of competing side by side).
+.schedule-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-quarter);
+  min-width: 0;
+}
+
+.schedule-value__date,
+.schedule-value__repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  max-width: 100%;
+
   mat-icon {
+    flex: 0 0 auto;
     font-size: 18px;
     width: 18px;
     height: 18px;
-    vertical-align: middle;
-    margin-right: var(--s-quarter);
   }
+}
+
+.schedule-value__repeat {
+  color: var(--text-color-muted);
 }
 
 .attachment-list-panel-content-wrapper {
