@@ -13,10 +13,10 @@ import {
 /**
  * WebDAV Single Client Rapid Sync E2E Tests
  *
- * These tests verify that rapid successive syncs from a single client
- * complete without errors. Conflict detection uses content hashing (MD5)
- * to compare the remote file before uploading, so timing precision
- * is not a concern.
+ * These tests verify that serialized create/change-and-sync cycles from a
+ * single client complete without errors and reach a second client. They do
+ * not force operations into the same externally visible WebDAV revision;
+ * deterministic same-revision coverage is tracked in #9147.
  *
  * Prerequisites:
  * - WebDAV server running at http://127.0.0.1:2345/
@@ -63,7 +63,8 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
     // Create the sync folder on WebDAV server
     await createSyncFolder(request, SYNC_FOLDER_NAME);
 
-    const { context, page } = await setupSyncClient(browser, baseURL);
+    const { context: contextA, page } = await setupSyncClient(browser, baseURL);
+    let contextB: Awaited<ReturnType<typeof setupSyncClient>>['context'] | null = null;
     const syncPage = new SyncPage(page);
     const workViewPage = new WorkViewPage(page);
 
@@ -100,7 +101,7 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
         await workViewPage.addTask(taskName);
         await expect(page.locator(`task:has-text("${taskName}")`)).toBeVisible();
 
-        // Immediately sync (within the same second if possible)
+        // Start the next serialized sync immediately after local creation.
         await syncPage.triggerSync();
         const result = await waitForSyncComplete(page, syncPage);
 
@@ -119,13 +120,33 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
       }
       await expect(page.locator('task')).toHaveCount(5, { timeout: 10000 });
 
+      // A second client is the durable oracle: local DOM state alone cannot prove
+      // that any of the rapid sync cycles reached the remote file.
+      const secondClient = await setupSyncClient(browser, baseURL);
+      contextB = secondClient.context;
+      const syncPageB = new SyncPage(secondClient.page);
+      const workViewPageB = new WorkViewPage(secondClient.page);
+      await workViewPageB.waitForTaskList();
+      await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
+      await syncPageB.triggerSync();
+      await waitForSyncComplete(secondClient.page, syncPageB);
+
+      for (const taskName of taskNames) {
+        await expect(
+          secondClient.page.locator(`task:has-text("${taskName}")`),
+        ).toBeVisible({ timeout: 10000 });
+      }
+      await expect(secondClient.page.locator('task')).toHaveCount(5, {
+        timeout: 10000,
+      });
+
       // Verify no 412 errors occurred
       expect(syncErrors.length).toBe(0);
 
       console.log('[RapidSync] ✓ All 5 rapid syncs successful');
       console.log('[RapidSync] ✓ No 412 errors');
     } finally {
-      await closeContextsSafely(context);
+      await closeContextsSafely(contextA, contextB);
     }
   });
 
@@ -163,7 +184,8 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
       syncFolderPath: `/${folderName}`,
     };
 
-    const { context, page } = await setupSyncClient(browser, baseURL);
+    const { context: contextA, page } = await setupSyncClient(browser, baseURL);
+    let contextB: Awaited<ReturnType<typeof setupSyncClient>>['context'] | null = null;
     const syncPage = new SyncPage(page);
     const workViewPage = new WorkViewPage(page);
 
@@ -222,90 +244,34 @@ test.describe('@webdav Rapid Sync (Single Client)', () => {
       await waitForSyncComplete(page, syncPage);
       console.log('[ModifySync] Rename synced');
 
+      // Verify the remote result from a fresh client, including the two state
+      // changes this scenario claims to exercise.
+      const secondClient = await setupSyncClient(browser, baseURL);
+      contextB = secondClient.context;
+      const syncPageB = new SyncPage(secondClient.page);
+      const workViewPageB = new WorkViewPage(secondClient.page);
+      await workViewPageB.waitForTaskList();
+      await syncPageB.setupWebdavSync(config);
+      await syncPageB.triggerSync();
+      await waitForSyncComplete(secondClient.page, syncPageB);
+
+      const syncedDoneTask = secondClient.page
+        .locator(`task:has-text("${taskName}")`)
+        .first();
+      await expect(syncedDoneTask).toHaveClass(/isDone/, { timeout: 10000 });
+      await expect(
+        secondClient.page.locator(`task:has-text("${task2Name}-Renamed")`),
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        secondClient.page.locator('task-title').getByText(task2Name, { exact: true }),
+      ).toHaveCount(0);
+
       // Verify no 412 errors
       expect(syncErrors.length).toBe(0);
 
       console.log('[ModifySync] ✓ All modifications synced without 412 errors');
     } finally {
-      await closeContextsSafely(context);
-    }
-  });
-
-  /**
-   * Scenario: Multiple syncs within same second succeed
-   *
-   * Stress test that tries to trigger the timestamp precision issue
-   * by syncing as fast as possible.
-   *
-   * Setup:
-   * - Client with WebDAV configured
-   *
-   * Actions:
-   * 1. Sync 10 times as fast as possible
-   *
-   * Verify:
-   * - All syncs complete
-   * - No 412 errors
-   */
-  test('Multiple syncs within same second succeed', async ({
-    browser,
-    baseURL,
-    request,
-    webdavServerUp,
-  }) => {
-    test.slow();
-
-    const folderName = generateSyncFolderName('e2e-burst');
-    await createSyncFolder(request, folderName);
-
-    const config = {
-      ...WEBDAV_CONFIG_TEMPLATE,
-      syncFolderPath: `/${folderName}`,
-    };
-
-    const { context, page } = await setupSyncClient(browser, baseURL);
-    const syncPage = new SyncPage(page);
-    const workViewPage = new WorkViewPage(page);
-
-    const syncErrors: string[] = [];
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (/HTTP 412|status[:\s]+412|Precondition Failed/i.test(text)) {
-        syncErrors.push(text);
-      }
-    });
-
-    try {
-      await workViewPage.waitForTaskList();
-      await syncPage.setupWebdavSync(config);
-
-      // Create a task so there's data to sync
-      await workViewPage.addTask(`BurstTask-${Date.now()}`);
-      console.log('[BurstSync] Task created');
-
-      // Sync rapidly 10 times
-      let successCount = 0;
-      for (let i = 1; i <= 10; i++) {
-        try {
-          await syncPage.triggerSync();
-          // Brief wait to let the new sync cycle start before checking completion
-          await page.waitForTimeout(500);
-          await waitForSyncComplete(page, syncPage, 15000);
-          successCount++;
-        } catch (e) {
-          // If sync times out, that's still better than 412
-          console.log(`[BurstSync] Sync ${i} timed out (not 412)`);
-        }
-      }
-
-      // At least some syncs should succeed (some might overlap/skip/dedup)
-      expect(successCount).toBeGreaterThanOrEqual(3);
-      expect(syncErrors.length).toBe(0);
-
-      console.log(`[BurstSync] ✓ ${successCount}/10 syncs completed`);
-      console.log('[BurstSync] ✓ No 412 errors in burst sync');
-    } finally {
-      await closeContextsSafely(context);
+      await closeContextsSafely(contextA, contextB);
     }
   });
 });

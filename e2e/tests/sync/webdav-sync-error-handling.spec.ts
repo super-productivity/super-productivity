@@ -6,9 +6,10 @@ import {
   createUniqueSyncFolder,
   createWebDavFolder,
   setupClient,
-  waitForSync,
+  waitForSyncComplete,
   simulateNetworkFailure,
   restoreNetwork,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
 
@@ -40,10 +41,11 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     // Configure Sync on Client A
     await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
     await expect(syncPageA.syncBtn).toBeVisible();
+    await waitForSyncComplete(pageA, syncPageA);
 
     // First, verify sync works normally
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    await waitForSyncComplete(pageA, syncPageA);
 
     // Create a task
     const taskName = `Network Test Task ${Date.now()}`;
@@ -54,7 +56,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     await simulateNetworkFailure(pageA);
 
     // Trigger sync - should fail
-    await syncPageA.triggerSync();
+    await syncPageA.syncBtn.click();
 
     // Wait for error indication (snackbar or sync icon change)
     // The sync should fail gracefully
@@ -151,7 +153,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     await expect(syncPageA.syncBtn).toBeVisible();
 
     // Trigger sync - should fail with auth error
-    await syncPageA.triggerSync();
+    await syncPageA.syncBtn.click();
 
     // Wait for error indication
     const startTime = Date.now();
@@ -216,6 +218,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     // Configure Sync on Client A
     await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
     await expect(syncPageA.syncBtn).toBeVisible();
+    await waitForSyncComplete(pageA, syncPageA);
 
     // Create some tasks
     const taskName = `Double Sync Task ${Date.now()}`;
@@ -223,12 +226,14 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     await waitForStatePersistence(pageA);
 
     // Trigger sync twice rapidly (simulating double-click)
+    syncPageA.prepareForNextSyncCycle('write');
     await syncPageA.syncBtn.click();
     await pageA.waitForTimeout(100);
     await syncPageA.syncBtn.click();
 
-    // Wait for sync to complete
-    await waitForSync(pageA, syncPageA);
+    // Prove that the rapid trigger produced a completed provider write rather
+    // than reusing the setup cycle's response.
+    await waitForSyncComplete(pageA, syncPageA);
 
     // App should not crash and task should still be visible
     const taskLocator = pageA.locator('task', { hasText: taskName });
@@ -239,9 +244,18 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
 
     // Try another sync to confirm everything works
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    await waitForSyncComplete(pageA, syncPageA);
+
+    // A fresh client must be able to hydrate the task from the remote commit.
+    const { context: contextB, page: pageB } = await setupClient(browser, url);
+    const syncPageB = new SyncPage(pageB);
+    await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
+    await waitForSyncComplete(pageB, syncPageB);
+    await expect(pageB.locator('task', { hasText: taskName })).toBeVisible({
+      timeout: 10000,
+    });
 
     // Cleanup
-    await contextA.close();
+    await closeContextsSafely(contextA, contextB);
   });
 });

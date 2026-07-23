@@ -1,6 +1,7 @@
 import {
   type Browser,
   type BrowserContext,
+  type Locator,
   type Page,
   type APIRequestContext,
 } from '@playwright/test';
@@ -120,22 +121,30 @@ export const setupSyncClient = async (
     localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
   });
 
-  // Auto-accept confirm dialogs for fresh client sync
-  // This handles the window.confirm() call in OperationLogSyncService._showFreshClientSyncConfirmation
+  // Auto-accept only the native confirmation for a genuinely fresh client.
+  // This handler lives for the page lifetime, so broad words such as "sync" or
+  // "remote" would also authorize later destructive repair/overwrite prompts.
   page.on('dialog', async (dialog) => {
+    const message = dialog.message();
+    if (
+      dialog.type() === 'beforeunload' ||
+      message.startsWith('Throw an error for error?') ||
+      (dialog.type() === 'alert' && message.startsWith('devERR:'))
+    ) {
+      return;
+    }
+
     if (dialog.type() === 'confirm') {
-      const message = dialog.message();
-      // devError's "Throw an error for error? ––– …" confirm is handled by
-      // installDevErrorDialogHandler above; don't trip the strict validator.
-      if (message.startsWith('Throw an error for error?')) {
-        return;
-      }
-      // Validate this is the expected fresh client sync confirmation
-      const expectedPatterns = [/fresh/i, /remote/i, /sync/i, /operations/i];
-      const isExpectedDialog = expectedPatterns.some((pattern) => pattern.test(message));
+      const normalizedMessage = message.replace(/\s+/g, ' ').toLowerCase();
+      const isExpectedDialog =
+        normalizedMessage.includes('initial sync') &&
+        normalizedMessage.includes('fresh installation') &&
+        normalizedMessage.includes('remote data') &&
+        normalizedMessage.includes('overwrite your local data');
 
       if (!isExpectedDialog) {
         console.error(`[E2E] Unexpected confirm dialog: "${message}"`);
+        await dialog.dismiss();
         throw new Error(
           `Unexpected confirm dialog message: "${message}". ` +
             `Expected fresh client sync confirmation.`,
@@ -144,7 +153,14 @@ export const setupSyncClient = async (
 
       console.log(`Auto-accepting confirm dialog: ${message}`);
       await dialog.accept();
+      return;
     }
+
+    await dialog.dismiss();
+    throw new Error(
+      `Unexpected ${dialog.type()} dialog: "${message}". ` +
+        'Only the fresh-client confirmation is expected.',
+    );
   });
 
   await page.goto('/');
@@ -157,86 +173,127 @@ export const setupSyncClient = async (
  */
 export const setupClient = setupSyncClient;
 
+type TerminalSyncState =
+  | { kind: 'success' }
+  | { kind: 'conflict' }
+  | { kind: 'error'; message: string }
+  | null;
+
+const readTerminalSyncState = async (
+  page: Page,
+  syncPage: SyncPage,
+  allowResponseOnlyCompletion: boolean,
+): Promise<TerminalSyncState> => {
+  // Error and conflict states can coexist with the old success icon, so they
+  // must always win over the success check below.
+  if (await syncPage.syncErrorIcon.isVisible().catch(() => false)) {
+    return { kind: 'error', message: 'sync_problem icon is visible' };
+  }
+
+  const snackBars = page.locator('.mat-mdc-snack-bar-container');
+  const snackBarTexts = await snackBars.allInnerTexts().catch(() => []);
+  const errorText = snackBarTexts.find((text) =>
+    /\b(error|failed?|failure|unable)\b|could not/i.test(text),
+  );
+  if (errorText) {
+    return { kind: 'error', message: errorText };
+  }
+
+  const conflictDialog = page.locator('dialog-sync-conflict');
+  if (await conflictDialog.isVisible().catch(() => false)) {
+    return { kind: 'conflict' };
+  }
+
+  const conflictMatDialog = page.locator('mat-dialog-container', {
+    hasText: 'Conflicting Data',
+  });
+  if (await conflictMatDialog.isVisible().catch(() => false)) {
+    return { kind: 'conflict' };
+  }
+
+  const [spinnerVisible, confirmedIconVisible] = await Promise.all([
+    syncPage.syncSpinner.isVisible().catch(() => false),
+    syncPage.syncConfirmedIcon.isVisible().catch(() => false),
+  ]);
+  if (!spinnerVisible && (confirmedIconVisible || allowResponseOnlyCompletion)) {
+    return { kind: 'success' };
+  }
+
+  return null;
+};
+
 /**
- * Waits for sync to complete by polling for success icon or conflict dialog.
- * Throws on error snackbar or timeout.
+ * Waits for a newly-triggered provider request and then a terminal sync state.
+ * Throws on error UI or timeout.
  *
  * @param page - Playwright page
  * @param syncPage - SyncPage instance
  * @param timeout - Maximum wait time in ms (default 30000)
+ * @param options.allowResponseOnlyCompletion - Require done_all by default. Conflict
+ * resolution paths may opt into a stable idle state after the witnessed response
+ * because those actions do not expose a reliable terminal icon. Such callers must
+ * assert the exact resulting state.
  * @returns 'success' | 'conflict' | void
  */
 export const waitForSyncComplete = async (
   page: Page,
   syncPage: SyncPage,
   timeout: number = 30000,
+  options: { allowResponseOnlyCompletion?: boolean } = {},
 ): Promise<'success' | 'conflict' | void> => {
   const startTime = Date.now();
+  const allowResponseOnlyCompletion = options.allowResponseOnlyCompletion ?? false;
 
   // Ensure sync button is visible first
   await expect(syncPage.syncBtn).toBeVisible({ timeout: 10000 });
 
-  // Track consecutive non-spinning states to confirm sync is truly complete
-  let nonSpinningCount = 0;
-  const requiredNonSpinningChecks = 3;
+  const responseTimeout = Math.max(1, timeout - (Date.now() - startTime));
+  await syncPage.waitForTriggeredSyncResponse(responseTimeout);
 
-  while (Date.now() - startTime < timeout) {
-    // Check if sync-state-ico icon exists (shown when hasNoPendingOps)
-    // The icon is small (10px) and absolutely positioned, so use count() check
-    const syncStateIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
-    if ((await syncStateIcon.count()) > 0) {
-      // Brief wait for any final state updates to flush through
-      await page.waitForTimeout(200);
-      return 'success';
-    }
+  const terminalTimeout = Math.max(1, timeout - (Date.now() - startTime));
+  const terminalState: { value: TerminalSyncState } = { value: null };
+  let consecutiveSuccessChecks = 0;
 
-    // Check if spinner is gone (sync not in progress)
-    const spinnerVisible = await syncPage.syncSpinner.isVisible().catch(() => false);
-    if (!spinnerVisible) {
-      nonSpinningCount++;
-      // After several consecutive checks with no spinner and no error, consider it success
-      // This handles cases where the icon check fails but sync actually completed
-      if (nonSpinningCount >= requiredNonSpinningChecks) {
-        // Final check - make sure sync button is still there and no error shown
-        const syncBtnVisible = await syncPage.syncBtn.isVisible().catch(() => false);
-        if (syncBtnVisible) {
-          // Brief wait for any final state updates to flush through
-          await page.waitForTimeout(200);
-          return 'success';
+  await expect
+    .poll(
+      async () => {
+        const state = await readTerminalSyncState(
+          page,
+          syncPage,
+          allowResponseOnlyCompletion,
+        );
+        if (state?.kind === 'success') {
+          consecutiveSuccessChecks++;
+          terminalState.value =
+            consecutiveSuccessChecks >= 3 ? state : terminalState.value;
+        } else {
+          consecutiveSuccessChecks = 0;
+          terminalState.value = state;
         }
-      }
-    } else {
-      nonSpinningCount = 0; // Reset if spinner is visible again
-    }
+        return terminalState.value?.kind ?? 'pending';
+      },
+      {
+        timeout: terminalTimeout,
+        message: 'Expected sync to reach a terminal success, conflict, or error state',
+      },
+    )
+    .not.toBe('pending');
 
-    const conflictDialog = page.locator('dialog-sync-conflict');
-    if (await conflictDialog.isVisible()) return 'conflict';
-
-    // Also check for first-sync conflict dialog (mat-dialog with "Conflicting Data" text)
-    const conflictMatDialog = page.locator('mat-dialog-container', {
-      hasText: 'Conflicting Data',
-    });
-    if (await conflictMatDialog.isVisible().catch(() => false)) return 'conflict';
-
-    const snackBars = page.locator('.mat-mdc-snack-bar-container');
-    const count = await snackBars.count();
-    for (let i = 0; i < count; ++i) {
-      // Snack bars can auto-dismiss between count() and innerText(), so catch stale element errors
-      try {
-        const text = await snackBars.nth(i).innerText({ timeout: 2000 });
-        if (text.toLowerCase().includes('error') || text.toLowerCase().includes('fail')) {
-          throw new Error(`Sync failed with error: ${text}`);
-        }
-      } catch (e) {
-        // Re-throw actual sync errors, ignore stale element errors
-        if (e instanceof Error && e.message.startsWith('Sync failed')) throw e;
-      }
-    }
-
-    await page.waitForTimeout(300);
+  const state = terminalState.value;
+  if (!state) {
+    throw new Error(`Sync timeout after ${timeout}ms: no terminal state appeared`);
+  }
+  if (state.kind === 'error') {
+    syncPage.completeTriggeredSyncCycle();
+    throw new Error(`Sync failed with error: ${state.message}`);
+  }
+  if (state.kind === 'conflict') {
+    syncPage.completeTriggeredSyncCycle();
+    return 'conflict';
   }
 
-  throw new Error(`Sync timeout after ${timeout}ms: Success icon did not appear`);
+  syncPage.completeTriggeredSyncCycle();
+  return 'success';
 };
 
 /**
@@ -246,6 +303,44 @@ export const waitForSync = async (
   page: Page,
   syncPage: SyncPage,
 ): Promise<'success' | 'conflict' | void> => waitForSyncComplete(page, syncPage);
+
+/**
+ * Completes the optional overwrite-warning step of the ordinary sync conflict
+ * dialog. The warning is conditional on the measured change counts, so wait
+ * for either that exact dialog or the parent conflict dialog closing instead
+ * of probing for a fixed delay and silently swallowing the result.
+ */
+export const confirmSyncConflictOverwriteIfShown = async (
+  page: Page,
+  conflictDialog: Locator,
+): Promise<void> => {
+  const overwriteConfirm = page
+    .locator('dialog-confirm')
+    .filter({ hasText: /WARNING:[\s\S]*overwrit/i });
+
+  await expect
+    .poll(
+      async () => {
+        if (await overwriteConfirm.isVisible().catch(() => false)) {
+          return 'confirm';
+        }
+        if (!(await conflictDialog.isVisible().catch(() => false))) {
+          return 'closed';
+        }
+        return 'pending';
+      },
+      {
+        timeout: 5000,
+        message: 'Expected the sync conflict to close or show its overwrite warning',
+      },
+    )
+    .not.toBe('pending');
+
+  if (await overwriteConfirm.isVisible().catch(() => false)) {
+    await overwriteConfirm.locator('[e2e="confirmBtn"]').click();
+  }
+  await expect(conflictDialog).toBeHidden({ timeout: 5000 });
+};
 
 /**
  * Waits for archive operations to complete and persist.
