@@ -348,9 +348,8 @@ page-title {
     color: var(--text-color);
   }
 
-  &.is-in-progress {
-    color: var(--brand);
-  }
+  // While syncing we intentionally keep the muted color: the spin animation
+  // already signals progress, and the brand color drew too much focus.
 
   &.is-error,
   &.is-offline {
