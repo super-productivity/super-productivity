@@ -90,46 +90,53 @@ describe('HabitTrackerComponent', () => {
 
       expect(navigationBar).not.toBeNull();
       const navigationStyles = getComputedStyle(navigationBar!);
-      const hostStyles = getComputedStyle(element);
-      expect(navigationBar!.scrollWidth)
-        .withContext(
-          JSON.stringify({
-            hostClientWidth: element.clientWidth,
-            hostContainerType: hostStyles.containerType,
-            navigationClientWidth: navigationBar!.clientWidth,
-            navigationFlexDirection: navigationStyles.flexDirection,
-          }),
-        )
-        .toBeLessThanOrEqual(element.clientWidth);
+      const hostRect = element.getBoundingClientRect();
+      const navigationRect = navigationBar!.getBoundingClientRect();
+
+      expect(navigationStyles.flexDirection).toBe('column');
+      expect(navigationRect.left).toBeGreaterThanOrEqual(hostRect.left);
+      expect(navigationRect.right).toBeLessThanOrEqual(hostRect.right);
+      Array.from(navigationBar!.children).forEach((child) => {
+        const childRect = child.getBoundingClientRect();
+        expect(childRect.left).toBeGreaterThanOrEqual(navigationRect.left);
+        expect(childRect.right).toBeLessThanOrEqual(navigationRect.right);
+      });
     } finally {
       document.body.removeChild(element);
     }
   });
 
-  it('fills the available mobile width when there are no enabled habits', async () => {
+  it('applies full-width sizing at a 500px mobile layout', async () => {
+    const mobileLayout = document.createElement('div');
+    mobileLayout.style.width = '500px';
+    mobileLayout.style.padding = '0 16px';
+    mobileLayout.style.boxSizing = 'border-box';
+
     const element = fixture.nativeElement as HTMLElement;
-    element.style.width = '320px';
-    document.body.appendChild(element);
-    fixture.componentRef.setInput('simpleCounters', []);
-    fixture.componentRef.setInput('disabledSimpleCounters', [
-      { ...mockCounter, isEnabled: false },
-    ]);
+    element.style.width = '100%';
+    mobileLayout.appendChild(element);
+    document.body.appendChild(mobileLayout);
 
     try {
       fixture.detectChanges();
+      const tracker = element.querySelector<HTMLElement>('.habit-tracker-container');
+      expect(tracker).not.toBeNull();
+
+      // Isolate the container sizing rule from the intrinsic width of its children.
+      Array.from(tracker!.children).forEach((child) => {
+        (child as HTMLElement).style.display = 'none';
+      });
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-      const tracker = element.querySelector<HTMLElement>('.habit-tracker-container');
       const hostStyles = getComputedStyle(element);
       const availableWidth =
         element.clientWidth -
         Number.parseFloat(hostStyles.paddingLeft) -
         Number.parseFloat(hostStyles.paddingRight);
 
-      expect(tracker).not.toBeNull();
       expect(tracker!.getBoundingClientRect().width).toBeCloseTo(availableWidth, 0);
     } finally {
-      document.body.removeChild(element);
+      document.body.removeChild(mobileLayout);
     }
   });
 

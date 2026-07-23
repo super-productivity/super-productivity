@@ -17,7 +17,7 @@
   margin: 0 auto;
 }
 
-@container (max-width: #{$layout-xxxs - 1px}) {
+@container (max-width: #{$layout-xs - 1px}) {
   .habit-tracker-container {
     width: 100%;
   }
