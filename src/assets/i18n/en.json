@@ -2118,6 +2118,7 @@
         "DEADLINE_TOMORROW": "Deadline Tomorrow",
         "ENTER_PROJECT": "Filter Projects",
         "ENTER_TAG": "Filter Tag",
+        "ENTER_TAG_HINT": "Comma-separate terms, prefix ! to exclude (e.g. work, !waiting)",
         "ESTIMATED_TIME": "Estimated Time",
         "FILTER_BY": "Filter By",
         "FILTER_DEADLINE": "Deadline",
