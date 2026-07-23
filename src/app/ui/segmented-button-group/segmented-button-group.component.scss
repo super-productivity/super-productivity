@@ -87,7 +87,7 @@
   text-align: center;
 
   @include mq(xs, max) {
-    font-size: 14px;
+    font-size: var(--font-size-md);
   }
 }
 
