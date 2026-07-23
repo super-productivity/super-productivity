@@ -60,6 +60,30 @@ const seedLegacyDatabase = async (
   }, data);
 };
 
+const readLegacyMigrationLock = async (page: Page): Promise<unknown> => {
+  return page.evaluate(async () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('pf', 1);
+      request.onsuccess = () => {
+        const db = request.result;
+        const getRequest = db
+          .transaction('main', 'readonly')
+          .objectStore('main')
+          .get('_migration_lock');
+        getRequest.onsuccess = () => {
+          db.close();
+          resolve(getRequest.result);
+        };
+        getRequest.onerror = () => {
+          db.close();
+          reject(getRequest.error);
+        };
+      };
+      request.onerror = () => reject(request.error);
+    });
+  });
+};
+
 /**
  * Helper to read data from SUP_OPS IndexedDB after migration
  */
@@ -427,6 +451,10 @@ test.describe('@migration Legacy Data Migration', () => {
       const download = await downloadPromise;
       expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
       expect(await download.failure()).toBeNull();
+
+      await acknowledgeButton.click();
+      await expect(dialog).not.toBeVisible();
+      await expect.poll(() => readLegacyMigrationLock(page)).toBeUndefined();
     } finally {
       await context.close();
     }
