@@ -27,6 +27,7 @@ interface TrelloConfig {
   boardId?: string;
   boardName?: string;
   filterUsername?: string;
+  defaultListId?: string;
 }
 
 interface TrelloLabel {
@@ -280,6 +281,13 @@ PluginAPI.registerIssueProvider({
       description: t('CFG.FILTER_USERNAME_DESC'),
       advanced: true,
     },
+    {
+      key: 'defaultListId',
+      type: 'input',
+      label: t('CFG.DEFAULT_LIST_ID'),
+      description: t('CFG.DEFAULT_LIST_ID_DESC'),
+      advanced: true,
+    },
   ],
 
   getHeaders(config: Record<string, unknown>): Record<string, string> {
@@ -392,7 +400,6 @@ PluginAPI.registerIssueProvider({
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
 
-  // Read-only provider: pull-only mapping drives remote-update detection only.
   // A Trello card counts as "done" once it is archived (closed).
   fieldMappings: [
     {
@@ -402,7 +409,67 @@ PluginAPI.registerIssueProvider({
       toIssueValue: (taskValue: unknown): string => (taskValue ? 'closed' : 'open'),
       toTaskValue: (issueValue: unknown): boolean => issueValue === 'closed',
     },
+    {
+      taskField: 'title',
+      issueField: 'title',
+      defaultDirection: 'pullOnly',
+      toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
+      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
+    },
+    {
+      taskField: 'notes',
+      issueField: 'body',
+      defaultDirection: 'off',
+      toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
+      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
+    },
   ] satisfies PluginFieldMapping[],
+
+  async updateIssue(
+    id: string,
+    changes: Record<string, unknown>,
+    _config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void> {
+    const cardChanges: Record<string, unknown> = {};
+    if ('state' in changes) {
+      cardChanges['closed'] = changes['state'] === 'closed';
+    }
+    if ('title' in changes) {
+      cardChanges['name'] = changes['title'];
+    }
+    if ('body' in changes) {
+      cardChanges['desc'] = changes['body'];
+    }
+    await http.put(`${TRELLO_API}/cards/${id}`, cardChanges);
+  },
+
+  async createIssue(
+    title: string,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<{ issueId: string; issueData: PluginIssue }> {
+    const cfg = config as unknown as TrelloConfig;
+    if (!cfg.defaultListId) {
+      throw new Error(t('ERRORS.DEFAULT_LIST_ID_REQUIRED'));
+    }
+    const card = await http.post<TrelloCard>(`${TRELLO_API}/cards`, {
+      name: title,
+      idList: cfg.defaultListId,
+    });
+    return {
+      issueId: card.shortLink,
+      issueData: mapIssue(card),
+    };
+  },
+
+  async deleteIssue(
+    id: string,
+    _config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void> {
+    await http.put(`${TRELLO_API}/cards/${id}`, { closed: true });
+  },
 
   extractSyncValues(issue: PluginIssue): Record<string, unknown> {
     return {
