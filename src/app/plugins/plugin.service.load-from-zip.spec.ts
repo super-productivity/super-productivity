@@ -183,6 +183,53 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     expect(service.getPluginIndexHtml(iframeManifest.id)).toBe(indexHtml);
   });
 
+  it('extracts i18n from zip, caches it, and loads it before plugin code runs', async () => {
+    const issueManifest: PluginManifest = {
+      id: 'i18n-upload-plugin',
+      name: 'I18n Upload',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '18.0.0',
+      hooks: [],
+      permissions: [],
+      iFrame: false,
+      i18n: { languages: ['en'] },
+      type: 'issueProvider',
+    };
+    const enJson = JSON.stringify({ CFG: { API_KEY: 'API Key' } });
+    const file = createZipFile({
+      'manifest.json': JSON.stringify(issueManifest),
+      'plugin.js': '/* plugin */',
+      'i18n/en.json': enJson,
+    });
+
+    const callOrder: string[] = [];
+    pluginI18n.loadPluginTranslationsFromContent.and.callFake(() => {
+      callOrder.push('i18n');
+    });
+    pluginRunner.loadPlugin.and.callFake(async (manifest, code, baseCfg, isEnabled) => {
+      callOrder.push('load');
+      return { manifest, loaded: true, isEnabled: isEnabled ?? true };
+    });
+
+    await service.loadPluginFromZip(file);
+
+    expect(pluginI18n.loadPluginTranslationsFromContent).toHaveBeenCalledWith(
+      issueManifest.id,
+      { en: enJson },
+    );
+    expect(pluginCache.storePlugin).toHaveBeenCalledWith(
+      issueManifest.id,
+      JSON.stringify(issueManifest),
+      '/* plugin */',
+      undefined,
+      undefined,
+      { en: enJson },
+      undefined,
+    );
+    expect(callOrder).toEqual(['i18n', 'load']);
+  });
+
   it('rejects a plugin zip without plugin.js when index.html is absent', async () => {
     const files: Record<string, string> = {};
     files['manifest.json'] = JSON.stringify(iframeManifest);

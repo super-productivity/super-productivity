@@ -56,6 +56,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/linear-issue-provider',
   'assets/bundled-plugins/trello-issue-provider',
   'assets/bundled-plugins/azure-devops-issue-provider',
+  'assets/bundled-plugins/plane-issue-provider',
   'assets/bundled-plugins/brain-dump',
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
@@ -84,6 +85,7 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'github-issue-provider',
   'google-calendar-provider',
   'linear-issue-provider',
+  'plane-issue-provider',
   'procrastination-buster',
   'sync-md',
   'todoist-import',
@@ -1434,6 +1436,25 @@ export class PluginService implements OnDestroy {
         manifest.id,
       );
 
+      // Extract i18n/{lang}.json for languages listed in the manifest. Must be
+      // loaded before plugin.js runs — issue providers call translate() while
+      // registering configFields / issueDisplay labels.
+      const translations: Record<string, string> = {};
+      const i18nLanguages = manifest.i18n?.languages || [];
+      for (const lang of i18nLanguages) {
+        const i18nBytes = extractedFiles[`i18n/${lang}.json`];
+        if (!i18nBytes) {
+          continue;
+        }
+        if (i18nBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
+          PluginLog.err(
+            `Plugin i18n/${lang}.json is too large, skipping`,
+          );
+          continue;
+        }
+        translations[lang] = new TextDecoder().decode(i18nBytes);
+      }
+
       // Create a unique path identifier for uploaded plugins
       const uploadedPluginPath = `uploaded://${manifest.id}`;
 
@@ -1444,7 +1465,7 @@ export class PluginService implements OnDestroy {
         pluginCode,
         indexHtml || undefined,
         iconContent || undefined,
-        undefined,
+        Object.keys(translations).length > 0 ? translations : undefined,
         configSchema,
       );
 
@@ -1458,6 +1479,13 @@ export class PluginService implements OnDestroy {
         this._pluginIcons.set(manifest.id, iconContent);
         this._registerPluginIcon(manifest.id, iconContent);
         this._pluginIconsSignal.set(new Map(this._pluginIcons));
+      }
+
+      if (Object.keys(translations).length > 0) {
+        this._pluginI18nService.loadPluginTranslationsFromContent(
+          manifest.id,
+          translations,
+        );
       }
 
       // Check for dangerous permissions in web version

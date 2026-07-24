@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API Key",
+    "HOW_TO_GET_TOKEN": "How to get an API key",
+    "HOST": "Host (self-hosted only; leave empty for Plane Cloud)",
+    "WORKSPACE_SLUG": "Workspace slug",
+    "WORKSPACE_SLUG_HELP": "From the URL: app.plane.so/<workspace-slug>/...",
+    "PROJECT_ID": "Project ID (UUID)",
+    "PROJECT_ID_HELP": "Open the project in Plane; the UUID is in the project settings URL or API."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "State",
+    "PRIORITY": "Priority",
+    "ASSIGNEE": "Assignee",
+    "DUE": "Due date",
+    "DESCRIPTION": "Description"
+  }
+}
