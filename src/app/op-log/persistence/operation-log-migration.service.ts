@@ -275,19 +275,16 @@ export class OperationLogMigrationService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
-    // 5. Persist to operation log
-    await this.opLogStore.append(migrationOp);
-    const lastSeq = await this.opLogStore.getLastSeq();
-
-    await this.opLogStore.saveStateCache({
+    // 5. Persist the genesis operation, its exact snapshot frontier, and the
+    // working clock in one transaction. There is no post-append interval where
+    // a later tab write can be skipped by the snapshot frontier or have its
+    // clock advancement overwritten by a follow-up migration write.
+    await this.opLogStore.appendOperationAndSnapshot(migrationOp, 'local', {
       state: dataToMigrate,
-      lastAppliedOpSeq: lastSeq,
       vectorClock: migrationOp.vectorClock,
       compactedAt: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
-
-    await this.opLogStore.setVectorClock(migrationOp.vectorClock);
 
     // 6. Dispatch to NgRx store
     this.store.dispatch(loadAllData({ appDataComplete: dataToMigrate }));
