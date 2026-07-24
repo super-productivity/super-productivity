@@ -10,6 +10,7 @@ import { T } from '../../t.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { AppDataComplete, MODEL_CONFIGS } from '../../op-log/model/model-config';
 import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import type { LocalDraftService } from '../../core/draft/local-draft.service';
 
 /**
  * Core service for user profile management
@@ -35,6 +36,17 @@ export class UserProfileService {
       this._syncWrapperServiceCache = this._injector.get(SWS);
     }
     return this._syncWrapperServiceCache!;
+  }
+
+  // Lazy-loaded to avoid a DI cycle: LocalDraftService injects UserProfileService.
+  private _localDraftServiceCache: LocalDraftService | null = null;
+  private get _localDraftService(): LocalDraftService {
+    if (!this._localDraftServiceCache) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { LocalDraftService: LDS } = require('../../core/draft/local-draft.service');
+      this._localDraftServiceCache = this._injector.get(LDS);
+    }
+    return this._localDraftServiceCache!;
   }
 
   readonly isInitialized = signal(false);
@@ -234,6 +246,10 @@ export class UserProfileService {
     // Delete profile data
     await this._storageService.deleteProfileData(profileId);
 
+    // Delete this profile's device-local drafts too — they are never synced, so
+    // nothing else reclaims them and their full contents would otherwise linger.
+    await this._localDraftService.deleteDraftsForProfile(profileId);
+
     // Save updated metadata
     await this._storageService.saveProfileMetadata(updatedMetadata);
 
@@ -399,6 +415,21 @@ export class UserProfileService {
       window.location.reload();
     } catch (error) {
       Log.err('UserProfileService: Failed to switch profile', error);
+      // Roll back the optimistic switch. Steps 4-5 persist and signal the target
+      // profile BEFORE the step-7 import commits; if the import fails, profile
+      // A's data is still live in the store while the persisted metadata and
+      // activeProfile() point at B. Any profile-keyed write — notably the
+      // crash-safe local drafts keyed off activeProfile() — would then be stored
+      // under B's namespace, hiding A's recovery copy and exposing it to B on
+      // overlapping ids (#8982 review). Restore A as the committed identity.
+      try {
+        this._metadata.set(metadata);
+        this.profiles.set(metadata.profiles);
+        this.activeProfile.set(currentProfile);
+        await this._storageService.saveProfileMetadata(metadata);
+      } catch (rollbackError) {
+        Log.err('UserProfileService: Failed to roll back profile switch', rollbackError);
+      }
       this._snackService.open({
         type: 'ERROR',
         msg: 'Failed to switch profile. Please try again.',

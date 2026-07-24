@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { SuperSyncRestoreService } from './super-sync-restore.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { BackupService } from '../../op-log/backup/backup.service';
+import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { RestorePoint } from '../../op-log/sync-providers/provider.interface';
@@ -12,6 +13,7 @@ describe('SuperSyncRestoreService', () => {
   let service: SuperSyncRestoreService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockBackupService: jasmine.SpyObj<BackupService>;
+  let mockLocalDraftService: jasmine.SpyObj<LocalDraftService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockProvider: any;
 
@@ -30,6 +32,11 @@ describe('SuperSyncRestoreService', () => {
 
     mockBackupService = jasmine.createSpyObj('BackupService', ['importCompleteBackup']);
 
+    mockLocalDraftService = jasmine.createSpyObj('LocalDraftService', [
+      'deleteDraftsForActiveProfile',
+    ]);
+    mockLocalDraftService.deleteDraftsForActiveProfile.and.resolveTo();
+
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
     // Spy on logger methods for retry logging tests
@@ -41,6 +48,7 @@ describe('SuperSyncRestoreService', () => {
         SuperSyncRestoreService,
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: BackupService, useValue: mockBackupService },
+        { provide: LocalDraftService, useValue: mockLocalDraftService },
         { provide: SnackService, useValue: mockSnackService },
       ],
     });
@@ -168,6 +176,24 @@ describe('SuperSyncRestoreService', () => {
         type: 'SUCCESS',
         msg: T.F.SYNC.S.RESTORE_SUCCESS,
       });
+    });
+
+    it('should clear the active profiles crash-safe drafts after a restore', async () => {
+      // The restore replaced this profile's notes wholesale, so every draft's
+      // baseContent now refers to content that no longer exists.
+      await service.restoreToPoint(100);
+
+      expect(mockLocalDraftService.deleteDraftsForActiveProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not clear drafts when the restore fails', async () => {
+      mockBackupService.importCompleteBackup.and.returnValue(
+        Promise.reject(new Error('validation failed')),
+      );
+
+      await expectAsync(service.restoreToPoint(100)).toBeRejected();
+
+      expect(mockLocalDraftService.deleteDraftsForActiveProfile).not.toHaveBeenCalled();
     });
 
     it('should show error snack and rethrow on failure after retries', async () => {

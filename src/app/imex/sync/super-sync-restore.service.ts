@@ -10,6 +10,7 @@ import { AppDataComplete } from '../../op-log/model/model-config';
 import { T } from '../../t.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { BackupService } from '../../op-log/backup/backup.service';
+import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { SyncLog } from '../../core/log';
 
 /**
@@ -21,6 +22,7 @@ export class SuperSyncRestoreService {
   private _snackService = inject(SnackService);
   private _providerManager = inject(SyncProviderManager);
   private _backupService = inject(BackupService);
+  private _localDraftService = inject(LocalDraftService);
 
   /**
    * Check if Super Sync restore is available.
@@ -66,6 +68,11 @@ export class SuperSyncRestoreService {
           true, // isSkipReload - no page reload needed
           true, // isForceConflict - gates page reload (isSkipReload=true overrides)
         );
+
+        // This profile's notes were just replaced wholesale, so every draft's
+        // baseContent refers to content that no longer exists. Swallows its own
+        // errors — a draft cleanup must never fail a completed restore.
+        await this._localDraftService.deleteDraftsForActiveProfile();
 
         this._snackService.open({
           type: 'SUCCESS',

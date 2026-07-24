@@ -7,7 +7,13 @@ import {
 } from '@angular/material/dialog';
 import { DialogFullscreenMarkdownComponent } from './dialog-fullscreen-markdown.component';
 
-type FullscreenMarkdownData = { content: string; taskId?: string };
+type FullscreenMarkdownData = {
+  content: string;
+  taskId?: string;
+  // Persisted content when `content` is a recovered draft — used as the
+  // reference for the discard confirmation.
+  originalContent?: string;
+};
 
 const FULLSCREEN_MARKDOWN_DIALOG_CONFIG: MatDialogConfig = {
   minWidth: '100vw',
