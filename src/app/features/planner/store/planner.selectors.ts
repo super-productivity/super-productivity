@@ -94,6 +94,37 @@ export const selectTasksForPlannerDay = (day: string) => {
   );
 };
 
+const appendConsecutivePlannerDates = (
+  dayDates: string[],
+  additionalDayDates: string[],
+): string[] => {
+  const result = [...dayDates];
+  const includedDates = new Set(dayDates);
+  let lastLoadedDate = dayDates.at(-1);
+
+  for (const additionalDayDate of additionalDayDates) {
+    if (!lastLoadedDate || additionalDayDate <= lastLoadedDate) {
+      if (!includedDates.has(additionalDayDate)) {
+        result.push(additionalDayDate);
+        includedDates.add(additionalDayDate);
+      }
+      continue;
+    }
+
+    const cursor = dateStrToUtcDate(lastLoadedDate);
+    while (lastLoadedDate < additionalDayDate) {
+      cursor.setDate(cursor.getDate() + 1);
+      lastLoadedDate = getDbDateStr(cursor);
+      if (!includedDates.has(lastLoadedDate)) {
+        result.push(lastLoadedDate);
+        includedDates.add(lastLoadedDate);
+      }
+    }
+  }
+
+  return result;
+};
+
 // Updated selectPlannerDays
 export const selectPlannerDays = (
   dayDates: string[],
@@ -115,12 +146,10 @@ export const selectPlannerDays = (
     selectStartOfNextDayDiffMs,
     (activeTasks, plannerState, scheduleConfig, startOfNextDayDiffMs): PlannerDay[] => {
       const allDatesWithData = Object.keys(plannerState.days);
-      const dayDatesToUse = [
-        ...dayDates,
-        ...allDatesWithData
-          .filter((d) => plannerState.days[d].length && !dayDates.includes(d))
-          .sort((a, b) => a.localeCompare(b)),
-      ];
+      const additionalDayDates = allDatesWithData
+        .filter((d) => plannerState.days[d].length && !dayDates.includes(d))
+        .sort((a, b) => a.localeCompare(b));
+      const dayDatesToUse = appendConsecutivePlannerDates(dayDates, additionalDayDates);
 
       // Pre-compute deadline tasks grouped by day (O(N) once, then O(1) per day)
       const deadlineMap = groupDeadlineTasksByDay(
