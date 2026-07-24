@@ -83,7 +83,7 @@ mat-dialog-content {
   margin: 0 var(--s2) var(--s2);
   text-align: start !important;
   justify-content: start !important;
-  height: 48px !important;
+  height: var(--bar-height) !important;
   padding: 0 var(--s2) !important;
 }
 

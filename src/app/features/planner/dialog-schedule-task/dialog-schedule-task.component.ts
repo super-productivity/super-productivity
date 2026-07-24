@@ -53,7 +53,6 @@ import { DateTimePickerComponent } from '../../../ui/datetime-picker/datetime-pi
 import { Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
@@ -128,6 +127,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _task$: Observable<Task | null> = this.data.task
     ? this._taskService.getByIdLive$(this.data.task.id)
     : of(null);
+  // Live task from the store — used to open the repeat dialog with an up-to-date
+  // repeatCfgId (the injected data.task is a frozen snapshot from dialog open).
+  private _liveTask = toSignal(this._task$);
   readonly repeatCfgLabel = toSignal(
     this._task$.pipe(
       map((task) => task?.repeatCfgId ?? null),
@@ -304,20 +306,25 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     this.selectedDate = new Date(newDate);
   }
 
-  openRepeatDialog(): void {
-    if (!this.data.task) {
+  async openRepeatDialog(): Promise<void> {
+    // Use the live task, not the frozen dialog snapshot: if a repeat cfg was just
+    // created here, re-opening must route to edit (via its repeatCfgId) instead of
+    // creating a second, orphaning cfg.
+    const task = this._liveTask() ?? this.data.task;
+    if (!task) {
       return;
     }
-    // Seed the recurrence start from the date the user is currently looking at in
-    // this dialog, falling back to the task's existing due day / creation date.
-    const targetDate = this.selectedDate
-      ? getDbDateStr(new Date(this.selectedDate))
-      : this.data.task.dueDay || getDbDateStr(new Date(this.data.task.created));
+    // Lazy import to avoid a static schedule-dialog <-> repeat-dialog module cycle,
+    // matching how task.component / add-task-bar open this dialog.
+    const { DialogEditTaskRepeatCfgComponent } =
+      await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
     this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
       restoreFocus: true,
       data: {
-        task: this.data.task,
-        targetDate,
+        task,
+        // targetDate drives the skip-instance affordance; the recurrence start is
+        // derived from the task's due date inside the repeat dialog.
+        targetDate: task.dueDay || getDbDateStr(new Date(task.created)),
       },
     });
   }

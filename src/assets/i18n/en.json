@@ -1814,7 +1814,7 @@
         "NOTES": "Note",
         "PARENT": "Parent",
         "REMINDER": "Reminder",
-        "REPEAT": "Recur",
+        "REPEAT": "Repeat",
         "SCHEDULE_TASK": "Schedule Task",
         "SUB_TASKS": "Subtasks ({{nr}})",
         "TIME": "Duration",

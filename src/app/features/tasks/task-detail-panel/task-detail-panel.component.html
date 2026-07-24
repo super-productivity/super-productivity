@@ -187,7 +187,10 @@
         @if (task().repeatCfgId && repeatCfgLabel()) {
           <div class="schedule-value__repeat">
             <mat-icon>repeat</mat-icon>
-            {{ repeatCfgLabel() }}
+            <span class="cdk-visually-hidden"
+              >{{ T.F.TASK.ADDITIONAL_INFO.REPEAT | translate }}:
+            </span>
+            <span>{{ repeatCfgLabel() }}</span>
           </div>
         }
       </div>
