@@ -81,6 +81,9 @@ async function getPlugins() {
     skipCopy: true,
   });
 
+  // Skip optional local dev-plugins to speed up compilation
+  return plugins;
+
   for (const entry of entries) {
     if (entry.isDirectory()) {
       const pluginPath = path.join(pluginDevDir, entry.name);
@@ -213,7 +216,9 @@ async function buildPlugin(plugin) {
         }
         if (needsInstall) {
           log(`  Installing dependencies...`, colors.yellow);
-          await execAsync(`cd ${pluginPath} && npm install`);
+          await execAsync(
+            `cd ${pluginPath} && npm install --prefer-offline --no-audit --no-fund --quiet`,
+          );
         }
       } catch {
         // No package.json, skip install
