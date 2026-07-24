@@ -200,7 +200,7 @@ export class ScheduleComponent {
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
-    const locale = this._dateTimeFormatService.currentLocale();
+    const locale = this._dateTimeFormatService.textLocale();
 
     if (this.isDayView()) {
       // On tablet width and below the full date clips, so drop to month + day
