@@ -4,8 +4,19 @@
     <meta charset="utf-8" />
     <title>Super Productivity</title>
 
+    <!--
+      interactive-widget=resizes-content makes the virtual keyboard shrink the
+      *layout* viewport on mobile web (Chrome/Android) instead of only the
+      visual viewport (the default `resizes-visual`). This mirrors what the
+      native builds already do — Android `adjustResize` and iOS Keyboard
+      `resize: 'native'` both resize the WebView — so the fixed global add-task
+      bar (position: fixed; bottom) re-anchors above the keyboard on the web app
+      the same way it does natively. Ignored where it doesn't apply: native
+      WebViews (keyboard handled natively), iOS Safari (unsupported → falls back
+      to the JS `--keyboard-height` visualViewport tracking), and desktop.
+    -->
     <meta
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
       name="viewport"
     />
     <link
