@@ -277,6 +277,52 @@ describe('TaskDetailPanelComponent', () => {
       expect(component.isExpandedNotesPanel()).toBeFalse();
     });
   });
+
+  describe('showScheduleIcon (merged schedule + recurrence item)', () => {
+    it("returns 'today' when a due day is set", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: '2026-05-26',
+        dueWithTime: undefined,
+        repeatCfgId: undefined,
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('today');
+    });
+
+    it("returns 'schedule' for a timed due date without a reminder", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: undefined,
+        dueWithTime: 1700000000000,
+        remindAt: undefined,
+        repeatCfgId: undefined,
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('schedule');
+    });
+
+    it("returns 'repeat' for a recurring task with no due date", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: undefined,
+        dueWithTime: undefined,
+        repeatCfgId: 'cfg-1',
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('repeat');
+    });
+
+    it('prefers the due-day icon over the repeat icon when a recurring task also has a due day', () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: '2026-05-26',
+        repeatCfgId: 'cfg-1',
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('today');
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>

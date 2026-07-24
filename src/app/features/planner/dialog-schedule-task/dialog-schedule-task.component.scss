@@ -78,6 +78,39 @@ mat-dialog-content {
   text-align: center;
 }
 
+.repeat-btn {
+  width: calc(100% - var(--s2) * 2);
+  margin: 0 var(--s2) var(--s2);
+  text-align: start !important;
+  justify-content: start !important;
+  height: var(--bar-height) !important;
+  padding: 0 var(--s2) !important;
+}
+
+.repeat-btn-content {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  width: 100%;
+  text-align: start;
+}
+
+.repeat-label {
+  font-weight: bold;
+}
+
+.repeat-val {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repeat-affordance-icon {
+  color: var(--text-color-muted);
+  flex: 0 0 auto;
+}
+
 .schedule-info {
   display: flex;
   align-items: flex-start;

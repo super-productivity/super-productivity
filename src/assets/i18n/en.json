@@ -1814,7 +1814,7 @@
         "NOTES": "Note",
         "PARENT": "Parent",
         "REMINDER": "Reminder",
-        "REPEAT": "Recur",
+        "REPEAT": "Repeat",
         "SCHEDULE_TASK": "Schedule Task",
         "SUB_TASKS": "Subtasks ({{nr}})",
         "TIME": "Duration",
@@ -1929,6 +1929,7 @@
         "UNSCHEDULE_ALL": "Unschedule all"
       },
       "D_SCHEDULE_TASK": {
+        "DOES_NOT_REPEAT": "Does not repeat",
         "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
         "INFO_OVERLAP": "Overlaps with another scheduled task.",
         "QA_NEXT_MONTH": "Schedule next month",
@@ -1936,6 +1937,7 @@
         "QA_TODAY": "Schedule today",
         "QA_TOMORROW": "Schedule tomorrow",
         "REMIND_AT": "Remind at",
+        "REPEAT": "Repeat",
         "RO_1H": "1 hour before it starts",
         "RO_5M": "5 minutes before it starts",
         "RO_10M": "10 minutes before it starts",

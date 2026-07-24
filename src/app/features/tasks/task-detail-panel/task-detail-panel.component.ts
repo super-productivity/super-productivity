@@ -38,7 +38,6 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
@@ -397,6 +396,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const task = this.task();
     if (task.dueDay) return 'today';
     if (task.dueWithTime && !task.remindAt) return 'schedule';
+    if (task.repeatCfgId) return 'repeat';
     return 'alarm';
   });
 
@@ -650,16 +650,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   removeDeadline(ev: Event): void {
     ev.stopPropagation();
     this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
-  }
-
-  editTaskRepeatCfg(): void {
-    this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-      restoreFocus: true,
-      data: {
-        task: this.task(),
-        targetDate: this.task().dueDay || getDbDateStr(new Date(this.task().created)),
-      },
-    });
   }
 
   addAttachment(): void {

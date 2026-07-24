@@ -1,5 +1,10 @@
+@use '@angular/cdk' as cdk;
 @use '../../../../styles/_globals.scss' as *;
 @use '../task/task.component.mixins' as *;
+
+// Provides the .cdk-visually-hidden helper used for the screen-reader-only
+// "Repeat" prefix on the recurrence line (encapsulation-scoped, not global).
+@include cdk.a11y-visually-hidden();
 
 :host {
   position: relative;
@@ -118,6 +123,42 @@ progress-bar {
 
 .quick-chip {
   margin-left: var(--s-quarter);
+}
+
+// Merged schedule item: the due date is the primary value, the recurrence a
+// secondary line stacked beneath it (instead of competing side by side).
+.schedule-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-quarter);
+  min-width: 0;
+}
+
+.schedule-value__date,
+.schedule-value__repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  max-width: 100%;
+  overflow: hidden;
+
+  mat-icon {
+    flex: 0 0 auto;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  // Let a long recurrence label (e.g. "Monthly on the first Thursday") shrink and
+  // ellipsis within the flex row (nowrap/ellipsis come from .input-item__value span).
+  > span {
+    min-width: 0;
+  }
+}
+
+.schedule-value__repeat {
+  color: var(--text-color-muted);
 }
 
 .attachment-list-panel-content-wrapper {
