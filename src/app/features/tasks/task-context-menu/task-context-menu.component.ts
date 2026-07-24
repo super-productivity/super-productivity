@@ -42,4 +42,18 @@ export class TaskContextMenuComponent {
   onClose(): void {
     this.isOpen.set(false);
   }
+
+  close(): boolean {
+    if (!this.isShowInner) {
+      return false;
+    }
+
+    const trigger = this.taskContextMenuInner()?.contextMenuTrigger();
+    if (!trigger) {
+      return false;
+    }
+
+    trigger.closeMenu();
+    return true;
+  }
 }
