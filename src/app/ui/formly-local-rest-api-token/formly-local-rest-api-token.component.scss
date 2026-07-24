@@ -1,0 +1,17 @@
+.local-rest-api-token {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+}
+
+.token-value {
+  width: 100%;
+  padding: var(--s);
+  font-family: monospace;
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+}

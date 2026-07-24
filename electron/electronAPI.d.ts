@@ -280,4 +280,6 @@ export interface ElectronAPI {
 
   onLocalRestApiRequest(listener: (payload: LocalRestApiRequestPayload) => void): void;
   sendLocalRestApiResponse(payload: LocalRestApiResponsePayload): void;
+  getLocalRestApiToken(): Promise<string>;
+  regenerateLocalRestApiToken(): Promise<string>;
 }
