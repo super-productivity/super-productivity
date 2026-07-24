@@ -91,6 +91,10 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       issueLastUpdated: issueData.etag_hash,
       notes: issueData.note,
       related_to: issueData.related_to,
+      // normalized to a boolean in _mapTask; without it a server-side
+      // STATUS:COMPLETED never ticks the task done (Plainspace and
+      // Nextcloud Deck map their equivalents the same way)
+      isDone: issueData.completed,
       ...startFields,
       ...dueFields,
       issueLastSyncedValues: this._caldavSyncAdapter.extractSyncValues(
@@ -143,9 +147,12 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     }
 
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
+    // Query and match by the VTODO UID (task.issueId) — task.id is SP's own
+    // nanoid and never matches a server-side UID, so keying on it made this
+    // batch poll return no updates at all.
     const issues: CaldavIssue[] = await firstValueFrom(
       this._caldavClientService.getByIds$(
-        tasks.map((t) => t.id),
+        tasks.map((t) => t.issueId as string),
         cfg,
       ),
     );
@@ -154,11 +161,11 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     return tasks
       .filter(
         (task) =>
-          issueMap.has(task.id) &&
-          issueMap.get(task.id)?.etag_hash !== task.issueLastUpdated,
+          issueMap.has(task.issueId as string) &&
+          issueMap.get(task.issueId as string)?.etag_hash !== task.issueLastUpdated,
       )
       .map((task) => {
-        const issue = issueMap.get(task.id) as CaldavIssue;
+        const issue = issueMap.get(task.issueId as string) as CaldavIssue;
         return {
           task,
           taskChanges: {

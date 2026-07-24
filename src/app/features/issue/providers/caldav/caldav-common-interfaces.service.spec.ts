@@ -8,6 +8,7 @@ import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
 import { IssueProviderCaldav } from '../../issue.model';
 import { CaldavCfg } from './caldav.model';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
+import { Task } from 'src/app/features/tasks/task.model';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -38,6 +39,15 @@ const makeReduced = (id: string, related_to?: string): CaldavIssueReduced => ({
   etag_hash: 1,
   ...(related_to ? { related_to } : {}),
 });
+
+const makeSpTask = (over: Partial<Task> = {}): Task =>
+  ({
+    id: 'sp-task-nanoid',
+    issueId: 'uid-1',
+    issueProviderId: 'test-provider',
+    issueLastUpdated: 41,
+    ...over,
+  }) as Task;
 
 // 2026-04-15 local-midnight timestamp (ical.js returns local-midnight for VALUE=DATE)
 const ALL_DAY_DATE_STR = '2026-04-15';
@@ -168,6 +178,59 @@ describe('CaldavCommonInterfacesService', () => {
       expect(result.dueWithTime).toBeNull();
       expect(result.deadlineDay).toBe('2026-04-20');
       expect(result.deadlineWithTime).toBeNull();
+    });
+  });
+
+  // Guards the completion pull: a server-side STATUS:COMPLETED must reach
+  // task.isDone, and the batch poll must key server todos by the VTODO UID
+  // (task.issueId) — not SP's own task id, which never matches a UID.
+  describe('getAddTaskData - completion mapping', () => {
+    it('should map completed=false → isDone=false', () => {
+      const result = service.getAddTaskData({ ...BASE_ISSUE, completed: false });
+      expect(result.isDone).toBe(false);
+    });
+
+    it('should map completed=true → isDone=true', () => {
+      const result = service.getAddTaskData({ ...BASE_ISSUE, completed: true });
+      expect(result.isDone).toBe(true);
+    });
+  });
+
+  describe('getFreshDataForIssueTask - completion pull', () => {
+    it('should tick the task done when the server todo is completed', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, completed: true, etag_hash: 43 }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(makeSpTask());
+      expect(result?.taskChanges.isDone).toBe(true);
+      expect(result?.taskChanges.issueWasUpdated).toBe(true);
+    });
+  });
+
+  describe('getFreshDataForIssueTasks - batch completion pull', () => {
+    it('should query and match by the VTODO UID (task.issueId), not the SP task id', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(
+        of([{ ...BASE_ISSUE, completed: true, etag_hash: 43 }]),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([makeSpTask()]);
+      expect(caldavClientSpy.getByIds$).toHaveBeenCalledWith(['uid-1'], BASE_CFG);
+      expect(result.length).toBe(1);
+      expect(result[0].taskChanges.isDone).toBe(true);
+      expect(result[0].taskChanges.issueWasUpdated).toBe(true);
+    });
+
+    it('should return no changes when the etag is unchanged', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(of([{ ...BASE_ISSUE }]));
+
+      const result = await service.getFreshDataForIssueTasks([
+        makeSpTask({ issueLastUpdated: BASE_ISSUE.etag_hash }),
+      ]);
+      expect(result).toEqual([]);
     });
   });
 
