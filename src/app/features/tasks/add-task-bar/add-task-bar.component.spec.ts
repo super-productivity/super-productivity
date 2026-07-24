@@ -329,13 +329,13 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('mobile keyboard positioning', () => {
-    let hadTouchOnlyClass: boolean;
+    let hadTouchPrimaryClass: boolean;
     let hadIOSClass: boolean;
 
     beforeEach(() => {
-      hadTouchOnlyClass = document.body.classList.contains(BodyClass.isTouchOnly);
+      hadTouchPrimaryClass = document.body.classList.contains(BodyClass.isTouchPrimary);
       hadIOSClass = document.body.classList.contains(BodyClass.isIOS);
-      document.body.classList.add(BodyClass.isTouchOnly);
+      document.body.classList.add(BodyClass.isTouchPrimary);
       document.body.classList.remove(BodyClass.isIOS);
       fixture.nativeElement.classList.add('global');
       fixture.nativeElement.style.setProperty('--keyboard-height', '336px');
@@ -347,7 +347,7 @@ describe('AddTaskBarComponent', () => {
     });
 
     afterEach(() => {
-      document.body.classList.toggle(BodyClass.isTouchOnly, hadTouchOnlyClass);
+      document.body.classList.toggle(BodyClass.isTouchPrimary, hadTouchPrimaryClass);
       document.body.classList.toggle(BodyClass.isIOS, hadIOSClass);
     });
 
@@ -368,8 +368,8 @@ describe('AddTaskBarComponent', () => {
       expect(getComputedStyle(fixture.nativeElement).bottom).toBe('352px');
     });
 
-    it('keeps the top-positioned layout for hybrid iOS devices', () => {
-      document.body.classList.remove(BodyClass.isTouchOnly);
+    it('keeps the top-positioned layout for mouse-primary iOS devices', () => {
+      document.body.classList.remove(BodyClass.isTouchPrimary);
       const layoutBeforeIOSClass = fixture.nativeElement.getBoundingClientRect();
 
       document.body.classList.add(BodyClass.isIOS);

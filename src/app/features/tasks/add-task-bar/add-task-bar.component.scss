@@ -31,7 +31,15 @@
   }
 }
 
-:host-context(.isTouchOnly).global {
+// Pin the floating bar to the bottom whenever touch is the primary input.
+// Keys on `.isTouchPrimary`, not `.isTouchOnly`: Android Chrome advertises a
+// fine pointer, so detect-it classifies phones as `hybrid` rather than
+// `touchOnly` and never sets `.isTouchOnly` on mobile web — which stranded the
+// bar at the top there while the native Android app (touch-only) got the
+// bottom layout. `.isTouchPrimary` covers pure-touch and hybrid-touch devices
+// alike (InputIntentService keeps it in sync with the active input) and matches
+// the autocomplete panel rule further down.
+:host-context(.isTouchPrimary).global {
   top: auto;
   // Extra gap above the keyboard so the bottom action buttons stay easy to
   // tap — `--s` alone leaves them flush against the IME's top edge.
@@ -42,7 +50,7 @@
 // Capacitor's native iOS mode shrinks the WebView around the keyboard. Only
 // apply an additional offset when the keyboard still overlays that viewport;
 // using its full height here would move the fixed bar twice (#8778).
-:host-context(.isTouchOnly.isIOS).global {
+:host-context(.isTouchPrimary.isIOS).global {
   bottom: calc(var(--keyboard-overlay-offset) + var(--s2));
 }
 
