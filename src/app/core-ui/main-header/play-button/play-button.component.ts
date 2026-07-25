@@ -50,46 +50,48 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
           }
         </div>
       }
-      @if (currentTaskId()) {
-        <div class="pulse-circle"></div>
-      }
-
-      @if (hasTimeEstimate) {
-        <svg
-          class="circle-svg"
-          focusable="false"
-          height="36"
-          width="36"
-        >
-          <circle
-            #circleSvg
-            cx="50%"
-            cy="50%"
-            fill="none"
-            r="10"
-            stroke="currentColor"
-            stroke-dasharray="62.83185307179586"
-            stroke-dashoffset="0"
-            stroke-width="20"
-          ></circle>
-        </svg>
-      }
-
-      <button
-        (click)="taskService.toggleStartTask()"
-        [color]="currentTaskId() ? 'accent' : 'primary'"
-        [matTooltip]="tooltipText() | translate"
-        matTooltipPosition="below"
-        class="play-btn tour-playBtn mat-elevation-z3"
-        mat-mini-fab
-        [disabled]="isDisabled()"
-      >
-        @if (!currentTaskId()) {
-          <mat-icon>play_arrow</mat-icon>
-        } @else {
-          <mat-icon>pause</mat-icon>
+      <div class="play-btn-container">
+        @if (currentTaskId()) {
+          <div class="pulse-circle"></div>
         }
-      </button>
+
+        @if (hasTimeEstimate) {
+          <svg
+            class="circle-svg"
+            focusable="false"
+            height="36"
+            width="36"
+          >
+            <circle
+              #circleSvg
+              cx="50%"
+              cy="50%"
+              fill="none"
+              r="10"
+              stroke="currentColor"
+              stroke-dasharray="62.83185307179586"
+              stroke-dashoffset="0"
+              stroke-width="20"
+            ></circle>
+          </svg>
+        }
+
+        <button
+          (click)="taskService.toggleStartTask()"
+          [color]="currentTaskId() ? 'accent' : 'primary'"
+          [matTooltip]="tooltipText() | translate"
+          matTooltipPosition="below"
+          class="play-btn tour-playBtn mat-elevation-z3"
+          mat-mini-fab
+          [disabled]="isDisabled()"
+        >
+          @if (!currentTaskId()) {
+            <mat-icon>play_arrow</mat-icon>
+          } @else {
+            <mat-icon>pause</mat-icon>
+          }
+        </button>
+      </div>
     </div>
   `,
   styles: [
@@ -114,8 +116,15 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
       }
 
       .play-btn-wrapper {
-        position: relative;
+        display: flex;
+        align-items: center;
         margin: 0 6px;
+
+        .play-btn-container {
+          position: relative;
+          display: flex;
+          flex: 0 0 auto;
+        }
 
         .pulse-circle {
           width: 42px;
@@ -164,29 +173,24 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
         }
       }
 
+      /* In flow rather than an overlay, so the header's flex layout keeps this
+         off the page title instead of covering it. Shrinks ahead of everything
+         else in the header, down to the floor below. */
       .current-task-title {
-        position: absolute;
-        right: 100%;
-        width: auto;
+        flex: 0 1 auto;
+        min-width: 90px;
         border: 1.5px solid var(--c-accent);
         border-radius: 10px;
-        min-width: 40px;
         white-space: nowrap;
         padding: calc(var(--s-half) * 0.75) var(--s);
         padding-right: calc(var(--s) * 2.25);
         margin-right: calc(-1 * var(--s) * 1.75);
-        top: 50%;
-        transform: translateY(-50%);
         transition: opacity 0.3s ease-out;
         display: flex;
         background: var(--bg-lighter);
         font-size: 13px;
         z-index: 5;
         cursor: pointer;
-
-        @media (max-width: 1080px) {
-          display: none;
-        }
 
         .title {
           max-width: 200px;
@@ -207,6 +211,12 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
             text-overflow: ellipsis;
             display: block;
           }
+        }
+
+        /* Narrower than the smallest phones, where even the floor is too much
+           to take from the page title. */
+        @media (max-width: 320px) {
+          display: none;
         }
       }
     `,
