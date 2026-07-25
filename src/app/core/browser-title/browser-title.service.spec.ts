@@ -2,15 +2,22 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
 import { TranslateService } from '@ngx-translate/core';
+import { BehaviorSubject } from 'rxjs';
 import { BrowserTitleService } from './browser-title.service';
 import { FocusModeMode } from '../../features/focus-mode/focus-mode.model';
 import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
+import { TaskService } from '../../features/tasks/task.service';
+import { DateService } from '../date/date.service';
+import { Task } from '../../features/tasks/task.model';
+
+const TODAY_STR = '2026-07-26';
 
 describe('BrowserTitleService', () => {
   let service: BrowserTitleService;
   let titleService: jasmine.SpyObj<Title>;
   let translateService: jasmine.SpyObj<TranslateService>;
   let focusModeServiceMock: any;
+  let currentTask$: BehaviorSubject<Task | null>;
 
   beforeEach(() => {
     titleService = jasmine.createSpyObj('Title', ['setTitle']);
@@ -39,12 +46,16 @@ describe('BrowserTitleService', () => {
       isInOvertime: signal(false),
     };
 
+    currentTask$ = new BehaviorSubject<Task | null>(null);
+
     TestBed.configureTestingModule({
       providers: [
         BrowserTitleService,
         { provide: Title, useValue: titleService },
         { provide: TranslateService, useValue: translateService },
         { provide: FocusModeService, useValue: focusModeServiceMock },
+        { provide: TaskService, useValue: { currentTask$ } },
+        { provide: DateService, useValue: { todayStr: () => TODAY_STR } },
       ],
     });
 
@@ -250,6 +261,60 @@ describe('BrowserTitleService', () => {
       );
 
       expect(result).toBe('05:00');
+    });
+  });
+
+  describe('plain time tracking', () => {
+    const taskWithTimeToday = (ms: number): Task =>
+      ({
+        id: 'T1',
+        title: 'Some task',
+        timeSpentOnDay: ms ? { [TODAY_STR]: ms } : {},
+      }) as unknown as Task;
+
+    it('should show base title when nothing is tracked', () => {
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('Super Productivity');
+    });
+
+    it("should show today's time and the task title", () => {
+      currentTask$.next(taskWithTimeToday(1500000));
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('25m - Some task');
+    });
+
+    it('should show 0m rather than a dash placeholder for a fresh task', () => {
+      currentTask$.next(taskWithTimeToday(0));
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('0m - Some task');
+    });
+
+    it('should let a running focus session win over the tracking title', () => {
+      currentTask$.next(taskWithTimeToday(1500000));
+      focusModeServiceMock.isRunning.set(true);
+      focusModeServiceMock.timeRemaining.set(600000);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('10:00');
+    });
+
+    it('should fall back to the tracking title once a focus session ends', () => {
+      currentTask$.next(taskWithTimeToday(3600000));
+      focusModeServiceMock.isRunning.set(true);
+
+      TestBed.flushEffects();
+
+      focusModeServiceMock.isRunning.set(false);
+
+      TestBed.flushEffects();
+
+      expect(titleService.setTitle).toHaveBeenCalledWith('1h - Some task');
     });
   });
 
