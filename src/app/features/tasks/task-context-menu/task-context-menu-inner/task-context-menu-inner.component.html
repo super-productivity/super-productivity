@@ -30,6 +30,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(1)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
     >
       <mat-icon>wb_sunny</mat-icon>
     </button>
@@ -39,6 +40,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(2)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
       <mat-icon>wb_twilight</mat-icon>
     </button>
@@ -47,6 +49,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(3)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
       <mat-icon>next_week</mat-icon>
     </button>
@@ -67,6 +70,11 @@
           : (T.F.TASK.CMP.SCHEDULE | translate)) +
         (kb.taskSchedule ? ' [' + kb.taskSchedule + ']' : '')
       "
+      [attr.aria-label]="
+        task.dueWithTime || task.dueDay
+          ? (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+          : (T.F.TASK.CMP.SCHEDULE | translate)
+      "
       (click)="scheduleTask()"
     >
       <mat-icon>today</mat-icon>
@@ -78,6 +86,7 @@
         tabindex="0"
         (click)="unscheduleTask()"
         [matTooltip]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
+        [attr.aria-label]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
       >
         <mat-icon>event_busy</mat-icon>
       </button>

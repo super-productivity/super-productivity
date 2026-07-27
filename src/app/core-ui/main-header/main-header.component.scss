@@ -297,7 +297,7 @@ page-title {
   }
 
   &:hover:not(.isActive):not(:disabled) {
-    background: var(--hover-color, rgba(0, 0, 0, 0.04));
+    background: var(--state-hover);
   }
 
   &:disabled {
@@ -374,7 +374,7 @@ page-title {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--c-bg);
+  background: var(--bg);
   border-radius: 50%;
   padding: 3px;
 

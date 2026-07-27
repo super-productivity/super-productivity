@@ -8,7 +8,7 @@
 
 @if (!canProceed()) {
   <mat-dialog-content>
-    <div class="info-box">
+    <div class="callout callout--info">
       <mat-icon aria-hidden="true">info</mat-icon>
       <div>
         <p>{{ errorReason() | translate }}</p>
@@ -28,7 +28,7 @@
 } @else if (initialSetup) {
   <!-- Simplified dialog for initial SuperSync setup -->
   <mat-dialog-content>
-    <div class="info-box">
+    <div class="callout callout--info">
       <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
       <div>
         <p [innerHTML]="textKeys.ENCRYPTION_SETUP_INTRO | translate"></p>
@@ -130,7 +130,7 @@
 } @else {
   <!-- Full dialog for enabling encryption on existing setup -->
   <mat-dialog-content>
-    <div class="warning-box">
+    <div class="callout callout--warning">
       <mat-icon aria-hidden="true">warning</mat-icon>
       <p>{{ textKeys.ENABLE_ENCRYPTION_WARNING | translate }}</p>
     </div>

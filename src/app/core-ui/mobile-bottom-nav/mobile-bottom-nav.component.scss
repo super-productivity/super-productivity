@@ -81,9 +81,16 @@
     flex: 0 0 var(--s7);
     width: var(--s7);
     height: var(--s7);
-    margin-left: var(--s);
-    margin-right: var(--s);
-    margin-bottom: var(--s3);
+    // A full nav-button width of gutter on each side. At var(--s) the 56px FAB
+    // came within 7px of the neighbouring buttons' active pill on a 390px
+    // viewport, so it read as sitting on top of the row rather than beside it.
+    margin-left: var(--s2);
+    margin-right: var(--s2);
+    // Dock the FAB centred on the bar's top edge instead of sinking it into the
+    // icon row. With `align-items: center` the margin box is centred in the
+    // --bottom-nav-height content box, so a bottom margin of exactly that
+    // height puts the FAB's centre on the bar's top border — for any FAB size.
+    margin-bottom: var(--bottom-nav-height);
     box-shadow: var(--whiteframe-shadow-4dp);
     transition: var(--transition-standard);
 

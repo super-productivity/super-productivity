@@ -7,7 +7,7 @@ h1 {
 }
 
 .warning-icon {
-  color: var(--text-color-secondary);
+  color: var(--text-color-muted);
 }
 
 .message {
@@ -16,7 +16,7 @@ h1 {
 }
 
 .import-info {
-  background: var(--background-color-lighter);
+  background: var(--bg-lighter);
   border-radius: 8px;
   padding: 12px var(--s2);
   margin-bottom: var(--s);
@@ -28,7 +28,7 @@ h1 {
   padding: var(--s-half) 0;
 
   .label {
-    color: var(--text-color-secondary);
+    color: var(--text-color-muted);
   }
 
   .value {
@@ -43,7 +43,7 @@ h1 {
 
 .reason {
   font-size: 13px;
-  color: var(--text-color-secondary);
+  color: var(--text-color-muted);
   margin-bottom: 12px;
 }
 

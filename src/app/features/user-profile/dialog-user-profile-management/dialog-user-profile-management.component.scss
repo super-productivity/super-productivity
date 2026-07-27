@@ -33,7 +33,7 @@
       justify-content: space-between;
       align-items: center;
       padding: var(--s2);
-      border: 1px solid rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--extra-border-color);
       border-radius: var(--card-border-radius);
       transition: var(--transition-standard);
 
@@ -47,7 +47,7 @@
         border-color: var(--c-accent);
         // Selected lift — accent-tinted (intentionally not migrated to
         // `--state-selected`, which is ink-on-surface). Kept as-is.
-        background: rgba(var(--c-accent-rgb), 0.05);
+        background: color-mix(in srgb, var(--c-accent) 5%, transparent);
       }
 
       .profile-info-section {
@@ -95,5 +95,5 @@
 .profile-folder-section {
   margin-top: var(--s3);
   padding-top: var(--s3);
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  border-top: 1px solid var(--extra-border-color);
 }

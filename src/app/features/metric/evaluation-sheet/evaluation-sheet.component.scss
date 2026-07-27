@@ -144,7 +144,7 @@ reflection-note {
     font-size: 0.75em;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--fg-secondary);
+    color: var(--text-color-muted);
     cursor: help;
     transition: opacity 0.2s ease;
 
@@ -157,7 +157,7 @@ reflection-note {
     display: flex;
     gap: var(--s);
     font-weight: 600;
-    color: var(--fg-primary);
+    color: var(--text-color);
     transition: transform 0.2s ease;
   }
 
@@ -168,7 +168,7 @@ reflection-note {
   }
 
   .daily-state-hint {
-    color: var(--fg-secondary);
+    color: var(--text-color-muted);
     font-size: 0.95em;
     line-height: 1.4;
   }

@@ -20,14 +20,14 @@
         display: flex;
         align-items: center;
         gap: var(--s);
-        color: var(--palette-primary-main);
+        color: var(--c-primary);
         text-decoration: none;
         padding: var(--s);
         border-radius: var(--card-border-radius);
         transition: background-color 0.2s;
 
         &:hover {
-          background-color: var(--palette-background-hover);
+          background-color: var(--state-hover);
           text-decoration: none;
         }
 

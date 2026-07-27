@@ -7,7 +7,7 @@
 
 input {
   width: 100%;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--input-border-color);
   border-radius: var(--card-border-radius);
   padding: var(--s) 12px;
   font-size: 14px;
@@ -24,11 +24,11 @@ input {
 
   &:focus {
     border-color: var(--c-accent);
-    box-shadow: 0 0 0 2px rgba(var(--c-accent-rgb), 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-accent) 20%, transparent);
   }
 
   &::placeholder {
-    color: var(--text-tertiary);
+    color: var(--text-color-muted);
     opacity: 0.7;
   }
 }
@@ -36,17 +36,17 @@ input {
 ::ng-deep {
   .mat-mdc-autocomplete-panel {
     max-height: 200px;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--extra-border-color);
     border-radius: var(--card-border-radius);
     box-shadow: var(--whiteframe-shadow-3dp);
-    background: var(--bg-color);
+    background: var(--card-bg);
 
     .mat-mdc-option {
       padding: 6px 10px;
       font-size: 14px;
       line-height: 1.3;
       min-height: auto;
-      border-bottom: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--extra-border-color);
 
       @include mq(xs, max) {
         padding: var(--s-half) var(--s);
@@ -58,11 +58,11 @@ input {
       }
 
       &:hover {
-        background: rgba(var(--c-accent-rgb), 0.1);
+        background: color-mix(in srgb, var(--c-accent) 10%, transparent);
       }
 
       &.mat-mdc-option-active {
-        background: rgba(var(--c-accent-rgb), 0.15);
+        background: color-mix(in srgb, var(--c-accent) 15%, transparent);
       }
 
       .mat-mdc-option-text {

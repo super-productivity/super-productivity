@@ -25,7 +25,7 @@
 
   p {
     margin: 0;
-    color: var(--text-color-secondary);
+    color: var(--text-color-muted);
   }
 }
 
@@ -35,7 +35,7 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: var(--warn-color);
+      color: var(--color-danger);
     }
   }
 
@@ -57,7 +57,7 @@
 }
 
 .simple-error {
-  color: var(--warn-color, #f44336);
+  color: var(--color-danger);
 
   mat-icon {
     font-size: 48px;
@@ -101,11 +101,11 @@
 // Dark theme support
 .dark-theme {
   .header {
-    background: var(--background-dark);
-    border-color: var(--border-dark);
+    background: var(--bg);
+    border-color: var(--extra-border-color);
   }
 
   .plugin-iframe {
-    background: var(--background-dark);
+    background: var(--bg);
   }
 }

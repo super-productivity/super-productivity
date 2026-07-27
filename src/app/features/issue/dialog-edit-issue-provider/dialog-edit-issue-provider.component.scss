@@ -67,7 +67,7 @@
 
 .connected-status {
   margin-left: var(--s);
-  color: var(--palette-accent);
+  color: var(--c-accent);
 }
 
 .connected-status-icon,
@@ -85,7 +85,7 @@
 
 .error-status {
   margin-left: var(--s);
-  color: var(--palette-warn);
+  color: var(--c-warn);
 }
 
 .success-info {

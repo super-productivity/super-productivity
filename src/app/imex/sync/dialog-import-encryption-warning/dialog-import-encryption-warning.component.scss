@@ -1,11 +1,12 @@
 @use '../dialog-encryption-common' as *;
 @use '../../../../styles/_globals.scss' as *;
 
-// Shared classes
-.warning-box {
-  @include dialog-warning-box;
+// Alert boxes come from the global `.callout` primitive.
+.callout {
+  margin-bottom: var(--s2);
 }
 
+// Shared classes
 .info-section {
   @include dialog-info-section;
 }
@@ -26,19 +27,11 @@
   gap: var(--s2);
   padding: var(--s2);
   margin-bottom: var(--s2);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--state-hover);
   border-radius: var(--card-border-radius);
 
   .arrow-icon {
-    color: var(--c-dark-40);
-  }
-
-  @include darkTheme {
-    background: var(--c-light-05);
-
-    .arrow-icon {
-      color: var(--c-light-40);
-    }
+    color: var(--text-color-muted);
   }
 }
 
@@ -50,7 +43,7 @@
   text-align: center;
 
   .state-label {
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     color: var(--c-dark-60);
 
     @include darkTheme {

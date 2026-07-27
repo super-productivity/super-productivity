@@ -163,7 +163,7 @@
     padding: var(--s-half) var(--s);
     border: 1px solid var(--divider-color);
     border-radius: 999px;
-    font-size: 12px;
+    font-size: var(--font-size-sm);
 
     mat-icon {
       font-size: 14px;

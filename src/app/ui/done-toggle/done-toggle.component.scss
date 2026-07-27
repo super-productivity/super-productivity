@@ -29,7 +29,7 @@ $check-len: 18;
   width: var(--done-toggle-size);
   height: var(--done-toggle-size);
   min-width: var(--done-toggle-size);
-  z-index: var(--z-done-toggle, var(--z-drag-handle));
+  z-index: var(--z-drag-handle);
   position: relative;
   touch-action: none;
   pointer-events: all;

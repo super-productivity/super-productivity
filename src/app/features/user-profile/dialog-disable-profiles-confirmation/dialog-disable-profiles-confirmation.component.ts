@@ -67,8 +67,8 @@ export interface DisableProfilesDialogData {
         </ol>
       </div>
 
-      <p class="note">
-        <mat-icon>info</mat-icon>
+      <p class="note callout callout--info">
+        <mat-icon aria-hidden="true">info</mat-icon>
         <strong>Note:</strong> No data will be deleted. You can re-enable this feature at
         any time.
       </p>
@@ -96,7 +96,7 @@ export interface DisableProfilesDialogData {
         display: flex;
         align-items: center;
         gap: 8px;
-        color: #f57c00;
+        color: var(--color-warning);
       }
 
       .info-section,
@@ -132,22 +132,10 @@ export interface DisableProfilesDialogData {
         font-size: 13px;
       }
 
+      /* Box styling comes from the global .callout (src/styles/components/_callout.scss);
+         per convention the consumer only sets outer margin. */
       .note {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        margin-top: 16px;
-        padding: 12px;
-        background: rgba(33, 150, 243, 0.1);
-        border-radius: 4px;
-        border-left: 4px solid #2196f3;
-      }
-
-      .note mat-icon {
-        color: #2196f3;
-        font-size: 20px;
-        width: 20px;
-        height: 20px;
+        margin-top: var(--s2);
       }
 
       mat-dialog-actions {

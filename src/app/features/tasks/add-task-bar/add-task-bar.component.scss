@@ -259,8 +259,8 @@
       // via the MDC token (the icon inherits it) rather than a .mat-*/.mdc-*
       // selector override.
       opacity: 1;
-      --mdc-icon-button-icon-color: var(--primary);
-      color: var(--primary);
+      --mdc-icon-button-icon-color: var(--c-primary);
+      color: var(--c-primary);
     }
   }
 
@@ -477,10 +477,10 @@
 
       .option-icon {
         flex-shrink: 0;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
 
         &.archived {
-          color: var(--color-accent);
+          color: var(--c-accent);
         }
       }
 
@@ -492,7 +492,7 @@
       .issue-id {
         flex-shrink: 0;
         font-size: 0.9em;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
         opacity: 0.7;
       }
     }

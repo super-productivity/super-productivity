@@ -375,7 +375,7 @@
 .cdk-drag-dragging {
   position: relative;
   z-index: 99 !important;
-  box-shadow: var(--whiteframe-shadow-20dp);
+  box-shadow: var(--whiteframe-shadow-24dp);
 }
 
 .drop-label {
@@ -479,7 +479,7 @@
 
   .time-badge {
     background: var(--c-accent);
-    color: var(--text-on-accent);
+    color: var(--palette-accent-contrast-500);
     padding: var(--s) var(--s2);
     border-radius: 20px;
     font-size: 14px;

@@ -208,7 +208,7 @@ mat-sidenav {
 // Remove right border/shadow of the side nav
 
 :host ::ng-deep .mat-drawer.mat-drawer-side {
-  border-right-color: var(--sidebar-border-color);
+  border-right-color: transparent;
 }
 
 @include mq(component) {

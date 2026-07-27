@@ -18,26 +18,16 @@
 }
 
 .error mat-icon {
-  color: var(--warn-color, #f44336);
+  color: var(--color-danger);
 }
 
 .intro {
   margin-bottom: 0.5rem;
 }
 
-.warning {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  margin-bottom: 1rem;
-  background: rgba(255, 152, 0, 0.1);
-  border-radius: var(--card-border-radius);
-  color: var(--warn-color, #ff9800);
-
-  mat-icon {
-    flex-shrink: 0;
-  }
+// Alert box comes from the global `.callout` primitive.
+.callout {
+  margin-bottom: var(--s2);
 }
 
 .restore-points {
@@ -53,7 +43,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
   cursor: pointer;
   transition:
@@ -68,7 +58,7 @@
   }
 
   &.selected {
-    border-color: var(--primary-color, #3f51b5);
+    border-color: var(--c-primary);
     // Migrated to state token: was a brand-tinted overlay. Switching to
     // `--state-selected` (ink-on-surface) is the convention for selected
     // rows; the brand outline still differentiates this state visually.
@@ -103,7 +93,7 @@
 
 .selected-icon {
   flex-shrink: 0;
-  color: var(--primary-color, #3f51b5);
+  color: var(--c-primary);
 }
 
 [mat-dialog-actions] {

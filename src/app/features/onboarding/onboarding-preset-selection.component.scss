@@ -78,7 +78,7 @@ h1 {
   width: 100%;
   padding: var(--s3);
   border-radius: var(--s);
-  border: 1px solid rgba(var(--text-color-rgb, 0, 0, 0), var(--border-alpha));
+  border: 1px solid rgba(var(--ink-on-channel), var(--border-alpha));
   background: var(--card-bg);
   cursor: pointer;
   transition:

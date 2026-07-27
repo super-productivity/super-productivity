@@ -81,7 +81,7 @@
   transform: translateY(-50%);
   line-height: 1;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   right: 16px;
   display: flex;
   align-items: center;
@@ -177,7 +177,7 @@ button[mat-menu-item].nav-link.active {
   border: none;
   width: 100%;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--font-size-md);
   font-family: inherit;
   font-weight: 400;
   letter-spacing: normal;
@@ -243,7 +243,7 @@ button[mat-menu-item].nav-link.active {
   .nav-icon {
     width: 24px;
     height: 24px;
-    font-size: 18px;
+    font-size: var(--font-size-xl);
   }
 
   .nav-label {
@@ -262,13 +262,13 @@ button[mat-menu-item].nav-link.active {
   align-items: center;
   justify-content: center;
   // Don't set default color here - let it inherit or use theme colors
-  font-size: 18px;
+  font-size: var(--font-size-xl);
   line-height: 1;
 
   // Emoji-specific styling
   &.nav-icon-emoji {
     font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
-    font-size: 16px;
+    font-size: var(--font-size-lg);
     font-feature-settings: normal;
     font-variation-settings: normal;
     text-transform: none;
