@@ -38,12 +38,12 @@ export const test = base.extend<TestFixtures>({
   // We use Playwright's merged `contextOptions` fixture so future option additions
   // propagate automatically instead of requiring this list to stay in sync by hand.
   isolatedContext: async (
-    { browser, contextOptions, baseURL, actionTimeout, navigationTimeout },
+    { browser, contextOptions, userAgent, baseURL, actionTimeout, navigationTimeout },
     use,
     testInfo,
   ) => {
     const url = baseURL || testInfo.project.use.baseURL || 'http://localhost:4242';
-    const baseUserAgent = contextOptions.userAgent ?? 'PLAYWRIGHT';
+    const baseUserAgent = userAgent ?? contextOptions.userAgent ?? 'PLAYWRIGHT';
 
     const context = await browser.newContext({
       ...contextOptions,

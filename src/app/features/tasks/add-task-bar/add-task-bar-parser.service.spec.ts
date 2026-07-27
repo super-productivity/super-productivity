@@ -71,6 +71,7 @@ describe('AddTaskBarParserService', () => {
       mockConfig = {
         isEnableProject: true,
         isEnableDue: true,
+        isEnableDeadline: true,
         isEnableTag: true,
       } as ShortSyntaxConfig;
 

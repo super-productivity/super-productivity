@@ -2,8 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError, OperationIntegrityError } from '../core/errors/sync-errors';
-import { ActionType, OpType } from '../core/operation.types';
+import { ActionType, Operation, OpType } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { convertOpToAction } from '../apply/operation-converter.util';
+import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
+import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/time-tracking.reducer';
 import { clearSessionKeyCache, setArgon2ParamsForTesting } from '@sp/sync-core';
 import { createValidAppData } from '../validation/state-validity-test-utils';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
@@ -273,6 +276,22 @@ describe('OperationEncryptionService', () => {
       ).toBeRejectedWithError(OperationIntegrityError);
     });
 
+    it('still rejects a retargeted TASK op when its plaintext entityType says TIME_TRACKING', async () => {
+      const encrypted = await service.encryptOperation(
+        createLwwOp('task-A'),
+        TEST_PASSWORD,
+      );
+      const tampered: SyncOperation = {
+        ...encrypted,
+        entityType: 'TIME_TRACKING',
+        entityId: 'task-B',
+      };
+
+      await expectAsync(
+        service.decryptOperation(tampered, TEST_PASSWORD),
+      ).toBeRejectedWithError(OperationIntegrityError);
+    });
+
     it('accepts a decrypted LWW op with untampered entityId', async () => {
       const encrypted = await service.encryptOperation(
         createLwwOp('task-123'),
@@ -284,6 +303,57 @@ describe('OperationEncryptionService', () => {
         id: 'task-123',
         changes: { title: 'legit change' },
       });
+    });
+
+    it('accepts the legacy encrypted TIME_TRACKING singleton op from #9256', async () => {
+      const legacyPayload = { project: {}, tag: {} };
+      const legacyOp: SyncOperation = {
+        ...createMockSyncOp(legacyPayload),
+        id: '019d1e73-b5e5-7790-a896-9f215331afe7',
+        actionType: toLwwUpdateActionType('TIME_TRACKING') as ActionType,
+        opType: 'UPDATE',
+        entityType: 'TIME_TRACKING',
+        entityId: 'PROJECT:eP8tBLmm0tBgJThAZOxcT:2026-03-24',
+        timestamp: 1774332392933,
+      };
+      const encrypted = await service.encryptOperation(legacyOp, TEST_PASSWORD);
+
+      const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+      expect(decrypted.payload).toEqual(legacyPayload);
+      expect(decrypted.entityId).toBe(legacyOp.entityId);
+    });
+
+    it('recovers TIME_TRACKING data end-to-end: real decrypt → convert → reduce (#9256)', async () => {
+      // Welds the full seam the other specs leave un-joined: the reporter's op
+      // survives the REAL AES-GCM decrypt + integrity gate, the converter finds
+      // no id to inject, and the meta-reducer restores the singleton slice — i.e.
+      // the data actually comes back, not just "the op wasn't rejected".
+      const project = { project1: { day1: 120000 } };
+      const tag = { tag1: { day1: 30000 } };
+      const legacyOp: SyncOperation = {
+        ...createMockSyncOp({ project, tag }),
+        id: '019d1e73-b5e5-7790-a896-9f215331afe7',
+        actionType: toLwwUpdateActionType('TIME_TRACKING') as ActionType,
+        opType: 'UPDATE',
+        entityType: 'TIME_TRACKING',
+        entityId: 'PROJECT:eP8tBLmm0tBgJThAZOxcT:2026-03-24',
+        timestamp: 1774332392933,
+      };
+      const encrypted = await service.encryptOperation(legacyOp, TEST_PASSWORD);
+      const decrypted = await service.decryptOperation(encrypted, TEST_PASSWORD);
+
+      const action = convertOpToAction(decrypted as unknown as Operation);
+      const baseReducer = jasmine
+        .createSpy('baseReducer')
+        .and.callFake((currentState: unknown) => currentState);
+      const reducer = lwwUpdateMetaReducer(baseReducer);
+      const state = { [TIME_TRACKING_FEATURE_KEY]: { project: {}, tag: {} } };
+
+      reducer(state, action);
+
+      const updated = baseReducer.calls.mostRecent().args[0] as typeof state;
+      expect(updated[TIME_TRACKING_FEATURE_KEY]).toEqual({ project, tag });
     });
 
     // --- project-move footprint (op.entityIds) across the real crypto flow ---

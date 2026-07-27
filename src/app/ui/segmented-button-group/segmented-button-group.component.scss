@@ -7,6 +7,7 @@
 
 .segmented-button-group {
   display: flex;
+  min-width: 0;
   gap: var(--s3);
   padding: 0;
   border-radius: var(--s4);
@@ -14,7 +15,7 @@
   //box-shadow: 0 18px 45px var(--c-dark-20);
 
   @include mq(xs, max) {
-    gap: var(--s2);
+    gap: var(--s);
   }
 }
 
@@ -25,6 +26,7 @@
   align-items: center;
   gap: var(--s);
   flex: 1 1 0;
+  min-width: 0;
   border-radius: 16px;
   padding: var(--s);
   border: 1px solid var(--options-border-color);
@@ -56,6 +58,16 @@
     box-shadow: var(--whiteframe-shadow-8dp);
     transform: scale(1.1);
   }
+
+  @include mq(xs, max) {
+    flex-direction: column;
+    gap: var(--s-half);
+    padding: var(--s-half);
+
+    &.is-active {
+      transform: none;
+    }
+  }
 }
 
 .segment-icon {
@@ -67,8 +79,16 @@
 }
 
 .segment-label {
+  min-width: 0;
   font-weight: 600;
   font-size: 15px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+
+  @include mq(xs, max) {
+    font-size: var(--font-size-md);
+  }
 }
 
 .segment-hint {

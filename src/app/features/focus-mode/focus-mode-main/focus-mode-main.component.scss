@@ -281,10 +281,10 @@
 }
 
 // ========== ROW 4 (In Progress): SESSION CONTROL ROW ==========
-// Back to Planning · Pause · Complete · Reset · (issue) · Notes — one
-// content-height bottom row. Keeps the hover/window-focus reveal
-// (--revealed-opacity) so it stays distraction-free, matching the rest of
-// focus mode.
+// Back to Planning · Pause · Complete · More — one content-height bottom row.
+// Secondary actions use the More menu on mobile and stay direct on wider screens.
+// Keeps the hover/window-focus reveal (--revealed-opacity) so it stays
+// distraction-free, matching the rest of focus mode.
 .bottom-controls {
   display: flex;
   justify-content: center;
@@ -293,6 +293,14 @@
   opacity: var(--revealed-opacity);
   pointer-events: var(--revealed-pointer-events);
   transition: var(--transition-standard);
+
+  @include mq(xs, max) {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: var(--s);
+    padding: 0 var(--s);
+  }
 
   a {
     justify-content: center;

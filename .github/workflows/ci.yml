@@ -104,9 +104,7 @@ jobs:
       - name: Install npm Packages
         run: npm i
       - name: Install Playwright Browsers
-        run: |
-          npx playwright install --with-deps chromium
-          npx playwright install-deps chromium
+        run: npx playwright install --with-deps chromium webkit
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run int:test # Validate i18n JSON files
       - run: npm run test:electron # Node-side unit tests for electron/*.cjs
@@ -119,6 +117,10 @@ jobs:
           test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
       - name: Test E2E
         run: npm run e2e:ci
+        env:
+          E2E_WEBKIT_SMOKE: 'true'
+      - name: Test production PWA offline reload
+        run: npm run e2e:pwa
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

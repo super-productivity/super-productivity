@@ -169,7 +169,8 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  box-shadow: var(--whiteframe-shadow-2dp);
+  // Flat: a divider separates the toolbar from the content instead of a shadow.
+  border-top: 1px solid var(--divider-color);
   padding: 0 var(--s2);
 
   > button {

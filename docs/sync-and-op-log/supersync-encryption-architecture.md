@@ -255,9 +255,12 @@ privateCfg: {
 >   rests on the server contract that `deleteAllData()` removes every downloadable
 >   plaintext op. This is the SuperSync op-level twin of the file-based GHSA-vrc7
 >   download guard and the GHSA-9544 _upload_ guard.
-> - **LWW `entityId` retarget:** the client rejects an _encrypted_ LWW-update op
->   whose authenticated `payload.id` does not equal `op.entityId`
->   (`verify-decrypted-op-integrity.ts`).
+> - **LWW `entityId` retarget:** for adapter-backed LWW updates, where
+>   `payload.id` selects the entity the reducer applies, the client rejects an
+>   _encrypted_ op whose authenticated `payload.id` does not equal
+>   `op.entityId` (`verify-decrypted-op-integrity.ts`). Singleton LWW actions
+>   target their registered feature state as a whole, so contextual conflict
+>   IDs such as TIME_TRACKING's composite key have no canonical payload `id`.
 > - **Full-state `opType` promotion:** after decrypting an operation tagged as
 >   `SYNC_IMPORT`, `BACKUP_IMPORT`, or `REPAIR`, the client structurally validates
 >   the authenticated payload as complete application data before the metadata can

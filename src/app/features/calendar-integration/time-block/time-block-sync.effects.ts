@@ -435,6 +435,12 @@ export class TimeBlockSyncEffects {
     task: Task,
     dueWithTime: number,
   ): Promise<void> {
+    // An imported task is already represented by its source calendar event.
+    // Writing a second, task-id-based time block to the same provider duplicates it.
+    if (task.issueId && task.issueProviderId === ctx.providerId) {
+      return;
+    }
+
     const durationMs = this._calcDurationMs(task);
     await ctx.definition.timeBlock!.upsertEvent(
       task.id,

@@ -494,6 +494,12 @@ const validateEntityChanges = (
       }
       // Create should have an id in changes
       const changesObj = change.changes as Record<string, unknown>;
+      // NOTE (#9256): like sync-core's convertLocalDeleteRemoteUpdatesToLww, this
+      // still classifies "is a singleton" by `entityId === '*'` — a composite-id
+      // singleton (TIME_TRACKING, GLOBAL_CONFIG, MENU_TREE) would be treated as an
+      // adapter here. Harmless today: it only appends a warning string, and LWW ops
+      // always carry `entityChanges: []`. Switch to a storage-pattern check
+      // (isLwwPayloadIdCanonical) if this ever gates acceptance.
       if (!changesObj.id && !isSingletonEntityId(change.entityId)) {
         warnings.push(`EntityChange[${i}] CREATE changes missing 'id' field`);
       }

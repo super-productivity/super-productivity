@@ -1,4 +1,4 @@
-import { isTodayWithOffset } from './is-today.util';
+import { isTodayWithOffset, shouldClearDueTimeForToday } from './is-today.util';
 import { getDbDateStr } from './get-db-date-str';
 
 describe('isTodayWithOffset', () => {
@@ -116,5 +116,49 @@ describe('isTodayWithOffset', () => {
         'Invalid date passed',
       );
     });
+  });
+});
+
+describe('shouldClearDueTimeForToday', () => {
+  const todayStr = '2026-02-15';
+
+  it('keeps (returns false) when there is no time set', () => {
+    expect(shouldClearDueTimeForToday(undefined, todayStr, 0)).toBe(false);
+    expect(shouldClearDueTimeForToday(null, todayStr, 0)).toBe(false);
+  });
+
+  it('keeps (returns false) a valid time that falls on today', () => {
+    const todayTime = new Date(2026, 1, 15, 12, 0, 0).getTime();
+
+    expect(shouldClearDueTimeForToday(todayTime, todayStr, 0)).toBe(false);
+  });
+
+  it('clears (returns true) a valid time that falls on another day', () => {
+    const yesterdayTime = new Date(2026, 1, 14, 12, 0, 0).getTime();
+
+    expect(shouldClearDueTimeForToday(yesterdayTime, todayStr, 0)).toBe(true);
+  });
+
+  it('clears (returns true) a non-positive or non-finite timestamp', () => {
+    expect(shouldClearDueTimeForToday(0, todayStr, 0)).toBe(true);
+    expect(shouldClearDueTimeForToday(-1, todayStr, 0)).toBe(true);
+    expect(shouldClearDueTimeForToday(NaN, todayStr, 0)).toBe(true);
+  });
+
+  it('clears (returns true) instead of throwing on an out-of-range timestamp', () => {
+    // 1e20 ms is a finite, positive number but outside the valid JS Date range,
+    // so a bare isTodayWithOffset(1e20, ...) would throw. The helper must not.
+    expect(() => shouldClearDueTimeForToday(1e20, todayStr, 0)).not.toThrow();
+    expect(shouldClearDueTimeForToday(1e20, todayStr, 0)).toBe(true);
+  });
+
+  it('honors the start-of-next-day offset like isTodayWithOffset', () => {
+    const fourHoursMs = 4 * 60 * 60 * 1000;
+    // 2 AM Feb 16 belongs to Feb 15 with a 4h offset → keep.
+    const earlyNextMorning = new Date(2026, 1, 16, 2, 0, 0).getTime();
+
+    expect(shouldClearDueTimeForToday(earlyNextMorning, todayStr, fourHoursMs)).toBe(
+      false,
+    );
   });
 });

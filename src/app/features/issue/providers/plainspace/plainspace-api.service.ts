@@ -137,24 +137,19 @@ export class PlainspaceApiService {
   }
 
   /**
-   * Pushes a field change back to Plainspace — done state, title, and/or
-   * scheduled time (`scheduledAt`) — in a single PATCH; null on failure.
-   * `scheduledAt` is an ISO instant, or null to unschedule. Used by the
-   * two-way-sync adapter.
+   * Pushes a completion change back to Plainspace; null on failure.
    */
   patchTask$(
     id: string,
-    fields: { done?: boolean; title?: string; scheduledAt?: string | null },
+    fields: { done: boolean },
     cfg: PlainspaceCfg,
-  ): Observable<PlainspaceIssue | null> {
+  ): Observable<PlainspaceCompletionConfirmation | null> {
     return this._http
-      .patch<SPTaskResponse>(
-        `${this._base(cfg)}/tasks/${encodeURIComponent(id)}`,
-        fields,
-        { headers: this._headers(cfg) },
-      )
+      .patch<unknown>(`${this._base(cfg)}/tasks/${encodeURIComponent(id)}`, fields, {
+        headers: this._headers(cfg),
+      })
       .pipe(
-        map((res) => mapSPTaskToIssue(res.task)),
+        map(parsePlainspaceCompletionConfirmation),
         catchError(() => of(null)),
       );
   }
@@ -239,6 +234,8 @@ interface SPTaskResponse {
   task: SPTask;
 }
 
+type PlainspaceCompletionConfirmation = Pick<PlainspaceIssue, 'id' | 'isDone'>;
+
 interface SPTasksResponse {
   tasks: SPTask[];
 }
@@ -263,6 +260,26 @@ interface SPMeResponse {
 const matchesSpace = (t: SPTask, spaceId: string | null | undefined): boolean =>
   !spaceId || t.projectId === spaceId || t.projectSlug === spaceId;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const parsePlainspaceCompletionConfirmation = (
+  value: unknown,
+): PlainspaceCompletionConfirmation | null => {
+  if (!isRecord(value) || !isRecord(value['task'])) {
+    return null;
+  }
+  const task = value['task'];
+  if (
+    typeof task['id'] !== 'string' ||
+    !task['id'] ||
+    typeof task['done'] !== 'boolean'
+  ) {
+    return null;
+  }
+  return { id: task['id'], isDone: task['done'] };
+};
+
 const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
   id: t.id,
   title: t.title,
@@ -270,11 +287,8 @@ const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({
   updatedAt: t.updatedAt,
   url: t.url,
   projectId: t.projectId,
-  // Normalize to a canonical UTC ISO instant on read. The two-way-sync baseline
-  // and push both compare `scheduledAt` by exact string, and the push side emits
-  // `new Date(ms).toISOString()` — so an equivalent-but-differently-formatted
-  // server value (offset vs Z, ms precision) would otherwise read as a remote
-  // change and silently drop the user's reschedule.
+  // Normalize to a canonical UTC ISO instant so equivalent server encodings do
+  // not appear as schedule changes in polling and baseline comparisons.
   scheduledAt: t.scheduledAt ? new Date(t.scheduledAt).toISOString() : null,
   isRecurring: !!t.isRecurring,
 });

@@ -327,10 +327,7 @@
   </button>
 </mat-menu>
 
-<mat-menu
-  #estimateMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #estimateMenu="matMenu">
   <ng-template matMenuContent>
     @for (option of ESTIMATE_OPTIONS; track option.value) {
       <button
@@ -366,10 +363,7 @@
   </ng-template>
 </mat-menu>
 
-<mat-menu
-  #projectMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #projectMenu="matMenu">
   <ng-template matMenuContent>
     @if (moveToProjectList$ | async; as list) {
       @for (project of list; track trackByProjectId($index, project)) {
@@ -391,10 +385,7 @@
   </ng-template>
 </mat-menu>
 
-<mat-menu
-  #tagMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #tagMenu="matMenu">
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
       @for (tag of toggleTagList(); track tag.id) {

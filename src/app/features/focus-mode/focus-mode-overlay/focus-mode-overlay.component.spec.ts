@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { of, Observable } from 'rxjs';
 import { FocusModeOverlayComponent } from './focus-mode-overlay.component';
@@ -10,10 +10,23 @@ import { cancelFocusSession, hideFocusOverlay } from '../store/focus-mode.action
 import { MatDialog } from '@angular/material/dialog';
 import {
   EnvironmentInjector,
+  Component,
   runInInjectionContext,
   signal,
   WritableSignal,
 } from '@angular/core';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TranslateModule } from '@ngx-translate/core';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { By } from '@angular/platform-browser';
+import { BannerComponent } from '../../../core/banner/banner/banner.component';
+
+@Component({
+  selector: 'banner',
+  template: '',
+  standalone: true,
+})
+class MockBannerComponent {}
 
 describe('FocusModeOverlayComponent', () => {
   let component: FocusModeOverlayComponent;
@@ -51,6 +64,11 @@ describe('FocusModeOverlayComponent', () => {
     mockStore.select.and.returnValue(of(0));
 
     TestBed.configureTestingModule({
+      imports: [
+        FocusModeOverlayComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
       providers: [
         { provide: Store, useValue: mockStore },
         { provide: TaskService, useValue: mockTaskService },
@@ -58,6 +76,9 @@ describe('FocusModeOverlayComponent', () => {
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: MatDialog, useValue: mockMatDialog },
       ],
+    }).overrideComponent(FocusModeOverlayComponent, {
+      remove: { imports: [BannerComponent] },
+      add: { imports: [MockBannerComponent] },
     });
 
     environmentInjector = TestBed.inject(EnvironmentInjector);
@@ -86,6 +107,43 @@ describe('FocusModeOverlayComponent', () => {
       expect(component.isSessionRunning()).toBe(false);
     });
   });
+
+  it('contains the banner and page in one non-modal focus trap', fakeAsync(() => {
+    const originButton = document.createElement('button');
+    document.body.appendChild(originButton);
+    document.body.classList.add('isMousePrimary');
+    originButton.focus();
+    mockFocusModeService.currentScreen.set(FocusScreen.Preparation);
+
+    const fixture = TestBed.createComponent(FocusModeOverlayComponent);
+    fixture.detectChanges();
+    tick();
+
+    const dialog = fixture.nativeElement.querySelector(
+      '.focus-mode-dialog',
+    ) as HTMLElement;
+    const focusTrap = fixture.debugElement.query(By.directive(CdkTrapFocus));
+
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBeNull();
+    expect(dialog.getAttribute('aria-label')).toBe('GCF.APP_FEATURES.FOCUS_MODE');
+    expect(dialog.querySelector('banner')).not.toBeNull();
+    expect(focusTrap).not.toBeNull();
+    expect(focusTrap.nativeElement).toBe(dialog);
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('.close-btn'),
+    );
+    expect(
+      getComputedStyle(fixture.nativeElement.querySelector('.close-btn')).opacity,
+    ).toBe('1');
+
+    fixture.destroy();
+
+    expect(document.activeElement).toBe(originButton);
+    document.body.classList.remove('isMousePrimary');
+    originButton.remove();
+  }));
 
   describe('cancelFocusSession', () => {
     it('should dispatch cancelFocusSession action', () => {

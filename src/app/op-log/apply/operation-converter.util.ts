@@ -6,11 +6,20 @@ import {
   Operation,
   OpType,
 } from '../core/operation.types';
-import { isLwwUpdateActionType } from '../core/lww-update-action-types';
-import { isSingletonEntityId } from '../core/entity-registry';
+import { getLwwEntityType } from '../core/lww-update-action-types';
+import { getEntityConfig, isLwwPayloadIdCanonical } from '../core/entity-registry';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { SyncLog } from '../../core/log';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getValueType = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+};
 
 const isValidDbDate = (value: unknown): value is string =>
   typeof value === 'string' && isValidDBDateStr(value);
@@ -255,14 +264,33 @@ const assertValidTaskTimeSyncPayload = (
 export const convertOpToAction = (op: Operation): PersistentAction => {
   // Resolve any aliased action types to their current names
   const actionType = ACTION_TYPE_ALIASES[op.actionType] ?? op.actionType;
+  const lwwEntityType = getLwwEntityType(actionType);
 
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
   const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
+  const isSingletonLww =
+    !isFullStateOp &&
+    lwwEntityType !== undefined &&
+    getEntityConfig(lwwEntityType)?.storagePattern === 'singleton';
   const replayActionType = isFullStateOp ? ActionType.LOAD_ALL_DATA : actionType;
   let actionPayload: Record<string, unknown> = isFullStateOp
     ? extractFullStatePayload(op.payload)
     : (extractActionPayload(op.payload) as Record<string, unknown>);
+
+  // JSON primitives and arrays are object-spreadable at runtime: a non-record
+  // singleton payload such as "x" or ["x"] would spread into { 0: "x" }, which
+  // the LWW reducer mistakes for non-empty singleton state and uses to replace
+  // the entire feature slice. Normalize it to the reducer's empty-data no-op.
+  if (isSingletonLww && !isRecord(actionPayload)) {
+    SyncLog.warn('[convertOpToAction] malformed singleton LWW payload — ignoring', {
+      opId: op.id,
+      actionType,
+      entityType: lwwEntityType,
+      payloadType: getValueType(actionPayload),
+    });
+    actionPayload = {};
+  }
 
   actionPayload = addLegacyPlanForTodayDate(actionType, actionPayload, op);
   actionPayload = addLegacyConvertToMainTaskDates(actionType, actionPayload, op);
@@ -275,25 +303,32 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   );
   assertValidTaskTimeSyncPayload(actionType, actionPayload, op);
 
-  // Force `payload.id = op.entityId` for non-singleton LWW Update ops. The
-  // op's `entityId` is the canonical identifier — producers also enforce
-  // this when creating ops, but a malformed/older remote op (or any path
-  // that ever drifts) could carry a payload.id that disagrees with
+  // Affected #7330 clients injected conflict keys as `id` into singleton LWW
+  // payloads. Singleton models have no top-level id, so remove it based on the
+  // action-derived reducer target rather than comparing against unauthenticated
+  // envelope metadata. This also cleans stale ids already carried in state.
+  if (isSingletonLww && Object.hasOwn(actionPayload, 'id')) {
+    actionPayload = { ...actionPayload };
+    delete actionPayload['id'];
+  }
+
+  // Force `payload.id = op.entityId` for adapter-backed LWW Update ops. The
+  // op's `entityId` is the canonical identifier for adapters — producers also
+  // enforce this when creating ops, but a malformed/older remote op (or any
+  // path that ever drifts) could carry a payload.id that disagrees with
   // op.entityId, in which case the consumer reducer at
-  // task-shared-meta-reducers/lww-update.meta-reducer.ts trusts payload.id
-  // and would update the WRONG entity. Forcing here makes "entityId is
-  // canonical" a hard invariant at the apply boundary regardless of
-  // producer or wire shape. Singletons use `SINGLETON_ENTITY_ID` and have
-  // no `id` field. Issue #7330.
+  // task-shared-meta-reducers/lww-update.meta-reducer.ts trusts payload.id and
+  // would update the WRONG entity. Singleton LWW actions target their feature
+  // state as a whole; their conflict-routing entityId may be composite and must
+  // not be injected into that state. Issues #7330, #9256.
   if (
     !isFullStateOp &&
-    isLwwUpdateActionType(actionType) &&
+    isLwwPayloadIdCanonical(lwwEntityType) &&
     op.entityId &&
-    !isSingletonEntityId(op.entityId) &&
-    actionPayload &&
-    typeof actionPayload === 'object' &&
+    isRecord(actionPayload) &&
     actionPayload['id'] !== op.entityId
   ) {
+    const payloadId = actionPayload['id'];
     // The hard rewrite is correct in direction (canonical entityId wins),
     // but it silently fixes a producer/wire bug. Surface it so we can
     // detect if the assumption ever breaks in production. Log only the
@@ -302,7 +337,8 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       actionType,
       entityType: op.entityType,
       entityId: op.entityId,
-      payloadId: actionPayload['id'],
+      payloadId:
+        typeof payloadId === 'string' ? payloadId : `<${getValueType(payloadId)}>`,
     });
     actionPayload = { ...actionPayload, id: op.entityId };
   }

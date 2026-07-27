@@ -1,0 +1,128 @@
+name: Android Native Tests
+
+# Keep this workflow present on every PR so it can be a required check. The
+# expensive setup and tests are skipped when no Android-affecting files changed.
+on:
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-native-tests:
+    name: Android Native Tests (JVM + Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect Android-affecting changes
+        id: changes
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PR_HEAD:-}" ]; then
+            echo "Manual run — running Android tests."
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BASE_TIP="$(git rev-parse HEAD^1)"
+          MERGE_BASE="$(git merge-base "${BASE_TIP}" "${PR_HEAD}")"
+          CHANGED_FILES="$(git diff --name-only --no-renames "${MERGE_BASE}" "${PR_HEAD}")"
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
+
+          android=false
+          ANDROID_PATTERN='^(android/|capacitor\.config\.ts$|package(-lock)?\.json$|\.github/workflows/android-tests\.yml$)'
+          if grep -Eq "${ANDROID_PATTERN}" <<< "${CHANGED_FILES}"; then android=true; fi
+
+          echo "→ android=${android}"
+          echo "android=${android}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        if: steps.changes.outputs.android == 'true'
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Setup Android SDK
+        if: steps.changes.outputs.android == 'true'
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+
+      # Work around npm installs from git+https://github.com/johannesjo/J2M.git.
+      - name: Reconfigure git to use HTTP authentication
+        if: steps.changes.outputs.android == 'true'
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Install npm packages
+        if: steps.changes.outputs.android == 'true'
+        run: npm i
+
+      - name: Prepare Capacitor Android project
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          npx cap update android
+
+      - name: Run Android JVM tests
+        if: steps.changes.outputs.android == 'true'
+        working-directory: android
+        run: ./gradlew :app:testPlayDebugUnitTest :app:testFdroidDebugUnitTest
+
+      - name: Enable KVM
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android instrumentation tests
+        if: steps.changes.outputs.android == 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: ./android
+          script: ./gradlew :app:connectedPlayDebugAndroidTest
+
+      - name: Upload instrumentation test results on failure
+        if: failure() && steps.changes.outputs.android == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-instrumentation-test-results-${{ github.run_id }}
+          path: |
+            android/app/build/reports/androidTests/connected/
+            android/app/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore
+          retention-days: 14

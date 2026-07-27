@@ -208,6 +208,12 @@ test.describe('@migration #9139 work context with no theme', () => {
       // would still pass with the on-disk corruption left in place. This is the
       // load-bearing assertion of this test (verified: disabling the heal fails
       // right here).
+      await expect
+        .poll(async () => (await readMigratedState(page)).tag?.entities?.TODAY != null, {
+          timeout: 30000,
+        })
+        .toBe(true);
+
       const state = await readMigratedState(page);
       const today = state.tag?.entities?.TODAY as
         | { theme?: Record<string, unknown> }
@@ -216,7 +222,7 @@ test.describe('@migration #9139 work context with no theme', () => {
       expect(today?.theme).toBeDefined();
       expect(typeof today?.theme?.primary).toBe('string');
 
-      // Checked LAST on purpose: the IndexedDB round trip above is a real
+      // Checked LAST on purpose: the IndexedDB poll above is a real
       // settle window, so a startup error has had time to surface. Asserting
       // this straight after the side nav appears would pass on timing alone.
       // (No task-content assertion here — TODAY membership is virtual, driven

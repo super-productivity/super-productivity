@@ -702,10 +702,11 @@ body.isDarkTheme {
   --sub-task-c-bg-done: var(--dark2);
   --task-c-bg-done: var(--dark1);
   --sub-task-c-bg-in-selected: var(--dark10);
-  --sub-task-border-color: transparent;
+  // Dark subtasks separate via a hairline border (like light), not a resting shadow.
+  --sub-task-border-color: var(--extra-border-color);
 
   // Task shadows (Cat B)
-  --task-shadow-sub-task: var(--task-shadow);
+  --task-shadow-sub-task: none;
   --task-selected-shadow: var(--whiteframe-shadow-1dp);
 
   // Scrollbar colors (Cat B)

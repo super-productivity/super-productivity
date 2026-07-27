@@ -151,6 +151,15 @@ const isNotSyncProvider = (
   providerId: SyncProviderId | null,
 ): boolean => rootSyncProvider(field, depth) !== providerId;
 
+const hasUnsavedProviderSwitch = (
+  field: FormlyFieldConfig | undefined,
+  depth: 1 | 2,
+): boolean => {
+  const root = depth === 1 ? field?.parent : field?.parent?.parent;
+  const activeProviderId = root?.model?._activeProviderId;
+  return activeProviderId !== undefined && activeProviderId !== root?.model?.syncProvider;
+};
+
 const isOneDriveClientIdRequired = (field: FormlyFieldConfig): boolean => {
   if (!isSyncProvider(field, 2, SyncProviderId.OneDrive)) {
     return false;
@@ -477,10 +486,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       ],
     },
 
-    // Encryption status box - shown when encryption is enabled (for any provider)
+    // Encryption status box - shown when encryption is enabled for the active provider.
     {
       hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-        !(field?.parent?.model?.isEncryptionEnabled ?? false),
+        !(field?.parent?.model?.isEncryptionEnabled ?? false) ||
+        hasUnsavedProviderSwitch(field, 1),
       className: 'encryption-status-box',
       fieldGroup: [
         {
@@ -588,10 +598,15 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             label: T.F.SYNC.FORM.L_USE_SPLIT_SYNC_FILES,
           },
         },
-        // Enable encryption button for file-based providers (shown when encryption is disabled)
+        // Established file-based providers can enable encryption here.
+        // Setup and provider switches expose this only after Save, when the
+        // selected provider is active.
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-            isSyncProvider(field, 2, SyncProviderId.SuperSync) || m.isEncryptionEnabled,
+            isSyncProvider(field, 2, SyncProviderId.SuperSync) ||
+            m.isEncryptionEnabled ||
+            field?.parent?.parent?.model?._isInitialSetup === true ||
+            hasUnsavedProviderSwitch(field, 2),
           type: 'btn',
           className: 'e2e-file-based-enable-encryption-btn',
           templateOptions: {
@@ -681,12 +696,14 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           },
         },
         // Enable encryption button for SuperSync (shown when encryption is disabled)
-        // Hidden during initial setup (encryption dialog opens automatically after save)
+        // Hidden during initial setup and provider switches because the
+        // encryption dialog always acts on the active, persisted provider.
         {
           hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
             isNotSyncProvider(field, 2, SyncProviderId.SuperSync) ||
             (field?.parent?.parent?.model?.isEncryptionEnabled ?? false) ||
-            field?.parent?.parent?.model?._isInitialSetup === true,
+            field?.parent?.parent?.model?._isInitialSetup === true ||
+            hasUnsavedProviderSwitch(field, 2),
           type: 'btn',
           className: 'e2e-enable-encryption-btn',
           templateOptions: {

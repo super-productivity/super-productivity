@@ -1,119 +1,40 @@
 For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
 
-### Features
+### New
 
-- **schedule:** add a single-day view to the Schedule tab (#9058)
-- **work-view:** show custom section task counts #9068 (#9109)
-- **sync:** add one background full-sync scheduler (#9078)
-- suppress idle dialog during active work sessions (#8965)
-- **sync:** conflict journal + disjoint-field auto-merge + review UI (#8874)
-- **work-view:** show break time today (#8909)
-- **tasks:** navigate from empty add-subtask input (#8916)
-- add Home Assistant Bridge to community plugins (#8891)
+- Recurring task settings are now integrated into the planner’s schedule dialog (#9286).
+- Detected add-task short syntax is highlighted as you type (#9135).
 
-### Fixes
+### Tasks and planning
 
-- **supersync:** prevent migrator advisory-lock leak on deploy timeout (#9126)
-- **sync:** heal missing idle config field on schema-migration upgrade (#9124)
-- **supersync:** make interrupted CONCURRENTLY migrations recoverable
-- **android:** stop the widget labelling a stale list as Today (#9098) (#9118)
-- **sync:** keep import author in client-side clock pruning (#9096) (#9102)
-- **sync:** unfreeze the disjoint-field merge to stop data loss (#9095) (#9101)
-- **sync:** dedupe surgical-sync retries and keep the import author through pruning (#9089)
-- **sync:** fence in-flight sync cycles across destructive config changes (#9088)
-- **locale:** consolidate textLocale, fix planner month label, enforce via lint (#8987) (#9065)
-- **sync:** guard snapshots against unpersisted state changes (#8751) (#9081)
-- **sync:** defer LocalFile folder pick commit to settings Save (#9075) (#9085)
-- **sync:** make no-pending concurrent crossings deterministic (#9073) (#9086)
-- **sync:** quiesce op capture before snapshot and compaction (#8469) (#9083)
-- **sync:** rebase repair op clocks on the durable clock (#8939) (#9080)
-- **project:** keep taskIds unique on replayed move-to-done (#8469) (#9076)
-- **schedule:** keep the layout reference live instead of freezing at first render (#9064)
-- **sync:** isolate file-provider state across target changes (#9063)
-- **sync:** freeze the conflict-review producers before the next release (#9061)
-- **locale:** localize ISO 8601 recurring-task start date & weekday labels (#8987) (#9055)
-- **locale:** localize remaining ISO 8601 spelled-out date names (#8987) (#9056)
-- **sync:** authenticate LWW project-move footprint (#9053) (#9054)
-- **tasks:** self-heal orphan tasks to Inbox on navigation (#8780) (#9052)
-- **sync:** sync review follow-up fixes (hydration data-loss + journal privacy) (#9045)
-- **sync:** don't block on repair dialogs while holding sp_op_log (#9026) (#9049)
-- **sync:** write split-compaction snapshots to immutable files (#9040) (#9047)
-- **sync:** recover project notes/sections/repeat-cfgs on losing delete (#9048)
-- **gitlab:** stop connection test/search from firing thousands of requests (#9034) (#9051)
-- **i18n:** complete Simplified Chinese translations #5362 (#9036)
-- **sync:** sanitize invalid LWW projectId to the current project (#9025) (#9041)
-- **planner:** don't erase day-scheduled subtasks on parent plan (#9019) (#9027)
-- **sync:** isolate provider encryption settings + enforce critical e2e coverage (#9044)
-- **sync:** guard file-based recovery snapshot vs concurrent ops (#9023) (#9043)
-- **sync:** retention pruning, misc→tasks alias boundary & WS local-win re-upload (#9028)
-- **sync-core:** break whole-entity LWW timestamp ties by clientId (#9035)
-- **electron:** assert renderer IPC boundary at window creation (#9018)
-- **tasks:** decode multipart and transfer-encoded eml bodies #8975 (#8999)
-- **sync:** recover tasks when a deleteProject loses an LWW conflict (#8997) (#9007)
-- **sync:** preserve local edits during snapshot hydration (#9010)
-- **locale:** localize ISO 8601 calendar weekday/month names (#8987) (#9013)
-- **electron:** gate Jira IPC behind a one-shot capability (#9008)
-- **sync:** serialize archive read-modify-write vs remote replacement (#8941) (#9006)
-- **sync:** make marked project deletions win LWW conflicts (#9009)
-- **sync:** file-based provider atomicity & conflict UX (#8960) (#9004)
-- **tasks:** keep REST project moves atomic across replay (#9001)
-- **tasks:** keep add-task bar visible above iOS keyboard (#8995)
-- **sync:** preserve multi-entity conflict recovery (#8990)
-- **ui:** open time picker for Electron touch input (#8989)
-- **android:** keep material icons aligned with system font scaling (#8992)
-- **locale:** localize ISO weekday labels (#8991)
-- **sync:** surface Dropbox OAuth service failures (#8988)
-- **sync:** keep the conflict summary banner counts live during review (#8946)
-- **sync:** enforce conflict-journal retention mid-session, not only at start (#8948)
-- **sync:** harden passkey registration verification (#8985)
-- **sync:** harden full-state operation recovery (#8973)
-- **sync:** reject forged encrypted full-state operations (#8984)
-- **sync:** preserve conflict cancellation and harden force overwrite (#8981)
-- **sync:** make task and time replay deterministic (#8979)
-- **sync:** prevent multi-entity conflict corruption (#8980)
-- **sync:** guard full-state apply against late local ops (#8976)
-- **sync:** harden op-log replay and recovery (#8978)
-- **plugins:** prevent automation rule data loss (#8972)
-- **supersync-server:** op data-loss on retention/cleanup & auth-endpoint hardening (#8971)
-- **sync:** suppress the "Project updated" snack on conflict-review flips
-- **sync:** bind empty string, not null, for the sync badge description at 0
-- **sync:** serialize remote archive side effects behind the archive mutex
-- **sync:** persist disjoint merges atomically and exempt them from checkpoint
-- **shared-schema:** let existing tasks settings win in v1-to-v2 merge
-- **supersync:** isolate duplicate upload ids and make clean-slate idempotent
-- **supersync:** widen conflict lookups to aliased and unioned entity ids
-- **sync:** serialize archive mutations and persist before dispatch
-- **sync:** guard rebuild backup identity and keep undo across reload
-- **sync:** make remote reducer checkpoint atomic with its clock merge
-- **sync:** converge rebuild capture races, unwedge archive recovery
-- **accessibility:** add ARIA roles, live regions, and alt attributes to banner component (#8888)
-- **app:** hide donation page on macOS (#8915)
-- **sync:** handle initial provider setup safely
-- **sync:** preserve actionable recovery state
-- **sync:** migrate legacy remote failures once
-- **sync:** gate incomplete rebuild recovery
-- **supersync:** preserve occupied ids during cleanup
-- **sync:** preserve incomplete recovery work
-- **sync-core:** validate remote apply results
-- **supersync:** isolate invalid upload operations
-- **sync:** enforce upload completion contracts
-- **sync:** block on incomplete local persistence
-- **sync:** preserve edits across rebuild resume
-- **sync:** preserve fresh-client recovery state
-- **sync:** exempt fresh-client startup ops from conflict gate
-- **sync:** harden SuperSync E2EE against metadata tampering (GHSA-8pxh-mgc7-gp3g) (#8904)
-- **sync:** surface Undo when an interrupted USE_REMOTE resume can't finish
-- **sync:** keep USE_REMOTE recovery Undo visible after routine sync
-- **sync:** preserve device-local sync settings in rebuild baseline
-- **sync:** remediate multi-agent review findings
-- **sync:** harden replay and conflict recovery
-- **sync:** remediate sync-correctness review findings
+- Existing tasks now appear in tagged board columns (#9295).
+- Archived tasks can be restored to Today, and recurring task presets retain their notes (#9254, #9263, #9293).
+- Subtasks can be deleted with the keyboard shortcut, and started tasks respect the auto-add setting (#9249, #9280, #9289).
+- Deadline short syntax is now disabled by default (#9291).
+- Fixed parent-task time totals, recurring “Last” dates, and productivity scores after exceeding focus targets (#9177, #9190, #9245, #9127, #9159).
+- Clarified planned versus available time in the planner (#9244).
 
-### Other Changes
+### Sync and integrations
 
-- 18.15.0
-- Add critical tests for task and sync helper flows (#9079)
-- chore(deps)(deps): bump the github-actions-minor group with 7 updates
-- Avoid dynamic option placeholder keys
-- Polish CalDAV option load state handling
-- Clarify empty CalDAV option loads
+- Recoverable and legacy LWW sync data is no longer incorrectly rejected as tampering (#9256, #9259, #9294).
+- Improved recovery and snapshot convergence after schema migrations (#9138, #9153).
+- Improved WebDAV and Nextcloud upload compatibility with ETag variants (#9240, #9251).
+- Plainspace completion sync now fails closed; title and schedule syncing is pull-only (#9296).
+- Prevented duplicate time blocks for imported calendar events (#9260).
+- Inactive encryption actions are now hidden (#9284).
+
+### Mobile, desktop, and UI
+
+- Improved mobile controls, accessibility, onboarding, dialog actions, and task action menus (#9272, #9275, #9285, #9288).
+- The global add-task bar now stays above the mobile web keyboard (#9277).
+- Refined task action icons, planner headers, and visual hierarchy.
+- Fixed Electron installations in paths containing special characters (#9257).
+- Fixed decoding of affected audio assets on iOS (#8880, #9175).
+- The Windows Store backup path is shown only when it exists (#9218).
+- Markdown link insertion now selects exactly the URL (#9208).
+
+### SuperSync server
+
+- Added database incident guardrails (#9212).
+- Improved conflict lookup performance and migration reliability (#9195, #9213, #9226).
+- Redacted query values from request logs and preserved Helm `reuse-values` upgrades (#9223).

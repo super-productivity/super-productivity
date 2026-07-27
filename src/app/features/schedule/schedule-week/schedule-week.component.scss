@@ -187,7 +187,8 @@
   z-index: 12;
   color: var(--text-color);
   background: var(--bg-lighter);
-  box-shadow: var(--whiteframe-shadow-1dp);
+  // Flat sticky header: the extraBorder bottom line separates it from scrolling
+  // content; a resting shadow on top of it just reads as a floating bar.
 
   &.isInPanel {
     //border: 0;

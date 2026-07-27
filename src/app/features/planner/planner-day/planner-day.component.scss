@@ -42,6 +42,7 @@
 .day-title {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
   gap: var(--s-half);
   font-size: var(--font-size-lg);
@@ -67,7 +68,7 @@
   display: flex;
   flex-wrap: wrap;
   grid-column: 1 / -1;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
@@ -82,7 +83,7 @@
 
   .day-load {
     min-width: 0;
-    text-align: end;
+    text-align: center;
   }
 }
 
@@ -145,7 +146,9 @@
 
 .normal-tasks-items > *,
 .deadline-items > * {
-  margin-bottom: var(--s);
+  // Match the main task list's inter-row rhythm (its .box is inset ~4px), rather
+  // than the roomier 8px, so planner and task-list spacing read the same.
+  margin-bottom: var(--s-half);
 }
 
 .scheduled-item {

@@ -1,4 +1,6 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForStatePersistence } from '../../utils/waits';
+import { readFile } from 'node:fs/promises';
 
 /**
  * Worklog E2E Tests
@@ -29,9 +31,9 @@ test.describe('Worklog', () => {
   }) => {
     await workViewPage.waitForTaskList();
 
-    // Create and complete a task
+    // Create and complete a task with deterministic tracked time
     const taskName = `${testPrefix}-Worklog Task`;
-    await workViewPage.addTask(taskName);
+    await workViewPage.addTask(`${taskName} 10m/1h`);
 
     const task = taskPage.getTaskByText(taskName);
     await expect(task).toBeVisible({ timeout: 10000 });
@@ -69,9 +71,64 @@ test.describe('Worklog', () => {
     await expect(dayToggle).toBeVisible();
     await dayToggle.click();
     await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
+
+    const worklogRow = page
+      .locator('.task-summary-table tr')
+      .filter({ hasText: taskName });
+    await expect(worklogRow.locator('td.title button')).toBeVisible();
+    await expect(worklogRow.locator('td.worked .value-wrapper')).toHaveText('0:10');
+
+    // Correct the archived duration through the real inline editor
+    const durationEditor = worklogRow.locator('td.worked inline-input');
+    await durationEditor.click();
+    const durationInput = durationEditor.locator('input.duration-input');
+    await durationInput.fill('20m');
+    await durationInput.press('Enter');
+    await expect(worklogRow.locator('td.worked .value-wrapper')).toHaveText('0:20');
+
+    // The corrected archive value survives hydration
+    await waitForStatePersistence(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('history')).toBeVisible();
+    const reloadedDayToggle = page.locator('history .week-row .day-toggle').first();
+    await expect(reloadedDayToggle).toBeVisible();
+    await reloadedDayToggle.click();
+    await expect(reloadedDayToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(
-      page.locator('.task-summary-table td.title button').filter({ hasText: taskName }),
-    ).toBeVisible();
+      page
+        .locator('.task-summary-table tr')
+        .filter({ hasText: taskName })
+        .locator('td.worked .value-wrapper'),
+    ).toHaveText('0:20');
+
+    // The persisted correction is also the value exported to CSV
+    await page
+      .locator('history .month-title button[aria-label="Export data"]')
+      .first()
+      .click();
+    const exportDialog = page.locator('dialog-worklog-export');
+    const previewRow = exportDialog.locator('table tr').filter({ hasText: taskName });
+    await expect(previewRow).toContainText('0:20');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      exportDialog.locator('a').filter({ hasText: 'Save to file' }).click(),
+    ]);
+    expect(await download.failure()).toBeNull();
+    expect(download.suggestedFilename()).toMatch(
+      /^tasks\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+
+    const downloadPath = await download.path();
+    if (!downloadPath) {
+      throw new Error('Worklog CSV download path is unavailable');
+    }
+    const csv = await readFile(downloadPath, 'utf8');
+    const rows = csv.replace(/^\uFEFF/, '').split(/\r?\n/);
+    expect(rows[0]).toBe('Date;Start;End;Worked;Titles');
+    expect(rows.find((row) => row.endsWith(`;${taskName}`))).toMatch(
+      /^\d{4}-\d{2}-\d{2}; - ; - ;0:20;/,
+    );
   });
 
   test('should navigate to worklog from side menu', async ({ page, workViewPage }) => {

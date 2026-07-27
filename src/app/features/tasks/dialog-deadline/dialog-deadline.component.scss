@@ -10,8 +10,9 @@
   justify-content: stretch;
   align-items: stretch;
   user-select: none;
-  width: 400px;
-  max-width: 100%;
+  width: max-content;
+  min-width: min(400px, calc(100vw - var(--s4)));
+  max-width: min(560px, 100%);
   display: block;
 
   :host-context([dir='rtl']) {
@@ -27,46 +28,15 @@ mat-dialog-content {
   ) !important;
 }
 
-:host ::ng-deep mat-dialog-actions {
+mat-dialog-actions {
   padding: 0 0 var(--s2) 0 !important;
+  row-gap: calc(var(--s) + var(--s-half));
 }
 
 .dialog-actions-and-warnings {
   margin: 0 var(--s2) var(--s2);
 }
 
-.deadline-actions {
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  width: 100%;
-  margin: 0 auto;
-  padding-bottom: var(--s);
-}
-
-.deadline-actions button {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 100%;
-  height: auto;
-  min-height: 38px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: center;
-}
-
-.deadline-actions button:not(:last-child) {
-  margin-right: var(--s-quarter);
-}
-
-.dialog-cancel-btn {
-  display: block;
-  width: 100%;
-}
-
-.deadline-actions button,
-.dialog-cancel-btn {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: center;
+.action-label {
+  white-space: nowrap;
 }

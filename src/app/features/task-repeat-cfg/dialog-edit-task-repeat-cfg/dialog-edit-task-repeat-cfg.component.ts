@@ -218,7 +218,9 @@ export class DialogEditTaskRepeatCfgComponent {
     task?: Task;
     repeatCfg?: TaskRepeatCfg;
     targetDate?: string;
+    initialStartDate?: string;
     defaultRemindOption?: TaskReminderOptionId;
+    isRemoveConfirmationRequired?: boolean;
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
@@ -334,6 +336,7 @@ export class DialogEditTaskRepeatCfgComponent {
         // Re-derived from the final schedule on save in case the user switches.
         skipOverdue: getDefaultSkipOverdue(DEFAULT_TASK_REPEAT_CFG),
         startDate:
+          this._data.initialStartDate ??
           this._data.task.dueDay ??
           getDbDateStr(this._data.task.dueWithTime || undefined),
         startTime,
@@ -497,12 +500,12 @@ export class DialogEditTaskRepeatCfgComponent {
       const newRepeatCfg = skipOverdueTouched
         ? finalRepeatCfg
         : { ...finalRepeatCfg, skipOverdue: getDefaultSkipOverdue(finalRepeatCfg) };
-      this._taskRepeatCfgService.addTaskRepeatCfgToTask(
+      const createdRepeatCfgId = this._taskRepeatCfgService.addTaskRepeatCfgToTask(
         (this._data.task as Task).id,
         (this._data.task as Task).projectId || null,
         newRepeatCfg,
       );
-      this.close();
+      this.close(createdRepeatCfgId);
     }
   }
 
@@ -533,9 +536,12 @@ export class DialogEditTaskRepeatCfgComponent {
 
   remove(): void {
     const currentRepeatCfg = this.repeatCfg();
-    this._taskRepeatCfgService.deleteTaskRepeatCfgWithDialog(
-      exists((currentRepeatCfg as TaskRepeatCfg).id),
-    );
+    const repeatCfgId = exists((currentRepeatCfg as TaskRepeatCfg).id);
+    if (this._data.isRemoveConfirmationRequired !== false) {
+      this._taskRepeatCfgService.deleteTaskRepeatCfgWithDialog(repeatCfgId);
+    } else {
+      this._taskRepeatCfgService.deleteTaskRepeatCfg(repeatCfgId);
+    }
     this.close();
   }
 
@@ -571,8 +577,8 @@ export class DialogEditTaskRepeatCfgComponent {
       });
   }
 
-  close(): void {
-    this._matDialogRef.close();
+  close(createdRepeatCfgId?: string): void {
+    this._matDialogRef.close(createdRepeatCfgId);
   }
 
   addTag(id: string): void {

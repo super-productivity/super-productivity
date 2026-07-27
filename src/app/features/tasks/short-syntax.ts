@@ -351,6 +351,9 @@ export const shortSyntax = async (
       pushRanges('due', dueResult.ranges);
       isTitleChanged = true;
     }
+  }
+
+  if (config.isEnableDeadline) {
     const deadlineResult = await parseDeadlineDate(tracked, now);
     if (deadlineResult) {
       taskChanges = { ...taskChanges, ...deadlineResult.changes };

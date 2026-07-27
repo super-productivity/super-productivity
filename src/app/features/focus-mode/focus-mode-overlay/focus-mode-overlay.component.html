@@ -1,33 +1,41 @@
 <div class="electron-drag-bar"></div>
 
-<header>
-  <banner></banner>
-</header>
-@if (activePage()) {
-  <main>
-    <button
-      class="close-btn"
-      mat-icon-button
-      (click)="closeOverlay()"
-      [attr.aria-label]="T.G.CLOSE | translate"
-    >
-      <mat-icon>close</mat-icon>
-    </button>
+<div
+  class="focus-mode-dialog"
+  role="dialog"
+  [attr.aria-label]="T.GCF.APP_FEATURES.FOCUS_MODE | translate"
+  cdkTrapFocus
+  [cdkTrapFocusAutoCapture]="true"
+>
+  <header>
+    <banner></banner>
+  </header>
+  @if (activePage()) {
+    <main>
+      <button
+        class="close-btn"
+        mat-icon-button
+        (click)="closeOverlay()"
+        [attr.aria-label]="T.G.CLOSE | translate"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
 
-    <!-- Mode selector is now integrated into focus-mode-main component -->
+      <!-- Mode selector is now integrated into focus-mode-main component -->
 
-    <!-- -->
-    @switch (activePage()) {
       <!-- -->
-      @case (FocusScreen.Main) {
-        <focus-mode-main @warpIn></focus-mode-main>
+      @switch (activePage()) {
+        <!-- -->
+        @case (FocusScreen.Main) {
+          <focus-mode-main @warpIn></focus-mode-main>
+        }
+        @case (FocusScreen.SessionDone) {
+          <focus-mode-session-done @warpIn></focus-mode-session-done>
+        }
+        @case (FocusScreen.Break) {
+          <focus-mode-break @warpIn></focus-mode-break>
+        }
       }
-      @case (FocusScreen.SessionDone) {
-        <focus-mode-session-done @warpIn></focus-mode-session-done>
-      }
-      @case (FocusScreen.Break) {
-        <focus-mode-break @warpIn></focus-mode-break>
-      }
-    }
-  </main>
-}
+    </main>
+  }
+</div>

@@ -76,6 +76,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   shortSyntax: {
     isEnableProject: true,
     isEnableDue: true,
+    isEnableDeadline: false,
     isEnableTag: true,
     urlBehavior: 'keep',
   },

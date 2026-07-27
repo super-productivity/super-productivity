@@ -69,6 +69,14 @@ export class MentionConfigService {
           labelKey: 'title',
           triggerChar: '@',
         });
+      }
+      if (cfg.isEnableDeadline) {
+        const chronoItems = CHRONO_SUGGESTIONS.map(
+          (title): MentionListItem => ({
+            title,
+            icon: 'schedule',
+          }),
+        );
         mentions.push({
           items: chronoItems,
           labelKey: 'title',

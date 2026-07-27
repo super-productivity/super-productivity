@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6230
@@ -44,19 +45,9 @@ test.describe('Repeat Task - Day Change (#6230)', () => {
 
     // 3. Open task detail and click the repeat/recurrence icon
     await taskPage.openTaskDetail(task);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
     // 4. Save the repeat dialog with default settings (DAILY)
-    const repeatDialog = page.locator('mat-dialog-container');
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await openRecurDialog(page);
+    await saveRecurDialog(page);
 
     // Close the task detail panel
     await page.keyboard.press('Escape');

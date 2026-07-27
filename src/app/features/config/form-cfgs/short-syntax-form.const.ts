@@ -28,6 +28,13 @@ export const SHORT_SYNTAX_FORM_CFG: ConfigFormSection<ShortSyntaxConfig> = {
       },
     },
     {
+      key: 'isEnableDeadline',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SHORT_SYNTAX.IS_ENABLE_DEADLINE,
+      },
+    },
+    {
       key: 'urlBehavior',
       type: 'select',
       templateOptions: {

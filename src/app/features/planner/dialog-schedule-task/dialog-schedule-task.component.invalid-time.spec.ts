@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -61,7 +62,11 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
 
   beforeEach(async () => {
     matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close']);
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['scheduleTask']);
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+      'scheduleTask',
+      'getByIdLive$',
+    ]);
+    taskServiceSpy.getByIdLive$.and.returnValue(of(task));
     // ngAfterViewInit reads viewChild.required(MatCalendar). With the template
     // stubbed there is no calendar — skip the hook and test in isolation.
     spyOn(DialogScheduleTaskComponent.prototype, 'ngAfterViewInit').and.stub();

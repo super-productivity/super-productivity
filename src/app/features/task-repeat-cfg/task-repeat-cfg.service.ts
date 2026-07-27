@@ -80,21 +80,23 @@ export class TaskRepeatCfgService {
     taskId: string,
     projectId: string | null,
     taskRepeatCfg: Omit<TaskRepeatCfgCopy, 'id'>,
-  ): void {
+  ): string {
     // Note: First occurrence calculation and lastTaskCreationDay update
     // is handled by the updateTaskAfterMakingItRepeatable$ effect (#5594)
+    const repeatCfgId = nanoid();
     this._store$.dispatch(
       addTaskRepeatCfgToTask({
         taskRepeatCfg: {
           ...taskRepeatCfg,
           projectId,
-          id: nanoid(),
+          id: repeatCfgId,
         },
         taskId,
         startTime: taskRepeatCfg.startTime,
         remindAt: taskRepeatCfg.remindAt,
       }),
     );
+    return repeatCfgId;
   }
 
   deleteTaskRepeatCfg(id: string): void {

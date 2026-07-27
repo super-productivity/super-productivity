@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
 import os from 'os';
 
+const IS_WEBKIT_SMOKE_ENABLED = process.env.E2E_WEBKIT_SMOKE === 'true';
+const IPHONE_13 = devices['iPhone 13'];
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -108,6 +111,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /mobile-webkit-smoke\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         contextOptions: {
@@ -131,15 +135,28 @@ export default defineConfig({
       },
     },
 
-    // Optionally test against other browsers
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
+    ...(IS_WEBKIT_SMOKE_ENABLED
+      ? [
+          {
+            name: 'mobile-webkit',
+            testMatch: /mobile-webkit-smoke\.spec\.ts/,
+            use: {
+              browserName: 'webkit' as const,
+              // The custom isolated-context fixture consumes contextOptions,
+              // so keep the mobile/touch descriptor nested here.
+              contextOptions: {
+                viewport: IPHONE_13.viewport,
+                screen: IPHONE_13.screen,
+                userAgent: IPHONE_13.userAgent,
+                deviceScaleFactor: IPHONE_13.deviceScaleFactor,
+                isMobile: IPHONE_13.isMobile,
+                hasTouch: IPHONE_13.hasTouch,
+                locale: 'en-GB',
+              },
+            },
+          },
+        ]
+      : []),
   ],
 
   /* Run your local dev server before starting the tests */

@@ -26,6 +26,7 @@ import { By } from '@angular/platform-browser';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { MarkdownModule } from 'ngx-markdown';
 import { MentionConfigService } from '../../tasks/mention-config.service';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'focus-mode-task-selector',
@@ -155,6 +156,7 @@ describe('FocusModeMainComponent', () => {
         { provide: FocusModeService, useValue: focusModeServiceSpy },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: signal(false) } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -654,6 +656,27 @@ describe('FocusModeMainComponent', () => {
       // Default setup has: mainState=Preparation
       expect(component.isShowModeSelector()).toBe(true);
     });
+
+    it('should mark the layout so mobile spacing can keep the close button clear', () => {
+      const layout = fixture.nativeElement.querySelector(
+        'focus-mode-layout',
+      ) as HTMLElement;
+
+      expect(layout.classList.contains('has-mode-selector')).toBe(true);
+    });
+  });
+
+  describe('accessible names', () => {
+    it('should label all icon-only preparation controls', () => {
+      const buttons = Array.from(
+        fixture.nativeElement.querySelectorAll('.play-actions button'),
+      ) as HTMLButtonElement[];
+
+      expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+        'F.FOCUS_MODE.START_FOCUS_SESSION',
+        'F.FOCUS_MODE.POMODORO_SETTINGS',
+      ]);
+    });
   });
 
   describe('selectMode', () => {
@@ -701,6 +724,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   let mainStateSignal: WritableSignal<FocusMainUIState>;
   let modeSignal: WritableSignal<FocusModeMode>;
   let isSessionRunningSignal: WritableSignal<boolean>;
+  let isXsSignal: WritableSignal<boolean>;
+  let mockIssueService: jasmine.SpyObj<IssueService>;
 
   const mockTask: TaskCopy = {
     id: 'task-1',
@@ -715,6 +740,10 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     timeSpentOnDay: {},
     attachments: [],
     tagIds: [],
+    issueType: 'GITHUB',
+    issueId: '123',
+    issueProviderId: 'provider-1',
+    issuePoints: 5,
   } as TaskCopy;
 
   beforeEach(async () => {
@@ -722,6 +751,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     mainStateSignal = signal(FocusMainUIState.InProgress);
     modeSignal = signal(FocusModeMode.Pomodoro);
     isSessionRunningSignal = signal(true);
+    isXsSignal = signal(true);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({
@@ -738,8 +768,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       'createFromDrop',
     ]);
 
-    const issueServiceSpy = jasmine.createSpyObj('IssueService', ['issueLink']);
-    issueServiceSpy.issueLink.and.returnValue(Promise.resolve('https://example.com'));
+    mockIssueService = jasmine.createSpyObj('IssueService', ['issueLink']);
+    mockIssueService.issueLink.and.returnValue(Promise.resolve('https://example.com'));
 
     const simpleCounterServiceSpy = jasmine.createSpyObj('SimpleCounterService', [''], {
       enabledSimpleCounters$: of([]),
@@ -784,11 +814,12 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
-        { provide: IssueService, useValue: issueServiceSpy },
+        { provide: IssueService, useValue: mockIssueService },
         { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: isXsSignal } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {
@@ -848,6 +879,92 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     component.selectMode(FocusModeMode.Countdown);
 
     expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should keep the primary session actions visible and group secondary actions on mobile', () => {
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.length).toBe(4);
+    expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+  });
+
+  it('should restore direct secondary session actions and issue points on desktop', () => {
+    isXsSignal.set(false);
+    fixture.detectChanges();
+
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.length).toBe(6);
+    expect(controls.querySelector('.secondary-actions-menu-btn')).toBeNull();
+    expect(controls.querySelector('.reset-cycles-btn')).not.toBeNull();
+    expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
+    expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
+    expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+  });
+
+  it('should defer resolving the issue URL until the mobile More menu opens', async () => {
+    expect(mockIssueService.issueLink).not.toHaveBeenCalled();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockIssueService.issueLink).toHaveBeenCalledOnceWith(
+      'GITHUB',
+      '123',
+      'provider-1',
+    );
+  });
+
+  it('should open the secondary actions menu and toggle notes', async () => {
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const menuItems = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    );
+    const notesButton = menuItems.find((button) =>
+      button.textContent?.includes('F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS'),
+    );
+
+    expect(notesButton).toBeDefined();
+    expect(component.isFocusNotes()).toBe(false);
+
+    notesButton!.click();
+    fixture.detectChanges();
+
+    expect(component.isFocusNotes()).toBe(true);
+  });
+
+  it('should label every icon-only primary session action', () => {
+    const controls = fixture.nativeElement.querySelector(
+      '.bottom-controls',
+    ) as HTMLElement;
+    const buttons = Array.from(
+      controls.querySelectorAll(':scope > button, :scope > a'),
+    ) as HTMLElement[];
+
+    expect(buttons.every((button) => Boolean(button.getAttribute('aria-label')))).toBe(
+      true,
+    );
   });
 
   it('should pass isDefaultText=false to inline-markdown when task has notes', () => {
@@ -1033,6 +1150,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
         { provide: FocusModeService, useValue: focusModeServiceMock },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: LayoutService, useValue: { isXs: signal(false) } },
       ],
     })
       .overrideComponent(FocusModeMainComponent, {

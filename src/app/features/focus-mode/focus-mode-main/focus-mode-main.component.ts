@@ -74,6 +74,13 @@ import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
 import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dialog-pomodoro-settings.component';
 import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dialog-flowtime-settings.component';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'focus-mode-main',
@@ -112,6 +119,10 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     InputDurationSliderComponent,
     SegmentedButtonGroupComponent,
     FocusModeTaskSelectorComponent,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
   ],
   host: {
     ['[class.isSessionRunning]']: 'isSessionRunning()',
@@ -139,6 +150,7 @@ export class FocusModeMainComponent {
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
   readonly focusModeService = inject(FocusModeService);
+  readonly isXs = inject(LayoutService).isXs;
   readonly focusModeConfig = this.focusModeService.focusModeConfig;
 
   readonly FocusModeMode = FocusModeMode;

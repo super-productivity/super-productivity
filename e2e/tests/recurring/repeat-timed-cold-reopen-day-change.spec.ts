@@ -1,4 +1,9 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  openRecurDialog,
+  openRecurScheduleDialog,
+  saveRecurDialog,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Regression guard: a TIMED daily repeat task must get its new-day instance
@@ -40,26 +45,11 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
 
     // 3. Open task detail → open the repeat/recurrence dialog.
     await taskPage.openTaskDetail(task);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
-    const repeatDialog = page.locator('mat-dialog-container').first();
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await openRecurDialog(page);
 
     // 4. Make it a TIMED daily repeat: Open schedule dialog and set a start time (13:00).
     //    remindAt defaults to AtStart once startTime is set, so the config is timed.
-    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
-    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
-    await scheduleBtn.click();
-
-    // Wait for the schedule dialog to appear
-    const scheduleDialog = page
-      .locator('mat-dialog-container')
-      .filter({ has: page.locator('datetime-picker') });
-    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+    const scheduleDialog = await openRecurScheduleDialog(page);
 
     // Set a valid startTime
     const startTimeField = scheduleDialog.getByLabel('Time');
@@ -75,10 +65,7 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
     // 5. Save the (default DAILY) repeat config.
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
     await page.keyboard.press('Escape');
 
     // 6. Day X instance exists in Today (scheduled 13:00, still in the future).

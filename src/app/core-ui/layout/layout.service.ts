@@ -27,7 +27,10 @@ import { toSignal } from '@angular/core/rxjs-interop';
 
 const XS_BREAKPOINT = 600;
 const XXXS_BREAKPOINT = 398;
-const XS_MEDIA_QUERY = `(max-width: ${XS_BREAKPOINT}px)`;
+const maxWidthMediaQuery = (breakpoint: number): string =>
+  `(max-width: ${breakpoint - 1}px)`;
+const XS_MEDIA_QUERY = maxWidthMediaQuery(XS_BREAKPOINT);
+const XXXS_MEDIA_QUERY = maxWidthMediaQuery(XXXS_BREAKPOINT);
 const initialXsMatch =
   typeof window !== 'undefined' ? window.matchMedia(XS_MEDIA_QUERY).matches : false;
 
@@ -74,7 +77,7 @@ export class LayoutService {
 
   readonly isXxxs = toSignal(
     this._breakPointObserver
-      .observe(`(max-width: ${XXXS_BREAKPOINT}px)`)
+      .observe(XXXS_MEDIA_QUERY)
       .pipe(map((result) => result.matches)),
     { initialValue: false },
   );

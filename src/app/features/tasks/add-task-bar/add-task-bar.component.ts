@@ -88,6 +88,12 @@ import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
+export interface TaskAddEvent {
+  taskId: string;
+  isAddToBottom: boolean;
+  isNewTask: boolean;
+}
+
 @Component({
   selector: 'add-task-bar',
   templateUrl: './add-task-bar.component.html',
@@ -149,7 +155,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   planForDay = input<string>();
 
   // Outputs
-  afterTaskAdd = output<{ taskId: string; isAddToBottom: boolean }>();
+  afterTaskAdd = output<TaskAddEvent>();
   closed = output<void>();
   done = output<void>();
 
@@ -620,7 +626,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         }
       }
 
-      this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
+      this.afterTaskAdd.emit({
+        taskId,
+        isAddToBottom: this.isAddToBottom(),
+        isNewTask: true,
+      });
       this._resetAfterAdd();
     } finally {
       this._isAddingTask = false;
@@ -664,7 +674,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const planForDay = this.planForDay();
     let didPlanForDay = false;
 
-    if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
+    if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
+      taskId = suggestion.taskId;
+    } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
       if (planForDay) {
         await this._planTaskForCurrentDay(suggestion.taskId);
         didPlanForDay = true;
@@ -725,6 +737,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       this.afterTaskAdd.emit({
         taskId,
         isAddToBottom: false,
+        isNewTask: !suggestion.taskId,
       });
     }
 

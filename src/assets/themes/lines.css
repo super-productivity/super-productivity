@@ -197,9 +197,11 @@ body issue-preview-item {
   background: transparent !important;
   box-shadow: none !important;
   border-radius: 0 !important;
-  border-top: 1px solid var(--separator-color);
+  /* !important so the theme hairline wins over the component's default :host
+     border, which now carries the --task-border switch at higher specificity. */
+  border-top: 1px solid var(--separator-color) !important;
 }
 
 body issue-preview-item:last-of-type {
-  border-bottom: 1px solid var(--separator-color);
+  border-bottom: 1px solid var(--separator-color) !important;
 }

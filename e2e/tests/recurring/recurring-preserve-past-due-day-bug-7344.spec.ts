@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
 
 /**
@@ -55,14 +56,7 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
     // 3. Open the repeat dialog via the task detail panel.
     const reopenedTask = taskPage.getTaskByText(taskTitle).first();
     await taskPage.openTaskDetail(reopenedTask);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
-    const repeatDialog = page.locator('mat-dialog-container');
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    const repeatDialog = await openRecurDialog(page);
 
     // 4. Switch to CUSTOM so repeatCycle becomes editable without overriding
     //    startDate (picking YEARLY_CURRENT_DATE would reset startDate to today).
@@ -79,10 +73,7 @@ test.describe('Recurring Task - preserve past dueDay (#7344)', () => {
     await yearlyOption.click();
 
     // 6. Save the repeat config.
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
     await page.keyboard.press('Escape');
 
     // 7. ASSERTION: after reload, the task remains visible in Today view.

@@ -1,4 +1,9 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  openRecurDialog,
+  openRecurScheduleDialog,
+  saveRecurDialog,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/7067
@@ -31,20 +36,10 @@ test('should not crash when a repeat config has an invalid startTime in the stor
   await expect(task).toBeVisible({ timeout: 10000 });
 
   await taskPage.openTaskDetail(task);
-  await page
-    .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) })
-    .click();
-
-  const repeatDialog = page.locator('mat-dialog-container').first();
-  await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+  await openRecurDialog(page);
 
   // Set a valid startTime so the config has startTime + remindAt in the store
-  await repeatDialog.locator('.planned-start-date-btn').click();
-  const scheduleDialog = page
-    .locator('mat-dialog-container')
-    .filter({ has: page.locator('datetime-picker') });
-  await expect(scheduleDialog).toBeVisible();
+  const scheduleDialog = await openRecurScheduleDialog(page);
 
   const startTimeField = scheduleDialog.getByLabel('Time');
   await expect(startTimeField).toBeVisible({ timeout: 5000 });
@@ -56,10 +51,7 @@ test('should not crash when a repeat config has an invalid startTime in the stor
   await scheduleDialog.waitFor({ state: 'hidden' });
   await page.waitForTimeout(300);
 
-  const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-  await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-  await saveBtn.click();
-  await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+  await saveRecurDialog(page);
   await page.keyboard.press('Escape');
   // Wait for the op to be flushed to IndexedDB before we try to read it
   await page.waitForTimeout(1500);

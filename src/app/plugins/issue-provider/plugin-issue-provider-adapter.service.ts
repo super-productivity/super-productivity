@@ -472,26 +472,49 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return ['closed', 'done', 'completed', 'resolved'].includes(state);
   }
 
-  private _handleRemoteDeletion(task: Task): void {
-    const hasTimeTracking = task.timeSpent > 0;
-    if (hasTimeTracking) {
-      this._snackService.open({
-        type: 'WARNING',
-        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED_WITH_TIME,
-        translateParams: { taskTitle: task.title },
-        ico: 'delete_forever',
-        actionStr: T.G.DELETE,
-        actionFn: () => this._taskService.removeMultipleTasks([task.id]),
-      });
-    } else {
-      this._taskService.removeMultipleTasks([task.id]);
-      this._snackService.open({
-        type: 'CUSTOM',
-        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED,
-        translateParams: { taskTitle: task.title },
-        ico: 'delete_forever',
-      });
-    }
+  private _handleRemoteDeletion(requestedTask: Task): void {
+    // Re-read synchronously from NgRx so a delayed response cannot delete or
+    // warn about a task that was relinked while the provider request was in flight.
+    this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
+      if (
+        !currentTask ||
+        currentTask.issueId !== requestedTask.issueId ||
+        currentTask.issueProviderId !== requestedTask.issueProviderId
+      ) {
+        return;
+      }
+
+      const hasTimeTracking = currentTask.timeSpent > 0;
+      if (hasTimeTracking) {
+        this._snackService.open({
+          type: 'WARNING',
+          msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED_WITH_TIME,
+          translateParams: { taskTitle: currentTask.title },
+          ico: 'delete_forever',
+          actionStr: T.G.DELETE,
+          actionFn: () => this._removeIfIssueStillMatches(currentTask),
+        });
+      } else {
+        this._taskService.removeMultipleTasks([currentTask.id]);
+        this._snackService.open({
+          type: 'CUSTOM',
+          msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED,
+          translateParams: { taskTitle: currentTask.title },
+          ico: 'delete_forever',
+        });
+      }
+    });
+  }
+
+  private _removeIfIssueStillMatches(requestedTask: Task): void {
+    this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
+      if (
+        currentTask?.issueId === requestedTask.issueId &&
+        currentTask.issueProviderId === requestedTask.issueProviderId
+      ) {
+        this._taskService.removeMultipleTasks([currentTask.id]);
+      }
+    });
   }
 
   private _mapLabelsToTagIds(labels: string[], shouldCreate: boolean): string[] {

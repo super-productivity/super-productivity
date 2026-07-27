@@ -93,6 +93,9 @@ jobs:
           fi
           node tools/verify-electron-requires.js "$ASAR"
 
+      - name: Move packaged app into special-character path
+        run: mv .tmp/app-builds/linux-unpacked '.tmp/app-builds/# packaged app'
+
       - name: Install xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
@@ -104,7 +107,7 @@ jobs:
             --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
             node e2e/electron/packaged-app-smoke.cjs \
-              .tmp/app-builds/linux-unpacked/superproductivity \
+              '.tmp/app-builds/# packaged app/superproductivity' \
             2>&1 | tee .tmp/smoke/launch.log
 
       - name: Upload logs on failure

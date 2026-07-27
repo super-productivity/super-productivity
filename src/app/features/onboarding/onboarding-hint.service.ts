@@ -39,6 +39,7 @@ export class OnboardingHintService {
   private _taskFocusService = inject(TaskFocusService);
   private _store = inject(Store);
   private _isStarted = false;
+  private _firstTaskIdForComposerAutoClose: string | null = null;
   private _waitingForBarClose = false;
   private _waitingForTaskPanelClose = false;
   private _waitingForTaskContextMenuClose = false;
@@ -126,9 +127,20 @@ export class OnboardingHintService {
     this._startOnboarding();
   }
 
+  shouldAutoCloseFirstTaskComposer(taskId: string): boolean {
+    const shouldAutoClose =
+      taskId === this._firstTaskIdForComposerAutoClose &&
+      this._waitingForBarClose &&
+      isTouchActive() &&
+      this._layoutService.isShowMobileBottomNav();
+    this._firstTaskIdForComposerAutoClose = null;
+    return shouldAutoClose;
+  }
+
   skip(): void {
     localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
     this.currentStep.set(null);
+    this._firstTaskIdForComposerAutoClose = null;
     this._waitingForBarClose = false;
     this._waitingForTaskPanelClose = false;
     this._waitingForTaskContextMenuClose = false;
@@ -164,8 +176,9 @@ export class OnboardingHintService {
   private _listenForTaskCreation(): void {
     this._listenSub = this._actions$
       .pipe(ofType(TaskSharedActions.addTask), first())
-      .subscribe(() => {
+      .subscribe(({ task }) => {
         this._listenSub?.unsubscribe();
+        this._firstTaskIdForComposerAutoClose = task.id;
         this._waitingForBarClose = true;
         // If the bar is already closed (e.g. keyboard shortcut), start the delay now
         if (!this._layoutService.isShowAddTaskBar()) {

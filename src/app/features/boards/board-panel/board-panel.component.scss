@@ -19,7 +19,8 @@
   }
 
   planner-task {
-    margin-bottom: var(--s);
+    // Match the planner/task-list inter-row rhythm (4px), not the roomier 8px.
+    margin-bottom: var(--s-half);
     margin-right: var(--s-half);
   }
 

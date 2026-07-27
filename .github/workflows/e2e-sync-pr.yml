@@ -71,13 +71,15 @@ jobs:
           # base since the PR opened and trips the pattern on unrelated churn.
           BASE_TIP="$(git rev-parse HEAD^1)"
           MERGE_BASE="$(git merge-base "${BASE_TIP}" "${PR_HEAD}")"
-          CHANGED_FILES="$(git diff --name-only "${MERGE_BASE}" "${PR_HEAD}")"
+          CHANGED_FILES="$(git diff --name-only --no-renames "${MERGE_BASE}" "${PR_HEAD}")"
           echo "Changed files:"
           echo "${CHANGED_FILES}"
 
           # Shared: client sync code + E2E harness that both providers exercise.
           # Keep in rough sync with the nightly workflow's push `paths:` list.
-          COMMON='src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$'
+          PERSISTENT_ACTION_PATHS='src/app/features/tasks/task-attachment/|src/app/plugins/store/'
+          SYNC_UTILITY_PATHS='src/app/core/date/date\.service\.ts$|src/app/core/util/|src/app/util/(get-db-date-str|is-today\.util|start-of-next-day\.util|local-actions\.token|skip-during-sync(-window)?\.operator|wait-for-sync-window\.operator)\.ts$'
+          COMMON="src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$"
           # SuperSync also depends on the server package and its compose override.
           SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
           WEBDAV_PATTERN="^(${COMMON})"

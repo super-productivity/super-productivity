@@ -29,7 +29,7 @@ import {
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
-import { IssueTask, Task, TaskCopy, TaskWithSubTasks } from '../tasks/task.model';
+import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
 // Trello is now a plugin — no built-in service needed
@@ -464,81 +464,11 @@ export class IssueService {
           });
         }
       }
-
-      if (service.getRemovedRemoteTasks) {
-        await this._removeOrphanedRemoteTasks(
-          service,
-          tasksIssueIdsByIssueProviderKey[providerKey],
-        );
-      }
     }
 
     for (const taskWithoutIssueId of tasksWithoutIssueId) {
       throw new Error('No issue task ' + taskWithoutIssueId.id);
     }
-  }
-
-  /**
-   * Removes local tasks that are gone from the provider (deleted or reassigned
-   * away), but only when nothing has been invested in them locally. Failures are
-   * logged and swallowed so a detection hiccup never aborts the rest of the poll.
-   */
-  private async _removeOrphanedRemoteTasks(
-    service: IssueServiceInterface,
-    tasks: Task[],
-  ): Promise<void> {
-    try {
-      const orphaned = await service.getRemovedRemoteTasks!(tasks);
-      const removable = orphaned.filter((task) => !this._hasLocalContent(task));
-      if (removable.length === 0) {
-        return;
-      }
-      // The deleteTask effect that mirrors deletions back to the provider no-ops
-      // here (Plainspace has no deleteIssue adapter) — which is also why removing
-      // a reassigned task never deletes the still-living remote item. Each device
-      // polls independently and the delete op is idempotent, so a concurrent
-      // same-task delete on another device is harmless. Tasks are childless by
-      // the _hasLocalContent guard, so an empty subTasks list is accurate.
-      if (removable.length === 1) {
-        // Single-task path keeps the built-in deleteTask UNDO snackbar.
-        this._taskService.remove({
-          ...removable[0],
-          subTasks: [],
-        } as TaskWithSubTasks);
-      } else {
-        // A bulk vanish (e.g. many reassigned at once) collapses to ONE deleteTasks
-        // op instead of N rapid deleteTask dispatches (sync rule #3: one
-        // reconciliation = one op). The bulk path has no per-task undo snackbar.
-        this._taskService.removeMultipleTasks(removable.map((task) => task.id));
-      }
-    } catch (e) {
-      // Never log the raw error object — it may be an HttpErrorResponse whose
-      // url/body carry the issue id or task content, and the log is exportable.
-      IssueLog.err(
-        'Failed to remove orphaned issue tasks',
-        e instanceof Error ? e : String(e),
-      );
-    }
-  }
-
-  /**
-   * Whether the task holds local work or a completion record that removal would
-   * lose. Time tracking is the headline case; notes, sub-tasks, attachments and a
-   * local repeat config all count. `isDone` is kept too: a finished task is a
-   * record worth preserving, it covers "reassigned away after I completed it",
-   * and it decouples removal from the server keeping done items in its list.
-   * Deliberately excluded: dueDay/dueWithTime and tagIds are seeded by the import
-   * itself, so every imported task has them.
-   */
-  private _hasLocalContent(task: Task): boolean {
-    return (
-      task.timeSpent > 0 ||
-      (task.subTaskIds?.length ?? 0) > 0 ||
-      !!task.notes ||
-      (task.attachments?.length ?? 0) > 0 ||
-      !!task.repeatCfgId ||
-      task.isDone
-    );
   }
 
   async addTaskFromIssue({

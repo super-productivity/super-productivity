@@ -1,5 +1,5 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { ComponentRef, NO_ERRORS_SCHEMA } from '@angular/core';
+import { ComponentRef, NO_ERRORS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { EMPTY, of } from 'rxjs';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
@@ -18,6 +18,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
 import { DEFAULT_TASK, TaskDetailTargetPanel, TaskWithSubTasks } from '../task.model';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
+import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -27,14 +28,17 @@ const MOCK_TASK: TaskWithSubTasks = {
   attachments: [],
 };
 
-describe('TaskDetailPanelComponent paste handler', () => {
+describe('TaskDetailPanelComponent', () => {
   let component: TaskDetailPanelComponent;
   let fixture: ComponentFixture<TaskDetailPanelComponent>;
   let componentRef: ComponentRef<TaskDetailPanelComponent>;
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
   let mockAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
+  let mockTaskService: jasmine.SpyObj<TaskService>;
+  let isXs: WritableSignal<boolean>;
 
   beforeEach(async () => {
+    isXs = signal(true);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'handlePasteWithProgress',
     ]);
@@ -42,7 +46,7 @@ describe('TaskDetailPanelComponent paste handler', () => {
       'addAttachment',
       'createFromDrop',
     ]);
-    const mockTaskService = jasmine.createSpyObj(
+    mockTaskService = jasmine.createSpyObj(
       'TaskService',
       ['update', 'setSelectedId', 'focusTaskIfPossible', 'addSubTaskTo'],
       {
@@ -52,6 +56,7 @@ describe('TaskDetailPanelComponent paste handler', () => {
     );
     const mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       isShowList: jasmine.createSpy().and.returnValue(true),
+      isXs,
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
@@ -107,7 +112,11 @@ describe('TaskDetailPanelComponent paste handler', () => {
         { provide: Store, useValue: mockStore },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(TaskContextMenuComponent, {
+        set: { template: '', imports: [] },
+      })
+      .compileComponents();
 
     fixture = TestBed.createComponent(TaskDetailPanelComponent);
     componentRef = fixture.componentRef;
@@ -224,6 +233,96 @@ describe('TaskDetailPanelComponent paste handler', () => {
       expect(mockAttachmentService.addAttachment).not.toHaveBeenCalled();
     }));
   });
+
+  describe('mobile task actions', () => {
+    it('shows a single more-actions button in the mobile header', () => {
+      const moreButton: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+        '.task-detail-more-btn',
+      );
+
+      expect(moreButton).not.toBeNull();
+      expect(moreButton?.getAttribute('aria-label')).toBeTruthy();
+      expect(moreButton?.getAttribute('aria-haspopup')).toBe('menu');
+      expect(moreButton?.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('opens the actions menu and reports keyboard activation through the view child', () => {
+      const taskContextMenu = component.taskContextMenu();
+      expect(taskContextMenu).toBeDefined();
+      const open = spyOn(taskContextMenu!, 'open').and.callFake(() =>
+        taskContextMenu!.isOpen.set(true),
+      );
+
+      const moreButton: HTMLButtonElement = fixture.nativeElement.querySelector(
+        '.task-detail-more-btn',
+      );
+
+      moreButton.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+      fixture.detectChanges();
+
+      expect(open).toHaveBeenCalledWith(jasmine.any(MouseEvent), true, moreButton);
+      expect(moreButton.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('hides the mobile actions above the mobile breakpoint', () => {
+      isXs.set(false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.task-detail-more-btn')).toBeNull();
+    });
+
+    it('uses the responsive layout signal for mobile panel defaults', () => {
+      expect(component.panelState.isExpandedAttachmentPanel()).toBeFalse();
+      expect(component.isExpandedIssuePanel()).toBeFalse();
+      expect(component.isExpandedNotesPanel()).toBeFalse();
+    });
+  });
+
+  describe('showScheduleIcon (merged schedule + recurrence item)', () => {
+    it("returns 'today' when a due day is set", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: '2026-05-26',
+        dueWithTime: undefined,
+        repeatCfgId: undefined,
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('today');
+    });
+
+    it("returns 'schedule' for a timed due date without a reminder", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: undefined,
+        dueWithTime: 1700000000000,
+        remindAt: undefined,
+        repeatCfgId: undefined,
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('schedule');
+    });
+
+    it("returns 'repeat' for a recurring task with no due date", () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: undefined,
+        dueWithTime: undefined,
+        repeatCfgId: 'cfg-1',
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('repeat');
+    });
+
+    it('prefers the due-day icon over the repeat icon when a recurring task also has a due day', () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        dueDay: '2026-05-26',
+        repeatCfgId: 'cfg-1',
+      });
+      fixture.detectChanges();
+      expect(component.showScheduleIcon()).toBe('today');
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
@@ -262,7 +361,7 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -378,7 +477,7 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -475,7 +574,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
-        { provide: LayoutService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
           useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },

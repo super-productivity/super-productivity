@@ -1,7 +1,7 @@
 import { extractActionPayload } from '@sp/sync-core';
 import { SyncOperation } from '../sync-providers/provider.interface';
-import { isLwwUpdateActionType } from '../core/lww-update-action-types';
-import { isSingletonEntityId } from '../core/entity-registry';
+import { getLwwEntityType } from '../core/lww-update-action-types';
+import { isLwwPayloadIdCanonical } from '../core/entity-registry';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { ACTION_TYPE_ALIASES } from '../apply/operation-converter.util';
 import { SyncLog } from '../../core/log';
@@ -15,6 +15,7 @@ import {
   MIN_SUPPORTED_SCHEMA_VERSION,
   migrateState,
 } from '@sp/shared-schema';
+import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 
 let _validateAllDataPromise:
   | Promise<typeof import('../validation/validation-fn').validateAllData>
@@ -34,8 +35,67 @@ const _loadValidateAllData = (): Promise<
   return _validateAllDataPromise;
 };
 
+let _autoFixTypiaErrorsPromise:
+  | Promise<typeof import('../validation/auto-fix-typia-errors').autoFixTypiaErrors>
+  | undefined;
+
+const _loadAutoFixTypiaErrors = (): Promise<
+  typeof import('../validation/auto-fix-typia-errors').autoFixTypiaErrors
+> => {
+  if (!_autoFixTypiaErrorsPromise) {
+    _autoFixTypiaErrorsPromise = import('../validation/auto-fix-typia-errors')
+      .then((m) => m.autoFixTypiaErrors)
+      .catch((err) => {
+        _autoFixTypiaErrorsPromise = undefined;
+        throw err;
+      });
+  }
+  return _autoFixTypiaErrorsPromise;
+};
+
+/**
+ * A typia error whose path points BELOW a top-level root (has a nested `.`/`[`
+ * segment after `$input.<root>`) — e.g. `$input.issueProvider.entities["x"]
+ * .allowFetchFallback`. Such an error proves the root container is PRESENT; only
+ * a field inside it drifted. A bare-root error (`$input.globalConfig`) is NOT
+ * field-level: the whole section is missing.
+ *
+ * CAVEAT: "present" is not "well-formed" — typia also descends into a present but
+ * DEGENERATE container (`globalConfig: {}` or `[]`) and reports only nested errors.
+ * So this predicate alone does not prove the root is the right container KIND;
+ * `_hasWrongRootContainerKind` is its companion guard on the heal path.
+ */
+const _isFieldLevelDriftError = (path: string): boolean => {
+  const rest = path.startsWith('$input.') ? path.slice('$input.'.length) : path;
+  return rest.includes('.') || rest.includes('[');
+};
+
 const _isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * True if any PRESENT top-level root has the wrong container kind (array vs
+ * object) versus its model default. typia descends into a present-but-mis-typed
+ * root and emits only nested errors (never a bare-root error), so without this a
+ * `globalConfig: []` would pass `_isFieldLevelDriftError` and then be rebuilt
+ * wholesale by `autoFixTypiaErrors`' globalConfig catch-all — healing a malformed
+ * container into a "valid" snapshot. A genuine snapshot never carries a mis-typed
+ * root; absent/null roots are left to typia's (non-field-level) bare-root errors.
+ * Codex-review finding, #9256.
+ */
+const _hasWrongRootContainerKind = (state: unknown): boolean => {
+  if (!_isRecord(state)) {
+    return true;
+  }
+  return Object.entries(MODEL_CONFIGS).some(([key, cfg]) => {
+    const value = state[key];
+    return (
+      value !== undefined &&
+      value !== null &&
+      Array.isArray(value) !== Array.isArray(cfg.defaultData)
+    );
+  });
+};
 
 const _restoreKnownFullStateOmissionsForValidation = (fullState: unknown): unknown => {
   if (!_isRecord(fullState)) {
@@ -103,10 +163,12 @@ const _migrateFullStateForValidation = (
  * resolve the mismatch by trusting the tampered `op.entityId` over the
  * authenticated `payload.id` (it coerces `payload.id = op.entityId` — including
  * when `payload.id` is absent — and only warns). Here we treat the
- * authenticated `payload.id` as ground truth and fail CLOSED: an in-scope LWW op
- * whose authenticated payload does not carry a string `id` equal to
- * `op.entityId` is rejected. The gate mirrors `convertOpToAction`'s coercion
- * predicate exactly (same alias resolution, same singleton exclusion) so the two
+ * authenticated `payload.id` as ground truth for adapter-backed LWW actions and
+ * fail CLOSED: an in-scope adapter LWW op whose authenticated payload does not
+ * carry a string `id` equal to `op.entityId` is rejected. Singleton LWW actions
+ * target their registered feature state as a whole, so their contextual
+ * conflict IDs do not have a canonical payload `id`. The gate mirrors
+ * `convertOpToAction`'s action-derived storage-pattern check so the two
  * boundaries cannot drift and leave a hole.
  *
  * Scope: only encrypted ops reach this boundary (it is called from the decrypt
@@ -135,14 +197,19 @@ export const assertDecryptedOpMetadataIntegrity = (
   // would make this gate skip an op the converter still LWW-coerces, silently
   // reopening the retarget hole.
   const actionType = ACTION_TYPE_ALIASES[op.actionType] ?? op.actionType;
+  const lwwEntityType = getLwwEntityType(actionType);
 
-  // Only non-singleton LWW single-entity updates carry a canonical `payload.id`
-  // that must equal `op.entityId`. Singletons use SINGLETON_ENTITY_ID (no `id`).
-  if (
-    !isLwwUpdateActionType(actionType) ||
-    !op.entityId ||
-    isSingletonEntityId(op.entityId)
-  ) {
+  // Derive the target from actionType because it chooses the reducer branch;
+  // op.entityType is unauthenticated metadata and must not grant an exemption.
+  //
+  // Scope is adapter-only ON PURPOSE and stays tied to the reducer: only the
+  // adapter branch of lwwUpdateMetaReducer addresses an entity BY `payload.id`,
+  // so only adapters can be retargeted by a tampered id. Singleton LWW replaces a
+  // whole feature slice (id irrelevant) and map/array LWW ops are not applied by
+  // that reducer at all — none carry a canonical `payload.id` to protect. If the
+  // reducer ever learns to apply a map/array LWW update by payload identity, this
+  // gate must be widened in lockstep or the retarget defense would not cover it.
+  if (!op.entityId || !isLwwPayloadIdCanonical(lwwEntityType)) {
     return;
   }
 
@@ -269,6 +336,19 @@ const assertEncryptedProjectMoveFootprintIntegrity = (
  * security failure and is not needed to distinguish ordinary entity payloads
  * from complete state.
  *
+ * FIELD-LEVEL SCHEMA DRIFT is likewise recoverable, not tampering: a required
+ * scalar added in a later app version (e.g. JiraCfg.allowFetchFallback / #7628,
+ * #9256) is simply absent from an older entity. The normal apply path heals that
+ * downstream (RemoteOpsProcessingService Checkpoint D → dataRepair →
+ * autoFixTypiaErrors), so a legitimate stale snapshot must NOT be rejected here as
+ * forged. We therefore mirror that heal on a throwaway copy before rejecting — but
+ * ONLY for errors nested inside a present root (`_isFieldLevelDriftError`) AND only
+ * when every present root is the right container kind (`_hasWrongRootContainerKind`).
+ * A missing top-level root (single-entity op fraudulently promoted to a full-state
+ * opType) or a mis-typed root stays strict and is still rejected — the security
+ * boundary is those two filters, NOT what autoFixTypiaErrors happens to be able to
+ * rebuild.
+ *
  * @throws OperationIntegrityError when a full-state op carries a non-full-state payload.
  */
 export const assertDecryptedFullStateOpIntegrity = async (
@@ -288,6 +368,44 @@ export const assertDecryptedFullStateOpIntegrity = async (
     return;
   }
 
+  // Accept a structurally-complete snapshot whose only faults are recoverable
+  // field drift inside present roots (see docstring). Gate strictly: every error
+  // must be field-level (else a missing root is in play), AND no present root may
+  // be the wrong container kind (else a mis-typed root would heal through). Either
+  // failing → reject without healing.
+  let validationErrorCount = validationResult.errors.length;
+  if (
+    validationErrorCount > 0 &&
+    validationResult.errors.every((error) => _isFieldLevelDriftError(error.path)) &&
+    !_hasWrongRootContainerKind(stateToValidate)
+  ) {
+    try {
+      const autoFixTypiaErrors = await _loadAutoFixTypiaErrors();
+      // Heal on a deep copy so the decrypted payload stays untouched for the
+      // downstream path. structuredClone mirrors dataRepair's clone-before-heal
+      // (data-repair.ts) — the same heal this gate is deliberately not stricter than.
+      const healed = autoFixTypiaErrors(
+        structuredClone(stateToValidate) as AppDataComplete,
+        validationResult.errors,
+      );
+      const healedResult = validateAllData(healed);
+      if (healedResult.success) {
+        return;
+      }
+      // Report what still failed AFTER healing — the real "not complete app data"
+      // signal — rather than the pre-heal count.
+      validationErrorCount = healedResult.errors.length;
+    } catch {
+      // Fail closed: any throw while probing recoverability (e.g. the dev-only
+      // devError in autoFixTypiaErrors) must not escape as a non-Integrity error —
+      // fall through to the strict rejection below so callers see a consistent type.
+      SyncLog.err(
+        '[assertDecryptedFullStateOpIntegrity] heal probe threw — rejecting as non-full-state',
+        { opId: op.id, opType: op.opType },
+      );
+    }
+  }
+
   // Never log validator values: they can contain task titles, notes, and other
   // user content. `opType` is safe here because it matched the fixed allowlist.
   SyncLog.err(
@@ -295,7 +413,7 @@ export const assertDecryptedFullStateOpIntegrity = async (
     {
       opId: op.id,
       opType: op.opType,
-      validationErrorCount: validationResult.errors.length,
+      validationErrorCount,
     },
   );
   throw new OperationIntegrityError(

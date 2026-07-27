@@ -30,12 +30,22 @@ import {
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
-import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
+import {
+  buildEntityRegistry,
+  ENTITY_REGISTRY,
+  isSingletonEntityId,
+} from '../core/entity-registry';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
 import { ConflictJournalService } from './conflict-journal.service';
-import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import {
+  isLwwUpdateActionType,
+  toLwwUpdateActionType,
+} from '../core/lww-update-action-types';
+import { convertOpToAction } from '../apply/operation-converter.util';
+import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/time-tracking.reducer';
+import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService;
@@ -7252,6 +7262,47 @@ describe('ConflictResolutionService', () => {
       expect(result[0].payload).toBe(archivePayload);
     });
 
+    it('should not convert a winning remote restore when local DELETE exists', () => {
+      const restorePayload = {
+        actionPayload: {
+          task: {
+            id: 'task-1',
+            title: 'Restored task',
+            subTaskIds: ['subtask-1'],
+          },
+          subTasks: [
+            {
+              id: 'subtask-1',
+              title: 'Restored subtask',
+              parentId: 'task-1',
+            },
+          ],
+        },
+        entityChanges: [],
+      };
+      const remoteRestore = {
+        ...createOpWithTimestamp('remote-restore', 'client-b', Date.now()),
+        actionType: ActionType.TASK_SHARED_RESTORE,
+        opType: OpType.Update,
+        payload: restorePayload,
+      };
+      const conflict = createConflict(
+        'task-1',
+        [
+          {
+            ...createOpWithTimestamp('local-del', 'client-a', Date.now() - 1000),
+            opType: OpType.Delete,
+            payload: { task: { id: 'task-1', title: 'Deleted task' } },
+          },
+        ],
+        [remoteRestore],
+      );
+
+      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+
+      expect(result).toEqual([remoteRestore]);
+    });
+
     it('should return remote op unchanged when base entity cannot be extracted', () => {
       // Rewriting actionType to LWW Update with an unmerged NgRx UPDATE payload
       // would no-op at the consumer (lwwUpdateMetaReducer bails when entityData
@@ -8045,12 +8096,12 @@ describe('ConflictResolutionService', () => {
     });
   });
 
-  describe('LWW Update payload always has top-level id (#7330)', () => {
-    // The lwwUpdateMetaReducer bails with "Entity data has no id" when an LWW
-    // Update payload lacks a top-level id. createLWWUpdateOp is the choke point
-    // for two of three LWW Update producers (_createLocalWinUpdateOp and the
-    // superseded-operation-resolver). Both pass the canonical entityId — so the
-    // payload should always carry it, even when entityState was malformed.
+  describe('adapter LWW Update payload has a top-level id (#7330)', () => {
+    // The lwwUpdateMetaReducer bails with "Entity data has no id" when an
+    // adapter LWW Update payload lacks a top-level id. createLWWUpdateOp is the
+    // choke point for the local-win and superseded-operation producers. Both
+    // pass the canonical entityId, so adapter payloads must carry it even when
+    // entityState was malformed.
 
     it('should backfill payload.id from entityId when entityState lacks id', () => {
       const entityStateWithoutId = { title: 'Local winner', projectId: 'proj-1' };
@@ -8082,6 +8133,19 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(extractActionPayload(op.payload)['id']).toBe('task-canonical');
+    });
+
+    it('should keep the canonical id when an adapter receives the singleton sentinel', () => {
+      const op = service.createLWWUpdateOp(
+        'TASK',
+        '*',
+        { id: 'wrong-id', title: 'Local winner' },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        Date.now(),
+      );
+
+      expect(extractActionPayload(op.payload)['id']).toBe('*');
     });
 
     it('should handle non-object entityState by producing { id } payload', () => {
@@ -8260,11 +8324,9 @@ describe('ConflictResolutionService', () => {
       expect(payload['projectId']).toBe('proj-1');
     });
 
-    // Singletons (GLOBAL_CONFIG, app-state, time-tracking) use entityId='*'
-    // as a sentinel. Injecting `id: '*'` into the payload would pollute the
-    // singleton feature state — which has no `id` field — when the consumer
-    // reducer spreads entityData into the feature state.
-    it('should NOT inject id when entityId is the singleton sentinel "*"', () => {
+    // Singleton LWW reducers target a whole feature slice, so neither the '*'
+    // sentinel nor a contextual conflict key belongs in payload state.
+    it('should NOT inject id for a GLOBAL_CONFIG singleton', () => {
       const singletonState = { sync: { syncProvider: null }, misc: { foo: 'bar' } };
       const op = service.createLWWUpdateOp(
         'GLOBAL_CONFIG',
@@ -8278,6 +8340,108 @@ describe('ConflictResolutionService', () => {
       expect(extractActionPayload(op.payload)['id']).toBeUndefined();
       // Original action payload shape is preserved (no synthetic field injected).
       expect(extractActionPayload(op.payload)).toEqual(singletonState);
+    });
+
+    it('preserves a PLANNER day task-id array in the LWW payload', () => {
+      const day = '2026-03-24';
+      const op = service.createLWWUpdateOp(
+        'PLANNER',
+        day,
+        ['task-1', 'task-2'],
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        1774332392933,
+      );
+
+      const actionPayload = extractActionPayload(op.payload);
+      expect(actionPayload['0']).toBe('task-1');
+      expect(actionPayload['1']).toBe('task-2');
+    });
+
+    it('keeps the compatibility id on wire and preserves TIME_TRACKING data on replay (#9256)', () => {
+      const project = { project1: { day1: 120000 } };
+      const tag = { tag1: { day1: 30000 } };
+      const pollutedSingletonState = {
+        id: 'PROJECT:stale-context:2026-03-23',
+        project,
+        tag,
+      };
+      const entityId = 'PROJECT:eP8tBLmm0tBgJThAZOxcT:2026-03-24';
+      const op = service.createLWWUpdateOp(
+        'TIME_TRACKING',
+        entityId,
+        pollutedSingletonState,
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        1774332392933,
+      );
+
+      // v18.15.0/v18.15.1 treat every non-'*' LWW entityId as canonical and
+      // reject encrypted payloads without a matching id. New receivers strip
+      // this compatibility-only field before replacing singleton state.
+      expect(extractActionPayload(op.payload)).toEqual({
+        id: entityId,
+        project,
+        tag,
+      });
+
+      const existingTimeTracking = { project: {}, tag: {} };
+      const state = { [TIME_TRACKING_FEATURE_KEY]: existingTimeTracking };
+      const baseReducer = jasmine
+        .createSpy('baseReducer')
+        .and.callFake((currentState: unknown) => currentState);
+      const reducer = lwwUpdateMetaReducer(baseReducer);
+
+      reducer(state, convertOpToAction(op));
+
+      const updatedState = baseReducer.calls.mostRecent().args[0] as typeof state;
+      expect(updatedState[TIME_TRACKING_FEATURE_KEY]).toEqual({ project, tag });
+    });
+
+    it('produces TIME_TRACKING ops that shipped v18.15.0/v18.15.1 clients still accept (#9256)', () => {
+      // Faithful copy of the v18.15.1 metadata-integrity predicate
+      // (git show v18.15.1:src/app/op-log/sync/verify-decrypted-op-integrity.ts):
+      // a non-'*' LWW entityId demands payload.id === entityId, else it throws
+      // OperationIntegrityError (the #9256 rejection). This branch does NOT ship a
+      // schema bump, so those released clients run exactly this on our new ops —
+      // the compat id is what keeps a mixed fleet syncing (graceful degradation).
+      const acceptedByV1815Gate = (
+        actionType: string,
+        entityId: string,
+        payload: Record<string, unknown>,
+      ): boolean => {
+        if (
+          !isLwwUpdateActionType(actionType) ||
+          !entityId ||
+          isSingletonEntityId(entityId)
+        ) {
+          return true;
+        }
+        const payloadId = payload['id'];
+        return typeof payloadId === 'string' && payloadId === entityId;
+      };
+
+      const entityId = 'PROJECT:eP8tBLmm0tBgJThAZOxcT:2026-03-24';
+      const op = service.createLWWUpdateOp(
+        'TIME_TRACKING',
+        entityId,
+        { project: {}, tag: {} },
+        TEST_CLIENT_ID,
+        { [TEST_CLIENT_ID]: 1 },
+        1774332392933,
+      );
+      const payload = extractActionPayload(op.payload);
+
+      // LOAD-BEARING: this is what fails if the producer ever stops emitting the
+      // compat id — drop `|| !isSingletonEntityId(entityId)` from createLWWUpdateOp
+      // (the SUNSET cleanup, done too early) and old clients reject the op again.
+      expect(acceptedByV1815Gate(op.actionType, entityId, payload)).toBeTrue();
+      // Guards the SIMULATION, not the producer: proves the copied v18.15.1
+      // predicate still discriminates, so the assertion above cannot pass because
+      // the helper degenerated into returning true for everything.
+      const withoutCompatId = { ...payload };
+      delete withoutCompatId['id'];
+      expect(acceptedByV1815Gate(op.actionType, entityId, withoutCompatId)).toBeFalse();
     });
   });
 });

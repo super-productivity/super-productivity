@@ -333,6 +333,21 @@ describe('TaskService', () => {
       expect(clearOneSpy).toHaveBeenCalledWith('task-1');
       expect(clearOneSpy).toHaveBeenCalledWith('subtask-1');
     });
+
+    // Regression: deleting a sub-task via keyboard shortcut (Backspace) passes the
+    // raw Task entity, which has no `subTasks` array — remove() must not throw. #9280
+    it('should still dispatch when removing a sub-task without a subTasks array', () => {
+      const clearOneSpy = spyOn(taskTimeSync, 'clearOne');
+      const subTask = createMockTask('subtask-1', {
+        parentId: 'task-1',
+      }) as TaskWithSubTasks;
+
+      expect(() => service.remove(subTask)).not.toThrow();
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.deleteTask({ task: subTask }),
+      );
+      expect(clearOneSpy).toHaveBeenCalledWith('subtask-1');
+    });
   });
 
   describe('removeMultipleTasks', () => {

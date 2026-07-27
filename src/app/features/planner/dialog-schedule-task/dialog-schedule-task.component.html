@@ -16,6 +16,25 @@
     ></datetime-picker>
   }
 
+  @if (canRepeat) {
+    @let repeatLabel = repeatCfgLabel();
+    <button
+      type="button"
+      mat-stroked-button
+      class="repeat-btn"
+      (click)="openRepeatDialog()"
+    >
+      <mat-icon>repeat</mat-icon>
+      {{ T.F.TASK.D_SCHEDULE_TASK.REPEAT | translate }}:
+      <span
+        class="repeat-value"
+        [class.repeat-value--empty]="!repeatLabel"
+      >
+        {{ repeatLabel || (T.F.TASK.D_SCHEDULE_TASK.DOES_NOT_REPEAT | translate) }}
+      </span>
+    </button>
+  }
+
   <div class="dialog-actions-and-warnings">
     @if (
       selectedTime &&
@@ -37,51 +56,50 @@
       </div>
     }
 
-    <mat-dialog-actions align="start">
-      <div class="schedule-actions">
-        @if (
-          !data.isSelectDueOnly &&
-          data.task &&
-          (data.task.dueWithTime || plannedDayForTask)
-        ) {
-          <button
-            (click)="remove()"
-            color="warn"
-            mat-stroked-button
-            type="button"
-          >
-            @if (selectedTime) {
-              <mat-icon>alarm_off</mat-icon>
-            } @else {
-              <mat-icon>event_busy</mat-icon>
-            }
-            {{ T.F.TASK.D_SCHEDULE_TASK.UNSCHEDULE | translate }}
-          </button>
-        }
-        <button
-          color="primary"
-          mat-flat-button
-          [disabled]="!selectedDate"
-          (click)="submit()"
-          type="button"
-          data-test-id="schedule-submit-btn"
-        >
-          @if (selectedTime) {
-            <mat-icon>alarm</mat-icon>
-          } @else {
-            <mat-icon>today</mat-icon>
-          }
-          {{ T.F.TASK.D_SCHEDULE_TASK.SCHEDULE | translate }}
-        </button>
-      </div>
+    <mat-dialog-actions align="end">
       <button
-        class="dialog-cancel-btn"
         mat-button
         (click)="close()"
         type="button"
         data-test-id="schedule-cancel-btn"
       >
-        {{ T.G.CANCEL | translate }}
+        <span class="action-label">{{ T.G.CANCEL | translate }}</span>
+      </button>
+      @if (
+        !data.isSelectDueOnly && data.task && (data.task.dueWithTime || plannedDayForTask)
+      ) {
+        <button
+          (click)="remove()"
+          color="warn"
+          mat-stroked-button
+          type="button"
+        >
+          @if (selectedTime) {
+            <mat-icon>alarm_off</mat-icon>
+          } @else {
+            <mat-icon>event_busy</mat-icon>
+          }
+          <span class="action-label">
+            {{ T.F.TASK.D_SCHEDULE_TASK.UNSCHEDULE | translate }}
+          </span>
+        </button>
+      }
+      <button
+        color="primary"
+        mat-flat-button
+        [disabled]="!selectedDate"
+        (click)="submit()"
+        type="button"
+        data-test-id="schedule-submit-btn"
+      >
+        @if (selectedTime) {
+          <mat-icon>alarm</mat-icon>
+        } @else {
+          <mat-icon>today</mat-icon>
+        }
+        <span class="action-label">
+          {{ T.F.TASK.D_SCHEDULE_TASK.SCHEDULE | translate }}
+        </span>
       </button>
     </mat-dialog-actions>
   </div>

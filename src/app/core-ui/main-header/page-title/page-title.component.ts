@@ -73,6 +73,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
           <button
             [mat-menu-trigger-for]="activeWorkContextMenu"
             [matTooltip]="T.MH.PROJECT_MENU | translate"
+            [attr.aria-label]="T.MH.PROJECT_MENU | translate"
             class="project-settings-btn"
             mat-icon-button
           >
@@ -83,6 +84,9 @@ import { KeyboardConfig } from '@sp/keyboard-config';
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
               [matMenuTriggerFor]="customizerPanel.menu"
+              [attr.aria-label]="
+                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+              "
               mat-icon-button
               matTooltip="{{
                 T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate

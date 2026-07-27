@@ -186,6 +186,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private _destroy$: Subject<boolean> = new Subject<boolean>();
   private _isTaskDeleteTriggered: boolean = false;
   private _isOpenedFromKeyboard = false;
+  private _restoreFocusTo?: HTMLElement;
   private _touchMenuTimeout: ReturnType<typeof setTimeout> | undefined;
   private _touchMenuRafId: number | undefined;
 
@@ -218,7 +219,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  open(ev?: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
+  open(
+    ev?: MouseEvent | KeyboardEvent | TouchEvent,
+    isOpenedFromKeyBoard = false,
+    restoreFocusTo?: HTMLElement,
+  ): void {
+    this._restoreFocusTo = restoreFocusTo;
+
     if (ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -299,9 +306,17 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   focusRelatedTaskOrNext(): void {
+    const restoreFocusTo = this._restoreFocusTo;
+    this._restoreFocusTo = undefined;
+
     // Focus the task element after context menu closes
     // Use setTimeout to ensure menu has fully closed and DOM is settled
     setTimeout(() => {
+      if (restoreFocusTo?.isConnected) {
+        restoreFocusTo.focus({ preventScroll: true });
+        return;
+      }
+
       const taskElement = document.getElementById(`t-${this.task.id}`);
       if (taskElement) {
         // Restore focus to the acted-on task (keyboard continuity) WITHOUT

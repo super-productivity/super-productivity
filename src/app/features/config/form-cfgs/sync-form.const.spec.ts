@@ -144,3 +144,98 @@ describe('SYNC_FORM Android SAF pick → form value (#9075)', () => {
     expect(logErrSpy).toHaveBeenCalled();
   });
 });
+
+describe('SYNC_FORM encryption action visibility (#9268)', () => {
+  type EncryptionVisibilityModel = {
+    syncProvider: SyncProviderId;
+    isEncryptionEnabled: boolean;
+    _isInitialSetup: boolean;
+    _activeProviderId: SyncProviderId | null;
+  };
+
+  const findFieldPath = (
+    fields: FormlyFieldConfig[],
+    className: string,
+  ): FormlyFieldConfig[] | undefined => {
+    for (const field of fields) {
+      if (field.className === className) {
+        return [field];
+      }
+      const childPath = field.fieldGroup
+        ? findFieldPath(field.fieldGroup, className)
+        : undefined;
+      if (childPath) {
+        return [field, ...childPath];
+      }
+    }
+    return undefined;
+  };
+
+  const isFieldHidden = (
+    className: string,
+    model: EncryptionVisibilityModel,
+  ): boolean => {
+    const path = findFieldPath(SYNC_FORM.items as FormlyFieldConfig[], className);
+    if (!path) {
+      throw new Error(`${className} not found in SYNC_FORM`);
+    }
+
+    let field: FormlyFieldConfig = { model };
+    for (const fieldConfig of path) {
+      field = { ...fieldConfig, model, parent: field };
+    }
+    if (typeof field.hideExpression !== 'function') {
+      throw new Error(`${className} has no hide expression`);
+    }
+
+    return field.hideExpression(model, {}, field);
+  };
+
+  it('hides the action during initial file-based sync setup', () => {
+    expect(
+      isFieldHidden('e2e-file-based-enable-encryption-btn', {
+        syncProvider: SyncProviderId.Dropbox,
+        isEncryptionEnabled: false,
+        _isInitialSetup: true,
+        _activeProviderId: null,
+      }),
+    ).toBeTrue();
+  });
+
+  it('shows the action for an established unencrypted file-based provider', () => {
+    expect(
+      isFieldHidden('e2e-file-based-enable-encryption-btn', {
+        syncProvider: SyncProviderId.Dropbox,
+        isEncryptionEnabled: false,
+        _isInitialSetup: false,
+        _activeProviderId: SyncProviderId.Dropbox,
+      }),
+    ).toBeFalse();
+  });
+
+  it('hides active-provider encryption actions during an unsaved switch', () => {
+    const switchedFileProvider: EncryptionVisibilityModel = {
+      syncProvider: SyncProviderId.Dropbox,
+      isEncryptionEnabled: false,
+      _isInitialSetup: false,
+      _activeProviderId: SyncProviderId.WebDAV,
+    };
+    expect(
+      isFieldHidden('e2e-file-based-enable-encryption-btn', switchedFileProvider),
+    ).toBeTrue();
+    expect(
+      isFieldHidden('e2e-enable-encryption-btn', {
+        syncProvider: SyncProviderId.SuperSync,
+        isEncryptionEnabled: false,
+        _isInitialSetup: false,
+        _activeProviderId: SyncProviderId.WebDAV,
+      }),
+    ).toBeTrue();
+    expect(
+      isFieldHidden('encryption-status-box', {
+        ...switchedFileProvider,
+        isEncryptionEnabled: true,
+      }),
+    ).toBeTrue();
+  });
+});

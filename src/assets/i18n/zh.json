@@ -1766,17 +1766,17 @@
         "TOMORROW": "明天",
         "TOOLTIP_ADD_TASK": "添加任务",
         "TOOLTIP_ADD_TO_BACKLOG": "添加至待办事项",
-        "TOOLTIP_ADD_TO_BOTTOM": "添加至底部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_BOTTOM": "添加至底部 (Ctrl+3)",
         "TOOLTIP_ADD_TO_TODAY": "添加至今天",
-        "TOOLTIP_ADD_TO_TOP": "添加至顶部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_TOP": "添加至顶部 (Ctrl+3)",
         "TOOLTIP_CLEAR_DATE": "清除日期",
         "TOOLTIP_CLEAR_DEADLINE": "清除截止日期",
         "TOOLTIP_CLEAR_ESTIMATE": "清除估算",
         "TOOLTIP_CLEAR_REPEAT": "清除重复设置",
         "TOOLTIP_CLEAR_TAGS": "清除标签",
-        "TOOLTIP_DISABLE_SEARCH": "禁用问题搜索 (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+2)",
-        "TOOLTIP_NOTE": "笔记（Ctrl+2）"
+        "TOOLTIP_DISABLE_SEARCH": "禁用问题搜索 (Ctrl+1)",
+        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+1)",
+        "TOOLTIP_NOTE": "笔记 (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "添加附件",

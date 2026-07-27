@@ -53,6 +53,7 @@ const ALL_TAGS: Tag[] = [
   { ...DEFAULT_TAG, id: 'multi_word_id', title: 'Multi Word Tag' },
 ];
 const CONFIG = DEFAULT_GLOBAL_CONFIG.shortSyntax;
+const DEADLINE_CONFIG = { ...CONFIG, isEnableDeadline: true };
 
 // Builds the expected parsedRanges for inputs where each consumed substring
 // occurs unambiguously; cases exercising ambiguous inputs (token text also
@@ -426,7 +427,7 @@ describe('shortSyntax', () => {
         title: 'Pay rent @monday !friday',
       };
       const now = new Date('2026-06-01T10:00:00'); // Mon Jun 1 2026
-      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+      const r = await shortSyntax(t, DEADLINE_CONFIG, undefined, undefined, now);
 
       expect(r?.taskChanges.title).toBe('Pay rent');
       expect(r?.taskChanges.dueWithTime).toBeDefined();
@@ -437,6 +438,17 @@ describe('shortSyntax', () => {
 
       expect(dueDate.getDay()).toBe(1); // Monday
       expect(deadlineDate.getDay()).toBe(5); // Friday
+    });
+
+    it('should ignore deadline syntax by default', async () => {
+      const t = {
+        ...TASK,
+        title: 'Pay rent !friday',
+      };
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+
+      expect(r).toBeUndefined();
     });
 
     it('should still parse schedule syntax when there is no preceding space (e.g. lunch@12)', async () => {
@@ -457,7 +469,7 @@ describe('shortSyntax', () => {
         title: 'Done!',
       };
       const now = new Date('2026-06-01T10:00:00');
-      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
+      const r = await shortSyntax(t, DEADLINE_CONFIG, undefined, undefined, now);
 
       expect(r).toBeUndefined();
     });
@@ -2488,7 +2500,15 @@ describe('shortSyntax recurrence', () => {
   });
 
   it('should NOT parse deadline syntax "!every friday" as recurrence', async () => {
-    const r = await parse('Taxes !every friday');
+    const r = await shortSyntax(
+      { ...TASK, title: 'Taxes !every friday' },
+      DEADLINE_CONFIG,
+      [],
+      [],
+      NOW,
+      'combine',
+      true,
+    );
     expect(r?.repeatQuickSetting).toBeNull();
   });
 

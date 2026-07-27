@@ -41,7 +41,10 @@ import { concatMap, first, take } from 'rxjs/operators';
 import { IS_MOBILE } from './util/is-mobile';
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
-import { AddTaskBarComponent } from './features/tasks/add-task-bar/add-task-bar.component';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from './features/tasks/add-task-bar/add-task-bar.component';
 import { Dir } from '@angular/cdk/bidi';
 import { MagicSideNavComponent } from './core-ui/magic-side-nav/magic-side-nav.component';
 import { MainHeaderComponent } from './core-ui/main-header/main-header.component';
@@ -426,9 +429,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
+  onTaskAdded({ taskId }: TaskAddEvent): void {
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
+    if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {
+      this.layoutService.hideAddTaskBar(taskId);
+    }
   }
 
   // Opacity + blur follow the resolved background source (per-context image or

@@ -163,6 +163,51 @@ describe('DialogScheduleTaskComponent', () => {
     expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
   });
 
+  it('should reflow three intact action buttons without horizontal overflow', () => {
+    component.plannedDayForTask = '2026-07-24';
+    fixture.detectChanges();
+
+    const actions: HTMLElement | null =
+      fixture.nativeElement.querySelector('mat-dialog-actions');
+    expect(actions).not.toBeNull();
+    if (!actions) {
+      return;
+    }
+
+    const actionButtons: HTMLElement[] = Array.from(
+      actions.querySelectorAll<HTMLElement>('button'),
+    );
+    const actionLabels = actions.querySelectorAll<HTMLElement>('.action-label');
+
+    expect(actionButtons.length).toBe(3);
+    expect(actionButtons[0].dataset.testId).toBe('schedule-cancel-btn');
+    expect(actionButtons[1].getAttribute('color')).toBe('warn');
+    expect(actionButtons[2].dataset.testId).toBe('schedule-submit-btn');
+    actionButtons.forEach((button) => {
+      expect(button.parentElement).toBe(actions);
+    });
+    expect(actionLabels.length).toBe(3);
+    actionLabels.forEach((label) => {
+      expect(getComputedStyle(label).whiteSpace).toBe('nowrap');
+    });
+
+    // Karma doesn't load the app-level Material layout styles. Reproduce the
+    // dialog action container's production flex rules to exercise this markup.
+    actions.style.display = 'flex';
+    actions.style.flexWrap = 'wrap';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.width = '280px';
+    const actionsRect = actions.getBoundingClientRect();
+    const buttonRects = actionButtons.map((button) => button.getBoundingClientRect());
+
+    expect(new Set(buttonRects.map(({ top }) => top)).size).toBeGreaterThan(1);
+    buttonRects.forEach(({ left, right }) => {
+      expect(left).toBeGreaterThanOrEqual(actionsRect.left);
+      expect(right).toBeLessThanOrEqual(actionsRect.right);
+    });
+    expect(getComputedStyle(actions).rowGap).toBe('12px');
+  });
+
   describe('schedule hints', () => {
     it('should show an inline info hint when the selected time overlaps another task', () => {
       const selectedDate = new Date(2026, 3, 15);

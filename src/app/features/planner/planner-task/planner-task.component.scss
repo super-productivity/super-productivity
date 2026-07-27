@@ -9,8 +9,10 @@
   @include grabCursor();
   color: var(--text-color);
   background: var(--task-c-bg);
-  box-shadow: var(--task-shadow);
-  border: var(--task-border, none);
+  // Flat rows: resting elevation replaced by the shared task-border hairline so
+  // planner tasks match the main task list (isCurrent/isDragReady keep their lift).
+  box-shadow: none;
+  border: var(--task-border, 1px solid var(--task-border-color));
 
   &.isDone {
     opacity: var(--task-is-done-dim-opacity);

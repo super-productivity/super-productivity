@@ -7,6 +7,7 @@
     @let weekIndex = getWeekIndex($index);
     @let dayIndex = getDayIndex($index);
     @if (weekIndex < weeksToShow()) {
+      @let dayEvents = getEventsForDay(day) ?? [];
       <div
         class="month-day-cell {{ getDayClass(day) }}"
         [attr.data-day]="day"
@@ -16,7 +17,7 @@
           <span class="month-day-number">{{ dayNumberByDay()[day] }}</span>
         </div>
         <div class="month-day-events">
-          @for (ev of getEventsForDay(day); track ev.id) {
+          @for (ev of dayEvents; track ev.id) {
             <div
               class="month-event"
               [class]="ev.type"
@@ -28,6 +29,20 @@
                 class="month-schedule-event"
               ></schedule-event>
             </div>
+          }
+          @if (dayEvents.length > 1) {
+            @let hiddenEventCount = dayEvents.length - 1;
+            <span class="month-more-events">
+              <span
+                class="month-more-events-count"
+                aria-hidden="true"
+                >+{{ hiddenEventCount }}</span
+              >
+              <span class="cdk-visually-hidden">{{
+                getMoreEventsKey(hiddenEventCount)
+                  | translate: { count: hiddenEventCount }
+              }}</span>
+            </span>
           }
         </div>
       </div>

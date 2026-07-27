@@ -8,6 +8,7 @@ import {
   isSingletonEntity,
   isMapEntity,
   isArrayEntity,
+  isLwwPayloadIdCanonical,
   EntityConfig,
 } from './entity-registry';
 
@@ -65,6 +66,40 @@ describe('entity-registry', () => {
     'PLUGIN_USER_DATA',
     'PLUGIN_METADATA',
   ];
+
+  describe('LWW payload id semantics', () => {
+    it('uses payload.id only for adapter-backed entities', () => {
+      expect(isLwwPayloadIdCanonical('TASK')).toBeTrue();
+      expect(isLwwPayloadIdCanonical('TIME_TRACKING')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('PLANNER')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('ALL')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('UNKNOWN')).toBeFalse();
+      expect(isLwwPayloadIdCanonical(undefined)).toBeFalse();
+    });
+
+    // #9256 was a MISCLASSIFICATION (a composite-id singleton mistaken for an
+    // adapter). Pin the payload-id verdict for EVERY entity so a future
+    // storagePattern change can't silently re-open the retarget gate for the
+    // wrong entity or slam it shut on a legitimate one. Table is exhaustive over
+    // ENTITY_CONFIGS via the categorized lists above.
+    it('is canonical for exactly the adapter entities and no others', () => {
+      for (const entityType of ADAPTER_ENTITIES) {
+        expect(isLwwPayloadIdCanonical(entityType))
+          .withContext(`adapter ${entityType} → canonical`)
+          .toBeTrue();
+      }
+      for (const entityType of [
+        ...SINGLETON_ENTITIES,
+        ...MAP_ENTITIES,
+        ...ARRAY_ENTITIES,
+        ...SPECIAL_OPERATION_TYPES,
+      ]) {
+        expect(isLwwPayloadIdCanonical(entityType))
+          .withContext(`non-adapter ${entityType} → not canonical`)
+          .toBeFalse();
+      }
+    });
+  });
 
   describe('ENTITY_CONFIGS completeness', () => {
     it('should have config for all regular entity types', () => {

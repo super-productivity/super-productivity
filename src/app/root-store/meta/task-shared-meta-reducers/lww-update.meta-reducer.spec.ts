@@ -23,6 +23,8 @@ import {
   SimpleCounter,
   SimpleCounterType,
 } from '../../../features/simple-counter/simple-counter.model';
+import { convertOpToAction } from '../../../op-log/apply/operation-converter.util';
+import { ActionType, Operation, OpType } from '../../../op-log/core/operation.types';
 
 describe('lwwUpdateMetaReducer', () => {
   const mockReducer = jasmine.createSpy('reducer');
@@ -1726,6 +1728,79 @@ describe('lwwUpdateMetaReducer', () => {
       expect(timeTracking).toBeDefined();
       expect(timeTracking['currentSessionTime']).toBe(5000);
       expect(timeTracking['isTrackingReminder']).toBe(false);
+    });
+
+    it('should preserve timeTracking state for malformed singleton LWW payloads', () => {
+      const state = createMockStateWithSingletons();
+      const originalTimeTracking = state[TIME_TRACKING_FEATURE_KEY];
+      const malformedValues: ReadonlyArray<{
+        label: string;
+        value: unknown;
+      }> = [
+        { label: 'string', value: 'x' },
+        { label: 'array', value: ['x'] },
+        { label: 'null', value: null },
+        { label: 'number', value: 1 },
+        { label: 'boolean', value: true },
+        { label: 'undefined', value: undefined },
+      ];
+
+      spyOn(OpLog, 'warn');
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      for (const { label, value } of malformedValues) {
+        const payloads = [
+          { format: 'flat', payload: value },
+          {
+            format: 'wrapped',
+            payload: {
+              actionPayload: value,
+              entityChanges: [],
+              lwwUpdateMode: 'replace',
+            },
+          },
+          ...(label === 'undefined'
+            ? [
+                {
+                  format: 'wrapped-missing',
+                  payload: {
+                    entityChanges: [],
+                    lwwUpdateMode: 'replace',
+                  },
+                },
+              ]
+            : []),
+        ];
+        for (const { format, payload } of payloads) {
+          const clientId = 'remote-client';
+          const op: Operation = {
+            id: `malformed-${format}-${label}`,
+            actionType: '[TIME_TRACKING] LWW Update' as ActionType,
+            opType: OpType.Update,
+            entityType: 'TIME_TRACKING',
+            entityId: 'PROJECT:project-1:2026-03-24',
+            payload,
+            clientId,
+            vectorClock: { [clientId]: 1 },
+            timestamp: 1,
+            schemaVersion: 1,
+          };
+          const action = convertOpToAction(op);
+
+          const updatedState = reducer(state, action) as Partial<RootState>;
+
+          expect(updatedState[TIME_TRACKING_FEATURE_KEY])
+            .withContext(`${format} ${label}`)
+            .toBe(originalTimeTracking);
+        }
+      }
     });
 
     it('should not require id field for singleton entities', () => {

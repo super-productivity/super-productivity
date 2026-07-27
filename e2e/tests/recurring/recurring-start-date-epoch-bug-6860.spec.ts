@@ -1,5 +1,10 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { saveRecurDialog, setRecurStartDate } from '../../utils/recurring-task-helpers';
+import {
+  openRecurDialog,
+  openRecurScheduleDialog,
+  saveRecurDialog,
+  setRecurStartDate,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6860
@@ -41,26 +46,10 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
 
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
-    // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container').first();
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    const repeatDialog = await openRecurDialog(page);
 
     // 4. Open the schedule dialog
-    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
-    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
-    await scheduleBtn.click();
-
-    // Wait for the schedule dialog to appear
-    const scheduleDialog = page
-      .locator('mat-dialog-container')
-      .filter({ has: page.locator('datetime-picker') });
-    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+    const scheduleDialog = await openRecurScheduleDialog(page);
 
     const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
@@ -90,10 +79,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     expect(valText).not.toContain('1970');
 
     // 6. Save and verify the date survives persistence
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
   });
   test('should preserve start date when configuring recurring task via helper', async ({
     page,
@@ -122,15 +108,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
 
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
-    // 3. Wait for the repeat dialog to appear
-    const repeatDialog = page.locator('mat-dialog-container').first();
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await openRecurDialog(page);
 
     await setRecurStartDate(page, '15/06/2026');
     await saveRecurDialog(page);

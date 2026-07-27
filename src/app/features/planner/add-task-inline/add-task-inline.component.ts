@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 import { T } from 'src/app/t.const';
-import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from '../../tasks/add-task-bar/add-task-bar.component';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
@@ -22,7 +25,7 @@ export class AddTaskInlineComponent {
   readonly tagsToRemove = input<string[]>([]);
   readonly taskIdsToExclude = input<string[]>();
   readonly isNoDefaults = input<boolean>(false);
-  readonly afterTaskAdd = output<{ taskId: string; isAddToBottom: boolean }>();
+  readonly afterTaskAdd = output<TaskAddEvent>();
 
   isShowAddTask = false;
 }

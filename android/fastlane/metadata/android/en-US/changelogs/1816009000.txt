@@ -1,0 +1,7 @@
+Recurring task settings are now integrated into the schedule dialog.
+Detected add-task short syntax is highlighted as you type.
+Existing tasks now appear in tagged board columns.
+Archived tasks restore to Today, and recurring presets retain notes.
+Improved mobile controls, dialogs, onboarding, and keyboard behavior.
+Fixed duplicate calendar blocks and recurring “Last” dates.
+Improved sync recovery and WebDAV/Nextcloud compatibility.

@@ -60,6 +60,11 @@ import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 // the app, so the discriminator value is named locally instead of inlined.
 const HTTP_NOT_FOUND = 404;
 
+type SyncFormModel = SyncConfig & {
+  _isInitialSetup?: boolean;
+  _activeProviderId?: SyncProviderId | null;
+};
+
 @Component({
   selector: 'dialog-sync-cfg',
   templateUrl: './dialog-sync-cfg.component.html',
@@ -398,9 +403,9 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       });
     }
   }
-  // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
-  // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
-  _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
+  // Form-only flags are checked by sync-form.const.ts hideExpressions.
+  // Encryption actions must target only the active, persisted provider.
+  _tmpUpdatedCfg: SyncFormModel = {
     isEnabled: true,
     syncProvider: SyncProviderId.SuperSync,
     syncInterval: 300000,
@@ -411,6 +416,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     nextcloud: {},
     superSync: {},
     _isInitialSetup: true,
+    _activeProviderId: null,
   };
 
   private _matDialogRef = inject<MatDialogRef<DialogSyncCfgComponent>>(MatDialogRef);
@@ -441,6 +447,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
           ...v,
           isEnabled: true,
           _isInitialSetup: !v.isEnabled,
+          _activeProviderId: this._initialProviderId,
         });
       });
   }
@@ -650,20 +657,21 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       ...this.form.value,
     };
 
-    // Strip _isInitialSetup before saving — it's only for form hideExpressions
-    // and the fresh-setup encryption-prompt decision below.
-    const { _isInitialSetup, ...cfgWithoutFlag } = this._tmpUpdatedCfg;
+    const isInitialSetup = this._tmpUpdatedCfg._isInitialSetup;
     const configToSave = {
-      ...cfgWithoutFlag,
+      ...this._tmpUpdatedCfg,
       isEnabled: this._tmpUpdatedCfg.isEnabled || !this.isWasEnabled(),
     };
+    // These flags drive only the form UI and setup decision.
+    delete configToSave._isInitialSetup;
+    delete configToSave._activeProviderId;
 
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     // Switching providers is a first setup only when the target has no stored
     // private config. Returning providers must keep their existing encryption
     // contract instead of being offered a new, incompatible key.
     const isProviderSetup =
-      _isInitialSetup ||
+      isInitialSetup ||
       (providerId !== this._initialProviderId && !this._selectedProviderWasConfigured);
     let selectedProvider: Awaited<ReturnType<SyncProviderManager['getProviderById']>> =
       undefined;
@@ -837,7 +845,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     return result?.success && result.password ? result.password : null;
   }
 
-  updateTmpCfg(cfg: SyncConfig & { _isInitialSetup?: boolean }): void {
+  updateTmpCfg(cfg: SyncFormModel): void {
     // Use Object.assign to preserve the object reference for Formly
     // This ensures Formly detects changes to the model
     Object.assign(this._tmpUpdatedCfg, cfg);

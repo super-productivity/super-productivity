@@ -33,6 +33,8 @@ import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
+import { DateService } from '../../core/date/date.service';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 
 @Component({
   selector: 'history',
@@ -65,6 +67,7 @@ export class HistoryComponent {
   private readonly _route = inject(ActivatedRoute);
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
+  private readonly _dateService = inject(DateService);
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
@@ -153,9 +156,19 @@ export class HistoryComponent {
               .map((id) => archiveState.entities[id])
               .filter((t): t is Task => !!t);
           }
+          const restoreToToday = {
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          };
 
           Log.log('RESTORE', { taskId: task.id, subTaskCount: subTasks?.length });
-          this._taskService.restoreTask(task, subTasks || []);
+          this._store.dispatch(
+            TaskSharedActions.restoreTask({
+              task,
+              subTasks: subTasks || [],
+              restoreToToday,
+            }),
+          );
           this._router.navigate(['/active/tasks']);
         }
       });

@@ -135,15 +135,22 @@
                 isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
               "
               [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
+              aria-controls="mobile-simple-counter-menu"
+              [attr.aria-expanded]="isShowSimpleCounterBtnsDropdown()"
+              [attr.aria-label]="T.F.METRIC.CMP.SIMPLE_COUNTERS | translate"
               mat-icon-button
+              type="button"
             >
               <mat-icon>{{
                 isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer'
               }}</mat-icon>
             </button>
             <div
+              id="mobile-simple-counter-menu"
               class="mobile-dropdown"
               [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
+              [attr.aria-hidden]="!isShowSimpleCounterBtnsDropdown()"
+              [attr.inert]="isShowSimpleCounterBtnsDropdown() ? null : ''"
             >
               @for (
                 simpleCounter of enabledSimpleCounters();

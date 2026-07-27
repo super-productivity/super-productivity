@@ -162,6 +162,21 @@ export const convertLocalDeleteRemoteUpdatesToLww = <
       const updateChanges = existingLwwPayload
         ? extractActionPayload(existingLwwPayload)
         : extractUpdateChanges(remoteOp.payload, remotePayloadKey, conflict.entityId);
+      // NOTE (#9256): this still classifies "is a singleton" by `entityId === '*'`,
+      // the same conflation the host fixed by switching to a storage-pattern check
+      // (see isLwwPayloadIdCanonical). A singleton with a COMPOSITE conflict id
+      // (e.g. TIME_TRACKING) would fall into the else branch and get `id` injected
+      // into its whole-slice payload — and the host's LWW reducer would then
+      // replace the WHOLE feature slice with that merged shape.
+      //
+      // Unreachable today, but NOT because "singletons never emit deletes": they
+      // do — menuTreeDeleteFolder emits MENU_TREE + OpType.Delete with a folderId
+      // entityId. The actual guard is `baseEntity` above: extractEntityFromPayload
+      // finds nothing in that delete payload (no `menuTree` key, no id-matching
+      // array element, no top-level `id` — the field is named `folderId`), so this
+      // branch is skipped. That means renaming such a payload field to `id`, or
+      // adding a singleton delete that carries its entity, ARMS this line. Migrate
+      // to a storage-pattern predicate before either happens.
       const mergedEntity = options.isSingletonEntityId?.(conflict.entityId)
         ? { ...baseEntity, ...updateChanges }
         : { ...baseEntity, ...updateChanges, id: conflict.entityId };

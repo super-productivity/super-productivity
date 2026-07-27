@@ -52,6 +52,7 @@ import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
+import { TaskAddEvent } from '../../tasks/add-task-bar/add-task-bar.component';
 
 @Component({
   selector: 'board-panel',
@@ -260,14 +261,26 @@ export class BoardPanelComponent {
     this._checkBacklogState(panelCfg, task.id);
   }
 
-  async afterTaskAdd({
-    taskId,
-    isAddToBottom,
-  }: {
-    taskId: string;
-    isAddToBottom: boolean;
-  }): Promise<void> {
+  async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
     const panelCfg = this.panelCfg();
+
+    if (!isNewTask) {
+      const task = await this.store
+        .select(selectTaskById, { id: taskId })
+        .pipe(first())
+        .toPromise();
+      if (!task) {
+        return;
+      }
+
+      const newTagIds = unique(rewriteTagIdsForPanel(task.tagIds || [], panelCfg));
+
+      if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
+        this.taskService.updateTags(task, newTagIds);
+      }
+      return;
+    }
+
     this.store.dispatch(
       BoardsActions.updatePanelCfgTaskIds({
         panelId: panelCfg.id,

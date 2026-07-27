@@ -1,5 +1,8 @@
 @use 'angular-material-css-vars' as mat-css-vars;
+@use '@angular/cdk' as cdk;
 @use '../../../../styles/_globals.scss' as *;
+
+@include cdk.a11y-visually-hidden();
 
 .month-grid-container {
   display: grid;
@@ -219,18 +222,10 @@
       }
     }
   }
+}
 
-  &::after {
-    content: attr(data-more-events);
-    display: none;
-    font-size: 10px;
-    color: rgba(0, 0, 0, 0.54);
-    padding: var(--s-quarter);
-
-    @include darkTheme() {
-      color: rgba(255, 255, 255, 0.54);
-    }
-  }
+.month-more-events {
+  display: none;
 }
 
 .month-event {
@@ -270,8 +265,21 @@
     min-height: 60px;
   }
 
-  .month-day-events .month-event:nth-child(n + 3) {
-    display: none;
+  .month-day-events {
+    overflow-y: hidden;
+
+    .month-event:nth-child(n + 2) {
+      display: none;
+    }
+  }
+
+  .month-more-events {
+    display: block;
+    padding: 0 var(--s-quarter);
+    color: var(--text-color-muted);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
   }
 
   ::ng-deep schedule-event .ico-wrapper {

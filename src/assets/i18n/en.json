@@ -1141,6 +1141,10 @@
       "INSERT_BEFORE": "Before",
       "LUNCH_BREAK": "Lunch Break",
       "MONTH": "Month",
+      "MORE_EVENTS": {
+        "ONE": "{{count}} more event",
+        "OTHER": "{{count}} more events"
+      },
       "NEXT_DAY": "Next Day",
       "NEXT_MONTH": "Next Month",
       "NEXT_WEEK": "Next Week",
@@ -1467,14 +1471,14 @@
           "ENCRYPTION_DISABLED": "Not encrypted",
           "ENCRYPTION_ENABLED": "Encrypted",
           "IMPORTED_STATE": "After import",
-          "ITEM_1": "All sync history and backups on the server will be permanently deleted",
+          "ITEM_1": "This account's existing sync history will be permanently deleted",
           "ITEM_2": "Your imported data will be uploaded with the new encryption settings",
           "ITEM_3": "All other devices must sync and update their encryption settings to match",
-          "NOTE": "Your local data will be replaced with the imported data regardless of this choice.",
+          "NOTE": "If you continue, the imported data will replace your local data.",
           "NOTE_DISABLING": "Important: Without encryption, anyone with access to your sync server can read your data.",
           "NOTE_ENABLING": "Important: Encryption requires a password. If you forget this password, your data CANNOT be recovered!",
           "TITLE": "Encryption Settings Will Change",
-          "WARNING_TEXT": "The backup you are importing has different encryption settings. Encrypted and unencrypted data cannot coexist on the server, so all server data must be deleted.",
+          "WARNING_TEXT": "This backup uses encryption, while this account's current synced data does not. SuperSync requires encryption; continuing will replace this account's synced state on the server and permanently delete its existing sync history.",
           "WHAT_HAPPENS": "What will happen:"
         },
         "L_ENABLE_COMPRESSION": "Enable compression (faster data transfer)",
@@ -1810,7 +1814,7 @@
         "NOTES": "Note",
         "PARENT": "Parent",
         "REMINDER": "Reminder",
-        "REPEAT": "Recur",
+        "REPEAT": "Repeat",
         "SCHEDULE_TASK": "Schedule Task",
         "SUB_TASKS": "Subtasks ({{nr}})",
         "TIME": "Duration",
@@ -1925,6 +1929,7 @@
         "UNSCHEDULE_ALL": "Unschedule all"
       },
       "D_SCHEDULE_TASK": {
+        "DOES_NOT_REPEAT": "Does not repeat",
         "INFO_OUTSIDE_WORK_HOURS": "Falls outside your configured work hours.",
         "INFO_OVERLAP": "Overlaps with another scheduled task.",
         "QA_NEXT_MONTH": "Schedule next month",
@@ -1932,6 +1937,7 @@
         "QA_TODAY": "Schedule today",
         "QA_TOMORROW": "Schedule tomorrow",
         "REMIND_AT": "Remind at",
+        "REPEAT": "Repeat",
         "RO_1H": "1 hour before it starts",
         "RO_5M": "5 minutes before it starts",
         "RO_10M": "10 minutes before it starts",
@@ -2671,6 +2677,7 @@
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Here you can control short syntax options when creating a task</p>",
+      "IS_ENABLE_DEADLINE": "Enable deadline short syntax (!<deadline time>)",
       "IS_ENABLE_DUE": "Enable planned at short syntax (@<planned time>)",
       "IS_ENABLE_PROJECT": "Enable project short syntax (+<project>)",
       "IS_ENABLE_TAG": "Enable tag short syntax (#<tag>)",
