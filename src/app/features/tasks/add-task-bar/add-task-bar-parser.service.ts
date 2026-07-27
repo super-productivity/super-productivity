@@ -274,7 +274,20 @@ export class AddTaskBarParserService {
       }
     }
 
-    // After the project (updateProjectId resets the section to null)
+    // After the project (updateProjectId resets the section to null). A
+    // parsed section must belong to the project the task will actually land
+    // in: the standalone-"/Section" context handed to the parser can be one
+    // edit stale (deleting "+Work" still resolves "/Design" against Work), so
+    // validate against the CURRENT project — the block above has already
+    // updated it (round-3 review finding on PR #9014).
+    const finalProjectId = this._stateService.state().projectId;
+    currentResult.sectionId =
+      currentResult.sectionId &&
+      allSections.some(
+        (s) => s.id === currentResult.sectionId && s.contextId === finalProjectId,
+      )
+        ? currentResult.sectionId
+        : null;
     if (
       !this._previousParseResult ||
       this._previousParseResult.sectionId !== currentResult.sectionId ||

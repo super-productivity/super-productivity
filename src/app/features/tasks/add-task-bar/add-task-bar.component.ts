@@ -624,7 +624,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
             first(),
           ),
         );
-        if (targetSection) {
+        // Write-site guard in lock-step with the reducer's own checks: the
+        // section must still exist AND belong to the project the task was
+        // just created in — a stale sectionId must never file a task into
+        // another project's section (round-3 review finding on PR #9014).
+        if (targetSection && targetSection.contextId === state.projectId) {
           // Respect the add-to-bottom toggle within the section, too
           const afterTaskId = this.isAddToBottom()
             ? targetSection.taskIds[targetSection.taskIds.length - 1] || null

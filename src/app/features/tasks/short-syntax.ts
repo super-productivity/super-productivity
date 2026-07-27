@@ -463,9 +463,13 @@ export const parseProjectChanges = (
   return result ? { title: tracked.text, projectId: result.projectId } : {};
 };
 
-// Prefix-match typed text against a project's sections; falls back to first
-// word only (like project matching). Returns the exact typed text to strip
-// from the title alongside the id.
+// Prefix-match typed text against a project's sections. Tries decreasing
+// leading word spans ("Design Reviews finish draft" → "Design Reviews
+// finish", "Design Reviews", "Design") and consumes the LONGEST one that
+// matches, so multi-word section names don't orphan their later words into
+// the title (round-3 review finding on PR #9014 — a first-word-only fallback
+// turned "+Work/Design Reviews finish draft" into "Task Reviews finish
+// draft"). Returns the exact typed text to strip alongside the id.
 const matchSectionByTypedText = (
   typed: string,
   projectId: string,
@@ -477,8 +481,18 @@ const matchSectionByTypedText = (
   const projectSections = allSections
     .filter((s) => s.contextId === projectId)
     .sort((s1, s2) => s1.title.length - s2.title.length);
-  const attempts = [typed.trim(), typed.trim().split(' ')[0]];
-  for (const typedText of attempts) {
+  // End offsets of every leading word span. Internal spacing is preserved so
+  // the returned typedText is always a literal slice of the typed text
+  // (leading whitespace is the caller's to account for).
+  const body = typed.trimStart();
+  const wordEnds: number[] = [];
+  const wordRegEx = /\S+/g;
+  let wordMatch: RegExpExecArray | null;
+  while ((wordMatch = wordRegEx.exec(body)) !== null) {
+    wordEnds.push(wordMatch.index + wordMatch[0].length);
+  }
+  for (let i = wordEnds.length - 1; i >= 0; i--) {
+    const typedText = body.slice(0, wordEnds[i]);
     const toMatch = typedText.replaceAll(' ', '').toLowerCase();
     const existing = projectSections.find(
       (s) => s.title.replaceAll(' ', '').toLowerCase().indexOf(toMatch) === 0,
@@ -553,6 +567,14 @@ const parseProjectTracked = (
     // "+Project/Section" targets a section within the matched project;
     // everything after the first "/" is the section part.
     const slashIndex = rawToken.indexOf(CH_SECTION);
+    // A token that STARTS with "/" has no project part. Bail out entirely:
+    // matching an empty string against project titles would prefix-match
+    // every project (round-3 review finding on PR #9014 — "+/-" in ordinary
+    // text, or a half-deleted "+Work/…", silently picked the shortest-titled
+    // project and mangled the title).
+    if (slashIndex === 0) {
+      return null;
+    }
     const projectTitle = slashIndex === -1 ? rawToken : rawToken.slice(0, slashIndex);
     const sectionPart = slashIndex === -1 ? '' : rawToken.slice(slashIndex + 1);
 
@@ -589,44 +611,13 @@ const parseProjectTracked = (
       .sort((p1, p2) => p1.title.length - p2.title.length);
 
     const matchProject = (titleToMatch: string): Project | undefined =>
-      sortedAllProjects.find(
-        (project) =>
-          project.title.replaceAll(' ', '').toLowerCase().indexOf(titleToMatch) === 0,
-      );
-
-    const buildResult = (
-      project: Project,
-      typedProjectText: string,
-    ): { projectId: string; sectionId?: string; ranges: TextRange[] } => {
-      // Sections are only resolved when the FULL left side matched the
-      // project — after a first-word-only match the leftover words sit
-      // between the project and the "/", so a contiguous strip is impossible.
-      const isFullLeftMatch = typedProjectText === projectTitle;
-      const section =
-        slashIndex !== -1 && isFullLeftMatch
-          ? matchSectionByTypedText(sectionPart, project.id, allSections)
-          : undefined;
-
-      let stripLen: number;
-      if (section) {
-        // "+Work/Design …" → strip through the matched section text
-        const leadingWs = sectionPart.length - sectionPart.trimStart().length;
-        stripLen = 1 + projectTitle.length + 1 + leadingWs + section.typedText.length;
-      } else if (slashIndex !== -1 && isFullLeftMatch) {
-        // "+Work/grocer" with no matching section: strip through the slash so
-        // the leftover ("grocer") rejoins the title instead of keeping a
-        // stray "/" (review finding on PR #9014).
-        stripLen = 1 + projectTitle.length + 1;
-      } else {
-        stripLen = 1 + typedProjectText.length;
-      }
-
-      return {
-        projectId: project.id,
-        ...(section ? { sectionId: section.sectionId } : {}),
-        ranges: consumeAt(stripLen),
-      };
-    };
+      titleToMatch
+        ? sortedAllProjects.find(
+            (project) =>
+              project.title.replaceAll(' ', '').toLowerCase().indexOf(titleToMatch) === 0,
+          )
+        : // an empty string would prefix-match every project
+          undefined;
 
     // Legacy first: the whole token as a project title, so projects whose
     // titles themselves contain "/" (e.g. "A/B Testing") keep matching and
@@ -639,33 +630,95 @@ const parseProjectTracked = (
           ranges: consumeAt(1 + rawToken.length),
         };
       }
-      // Same legacy fallback with trailing words ("+A/B Testing extra words"):
-      // the first word alone, slash included, as a project title prefix.
-      const firstWord = rawToken.split(' ')[0];
-      if (firstWord.includes(CH_SECTION)) {
-        const firstWordProject = matchProject(firstWord.toLowerCase());
-        if (firstWordProject) {
-          return {
-            projectId: firstWordProject.id,
-            ranges: consumeAt(1 + firstWord.length),
-          };
-        }
-      }
     }
 
     const existingProject = matchProject(projectTitleToMatch);
 
-    if (existingProject) {
-      return buildResult(existingProject, projectTitle);
+    // Candidate for the legacy first-word fallback ("+A/B Testing extra
+    // words" → first word "A/B", slash included, as a project title prefix).
+    // Computed early: it decides section eligibility below AND serves as the
+    // fallback match itself.
+    let firstWordSlashProject: Project | undefined;
+    if (slashIndex !== -1) {
+      const firstWord = rawToken.split(' ')[0];
+      if (firstWord.includes(CH_SECTION)) {
+        firstWordSlashProject = matchProject(firstWord.toLowerCase());
+      }
     }
 
-    // also try only first word after special char
+    // Full left-side project match WITH a matching section is the strongest
+    // remaining interpretation — a whole-token match above is exact evidence,
+    // but the first-word fallback below is only a prefix guess, so a resolved
+    // project+section outranks it (round-3 review note on PR #9014: with
+    // projects "Work" + "Work/Design Archive" and section "Design Reviews",
+    // "+Work/Design fix login" means Work → Design Reviews).
+    // EXCEPT when the first word including the slash prefixes the SAME
+    // project ("+A/B Testing…"): then the "/" is part of the project's own
+    // title, not a section separator, and reading a section out of its right
+    // side ("B" → "Backlog") would file the task somewhere the user never
+    // pointed at.
+    if (
+      existingProject &&
+      slashIndex !== -1 &&
+      (!firstWordSlashProject || firstWordSlashProject.id !== existingProject.id)
+    ) {
+      const section = matchSectionByTypedText(
+        sectionPart,
+        existingProject.id,
+        allSections,
+      );
+      if (section) {
+        // "+Work/Design …" → strip through the matched section text
+        const leadingWs = sectionPart.length - sectionPart.trimStart().length;
+        return {
+          projectId: existingProject.id,
+          sectionId: section.sectionId,
+          ranges: consumeAt(
+            1 + projectTitle.length + 1 + leadingWs + section.typedText.length,
+          ),
+        };
+      }
+    }
+
+    // Legacy fallback with trailing words ("+A/B Testing extra words"): the
+    // first word alone, slash included, as a project title prefix. Ranked
+    // above the strip-through-slash path so master's stripping behavior is
+    // preserved whenever the section part matches nothing.
+    if (firstWordSlashProject) {
+      return {
+        projectId: firstWordSlashProject.id,
+        ranges: consumeAt(1 + rawToken.split(' ')[0].length),
+      };
+    }
+
+    if (existingProject) {
+      if (slashIndex !== -1) {
+        // "+Work/grocer" with no matching section: strip through the slash so
+        // the leftover ("grocer") rejoins the title instead of keeping a
+        // stray "/" (round-1 review finding on PR #9014).
+        return {
+          projectId: existingProject.id,
+          ranges: consumeAt(1 + projectTitle.length + 1),
+        };
+      }
+      return {
+        projectId: existingProject.id,
+        ranges: consumeAt(1 + projectTitle.length),
+      };
+    }
+
+    // also try only first word after special char. Sections are not resolved
+    // here: after a first-word-only match the leftover words sit between the
+    // project and the "/", so a contiguous strip is impossible.
     const projectTitleFirstWordOnly = projectTitle.split(' ')[0];
     const projectTitleToMatch2 = projectTitleFirstWordOnly.replace(' ', '').toLowerCase();
     const existingProjectForFirstWordOnly = matchProject(projectTitleToMatch2);
 
     if (existingProjectForFirstWordOnly) {
-      return buildResult(existingProjectForFirstWordOnly, projectTitleFirstWordOnly);
+      return {
+        projectId: existingProjectForFirstWordOnly.id,
+        ranges: consumeAt(1 + projectTitleFirstWordOnly.length),
+      };
     }
   }
 

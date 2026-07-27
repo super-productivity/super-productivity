@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { selectAllSections } from '../../section/store/section.selectors';
@@ -1724,6 +1724,121 @@ describe('AddTaskBarParserService', () => {
       mockStateService.state.and.returnValue(baseState as any);
       await service.parseAndUpdateText('', cfg, [], [], defaultProject);
       expect(mockStateService.updateSyntaxHighlight).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('section validation against the final project (round-3 review, PR #9014)', () => {
+    const cfg = {
+      isEnableProject: true,
+      isEnableDue: true,
+      isEnableTag: true,
+    } as ShortSyntaxConfig;
+    const defaultProject = { id: 'default-project', title: 'Default Project' } as Project;
+    const workProject = { id: 'work', title: 'Work' } as Project;
+    const designSection = {
+      id: 'sec-design',
+      contextId: 'work',
+      contextType: 'PROJECT',
+      title: 'Design',
+      taskIds: [],
+    };
+    const makeState = (projectId: string): unknown => ({
+      projectId,
+      sectionId: null,
+      tagIds: [],
+      tagIdsFromTxt: [],
+      newTagTitles: [],
+      date: null,
+      time: null,
+      spent: null,
+      estimate: null,
+      cleanText: null,
+      remindOption: null,
+      attachments: [],
+      repeatQuickSetting: null,
+      deadlineDate: null,
+      deadlineTime: null,
+      deadlineRemindOption: null,
+    });
+
+    // Mirror the real state service closely enough for the two-step
+    // sequence: project updates clear the section, every update lands in
+    // `liveState` so the service's own `state()` reads see it.
+    let liveState: { projectId: string; sectionId: string | null };
+    beforeEach(() => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectAllSections, [designSection] as never[]);
+      liveState = makeState(defaultProject.id) as typeof liveState;
+      mockStateService.state.and.callFake((() => liveState) as any);
+      mockStateService.isAutoDetected.and.returnValue(true);
+      mockStateService.setAutoDetectedProjectId.and.callFake((id: string) => {
+        liveState = { ...liveState, projectId: id, sectionId: null };
+      });
+      mockStateService.updateProjectId.and.callFake((id: string) => {
+        liveState = { ...liveState, projectId: id, sectionId: null };
+      });
+      mockStateService.updateSectionId.and.callFake((id: string | null) => {
+        liveState = { ...liveState, sectionId: id };
+      });
+    });
+
+    it('should resolve "+Work/Design" to Work + its section', async () => {
+      await service.parseAndUpdateText(
+        'buy milk +Work/Design',
+        cfg,
+        [defaultProject, workProject],
+        [],
+        defaultProject,
+      );
+      expect(liveState.projectId).toBe('work');
+      expect(liveState.sectionId).toBe('sec-design');
+    });
+
+    it('should clear a stale section from another project when the +Project token is deleted', async () => {
+      await service.parseAndUpdateText(
+        'buy milk +Work/Design',
+        cfg,
+        [defaultProject, workProject],
+        [],
+        defaultProject,
+      );
+
+      // Deleting just "+Work" falls the task back to the default project;
+      // the leftover "/Design" must NOT keep pointing at Work's section.
+      await service.parseAndUpdateText(
+        'buy milk /Design',
+        cfg,
+        [defaultProject, workProject],
+        [],
+        defaultProject,
+      );
+      expect(liveState.projectId).toBe(defaultProject.id);
+      expect(liveState.sectionId).toBeNull();
+    });
+
+    it('should clear the section when the user manually picks another project', async () => {
+      await service.parseAndUpdateText(
+        'buy milk +Work/Design',
+        cfg,
+        [defaultProject, workProject],
+        [],
+        defaultProject,
+      );
+
+      // Manual selection: the state service clears the section and the
+      // auto-detected flag; a re-parse of the unchanged text must not
+      // re-apply Work's section to the manually chosen project.
+      liveState = { ...liveState, projectId: defaultProject.id, sectionId: null };
+      mockStateService.isAutoDetected.and.returnValue(false);
+      await service.parseAndUpdateText(
+        'buy milk +Work/Design',
+        cfg,
+        [defaultProject, workProject],
+        [],
+        defaultProject,
+      );
+      expect(liveState.projectId).toBe(defaultProject.id);
+      expect(liveState.sectionId).toBeNull();
     });
   });
 
