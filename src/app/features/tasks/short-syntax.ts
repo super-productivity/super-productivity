@@ -3,6 +3,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { stringToMs } from '../../ui/duration/string-to-ms.pipe';
 import { Tag } from '../tag/tag.model';
 import { Project } from '../project/project.model';
+import { Section } from '../section/section.model';
 import { ShortSyntaxConfig } from '../config/global-config.model';
 import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
@@ -54,6 +55,10 @@ const CH_PRO = '+';
 const CH_TAG = '#';
 const CH_DUE = '@';
 const CH_DEADLINE = '!';
+// Separates the section part inside a "+Project/Section" token and triggers a
+// standalone "/Section" token. Not a global special char: bare slashes in
+// ordinary text stay untouched unless a section actually matches.
+const CH_SECTION = '/';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
 
 let customDateParserPromise: Promise<Chrono> | null = null;
@@ -303,12 +308,17 @@ export const shortSyntax = async (
   // can be created for the result — the add-task bar. Title edits of existing
   // tasks keep parsing it as a plain date.
   isParseRepeat: boolean = false,
+  allSections?: Section[],
+  // The project the task will land in when no "+Project" token is typed —
+  // the context a standalone "/Section" token resolves against.
+  contextProjectId?: string,
 ): Promise<
   | {
       taskChanges: Partial<Task> & { hasDeadlineTime?: boolean };
       newTagTitles: string[];
       remindAt: number | null;
       projectId: string | undefined;
+      sectionId?: string;
       attachments: TaskAttachment[];
       repeatQuickSetting: RepeatQuickSetting | null;
       parsedRanges: ShortSyntaxRange[];
@@ -325,6 +335,7 @@ export const shortSyntax = async (
   // TODO clean up this mess
   let taskChanges: Partial<TaskCopy> & { hasDeadlineTime?: boolean } = {};
   let projectId: string | undefined;
+  let sectionId: string | undefined;
   let newTagTitles: string[] = [];
   let attachments: TaskAttachment[] = [];
   let repeatQuickSetting: RepeatQuickSetting | null = null;
@@ -367,11 +378,31 @@ export const shortSyntax = async (
       task,
       tracked,
       allProjects?.filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+      allSections,
     );
     if (projectResult) {
       projectId = projectResult.projectId;
+      sectionId = projectResult.sectionId;
       pushRanges('project', projectResult.ranges);
       isTitleChanged = true;
+    }
+
+    // Standalone "/Section" (no "+Project/Section" resolved): resolve against
+    // the project the task is being added to (an explicit "+Project" wins).
+    if (!sectionId) {
+      const sectionContextProjectId = projectResult?.projectId || contextProjectId;
+      if (sectionContextProjectId) {
+        const standaloneResult = parseStandaloneSectionTracked(
+          tracked,
+          sectionContextProjectId,
+          allSections,
+        );
+        if (standaloneResult) {
+          sectionId = standaloneResult.sectionId;
+          pushRanges('project', standaloneResult.ranges);
+          isTitleChanged = true;
+        }
+      }
     }
   }
 
@@ -413,6 +444,7 @@ export const shortSyntax = async (
     newTagTitles,
     remindAt: null,
     projectId,
+    ...(sectionId ? { sectionId } : {}),
     attachments,
     repeatQuickSetting,
     parsedRanges,
@@ -431,11 +463,80 @@ export const parseProjectChanges = (
   return result ? { title: tracked.text, projectId: result.projectId } : {};
 };
 
+// Prefix-match typed text against a project's sections; falls back to first
+// word only (like project matching). Returns the exact typed text to strip
+// from the title alongside the id.
+const matchSectionByTypedText = (
+  typed: string,
+  projectId: string,
+  allSections?: Section[],
+): { sectionId: string; typedText: string } | undefined => {
+  if (!typed.trim() || !Array.isArray(allSections) || !allSections.length) {
+    return undefined;
+  }
+  const projectSections = allSections
+    .filter((s) => s.contextId === projectId)
+    .sort((s1, s2) => s1.title.length - s2.title.length);
+  const attempts = [typed.trim(), typed.trim().split(' ')[0]];
+  for (const typedText of attempts) {
+    const toMatch = typedText.replaceAll(' ', '').toLowerCase();
+    const existing = projectSections.find(
+      (s) => s.title.replaceAll(' ', '').toLowerCase().indexOf(toMatch) === 0,
+    );
+    if (existing) {
+      return { sectionId: existing.id, typedText };
+    }
+  }
+  return undefined;
+};
+
+// Standalone "/Section" token (word boundary before "/", no space after it) —
+// only meaningful when a context project is known. Nothing is stripped from
+// the title unless a section actually matches, so slashes in ordinary prose
+// ("either/or", "w/ milk") and URLs stay untouched.
+const SHORT_SYNTAX_STANDALONE_SECTION_REG_EX = new RegExp(
+  `(?:^|\\s)\\${CH_SECTION}(?!\\s|\\${CH_SECTION})([^${ALL_SPECIAL}]+)`,
+);
+
+const parseStandaloneSectionTracked = (
+  tracked: TrackedTitle,
+  contextProjectId: string,
+  allSections?: Section[],
+): { sectionId: string; ranges: TextRange[] } | null => {
+  if (!tracked.text || !contextProjectId) {
+    return null;
+  }
+  const rr = tracked.text.match(SHORT_SYNTAX_STANDALONE_SECTION_REG_EX);
+  if (!rr || !rr[1]) {
+    return null;
+  }
+  const section = matchSectionByTypedText(rr[1], contextProjectId, allSections);
+  if (!section) {
+    return null;
+  }
+  // Positional strip of exactly the matched "/<typed>" span. "(?:^|\s)"
+  // consumes at most one leading whitespace char, so the slash sits at index
+  // 0 or 1 of the match; the section text follows it directly (the lookahead
+  // forbids whitespace after the slash).
+  const slashPos = (rr.index as number) + (rr[0].startsWith(CH_SECTION) ? 0 : 1);
+  const stripEnd = slashPos + 1 + section.typedText.length;
+  const ranges = tracked.rawRanges(slashPos, stripEnd);
+  tracked.remove(slashPos, stripEnd);
+  tracked.trim();
+  // get rid of excess whitespace a mid-title removal leaves behind
+  const doubleSpaceIdx = tracked.text.indexOf('  ');
+  if (doubleSpaceIdx !== -1) {
+    tracked.remove(doubleSpaceIdx, doubleSpaceIdx + 1);
+  }
+  return { sectionId: section.sectionId, ranges };
+};
+
 const parseProjectTracked = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
   allProjects?: Project[],
-): { projectId: string; ranges: TextRange[] } | null => {
+  allSections?: Section[],
+): { projectId: string; sectionId?: string; ranges: TextRange[] } | null => {
   if (
     task.issueId || // don't allow for issue tasks
     !tracked.text ||
@@ -448,7 +549,13 @@ const parseProjectTracked = (
   const rr = tracked.text.match(SHORT_SYNTAX_PROJECT_REG_EX);
 
   if (rr && rr[0]) {
-    const projectTitle: string = rr[0].trim().replace(CH_PRO, '');
+    const rawToken: string = rr[0].trim().replace(CH_PRO, '');
+    // "+Project/Section" targets a section within the matched project;
+    // everything after the first "/" is the section part.
+    const slashIndex = rawToken.indexOf(CH_SECTION);
+    const projectTitle = slashIndex === -1 ? rawToken : rawToken.slice(0, slashIndex);
+    const sectionPart = slashIndex === -1 ? '' : rawToken.slice(slashIndex + 1);
+
     const projectTitleToMatch = projectTitle.replaceAll(' ', '').toLowerCase();
     const indexBeforePlus =
       tracked.text.toLowerCase().lastIndexOf(CH_PRO + projectTitleToMatch) - 1;
@@ -459,13 +566,14 @@ const parseProjectTracked = (
       return null;
     }
 
-    const consume = (matchedText: string): TextRange[] => {
-      const start = tracked.text.indexOf(matchedText);
-      if (start === -1) {
-        return [];
-      }
-      const ranges = tracked.rawRanges(start, start + matchedText.length);
-      tracked.remove(start, start + matchedText.length);
+    // Positional strip: remove exactly `len` chars of the matched token
+    // starting at the "+" — never re-find the typed text by string search
+    // (a search on a reconstructed string silently no-ops or hits an earlier
+    // lookalike occurrence, orphaning syntax in the title).
+    const tokenStart = rr.index as number;
+    const consumeAt = (len: number): TextRange[] => {
+      const ranges = tracked.rawRanges(tokenStart, tokenStart + len);
+      tracked.remove(tokenStart, tokenStart + len);
       tracked.trim();
       // get rid of excess whitespace a mid-title removal leaves behind
       const doubleSpaceIdx = tracked.text.indexOf('  ');
@@ -480,33 +588,84 @@ const parseProjectTracked = (
       .slice()
       .sort((p1, p2) => p1.title.length - p2.title.length);
 
-    const existingProject = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch) ===
-        0,
-    );
+    const matchProject = (titleToMatch: string): Project | undefined =>
+      sortedAllProjects.find(
+        (project) =>
+          project.title.replaceAll(' ', '').toLowerCase().indexOf(titleToMatch) === 0,
+      );
+
+    const buildResult = (
+      project: Project,
+      typedProjectText: string,
+    ): { projectId: string; sectionId?: string; ranges: TextRange[] } => {
+      // Sections are only resolved when the FULL left side matched the
+      // project — after a first-word-only match the leftover words sit
+      // between the project and the "/", so a contiguous strip is impossible.
+      const isFullLeftMatch = typedProjectText === projectTitle;
+      const section =
+        slashIndex !== -1 && isFullLeftMatch
+          ? matchSectionByTypedText(sectionPart, project.id, allSections)
+          : undefined;
+
+      let stripLen: number;
+      if (section) {
+        // "+Work/Design …" → strip through the matched section text
+        const leadingWs = sectionPart.length - sectionPart.trimStart().length;
+        stripLen = 1 + projectTitle.length + 1 + leadingWs + section.typedText.length;
+      } else if (slashIndex !== -1 && isFullLeftMatch) {
+        // "+Work/grocer" with no matching section: strip through the slash so
+        // the leftover ("grocer") rejoins the title instead of keeping a
+        // stray "/" (review finding on PR #9014).
+        stripLen = 1 + projectTitle.length + 1;
+      } else {
+        stripLen = 1 + typedProjectText.length;
+      }
+
+      return {
+        projectId: project.id,
+        ...(section ? { sectionId: section.sectionId } : {}),
+        ranges: consumeAt(stripLen),
+      };
+    };
+
+    // Legacy first: the whole token as a project title, so projects whose
+    // titles themselves contain "/" (e.g. "A/B Testing") keep matching and
+    // never get misread as project/section.
+    if (slashIndex !== -1) {
+      const wholeTokenProject = matchProject(rawToken.replaceAll(' ', '').toLowerCase());
+      if (wholeTokenProject) {
+        return {
+          projectId: wholeTokenProject.id,
+          ranges: consumeAt(1 + rawToken.length),
+        };
+      }
+      // Same legacy fallback with trailing words ("+A/B Testing extra words"):
+      // the first word alone, slash included, as a project title prefix.
+      const firstWord = rawToken.split(' ')[0];
+      if (firstWord.includes(CH_SECTION)) {
+        const firstWordProject = matchProject(firstWord.toLowerCase());
+        if (firstWordProject) {
+          return {
+            projectId: firstWordProject.id,
+            ranges: consumeAt(1 + firstWord.length),
+          };
+        }
+      }
+    }
+
+    const existingProject = matchProject(projectTitleToMatch);
 
     if (existingProject) {
-      return {
-        projectId: existingProject.id,
-        ranges: consume(`${CH_PRO}${projectTitle}`),
-      };
+      return buildResult(existingProject, projectTitle);
     }
 
     // also try only first word after special char
     const projectTitleFirstWordOnly = projectTitle.split(' ')[0];
     const projectTitleToMatch2 = projectTitleFirstWordOnly.replace(' ', '').toLowerCase();
-    const existingProjectForFirstWordOnly = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch2) ===
-        0,
-    );
+    const existingProjectForFirstWordOnly = matchProject(projectTitleToMatch2);
 
     if (existingProjectForFirstWordOnly) {
-      return {
-        projectId: existingProjectForFirstWordOnly.id,
-        ranges: consume(`${CH_PRO}${projectTitleFirstWordOnly}`),
-      };
+      return buildResult(existingProjectForFirstWordOnly, projectTitleFirstWordOnly);
     }
   }
 

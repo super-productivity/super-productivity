@@ -5,6 +5,9 @@ import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model'
 
 export interface AddTaskBarState {
   projectId: string;
+  // Section within the project (from "+Project/Section" syntax); the task is
+  // added to it after creation (section membership is not a task field).
+  sectionId?: string | null;
   tagIds: string[];
   tagIdsFromTxt: string[];
   date: string | null;
@@ -37,6 +40,7 @@ export const ESTIMATE_OPTIONS = [
 
 export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   projectId: INBOX_PROJECT.id,
+  sectionId: null,
   tagIds: [],
   tagIdsFromTxt: [],
   date: null,
