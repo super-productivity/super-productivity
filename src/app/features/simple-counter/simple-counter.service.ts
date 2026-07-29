@@ -14,6 +14,7 @@ import {
   deleteSimpleCounters,
   increaseSimpleCounterCounterToday,
   setSimpleCounterCounterForDate,
+  setSimpleCounterCounterOff,
   setSimpleCounterCounterToday,
   tickSimpleCounterLocal,
   toggleSimpleCounterCounter,
@@ -307,6 +308,10 @@ export class SimpleCounterService implements OnDestroy {
 
   toggleCounter(id: string): void {
     this._store$.dispatch(toggleSimpleCounterCounter({ id }));
+  }
+
+  setCounterOff(id: string): void {
+    this._store$.dispatch(setSimpleCounterCounterOff({ id }));
   }
 
   turnOffAll(): void {
