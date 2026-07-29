@@ -446,6 +446,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       typeof raw['dueWithTime'] === 'number' ? (raw['dueWithTime'] as number) : undefined;
     const startMs =
       typeof raw['start'] === 'number' ? (raw['start'] as number) : undefined;
+    const deadlineWithTime =
+      typeof raw['deadlineWithTime'] === 'number'
+        ? (raw['deadlineWithTime'] as number)
+        : undefined;
+    const deadlineDay =
+      typeof raw['deadlineDay'] === 'string' ? (raw['deadlineDay'] as string) : undefined;
 
     return {
       title: data.title,
@@ -460,6 +466,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         ? { dueWithTime }
         : startMs != null
           ? { dueDay: getDbDateStr(startMs) }
+          : {}),
+      ...(deadlineWithTime != null
+        ? { deadlineWithTime, deadlineDay: null }
+        : deadlineDay != null
+          ? { deadlineDay, deadlineWithTime: null }
           : {}),
     };
   }
