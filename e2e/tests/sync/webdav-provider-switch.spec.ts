@@ -9,20 +9,19 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 
 /**
- * Tests for provider switch scenario where Client B connects to an existing WebDAV
+ * Tests for late-join scenarios where Client B connects to an existing WebDAV
  * sync folder that Client A has been using.
  *
- * This test specifically verifies the fix for the "mutual SYNC_IMPORT discarding" bug:
- * - When Client B joins an existing sync, it creates a SYNC_IMPORT
- * - The SYNC_IMPORT's vector clock must include Client A's clock entries
- * - Otherwise, Client A's ops are CONCURRENT with Client B's SYNC_IMPORT and get discarded
+ * A fresh file-based bootstrap must hydrate the remote snapshot without creating
+ * a local SYNC_IMPORT. Later operations must then converge in both directions.
  *
  * @tags @webdav
  */
-test.describe('@webdav WebDAV Provider Switch', () => {
+test.describe('@webdav WebDAV Late Join', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
 
@@ -34,7 +33,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     syncFolderPath: `/${SYNC_FOLDER_NAME}`,
   };
 
-  test('should sync tasks when Client B connects to existing WebDAV server (provider switch)', async ({
+  test('should sync tasks when Client B joins an existing WebDAV folder', async ({
     browser,
     baseURL,
     request,
@@ -86,7 +85,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Provider Switch Test] Client A: Initial sync complete');
 
-    // === CLIENT B: Fresh client connecting to existing sync (simulates provider switch) ===
+    // === CLIENT B: Fresh client connecting to existing sync ===
     const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
@@ -138,9 +137,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Provider Switch Test] Client A: Synced to receive Client B task');
 
-    // Verify Client A received Client B's task (THIS IS THE KEY ASSERTION)
-    // Before the fix, Client B's ops were CONCURRENT with Client A's SYNC_IMPORT
-    // and would be discarded. With the fix, they should be kept.
+    // Exact bidirectional state is the key bootstrap assertion.
     await expect(pageA.locator('task')).toHaveCount(3);
     await expect(pageA.locator('task', { hasText: taskA1 })).toBeVisible();
     await expect(pageA.locator('task', { hasText: taskA2 })).toBeVisible();
@@ -469,7 +466,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await closeContextsSafely(contextA, contextB, contextC);
   });
 
-  test('should handle bidirectional sync after provider switch', async ({
+  test('should handle bidirectional sync after a late join', async ({
     browser,
     baseURL,
     request,
@@ -561,11 +558,13 @@ test.describe('@webdav WebDAV Provider Switch', () => {
   });
 
   /**
-   * Test: Client with multiple local ops joining sync
+   * Test: Client with multiple local tasks chooses remote on first sync
    *
-   * Verifies that confirmation shows correct count and accepting replaces all local data.
+   * Verifies that choosing Keep remote replaces all local tasks with the exact
+   * remote set. The missing fresh-client secondary-warning oracle is tracked
+   * separately by #9166.
    */
-  test('should replace multiple local ops when user accepts confirmation', async ({
+  test('should replace multiple local tasks when fresh client chooses Keep remote', async ({
     browser,
     baseURL,
     request,
@@ -626,30 +625,22 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     const conflictDialog = pageB.locator('mat-dialog-container', {
       hasText: 'Conflicting Data',
     });
-    const conflictVisible = await conflictDialog
-      .waitFor({ state: 'visible', timeout: 10000 })
-      .then(() => true)
-      .catch(() => false);
+    await expect(conflictDialog).toBeVisible({ timeout: 10000 });
+    const keepRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
+    syncPageB.prepareForNextSyncCycle('read');
+    await keepRemoteBtn.click();
 
-    if (conflictVisible) {
-      const keepRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
-      await keepRemoteBtn.click();
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-      // A fresh client with no last-synced baseline now gets an overwrite
-      // confirmation (getChangeCount → null ⇒ shouldConfirmOverwrite, since #8785).
-      // Accept it — this is the "when user accepts confirmation" the test name
-      // describes. The confirmation is optional, so tolerate its absence.
-      const confirmDialog = pageB.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog.locator('[e2e="confirmBtn"]').click();
-      } catch {
-        // No confirmation shown — fine.
-      }
-
-      // Wait for dialog to close
-      await conflictDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
-    }
+    await expect(conflictDialog).toBeHidden({ timeout: 5000 });
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
+    await expect(pageB.locator('task', { hasText: taskA1 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskA2 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskA3 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskB1 })).not.toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskB2 })).not.toBeVisible();
 
     // Trigger sync if not already syncing and wait for completion
     await syncPageB.triggerSync();

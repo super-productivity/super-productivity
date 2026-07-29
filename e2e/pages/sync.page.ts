@@ -1,5 +1,13 @@
-import { type Page, type Locator, expect } from '@playwright/test';
+import {
+  type Page,
+  type Locator,
+  type Request,
+  type Response,
+  expect,
+} from '@playwright/test';
 import { BasePage } from './base.page';
+
+type SyncCycleIntent = 'any' | 'read' | 'write';
 
 export class SyncPage extends BasePage {
   readonly syncBtn: Locator;
@@ -11,9 +19,13 @@ export class SyncPage extends BasePage {
   readonly saveBtn: Locator;
   readonly syncSpinner: Locator;
   readonly syncCheckIcon: Locator;
+  readonly syncConfirmedIcon: Locator;
+  readonly syncErrorIcon: Locator;
   readonly encryptionPasswordInput: Locator;
   readonly enableEncryptionBtn: Locator;
   readonly disableEncryptionBtn: Locator;
+
+  private _pendingSyncResponse: Promise<boolean> | null = null;
 
   constructor(page: Page) {
     super(page);
@@ -26,6 +38,10 @@ export class SyncPage extends BasePage {
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
     this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
+    this.syncConfirmedIcon = this.syncCheckIcon.filter({ hasText: 'done_all' });
+    this.syncErrorIcon = page
+      .locator('.sync-btn mat-icon')
+      .filter({ hasText: 'sync_problem' });
     // Encryption-related locators
     // Note: encryptionPasswordInput is no longer used directly - password is entered in a dialog
     this.encryptionPasswordInput = page.locator(
@@ -223,6 +239,10 @@ export class SyncPage extends BasePage {
           });
         }
 
+        // Saving a new provider configuration starts the initial sync. Arm the
+        // response witness before clicking so a fast response cannot be missed.
+        this._armSyncCycleResponse();
+
         // Save the configuration
         await this.saveBtn.click();
 
@@ -326,6 +346,8 @@ export class SyncPage extends BasePage {
   }
 
   async triggerSync(): Promise<void> {
+    await this._settlePendingCycleBeforeManualTrigger();
+
     // Dismiss any open dialogs/overlays that might block the sync button
     const overlay = this.page.locator('.cdk-overlay-backdrop');
     if (await overlay.isVisible({ timeout: 500 }).catch(() => false)) {
@@ -339,20 +361,205 @@ export class SyncPage extends BasePage {
       }
     }
 
+    // Arm the response witness before the click. A pre-existing success icon is
+    // deliberately not a start signal because it remains visible for up to a
+    // minute after an earlier sync.
+    this._armSyncCycleResponse();
+
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.syncBtn.click({ noWaitAfter: true });
-    // Wait for any sync operation to start (spinner appears or completes immediately)
-    await Promise.race([
-      this.syncSpinner.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {}),
-      this.syncCheckIcon.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {}),
-    ]);
   }
 
   async waitForSyncComplete(): Promise<void> {
+    await this.waitForTriggeredSyncResponse(20000);
+
+    if (await this.syncErrorIcon.isVisible().catch(() => false)) {
+      throw new Error('Sync failed: sync_problem icon is visible');
+    }
+
     // Wait for sync spinner to disappear
-    await this.syncSpinner.waitFor({ state: 'hidden', timeout: 20000 }); // Reduced from 30s to 20s
-    // Verify check icon appears
-    await this.syncCheckIcon.waitFor({ state: 'visible' });
+    await this.syncSpinner.waitFor({ state: 'hidden', timeout: 20000 });
+    // Require the remote-confirmed double check, not the local-only check icon.
+    await this.syncConfirmedIcon.waitFor({ state: 'visible' });
+    this.completeTriggeredSyncCycle();
+  }
+
+  /**
+   * Waits for a provider response observed after the latest setup/save or sync
+   * button click. This prevents completion helpers from accepting UI left over
+   * from an earlier sync cycle.
+   */
+  async waitForTriggeredSyncResponse(timeout: number): Promise<void> {
+    const pendingResponse = this._pendingSyncResponse;
+    if (!pendingResponse) {
+      throw new Error(
+        'No sync cycle is pending. Call triggerSync() or setupWebdavSync() before waiting.',
+      );
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<'timeout'>((resolve) => {
+      timeoutId = setTimeout(() => resolve('timeout'), timeout);
+    });
+    const responseObserved = await Promise.race([pendingResponse, timeoutPromise]);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+
+    if (responseObserved === true) {
+      return;
+    }
+
+    if (this._pendingSyncResponse === pendingResponse) {
+      this._pendingSyncResponse = null;
+    }
+
+    throw new Error(
+      `Sync timeout after ${timeout}ms: no provider response was observed for this cycle`,
+    );
+  }
+
+  /** Marks a successfully completed cycle so it cannot be reused by a later wait. */
+  completeTriggeredSyncCycle(): void {
+    this._pendingSyncResponse = null;
+  }
+
+  /**
+   * Arms the response witness for a sync that the application will start next,
+   * such as the automatic retry after a conflict-resolution choice.
+   */
+  prepareForNextSyncCycle(intent: Exclude<SyncCycleIntent, 'any'>): void {
+    this._armSyncCycleResponse(intent);
+  }
+
+  private async _settlePendingCycleBeforeManualTrigger(): Promise<void> {
+    const pendingResponse = this._pendingSyncResponse;
+    if (!pendingResponse) {
+      return;
+    }
+
+    // setupWebdavSync() deliberately returns while its automatic initial cycle
+    // may still be running. Do not overwrite that witness or let its late
+    // response satisfy the manual click below.
+    await pendingResponse;
+
+    let consecutiveIdleChecks = 0;
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline && consecutiveIdleChecks < 3) {
+      const conflictVisible =
+        (await this.page
+          .locator('dialog-sync-conflict')
+          .isVisible()
+          .catch(() => false)) ||
+        (await this.page
+          .locator('mat-dialog-container', { hasText: 'Conflicting Data' })
+          .isVisible()
+          .catch(() => false));
+      const decryptDialogVisible = await this.page
+        .locator('dialog-handle-decrypt-error')
+        .isVisible()
+        .catch(() => false);
+      const passwordDialogVisible = await this.page
+        .locator('dialog-enter-encryption-password')
+        .isVisible()
+        .catch(() => false);
+      if (conflictVisible || decryptDialogVisible || passwordDialogVisible) {
+        throw new Error(
+          'Resolve the pending setup sync dialog before triggering another cycle',
+        );
+      }
+
+      if (await this.syncSpinner.isVisible().catch(() => false)) {
+        consecutiveIdleChecks = 0;
+      } else {
+        consecutiveIdleChecks++;
+      }
+      if (consecutiveIdleChecks < 3) {
+        await this.page.waitForTimeout(100);
+      }
+    }
+
+    if (consecutiveIdleChecks < 3) {
+      throw new Error('Pending setup sync cycle did not become idle within 30000ms');
+    }
+
+    if (this._pendingSyncResponse === pendingResponse) {
+      this._pendingSyncResponse = null;
+    }
+  }
+
+  private _armSyncCycleResponse(intent: SyncCycleIntent = 'any'): void {
+    const requestsStartedAfterArm = new WeakSet<Request>();
+    const requestHandler = (request: Request): void => {
+      requestsStartedAfterArm.add(request);
+    };
+    this.page.on('request', requestHandler);
+
+    this._pendingSyncResponse = this.page
+      .waitForResponse(
+        (response) =>
+          requestsStartedAfterArm.has(response.request()) &&
+          response.ok() &&
+          this._isSyncProviderResponse(response) &&
+          this._matchesSyncCycleIntent(response, intent),
+        { timeout: 30000 },
+      )
+      // waitForResponse resolves on headers; finished() waits for the body.
+      .then((response) => response.finished())
+      .then((failure) => failure === null)
+      // Keep an unconsumed cycle from producing an unhandled rejection.
+      .catch(() => false)
+      .finally(() => this.page.off('request', requestHandler));
+  }
+
+  private _matchesSyncCycleIntent(response: Response, intent: SyncCycleIntent): boolean {
+    if (intent === 'any') {
+      return true;
+    }
+
+    const method = response.request().method();
+    if (intent === 'read') {
+      return method === 'GET';
+    }
+
+    const pathName = new URL(response.url()).pathname;
+    if (method === 'POST') {
+      return pathName.endsWith('/api/sync/snapshot');
+    }
+    if (method !== 'PUT') {
+      return false;
+    }
+
+    // In split-file mode sync-state is uploaded before the sync-ops commit
+    // point. A successful state/backup/meta upload must not hide a failed
+    // primary snapshot or operation-log upload.
+    const fileName = pathName.split('/').at(-1) ?? '';
+    return /^(?:sync-data|sync-ops)(?:__[^/]+)?\.json$/.test(fileName);
+  }
+
+  private _isSyncProviderResponse(response: Response): boolean {
+    if (response.request().method() === 'OPTIONS') {
+      return false;
+    }
+
+    let url: URL;
+    try {
+      url = new URL(response.url());
+    } catch {
+      return false;
+    }
+
+    // Keep this generic page object compatible with the small number of
+    // provider-switch tests that use it for SuperSync.
+    if (url.pathname.endsWith('/api/sync/ops')) {
+      return true;
+    }
+
+    const fileName = url.pathname.split('/').at(-1) ?? '';
+    return (
+      /^(?:sync-data|sync-ops|sync-state)(?:__[^/]+)?\.json(?:\.bak)?$/.test(fileName) ||
+      fileName === '__meta_'
+    );
   }
 
   /**

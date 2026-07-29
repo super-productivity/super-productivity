@@ -1,4 +1,11 @@
-import { type Page, type Locator, expect } from '@playwright/test';
+import {
+  type Dialog,
+  type Locator,
+  type Page,
+  type Request,
+  type Response,
+  expect,
+} from '@playwright/test';
 import { BasePage } from './base.page';
 
 export interface SuperSyncConfig {
@@ -39,6 +46,8 @@ type SyncCompletionSnapshot = {
   unsyncedCount: number | null;
 };
 
+type NativeSyncConfirmIntent = 'fresh' | 'use-local' | 'use-remote';
+
 /**
  * Page object for SuperSync configuration and sync operations.
  * Used for E2E tests that verify multi-client sync via the super-sync-server.
@@ -55,6 +64,7 @@ export class SuperSyncPage extends BasePage {
   readonly syncSpinner: Locator;
   readonly syncCheckIcon: Locator;
   readonly syncErrorIcon: Locator;
+  private readonly _syncRemoteCheckIcon: Locator;
   /** Fresh client confirmation dialog - appears when a new client first syncs */
   readonly freshClientDialog: Locator;
   readonly freshClientConfirmBtn: Locator;
@@ -71,6 +81,7 @@ export class SuperSyncPage extends BasePage {
    * handle enter_password and enable_encryption dialogs that appear mid-test.
    */
   private _encryptionPassword: string = 'e2e-default-encryption-pw';
+  private _unexpectedNativeDialog: string | undefined;
 
   constructor(page: Page) {
     super(page);
@@ -84,11 +95,19 @@ export class SuperSyncPage extends BasePage {
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
     this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
+    this._syncRemoteCheckIcon = page.locator(
+      '.sync-btn mat-icon.sync-state-ico:has-text("done_all")',
+    );
     // Error state shows sync_problem icon (no special class, just the icon name)
     this.syncErrorIcon = page.locator('.sync-btn mat-icon:has-text("sync_problem")');
-    // Fresh client confirmation dialog elements
-    this.freshClientDialog = page.locator('dialog-confirm');
-    this.freshClientConfirmBtn = page.locator('dialog-confirm button[mat-flat-button]');
+    // Legacy Angular fresh-client dialog elements. Keep this locator scoped so a
+    // different generic confirmation can never be accepted as a sync prompt.
+    this.freshClientDialog = page
+      .locator('dialog-confirm')
+      .filter({ hasText: /initial sync|fresh installation/i });
+    this.freshClientConfirmBtn = this.freshClientDialog.locator(
+      'button[mat-flat-button]',
+    );
     // Conflict resolution dialog elements
     this.conflictDialog = page.locator('dialog-conflict-resolution');
     this.conflictUseRemoteBtn = page.locator(
@@ -181,6 +200,21 @@ export class SuperSyncPage extends BasePage {
    * @param config - SuperSync configuration (includes optional waitForInitialSync flag)
    */
   async setupSuperSync(config: SuperSyncConfig): Promise<void> {
+    const expectedNativeChoice = config.syncImportChoice ?? 'remote';
+    const setupDialogHandler = async (dialog: Dialog): Promise<void> => {
+      await this._handleNativeSyncDialog(dialog, 'setupSuperSync', expectedNativeChoice);
+    };
+    this.page.on('dialog', setupDialogHandler);
+
+    try {
+      await this._setupSuperSync(config);
+      this._throwIfUnexpectedNativeDialog();
+    } finally {
+      this.page.off('dialog', setupDialogHandler);
+    }
+  }
+
+  private async _setupSuperSync(config: SuperSyncConfig): Promise<void> {
     // Block WebSocket connections and immediate uploads by default so tests have
     // controlled, sequential sync via syncAndWait() only.
     // Only the realtime-push test opts in with enableWebSocket: true.
@@ -209,32 +243,6 @@ export class SuperSyncPage extends BasePage {
 
     // Extract waitForInitialSync from config, defaulting to true
     const waitForInitialSync = config.waitForInitialSync ?? true;
-    // Auto-accept native browser confirm dialogs (window.confirm used for fresh client sync confirmation)
-    // Only handles 'confirm' dialogs to avoid conflicts with test handlers that may handle 'alert' dialogs
-    // Use 'once' to prevent memory leak from registering multiple handlers on repeated calls
-    this.page.once('dialog', async (dialog) => {
-      if (dialog.type() === 'confirm') {
-        const message = dialog.message();
-        // Validate this is the expected fresh client sync confirmation
-        const expectedPatterns = [/fresh/i, /remote/i, /sync/i, /operations/i];
-        const isExpectedDialog = expectedPatterns.some((pattern) =>
-          pattern.test(message),
-        );
-
-        if (!isExpectedDialog) {
-          console.warn(
-            `[SuperSyncPage] Unexpected confirm dialog: "${message}". Accepting anyway...`,
-          );
-        }
-        // Try/catch: another handler (e.g. syncAndWait) may have already handled this dialog
-        try {
-          await dialog.accept();
-        } catch {
-          // Dialog already handled by another listener - ignore
-        }
-      }
-    });
-
     // CRITICAL: Handle any leftover mandatory encryption dialog from previous operations
     // (e.g., backup import triggers sync which opens the disableClose:true encryption dialog).
     // ensureOverlaysClosed() uses Escape which can't dismiss disableClose dialogs.
@@ -1549,32 +1557,8 @@ export class SuperSyncPage extends BasePage {
    * @internal Use syncAndWait() instead for most cases
    */
   async triggerSync(): Promise<void> {
-    // Allow uploads during explicit sync
-    await this.syncBtn.click();
-
-    const spinnerAppeared = await this.syncSpinner
-      .waitFor({ state: 'visible', timeout: 3000 })
-      .then(() => true)
-      .catch(() => false);
-
-    if (spinnerAppeared) {
-      // Increased timeout from 15s to 30s for multi-client scenarios under load
-      // Also check for error state to fail fast
-      const result = await Promise.race([
-        this.syncSpinner
-          .waitFor({ state: 'hidden', timeout: 30000 })
-          .then(() => 'hidden'),
-        this.syncErrorIcon
-          .waitFor({ state: 'visible', timeout: 30000 })
-          .then(() => 'error'),
-      ]);
-
-      if (result === 'error') {
-        throw new Error('Sync failed with error state during triggerSync()');
-      }
-    }
-
-    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+    await this._triggerSuperSyncCycle(30000);
+    await this._waitForSyncCompletion({ timeout: 30000, useLocal: false });
   }
 
   /**
@@ -1594,11 +1578,87 @@ export class SuperSyncPage extends BasePage {
       await this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 });
     }
 
-    // Wait for sync to complete (spinner disappears)
-    await this.syncSpinner.waitFor({ state: 'hidden', timeout });
+    await this._waitForSyncCompletion({ timeout, useLocal: false });
+  }
 
-    // Verify success (check icon should be visible)
-    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 3000 });
+  private _getNativeSyncConfirmIntent(
+    message: string,
+  ): NativeSyncConfirmIntent | undefined {
+    const normalized = message.replace(/\s+/g, ' ').toLowerCase();
+
+    if (
+      /^initial sync this appears to be a fresh installation\. remote data with \d+ changes was found\. do you want to download and overwrite your local data with it\?$/.test(
+        normalized,
+      )
+    ) {
+      return 'fresh';
+    }
+    if (
+      normalized ===
+      'this device has never synced before. "use my data" will permanently replace the data on the server with this device\'s local data. this cannot be undone. continue?'
+    ) {
+      return 'use-local';
+    }
+    if (
+      /^this replaces this device's data with the server's and discards \d+ local change\(s\)\. continue\?$/.test(
+        normalized,
+      )
+    ) {
+      return 'use-remote';
+    }
+
+    return undefined;
+  }
+
+  private async _handleNativeSyncDialog(
+    dialog: Dialog,
+    context: string,
+    expectedChoice: 'local' | 'remote',
+  ): Promise<void> {
+    const message = dialog.message();
+    const isRuntimeOwnedDialog =
+      dialog.type() === 'beforeunload' ||
+      (dialog.type() === 'alert' && message.startsWith('devERR:')) ||
+      (dialog.type() === 'confirm' && message.startsWith('Throw an error for error?'));
+    if (isRuntimeOwnedDialog) {
+      return;
+    }
+
+    const intent =
+      dialog.type() === 'confirm' ? this._getNativeSyncConfirmIntent(message) : undefined;
+    const isExpectedConfirm = intent === 'fresh' || intent === `use-${expectedChoice}`;
+
+    if (isExpectedConfirm) {
+      console.log(
+        `[${context}] Expected native sync confirmation: "${message.substring(0, 80)}..."`,
+      );
+      try {
+        await dialog.accept();
+      } catch {
+        // Another narrowly-scoped listener already handled this dialog.
+      }
+      return;
+    }
+
+    this._unexpectedNativeDialog = `${dialog.type()}: ${message}`;
+    console.error(
+      `[${context}] Unexpected native dialog: ${this._unexpectedNativeDialog}`,
+    );
+    try {
+      await dialog.dismiss();
+    } catch {
+      // Another listener handled it; the recorded error still fails the helper.
+    }
+  }
+
+  private _throwIfUnexpectedNativeDialog(): void {
+    if (!this._unexpectedNativeDialog) {
+      return;
+    }
+
+    const unexpectedDialog = this._unexpectedNativeDialog;
+    this._unexpectedNativeDialog = undefined;
+    throw new Error(`Unexpected native dialog during SuperSync: ${unexpectedDialog}`);
   }
 
   /**
@@ -1737,7 +1797,7 @@ export class SuperSyncPage extends BasePage {
   private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
     const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
       [
-        this.syncCheckIcon.isVisible().catch(() => false),
+        this._syncRemoteCheckIcon.isVisible().catch(() => false),
         this.syncSpinner.isVisible().catch(() => false),
         this.syncErrorIcon.isVisible().catch(() => false),
         this._getUnsyncedOperationCount(),
@@ -1745,6 +1805,58 @@ export class SuperSyncPage extends BasePage {
     );
 
     return { checkVisible, spinnerVisible, errorVisible, unsyncedCount };
+  }
+
+  private async _triggerSuperSyncCycle(timeout: number): Promise<void> {
+    const failedAttempts: string[] = [];
+    const requestsStartedAfterArm = new WeakSet<Request>();
+    const isOpsUrl = (url: string): boolean => url.includes('/api/sync/ops');
+    const isOpsRequest = (request: Request): boolean =>
+      request.method() !== 'OPTIONS' && isOpsUrl(request.url());
+    const isArmedOpsRequest = (request: Request): boolean =>
+      requestsStartedAfterArm.has(request) && isOpsRequest(request);
+    const requestHandler = (request: Request): void => {
+      requestsStartedAfterArm.add(request);
+    };
+    const responseHandler = (response: Response): void => {
+      if (isArmedOpsRequest(response.request()) && !response.ok()) {
+        failedAttempts.push(`HTTP ${response.status()}`);
+      }
+    };
+    const requestFailedHandler = (request: Request): void => {
+      if (isArmedOpsRequest(request)) {
+        failedAttempts.push(request.failure()?.errorText ?? 'request failed');
+      }
+    };
+
+    this.page.on('request', requestHandler);
+    this.page.on('response', responseHandler);
+    this.page.on('requestfailed', requestFailedHandler);
+
+    try {
+      const [response] = await Promise.all([
+        this.page.waitForResponse(
+          (candidate) => isArmedOpsRequest(candidate.request()) && candidate.ok(),
+          { timeout },
+        ),
+        this.syncBtn.click(),
+      ]);
+      const responseFailure = await response.finished();
+      if (responseFailure) {
+        throw responseFailure;
+      }
+    } catch (error) {
+      const attemptSummary =
+        failedAttempts.length > 0 ? failedAttempts.join(', ') : 'none observed';
+      throw new Error(
+        `SuperSync did not receive a completed successful /api/sync/ops response within ${timeout}ms. Failed attempts: ${attemptSummary}`,
+        { cause: error },
+      );
+    } finally {
+      this.page.off('request', requestHandler);
+      this.page.off('response', responseHandler);
+      this.page.off('requestfailed', requestFailedHandler);
+    }
   }
 
   private async _waitForSyncCompletion(options: {
@@ -1755,6 +1867,8 @@ export class SuperSyncPage extends BasePage {
     let lastSnapshot: SyncCompletionSnapshot | undefined;
 
     while (Date.now() - startTime < options.timeout) {
+      this._throwIfUnexpectedNativeDialog();
+
       const handledDialog = await this._handleSyncDialogs(options.useLocal);
       if (handledDialog) {
         await this.page.waitForTimeout(500);
@@ -1772,14 +1886,7 @@ export class SuperSyncPage extends BasePage {
         throw new Error('Sync failed with error state during syncAndWait()');
       }
 
-      if (lastSnapshot.checkVisible) {
-        return;
-      }
-
-      if (!lastSnapshot.spinnerVisible && lastSnapshot.unsyncedCount === 0) {
-        console.log(
-          '[syncAndWait] Sync check icon not visible, but SUP_OPS has no pending operations',
-        );
+      if (!lastSnapshot.spinnerVisible && lastSnapshot.checkVisible) {
         return;
       }
 
@@ -1813,29 +1920,18 @@ export class SuperSyncPage extends BasePage {
     // Increased default timeout from 15s to 30s for multi-client scenarios under load
     const { useLocal = false, timeout = 30000 } = options;
 
-    // Register handler for native window.confirm dialogs that may appear during sync
-    // (e.g., fresh client confirmation, data repair). Use a non-once handler that
-    // removes itself when sync completes.
+    this._throwIfUnexpectedNativeDialog();
+
+    // Register a handler for the small set of destructive confirmations that are
+    // expected during sync. Unexpected confirms and every alert fail the helper.
     let dialogHandlerActive = true;
-    const dialogHandler = async (
-      dialog: import('@playwright/test').Dialog,
-    ): Promise<void> => {
+    const dialogHandler = async (dialog: Dialog): Promise<void> => {
       if (!dialogHandlerActive) return;
-      try {
-        if (dialog.type() === 'confirm') {
-          console.log(
-            `[syncAndWait] Native confirm dialog: "${dialog.message().substring(0, 80)}..." - accepting`,
-          );
-          await dialog.accept();
-        } else if (dialog.type() === 'alert') {
-          console.log(
-            `[syncAndWait] Native alert dialog: "${dialog.message().substring(0, 80)}..." - dismissing`,
-          );
-          await dialog.dismiss();
-        }
-      } catch {
-        // Dialog already handled by another listener - ignore
-      }
+      await this._handleNativeSyncDialog(
+        dialog,
+        'syncAndWait',
+        useLocal ? 'local' : 'remote',
+      );
     };
     this.page.on('dialog', dialogHandler);
 
@@ -1843,95 +1939,14 @@ export class SuperSyncPage extends BasePage {
       // Handle any pre-existing dialog (e.g., from auto-sync) before clicking sync
       await this._handleSyncDialogs(useLocal);
 
-      // Record whether the check icon is already visible BEFORE clicking sync.
-      // This is crucial: if it's visible from a previous sync, we must wait for
-      // it to disappear (indicating the new sync cycle started) before we can
-      // wait for it to reappear (indicating the new sync completed).
-      const checkVisibleBeforeClick = await this.syncCheckIcon
-        .isVisible()
-        .catch(() => false);
-
-      // Click sync button to initiate the sync cycle.
-      await this.syncBtn.click();
-
-      if (checkVisibleBeforeClick) {
-        // The check icon is stale from a previous sync. Wait for it to disappear
-        // (sync started) or the spinner to appear. This prevents returning early
-        // when the check icon never disappears (e.g., download-only syncs where
-        // hasNoPendingOps stays true).
-        try {
-          await Promise.race([
-            this.syncCheckIcon.waitFor({ state: 'hidden', timeout: 5000 }),
-            this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }),
-          ]);
-        } catch {
-          // Neither happened within 5s - the sync may have been a true no-op.
-          // Fall through to the spinner/check logic below.
-        }
-      }
-
-      // Wait for spinner or check icon to determine sync state
-      const spinnerAppeared = await this.syncSpinner
-        .waitFor({ state: 'visible', timeout: 2000 })
-        .then(() => true)
-        .catch(() => false);
-
-      if (spinnerAppeared) {
-        // Wait for sync to complete, continuously checking for blocking dialogs.
-        // Previously we checked dialogs once then blocked on spinner - but dialogs
-        // can appear at any point during sync (especially after server round-trips).
-        const startTime = Date.now();
-
-        while (Date.now() - startTime < timeout) {
-          // Handle any visible dialog first
-          const handledDialog = await this._handleSyncDialogs(useLocal);
-          if (handledDialog) {
-            // Encryption/password dialogs trigger re-sync via afterClosed() → sync().
-            // Wait briefly so the new sync has time to start (spinner appears).
-            await this.page.waitForTimeout(2000);
-            continue;
-          }
-
-          // Wait for spinner to hide with short timeout to allow periodic dialog checks
-          const remaining = Math.max(timeout - (Date.now() - startTime), 1000);
-          const waitChunk = Math.min(3000, remaining);
-
-          try {
-            await this.syncSpinner.waitFor({ state: 'hidden', timeout: waitChunk });
-            break; // Spinner hidden - sync complete
-          } catch {
-            // Spinner still visible - check for error state
-            const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
-            if (hasError) {
-              // Before throwing, give encryption dialogs a chance to appear.
-              // DecryptNoPasswordError sets ERROR status THEN opens the dialog
-              // asynchronously (lazy import), so the dialog may not be visible yet.
-              await this.page.waitForTimeout(500);
-              const handledEncryptionDialog = await this._handleSyncDialogs(useLocal);
-              if (handledEncryptionDialog) {
-                continue; // Dialog handled — re-sync will start, re-enter loop
-              }
-              throw new Error('Sync failed with error state during syncAndWait()');
-            }
-            // Continue loop to re-check for dialogs
-          }
-        }
-
-        // Final check
-        const isStillSpinning = await this.syncSpinner.isVisible().catch(() => false);
-        if (isStillSpinning) {
-          throw new Error(
-            `syncAndWait timed out after ${timeout}ms - spinner still visible`,
-          );
-        }
-      }
-
-      // Check for encryption dialogs before waiting for check icon.
-      // The sync may have ended with ERROR status and opened a dialog.
-      await this._handleSyncDialogs(useLocal);
-
-      // Now wait for sync to settle (whether spinner appeared or not)
-      await this._waitForSyncCompletion({ timeout: 10000, useLocal });
+      // A visible check icon can be up to a minute old. Arm a SuperSync ops
+      // response waiter before clicking; only after a successful response finishes
+      // do we accept a non-spinning remote checkmark. Intermediate failures are
+      // allowed because the provider may retry. The spinner is intentionally not
+      // required: a fast no-op cycle may complete between browser render frames.
+      await this._triggerSuperSyncCycle(timeout);
+      this._throwIfUnexpectedNativeDialog();
+      await this._waitForSyncCompletion({ timeout, useLocal });
 
       // Post-sync dialog check: _promptSuperSyncEncryptionIfNeeded() runs AFTER
       // sync completes (check icon visible) and may open enable_encryption or
@@ -1988,19 +2003,28 @@ export class SuperSyncPage extends BasePage {
         // Don't paper over a genuine error state by re-syncing.
         const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
         if (hasError) {
-          break;
+          throw new Error('Sync entered an error state while flushing trailing ops');
         }
         console.log(
           `[syncAndWait] ${pending} trailing op(s) remained after sync settled — ` +
             `flushing (attempt ${flush + 1}/3).`,
         );
         await this._handleSyncDialogs(useLocal);
-        await this.syncBtn.click();
-        await this.syncSpinner
-          .waitFor({ state: 'visible', timeout: 2000 })
-          .catch(() => {});
+        await this._triggerSuperSyncCycle(10000);
         await this._waitForSyncCompletion({ timeout: 10000, useLocal });
       }
+
+      const remainingPending = await this._getUnsyncedOperationCount();
+      if (remainingPending === null) {
+        throw new Error('Could not verify that SuperSync drained all pending operations');
+      }
+      if (remainingPending > 0) {
+        throw new Error(
+          `SuperSync still has ${remainingPending} pending operation(s) after 3 flush attempts`,
+        );
+      }
+
+      this._throwIfUnexpectedNativeDialog();
     } finally {
       // Clean up the dialog handler
       dialogHandlerActive = false;
@@ -2168,14 +2192,14 @@ export class SuperSyncPage extends BasePage {
    * Returns: 'syncing' | 'success' | 'error' | 'unknown'
    */
   async getSyncState(): Promise<'syncing' | 'success' | 'error' | 'unknown'> {
+    const isErrorVisible = await this.syncErrorIcon.isVisible().catch(() => false);
+    if (isErrorVisible) return 'error';
+
     const isSpinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
     if (isSpinnerVisible) return 'syncing';
 
-    const isCheckVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+    const isCheckVisible = await this._syncRemoteCheckIcon.isVisible().catch(() => false);
     if (isCheckVisible) return 'success';
-
-    const isErrorVisible = await this.syncErrorIcon.isVisible().catch(() => false);
-    if (isErrorVisible) return 'error';
 
     return 'unknown';
   }

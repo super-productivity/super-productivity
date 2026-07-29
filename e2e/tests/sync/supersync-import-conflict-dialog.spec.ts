@@ -603,11 +603,10 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * regression for it): the app syncs download-first, so in this deterministic flow the
    * incoming SYNC_IMPORT is intercepted by Client B's DOWNLOAD phase, which already
    * persisted lastServerSeq correctly before #8304 — so this test passes with or
-   * without that fix. #8304's actual bug is on the UPLOAD-piggyback path, reachable only
-   * via a timing race (A uploads between B's download and upload) that a deterministic
-   * E2E cannot force; that path is covered by the unit specs and
-   * operation-log-upload-piggyback-seq.integration.spec.ts. This test is the real-server
-   * end-to-end guard for the shared cancel→re-offer→reconverge contract.
+   * without that fix. #8304's actual bug is on the UPLOAD-piggyback path. A held
+   * download in supersync-conflict-gate-non-task-work.spec.ts forces that interleave,
+   * but does not combine it with CANCEL and re-offer. This test is the real-server
+   * end-to-end guard for the download-path cancel→re-offer→reconverge contract.
    *
    * Actions:
    * 1. Clients A and B sync a shared baseline task.

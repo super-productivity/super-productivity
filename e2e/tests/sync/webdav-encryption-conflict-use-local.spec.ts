@@ -9,6 +9,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 
@@ -28,7 +29,7 @@ import { waitForAppReady } from '../../utils/waits';
 test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('should resolve USE_LOCAL conflict with encryption without data corruption', async ({
+  test('should propagate an encrypted USE_LOCAL snapshot and later ops', async ({
     browser,
     baseURL,
     request,
@@ -124,24 +125,17 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     // Click "Keep local"
     const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
     await expect(useLocalBtn).toBeVisible();
+    syncPageB.prepareForNextSyncCycle('write');
     await useLocalBtn.click();
     console.log('[Test] Clicked Keep local on Client B');
 
-    // Handle potential confirmation dialog
-    const confirmDialog = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialog
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
     // Wait for sync to complete — this is the critical moment.
     // If the double-encryption bug were present, decryption would fail here.
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log(
       '[Test] Client B sync completed after USE_LOCAL (no double-encryption error)',
     );
@@ -153,6 +147,17 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     // Client A's task should NOT be visible (we chose USE_LOCAL)
     await expect(pageB.locator('task', { hasText: taskA })).not.toBeVisible();
     console.log('[Test] Verified Client B has local task, not remote task');
+
+    // The established client must hydrate the authoritative encrypted snapshot.
+    // Keep this poll before the tail op: #9170 tracks the file-sync bug where a
+    // later op can mask the replacement generation from a delayed reader.
+    await syncPageA.triggerSync();
+    await waitForSyncComplete(pageA, syncPageA);
+    await expect(pageA.locator('task', { hasText: taskB })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
+    console.log('[Test] Client A decrypted and applied Client B snapshot');
 
     // --- KEY REGRESSION: No repeated conflict on subsequent sync ---
     const taskB2 = 'Second Task B - ' + Date.now();
@@ -177,20 +182,20 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
     await expect(pageB.locator('task', { hasText: taskB2 })).toBeVisible();
 
-    // --- Client A syncs → should decrypt Client B's encrypted data correctly ---
+    // --- Client A syncs → should decrypt Client B's later encrypted op ---
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Test] Client A synced');
 
-    // Client A should be able to decrypt Client B's ops (taskB2 was uploaded as ops).
-    // This validates that Client B's encrypted upload after USE_LOCAL is readable.
-    // Note: The first task (taskB) was part of Client B's snapshot upload, which
-    // may not propagate via incremental sync when seq numbers align. That's an
-    // orthogonal sync protocol behavior, not related to the double-encryption fix.
+    // The snapshot state must survive when the later op is applied.
+    await expect(pageA.locator('task', { hasText: taskB })).toBeVisible({
+      timeout: 15000,
+    });
     await expect(pageA.locator('task', { hasText: taskB2 })).toBeVisible({
       timeout: 15000,
     });
-    console.log('[Test] Client A received and decrypted Client B data successfully');
+    await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
+    console.log('[Test] Client A converged on Client B data without stale tasks');
 
     await closeContextsSafely(contextA, contextB);
   });

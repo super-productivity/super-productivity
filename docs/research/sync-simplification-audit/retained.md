@@ -2,6 +2,16 @@
 
 Baseline ID: `9b4481332dd635dce29da3774d1b8601ea213467f07dfc7fb0417f36328c3135`
 
+> Post-baseline correction (2026-07-18): the browser suite proves that a real
+> upload carrying 25 injected clock entries is stored at 20 while retaining the
+> import author. It does not prove natural 21-client accumulation or the
+> same-entity compare-before-prune/retry seam (#9164), nor later comparisons
+> against an already-pruned clock (#8755).
+>
+> The later E2E deletion audit also invalidated B36.1-R04's day-change and
+> divergence browser cases: neither reproduced its named bug. Their real seams
+> are tracked in #9148, #9167, and #9168 rather than retained as green tests.
+
 This register preserves necessary complexity, rejected hypotheses,
 already-tracked work, compatibility constraints, and decision-required items so
 future audits do not repeat unsafe suggestions.

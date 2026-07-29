@@ -4,22 +4,22 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  getTaskTitles,
   waitForTask,
   markTaskDone,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import {
-  expectTaskOnAllClients,
-  expectEqualTaskCount,
-} from '../../utils/supersync-assertions';
+import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
 
 /**
- * SuperSync Vector Clock Max Size & LWW Retry Limit E2E Tests
+ * SuperSync Concurrent Batch and Multi-Client Convergence E2E Tests
  *
- * These tests verify the fixes from commit cb36c09538:
- * - LWW re-upload retry loop has a bounded maximum (prevents infinite sync)
- * - TAG:TODAY concurrent edits converge without hanging
- * - Multiple clients with many tasks produce consistent vector clocks
+ * These tests verify ordinary convergence behavior adjacent to commit cb36c09538:
+ * - equivalent concurrent task batches sync without hanging
+ * - TAG:TODAY concurrent operations sync without hanging
+ * - Multiple clients with many tasks converge on the same task set
+ *
+ * They do not force the retry-limit or 20-entry vector-clock pruning boundaries.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -32,23 +32,23 @@ const ERROR_SNACK_TIMEOUT = { timeout: 3000 };
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW Retry', () => {
+test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => {
   /**
-   * Test 1: Sync completes without hanging during heavy LWW conflict (retry limit)
+   * Test 1: Equivalent concurrent task batches sync without hanging
    *
-   * Creates concurrent edits that produce many LWW conflicts.
-   * Without the retry limit fix, the sync would loop infinitely
-   * re-uploading local-win ops that keep producing new LWW ops.
+   * Creates equivalent concurrent edits across several tasks and proves the
+   * ordinary batch path completes and converges. Because both clients write
+   * the same value, this does not prove an LWW winner or the retry bound.
    *
    * Steps:
    * 1. Client A creates 5 tasks, syncs
    * 2. Client B syncs, receives tasks
    * 3. Both clients mark all tasks done (concurrent edits)
    * 4. Client A syncs first
-   * 5. Client B syncs (many LWW conflicts from concurrent done-marking)
+   * 5. Client B syncs the equivalent concurrent updates
    * 6. Assert: sync completes (doesn't hang), clients converge, no errors
    */
-  test('Sync completes without hanging during heavy LWW conflict (retry limit)', async ({
+  test('Equivalent concurrent task batches sync without hanging', async ({
     browser,
     baseURL,
     testRunId,
@@ -56,6 +56,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
     const uniqueId = `${testRunId}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let clientC: SimulatedE2EClient | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -103,11 +104,9 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await clientA.sync.syncAndWait();
       console.log('[LWW Retry] Client A synced');
 
-      // This is the critical step: B has many concurrent edits that produce LWW conflicts
-      // Without the retry limit fix, this would loop infinitely
-      console.log('[LWW Retry] Client B syncing (heavy LWW conflicts expected)');
+      console.log('[Concurrent Batch] Client B syncing equivalent updates');
       await clientB.sync.syncAndWait();
-      console.log('[LWW Retry] Client B synced (did not hang!)');
+      console.log('[Concurrent Batch] Client B synced (did not hang!)');
 
       // ============ Verify convergence ============
       console.log('[LWW Retry] Verifying convergence');
@@ -115,8 +114,23 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       // Final sync to ensure full convergence
       await clientA.sync.syncAndWait();
 
-      // Both clients should have same task count
-      await expectEqualTaskCount([clientA, clientB]);
+      // A fresh client proves the done updates reached the server rather than
+      // merely remaining identical in A and B's local stores.
+      clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+      await clientC.sync.setupSuperSync(syncConfig);
+      await clientC.sync.syncAndWait();
+
+      const allClients = [clientA, clientB, clientC];
+      const persistedTaskNames = taskNames.map((name) => `A-${testRunId}-${name}`);
+      for (const client of allClients) {
+        const titles = await getTaskTitles(client);
+        expect([...titles].sort()).toEqual([...persistedTaskNames].sort());
+        for (const name of taskNames) {
+          const task = client.page.locator('task', { hasText: name });
+          await expect(task).toHaveCount(1);
+          await expect(task).toHaveClass(/isDone/);
+        }
+      }
 
       // No error snackbars
       const errorSnackA = clientA.page.locator('simple-snack-bar.error');
@@ -124,29 +138,30 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
-      console.log('[LWW Retry] Test PASSED - sync completed without hanging');
+      console.log('[Concurrent Batch] Test PASSED - sync completed without hanging');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
+      if (clientC) await closeClient(clientC);
     }
   });
 
   /**
-   * Test 2: TAG:TODAY operations converge after concurrent edits (the bug scenario)
+   * Test 2: TAG:TODAY concurrent operations sync without hanging
    *
    * This reproduces the exact bug scenario: two clients editing tasks that belong
    * to TAG:TODAY (via dueDay). Concurrent edits on the same entity produce LWW
    * conflicts that previously caused an infinite re-upload loop.
    *
    * Steps:
-   * 1. Client A creates a task with sd:today (adds to TODAY tag), syncs
+   * 1. Client A creates a task with `@today` (adds to TODAY ordering), syncs
    * 2. Client B syncs, receives the task
    * 3. Client A marks the task done
-   * 4. Client B concurrently renames the task
+   * 4. Client B concurrently creates another task in TODAY ordering
    * 5. Both sync in sequence
    * 6. Assert: sync completes, no hanging, consistent state
    */
-  test('TAG:TODAY operations converge after concurrent edits (the bug scenario)', async ({
+  test('TAG:TODAY concurrent operations sync without hanging', async ({
     browser,
     baseURL,
     testRunId,
@@ -171,11 +186,11 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
 
-      // ============ Client A creates task with sd:today ============
-      console.log('[TODAY] Client A creating task with sd:today');
+      // ============ Client A creates task with @today ============
+      console.log('[TODAY] Client A creating task with @today');
       const taskName = `TODAY-Task-${uniqueId}`;
-      // Using sd:today sets dueDay which makes the task appear in TODAY view
-      await clientA.workView.addTask(`${taskName} sd:today`);
+      // Using @today sets dueDay which makes the task appear in TODAY view
+      await clientA.workView.addTask(`${taskName} @today`, false, taskName);
       await waitForTask(clientA.page, taskName);
 
       await clientA.sync.syncAndWait();
@@ -196,7 +211,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
 
       // Client B adds a second task (creates concurrent TAG:TODAY ordering changes)
       const task2Name = `TODAY-Task2-${uniqueId}`;
-      await clientB.workView.addTask(`${task2Name} sd:today`);
+      await clientB.workView.addTask(`${task2Name} @today`, false, task2Name);
       await waitForTask(clientB.page, task2Name);
       console.log('[TODAY] Client B created second today task');
 
@@ -221,8 +236,19 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
-      // Both clients should see the second task
-      await expectTaskOnAllClients([clientA, clientB], task2Name);
+      // Both directions must survive: A's completion reaches B and B's new
+      // TODAY task reaches A. Also reject duplicates or stale extra titles.
+      const persistedTaskNames = [
+        `A-${testRunId}-${taskName}`,
+        `B-${testRunId}-${task2Name}`,
+      ];
+      for (const client of [clientA, clientB]) {
+        const titles = await getTaskTitles(client);
+        expect([...titles].sort()).toEqual([...persistedTaskNames].sort());
+        const completedTask = client.page.locator('task', { hasText: taskName });
+        await expect(completedTask).toHaveCount(1);
+        await expect(completedTask).toHaveClass(/isDone/);
+      }
 
       console.log('[TODAY] Test PASSED - TAG:TODAY concurrent edits converged');
     } finally {
@@ -232,11 +258,11 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
   });
 
   /**
-   * Test 3: Multiple clients creating many tasks produces consistent vector clocks after sync
+   * Test 3: Multiple clients creating many tasks converge after sync
    *
-   * Three clients each create several tasks and sync in sequence.
-   * This builds up vector clock entries and verifies that pruning
-   * doesn't break comparison or cause sync failures.
+   * Three clients each create several tasks and sync in sequence. This builds
+   * up several vector-clock entries and verifies ordinary multi-client
+   * comparison/convergence; it does not reach the 20-entry pruning boundary.
    *
    * Steps:
    * 1. Create 3 clients (A, B, C)
@@ -244,7 +270,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
    * 3. All sync multiple rounds
    * 4. Assert: all clients have identical task set, no errors
    */
-  test('Multiple clients creating many tasks produces consistent vector clocks after sync', async ({
+  test('Multiple clients creating many tasks converge after sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -281,7 +307,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
 
       for (let i = 1; i <= 3; i++) {
         const name = `A-Task${i}-${uniqueId}`;
-        allTaskNames.push(name);
+        allTaskNames.push(`A-${testRunId}-${name}`);
         await clientA.workView.addTask(name);
       }
       await clientA.sync.syncAndWait();
@@ -290,7 +316,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await clientB.sync.syncAndWait(); // Get A's tasks
       for (let i = 1; i <= 3; i++) {
         const name = `B-Task${i}-${uniqueId}`;
-        allTaskNames.push(name);
+        allTaskNames.push(`B-${testRunId}-${name}`);
         await clientB.workView.addTask(name);
       }
       await clientB.sync.syncAndWait();
@@ -299,7 +325,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       await clientC.sync.syncAndWait(); // Get A's + B's tasks
       for (let i = 1; i <= 3; i++) {
         const name = `C-Task${i}-${uniqueId}`;
-        allTaskNames.push(name);
+        allTaskNames.push(`C-${testRunId}-${name}`);
         await clientC.workView.addTask(name);
       }
       await clientC.sync.syncAndWait();
@@ -322,7 +348,10 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
         await expectTaskOnAllClients(allClients, name);
       }
 
-      await expectEqualTaskCount(allClients);
+      for (const client of allClients) {
+        const titles = await getTaskTitles(client);
+        expect([...titles].sort()).toEqual([...allTaskNames].sort());
+      }
 
       // No error snackbars on any client
       for (const client of allClients) {

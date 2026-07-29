@@ -13,8 +13,8 @@ import {
  *
  * Verifies the new WebSocket notification flow end-to-end:
  * 1. Both clients complete an initial successful SuperSync sync
- * 2. Client A uploads a change
- * 3. Client B receives the change without clicking sync again
+ * 2. Client A's immediate-upload path uploads a local change
+ * 3. Client B's WebSocket path downloads it
  *
  * This specifically guards the PR's new "upload -> WS notify -> download" path.
  */
@@ -53,12 +53,11 @@ test.describe('@supersync Realtime Push', () => {
       await clientB.sync.syncAndWait();
 
       const pushedTask = `Realtime-Pushed-${testRunId}`;
+      const pushStart = Date.now();
       await clientA.workView.addTask(pushedTask);
 
-      const pushStart = Date.now();
-      await clientA.sync.syncAndWait();
-
-      // No manual sync on client B here: it should update via WS-triggered download.
+      // No manual sync on either client: A must use ImmediateUploadService and B
+      // must use the WebSocket-triggered download path.
       await waitForTask(clientB.page, pushedTask, 10000);
 
       const propagationMs = Date.now() - pushStart;

@@ -9,6 +9,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 
@@ -104,24 +105,16 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     // Click "Keep local" button
     const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
     await expect(useLocalBtn).toBeVisible();
+    syncPageB.prepareForNextSyncCycle('write');
     await useLocalBtn.click();
     console.log('[Test] Clicked Use Local on Client B');
 
-    // Handle potential confirmation dialog (for overwrites with many changes)
-    const confirmDialog = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-      // Click the confirm/OK button
-      await confirmDialog
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear - that's fine
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-    // Wait for sync to complete
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    // Wait for the replacement upload started by USE_LOCAL.
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] Sync completed on Client B');
 
     // Verify Client B still has its local task
@@ -216,22 +209,17 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     // Click "Keep remote" button
     const useRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
     await expect(useRemoteBtn).toBeVisible();
+    syncPageB.prepareForNextSyncCycle('read');
     await useRemoteBtn.click();
     console.log('[Test] Clicked Use Remote');
 
-    // Handle potential confirmation dialog
-    const confirmDialog = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialog
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    // USE_REMOTE performs a fresh seq-0 rebuild download. The witness was armed
+    // before the click so the setup response cannot be reused.
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] Sync completed');
 
     // Verify Client B now has remote data (Client A's task)
@@ -314,26 +302,20 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     console.log('[Test] First conflict dialog appeared');
 
     const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
+    syncPageB.prepareForNextSyncCycle('write');
     await useLocalBtn.click();
     console.log('[Test] Clicked Use Local');
 
-    // Handle potential confirmation dialog
-    const confirmDialog = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialog
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] First sync completed after conflict resolution');
 
     // Verify Client B has its local task
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: taskA })).not.toBeVisible();
     console.log('[Test] Verified local task is present');
 
     // --- KEY TEST: Create ANOTHER task and sync ---
@@ -474,23 +456,18 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     console.log('[Test] Client C conflict dialog appeared');
 
     const useLocalBtnC = conflictDialogC.locator('button', { hasText: /Keep local/i });
+    syncPageC.prepareForNextSyncCycle('write');
     await useLocalBtnC.click();
     console.log('[Test] Client C clicked Use Local (uploads snapshot)');
 
-    // Handle potential confirmation dialog
-    const confirmDialogC = pageC.locator('dialog-confirm');
-    try {
-      await confirmDialogC.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialogC
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageC, conflictDialogC);
 
-    await waitForSyncComplete(pageC, syncPageC, 30000);
+    await waitForSyncComplete(pageC, syncPageC, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] Client C sync completed (snapshot uploaded)');
+    await expect(pageC.locator('task', { hasText: taskC })).toBeVisible();
+    await expect(pageC.locator('task', { hasText: taskA })).not.toBeVisible();
 
     // --- KEY TEST: Client B syncs and should detect gap/snapshot replacement ---
     // Client B has unsynced local changes (taskB) and the remote data was replaced
@@ -509,27 +486,25 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     // Resolve with USE_LOCAL to keep B's data
     const useLocalBtnB = conflictDialogB.locator('button', { hasText: /Keep local/i });
+    syncPageB.prepareForNextSyncCycle('write');
     await useLocalBtnB.click();
 
-    // Handle potential confirmation dialog
-    const confirmDialogB = pageB.locator('dialog-confirm');
-    try {
-      await confirmDialogB.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialogB
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // Confirmation might not appear
-    }
+    await confirmSyncConflictOverwriteIfShown(pageB, conflictDialogB);
 
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    await waitForSyncComplete(pageB, syncPageB, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] Client B resolved conflict');
 
-    // Verify Client B kept its local task
+    // B's replacement contains its downloaded A task plus its unsynced B task,
+    // and must not contain C's discarded snapshot.
+    await expect(pageB.locator('task', { hasText: taskA })).toBeVisible({
+      timeout: 5000,
+    });
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible({
       timeout: 5000,
     });
+    await expect(pageB.locator('task', { hasText: taskC })).not.toBeVisible();
     console.log('[Test] Verified Client B kept its local task');
 
     await closeContextsSafely(contextA, contextB, contextC);
@@ -618,19 +593,12 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
       hasText: 'Conflicting Data',
     });
     await expect(conflictDialogA).toBeVisible({ timeout: 30000 });
+    syncPageA.prepareForNextSyncCycle('write');
     await conflictDialogA.locator('button', { hasText: /Keep local/i }).click();
-    // Possible "are you sure?" overwrite confirmation
-    const confirmDialogA = pageA.locator('dialog-confirm');
-    try {
-      await confirmDialogA.waitFor({ state: 'visible', timeout: 3000 });
-      await confirmDialogA
-        .locator('button[color="warn"], button:has-text("OK")')
-        .first()
-        .click();
-    } catch {
-      // No confirmation needed
-    }
-    await waitForSyncComplete(pageA, syncPageA, 30000);
+    await confirmSyncConflictOverwriteIfShown(pageA, conflictDialogA);
+    await waitForSyncComplete(pageA, syncPageA, 30000, {
+      allowResponseOnlyCompletion: true,
+    });
     console.log('[Test] A uploaded SNAPSHOT via USE_LOCAL');
 
     // --- Client B: fresh, downloads A's snapshot ---
