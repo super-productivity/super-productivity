@@ -29,7 +29,6 @@ module.exports = function (config) {
     plugins: [
       require('karma-jasmine'),
       require('karma-chrome-launcher'),
-      require('karma-firefox-launcher'),
       require('@angular-devkit/build-angular/plugins/karma'),
       require('./test-helpers/karma-running-spec-on-disconnect'),
       require('karma-coverage-istanbul-reporter'),
@@ -75,7 +74,7 @@ module.exports = function (config) {
     colors: true,
     logLevel: config.LOG_INFO,
     autoWatch: true,
-    browsers: ['FirefoxHeadless'],
+    browsers: ['ChromeHeadless'],
     singleRun: false,
     customLaunchers: {
       ChromeHeadless: {
