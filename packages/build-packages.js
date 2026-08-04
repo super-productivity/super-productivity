@@ -213,9 +213,7 @@ async function buildPlugin(plugin) {
         }
         if (needsInstall) {
           log(`  Installing dependencies...`, colors.yellow);
-          await execAsync(
-            `cd ${pluginPath} && npm install --prefer-offline --no-audit --no-fund --quiet`,
-          );
+          await execAsync(`cd ${pluginPath} && npm install`);
         }
       } catch {
         // No package.json, skip install
