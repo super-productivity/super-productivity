@@ -138,28 +138,19 @@ export class ScheduleComponent {
   });
 
   private _daysToShowCount = computed(() => {
-    const size = this._windowSize();
     const selectedView = this._currentTimeViewMode();
-    const width = size.width;
-    const height = size.height;
 
     if (selectedView === 'day') return 1;
 
+    // Month view: a fixed grid of weeks, never a function of the window height.
+    // Deriving the row count from available space used to drop the tail of the
+    // month whenever the window was short (#9449): a month whose 1st falls late
+    // in the week needs 6 rows (Aug 2026 starts on a Saturday), and a day left
+    // out of `daysToShow` gets no events computed at all, so the task vanished
+    // rather than merely being clipped. 6 rows covers every month/firstDayOfWeek
+    // combination and matches the 6 row tracks the grid already reserves.
     if (selectedView === 'month') {
-      const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
-      const minHeightPerWeek =
-        width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET
-          ? SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_MOBILE
-          : SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_DESKTOP;
-      const maxWeeks = Math.floor(availableHeight / minHeightPerWeek);
-
-      if (maxWeeks < SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS;
-      } else if (maxWeeks > SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS;
-      } else {
-        return maxWeeks;
-      }
+      return SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS;
     }
 
     // Week view: always 7 days

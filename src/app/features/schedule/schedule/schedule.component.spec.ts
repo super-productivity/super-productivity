@@ -860,35 +860,31 @@ describe('ScheduleComponent', () => {
       expect(daysToShowCount).toBe(7);
     });
 
-    it('should return a value between MIN_WEEKS and MAX_WEEKS in month view', () => {
+    it('should return the full week count in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
 
       // Act
       const daysToShowCount = component['_daysToShowCount']();
 
-      // Assert - should be bounded by constants
-      expect(daysToShowCount).toBeGreaterThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS,
-      );
-      expect(daysToShowCount).toBeLessThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS,
-      );
+      // Assert
+      expect(daysToShowCount).toBe(SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS);
     });
 
-    it('should use MONTH_VIEW constants for calculation', () => {
-      // This test verifies the constants are being used by checking
-      // that the result is consistent with the constant values
+    it('should not shrink the month grid on a short window (#9449)', () => {
+      // The month grid used to be sized from the viewport, so a short window
+      // dropped the tail of the month (a task on Mon 31 Aug 2026 had no cell
+      // and therefore no events computed at all). Height must not influence it.
       mockLayoutService.selectedTimeView.set('month');
 
-      const daysToShowCount = component['_daysToShowCount']();
+      component['_windowSize'] = signal({ width: 1280, height: 1400 });
+      const onTallWindow = component['_daysToShowCount']();
 
-      // The result must be an integer (whole number of weeks)
-      expect(Number.isInteger(daysToShowCount)).toBe(true);
+      component['_windowSize'] = signal({ width: 1280, height: 500 });
+      const onShortWindow = component['_daysToShowCount']();
 
-      // Must be within the defined bounds
-      expect(daysToShowCount).toBeGreaterThanOrEqual(3); // MIN_WEEKS
-      expect(daysToShowCount).toBeLessThanOrEqual(6); // MAX_WEEKS
+      expect(onShortWindow).toBe(onTallWindow);
+      expect(onShortWindow).toBe(SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS);
     });
   });
 
