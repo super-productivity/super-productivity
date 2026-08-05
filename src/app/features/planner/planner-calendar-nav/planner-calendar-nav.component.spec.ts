@@ -69,13 +69,28 @@ describe('PlannerCalendarNavComponent', () => {
   });
 
   describe('weeks computed', () => {
-    it('should generate a 5-week calendar grid with 7 days per week', () => {
+    it('should generate a calendar grid of WEEKS_SHOWN weeks with 7 days per week', () => {
       const weeks = component.weeks();
 
       expect(weeks.length).toBe(WEEKS_SHOWN);
       for (const week of weeks) {
         expect(week.length).toBe(7);
       }
+    });
+
+    it('should still reach the last day of a month that spans six rows (#9449)', () => {
+      // August 2026 starts on a Saturday, so with Monday as the first day of
+      // week the grid is anchored at Mon 27 Jul and Mon 31 Aug lands in the
+      // sixth row. At five rows it had no cell at all: no task dot, no way to
+      // tap it.
+      mockTodayDateStr.set('2026-08-01');
+      fixture.componentRef.setInput('visibleDayDate', '2026-08-01');
+      fixture.detectChanges();
+
+      const allDays = component.weeks().flat();
+
+      expect(allDays[0].dateStr).toBe('2026-07-27');
+      expect(allDays.map((d) => d.dateStr)).toContain('2026-08-31');
     });
 
     it('should start the grid from the week containing today', () => {

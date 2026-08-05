@@ -1,5 +1,9 @@
 export const ROW_HEIGHT = 40;
-export const WEEKS_SHOWN = 5;
+// 6, not 5: the expanded grid anchors to the week containing the 1st, and a
+// month starting late in the week spans 6 rows (Aug 2026 starts on a Saturday).
+// At 5 the month's last day had no cell at all — no task dot, not tappable
+// (#9449).
+export const WEEKS_SHOWN = 6;
 export const DAYS_IN_VIEW = WEEKS_SHOWN * 7;
 export const MIN_HEIGHT = ROW_HEIGHT;
 export const MAX_HEIGHT = ROW_HEIGHT * WEEKS_SHOWN;

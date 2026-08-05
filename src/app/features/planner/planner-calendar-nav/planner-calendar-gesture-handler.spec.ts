@@ -526,13 +526,18 @@ describe('CalendarGestureHandler', () => {
       cb.getIsExpanded.and.returnValue(false);
       cb.getActiveWeekIndex.and.returnValue(0);
 
+      // Derived, not a literal: the midpoint sits halfway between MIN_HEIGHT
+      // and MAX_HEIGHT, so a fixed pixel delta silently stops clearing it when
+      // the expanded height changes (it did when the grid went to six rows).
+      const pastMidpoint = Math.ceil((MAX_HEIGHT - MIN_HEIGHT) * 0.75);
+
       handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
       // Move more than 5px to trigger drag mode, then advance time to keep
       // velocity low so the midpoint check is used rather than velocity
-      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 200));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 100 + pastMidpoint));
       jasmine.clock().tick(1000);
       // End drag with enough delta to be past midpoint
-      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 200));
+      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 100 + pastMidpoint));
 
       jasmine.clock().tick(SNAP_DURATION + 15);
 
