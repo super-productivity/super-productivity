@@ -37,7 +37,7 @@ import {
 import { DateService } from 'src/app/core/date/date.service';
 
 import { EntityState } from '@ngrx/entity';
-import { Action } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 
 import { IS_ELECTRON } from '../../app.constants';
@@ -126,6 +126,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _operationWriteFlushService = inject(OperationWriteFlushService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
+  private readonly _store = inject(Store);
   private readonly _simpleCounterService = inject(SimpleCounterService);
   private readonly _dateService = inject(DateService);
   private readonly _metricService = inject(MetricService);
@@ -341,6 +342,11 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async finishDay(): Promise<void> {
+    // Notify plugins (finishDay hook) before the day is wrapped up and tasks are
+    // archived — the plugin-hooks effect listens for the FINISH_DAY action.
+    this.actionsToExecuteBeforeFinishDay.forEach((action) =>
+      this._store.dispatch(action),
+    );
     try {
       await this._beforeFinishDayService.executeActions();
       // Wait for any ongoing sync to complete before archiving to avoid DB lock errors.
