@@ -8,7 +8,6 @@ export const DAYS_IN_VIEW = WEEKS_SHOWN * 7;
 export const MIN_HEIGHT = ROW_HEIGHT;
 export const MAX_HEIGHT = ROW_HEIGHT * WEEKS_SHOWN;
 
-const SNAP_MIDPOINT = (MIN_HEIGHT + MAX_HEIGHT) / 2;
 const SNAP_VELOCITY = 0.3;
 const SNAP_DURATION = 200;
 const SLIDE_DURATION = 150;
@@ -19,6 +18,9 @@ const DIRECTION_RATIO = 1.5;
 export interface CalendarGestureCallbacks {
   getActiveWeekIndex(): number;
   getIsExpanded(): boolean;
+  /** `MAX_HEIGHT`, or less where the viewport cannot fit every row. */
+  getExpandedHeight(): number;
+  getWeekOffset(expanded: boolean, activeIdx: number): number;
   onExpandChanged(expanded: boolean): void;
   onVerticalSwipe(isDown: boolean): void;
   onHorizontalSwipe(dir: 1 | -1): void;
@@ -65,9 +67,9 @@ export class CalendarGestureHandler {
     if (activeIdx !== undefined) this._dragActiveIdx = activeIdx;
 
     const snapDur = this._animDuration(SNAP_DURATION);
-    const targetHeight = expanded ? MAX_HEIGHT : MIN_HEIGHT;
+    const targetHeight = expanded ? this._cb.getExpandedHeight() : MIN_HEIGHT;
     const idx = this._dragActiveIdx;
-    const targetOffset = expanded ? 0 : -idx * ROW_HEIGHT;
+    const targetOffset = this._cb.getWeekOffset(expanded, idx);
 
     if (snapDur === 0) {
       weeksEl.style.transition = '';
@@ -223,16 +225,17 @@ export class CalendarGestureHandler {
         const deltaY = touch.clientY - this._touchStartY;
         const elapsed = Date.now() - this._touchStartTime;
         const velocity = deltaY / Math.max(elapsed, 1);
+        const expandedHeight = this._cb.getExpandedHeight();
         const currentHeight = Math.max(
           MIN_HEIGHT,
-          Math.min(MAX_HEIGHT, this._dragStartHeight + deltaY),
+          Math.min(expandedHeight, this._dragStartHeight + deltaY),
         );
 
         let snapExpanded: boolean;
         if (Math.abs(velocity) > SNAP_VELOCITY) {
           snapExpanded = velocity > 0;
         } else {
-          snapExpanded = currentHeight > SNAP_MIDPOINT;
+          snapExpanded = currentHeight > (MIN_HEIGHT + expandedHeight) / 2;
         }
         this.snapTo(snapExpanded);
       }
@@ -273,20 +276,27 @@ export class CalendarGestureHandler {
   private _startDrag(): void {
     this._isDragging = true;
     this._dragActiveIdx = this._cb.getActiveWeekIndex();
-    this._dragStartHeight = this._cb.getIsExpanded() ? MAX_HEIGHT : MIN_HEIGHT;
+    this._dragStartHeight = this._cb.getIsExpanded()
+      ? this._cb.getExpandedHeight()
+      : MIN_HEIGHT;
   }
 
   private _updateDrag(deltaY: number): void {
+    const expandedHeight = this._cb.getExpandedHeight();
     const newHeight = Math.max(
       MIN_HEIGHT,
-      Math.min(MAX_HEIGHT, this._dragStartHeight + deltaY),
+      Math.min(expandedHeight, this._dragStartHeight + deltaY),
     );
     const weeksEl = this._getWeeksEl();
     if (!weeksEl) return;
     weeksEl.style.maxHeight = newHeight + 'px';
 
-    const progress = (newHeight - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT);
-    const offset = -this._dragActiveIdx * ROW_HEIGHT * (1 - progress);
+    const progress = (newHeight - MIN_HEIGHT) / (expandedHeight - MIN_HEIGHT);
+    const collapsedOffset = this._cb.getWeekOffset(false, this._dragActiveIdx);
+    const expandedOffset = this._cb.getWeekOffset(true, this._dragActiveIdx);
+    const travel = expandedOffset - collapsedOffset;
+    const travelled = travel * progress;
+    const offset = collapsedOffset + travelled;
     const innerEl = weeksEl.firstElementChild as HTMLElement;
     if (innerEl) {
       innerEl.style.transform = `translateY(${offset}px)`;

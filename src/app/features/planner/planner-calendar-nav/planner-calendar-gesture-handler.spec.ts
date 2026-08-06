@@ -50,6 +50,8 @@ const createMockCallbacks = (): jasmine.SpyObj<CalendarGestureCallbacks> =>
   jasmine.createSpyObj<CalendarGestureCallbacks>('callbacks', [
     'getActiveWeekIndex',
     'getIsExpanded',
+    'getExpandedHeight',
+    'getWeekOffset',
     'onExpandChanged',
     'onVerticalSwipe',
     'onHorizontalSwipe',
@@ -78,6 +80,12 @@ describe('CalendarGestureHandler', () => {
     cb = createMockCallbacks();
     cb.getActiveWeekIndex.and.returnValue(0);
     cb.getIsExpanded.and.returnValue(false);
+    // Unclamped geometry: what the component reports on any viewport tall
+    // enough for all six rows. The clamped case is covered in the component spec.
+    cb.getExpandedHeight.and.returnValue(MAX_HEIGHT);
+    cb.getWeekOffset.and.callFake((expanded: boolean, activeIdx: number) =>
+      expanded ? 0 : -activeIdx * ROW_HEIGHT,
+    );
 
     handler = new CalendarGestureHandler(el, () => weeksEl, cb);
   });
