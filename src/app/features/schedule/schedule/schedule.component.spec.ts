@@ -877,14 +877,60 @@ describe('ScheduleComponent', () => {
       // and therefore no events computed at all). Height must not influence it.
       mockLayoutService.selectedTimeView.set('month');
 
-      component['_windowSize'] = signal({ width: 1280, height: 1400 });
+      // One signal, mutated with .set(): replacing the field instead would not
+      // invalidate the computed, so the second read would return the first
+      // read's cached value and the test could not fail.
+      const windowSize = signal({ width: 1280, height: 1400 });
+      component['_windowSize'] = windowSize;
       const onTallWindow = component['_daysToShowCount']();
 
-      component['_windowSize'] = signal({ width: 1280, height: 500 });
+      windowSize.set({ width: 1280, height: 500 });
       const onShortWindow = component['_daysToShowCount']();
 
       expect(onShortWindow).toBe(onTallWindow);
       expect(onShortWindow).toBe(SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS);
+    });
+  });
+
+  describe('scroll position on view change', () => {
+    // Six rows overflow the wrapper on a short window, so a scroll position
+    // carried over from week view clamped to the bottom and opened the month
+    // with its first row above the viewport (#9463 review).
+    const scrollWrapper = (): HTMLElement =>
+      fixture.nativeElement.querySelector('.scroll-wrapper');
+
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('should reset the wrapper to the top when entering month view', () => {
+      mockLayoutService.selectedTimeView.set('week');
+      fixture.detectChanges();
+
+      // Cast because Element.scrollTo is overloaded; we always call the
+      // options form.
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).toHaveBeenCalled();
+      const [opts] = scrollToSpy.calls.mostRecent().args as [ScrollToOptions];
+      expect(opts.top).toBe(0);
+      expect(opts.left).toBe(0);
+    });
+
+    it('should not reset the wrapper while staying in month view', () => {
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).not.toHaveBeenCalled();
     });
   });
 

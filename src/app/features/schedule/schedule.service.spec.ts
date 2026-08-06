@@ -333,10 +333,10 @@ describe('ScheduleService', () => {
       });
 
       it('should span the whole month for every month/firstDayOfWeek combination', () => {
-        // 24 consecutive months covers every start-weekday and both a leap and
-        // a non-leap February.
+        // 24 consecutive months from Jan 2027 covers every start-weekday and
+        // both a non-leap February (2027) and a leap one (2028).
         for (let monthOffset = 0; monthOffset < 24; monthOffset++) {
-          const reference = new Date(2026, monthOffset, 15);
+          const reference = new Date(2027, monthOffset, 15);
           const year = reference.getFullYear();
           const month = reference.getMonth();
           const first = dayStr(new Date(year, month, 1));

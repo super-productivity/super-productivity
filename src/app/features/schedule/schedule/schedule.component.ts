@@ -4,8 +4,10 @@ import {
   Component,
   computed,
   effect,
+  ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -100,6 +102,8 @@ export class ScheduleComponent {
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
   }
+
+  private _scrollWrapper = viewChild<ElementRef<HTMLElement>>('scrollWrapper');
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
@@ -383,12 +387,23 @@ export class ScheduleComponent {
     this.isHScrolled.set(el.scrollLeft > 0);
   }
 
+  // The month grid is taller than the wrapper on a short window, so a scroll
+  // position carried over from week view clamps to the bottom and opens the
+  // month with its first row above the viewport (#9463 review).
+  private _resetScrollWrapper(): void {
+    this._scrollWrapper()?.nativeElement.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  }
+
   // Scroll a target element into view inside the scroll-wrapper, but pull
   // horizontally back by the sticky time column's width (+ a bit extra) so
   // the target doesn't end up sitting under the time column.
   private _scrollIntoViewWithTimeColumnOffset(elementId: string): void {
     const element = document.getElementById(elementId);
-    const scrollContainer = element?.closest('.scroll-wrapper') as HTMLElement | null;
+    const scrollContainer = this._scrollWrapper()?.nativeElement;
     if (!element || !scrollContainer) return;
 
     const timeCol = scrollContainer.querySelector(
@@ -435,6 +450,8 @@ export class ScheduleComponent {
       if (this.isMonthView() === false) {
         // scroll to work start whenever view is switched to work-week
         setTimeout(() => this._scrollIntoViewWithTimeColumnOffset('work-start'));
+      } else {
+        setTimeout(() => this._resetScrollWrapper());
       }
     });
   }
