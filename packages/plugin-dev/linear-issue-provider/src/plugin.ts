@@ -20,6 +20,7 @@ interface LinearConfig {
   apiKey?: string;
   teamId?: string;
   projectId?: string;
+  isAutoImportCurrentCycleOnly?: boolean;
 }
 
 interface LinearGraphQLResponse<T = unknown> {
@@ -66,14 +67,15 @@ const t = (key: string): string => {
 };
 
 const SEARCH_ISSUES_QUERY = `
-  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter) {
+  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter, $cycle: NullableCycleFilter) {
     viewer {
       assignedIssues(
         first: $first,
         filter: {
           state: { type: { in: ["backlog", "unstarted", "started"] } },
           team: $team,
-          project: $project
+          project: $project,
+          cycle: $cycle
         }
       ) {
         nodes {
@@ -149,6 +151,9 @@ const searchAssignedIssues = async (
   if (cfg.projectId) {
     variables.project = { id: { eq: cfg.projectId } };
   }
+  if (cfg.isAutoImportCurrentCycleOnly) {
+    variables.cycle = { isActive: { eq: true } };
+  }
 
   const data = await graphql<{
     viewer: { assignedIssues: { nodes: LinearRawIssueReduced[] } };
@@ -190,6 +195,12 @@ PluginAPI.registerIssueProvider({
       key: 'projectId',
       type: 'input',
       label: t('CFG.PROJECT_ID'),
+      advanced: true,
+    },
+    {
+      key: 'isAutoImportCurrentCycleOnly',
+      type: 'checkbox' as const,
+      label: t('CFG.AUTO_IMPORT_CURRENT_CYCLE_ONLY'),
       advanced: true,
     },
   ],
