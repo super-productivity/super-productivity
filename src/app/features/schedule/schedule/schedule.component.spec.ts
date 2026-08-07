@@ -741,6 +741,36 @@ describe('ScheduleComponent', () => {
     });
   });
 
+  describe('empty state', () => {
+    it('shows the empty hint when there is nothing scheduled', () => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty')).toBeTruthy();
+    });
+
+    it('hides the empty hint as soon as there is an event', () => {
+      mockScheduleService.createScheduleDaysWithContext.and.returnValue([
+        {
+          dayDate: '2026-01-20',
+          entries: [],
+          beyondBudgetTasks: [
+            {
+              id: 'some-task',
+              title: 'Some task',
+              timeEstimate: 30 * 60 * 1000,
+              timeSpent: 0,
+              subTaskIds: [],
+              dueDay: '2026-01-20',
+            } as unknown as ScheduleDay['beyondBudgetTasks'][number],
+          ],
+          isToday: true,
+        },
+      ]);
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty')).toBeFalsy();
+    });
+  });
+
   describe('currentTimeRow computed', () => {
     it('should return null when not viewing today', () => {
       // Arrange - view a future range that doesn't contain today
