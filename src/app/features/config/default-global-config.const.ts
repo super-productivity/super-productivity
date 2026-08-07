@@ -10,6 +10,9 @@ import { INBOX_PROJECT } from '../project/project.const';
 import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 
 const minute = 60 * 1000;
+const isServedFromBundledSyncServer = (): boolean =>
+  typeof window !== 'undefined' && window.location.pathname.startsWith('/app/');
+
 const defaultTaskNotesTemplate = `**How can I best achieve it now?**
 
 **What do I want?**
@@ -251,9 +254,11 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     },
 
     superSync: {
-      baseUrl: environment.production
-        ? 'https://sync.super-productivity.com'
-        : 'http://localhost:1901',
+      baseUrl: isServedFromBundledSyncServer()
+        ? window.location.origin
+        : environment.production
+          ? 'https://sync.super-productivity.com'
+          : 'http://localhost:1901',
       userName: null,
       password: null,
       accessToken: null,
