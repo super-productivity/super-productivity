@@ -2408,6 +2408,7 @@
       "EXPERIMENTAL_WARNING_MSG": "This feature is experimental. It may have bugs, change significantly, or be removed in a future update. Make sure to keep backups of your data.<br/><br/>Do you want to enable it?"
     },
     "AUTO_BACKUPS": {
+      "CHANGE_LOCATION": "Change backup folder",
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LAST_BACKUP_INFO": "Last backup: {{date}}",
