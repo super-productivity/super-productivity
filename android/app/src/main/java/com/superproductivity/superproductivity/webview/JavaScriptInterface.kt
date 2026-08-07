@@ -20,6 +20,7 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.ReminderNotificationTexts
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
@@ -334,6 +335,32 @@ class JavaScriptInterface(
             """{"durationMs":$durationMs,"remainingMs":$remainingMs,"isBreak":$isBreak,"isPaused":$isPaused}"""
         } else {
             "null"
+        }
+    }
+
+    /**
+     * Persist the localized reminder notification texts pushed from the
+     * frontend, so notifications built natively at alarm-fire time (including
+     * snoozed and reboot-re-registered ones) use the user's app language.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateReminderNotificationTexts(
+        bodyTask: String,
+        bodyDueDate: String,
+        actionDone: String,
+        actionSnooze10m: String,
+        actionSnooze1h: String
+    ) {
+        safeCall("Failed to update reminder notification texts") {
+            ReminderNotificationTexts.save(
+                activity,
+                bodyTask,
+                bodyDueDate,
+                actionDone,
+                actionSnooze10m,
+                actionSnooze1h
+            )
         }
     }
 

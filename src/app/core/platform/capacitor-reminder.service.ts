@@ -1,7 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { Capacitor, PermissionState } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { TranslateService } from '@ngx-translate/core';
 import { Log } from '../log';
+import { T } from '../../t.const';
 import { CapacitorPlatformService } from './capacitor-platform.service';
 import {
   CapacitorNotificationService,
@@ -56,6 +58,7 @@ export class CapacitorReminderService {
   private _platformService = inject(CapacitorPlatformService);
   private _notificationService = inject(CapacitorNotificationService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _translateService = inject(TranslateService);
   // Injected (vs reading IS_ANDROID_WEB_VIEW directly) so tests can override
   // it via DI — matches the pattern in `task-reminder.effects.ts`.
   private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
@@ -127,6 +130,18 @@ export class CapacitorReminderService {
           useAlarmStyle,
         });
 
+        // The notification itself is built natively at alarm-fire time, so the
+        // web view hands over the texts in the user's app language beforehand.
+        // Older APKs without this bridge method keep their built-in English
+        // texts (optional chaining), so this is safe across version skews.
+        androidInterface.updateReminderNotificationTexts?.(
+          this._translateService.instant(T.F.REMINDER.N_BODY_TASK),
+          this._translateService.instant(T.F.REMINDER.N_BODY_DUE_DATE),
+          this._translateService.instant(T.F.REMINDER.N_ACTION_DONE),
+          this._translateService.instant(T.F.REMINDER.N_ACTION_SNOOZE_10M),
+          this._translateService.instant(T.F.REMINDER.N_ACTION_SNOOZE_1H),
+        );
+
         androidInterface.scheduleNativeReminder(
           options.notificationId,
           options.reminderId,
@@ -173,7 +188,11 @@ export class CapacitorReminderService {
             {
               id: options.notificationId,
               title: options.title,
-              body: `Reminder: ${options.title}`,
+              body: this._translateService.instant(
+                options.reminderType === 'DUE_DATE'
+                  ? T.F.REMINDER.N_BODY_DUE_DATE
+                  : T.F.REMINDER.N_BODY_TASK,
+              ),
               // Play the default system notification sound.
               // Without this, iOS delivers notifications silently (content.sound = nil).
               // The string 'default' triggers iOS's file-not-found fallback to the system sound.
