@@ -30,7 +30,7 @@
                 <span class="label">{{ T.WW.ESTIMATE_REMAINING | translate }}</span>
                 <span class="no-wrap">
                   ~<strong class="time-val">{{
-                    estimateRemainingToday() | msToString
+                    (estimateRemainingToday() | msToString: false : true) || '0m'
                   }}</strong>
                   <mat-icon style="margin-left: 2px">hourglass_empty</mat-icon>
                 </span>
@@ -38,7 +38,9 @@
               <div class="item">
                 <span class="label">{{ T.WW.WORKING_TODAY | translate }}</span>
                 <span class="no-wrap">
-                  <strong class="time-val">{{ workingToday() | msToString }}</strong>
+                  <strong class="time-val">{{
+                    (workingToday() | msToString: false : true) || '0m'
+                  }}</strong>
                   @if (
                     workContextService.workingTodayArchived$ | async;
                     as workingTodayArchived
@@ -62,7 +64,9 @@
                     matTooltipPosition="above"
                   >
                     <strong class="time-val">{{
-                      takeABreakService.timeWorkingWithoutABreak$ | async | msToString
+                      (takeABreakService.timeWorkingWithoutABreak$
+                        | async
+                        | msToString: false : true) || '0m'
                     }}</strong
                     ><mat-icon>timer</mat-icon>
                   </span>

@@ -129,6 +129,11 @@ button.isActive2 {
 
 .primary-action-group {
   margin-inline-end: calc(var(--header-action-group-gap) - var(--header-nav-button-gap));
+  // The tracked-task chip is the only shrinkable thing in the header, so let
+  // this group give way. No min-width: 0 anywhere in this chain - the automatic
+  // minimum size is what stops the shrink at the chip's floor instead of
+  // letting the fixed-size buttons overflow (#7477).
+  flex-shrink: 1;
 
   ::ng-deep play-button .play-btn-wrapper {
     margin: 0;
@@ -173,11 +178,11 @@ button.isActive2 {
   margin-left: auto;
   display: flex;
   align-items: center;
-  // Keep the action group at its intrinsic width so a long title shrinks
-  // (it ellipsizes) instead of pushing these buttons off screen (#7477).
-  flex: 0 0 auto;
+  // Shrinkable only as far as the tracked-task chip can give way - every
+  // button inside is fixed-size, so they still can't be pushed off screen
+  // (#7477) while the page title keeps its share of the row.
+  flex: 0 1 auto;
   gap: var(--header-nav-button-gap);
-  min-width: 0;
 
   :host-context([dir='rtl']) & {
     margin-left: 0;
@@ -330,14 +335,6 @@ page-title {
   to {
     transform: rotate(-360deg) translateZ(0);
   }
-}
-
-.current-task-title {
-  position: absolute;
-  right: 100%;
-  width: auto;
-  border: 2px solid var(--c-accent);
-  border-radius: 12px;
 }
 
 .sync-btn {
