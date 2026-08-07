@@ -153,8 +153,12 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.setDeadline),
-        // A bulk action shows one summary snack instead of one per task.
-        filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
+        // A bulk action shows one summary snack instead of one per task;
+        // a programmatic write (REST API) opts out via `isSkipSnack`.
+        filter(
+          ({ isSkipSnack }) =>
+            !isSkipSnack && !this._taskMultiSelectService.isBulkFeedbackSuppressed(),
+        ),
         tap(({ deadlineDay, deadlineWithTime }) => {
           const formattedDate = deadlineWithTime
             ? this._datePipe.transform(deadlineWithTime, 'short')
@@ -176,8 +180,12 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.removeDeadline),
-        // A bulk action shows one summary snack instead of one per task.
-        filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
+        // A bulk action shows one summary snack instead of one per task;
+        // a programmatic write (REST API) opts out via `isSkipSnack`.
+        filter(
+          ({ isSkipSnack }) =>
+            !isSkipSnack && !this._taskMultiSelectService.isBulkFeedbackSuppressed(),
+        ),
         tap(() => {
           this._snackService.open({
             type: 'SUCCESS',
