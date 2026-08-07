@@ -22,6 +22,7 @@ import {
 } from 'rxjs/operators';
 import { NavigationEnd, Router } from '@angular/router';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
+import { prefersReducedMotion } from '../../util/prefers-reduced-motion';
 import { MaterialCssVarsService } from 'angular-material-css-vars';
 import { DOCUMENT } from '@angular/common';
 import { MatIconRegistry } from '@angular/material/icon';
@@ -565,7 +566,7 @@ export class GlobalThemeService {
     // Use effect to reactively update animation class
     effect(() => {
       const misc = this._globalConfigService.misc();
-      if (misc?.isDisableAnimations) {
+      if (misc?.isDisableAnimations || prefersReducedMotion()) {
         this.document.body.classList.add(BodyClass.isDisableAnimations);
       } else {
         this.document.body.classList.remove(BodyClass.isDisableAnimations);

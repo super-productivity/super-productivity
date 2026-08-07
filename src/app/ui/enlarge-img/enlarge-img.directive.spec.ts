@@ -66,4 +66,70 @@ describe('EnlargeImgDirective', () => {
     expect(enlarged).not.toBeNull();
     expect(enlarged!.getAttribute('src')).toBe(url);
   });
+
+  // Regression test: with `body.isDisableAnimations` (also set by the OS
+  // reduced-motion preference) `* { transition: none }` means `transitionend`
+  // never fires. Without a timeout fallback the full-viewport lightbox stays in
+  // the DOM forever and swallows every pointer event.
+  describe('with animations disabled', () => {
+    const getWrapper = (): HTMLElement | null =>
+      document.querySelector('.enlarged-image-wrapper');
+
+    const waitFor = async (
+      pred: () => boolean,
+      label: string,
+      timeoutMs = 4000,
+    ): Promise<void> => {
+      const start = Date.now();
+      while (!pred()) {
+        if (Date.now() - start > timeoutMs) {
+          throw new Error(`Timed out waiting for ${label}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    };
+
+    const openLightbox = async (): Promise<HTMLElement> => {
+      fixture.componentInstance.url = 'assets/icons/icon-128x128.png';
+      fixture.detectChanges();
+      hostImgEl.click();
+      await waitFor(() => !!getWrapper(), 'lightbox to open');
+      const wrapperEl = getWrapper() as HTMLElement;
+      await waitFor(
+        () => wrapperEl.classList.contains('ani-enter'),
+        'enter animation to start',
+      );
+      return wrapperEl;
+    };
+
+    beforeEach(() => {
+      document.body.classList.add('isDisableAnimations');
+    });
+
+    afterEach(() => {
+      document.body.classList.remove('isDisableAnimations');
+    });
+
+    it('removes the lightbox on backdrop click', async () => {
+      const wrapperEl = await openLightbox();
+      expect(getComputedStyle(wrapperEl).transitionProperty).toBe('none');
+
+      wrapperEl.click();
+
+      await waitFor(() => !getWrapper(), 'lightbox to be removed');
+      expect(getWrapper()).toBeNull();
+    });
+
+    it('removes the lightbox on the zoom-out path', async () => {
+      await openLightbox();
+      const enlargedImgEl = getEnlargedImg() as HTMLImageElement;
+
+      // first click zooms in, the second zooms out and should then hide
+      enlargedImgEl.click();
+      enlargedImgEl.click();
+
+      await waitFor(() => !getWrapper(), 'lightbox to be removed');
+      expect(getWrapper()).toBeNull();
+    });
+  });
 });
