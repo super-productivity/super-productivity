@@ -9,6 +9,7 @@ import {
   switchMap,
 } from 'rxjs/operators';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from '../schedule/ical/get-relevant-events-from-ical';
+import { getCalNameFromIcal } from '../schedule/ical/get-cal-name-from-ical';
 import {
   BehaviorSubject,
   combineLatest,
@@ -40,6 +41,7 @@ import {
 } from '../schedule/schedule.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { selectCalendarProviders } from '../issue/store/issue-provider.selectors';
+import { IssueProviderActions } from '../issue/store/issue-provider.actions';
 import {
   IssueProviderCalendar,
   IssueProviderPluginType,
@@ -441,15 +443,16 @@ export class CalendarIntegrationService {
         },
       })
       .pipe(
-        switchMap((icalStrData) =>
-          getRelevantEventsForCalendarIntegrationFromIcal(
+        switchMap((icalStrData) => {
+          this._updateCalNameIfChanged(calProvider, icalStrData);
+          return getRelevantEventsForCalendarIntegrationFromIcal(
             icalStrData,
             calProvider.id,
             start,
             end,
             calProvider.icalUrl,
-          ),
-        ),
+          );
+        }),
         map((events) =>
           events.map((ev) => ({
             ...ev,
@@ -508,6 +511,26 @@ export class CalendarIntegrationService {
       Date.now() + ONE_MONTHS,
       isForwardError,
     );
+  }
+
+  /**
+   * Persists the feed's own display name (X-WR-CALNAME) on the provider so
+   * lists and tooltips can show "Work" instead of "calendar.example.com"
+   * (#9144). Dispatches only when the name actually changed — i.e. at most
+   * once per calendar rename — so regular polling causes no store churn.
+   */
+  private _updateCalNameIfChanged(
+    calProvider: IssueProviderCalendar,
+    icalStrData: string,
+  ): void {
+    const calName = getCalNameFromIcal(icalStrData);
+    if (calName && calName !== calProvider.calName) {
+      this._store.dispatch(
+        IssueProviderActions.updateIssueProvider({
+          issueProvider: { id: calProvider.id, changes: { calName } },
+        }),
+      );
+    }
   }
 
   private _getCalProviderFromCache(): ScheduleCalendarMapEntry[] {

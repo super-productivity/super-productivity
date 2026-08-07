@@ -4,6 +4,9 @@ import { CalendarIntegrationEvent } from '../../../calendar-integration/calendar
 
 export interface CalendarProviderCfg extends BaseIssueProviderCfg {
   icalUrl: string;
+  // Human-readable calendar name taken from the feed's X-WR-CALNAME property.
+  // Captured on fetch so lists/tooltips can show it instead of the hostname.
+  calName?: string;
   isAutoImportForCurrentDay: boolean;
   isReferenceCalendar?: boolean;
   color?: string;
