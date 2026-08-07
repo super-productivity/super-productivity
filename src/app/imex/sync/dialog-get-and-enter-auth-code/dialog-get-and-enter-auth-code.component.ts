@@ -133,10 +133,11 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       // callback URL is malformed or attacker-crafted. Raw code-only paste (no URL)
       // is fine: it won't match the PKCE verifier on token exchange.
       const stateFromUrl = parsedUrl.searchParams.get('state');
-      if (this.data.providerName.toLowerCase() === 'onedrive') {
+      const providerLower = this.data.providerName.toLowerCase();
+      if (providerLower === 'onedrive' || providerLower === 'outlook-tasks') {
         // Missing and mismatched state both fail closed with the same retry
         // message — the user can't act differently on the two cases.
-        if (!stateFromUrl || !validateOAuthState('onedrive', stateFromUrl)) {
+        if (!stateFromUrl || !validateOAuthState(providerLower, stateFromUrl)) {
           this._snackService.open({
             type: 'ERROR',
             msg: T.F.SYNC.S.OAUTH_STATE_INVALID,

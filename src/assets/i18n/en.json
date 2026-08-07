@@ -824,6 +824,37 @@
         "ERR_LOAD_BOARDS": "Failed to load Deck boards! Check your credentials."
       }
     },
+    "OUTLOOK_TASKS": {
+      "FORM": {
+        "ADVANCED_CONFIG": "Advanced Config",
+        "CLIENT_ID": "Azure AD Application (client) ID",
+        "CLIENT_ID_DESCRIPTION": "Register an app at https://portal.azure.com and use its Application (client) ID. Required scopes: Tasks.ReadWrite",
+        "TENANT_ID": "Tenant ID",
+        "TENANT_ID_DESCRIPTION": "Azure AD tenant ID. Use \"common\" for personal Microsoft accounts and multi-tenant apps.",
+        "TASK_LIST_ID": "Task List ID (leave empty for default)",
+        "TASK_LIST_ID_DESCRIPTION": "ID of a specific Outlook task list. Leave empty to use the default list.",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
+        "TWO_WAY_SYNC_SECTION": "Two-Way Sync",
+        "TWO_WAY_SYNC_STATUS": "Status sync",
+        "TWO_WAY_SYNC_TITLE": "Title sync",
+        "TWO_WAY_SYNC_NOTES": "Notes sync",
+        "TWO_WAY_SYNC_OFF": "Off",
+        "TWO_WAY_SYNC_PULL_ONLY": "Pull only",
+        "TWO_WAY_SYNC_PUSH_ONLY": "Push only",
+        "TWO_WAY_SYNC_BOTH": "Both directions"
+      },
+      "FORM_SECTION": {
+        "HELP": "Connect to Microsoft Outlook Tasks via Microsoft Graph API. Requires an Azure AD application registration with Tasks.ReadWrite permission."
+      },
+      "S": {
+        "AUTH_CONNECTED": "Outlook Tasks: connected successfully.",
+        "AUTH_EXPIRED": "Outlook Tasks: authentication expired. Please re-authorize.",
+        "AUTHORIZE": "Authorize with Microsoft",
+        "AUTHORIZE_ENTER_CLIENT_ID": "Please enter the Azure AD Application (client) ID first.",
+        "NO_TASK_LISTS": "No Outlook task lists found.",
+        "TASK_NOT_FOUND": "Outlook Tasks: Task \"{{issueId}}\" not found."
+      }
+    },
     "NOTE": {
       "D_DRAFT_CONFLICT": {
         "KEEP_SAVED": "Keep saved version",

@@ -26,6 +26,7 @@ import {
 import {
   DEFAULT_ISSUE_PROVIDER_CFGS,
   ICAL_TYPE,
+  OUTLOOK_TASKS_TYPE,
   ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
   ISSUE_PROVIDER_FORM_CFGS_MAP,
   ISSUE_PROVIDER_HUMANIZED,
@@ -73,6 +74,10 @@ import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import { OutlookTasksClientService } from '../providers/outlook-tasks/outlook-tasks-client.service';
+import { OutlookTasksCfg } from '../providers/outlook-tasks/outlook-tasks.model';
+import { IssueProviderOutlookTasks } from '../issue.model';
+import { DialogGetAndEnterAuthCodeComponent } from '../../../imex/sync/dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
 
 type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
 
@@ -181,6 +186,9 @@ export class DialogEditIssueProviderComponent {
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
+  private _outlookTasksClientService = inject(OutlookTasksClientService);
+
+  outlookOAuthConnecting = signal(false);
 
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
 
@@ -213,6 +221,13 @@ export class DialogEditIssueProviderComponent {
         getSafeErrorLogMeta(err),
       );
     });
+    // For built-in Outlook Tasks provider, check if already authorized.
+    if (
+      this.issueProviderKey === OUTLOOK_TASKS_TYPE &&
+      (this.model as Record<string, unknown>)['accessToken']
+    ) {
+      this.isOAuthConnected.set(true);
+    }
   }
 
   submit(isSkipClose = false): void {
@@ -241,6 +256,71 @@ export class DialogEditIssueProviderComponent {
 
   cancel(): void {
     this._matDialogRef.close();
+  }
+
+  async authorizeOutlookTasks(): Promise<void> {
+    // Guard against double-click race condition.
+    if (this.outlookOAuthConnecting()) {
+      return;
+    }
+    const m = this.model as IssueProviderOutlookTasks;
+    const clientId = m.clientId;
+    const tenantId = m.tenantId ?? null;
+    if (!clientId) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.OUTLOOK_TASKS.S.AUTHORIZE_ENTER_CLIENT_ID,
+      });
+      return;
+    }
+    this.outlookOAuthConnecting.set(true);
+    try {
+      const cfg: OutlookTasksCfg = {
+        clientId,
+        tenantId,
+        isEnabled: true,
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        taskListId: null,
+      };
+      const authUrl = this._outlookTasksClientService.getAuthUrl(cfg);
+      const authCode: string | undefined = await this._matDialog
+        .open(DialogGetAndEnterAuthCodeComponent, {
+          restoreFocus: true,
+          data: {
+            providerName: 'outlook-tasks',
+            url: authUrl,
+          },
+        })
+        .afterClosed()
+        .toPromise();
+      if (authCode) {
+        const tokens = await this._outlookTasksClientService.exchangeAuthCode(
+          cfg,
+          authCode,
+        );
+        this.model = {
+          ...this.model,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          tokenExpiresAt: tokens.expiresAt,
+        } as Partial<IssueProvider>;
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.F.OUTLOOK_TASKS.S.AUTH_CONNECTED,
+        });
+        this.isOAuthConnected.set(true);
+      }
+    } catch (err) {
+      IssueLog.err('Outlook Tasks OAuth failed', getSafeErrorLogMeta(err));
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.ISSUE.S.OAUTH_FAILED,
+      });
+    } finally {
+      this.outlookOAuthConnecting.set(false);
+    }
   }
 
   duplicate(): void {
@@ -399,6 +479,7 @@ export class DialogEditIssueProviderComponent {
   }
 
   protected readonly ICAL_TYPE = ICAL_TYPE;
+  protected readonly OUTLOOK_TASKS_TYPE = OUTLOOK_TASKS_TYPE;
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;

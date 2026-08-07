@@ -27,6 +27,7 @@ import {
   REDMINE_TYPE,
   NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
+  OUTLOOK_TASKS_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
@@ -45,6 +46,7 @@ import { RedmineCommonInterfacesService } from './providers/redmine/redmine-comm
 // Azure DevOps is now a plugin — no built-in service needed
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
 import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
+import { OutlookTasksCommonInterfacesService } from './providers/outlook-tasks/outlook-tasks-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
@@ -82,6 +84,9 @@ export class IssueService {
     NextcloudDeckCommonInterfacesService,
   );
   private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
+  private _outlookTasksCommonInterfaceService = inject(
+    OutlookTasksCommonInterfacesService,
+  );
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
   private _workContextService = inject(WorkContextService);
@@ -104,6 +109,7 @@ export class IssueService {
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
     [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
+    [OUTLOOK_TASKS_TYPE]: this._outlookTasksCommonInterfaceService,
   };
 
   ISSUE_REFRESH_MAP: {
