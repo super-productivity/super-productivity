@@ -372,6 +372,35 @@ describe('TaskReminderEffects', () => {
     });
   });
 
+  describe('deadline snacks', () => {
+    it('should not show a snack when setting a deadline with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineDay: '2026-05-12',
+          isSkipSnack: true,
+        }),
+      );
+
+      effects.setDeadlineSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should not show a snack when removing a deadline with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.removeDeadline({
+          taskId: 'task-1',
+          isSkipSnack: true,
+        }),
+      );
+
+      effects.removeDeadlineSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dismissReminderSnack$', () => {
     it('should show snack when reminder is dismissed', () => {
       const action = TaskSharedActions.dismissReminderOnly({ id: 'task-1' });

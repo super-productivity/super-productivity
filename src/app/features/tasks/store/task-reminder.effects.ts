@@ -149,6 +149,7 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.setDeadline),
+        filter(({ isSkipSnack }) => !isSkipSnack),
         tap(({ deadlineDay, deadlineWithTime }) => {
           const formattedDate = deadlineWithTime
             ? this._datePipe.transform(deadlineWithTime, 'short')
@@ -170,6 +171,7 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.removeDeadline),
+        filter(({ isSkipSnack }) => !isSkipSnack),
         tap(() => {
           this._snackService.open({
             type: 'SUCCESS',
