@@ -416,7 +416,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         ? this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_OVERDUE
         : this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_DUE_BY;
     }
-    return this.T.F.TASK.ADDITIONAL_INFO.DEADLINE;
+    return this.T.F.TASK.CMP.SET_DEADLINE;
   });
 
   // EFFECTS
