@@ -252,4 +252,8 @@
   .input-item:hover & {
     display: block !important;
   }
+
+  @media (hover: none) {
+    display: block !important;
+  }
 }
