@@ -1826,6 +1826,7 @@
         "REPEAT": "Repeat",
         "SCHEDULE_TASK": "Schedule Task",
         "SUB_TASKS": "Subtasks ({{nr}})",
+        "SUB_TASKS_EMPTY": "Subtasks",
         "TIME": "Duration",
         "TITLE_PLACEHOLDER": "Enter a title"
       },

@@ -35,10 +35,14 @@
     >
       <ng-container panel-header>
         <mat-icon class="panel-header-icon">list</mat-icon>
-        <span>{{
-          T.F.TASK.ADDITIONAL_INFO.SUB_TASKS
-            | translate: { nr: task().subTasks?.length || 0 }
-        }}</span>
+        @if (task().subTasks?.length) {
+          <span>{{
+            T.F.TASK.ADDITIONAL_INFO.SUB_TASKS
+              | translate: { nr: task().subTasks?.length }
+          }}</span>
+        } @else {
+          <span>{{ T.F.TASK.ADDITIONAL_INFO.SUB_TASKS_EMPTY | translate }}</span>
+        }
       </ng-container>
       <ng-container panel-content>
         @if (task().subTasks && task().subTasks.length) {
