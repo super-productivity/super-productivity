@@ -384,6 +384,8 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   showTimeEstimate = computed(() => !this.task().subTasks?.length);
 
+  hasTimeData = computed(() => !!(this.task().timeSpent || this.task().timeEstimate));
+
   hasAttachments = computed(() => {
     return this.issueAttachments().length > 0 || this.localAttachments().length > 0;
   });
