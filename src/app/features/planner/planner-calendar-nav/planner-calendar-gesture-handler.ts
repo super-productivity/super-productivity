@@ -38,6 +38,8 @@ export class CalendarGestureHandler {
   private _touchActive = false;
   private _dragStartHeight = 0;
   private _dragActiveIdx = 0;
+  /** Sampled once per drag: measuring per touchmove interleaves layout reads with writes. */
+  private _dragExpandedHeight = 0;
   private _prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -60,23 +62,34 @@ export class CalendarGestureHandler {
     this._el.removeEventListener('touchcancel', this._onTouchCancel);
   }
 
-  snapTo(expanded: boolean, activeIdx?: number): void {
+  snapTo(requestExpanded: boolean, activeIdx?: number): void {
     const weeksEl = this._getWeeksEl();
     if (!weeksEl) return;
     const innerEl = weeksEl.firstElementChild as HTMLElement;
     if (activeIdx !== undefined) this._dragActiveIdx = activeIdx;
 
+    // A viewport with room for only one row leaves nothing to expand into.
+    // Reporting expanded there would desync the flag from the geometry: the
+    // calendar still looks collapsed while horizontal swipes take the expanded
+    // branch and jump whole months.
+    const expandedHeight = this._cb.getExpandedHeight();
+    const expanded = requestExpanded && expandedHeight > MIN_HEIGHT;
+
     const snapDur = this._animDuration(SNAP_DURATION);
-    const targetHeight = expanded ? this._cb.getExpandedHeight() : MIN_HEIGHT;
+    const targetHeight = expanded ? expandedHeight : MIN_HEIGHT;
     const idx = this._dragActiveIdx;
     const targetOffset = this._cb.getWeekOffset(expanded, idx);
 
     if (snapDur === 0) {
+      // Apply the target rather than clearing, for the same reason the animated
+      // branch below keeps its inline styles: Angular skips the DOM write when
+      // the bound signal value has not changed, which would leave the element
+      // with no max-height at all and drop the responsive row clamp.
       weeksEl.style.transition = '';
-      weeksEl.style.maxHeight = '';
+      weeksEl.style.maxHeight = targetHeight + 'px';
       if (innerEl) {
         innerEl.style.transition = '';
-        innerEl.style.transform = '';
+        innerEl.style.transform = `translateY(${targetOffset}px)`;
       }
       this._cb.onExpandChanged(expanded);
       this._cb.detectChanges();
@@ -225,7 +238,7 @@ export class CalendarGestureHandler {
         const deltaY = touch.clientY - this._touchStartY;
         const elapsed = Date.now() - this._touchStartTime;
         const velocity = deltaY / Math.max(elapsed, 1);
-        const expandedHeight = this._cb.getExpandedHeight();
+        const expandedHeight = this._dragExpandedHeight;
         const currentHeight = Math.max(
           MIN_HEIGHT,
           Math.min(expandedHeight, this._dragStartHeight + deltaY),
@@ -276,13 +289,14 @@ export class CalendarGestureHandler {
   private _startDrag(): void {
     this._isDragging = true;
     this._dragActiveIdx = this._cb.getActiveWeekIndex();
+    this._dragExpandedHeight = this._cb.getExpandedHeight();
     this._dragStartHeight = this._cb.getIsExpanded()
-      ? this._cb.getExpandedHeight()
+      ? this._dragExpandedHeight
       : MIN_HEIGHT;
   }
 
   private _updateDrag(deltaY: number): void {
-    const expandedHeight = this._cb.getExpandedHeight();
+    const expandedHeight = this._dragExpandedHeight;
     const newHeight = Math.max(
       MIN_HEIGHT,
       Math.min(expandedHeight, this._dragStartHeight + deltaY),
@@ -291,7 +305,10 @@ export class CalendarGestureHandler {
     if (!weeksEl) return;
     weeksEl.style.maxHeight = newHeight + 'px';
 
-    const progress = (newHeight - MIN_HEIGHT) / (expandedHeight - MIN_HEIGHT);
+    // Guarded: with room for a single row the range is 0 and the ratio would be
+    // NaN, which renders as translateY(NaNpx).
+    const range = expandedHeight - MIN_HEIGHT;
+    const progress = range > 0 ? (newHeight - MIN_HEIGHT) / range : 0;
     const collapsedOffset = this._cb.getWeekOffset(false, this._dragActiveIdx);
     const expandedOffset = this._cb.getWeekOffset(true, this._dragActiveIdx);
     const travel = expandedOffset - collapsedOffset;

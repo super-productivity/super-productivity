@@ -551,5 +551,95 @@ describe('CalendarGestureHandler', () => {
 
       expect(cb.onExpandChanged).toHaveBeenCalledWith(true);
     });
+
+    // Review round 2 of #9463: with room for a single row there is nothing to
+    // expand into, so the interpolation range is 0 and the ratio would be NaN.
+    describe('at a one-row viewport', () => {
+      beforeEach(() => {
+        cb.getExpandedHeight.and.returnValue(MIN_HEIGHT);
+      });
+
+      // Asserting the exact offset, not merely the absence of 'NaN': the
+      // browser rejects translateY(NaNpx) outright, so the unguarded code
+      // leaves the transform empty and a not-toContain check passes on it.
+      it('should still write a usable transform while dragging', () => {
+        cb.getActiveWeekIndex.and.returnValue(2);
+
+        handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+        handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 200));
+
+        const innerEl = weeksEl.firstElementChild as HTMLElement;
+        expect(innerEl.style.transform).toBe(`translateY(${-2 * ROW_HEIGHT}px)`);
+        expect(weeksEl.style.maxHeight).toBe(MIN_HEIGHT + 'px');
+      });
+
+      it('should stay collapsed rather than report an expansion it cannot render', () => {
+        handler.snapTo(true);
+        jasmine.clock().tick(SNAP_DURATION + 20);
+
+        expect(cb.onExpandChanged).toHaveBeenCalledWith(false);
+        expect(cb.onExpandChanged).not.toHaveBeenCalledWith(true);
+        expect(weeksEl.style.maxHeight).toBe(MIN_HEIGHT + 'px');
+      });
+    });
+
+    // The component re-measures on every getExpandedHeight() call, so reading it
+    // per touchmove interleaves layout reads with the style writes below it.
+    it('should measure the expanded height once per drag, not per touchmove', () => {
+      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      cb.getExpandedHeight.calls.reset();
+
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 120));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 140));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 160));
+
+      // Once for _startDrag, on the first move that crosses the threshold.
+      expect(cb.getExpandedHeight).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Review round 2 of #9463: the zero-duration branch cleared the inline styles
+  // and relied on Angular re-applying them, but onExpandChanged may write an
+  // unchanged signal value, in which case Angular skips the DOM write and the
+  // element is left with no max-height at all — dropping the responsive clamp.
+  describe('reduced motion', () => {
+    let reducedHandler: CalendarGestureHandler;
+    let reducedWeeksEl: HTMLElement;
+
+    beforeEach(() => {
+      (window.matchMedia as jasmine.Spy).and.returnValue({
+        matches: true,
+      } as MediaQueryList);
+      reducedWeeksEl = createMockWeeksEl();
+      reducedHandler = new CalendarGestureHandler(
+        document.createElement('div'),
+        () => reducedWeeksEl,
+        cb,
+      );
+    });
+
+    afterEach(() => reducedHandler.destroy());
+
+    it('should keep the clamped height when snapping to the state it is already in', () => {
+      cb.getIsExpanded.and.returnValue(true);
+
+      reducedHandler.snapTo(true);
+
+      expect(reducedWeeksEl.style.maxHeight).toBe(MAX_HEIGHT + 'px');
+      expect((reducedWeeksEl.firstElementChild as HTMLElement).style.transform).toBe(
+        'translateY(0px)',
+      );
+    });
+
+    it('should keep the collapsed geometry when a drag is cancelled', () => {
+      cb.getActiveWeekIndex.and.returnValue(2);
+
+      reducedHandler.snapTo(false, 2);
+
+      expect(reducedWeeksEl.style.maxHeight).toBe(MIN_HEIGHT + 'px');
+      expect((reducedWeeksEl.firstElementChild as HTMLElement).style.transform).toBe(
+        `translateY(${-2 * ROW_HEIGHT}px)`,
+      );
+    });
   });
 });
