@@ -32,6 +32,13 @@ export const MONTHLY_ANCHOR_RESET: Partial<TaskRepeatCfg> = {
   monthlyLastDay: undefined,
 };
 
+// The day a monthly day-of-month anchor is derived from: the date the
+// recurrence is being set up for — the picked date in the add bar, the config's
+// own start date in the dialog — floored at today so a stale start date cannot
+// drag a freshly chosen preset into the past (#7726).
+const anchorDayFor = (referenceDate: Date | undefined, today: Date): Date =>
+  referenceDate && referenceDate.getTime() > today.getTime() ? referenceDate : today;
+
 /**
  * Returns partial TaskRepeatCfg updates based on the quick setting.
  * @param quickSetting The quick setting to apply
@@ -80,13 +87,15 @@ export const getQuickSettingUpdates = (
     }
 
     case 'MONTHLY_FIRST_DAY': {
-      // Anchor to the next 1st-of-month that is today or later, so the first
-      // generated instance is never backdated (#7726). `month + 1` rolls the
-      // year over correctly in December.
+      // Anchor to the first 1st-of-month on or after the anchor day, so the
+      // first generated instance is never backdated (#7726) and lands in the
+      // month the recurrence was set up for rather than the month it happens to
+      // be saved in. `month + 1` rolls the year over correctly in December.
+      const anchor = anchorDayFor(referenceDate, today);
       const firstDay =
-        today.getDate() === 1
-          ? new Date(today.getFullYear(), today.getMonth(), 1)
-          : new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        anchor.getDate() === 1
+          ? new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+          : new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
@@ -96,11 +105,12 @@ export const getQuickSettingUpdates = (
     }
 
     case 'MONTHLY_LAST_DAY': {
-      // First occurrence = the upcoming last day of the current month, which
-      // is always today or later. The `monthlyLastDay` flag tells the
+      // First occurrence = the last day of the anchor day's month, which is
+      // always that day or later. The `monthlyLastDay` flag tells the
       // occurrence engine to clamp to month-end every month, so `startDate`'s
       // day-of-month no longer needs to be a hardcoded 31 (#7726).
-      const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const anchor = anchorDayFor(referenceDate, today);
+      const lastDayThisMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,

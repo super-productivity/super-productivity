@@ -206,6 +206,60 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
+  // Both callers pass a reference day — the picked date in the add bar, the
+  // config's own start date in the repeat dialog — and these two presets used
+  // to derive their anchor from `new Date()` regardless, so the saved
+  // recurrence started in a month the user never chose.
+  describe('monthly day-of-month presets honour the referenceDate', () => {
+    afterEach(() => jasmine.clock().uninstall());
+
+    const mockToday = (date: Date): void => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(date);
+    };
+
+    it('MONTHLY_FIRST_DAY anchors to the 1st after the reference date', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY', new Date(2026, 11, 15));
+      expect(result!.startDate).toBe('2027-01-01');
+    });
+
+    it('MONTHLY_FIRST_DAY keeps a reference date that already is the 1st', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY', new Date(2026, 11, 1));
+      expect(result!.startDate).toBe('2026-12-01');
+    });
+
+    it('MONTHLY_LAST_DAY anchors to the end of the reference month', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY', new Date(2026, 11, 15));
+      expect(result!.startDate).toBe('2026-12-31');
+    });
+
+    // Re-deriving the preset from the date it already produced must be a no-op:
+    // the dialog runs this on every save, and a changed startDate reschedules
+    // the live instance (#7373).
+    it('MONTHLY_LAST_DAY leaves an anchor it produced itself alone', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY', new Date(2026, 10, 30));
+      expect(result!.startDate).toBe('2026-11-30');
+    });
+
+    // #7726 still holds: a stale start date must not drag a fresh anchor into
+    // the past, so the reference day is floored at today.
+    it('MONTHLY_FIRST_DAY ignores a reference date that is in the past', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY', new Date(2020, 0, 15));
+      expect(result!.startDate).toBe('2026-09-01');
+    });
+
+    it('MONTHLY_LAST_DAY ignores a reference date that is in the past', () => {
+      mockToday(new Date(2026, 7, 8));
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY', new Date(2020, 0, 15));
+      expect(result!.startDate).toBe('2026-08-31');
+    });
+  });
+
   describe('YEARLY_CURRENT_DATE', () => {
     it('should return YEARLY cycle with repeatEvery 1', () => {
       const result = getQuickSettingUpdates('YEARLY_CURRENT_DATE');

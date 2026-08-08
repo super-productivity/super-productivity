@@ -954,4 +954,51 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(savedCfg().skipOverdue).toBe(true);
     });
   });
+
+  // save() re-derives the quick setting from the stored start date, so a preset
+  // that ignored that date rewrote it on every save — and a startDate in the
+  // change set reschedules the live instance (#7373).
+  describe('monthly anchors survive an unrelated save', () => {
+    const changes = (): Partial<TaskRepeatCfg> =>
+      mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as Partial<TaskRepeatCfg>;
+
+    it('keeps a future MONTHLY_LAST_DAY start date where the user put it', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'repeat-cfg-last-day',
+          title: 'Pay rent',
+          quickSetting: 'MONTHLY_LAST_DAY',
+          repeatCycle: 'MONTHLY',
+          monthlyLastDay: true,
+          startDate: '2099-09-30',
+        },
+      });
+
+      fixture.componentInstance.save();
+
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledTimes(1);
+      expect(changes().startDate).toBeUndefined();
+      expect('startDate' in changes()).toBe(false);
+    });
+
+    it('keeps a future MONTHLY_FIRST_DAY start date where the user put it', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'repeat-cfg-first-day',
+          title: 'Pay rent',
+          quickSetting: 'MONTHLY_FIRST_DAY',
+          repeatCycle: 'MONTHLY',
+          startDate: '2099-10-01',
+        },
+      });
+
+      fixture.componentInstance.save();
+
+      expect(changes().startDate).toBeUndefined();
+      expect('startDate' in changes()).toBe(false);
+    });
+  });
 });

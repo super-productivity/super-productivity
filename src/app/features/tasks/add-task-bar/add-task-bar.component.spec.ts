@@ -653,6 +653,50 @@ describe('AddTaskBarComponent', () => {
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2024-05-20');
     });
 
+    // The contextual monthly presets read the picked date, so "the 1st of the
+    // month" has to mean the month the user picked into, not the month the bar
+    // happens to be open in. Dates far enough out to stay true whatever day the
+    // suite runs on.
+    it('should anchor a monthly-first-day repeat to the month of the picked date', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Pay rent');
+      component.stateService.updateCleanText('Pay rent');
+      component.stateService.updateDate('2099-09-15');
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'MONTHLY_FIRST_DAY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2099-10-01');
+    });
+
+    it('should anchor a monthly-last-day repeat to the month of the picked date', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Pay rent');
+      component.stateService.updateCleanText('Pay rent');
+      component.stateService.updateDate('2099-09-15');
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'MONTHLY_LAST_DAY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2099-09-30');
+    });
+
     it('should copy entered notes to an inline repeat preset config (discussion #937)', async () => {
       mockTaskService.add.and.returnValue('task-1');
       const addRepeatCfgSpy = spyOn(
