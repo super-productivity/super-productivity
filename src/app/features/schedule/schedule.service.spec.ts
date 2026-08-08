@@ -15,6 +15,7 @@ import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-c
 import { TaskService } from '../tasks/task.service';
 import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
+import { SCHEDULE_CONSTANTS } from './schedule.constants';
 
 describe('ScheduleService', () => {
   let service: ScheduleService;
@@ -303,6 +304,56 @@ describe('ScheduleService', () => {
       const lastDay = new Date(result[result.length - 1]);
       // With 5 weeks starting from late December, we should reach into February
       expect(lastDay.getMonth()).toBeGreaterThanOrEqual(0);
+    });
+
+    describe('full-month coverage (#9449)', () => {
+      const dayStr = (date: Date): string => dateService.todayStr(date.getTime());
+      const lastDayOfMonth = (year: number, month: number): Date =>
+        new Date(year, month + 1, 0);
+
+      it('should include Mon 31 Aug 2026 for every first day of week', () => {
+        const aug31 = dayStr(new Date(2026, 7, 31));
+
+        for (let firstDayOfWeek = 0; firstDayOfWeek < 7; firstDayOfWeek++) {
+          const result = service.getMonthDaysToShow(
+            SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS,
+            firstDayOfWeek,
+            new Date(2026, 7, 15),
+          );
+          expect(result).withContext(`firstDayOfWeek ${firstDayOfWeek}`).toContain(aug31);
+        }
+      });
+
+      it('should not reach 31 Aug 2026 with only 5 weeks — why NR_OF_WEEKS is 6', () => {
+        // August 2026 starts on a Saturday, so the padded grid needs 6 rows.
+        // This is the shape the reported bug had: a shorter window silently
+        // stopped before the end of the month.
+        const result = service.getMonthDaysToShow(5, 1, new Date(2026, 7, 15));
+        expect(result).not.toContain(dayStr(new Date(2026, 7, 31)));
+      });
+
+      it('should span the whole month for every month/firstDayOfWeek combination', () => {
+        // 24 consecutive months from Jan 2027 covers every start-weekday and
+        // both a non-leap February (2027) and a leap one (2028).
+        for (let monthOffset = 0; monthOffset < 24; monthOffset++) {
+          const reference = new Date(2027, monthOffset, 15);
+          const year = reference.getFullYear();
+          const month = reference.getMonth();
+          const first = dayStr(new Date(year, month, 1));
+          const last = dayStr(lastDayOfMonth(year, month));
+
+          for (let firstDayOfWeek = 0; firstDayOfWeek < 7; firstDayOfWeek++) {
+            const result = service.getMonthDaysToShow(
+              SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS,
+              firstDayOfWeek,
+              reference,
+            );
+            const context = `${year}-${month + 1}, firstDayOfWeek ${firstDayOfWeek}`;
+            expect(result).withContext(context).toContain(first);
+            expect(result).withContext(context).toContain(last);
+          }
+        }
+      });
     });
   });
 
