@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
@@ -12,6 +12,7 @@ import { DateService } from '../../../core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { Project } from '../../project/project.model';
 import { ProjectService } from '../../project/project.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
@@ -32,6 +33,7 @@ describe('TaskComponent shortcut handling', () => {
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
   let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
+  let isTodayListSignal: WritableSignal<boolean>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
     ({
@@ -105,6 +107,7 @@ describe('TaskComponent shortcut handling', () => {
     );
     storeSpy = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select']);
     storeSpy.select.and.returnValue(of(new Set<string>()));
+    isTodayListSignal = signal(false);
 
     await TestBed.configureTestingModule({
       imports: [TaskComponent],
@@ -191,6 +194,7 @@ describe('TaskComponent shortcut handling', () => {
           provide: WorkContextService,
           useValue: {
             isTodayList: signal(false),
+            isTodayListSignal,
           },
         },
         {
@@ -633,6 +637,66 @@ describe('TaskComponent shortcut handling', () => {
       expect(document.activeElement).toBe(lastSubtask);
       detailPanel.remove();
     }));
+  });
+
+  describe('moveToBacklogWithFocus from Today view (#9374)', () => {
+    let projectService: jasmine.SpyObj<ProjectService>;
+
+    beforeEach(() => {
+      projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
+      fixture.componentRef.setInput('task', createTopLevelTask('Scheduled for today'));
+      storeSpy.dispatch.calls.reset();
+    });
+
+    it('keeps the position-only move outside of the Today list (#8592)', () => {
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).toHaveBeenCalledWith('top-1', 'project-1');
+      expect(projectService.getByIdOnce$).not.toHaveBeenCalled();
+      expect(storeSpy.dispatch).not.toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'top-1' }),
+      );
+    });
+
+    it('also unschedules on the Today list so the task actually leaves it', () => {
+      isTodayListSignal.set(true);
+      projectService.getByIdOnce$.and.returnValue(
+        of({ isEnableBacklog: true } as Project),
+      );
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).toHaveBeenCalledWith('top-1', 'project-1');
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'top-1' }),
+      );
+    });
+
+    it('no-ops on the Today list when the project backlog is disabled', () => {
+      isTodayListSignal.set(true);
+      projectService.getByIdOnce$.and.returnValue(
+        of({ isEnableBacklog: false } as Project),
+      );
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('no-ops for a task without a project', () => {
+      isTodayListSignal.set(true);
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('No project'),
+        projectId: undefined,
+      } as unknown as TaskWithSubTasks);
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
+      expect(projectService.getByIdOnce$).not.toHaveBeenCalled();
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('moveToToday overdue branch (#8851)', () => {

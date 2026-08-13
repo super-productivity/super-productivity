@@ -812,10 +812,28 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (t.projectId && !t.parentId) {
+    if (!t.projectId || t.parentId) {
+      return;
+    }
+    if (!this.isTodayListActive()) {
       this.focusPrevious(true);
       this.moveToBacklog();
+      return;
     }
+    // Membership in the Today view is schedule-based, so from there the
+    // position-only backlog move alone is invisible: the task would stay on
+    // the list and only the focus would jump to the previous task (#9374).
+    // Unschedule the task as well so it actually disappears from Today. If
+    // the project's backlog is disabled the move would be dropped by the
+    // reducer, so no-op entirely instead of silently unscheduling.
+    this._projectService.getByIdOnce$(t.projectId).subscribe((project) => {
+      if (!project?.isEnableBacklog) {
+        return;
+      }
+      this.focusPrevious(true);
+      this.moveToBacklog();
+      this.unschedule();
+    });
   }
 
   moveToTodayWithFocus(): void {
