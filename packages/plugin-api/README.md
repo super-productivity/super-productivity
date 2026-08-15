@@ -39,6 +39,17 @@ PluginAPI.registerHeaderButton({
   },
 });
 
+// Add an action to task and subtask context menus
+PluginAPI.registerTaskContextMenuEntry({
+  id: 'copy-external-link',
+  label: 'Copy external link',
+  icon: 'link',
+  showFor: ['TASK'],
+  onClick: ({ taskId }) => {
+    console.log('Selected task:', taskId);
+  },
+});
+
 // Register a keyboard shortcut
 PluginAPI.registerShortcut({
   id: 'my_shortcut',
@@ -63,7 +74,13 @@ PluginAPI.registerShortcut({
   "minSupVersion": "13.0.0",
   "description": "An awesome plugin for Super Productivity",
   "hooks": ["taskComplete", "taskUpdate"],
-  "permissions": ["showSnack", "getTasks", "addTask", "showIndexHtmlAsView"],
+  "permissions": [
+    "showSnack",
+    "getTasks",
+    "addTask",
+    "showIndexHtmlAsView",
+    "taskContextMenu"
+  ],
   "iFrame": true,
   "uiKit": true,
   "icon": "icon.svg"
@@ -78,6 +95,9 @@ PluginAPI.registerShortcut({
 - `PluginManifest` - Plugin configuration
 - `PluginHooks` - Available hook types
 - `PluginBaseCfg` - Runtime configuration
+- `PluginTaskContextMenuEntryCfg` - Task context-menu action configuration
+- `PluginTaskContextMenuContext` - Context passed to a task action
+- `PluginTaskContextMenuTarget` - Supported task-menu targets
 
 ### Data Types
 
@@ -126,6 +146,7 @@ Add these to your manifest.json based on what your plugin needs:
 - `showSnack` - Show notifications
 - `notify` - System notifications
 - `showIndexHtmlAsView` - Display plugin UI
+- `taskContextMenu` - Add actions to task context menus
 - `openDialog` - Show dialogs
 - `getTasks` - Read tasks
 - `getArchivedTasks` - Read archived tasks
