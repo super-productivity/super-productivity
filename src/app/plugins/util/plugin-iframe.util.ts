@@ -320,7 +320,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
                 try {
                   handler(data.payload);
                 } catch (error) {
-                  PluginLog.err('Hook handler error:', error);
+                  // console, not PluginLog: this runs inside the iframe, where
+                  // the host's PluginLog global does not exist.
+                  console.error('Plugin hook handler error:', error);
                 }
               });
             }
@@ -557,6 +559,15 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
  * Build the full HTML document for a plugin UI iframe: the plugin's index.html
  * with the host CSS and the postMessage API bridge injected.
  *
+ * The API script is injected at the START of <head>, before any plugin markup,
+ * so `window.PluginAPI` exists synchronously for every plugin script —
+ * including classic inline/blocking scripts that run at parse time. It was
+ * previously appended before </body>, which left parse-time plugin code
+ * without the API and pushed plugins into local-storage fallbacks that
+ * silently bypass sync (#9526). The script only touches `window` /
+ * `window.parent` (no DOM access), so running it before <body> exists is safe;
+ * the host's only reaction to the (now earlier) READY message is a log line.
+ *
  * Returned as a string for `iframe.srcdoc`, NOT a `blob:` URL: srcdoc is parsed
  * inline, so there is no blob URL lifecycle to track and revoke. The iframe is
  * same-origin with the host (see PLUGIN_IFRAME_SANDBOX — `allow-same-origin` is
@@ -568,28 +579,19 @@ export const buildPluginIframeHtml = (config: PluginIframeConfig): string => {
   const fullCssInjection =
     cssInjection + (config.manifest.uiKit !== false ? PLUGIN_UI_KIT_CSS : '');
 
-  // Inject CSS at start of head so plugin styles come later and win by source order
-  let html = config.indexHtml;
+  // CSS first (at start of head, so plugin styles come later and win by source
+  // order), then the API script — both before any plugin content.
+  const headInjection = fullCssInjection + apiScript;
+  const html = config.indexHtml;
   const headMatch = html.match(/<head[^>]*>/i);
 
   if (headMatch) {
     const insertPos = headMatch.index! + headMatch[0].length;
-    html = html.slice(0, insertPos) + fullCssInjection + html.slice(insertPos);
-  } else {
-    // If no head tag, inject at beginning
-    html = fullCssInjection + html;
+    return html.slice(0, insertPos) + headInjection + html.slice(insertPos);
   }
-
-  // Inject API script before closing body tag
-  const bodyEnd = html.toLowerCase().lastIndexOf('</body>');
-
-  if (bodyEnd !== -1) {
-    html = html.slice(0, bodyEnd) + apiScript + html.slice(bodyEnd);
-  } else {
-    html = html + apiScript;
-  }
-
-  return html;
+  // No head tag: prepend — srcdoc fragments execute scripts in document order,
+  // so the API script still runs before any plugin script.
+  return headInjection + html;
 };
 
 /**

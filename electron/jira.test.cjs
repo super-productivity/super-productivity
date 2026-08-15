@@ -4,6 +4,19 @@ const path = require('node:path');
 
 require('ts-node/register/transpile-only');
 
+// Electron >= 42 removed its postinstall step: `require('electron')` now
+// downloads the ~120MB binary on demand and throws when that fails. This suite
+// only reaches electron transitively (proxy-agent -> electron-log/main) and
+// never touches real electron APIs, so pre-seed the module cache with a stub
+// to keep the tests offline-safe and download-free.
+const electronId = require.resolve('electron');
+require.cache[electronId] = {
+  id: electronId,
+  filename: electronId,
+  loaded: true,
+  exports: {},
+};
+
 const {
   executeJiraRequest,
 } = require(

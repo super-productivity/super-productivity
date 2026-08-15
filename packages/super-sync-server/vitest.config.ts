@@ -26,6 +26,7 @@ export default defineConfig({
       'tests/integration/clean-slate-atomicity-sql.integration.spec.ts',
       'tests/integration/snapshot-vector-clock-sql.integration.spec.ts',
       'tests/integration/conflict-detection-sql.integration.spec.ts',
+      'tests/integration/batch-conflict-plan.integration.spec.ts',
       'tests/integration/repair-causality.integration.spec.ts',
       'tests/integration/health-alert-db-probe.integration.spec.ts',
       'tests/integration/migrate-deploy-db-timeout.integration.spec.ts',

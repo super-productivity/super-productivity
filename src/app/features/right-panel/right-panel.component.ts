@@ -71,7 +71,12 @@ const getMaxWidthInPixels = (maxWidth: number | string): number => {
 // Helper function to validate and clamp width within bounds
 const clampWidth = (width: number, maxWidth: number | string): number => {
   const maxWidthInPixels = getMaxWidthInPixels(maxWidth);
-  return Math.max(RIGHT_PANEL_CONFIG.MIN_WIDTH, Math.min(maxWidthInPixels, width));
+  // The cap wins when the two disagree. A row too narrow to afford MIN_WIDTH
+  // still gets to bound the panel: the panel shares that row with the header,
+  // so a floor it insists on regardless is paid for out of everything to its
+  // left — measured, a 270px panel in a 460px row left the header 190px, which
+  // is not enough to seat its own actions (#9480).
+  return Math.min(maxWidthInPixels, Math.max(RIGHT_PANEL_CONFIG.MIN_WIDTH, width));
 };
 
 @Component({
@@ -177,8 +182,25 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private _closeButtonDragStart = { x: 0, y: 0 };
   private _isCloseButtonDragCandidate = false;
 
-  // Computed panel width for CSS binding
-  readonly panelWidth = computed(() => this.currentWidth());
+  /**
+   * How much of the row is available to the panel right now — half of it.
+   * Kept as state rather than read at use time so the width below can be a
+   * computed: it changes only with the window, which is where it is refreshed.
+   */
+  private readonly _maxWidth = signal<number>(Number.POSITIVE_INFINITY);
+
+  /**
+   * The width actually rendered: what the user asked for, bounded by what the
+   * row can currently spare.
+   *
+   * Two values rather than one, because they answer different questions and
+   * only one of them is the user's. `currentWidth` is the preference and only a
+   * drag changes it; a window too narrow to honour it squeezes the panel here
+   * instead of overwriting it, so widening the window gives the width back
+   * rather than leaving the panel stuck at whatever the narrowest moment
+   * allowed.
+   */
+  readonly panelWidth = computed(() => Math.min(this.currentWidth(), this._maxWidth()));
 
   readonly sideStyle = computed<SafeStyle>(() => {
     const styles =
@@ -276,8 +298,32 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this._initializeWidth();
+    this._refreshMaxWidth();
     // Add window resize listener for percentage-based max width
     window.addEventListener('resize', this._boundOnWindowResize);
+    this._observeContentWidth();
+  }
+
+  /**
+   * Keep the cap honest when the measured box changes without a window resize.
+   *
+   * The cap is half of `.main-content`, and that box also narrows when the side
+   * nav expands or the vertical action bar is switched on — neither of which
+   * fires a `resize`. Driving it from the element itself covers those and the
+   * window alike; a ResizeObserver delivers after layout and before paint, so
+   * it needs none of the rAF deferral the window path uses.
+   */
+  private _observeContentWidth(): void {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const mainContent = document.querySelector('.main-content');
+    if (!mainContent) {
+      return;
+    }
+    const ro = new ResizeObserver(() => this._refreshMaxWidth());
+    ro.observe(mainContent);
+    this._destroyRef.onDestroy(() => ro.disconnect());
   }
 
   ngOnDestroy(): void {
@@ -326,39 +372,32 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
       window.clearTimeout(this._windowResizeDebounceTimer);
     }
 
-    // Only recalculate if using percentage-based max width
-    if (
-      typeof RIGHT_PANEL_CONFIG.MAX_WIDTH === 'string' &&
-      RIGHT_PANEL_CONFIG.MAX_WIDTH.endsWith('%')
-    ) {
-      // Defer measurement until after the layout settles to avoid reading stale widths
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const newMaxWidthInPixels = getMaxWidthInPixels(RIGHT_PANEL_CONFIG.MAX_WIDTH);
-          if (newMaxWidthInPixels < RIGHT_PANEL_CONFIG.MIN_WIDTH) {
-            return;
-          }
+    // Defer measurement until after the layout settles to avoid reading stale
+    // widths. No early return when the row cannot afford MIN_WIDTH: that is the
+    // case where the cap matters most, and skipping it left the panel holding a
+    // width the row could not pay for. No write to `currentWidth` either — the
+    // squeeze belongs in `_maxWidth`, so the user's chosen width survives it.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this._refreshMaxWidth());
+    });
 
-          const currentWidth = this.currentWidth();
-
-          // If current width exceeds new max width, clamp it
-          if (currentWidth > newMaxWidthInPixels) {
-            const clampedWidth = Math.max(
-              RIGHT_PANEL_CONFIG.MIN_WIDTH,
-              newMaxWidthInPixels,
-            );
-            this.currentWidth.set(clampedWidth);
-            this._saveWidthToStorage();
-          }
-        });
-      });
-    }
-
-    // Debounce: wait 300ms after last resize event to unset flag
+    // Debounce: wait 300ms after last resize event to unset flag. Refresh once
+    // more here, because the throttle above drops events rather than queuing a
+    // trailing one — so the last resize of a drag can be the one that never
+    // reaches the handler, and this is what guarantees the settled size lands.
     this._windowResizeDebounceTimer = window.setTimeout(() => {
       this.isWindowResizing.set(false);
       this._windowResizeDebounceTimer = undefined;
+      this._refreshMaxWidth();
     }, 300);
+  }
+
+  /** How much of the row the panel may take, as of the current layout. */
+  private _refreshMaxWidth(): void {
+    const max = getMaxWidthInPixels(RIGHT_PANEL_CONFIG.MAX_WIDTH);
+    if (Number.isFinite(max) && max > 0) {
+      this._maxWidth.set(max);
+    }
   }
 
   close(): void {
@@ -401,7 +440,12 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     this._layoutService.isPanelResizing.set(true);
     this._activePointerId = event.pointerId;
     this._startX.set(event.clientX);
-    this._startWidth.set(this.currentWidth());
+    // The RENDERED width, not the preference. The two deliberately diverge once
+    // the window is too narrow to honour the preference, and seeding from the
+    // preference made the handle dead for exactly that difference — drag left
+    // from a 450px-rendered/600px-preferred panel and nothing moved for the
+    // first 150px, with CLOSE_THRESHOLD measured against the phantom width too.
+    this._startWidth.set(this.panelWidth());
 
     // Improve pointer capture for consistent drag behavior
     const targetEl = event.target as Element | null;
@@ -565,13 +609,13 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
 
   private _initializeWidth(): void {
     try {
-      const maxWidthInPixels = getMaxWidthInPixels(RIGHT_PANEL_CONFIG.MAX_WIDTH);
-
-      // Load saved width from localStorage or use default
+      // Bounded only as a sanity check on a corrupt value, NOT by the current
+      // 50% cap: that cap is a property of this moment's window, and folding it
+      // in here is the same overwrite the comment below describes.
       const savedWidth = readNumberLSBounded(
         LS.RIGHT_PANEL_WIDTH,
         RIGHT_PANEL_CONFIG.MIN_WIDTH,
-        maxWidthInPixels,
+        window.innerWidth,
       );
 
       const width = savedWidth ?? RIGHT_PANEL_CONFIG.DEFAULT_WIDTH;
@@ -583,9 +627,12 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      // Ensure width doesn't exceed current max width (important for percentage-based max width)
-      const validatedWidth = clampWidth(width, RIGHT_PANEL_CONFIG.MAX_WIDTH);
-      this.currentWidth.set(validatedWidth);
+      // Stored as the user's PREFERENCE, unclamped. Booting in a narrow window
+      // used to write the clamp back here, which destroyed the preference for
+      // good — widening again could not restore what had been overwritten. The
+      // current window's cap is applied in `panelWidth`, which is the whole
+      // point of keeping the two apart.
+      this.currentWidth.set(width);
     } catch (error) {
       Log.warn('Failed to initialize right panel width:', error);
       this.currentWidth.set(RIGHT_PANEL_CONFIG.DEFAULT_WIDTH);

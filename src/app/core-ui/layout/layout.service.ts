@@ -15,9 +15,11 @@ import { Observable } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import {
   LayoutState,
+  selectActivePluginId,
   selectIsShowAddTaskBar,
   selectIsShowIssuePanel,
   selectIsShowNotes,
+  selectIsShowPluginPanel,
   selectIsShowTaskViewCustomizerPanel,
   selectIsShowScheduleDayPanel,
 } from './store/layout.reducer';
@@ -107,6 +109,18 @@ export class LayoutService {
     this._store$.pipe(select(selectIsShowScheduleDayPanel)),
     { initialValue: false },
   );
+
+  // The plugin side panel's open state and which plugin owns it. Exposed for
+  // the header's action-row reveal: a plugin panel's toggle sits at the row's
+  // end exactly like the built-in panel toggles do.
+  readonly isShowPluginPanel = toSignal(
+    this._store$.pipe(select(selectIsShowPluginPanel)),
+    { initialValue: false },
+  );
+
+  readonly activePluginId = toSignal(this._store$.pipe(select(selectActivePluginId)), {
+    initialValue: null,
+  });
 
   // Signal to track if any panel is currently being resized
   readonly isPanelResizing = signal(false);

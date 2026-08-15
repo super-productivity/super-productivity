@@ -18,10 +18,10 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       # @nx/nx-darwin-arm64 + dmg-license aren't in package.json (npm's
-      # optional-dep bug skips them), so install them explicitly. That install
-      # and `npm i` both run electron's flaky postinstall binary download, so
-      # retry the whole thing — dropping node_modules/electron between tries
-      # forces the postinstall to re-run (npm skips it for a present package).
+      # optional-dep bug skips them), so install them explicitly, and retry to
+      # ride out transient npm registry flakiness. (Since Electron 42 `npm i`
+      # no longer downloads the Electron binary; electron-builder fetches its
+      # own copy when packaging.)
       - name: Install npm packages
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
@@ -29,7 +29,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i || { rm -rf node_modules/electron; exit 1; }
+          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i
 
       - name: Decode provisioning profile
         shell: bash

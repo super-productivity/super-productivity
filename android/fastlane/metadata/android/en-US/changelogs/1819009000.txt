@@ -1,0 +1,1 @@
+Workday recurrences no longer start on a weekend selected from the add-task menu. Restored macOS release builds. Plugin addTask and updateTask behavior now matches the local REST API. Improved monitoring report accuracy and resource limits. Added a warning that User Profiles will be removed in the next release.

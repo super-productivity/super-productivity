@@ -57,7 +57,6 @@ export class NotePage extends BasePage {
       return;
     }
 
-    // Toggle notes panel via header button
     const isToggleBtnVisible = await this.toggleNotesBtn
       .isVisible({ timeout: 3000 })
       .catch(() => false);

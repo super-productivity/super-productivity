@@ -454,6 +454,42 @@ describe('performance migrations', () => {
     expect(composeFile).toContain('- db');
   });
 
+  it('mounts a writable /tmp into the migrate-db initContainer so migrate-deploy.sh runs under readOnlyRootFilesystem', () => {
+    const helmDeployment = readFileSync(
+      join(currentDir, '../helm/supersync/templates/deployment.yaml'),
+      'utf8',
+    );
+    const helmValues = readFileSync(
+      join(currentDir, '../helm/supersync/values.yaml'),
+      'utf8',
+    );
+
+    const migrateDbStart = helmDeployment.indexOf('- name: migrate-db');
+    expect(migrateDbStart).toBeGreaterThan(-1);
+    // The migrate-db initContainer block ends at the next list item at the
+    // same indent (the following initContainer).
+    const nextContainer = helmDeployment.indexOf(
+      '\n        - name: ',
+      migrateDbStart + 1,
+    );
+    expect(nextContainer).toBeGreaterThan(migrateDbStart);
+    const migrateDbBlock = helmDeployment.slice(migrateDbStart, nextContainer);
+
+    // migrate-deploy.sh writes a temp log via `mktemp` under /tmp and runs
+    // with `set -eu`, so a read-only /tmp aborts the install before any
+    // migration runs. /tmp must therefore be backed by a writable volume
+    // mounted into THIS initContainer.
+    expect(migrateDbBlock).toContain('sh scripts/migrate-deploy.sh');
+    expect(migrateDbBlock).toContain('volumeMounts:');
+    expect(migrateDbBlock).toMatch(/- name: tmp\s+mountPath: \/tmp/);
+    // ...and the mounted volume must actually be declared as a writable
+    // emptyDir at the pod level.
+    expect(helmDeployment).toMatch(/- name: tmp\s+emptyDir:/);
+    // The mount is required precisely because the shared securityContext
+    // applied to this initContainer sets a read-only root filesystem.
+    expect(helmValues).toContain('readOnlyRootFilesystem: true');
+  });
+
   it('backfills operation payload bytes with per-user batched updates', () => {
     const script = readFileSync(
       join(currentDir, '../scripts/migrate-payload-bytes.ts'),

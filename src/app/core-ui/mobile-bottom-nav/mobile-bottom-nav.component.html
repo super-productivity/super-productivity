@@ -75,11 +75,22 @@
     </button>
   }
 
+  @if (isScheduleDayPanelEnabled()) {
+    <button
+      mat-menu-item
+      class="e2e-toggle-schedule-day-panel"
+      [class.active]="isShowScheduleDayPanel()"
+      (click)="toggleScheduleDayPanel()"
+    >
+      <mat-icon>schedule</mat-icon>
+      <span>{{ T.BN.SHOW_SCHEDULE | translate }}</span>
+    </button>
+  }
+
   @if (isIssuesPanelEnabled()) {
     <button
       mat-menu-item
       class="e2e-toggle-issue-provider-panel"
-      [disabled]="!isRouteWithSidePanel()"
       [class.active]="isShowIssuePanel()"
       (click)="toggleIssuePanel()"
     >
@@ -92,7 +103,6 @@
     <button
       mat-menu-item
       class="e2e-toggle-notes-btn"
-      [disabled]="!isRouteWithSidePanel()"
       [class.active]="isShowNotes()"
       (click)="toggleNotes()"
     >

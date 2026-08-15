@@ -21,6 +21,7 @@ import { alertDialog } from '../../util/native-dialogs';
 import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 
 export interface RebaseStaleRepairOptions {
   staleRepairOpId: string;
@@ -46,6 +47,7 @@ export class RepairOperationService {
   private repairSyncContext = inject(RepairSyncContextService);
   private stateSnapshotService = inject(StateSnapshotService);
   private snackService = inject(SnackService);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   // Once-per-session guard for the non-interactive "data repaired" snack, so a
   // repeat-repair loop can't spam it (mirrors the version-block snack latch).
@@ -106,6 +108,13 @@ export class RepairOperationService {
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
+
+      // #9438: this is a full-state baseline install — REPAIR supersedes all
+      // earlier ops on replay and the caller dispatches repairedState as the
+      // live state right after — so re-establish the tab frontier here (also
+      // clears any sticky concurrent-tab divergence, mirroring the store's
+      // other baseline installs).
+      this.tabSeqFrontier.establishFrontier(seq);
 
       OpLog.log('[RepairOperationService] Created REPAIR operation', {
         seq,

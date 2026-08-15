@@ -312,15 +312,15 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
     delete actionPayload['id'];
   }
 
-  // Force `payload.id = op.entityId` for adapter-backed LWW Update ops. The
-  // op's `entityId` is the canonical identifier for adapters — producers also
-  // enforce this when creating ops, but a malformed/older remote op (or any
-  // path that ever drifts) could carry a payload.id that disagrees with
-  // op.entityId, in which case the consumer reducer at
-  // task-shared-meta-reducers/lww-update.meta-reducer.ts trusts payload.id and
-  // would update the WRONG entity. Singleton LWW actions target their feature
-  // state as a whole; their conflict-routing entityId may be composite and must
-  // not be injected into that state. Issues #7330, #9256.
+  // Force `payload.id = op.entityId` for adapter- and array-backed LWW Update
+  // ops (arrays since #9526). The op's `entityId` is the canonical identifier
+  // for both — producers also enforce this when creating ops, but a
+  // malformed/older remote op (or any path that ever drifts) could carry a
+  // payload.id that disagrees with op.entityId, in which case the consumer
+  // reducer at task-shared-meta-reducers/lww-update.meta-reducer.ts trusts
+  // payload.id and would update the WRONG entity. Singleton LWW actions target
+  // their feature state as a whole; their conflict-routing entityId may be
+  // composite and must not be injected into that state. Issues #7330, #9256.
   if (
     !isFullStateOp &&
     isLwwPayloadIdCanonical(lwwEntityType) &&

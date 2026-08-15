@@ -17,6 +17,7 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import {
   ActionType,
@@ -157,6 +158,7 @@ describe('OperationLogHydratorService', () => {
       'startApplyingRemoteOps',
       'endApplyingRemoteOps',
       'setHydrationFallbackActive',
+      'setHydrationInProgress',
     ]);
     mockSnapshotService = jasmine.createSpyObj('OperationLogSnapshotService', [
       'isValidSnapshot',
@@ -373,6 +375,54 @@ describe('OperationLogHydratorService', () => {
       });
     });
 
+    describe('tab applied-seq frontier establishment (#9438)', () => {
+      // The snapshot/compaction guard only arms once hydration establishes
+      // the frontier — these tests protect that wiring.
+      it('establishes the frontier at the snapshot anchor when there are no tail ops', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(5)).toBe(true);
+        expect(frontier.isSaveSafeAt(6)).toBe(false);
+      });
+
+      it('establishes the frontier at the last replayed tail seq', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(6, createMockOperation('op-6')),
+          createMockEntry(7, createMockOperation('op-7')),
+        ]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(7)).toBe(true);
+        expect(frontier.isSaveSafeAt(8)).toBe(false);
+      });
+
+      it('covers reducer-rejected tail entries with the frontier (replay skips them by design)', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const rejectedEntry: OperationLogEntry = {
+          ...createMockEntry(6, createMockOperation('op-reducer-rejected')),
+          rejectedAt: Date.now(),
+          reducerRejectedAt: Date.now(),
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([rejectedEntry]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(6)).toBe(true);
+        expect(frontier.isSaveSafeAt(5)).toBe(false);
+      });
+    });
+
     describe('tail operation replay', () => {
       it('should not replay an operation whose reducer was durably rejected', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
@@ -513,6 +563,35 @@ describe('OperationLogHydratorService', () => {
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();
         expect(mockHydrationStateService.endApplyingRemoteOps).toHaveBeenCalled();
+      });
+
+      // #9084: the flag must bracket the whole run — from before the snapshot
+      // dispatch until after the tail replay — so the compaction guard covers
+      // the gap between them, not just the bulk-dispatch call itself.
+      it('should hold hydration-in-progress across the full run, from before the snapshot dispatch until after the tail replay (#9084)', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = [createMockEntry(6, createMockOperation('op-6'))];
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tailOps);
+
+        const callOrder: string[] = [];
+        mockHydrationStateService.setHydrationInProgress.and.callFake(((
+          isInProgress: boolean,
+        ) => {
+          callOrder.push(isInProgress ? 'in-progress:true' : 'in-progress:false');
+        }) as never);
+        mockStore.dispatch.and.callFake(((action: { type: string }) => {
+          callOrder.push(`dispatch:${action.type}`);
+        }) as never);
+
+        await service.hydrateStore();
+
+        expect(callOrder).toEqual([
+          'in-progress:true',
+          `dispatch:${loadAllData.type}`,
+          `dispatch:${bulkApplyHydrationOperations.type}`,
+          'in-progress:false',
+        ]);
       });
 
       it('should replay a tail op with a malformed stored schemaVersion verbatim instead of failing into recovery', async () => {

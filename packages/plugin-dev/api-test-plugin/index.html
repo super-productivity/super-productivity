@@ -233,6 +233,11 @@ console.log(tasks.length);</code></pre>
     <hr />
 
     <script>
+      // #9526: captured at parse time — the host injects the PluginAPI bridge
+      // in <head>, so it must already exist when this classic script executes.
+      // Asserted by e2e/tests/plugins/plugin-iframe.spec.ts.
+      window.__pluginApiTypeAtParseTime = typeof window.PluginAPI;
+
       let lastTaskId = null;
       let lastProjectId = null;
       let lastTagId = null;

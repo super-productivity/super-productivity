@@ -165,6 +165,146 @@ test.describe('@supersync Archive Conflict Resolution', () => {
   });
 
   /**
+   * Test C: archive-vs-archive — both clients bulk-archive overlapping tasks
+   * ("Finish day" on two devices, #9537).
+   *
+   * Scenario:
+   * 1. Client A creates T1, T2, T3, syncs
+   * 2. Client B syncs (gets all three)
+   * 3. Client B marks T1 done, archives it, syncs (uploads its own archive op)
+   * 4. Client A — WS-blocked, unaware — marks ALL THREE done and archives them
+   *    in ONE atomic bulk moveToArchive
+   * 5. Client A syncs: its bulk archive loses T1 to B's remote archive. The
+   *    scoped replacement must re-upload T2+T3's archival instead of wedging
+   *    sync forever with SYNC_MULTI_ENTITY_UNSUPPORTED (#9537)
+   * 6. Client B syncs (downloads the replacement)
+   *
+   * Expected: no active tasks on either client; ALL THREE tasks in BOTH
+   * worklogs. T2/T3 in Client B's worklog is the load-bearing assertion —
+   * they can only arrive via the scoped replacement op.
+   */
+  test('bulk archive resolves when both clients archived an overlapping task @supersync', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const uniqueId = Date.now();
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // ============ PHASE 1: Client A creates three tasks and syncs ============
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      const task1Name = `ArchVsArch-T1-${uniqueId}`;
+      const task2Name = `ArchVsArch-T2-${uniqueId}`;
+      const task3Name = `ArchVsArch-T3-${uniqueId}`;
+
+      await clientA.workView.addTask(task1Name);
+      await clientA.workView.addTask(task2Name);
+      await clientA.workView.addTask(task3Name);
+      console.log(`[ArchVsArch] Client A created tasks T1, T2, T3`);
+
+      await clientA.sync.syncAndWait();
+      console.log('[ArchVsArch] Client A synced (uploaded tasks)');
+
+      // ============ PHASE 2: Client B downloads tasks ============
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.syncAndWait();
+
+      await waitForTask(clientB.page, task1Name);
+      await waitForTask(clientB.page, task2Name);
+      await waitForTask(clientB.page, task3Name);
+      console.log('[ArchVsArch] Client B received all three tasks');
+
+      // Block WS-triggered downloads on Client A so it doesn't auto-receive
+      // B's archive before Phase 4 (we want a true concurrent archive race)
+      await clientA.page.evaluate(
+        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
+      );
+
+      // ============ PHASE 3: Client B archives the overlapping task ============
+      await markTaskDoneByKey(clientB, task1Name);
+      await archiveDoneTasks(clientB);
+      console.log('[ArchVsArch] Client B archived T1');
+
+      await clientB.sync.syncAndWait();
+      console.log('[ArchVsArch] Client B synced (uploaded its archive op)');
+
+      // ============ PHASE 4: Client A bulk-archives ALL THREE ============
+      // Client A never received B's archive: T1 is still active here, so the
+      // finish-day style bulk covers T1, T2 and T3 in one atomic op.
+      await markTaskDoneByKey(clientA, task1Name);
+      await markTaskDoneByKey(clientA, task2Name);
+      await markTaskDoneByKey(clientA, task3Name);
+      await archiveDoneTasks(clientA);
+      console.log('[ArchVsArch] Client A bulk-archived T1+T2+T3');
+
+      // ============ PHASE 5: Client A syncs (archive-vs-archive conflict) ====
+      // (Flipping the flag mirrors sibling Test A's choreography; the
+      // harness's WS route-block plus blocked immediate-upload/auto-sync and
+      // the explicit syncs are what keep this race deterministic.)
+      await clientA.page.evaluate(
+        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
+      );
+      await clientA.sync.syncAndWait();
+      console.log('[ArchVsArch] Client A synced (conflict resolved, no wedge)');
+
+      // Second sync uploads the scoped replacement created by resolution
+      await clientA.sync.syncAndWait();
+      console.log('[ArchVsArch] Client A synced again (uploaded replacement)');
+
+      // ============ PHASE 6: Client B syncs to receive the replacement ======
+      await clientB.sync.syncAndWait();
+
+      // Extra sync round for convergence
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      console.log('[ArchVsArch] Extra sync round for convergence');
+
+      // ============ PHASE 7: Verify tasks NOT in active task list ============
+      await navigateToWorkView(clientA);
+      await navigateToWorkView(clientB);
+
+      await expectTaskNotVisible(clientA, task1Name);
+      await expectTaskNotVisible(clientA, task2Name);
+      await expectTaskNotVisible(clientA, task3Name);
+      console.log('[ArchVsArch] Client A: no tasks in active list');
+
+      // Client B archives T2/T3 through the async remote-apply pipeline —
+      // give it the same extended window sibling Test B documents (15s).
+      const archivedAssertionTimeout = 15000;
+      await expectTaskNotVisible(clientB, task1Name, archivedAssertionTimeout);
+      await expectTaskNotVisible(clientB, task2Name, archivedAssertionTimeout);
+      await expectTaskNotVisible(clientB, task3Name, archivedAssertionTimeout);
+      console.log('[ArchVsArch] Client B: no tasks in active list');
+
+      // ============ PHASE 8: Verify ALL tasks IN worklog on BOTH clients =====
+      await expectTaskInWorklog(clientA, task1Name);
+      await expectTaskInWorklog(clientA, task2Name);
+      await expectTaskInWorklog(clientA, task3Name);
+      console.log('[ArchVsArch] Client A: all three tasks in worklog');
+
+      // T2/T3 here prove the scoped replacement arrived — without it Client B
+      // would keep them active forever (or, pre-fix, sync would wedge).
+      await expectTaskInWorklog(clientB, task1Name);
+      await expectTaskInWorklog(clientB, task2Name);
+      await expectTaskInWorklog(clientB, task3Name);
+      console.log('[ArchVsArch] Client B: all three tasks in worklog');
+
+      console.log('[ArchVsArch] ✓ Test C passed: overlapping bulk archives converged');
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
+  /**
    * Test B: LWW Update does not resurrect archived tasks (Bug B)
    *
    * Scenario:

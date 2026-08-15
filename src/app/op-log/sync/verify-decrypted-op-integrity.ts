@@ -209,13 +209,14 @@ export const assertDecryptedOpMetadataIntegrity = (
   // Derive the target from actionType because it chooses the reducer branch;
   // op.entityType is unauthenticated metadata and must not grant an exemption.
   //
-  // Scope is adapter-only ON PURPOSE and stays tied to the reducer: only the
-  // adapter branch of lwwUpdateMetaReducer addresses an entity BY `payload.id`,
-  // so only adapters can be retargeted by a tampered id. Singleton LWW replaces a
-  // whole feature slice (id irrelevant) and map/array LWW ops are not applied by
-  // that reducer at all — none carry a canonical `payload.id` to protect. If the
-  // reducer ever learns to apply a map/array LWW update by payload identity, this
-  // gate must be widened in lockstep or the retarget defense would not cover it.
+  // Scope stays tied to the reducer: the adapter branch AND (since #9526) the
+  // array branch of lwwUpdateMetaReducer address an entity BY `payload.id`, so
+  // both can be retargeted by a tampered id and are in scope via
+  // isLwwPayloadIdCanonical. Singleton LWW replaces a whole feature slice (id
+  // irrelevant) and map LWW ops are not applied by that reducer at all — no
+  // canonical `payload.id` to protect. If the reducer ever learns to apply a
+  // map LWW update by payload identity, this gate must be widened in lockstep
+  // or the retarget defense would not cover it.
   if (!op.entityId || !isLwwPayloadIdCanonical(lwwEntityType)) {
     return;
   }

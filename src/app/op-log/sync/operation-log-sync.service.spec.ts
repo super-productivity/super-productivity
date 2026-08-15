@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { FILE_BASED_SYNC_CONSTANTS } from '../sync-providers/file-based/file-based-sync.types';
 import { SchemaMigrationService } from '../persistence/schema-migration.service';
@@ -142,6 +143,8 @@ describe('OperationLogSyncService', () => {
       'loadImportBackup',
     ]);
     opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+    // 0 = empty store; establishFrontier(0) resets to default-open (#9438).
+    opLogStoreSpy.getLastSeq.and.resolveTo(0);
     opLogStoreSpy.getUnsynced.and.resolveTo([]);
     opLogStoreSpy.getPendingRemoteOps.and.resolveTo([]);
     opLogStoreSpy.getFailedRemoteOps.and.resolveTo([]);
@@ -4604,6 +4607,35 @@ describe('OperationLogSyncService', () => {
       await service.forceDownloadRemoteState(mockProvider);
 
       expect(callOrder).toEqual(['downloadRemoteOps', 'runRemoteStateReplacement']);
+    });
+
+    it('re-establishes the tab seq frontier at the store tail after a completed rebuild (#9438)', async () => {
+      // The pre-rebuild ops wipe correctly leaves the tracker default-open;
+      // once the rebuild has applied everything it wrote (inside the
+      // exclusive section), _completeRawRebuild must re-arm the guard —
+      // including clearing a sticky divergence from before the rebuild.
+      const frontier = TestBed.inject(TabSeqFrontierService);
+      frontier.establishFrontier(4);
+      frontier.observeOwnWrite(6); // gap → sticky divergence
+      expect(frontier.hasKnownForeignWrites()).toBe(true);
+      opLogStoreSpy.getLastSeq.and.resolveTo(42);
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [makeRemoteOp()],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceDownloadRemoteState(mockProvider);
+
+      expect(frontier.hasKnownForeignWrites()).toBe(false);
+      expect(frontier.isSaveSafeAt(42)).toBe(true);
     });
 
     it('should preserve device-local sync settings in the atomic rebuild baseline', async () => {

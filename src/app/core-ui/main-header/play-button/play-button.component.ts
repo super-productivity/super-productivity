@@ -15,41 +15,17 @@ import { MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { TagComponent } from '../../../features/tag/tag/tag.component';
-import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { expandFadeHorizontalAnimation } from '../../../ui/animations/expand.ani';
 import { T } from '../../../t.const';
-import { Task } from '../../../features/tasks/task.model';
-import { WorkContext } from '../../../features/work-context/work-context.model';
 import { TaskService } from '../../../features/tasks/task.service';
 import { animationFrameScheduler, Subscription } from 'rxjs';
 import { distinctUntilChanged, observeOn } from 'rxjs/operators';
-import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.service';
 
 @Component({
   selector: 'play-button',
   standalone: true,
-  imports: [MatMiniFabButton, MatIcon, MatTooltip, TranslatePipe, TagComponent],
+  imports: [MatMiniFabButton, MatIcon, MatTooltip, TranslatePipe],
   template: `
     <div class="play-btn-wrapper">
-      @if (currentTask(); as task) {
-        <div
-          @fade
-          class="current-task-title"
-          (click)="navigateToCurrentTask()"
-          matTooltip="{{ T.MH.SHOW_TRACKED_TASK | translate }}"
-          matTooltipPosition="below"
-        >
-          <div class="title">{{ task.title }}</div>
-          @if (currentTaskContext(); as taskContext) {
-            <tag
-              @expandFadeHorizontal
-              [tag]="taskContext"
-              class="project"
-            ></tag>
-          }
-        </div>
-      }
       @if (currentTaskId()) {
         <div class="pulse-circle"></div>
       }
@@ -164,68 +140,18 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
           }
         }
       }
-
-      .current-task-title {
-        position: absolute;
-        right: 100%;
-        width: auto;
-        border: 1.5px solid var(--c-accent);
-        border-radius: 10px;
-        min-width: 40px;
-        white-space: nowrap;
-        padding: calc(var(--s-half) * 0.75) var(--s);
-        padding-right: calc(var(--s) * 2.25);
-        margin-right: calc(-1 * var(--s) * 1.75);
-        top: 50%;
-        transform: translateY(-50%);
-        transition: opacity 0.3s ease-out;
-        display: flex;
-        background: var(--bg-lighter);
-        font-size: 13px;
-        z-index: 5;
-        cursor: pointer;
-
-        @media (max-width: 1080px) {
-          display: none;
-        }
-
-        .title {
-          max-width: 200px;
-          text-overflow: ellipsis;
-          overflow: hidden;
-        }
-
-        .project {
-          max-width: 130px;
-          padding-right: 0;
-          padding-left: var(--s-half);
-          font-size: 12px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-
-          ::ng-deep .tag-title {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: block;
-          }
-        }
-      }
     `,
   ],
-  animations: [fadeAnimation, expandFadeHorizontalAnimation],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlayButtonComponent implements OnInit, OnDestroy {
   private _renderer = inject(Renderer2);
   private _cd = inject(ChangeDetectorRef);
-  private _navigateToTaskService = inject(NavigateToTaskService);
 
   readonly T = T;
   readonly taskService = inject(TaskService);
 
-  readonly currentTask = input<Task | null>();
   readonly currentTaskId = input<string | null>();
-  readonly currentTaskContext = input<WorkContext | null>();
   readonly hasTrackableTasks = input<boolean>(true);
   readonly circleSvg = viewChild<ElementRef<SVGCircleElement>>('circleSvg');
 
@@ -271,13 +197,6 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
           }
         }),
     );
-  }
-
-  navigateToCurrentTask(): void {
-    const taskId = this.currentTaskId();
-    if (taskId) {
-      this._navigateToTaskService.navigate(taskId);
-    }
   }
 
   ngOnDestroy(): void {

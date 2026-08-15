@@ -103,7 +103,7 @@
       (collapseParent)="collapseParent()"
       (editActionTriggered)="estimateTime()"
       (keyPress)="onItemKeyPress($event)"
-      [inputIcon]="'edit'"
+      [inputIcon]="hasTimeData() ? 'edit' : 'add'"
       class="input-item --estimate"
     >
       <ng-container input-title>

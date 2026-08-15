@@ -711,7 +711,7 @@ describe('TaskShortcutService', () => {
     it('delegates to the focused <task> component (preserves overdue/backlog branching)', () => {
       const taskComponent = {
         task: () => ({ id: 'focused-task-1' }),
-        moveToTodayWithFocus: jasmine.createSpy('moveToTodayWithFocus'),
+        scheduleForTodayWithFocus: jasmine.createSpy('scheduleForTodayWithFocus'),
         taskContextMenu: () => undefined,
       };
       setFocusedTask('focused-task-1');
@@ -723,7 +723,7 @@ describe('TaskShortcutService', () => {
       const result = service.handleTaskShortcuts(event);
 
       expect(result).toBe(true);
-      expect(taskComponent.moveToTodayWithFocus).toHaveBeenCalled();
+      expect(taskComponent.scheduleForTodayWithFocus).toHaveBeenCalled();
       expect(mockTaskService.scheduleForTodayById).not.toHaveBeenCalled();
     });
 
@@ -772,7 +772,7 @@ describe('TaskShortcutService', () => {
 
       const staleComponent = {
         task: () => ({ id: 'stale-task-elsewhere' }),
-        moveToTodayWithFocus: jasmine.createSpy('moveToTodayWithFocus'),
+        scheduleForTodayWithFocus: jasmine.createSpy('scheduleForTodayWithFocus'),
         taskContextMenu: () => undefined,
       };
       mockTaskFocusService.focusedTaskId.set('stale-task-elsewhere');
@@ -785,7 +785,7 @@ describe('TaskShortcutService', () => {
         'overdue-planner-task',
       );
       expect(mockTaskService.scheduleForTodayById).toHaveBeenCalledTimes(1);
-      expect(staleComponent.moveToTodayWithFocus).not.toHaveBeenCalled();
+      expect(staleComponent.scheduleForTodayWithFocus).not.toHaveBeenCalled();
     });
   });
 });

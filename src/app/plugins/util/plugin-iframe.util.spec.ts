@@ -456,15 +456,41 @@ describe('handlePluginMessage()', () => {
       expect(html).toContain('<div id="app"></div>');
     });
 
-    it('injects the API bridge script (with the bridge token) before </body>', () => {
+    it('injects the API bridge script (with the bridge token) into <head>', () => {
       const html = buildPluginIframeHtml({
         ...createConfig(pluginBridge),
         indexHtml: '<html><head></head><body></body></html>',
       });
       expect(html).toContain('const bridgeToken = "test-bridge-token"');
       expect(html).toContain('window.PluginAPI');
-      // script is injected inside the body, before its closing tag
-      expect(html.indexOf('window.PluginAPI')).toBeLessThan(html.indexOf('</body>'));
+      expect(html.indexOf('window.PluginAPI')).toBeLessThan(html.indexOf('</head>'));
+    });
+
+    // #9526: classic (non-defer) plugin scripts execute at parse time — the API
+    // must already exist by then, or plugins fall into local fallbacks that
+    // silently bypass sync.
+    it('defines window.PluginAPI before any plugin script runs', () => {
+      const html = buildPluginIframeHtml({
+        ...createConfig(pluginBridge),
+        indexHtml:
+          '<html><head><script>window.PluginAPI.getTasks();</script></head>' +
+          '<body><script>window.PluginAPI.showSnack({});</script></body></html>',
+      });
+      const apiDefinition = html.indexOf('window.PluginAPI = {');
+      expect(apiDefinition).toBeGreaterThan(-1);
+      expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.getTasks()'));
+      expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.showSnack({})'));
+    });
+
+    it('prepends the API script for fragment HTML without a <head>', () => {
+      const html = buildPluginIframeHtml({
+        ...createConfig(pluginBridge),
+        indexHtml: '<div id="app"></div><script>window.PluginAPI.getTasks();</script>',
+      });
+      expect(html).toContain('<div id="app"></div>');
+      expect(html.indexOf('window.PluginAPI = {')).toBeLessThan(
+        html.indexOf('window.PluginAPI.getTasks()'),
+      );
     });
   });
 

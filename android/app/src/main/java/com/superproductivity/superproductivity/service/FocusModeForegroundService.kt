@@ -251,7 +251,7 @@ class FocusModeForegroundService : Service() {
     }
 
     private fun startFocusMode(): Boolean {
-        Log.d(TAG, "Starting focus mode: title=$title, durationMs=$durationMs, remainingMs=$remainingMs, isBreak=$isBreak, isPaused=$isPaused")
+        Log.d(TAG, "Starting focus mode: durationMs=$durationMs, remainingMs=$remainingMs, isBreak=$isBreak, isPaused=$isPaused")
         FocusModeNotificationHelper.cancelCompletionNotification(this)
 
         isRunning = true
@@ -339,7 +339,7 @@ class FocusModeForegroundService : Service() {
     }
 
     private fun onTimerComplete() {
-        Log.d(TAG, "Timer completed! isBreak=$isBreak, title=$title")
+        Log.d(TAG, "Timer completed! isBreak=$isBreak")
         hasNotifiedCompletion = true
 
         // Show high-priority completion notification with sound.

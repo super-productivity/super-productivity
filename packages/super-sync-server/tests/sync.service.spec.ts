@@ -449,18 +449,25 @@ vi.mock('../src/db', async () => {
         state.serverSeqCounter = Math.max(state.serverSeqCounter, lastSeq);
         return [{ lastSeq }];
       }
-      if (sql.includes('JOIN (VALUES')) {
-        // Params are [touchedRows (VALUES join), userId, idArray, idArray]: userId
-        // is the only number; the VALUES join is the first Sql fragment, whose
-        // .values hold the flattened (entity_type, entity_id) touched pairs. The
-        // idArray prefilter params (#8334) are not needed by the mock. (Previously
-        // userId was the last param and the join the only fragment.)
+      if (sql.includes('touched(entity_type, entity_id)')) {
+        // Params are [touchedRows (the VALUES CTE), userId, arrayBranchCte, userId]:
+        // userId is the only number, and touchedRows is the only Sql fragment with a
+        // NON-EMPTY .values (the shared array-branch CTE binds nothing), whose values
+        // hold the flattened (entity_type, entity_id) pairs. Matched on the CTE name
+        // rather than on `JOIN (VALUES` because #9503 lifted the VALUES list into a CTE
+        // and dropped the separate idArray params. Deliberately position-independent —
+        // three mocks broke on positional params during that change.
+        //
+        // This mock matches stored ops by scalar entityId only and ignores entityIds,
+        // so it does not model the array branch: a future batchUpload test whose prior
+        // op is multi-entity would get a false "no conflict" here.
         const txUserId = params.find((p: unknown) => typeof p === 'number') as number;
         const valuesParam = params.find(
           (p: unknown) =>
             !!p &&
             typeof p === 'object' &&
-            Array.isArray((p as { values?: unknown[] }).values),
+            Array.isArray((p as { values?: unknown[] }).values) &&
+            (p as { values: unknown[] }).values.length > 0,
         ) as { values: unknown[] } | undefined;
         const touchedParams = valuesParam?.values ?? [];
         const touchedPairs = new Set<string>();

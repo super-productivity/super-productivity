@@ -25,7 +25,12 @@ import { WORKLOG_EXPORT_DEFAULTS } from '../../work-context/work-context.const';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
-import { createRows, formatRows, formatText } from './worklog-export.util';
+import {
+  createRows,
+  formatRows,
+  formatText,
+  getHeadlineCol,
+} from './worklog-export.util';
 import { MatDialogActions, MatDialogContent } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { MatAnchor, MatButton, MatMiniFabButton } from '@angular/material/button';
@@ -195,36 +200,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
             this.formattedRows = formatRows(rows, this.options);
             // TODO format to csv
 
-            this.headlineCols = this.options.cols.map((col) => {
-              switch (col) {
-                case 'DATE':
-                  return 'Date';
-                case 'START':
-                  return 'Start';
-                case 'END':
-                  return 'End';
-                case 'TITLES':
-                  return 'Titles';
-                case 'TITLES_INCLUDING_SUB':
-                  return 'Titles';
-                case 'NOTES':
-                  return 'Descriptions';
-                case 'PROJECTS':
-                  return 'Projects';
-                case 'TAGS':
-                  return 'Tags';
-                case 'TIME_MS':
-                case 'TIME_STR':
-                case 'TIME_CLOCK':
-                  return 'Worked';
-                case 'ESTIMATE_MS':
-                case 'ESTIMATE_STR':
-                case 'ESTIMATE_CLOCK':
-                  return 'Estimate';
-                default:
-                  return 'INVALID COL';
-              }
-            });
+            this.headlineCols = this.options.cols.map(getHeadlineCol);
 
             this.txt = formatText(this.headlineCols, this.formattedRows);
             this._changeDetectorRef.detectChanges();

@@ -24,6 +24,8 @@ x-logging-app: &app-logging
 
 services:
   supersync:
+    # Only `latest` and `master-<sha>` are published, both built from master — there
+    # are no release tags. Pin SUPERSYNC_IMAGE to a master-<sha> for a fixed version.
     image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
     container_name: supersync-server
     restart: unless-stopped
@@ -102,6 +104,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    # PID 1 is `node`, which reaps only the children it spawned itself.
+    # health-alert.sh execs `timeout 18 node -e <probe>` in here every 5 min,
+    # and Alpine's timeout is BusyBox, not coreutils: it forks a watchdog and
+    # then execs the probe in its own process, so the watchdog outlives the
+    # probe, is reparented to PID 1 and is never reaped. One permanent zombie
+    # per run — 1058 of them on the hosted server after 3.7 days of uptime,
+    # reported by the hoster as PID pressure. docker-init (tini) reaps them and
+    # still forwards SIGTERM, so graceful shutdown is unaffected.
+    # (caddy/postgres are exempt: nothing execs a forking command into them,
+    # and the postmaster reaps foreign children anyway.)
+    init: true
     security_opt:
       - no-new-privileges:true
     cap_drop:

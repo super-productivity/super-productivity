@@ -2,14 +2,8 @@
 
 // TODO split up into more manageable bits
 
-@mixin btn-transition {
-  transition: var(--transition-standard);
-  opacity: 0;
-  position: relative;
-  z-index: 2;
-  margin: var(--s) 0 0 0;
-}
-
+// Every length the action row is laid out with is declared once, here, and
+// consumed by the rules below and by `page-title`, which inherits them.
 :host {
   display: block;
   position: relative;
@@ -17,9 +11,60 @@
   --header-nav-button-gap: var(--s-half);
   --header-action-group-gap: var(--s);
   --header-button-size: 40px;
+  --header-title-padding-inline-start: var(--s);
+  --header-title-padding-inline-end: var(--s2);
+  --header-title-action-gap: var(--s-quarter);
+  // How far the title's buttons are pulled back toward the title, so they sit
+  // against the name instead of after a run of empty box. Declared positive and
+  // negated where it is applied: an unregistered custom property substitutes
+  // `var()` at computed-value time but does NOT evaluate `calc()`, so a
+  // `calc(-1 * ...)` here reads back as an unparseable string.
+  --header-title-actions-inset: var(--s);
+  --header-title-actions-gutter: var(--s2);
+  // How wide the "there is more that way" fade is. Wider than it looks like it
+  // needs to be, and that is the point: an icon button is 40px around a 20px
+  // glyph, so the transparent gutter between two glyphs is ~24px. A band that
+  // size can land entirely in a gutter and dim nothing at all -- measured, at a
+  // 700px window two whole buttons were hidden behind a perfectly crisp icon.
+  // 48px always covers a full glyph plus its gutter, so the band always has ink
+  // to act on.
+  //
+  // Capped at a share of the row, because that argument is about the WIDE case
+  // and inverts once the row is narrower than a couple of buttons: measured with
+  // the right panel open, a flat 48px covered 67% of the row at an 800px window
+  // and 100% of it below 700px, so the affordance erased the only action still
+  // on screen. A proportional cap keeps the band meaningful without letting it
+  // eat the row it is describing.
+  --header-scroll-fade: min(48px, 30%);
+  // How much of the title BOX survives however tight the row gets. A real
+  // `min-width` on `.page-title` (page-title.component owns the rule, and adds
+  // the icon's width on top where there is one), not a number some solver
+  // reserves -- the row scrolls once it runs out of space, so this simply stops
+  // the title yielding and lets the actions scroll instead.
+  //
+  // The box, not the name: `min-width` is border-box here, so the box's own
+  // inline padding comes out of this and the name gets ~8px less than the
+  // number says. Close enough to "six characters" to be the right unit, but not
+  // an exact promise -- see page-title for why paying the padding back out is
+  // not affordable.
+  //
+  // The title is the first thing in the row to shrink (`flex-shrink: 999`), so
+  // without a floor it spends its last pixel on one more action: a 320px
+  // project name was squeezed to 70px at an 800px window and to 2px at 600px.
+  // The name is what says which project you are looking at, so it outranks the
+  // seventh icon.
+  //
+  // `ch` rather than px: it means "about this many characters" at whatever font
+  // the title renders in, which is the guarantee actually wanted. Zero below
+  // 600px, where add-task and the panel buttons have moved to the bottom nav
+  // and the title is competing with far less.
+  --header-title-text-min: 0px;
 
   @include mq(xs) {
     --header-action-group-gap: var(--s2);
+    --header-title-padding-inline-start: 0px;
+    --header-title-padding-inline-end: var(--s);
+    --header-title-text-min: 6ch;
   }
 }
 
@@ -28,12 +73,17 @@
 }
 
 :host-context(.isNoMac.isObsidianStyleHeader.isElectron) {
-  // Dynamic window controls width using Window Controls Overlay CSS env vars
-  // env(titlebar-area-width) = available width (viewport - controls)
-  // So: controls width = 100vw - titlebar-area-width
-  // Fallback calc ensures 140px when env vars unavailable
-  // Only on non-Mac: macOS window controls are on the left, no right padding needed
-  padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
+  // Keep header content inside the Window Controls Overlay safe area:
+  // env(titlebar-area-x) = left inset, env(titlebar-area-width) = safe width.
+  // Since Electron 43, Linux WCO follows the native button layout, so controls
+  // can sit left, right, or on both sides — pad both edges instead of assuming
+  // right-side controls. Fallbacks (0 left / 140px right) preserve the old
+  // behavior when the env vars are unavailable.
+  // Only on non-Mac: macOS uses hiddenInset traffic lights, handled above.
+  padding-left: env(titlebar-area-x, 0px);
+  padding-right: calc(
+    100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 140px))
+  );
 
   // Prevent header content from overflowing into the window controls area
   // when the window is resized to a narrow width (fixes #6365).
@@ -41,6 +91,23 @@
   .wrapper {
     overflow-x: clip;
   }
+}
+
+// ...but the controls sit in the top-right corner of the WINDOW, and with the
+// right panel open that corner belongs to the panel, not the header. Reserving
+// room for them here then costs the action row ~140px it does not owe — enough,
+// measured, to squeeze the whole row down to a few pixels and take every header
+// action with it, overflow trigger included.
+//
+// The panel is normally far wider than the overlay band, so the header does not
+// reach the controls while it is open. Two edges this does not cover, both
+// transient or cosmetic rather than trapping: the band is briefly uncovered
+// while the panel animates open, and `.side` is additionally capped at 50% of
+// the content area, so a very narrow window can render it under the band.
+:host-context(.isNoMac.isObsidianStyleHeader.isElectron):host-context(
+  right-panel.isOpen
+) {
+  padding-right: 0;
 }
 
 :host-context(.isMac.isElectron),
@@ -56,7 +123,11 @@
     cursor: grabbing;
   }
 
-  .current-work-context-title,
+  // `.page-title` is a div with a routerLink, so neither `button` nor `a`
+  // below reaches it -- it needs naming here or the one control that fills the
+  // left of the header is inside the drag region and cannot be clicked. It was
+  // named here, as `.current-work-context-title`, until that class was renamed.
+  .page-title,
   ::ng-deep .current-task-title,
   button,
   a,
@@ -75,45 +146,42 @@
   padding: var(--s-half) var(--s);
   min-height: var(--bar-height-large);
 
+  // The row's own width, which is what decides whether identity fits — not the
+  // window's. The right panel narrows this box without narrowing the viewport,
+  // and keying off the viewport instead is the exact mistake #9480 exists to
+  // kill. Inline-size containment is safe here: the wrapper is a block-level
+  // box, so its width comes from its parent and never from its contents.
+  container-type: inline-size;
+  container-name: main-header;
+
   @include mq(xs) {
     min-height: var(--bar-height);
     padding: var(--s-half) var(--s2);
   }
-
-  &:has(page-title:hover) ::ng-deep .current-task-title,
-  &:has(page-title [aria-expanded='true']) ::ng-deep .current-task-title {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--transition-duration-m) ease-out;
-  }
 }
 
-.project-settings-btn {
-  display: none;
-  @include mq(xs) {
-    display: block;
-    transition: var(--transition-standard);
-    opacity: 0;
-    margin-right: var(--s2);
-    margin-left: calc(var(--s) * -1);
-    position: relative;
-    z-index: 1;
-  }
-
-  &:hover,
-  .current-work-context-title:hover + & {
-    opacity: 1;
+// Below a row that cannot seat both, identity yields entirely.
+//
+// The title's floor plus its two never-shrinking buttons cost about 164px, so
+// under roughly this width they claimed everything and the action row was left
+// with its padding and nothing else: measured with the notes panel open, a
+// 650px window gave the row an 8px box holding ZERO of its seven actions, and
+// scrolling cannot help a scrollport with no width. Above this the title still
+// wins the squeeze (#7477) and the actions scroll, which is the ordering this
+// row has always stated; below it there is no version of "the title yields a
+// bit" that seats a 40px control, so it yields all of it.
+//
+// The name is the thing lost, and that is the trade the width forces: an action
+// you cannot reach is worse than a context you can still read from the side nav.
+@container main-header (max-width: 250px) {
+  page-title {
+    display: none;
   }
 }
 
 a,
 button {
   cursor: pointer;
-}
-
-button.isActive2 {
-  background: var(--c-accent);
-  transition: background var(--transition-standard);
 }
 
 .header-action-group {
@@ -128,6 +196,8 @@ button.isActive2 {
 }
 
 .primary-action-group {
+  // The row's one visual break: play and add-task, then everything else at the
+  // plain button gap.
   margin-inline-end: calc(var(--header-action-group-gap) - var(--header-nav-button-gap));
 
   ::ng-deep play-button .play-btn-wrapper {
@@ -152,43 +222,184 @@ button.isActive2 {
   }
 }
 
-.counters-action-group {
-  margin-inline-end: calc(var(--header-action-group-gap) - var(--header-nav-button-gap));
-
-  ::ng-deep button {
-    width: 36px;
-    height: 36px;
-
-    .mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      line-height: 20px;
-    }
-  }
+// The row's slack, made into a box so the tracked-task pill has somewhere to
+// live that costs the actions nothing.
+//
+// `flex: 1 1 0` is the whole trick: a zero basis means this box contributes
+// nothing to the row's content width and never shrinks anyone, while grow
+// hands it whatever is left over — so it is the free space, and it is zero the
+// moment there is none. That also makes it what pushes the actions to the end,
+// which is why the nav no longer needs an auto margin (and why RTL needs no
+// special case: slack lands on the correct side by construction).
+//
+// `container-type: inline-size` lets the pill ask how much leftover there
+// actually is. Note this implies `contain: layout`, making the slot the
+// containing block for the absolutely positioned pill — which is wanted — but
+// NOT `contain: paint`, so the pill may still overhang it.
+// Named, because the queries that read it live in a DIFFERENT component
+// (tracked-task-pill). Unnamed, they bind to whatever the nearest ancestor
+// container happens to be — and `.main-content` already declares one further
+// up, so any `container-type` added between here and the pill would silently
+// retarget them with no error. The name makes the cross-file contract greppable
+// from both ends.
+.pill-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  position: relative;
+  container-type: inline-size;
+  container-name: header-pill-slot;
 }
 
 .action-nav-right {
-  margin-right: 0;
-  margin-left: auto;
   display: flex;
   align-items: center;
-  // Keep the action group at its intrinsic width so a long title shrinks
-  // (it ellipsizes) instead of pushing these buttons off screen (#7477).
-  flex: 0 0 auto;
+  // The title still yields first, so a long name ellipsizes rather than pushing
+  // these buttons off screen (#7477) — but that is now expressed as a shrink
+  // *priority* (`.page-title` carries `flex-shrink: 999`) rather than by making
+  // the nav unshrinkable. The nav has to be able to shrink so that it can
+  // scroll: see the floor below.
+  flex: 0 1 auto;
   gap: var(--header-nav-button-gap);
   min-width: 0;
 
-  :host-context([dir='rtl']) & {
-    margin-left: 0;
-    margin-right: auto;
+  // The row scrolls rather than losing a button (#9480): nothing in the
+  // ancestor chain scrolls (`.main-content` is `overflow: hidden`), so an
+  // action that runs off this edge used to be unreachable. The reporter asked
+  // for exactly this — "scrollable or otherwise accessible".
+  //
+  // Not applied to the teleported vertical strip — it is a fixed-width column
+  // that sets its own `overflow: visible` so badges and the play button's
+  // elevation can paint past the 48px rail. (Its styles live in
+  // `src/styles/components/_vertical-action-bar.scss`.)
+  &:not(.action-nav-right--teleported) {
+    // Buttons keep their size and let the row scroll instead.
+    > .action-nav-scroll > * {
+      flex-shrink: 0;
+    }
+
+    // What used to make an always-on clip unsafe is gone: the tracked-task pill
+    // hung off `right: 100%` of the play button, the row's first child, putting
+    // it beyond the inline-start clip edge — and left-of-origin overflow cannot
+    // be scrolled back (`scrollLeft` clamps at 0), so clipping did not hide the
+    // pill, it deleted it. The pill still sits against the play button, but as
+    // a child of the wrapper rather than of this nav, so it is never scrolled
+    // content and cannot land past that edge again.
+    //
+    // Anchored at the inline START, and that direction is not a preference:
+    // `justify-content: flex-end` would push the overflow off the start edge
+    // and recreate exactly the trap above.
+    > .action-nav-scroll {
+      display: flex;
+      align-items: center;
+      gap: var(--header-nav-button-gap);
+      min-width: 0;
+      overflow-x: auto;
+      // `overflow-x: auto` forces `overflow-y` to compute to `auto` (the two
+      // axes are coupled). Pin it to `hidden` so no stray vertical scrollbar
+      // can appear, and buy the clipped ink back as padding: the sync badge
+      // above, and the play button's elevation, which reaches 8px under its box
+      // and 5px to either side. (No active-panel underline in that list: the
+      // only `::after` tab left is `display: none` in plugin-side-panel-btns.)
+      //
+      // Block and inline-start padding are each cancelled by an equal negative
+      // margin, so the row's own box is exactly what it was — the padding buys
+      // paintable area inside the clip without costing the row a pixel. The
+      // start side may paint 8px outward safely: what abuts it is the title's
+      // free space, not a control.
+      //
+      // Deliberately nothing on the inline END: keeping the row's geometry
+      // while padding there needs a negative end margin, which would let this
+      // box's ink paint outside the header's own edge. The cost is that a badge
+      // on a trailing action inflates `scrollWidth`, so the fade can show with
+      // nothing to scroll to; sync is fifth of nine in DOM order, so in
+      // practice the trailing action is a panel toggle, which has no overhang
+      // at all.
+      overflow-y: hidden;
+      padding-block: var(--s);
+      padding-inline-start: var(--s);
+      margin-block: calc(-1 * var(--s));
+      margin-inline-start: calc(-1 * var(--s));
+      scrollbar-width: none;
+      // Keep whatever the browser scrolls into view clear of the fade. Without
+      // this, focusing a button that had scrolled away lands it flush against
+      // the trailing edge -- i.e. inside the band that erases it, so the control
+      // that just took focus is the one being faded out (WCAG 2.4.11). Covers
+      // Tab, `scrollIntoView` and Playwright's actionability scroll alike.
+      scroll-padding-inline: var(--header-scroll-fade);
+      // Horizontal overscroll here would otherwise reach the platform's
+      // back-gesture, which is a steep price for flicking a button row.
+      overscroll-behavior-x: contain;
+      // The header is a drag region on Electron with a custom title bar, and a
+      // drag region swallows pointer input at the OS level — without this a
+      // touch drag across the row moves the window instead of scrolling it.
+      -webkit-app-region: no-drag;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+
+    // The only affordance a hidden scrollbar leaves, so it has to mean
+    // something precise: there is more row past this edge. Each edge gets one,
+    // because that is a question with two answers — a row scrolled to its end
+    // hides its START, and the play button is first in DOM order, so it is the
+    // first thing to go behind that edge. A single trailing fade left that
+    // state looking like a complete row, with a running timer and no cue.
+    //
+    // Each class drives one LOGICAL edge; the two properties below map logical
+    // to physical exactly once, because `mask-image` has no logical form.
+    // Applied only while an edge can actually scroll, so a row that fits pays
+    // for no render surface.
+    > .action-nav-scroll {
+      --header-fade-inline-start: 0px;
+      --header-fade-inline-end: 0px;
+      --header-fade-left: var(--header-fade-inline-start);
+      --header-fade-right: var(--header-fade-inline-end);
+    }
+
+    &.action-nav-right--can-scroll-back > .action-nav-scroll {
+      --header-fade-inline-start: var(--header-scroll-fade);
+    }
+
+    &.action-nav-right--can-scroll > .action-nav-scroll {
+      --header-fade-inline-end: var(--header-scroll-fade);
+    }
+
+    &:is(.action-nav-right--can-scroll, .action-nav-right--can-scroll-back)
+      > .action-nav-scroll {
+      mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        #000 var(--header-fade-left),
+        #000 calc(100% - var(--header-fade-right)),
+        transparent 100%
+      );
+
+      // The fade is not colour, so it survives forced-colors intact and would
+      // dim system-coloured glyphs just the same. Nothing depends on it: the
+      // row still scrolls.
+      @media (forced-colors: active) {
+        mask-image: none;
+      }
+    }
   }
 
-  // EXPERIMENT: vertical action strip styles live in src/styles.scss so they
-  // bypass Angular view encapsulation (and any containing-block surprises
-  // from this file). See `nav.action-nav-right` rules there.
+  :host-context([dir='rtl']) &:not(.action-nav-right--teleported) > .action-nav-scroll {
+    --header-fade-left: var(--header-fade-inline-end);
+    --header-fade-right: var(--header-fade-inline-start);
+  }
 
-  // Keep every header action on the same compact icon grid.
+  // EXPERIMENT: vertical action strip styles live in
+  // `src/styles/components/_vertical-action-bar.scss` so they bypass Angular
+  // view encapsulation (and any containing-block surprises from this file).
+  // See the `nav.action-nav-right` rules there.
+}
+
+// Keep every header action on the same compact icon grid. Scoped to the nav
+// rather than to `:host`, because the page title's own buttons are deliberately
+// not on this grid.
+.action-nav-right {
   ::ng-deep button:not(.sync-btn) .mat-icon:not(.sync-state-ico) {
     font-size: 20px;
     width: 20px;
@@ -209,12 +420,19 @@ button.isActive2 {
   }
 }
 
-page-title {
-  position: relative;
+// Only the teleported vertical strip leaves this box out of the layout; the
+// ordinary row overrides it to a real flex scroller above.
+.action-nav-scroll {
+  display: contents;
 }
 
+// The collapsed counters, below 600px (see the template for why this sits
+// outside the scroller). A direct child of the nav rather than of
+// `.action-nav-scroll`, so the shrink rule scoped to that box does not reach
+// it — state it here, or a tight row squeezes the trigger instead of scrolling.
 .mobile-dropdown-wrapper {
   position: relative;
+  flex-shrink: 0;
 }
 
 .mobile-dropdown {
@@ -222,12 +440,14 @@ page-title {
   display: flex;
   transition: var(--transition-standard);
   top: 100%;
-  flex-direction: column;
+  // A column of counter buttons under a button of the same width, so centring
+  // cannot push it off the viewport edge the way a wide panel would.
   left: 50%;
   transform: translateX(-50%);
+  flex-direction: column;
   z-index: 2;
   pointer-events: none;
-  // Scrolling support for many counters (fixes #5999)
+  // Many counters must stay reachable, #5999.
   max-height: calc(100dvh - 120px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -241,8 +461,10 @@ page-title {
     box-shadow: var(--whiteframe-shadow-2dp);
   }
 
+  // Each button slides out from behind the trigger, so the stagger has to undo
+  // its own stacking offset: the nth button starts n rows higher.
   simple-counter-button {
-    @include btn-transition;
+    transition: var(--transition-standard);
     transform: translateY(-100%);
     opacity: 0;
     position: relative;
@@ -261,53 +483,6 @@ page-title {
   &.isVisible simple-counter-button {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-.panel-btn {
-  position: relative;
-  transition: var(--transition-standard);
-  overflow: visible !important;
-
-  &.isActive {
-    background: transparent;
-
-    .mat-icon {
-      transition: var(--transition-standard);
-      transform: rotate(45deg);
-    }
-
-    &::after {
-      border-radius: var(--card-border-radius);
-      box-shadow: 0 -2px 3px var(--separator-alpha);
-      background: var(--sidenav-bg);
-      content: '';
-      width: 100%;
-      position: absolute;
-      top: 0;
-      right: auto;
-      bottom: -5px;
-      left: 1px;
-      z-index: -1;
-    }
-
-    &.isCustomized::after {
-      background: var(--c-accent);
-    }
-  }
-
-  &:hover:not(.isActive):not(:disabled) {
-    background: var(--hover-color, rgba(0, 0, 0, 0.04));
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: transparent !important;
-
-    &::after {
-      background: transparent !important;
-    }
   }
 }
 
@@ -330,14 +505,6 @@ page-title {
   to {
     transform: rotate(-360deg) translateZ(0);
   }
-}
-
-.current-task-title {
-  position: absolute;
-  right: 100%;
-  width: auto;
-  border: 2px solid var(--c-accent);
-  border-radius: 12px;
 }
 
 .sync-btn {

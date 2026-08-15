@@ -17,6 +17,53 @@ import {
 const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
 
 /**
+ * ARRAY-branch candidates for BOTH batch conflict lookups: every stored op whose
+ * `entity_ids` contains a probed id, tagged with the id that matched. Shared rather than
+ * hand-copied — the #8334 "keep these two in sync" hazard is exactly what let #9503 ship
+ * the same mis-plan into both queries.
+ *
+ * Three properties are load-bearing. Each is a COST property, not a correctness one, so
+ * nothing here fails loudly; changing one needs the full measurements in
+ * docs/sync-and-op-log/vector-clocks.md, not a single benchmark.
+ *
+ * - `p.eid` is CARRIED, never re-derived downstream by unnesting `entity_ids`: `cand`
+ *   already holds one copy of the op per matching probe id, so re-deriving fans out
+ *   quadratically on wide arrays, and callers normally probe ids that OVERLAP the stored
+ *   arrays heavily. Guarded by the "does not fan out" tests in
+ *   batch-conflict-plan.pglite.spec.ts, which carry the numbers.
+ * - `MATERIALIZED` stops the callers' outer user_id / entity_type predicates being pushed
+ *   down, which would hand the composite btree back and restore the slice scan this whole
+ *   change exists to remove.
+ * - ONE `@>` PROBE PER ID, not one `&&` for the batch. Both forms are correct and both fix
+ *   #9503. `@>` ships because its terms are bounded (probe size is chunked, descent grows
+ *   only with index size) while `&&`'s `matches x stored width` is bounded by nothing a
+ *   tenant controls — but `&&` IS ~20x faster on an all-new probe, so this is a real
+ *   trade and not a free win. Equivalence of the forms is pinned by
+ *   array-branch-equivalence.pglite.spec.ts, which DERIVES the shipped form from this
+ *   fragment, so changing it here re-points that spec automatically.
+ *
+ * NOT user-scoped: like the single-entity path this matches by entity id across ALL users,
+ * and the callers' outer WHERE enforces the boundary. Correct — pinned by the ARRAY-branch
+ * isolation tests in entity-ids-conflict.pglite.spec.ts — but the cost is not bounded per
+ * tenant, which IS a regression against master and is tracked as #9510. The `MATERIALIZED`
+ * fence is precisely what forbids putting `user_id` back inside.
+ *
+ * Exported ONLY so the equivalence spec can splice the real text instead of a copy; it
+ * binds no values, and that is asserted there because a `$n` would renumber the callers'
+ * parameters.
+ */
+export const arrayBranchCandidatesCte = (
+  probeSource: Prisma.Sql,
+): Prisma.Sql => Prisma.sql`
+  cand AS MATERIALIZED (
+    SELECT p.eid AS eid, o.user_id, o.entity_type, o.client_id, o.action_type,
+           o.vector_clock, o.server_seq
+    FROM (${probeSource}) p
+    JOIN operations o ON o.entity_ids @> ARRAY[p.eid]
+  )
+`;
+
+/**
  * Check if an incoming operation conflicts with existing operations.
  * Returns conflict info if a concurrent modification is detected.
  */
@@ -83,29 +130,75 @@ export const detectConflictForEntities = async (
     // when entity_ids is empty) so an op whose entity_id is NOT a member of its
     // own entity_ids — possible when a multi-entity op dedups to a different
     // primary, see getStoredEntityIds — still exposes that scalar entity here.
-    // DISTINCT ON dedupes the harmless overlap when entity_id is already in the
-    // array (the common entity_id = entityIds[0] case). The `&&`/`= ANY`
-    // prefilter keeps the GIN(entity_ids) + entity_id indexes usable; `eid = ANY`
-    // keeps only the requested entities, then DISTINCT ON picks the latest op per
-    // entity. Kept inline (not a shared fragment) so the positional params stay
-    // stable for the conflict-detection.spec mock; the same shape is duplicated in
+    // DISTINCT ON then picks the latest op per entity across both branches, which
+    // also dedupes the harmless overlap when entity_id is already in the array (the
+    // common entity_id = entityIds[0] case). The same shape is duplicated in
     // prefetchLatestEntityOpsForBatch — keep them in sync. (#8334)
+    //
+    // PERF — this must stay TWO separately-indexed branches, for the reason
+    // detectConflictForEntity documents at length below. It was ONE query with a combined
+    // `(entity_ids && $arr OR entity_id = ANY($arr))`, and that OR spans the entity_ids
+    // GIN and the (user_id, entity_type, entity_id, server_seq) btree, so the planner
+    // abandoned both and slice-scanned the btree: a 100-id probe matching NOTHING read and
+    // discarded the probed user's ENTIRE (user_id, entity_type) slice, twice per upload
+    // inside the transaction, and production cancelled it by statement_timeout every 5-12
+    // minutes (#9503). Guarded by batch-conflict-plan.pglite.spec.ts, whose CANARY test
+    // still reproduces the mis-plan on the old form.
+    //
+    // Scalar branch: a lateral top-1 per requested id. All three equality columns
+    // PLUS the sort column are covered by the composite btree, so each probe is an
+    // index seek that terminates on an empty range when the entity is new.
+    //
+    // Array branch: per-id `@>` probes. See arrayBranchCandidatesCte for the full cost
+    // model and why the one-`&&`-per-batch alternative was measured and rejected.
+    //
+    // Trade accepted knowingly: this moves the array branch's cost from "the probing
+    // user's slice" to a FIXED whole-table GIN probe, so SMALL accounts pay ~13 ms / 700
+    // blocks per call they did not pay before (and this path runs twice per upload) while
+    // large ones pay far less. Accepted because the term it replaces is unbounded in
+    // account history while this one cannot exceed |probe| index descents. Measurements:
+    // PR #9516; the unbounded co-tenant term stacked on top of it is #9510.
+    //
+    // `probe` binds the ids ONCE and is then referenced twice, so Postgres materialises
+    // the list once. Its DISTINCT is redundant here (detectConflict already dedupes) and
+    // kept only so this shape stays identical to the prefetch sibling, where the same id
+    // can legitimately appear under two entity types.
     const idArray = Prisma.sql`ARRAY[${Prisma.join(batchEntityIds)}]::text[]`;
     const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
+      WITH probe(eid) AS (
+        SELECT DISTINCT eid FROM unnest(${idArray}) AS eid
+      ),
+      scalar_hits AS (
+        SELECT p.eid AS eid, x.client_id, x.action_type, x.vector_clock, x.server_seq
+        FROM probe p
+        CROSS JOIN LATERAL (
+          SELECT o.client_id, o.action_type, o.vector_clock, o.server_seq
+          FROM operations o
+          WHERE o.user_id = ${userId}
+            AND o.entity_type = ${op.entityType}
+            AND o.entity_id = p.eid
+          ORDER BY o.server_seq DESC
+          LIMIT 1
+        ) x
+      ),
+      ${arrayBranchCandidatesCte(Prisma.sql`SELECT eid FROM probe`)},
+      array_hits AS (
+        SELECT c.eid AS eid, c.client_id, c.action_type, c.vector_clock, c.server_seq
+        FROM cand c
+        WHERE c.user_id = ${userId}
+          AND c.entity_type = ${op.entityType}
+      )
       SELECT DISTINCT ON (eid)
         eid AS "entityId",
-        o.client_id AS "clientId",
-        o.action_type AS "actionType",
-        o.vector_clock AS "vectorClock"
-      FROM operations o
-      CROSS JOIN LATERAL unnest(
-        o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
-      ) AS eid
-      WHERE o.user_id = ${userId}
-        AND o.entity_type = ${op.entityType}
-        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
-        AND eid = ANY(${idArray})
-      ORDER BY eid, o.server_seq DESC
+        client_id AS "clientId",
+        action_type AS "actionType",
+        vector_clock AS "vectorClock"
+      FROM (
+        SELECT eid, client_id, action_type, vector_clock, server_seq FROM scalar_hits
+        UNION ALL
+        SELECT eid, client_id, action_type, vector_clock, server_seq FROM array_hits
+      ) u
+      ORDER BY eid, server_seq DESC
     `;
 
     const latestOpByEntityId = new Map<string, LatestEntityOperationRow>();
@@ -230,11 +323,14 @@ export const detectConflictForEntity = async (
   // sorts it (or walks (user_id, server_seq) backwards, betting `LIMIT 1` resolves
   // early). For an entity with no matching rows — the first-ever op for a new task,
   // the single most common upload there is — nothing bounds that work and it reads
-  // the user's whole slice. The batch unnest paths (detectConflictForEntities /
-  // prefetchLatestEntityOpsForBatch) cannot make that EARLY-EXIT bet — no LIMIT, and
-  // DISTINCT ON forces full evaluation. They carry the same two-index OR, though, so
-  // the SLICE-SCAN degeneracy is not excluded for them, and nothing EXPLAINs either
-  // batch query today (#9205).
+  // the user's whole slice. The batch unnest paths carried the same two-index OR and
+  // WERE hit by it: this paragraph used to argue they were safe because they have no
+  // LIMIT for the planner to bet on and DISTINCT ON forces full evaluation. Both
+  // statements are true and the conclusion was still wrong — "no early-exit bet to
+  // lose" and "cheap" are different properties, and the SLICE SCAN does not need a
+  // LIMIT. Production cancelled detectConflictForEntities by statement_timeout every
+  // 5-12 minutes until it was split the same way (#9503). Both batch queries are now
+  // EXPLAINed by batch-conflict-plan.pglite.spec.ts (#9205).
   //
   // Scalar branch: the (user_id, entity_type, entity_id, server_seq) btree covers all
   // three equality columns PLUS the sort column, so this is a direct index seek and a
@@ -655,37 +751,69 @@ export const prefetchLatestEntityOpsForBatch = async (
       start,
       start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
     );
+    // The ::text casts pin the VALUES list's column types.
     const touchedRows = batchPairs.map(
-      ({ entityType, entityId }) => Prisma.sql`(${entityType}, ${entityId})`,
+      ({ entityType, entityId }) => Prisma.sql`(${entityType}::text, ${entityId}::text)`,
     );
-    // Prefilter array (all requested ids) so the JOIN below can match a requested
-    // id inside a stored op's entity_ids set, not just its scalar entity_id, while
-    // keeping the GIN(entity_ids) + entity_id indexes usable. The unnest folds the
-    // scalar entity_id into the entity_ids set (UNION, deduped by DISTINCT ON) so a
-    // divergent scalar is never missed — see the matching note in
-    // detectConflictForEntities; keep the two shapes in sync. (#8334)
-    const idArray = Prisma.sql`ARRAY[${Prisma.join(
-      batchPairs.map((pair) => pair.entityId),
-    )}]::text[]`;
 
+    // Two separately-indexed branches, mirroring detectConflictForEntities — see the PERF
+    // note there. The array branch is the shared arrayBranchCandidatesCte, so only the
+    // scalar branch and the keying differ. (#8334) This was the WORSE of the two under the
+    // old OR form: it carries no `entity_type` predicate of its own, so the btree's usable
+    // prefix was just `user_id` and the degeneracy read the user's ENTIRE history across
+    // every entity type. Only `batchUpload` defaulting to false spared it production
+    // traffic (#9503).
+    //
+    // `array_hits` re-checks the entity TYPE with a row-wise `IN`, not a `JOIN`: `cand` is
+    // keyed by id alone (the probe source drops the type), so a stored op matched by id
+    // must still be confirmed against the requested (type, id) PAIR. Semi-join vs JOIN is
+    // a cost choice here, not a correctness one — the outer DISTINCT ON absorbs either.
+    // Either way the residual is |cand| x |touched|, bounded by the batch size and
+    // independent of how wide the stored arrays are, which is what distinguishes it from
+    // a fan-out.
     const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      SELECT DISTINCT ON (o.entity_type, eid)
-        o.entity_type AS "entityType",
+      WITH touched(entity_type, entity_id) AS (
+        VALUES ${Prisma.join(touchedRows)}
+      ),
+      scalar_hits AS (
+        SELECT t.entity_type, t.entity_id AS eid, x.client_id, x.action_type,
+               x.vector_clock, x.server_seq
+        FROM touched t
+        CROSS JOIN LATERAL (
+          SELECT o.client_id, o.action_type, o.vector_clock, o.server_seq
+          FROM operations o
+          WHERE o.user_id = ${userId}
+            AND o.entity_type = t.entity_type
+            AND o.entity_id = t.entity_id
+          ORDER BY o.server_seq DESC
+          LIMIT 1
+        ) x
+      ),
+      ${arrayBranchCandidatesCte(
+        Prisma.sql`SELECT DISTINCT entity_id AS eid FROM touched`,
+      )},
+      array_hits AS (
+        SELECT c.entity_type, c.eid AS eid, c.client_id, c.action_type,
+               c.vector_clock, c.server_seq
+        FROM cand c
+        WHERE c.user_id = ${userId}
+          AND (c.entity_type, c.eid) IN (SELECT entity_type, entity_id FROM touched)
+      )
+      SELECT DISTINCT ON (entity_type, eid)
+        entity_type AS "entityType",
         eid AS "entityId",
-        o.client_id AS "clientId",
-        o.action_type AS "actionType",
-        o.vector_clock AS "vectorClock",
-        o.server_seq AS "serverSeq"
-      FROM operations o
-      CROSS JOIN LATERAL unnest(
-        o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
-      ) AS eid
-      JOIN (VALUES ${Prisma.join(touchedRows)}) AS touched(entity_type, entity_id)
-        ON touched.entity_type = o.entity_type
-       AND touched.entity_id = eid
-      WHERE o.user_id = ${userId}
-        AND (o.entity_ids && ${idArray} OR o.entity_id = ANY(${idArray}))
-      ORDER BY o.entity_type, eid, o.server_seq DESC
+        client_id AS "clientId",
+        action_type AS "actionType",
+        vector_clock AS "vectorClock",
+        server_seq AS "serverSeq"
+      FROM (
+        SELECT entity_type, eid, client_id, action_type, vector_clock, server_seq
+        FROM scalar_hits
+        UNION ALL
+        SELECT entity_type, eid, client_id, action_type, vector_clock, server_seq
+        FROM array_hits
+      ) u
+      ORDER BY entity_type, eid, server_seq DESC
     `;
 
     for (const latestOp of latestOps) {

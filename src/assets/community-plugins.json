@@ -146,9 +146,16 @@
   {
     "name": "Bulk Add Tasks",
     "shortDescription": "Bulk-create Super Productivity tasks from pasted text, with project headings, subtasks, existing tags, notes and preview validation.",
-    "url": "https://github.com/initialcrow/bulk-add-tasks-plugin",
-    "author": "initialcrow",
-    "authorUrl": "https://github.com/initialcrow",
+    "url": "https://github.com/InitialCrow/bulk-add-tasks-plugin",
+    "author": "InitialCrow",
+    "authorUrl": "https://github.com/InitialCrow",
+    "stars": 0,
+  },
+    "name": "JSON to Tasks",
+    "shortDescription": "Create tasks and subtasks from pasted JSON, with project/tag resolution and optional creation of missing projects and tags.",
+    "url": "https://github.com/nekoritsme/superproductivity-fromjson-totasks",
+    "author": "nekoritsme",
+    "authorUrl": "https://github.com/nekoritsme",
     "stars": 0
   }
 ]

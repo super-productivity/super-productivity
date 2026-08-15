@@ -128,12 +128,6 @@
   :host.isSelected.isSelected .inner-wrapper > &,
   :host.isSelected.isCurrent.isCurrent.isCurrent.isCurrent & {
     @include mq(xs) {
-      right: -34px;
-    }
-    @include mq(md) {
-      right: -234px;
-    }
-    @include mq(xl) {
       right: calc(-1 * var(--task-border-radius));
     }
   }

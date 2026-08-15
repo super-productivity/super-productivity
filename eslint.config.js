@@ -257,6 +257,23 @@ module.exports = tseslint.config(
       'local-rules/no-adapter-in-tx': 'error',
     },
   },
+  // Op-log persistence: every method appending rows to STORE_NAMES.OPS must
+  // report the committed seqs to TabSeqFrontierService (#9438). A missed
+  // observeOwnWrite makes the tab's next own write look like a foreign seq
+  // gap → sticky divergence → snapshot saves AND compaction silently disabled
+  // for the whole session, on all platforms — a failure mode nothing crashes
+  // on, so lint is the only place it can fail loudly. Specs are exempt: they
+  // seed fake stores without a live frontier to report to.
+  {
+    files: ['src/app/op-log/**/*.ts'],
+    ignores: ['src/app/op-log/**/*.spec.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/require-frontier-report-on-ops-append': 'error',
+    },
+  },
   // App code must route logging through Log/SyncLog/OpLog/... helpers.
   // Direct console.* calls bypass the exportable log history users attach
   // to bug reports. The Log implementation itself, tests, and benchmarks

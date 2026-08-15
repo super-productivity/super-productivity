@@ -41,7 +41,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Issue Provider Panel",
-    "SHOW_NOTES": "Project Notes"
+    "SHOW_NOTES": "Project Notes",
+    "SHOW_SCHEDULE": "Schedule"
   },
   "CONFIRM": {
     "DELETE_SECTION": "Are you sure you want to delete this section? Tasks in it will be moved to the task list.",
@@ -2281,7 +2282,7 @@
           "FULL_QUARTERS": "full quarters",
           "NOTES": "Task Notes",
           "PARENT_TASK": "Parent Task",
-          "PARENT_TASK_TITLES_ONLY": "Parent Task Titles only",
+          "PARENT_TASK_TITLES_ONLY": "Parent Task Titles",
           "PROJECTS": "Project Names",
           "STARTED_WORKING": "Started Working",
           "TAGS": "Tags",
@@ -2289,7 +2290,7 @@
           "TIME_AS_CLOCK": "Time as clock (e.g. 5:23)",
           "TIME_AS_MILLISECONDS": "Time as milliseconds",
           "TIME_AS_STRING": "Time as string (e.g. 5h 23m)",
-          "TITLES_AND_SUB_TASK_TITLES": "Titles and Subtask Titles",
+          "TITLES_AND_SUB_TASK_TITLES": "Task/Subtask Titles",
           "WORKLOG": "Worklog"
         },
         "OPTIONS": "Options",
@@ -2369,7 +2370,7 @@
     "NONE": "None",
     "OK": "Ok",
     "OPEN_IN_BROWSER": "Open in browser",
-    "OVERDUE": "Overdue",
+    "OVERDUE": "From previous days",
     "PASSWORD_STRENGTH_FAIR": "Fair",
     "PASSWORD_STRENGTH_STRONG": "Strong",
     "PASSWORD_STRENGTH_WEAK": "Weak",

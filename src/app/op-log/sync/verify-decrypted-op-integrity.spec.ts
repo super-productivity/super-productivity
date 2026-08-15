@@ -71,6 +71,25 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
         OperationIntegrityError,
       );
     });
+
+    it('throws for an array-entity LWW op whose entityId was retargeted (#9526 lockstep)', () => {
+      // Since the reducer applies array LWW updates by payload identity,
+      // array entities are retargetable and must be in scope of the gate.
+      const op = createOp({
+        actionType: toLwwUpdateActionType('PLUGIN_USER_DATA'),
+        entityType: 'PLUGIN_USER_DATA',
+        entityId: 'victim-plugin',
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'real-plugin', data: '{}' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      };
+
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).toThrowError(OperationIntegrityError);
+    });
   });
 
   describe('accepts legitimate ops (no false positives)', () => {
@@ -102,6 +121,23 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
       const op = createOp({ entityId: undefined });
       expect(() =>
         assertDecryptedOpMetadataIntegrity(op, { id: 'task-123' }),
+      ).not.toThrow();
+    });
+
+    it('passes a genuine array-entity LWW op (payload.id matches entityId)', () => {
+      const op = createOp({
+        actionType: toLwwUpdateActionType('PLUGIN_USER_DATA'),
+        entityType: 'PLUGIN_USER_DATA',
+        entityId: 'sync-md',
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'sync-md', data: '{}' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      };
+
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
       ).not.toThrow();
     });
   });

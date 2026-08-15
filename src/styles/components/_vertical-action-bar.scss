@@ -17,8 +17,15 @@
   body > nav.action-nav-right.action-nav-right--teleported {
     // Header spacing tokens are declared on <main-header>'s :host, but the
     // strip is teleported to <body> and out of that scope, so re-declare them.
+    // The gap is deliberately larger here than in the horizontal row; the other
+    // two must match main-header, or the components that read them get an
+    // undefined var. --header-button-size is one of those: focus-button and
+    // simple-counter-button size themselves from it with no fallback, so
+    // without it their height and flex basis were invalid-at-computed-value in
+    // this mode and they lost their fixed box.
     --header-nav-button-gap: var(--s);
     --header-action-group-gap: var(--s2);
+    --header-button-size: 40px;
     display: flex;
     position: fixed;
     // Default: strip starts at viewport top (web, Mac, native-frame
@@ -38,22 +45,28 @@
     background: var(--sidenav-bg);
     border-left: 1px solid var(--separator-color);
     z-index: var(--z-vertical-action-bar);
-    // overflow: visible so the current-task flyout can extend past the
-    // 48px rail. (overflow-x can't be visible while overflow-y is auto —
-    // the two axes are coupled — so no inner scroll here; the strip holds
-    // few small buttons and is far shorter than the viewport.)
+    // overflow: visible so badges, the active-panel underline and the play
+    // button's elevation can paint past the 48px rail. (overflow-x can't be
+    // visible while overflow-y is auto — the two axes are coupled — so no
+    // inner scroll here; the strip holds few small buttons and is far shorter
+    // than the viewport.)
     overflow: visible;
     -webkit-app-region: no-drag;
     box-sizing: border-box;
 
-    > .header-action-group {
+    // Descendant, not child: the horizontal row keeps its actions inside
+    // `.action-nav-scroll`. That box is `display: contents` here, which removes
+    // it from the *rendered* tree but not from the *selector* tree, so a `>`
+    // combinator would silently stop matching and the rail would lose its
+    // column layout.
+    .header-action-group {
       flex-direction: column;
       margin-right: 0;
       gap: var(--header-nav-button-gap);
     }
 
-    > .primary-action-group,
-    > .counters-action-group {
+    .primary-action-group,
+    .counters-action-group {
       margin-inline-end: 0;
       margin-block-end: calc(
         var(--header-action-group-gap) - var(--header-nav-button-gap)
@@ -67,10 +80,14 @@
     // each wrapper a column flex item that stacks its button(s) with the
     // same gap, and drop truly-empty wrappers so they don't reserve a
     // phantom gap slot.
-    > plugin-header-btns,
-    > plugin-side-panel-btns,
-    > desktop-panel-buttons,
-    > user-profile-button {
+    //
+    // Descendant, not child: these sit inside `.action-nav-scroll`, whose
+    // `display: contents` removes it from the *rendered* tree but not from the
+    // *selector* tree, so a `>` combinator would silently stop matching.
+    plugin-header-btns,
+    plugin-side-panel-btns,
+    desktop-panel-buttons,
+    user-profile-button {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -87,33 +104,13 @@
       margin: 0;
     }
 
-    // Current-task title: hover-reveal flyout to the LEFT of the strip.
-    // Keep the component's own position:absolute + top:50% +
-    // translateY(-50%) (relative to .play-btn-wrapper) so it is exactly
-    // vertically centred on the play button regardless of theme/density.
-    // Only undo the inline-header horizontal "tuck", and hide it until
-    // the play button (or the flyout itself) is hovered. Mobile
-    // (< 1080px) is unchanged — the component still display:none's it.
-    play-button .current-task-title {
-      right: calc(100% + var(--s-half));
-      margin: 0;
-      padding: calc(var(--s-half) * 0.75) var(--s);
-      max-width: 320px;
-      z-index: var(--z-vertical-action-bar);
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transition:
-        opacity 0.2s ease-out,
-        visibility 0.2s ease-out;
-    }
-
-    play-button .play-btn-wrapper:hover .current-task-title,
-    play-button .current-task-title:hover {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-    }
+    // No current-task flyout here any more: the pill is a child of the header
+    // wrapper, which is NOT teleported, so in this mode it simply stays in the
+    // header — permanently visible rather than revealed on hover, and with no
+    // second copy of its styling to keep in step with the component's own.
+    // `.pill-slot` is still the wrapper's slack, and the pill still sits at its
+    // inline-end, so once this rail has taken the action row away the pill
+    // parks at the header's trailing edge.
   }
 
   // Win/Linux Electron with custom title bar: WCO renders a compact band
@@ -125,18 +122,14 @@
     top: calc(var(--wco-height) + var(--s));
   }
 
-  [dir='rtl'] > nav.action-nav-right.action-nav-right--teleported {
+  // Descendant, not child: the teleported nav's parent is `<body>`, and `dir`
+  // is only ever set on `<html>` and `.app-container` (app.component.html), so
+  // a `>` combinator never matched. The rail then stayed on the right in RTL,
+  // painting over the side nav while the 48px gutter the app reserves sat empty
+  // on the left.
+  [dir='rtl'] nav.action-nav-right.action-nav-right--teleported {
     inset: 0 auto 0 0;
     border-left: none;
     border-right: 1px solid var(--separator-color);
-  }
-
-  // RTL: strip is on the left edge, so the flyout opens to its right.
-  [dir='rtl']
-    > nav.action-nav-right.action-nav-right--teleported
-    play-button
-    .current-task-title {
-    right: auto;
-    left: calc(100% + var(--s-half));
   }
 }

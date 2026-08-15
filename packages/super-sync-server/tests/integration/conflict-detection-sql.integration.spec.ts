@@ -4,9 +4,11 @@
  * Runs the ACTUAL `detectConflict` / `prefetchLatestEntityOpsForBatch` functions
  * (not a copy of the SQL, not a mock) against a REAL PostgreSQL database. Unit
  * tests mock `$queryRaw` and can only verify the JS transformation around the
- * query — this verifies the literal SQL: the `entity_ids || ARRAY[entity_id]`
- * unnest, the `&&` / `= ANY` prefilter, the `DISTINCT ON` latest-per-entity pick,
- * and the empty-array → scalar fallback for pre-migration rows.
+ * query — this verifies the literal SQL: the scalar branch `UNION ALL` the array
+ * branch (#9503 replaced the single `entity_ids || ARRAY[entity_id]` unnest and its
+ * `&&` / `= ANY` prefilter with these two separately-indexed branches), the
+ * `DISTINCT ON` latest-per-entity pick, and the empty-array → scalar fallback for
+ * pre-migration rows.
  *
  * The decisive #8334 case is "divergent scalar": a stored op whose scalar `entity_id`
  * is NOT a member of its own `entity_ids`. The previous mutually-exclusive

@@ -137,6 +137,10 @@
               }
             </div>
           }
+          <!-- Keep this @if chain and the panels below in lockstep with
+               _expandCollapsedContainerFor(): the search reveal has to open
+               whichever container holds the target, and it mirrors these
+               conditions to know which ones are on screen. (#8780) -->
           @if (customizedUndoneTasks(); as customized) {
             @if (customized.grouped) {
               @for (

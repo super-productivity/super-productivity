@@ -70,6 +70,12 @@ spec:
               value: {{ .Values.externalDatabase.url | quote }}
               {{- end }}
             {{- end }}
+          volumeMounts:
+            # scripts/migrate-deploy.sh calls mktemp, and securityContext defaults to
+            # readOnlyRootFilesystem: true — without a writable /tmp the init container exits
+            # with "mktemp: Read-only file system" before any migration runs.
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
         - name: copy-public

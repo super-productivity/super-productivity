@@ -250,7 +250,7 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         editText?.text?.clear()
         updateFeedback()
 
-        Log.d(TAG, "Task queued from startup overlay: $title (total: $taskCount)")
+        Log.d(TAG, "Task queued from startup overlay (total: $taskCount)")
     }
 
     private fun updateFeedback() {

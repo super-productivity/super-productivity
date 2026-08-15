@@ -8,7 +8,11 @@ import { ProjectCopy } from '../../project/project.model';
 import { TagCopy } from '../../tag/tag.model';
 import { WorklogTask } from '../../tasks/task.model';
 import { resolveDisplayTagIds } from '../../tasks/util/resolve-display-tag-ids.util';
-import { WorklogExportSettingsCopy, WorklogGrouping } from '../worklog.model';
+import {
+  WorklogColTypes,
+  WorklogExportSettingsCopy,
+  WorklogGrouping,
+} from '../worklog.model';
 import { Log } from '../../../core/log';
 import {
   ItemsByKey,
@@ -340,6 +344,43 @@ export const formatRows = (
       }
     });
   });
+};
+
+/**
+ * Deliberately untranslated: the headers are consumed by spreadsheets and
+ * scripts, so they must not vary with the UI language.
+ */
+export const getHeadlineCol = (col: WorklogColTypes): string => {
+  switch (col) {
+    case 'DATE':
+      return 'Date';
+    case 'START':
+      return 'Start';
+    case 'END':
+      return 'End';
+    case 'TITLES':
+      // must differ from TITLES_INCLUDING_SUB: both columns can be exported
+      // together to attribute a sub-task row to its parent task
+      return 'Parent Titles';
+    case 'TITLES_INCLUDING_SUB':
+      return 'Titles';
+    case 'NOTES':
+      return 'Descriptions';
+    case 'PROJECTS':
+      return 'Projects';
+    case 'TAGS':
+      return 'Tags';
+    case 'TIME_MS':
+    case 'TIME_STR':
+    case 'TIME_CLOCK':
+      return 'Worked';
+    case 'ESTIMATE_MS':
+    case 'ESTIMATE_STR':
+    case 'ESTIMATE_CLOCK':
+      return 'Estimate';
+    default:
+      return 'INVALID COL';
+  }
 };
 
 /**

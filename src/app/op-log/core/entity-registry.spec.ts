@@ -68,8 +68,9 @@ describe('entity-registry', () => {
   ];
 
   describe('LWW payload id semantics', () => {
-    it('uses payload.id only for adapter-backed entities', () => {
+    it('uses payload.id for adapter- and array-backed entities', () => {
       expect(isLwwPayloadIdCanonical('TASK')).toBeTrue();
+      expect(isLwwPayloadIdCanonical('PLUGIN_USER_DATA')).toBeTrue();
       expect(isLwwPayloadIdCanonical('TIME_TRACKING')).toBeFalse();
       expect(isLwwPayloadIdCanonical('PLANNER')).toBeFalse();
       expect(isLwwPayloadIdCanonical('ALL')).toBeFalse();
@@ -81,21 +82,22 @@ describe('entity-registry', () => {
     // adapter). Pin the payload-id verdict for EVERY entity so a future
     // storagePattern change can't silently re-open the retarget gate for the
     // wrong entity or slam it shut on a legitimate one. Table is exhaustive over
-    // ENTITY_CONFIGS via the categorized lists above.
-    it('is canonical for exactly the adapter entities and no others', () => {
-      for (const entityType of ADAPTER_ENTITIES) {
+    // ENTITY_CONFIGS via the categorized lists above. Array entities became
+    // canonical with #9526 (the LWW reducer applies them by payload identity,
+    // so the integrity gate must cover them).
+    it('is canonical for exactly the adapter and array entities and no others', () => {
+      for (const entityType of [...ADAPTER_ENTITIES, ...ARRAY_ENTITIES]) {
         expect(isLwwPayloadIdCanonical(entityType))
-          .withContext(`adapter ${entityType} → canonical`)
+          .withContext(`id-addressed ${entityType} → canonical`)
           .toBeTrue();
       }
       for (const entityType of [
         ...SINGLETON_ENTITIES,
         ...MAP_ENTITIES,
-        ...ARRAY_ENTITIES,
         ...SPECIAL_OPERATION_TYPES,
       ]) {
         expect(isLwwPayloadIdCanonical(entityType))
-          .withContext(`non-adapter ${entityType} → not canonical`)
+          .withContext(`non-id-addressed ${entityType} → not canonical`)
           .toBeFalse();
       }
     });

@@ -2391,7 +2391,7 @@
     "NO_CON": "您目前已離線。請重新連線至網際網路。",
     "NONE": "無",
     "OK": "確定",
-    "OVERDUE": "逾期",
+    "OVERDUE": "來自前幾天",
     "PASSWORD_STRENGTH_FAIR": "普通",
     "PASSWORD_STRENGTH_STRONG": "強",
     "PASSWORD_STRENGTH_WEAK": "弱",

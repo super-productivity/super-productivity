@@ -85,7 +85,6 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
-import { isTaskOverdue } from '../util/is-task-overdue';
 import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-deadline-approaching';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -818,14 +817,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  moveToTodayWithFocus(): void {
-    const t = this.task();
-    if (t.projectId) {
-      this.focusNext(true, true);
-      this.moveToToday();
-    }
-  }
-
   openProjectMenu(): void {
     if (this.task().parentId) {
       return;
@@ -1386,34 +1377,42 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  moveToToday(): void {
-    const t = this.task();
-    if (!t.projectId) {
+  /**
+   * `taskScheduleToday` (Shift+T, "Schedule task for today"). Schedules only —
+   * it must never change list position, because #8592 asked for the
+   * backlog→regular move to leave the schedule alone via BOTH the context menu
+   * and this shortcut. Keeping the two intents apart is what stops #8592 and
+   * #9563 from taking turns being broken; the context menu's own moveToToday()
+   * owns the position-only move.
+   *
+   * A backlog task does not need the move to land on Today: membership is
+   * computed from dueDay/dueWithTime alone (computeOrderedTaskIdsForToday),
+   * never from project.backlogTaskIds.
+   */
+  scheduleForToday(): void {
+    // Nothing to do, and doing it anyway is destructive: planTasksForToday
+    // clears remindAt unconditionally, so this would drop the reminder of a
+    // task due at a time today. The "Add to Today" button hides itself in this
+    // state for the same reason.
+    if (this.isScheduledToday()) {
       return;
     }
-    // An overdue task is never in the backlog, so the position-only move below
-    // early-returns for it (moveProjectTaskToRegularListAuto) and Shift+T would
-    // no-op. Schedule it for today instead — the same thing the "Add to My Day"
-    // button and Schedule → Today do (#8851). Overdue vs. backlog→regular are
-    // cleanly separated because overdue tasks are never in the backlog. Exclude
-    // done tasks: a done task with a stale past dueDay can still sit in the
-    // backlog, and it should take the position-only move, not be re-added to
-    // Today. (isTaskOverdue stays done-agnostic — selectOverdueTasks needs
-    // done tasks included.)
-    if (
-      !t.isDone &&
-      isTaskOverdue(
-        t,
-        this._dateService.todayStr(),
-        this._dateService.getStartOfNextDayDiffMs(),
-      )
-    ) {
-      this.addToMyDay();
+    // Completion never synthesizes a dueDay (see task-related-model.effects.ts):
+    // done tasks reach Today's Done list via isDone, and dating one instead
+    // inflates the daily summary's done count for today.
+    if (this.task().isDone) {
       return;
     }
-    // Moving to the regular list is a list-position change only; it must not
-    // schedule the task for today (#8592).
-    this._projectService.moveTaskToTodayList(t.id, t.projectId);
+    this.addToMyDay();
+  }
+
+  scheduleForTodayWithFocus(): void {
+    this._storeNextFocusEl();
+    this.scheduleForToday();
+    // Same focus handling as the sibling schedule shortcuts: keep focus on the
+    // task, and only advance if scheduling removed the row from this list (the
+    // Planner/work-view overdue panels).
+    this.focusSelfOrNextIfNotPossible();
   }
 
   trackByProjectId(i: number, project: Project): string {

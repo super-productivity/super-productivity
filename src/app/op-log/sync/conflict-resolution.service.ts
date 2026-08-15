@@ -948,6 +948,7 @@ export class ConflictResolutionService {
     const additionalLocalIntentOps = [
       ...(await this._preservePartiallyRejectedLocalBulkDeletes(resolutions)),
       ...(await this._preservePartiallyRejectedLocalBulkPlanOps(resolutions)),
+      ...(await this._preservePartiallyRejectedLocalBulkArchives(resolutions)),
     ];
 
     const allOpsToApply: Operation[] = [];
@@ -2371,9 +2372,12 @@ export class ConflictResolutionService {
 
   /**
    * Generic multi-entity operations cannot be partially compensated safely.
-   * Fail before op-log mutation unless the winner removes the whole remote set,
-   * a local archive is re-created as the same atomic action, or the local legacy
-   * rounding action has an explicit per-entity reconciliation path above.
+   * Fail before op-log mutation unless every multi-entity op in the plan has an
+   * explicit resolution path: bulk archives are re-created when they win
+   * (`_createArchiveWinOp`) or re-scoped to the tasks no remote archive covered
+   * when they lose (`_preservePartiallyRejectedLocalBulkArchives`, #9537),
+   * independent bulk deletes are re-scoped, and the local legacy rounding
+   * action has an explicit per-entity reconciliation path above.
    *
    * The Today-list ops that used to make this reachable from ordinary use —
    * `planTasksForToday` (dispatched with every due task id by the automatic
@@ -2402,26 +2406,50 @@ export class ConflictResolutionService {
         );
       }
 
-      const localMultiOps = plan.conflict.localOps.filter(isMultiEntityOperation);
-      const localArchiveIsRecreated =
-        plan.winner === 'local' &&
-        plan.localWinOperationKind === 'archive-win' &&
-        localMultiOps.every(
-          (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-        );
-      const unsafeLocalOp = localArchiveIsRecreated
-        ? undefined
-        : localMultiOps.find(
-            (op) =>
-              !INDEPENDENT_MULTI_DELETE_ACTIONS.has(op.actionType) &&
-              !DECOMPOSABLE_MULTI_ACTION_FIELDS.has(op.actionType) &&
-              !isResolvableTodayListAction(op.actionType),
-          );
+      const unsafeLocalOp = plan.conflict.localOps.find(
+        (op) =>
+          isMultiEntityOperation(op) &&
+          op.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE &&
+          !INDEPENDENT_MULTI_DELETE_ACTIONS.has(op.actionType) &&
+          !DECOMPOSABLE_MULTI_ACTION_FIELDS.has(op.actionType) &&
+          !isResolvableTodayListAction(op.actionType),
+      );
       if (unsafeLocalOp) {
         throw new UnsupportedMultiEntityConflictError(
           'local',
           unsafeLocalOp.actionType,
           getOpEntityIds(unsafeLocalOp).length,
+        );
+      }
+
+      // The bulk-archive excusal above assumes at most ONE whole-entity local
+      // intent per row. Two pending bulk archives sharing a task (archive →
+      // restore → re-archive with no sync between), or a bulk archive
+      // overlapping a bulk delete, would make the per-op scoped replacements
+      // re-assert contradictory or superseded intents with no cross-op
+      // ordering — one op's uniquely-retained tasks could silently never
+      // upload. Keep the safe stop for those degenerate histories. (Scope
+      // caveat: this sees only ops sharing THIS row's conflicted task — an
+      // overlap confined to non-conflicted siblings passes and resolves
+      // per-op, which can re-assert the older op's stale sibling snapshot.)
+      const localBulkArchiveOps = plan.conflict.localOps.filter(
+        (op) =>
+          isMultiEntityOperation(op) &&
+          op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      );
+      const distinctBulkArchiveOpIds = new Set(localBulkArchiveOps.map(({ id }) => id));
+      const hasBulkDeleteOverlap =
+        distinctBulkArchiveOpIds.size > 0 &&
+        plan.conflict.localOps.some(
+          (op) =>
+            isMultiEntityOperation(op) &&
+            INDEPENDENT_MULTI_DELETE_ACTIONS.has(op.actionType),
+        );
+      if (distinctBulkArchiveOpIds.size > 1 || hasBulkDeleteOverlap) {
+        throw new UnsupportedMultiEntityConflictError(
+          'local',
+          ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          getOpEntityIds(localBulkArchiveOps[0]).length,
         );
       }
     }
@@ -3094,6 +3122,206 @@ export class ConflictResolutionService {
 
     return {
       ...group.deleteOp,
+      id: uuidv7(),
+      entityId: retainedEntityIds[0],
+      entityIds: retainedEntityIds,
+      payload: scopedPayload,
+      clientId,
+      vectorClock: this.mergeAndIncrementClocks(allClocks, clientId),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+  }
+
+  /**
+   * #9537: preserves the surviving tasks of a bulk `moveToArchive` row that
+   * lost one or more of its entities to a concurrent REMOTE archive — the
+   * finish-day-on-two-devices race, where both clients archive overlapping
+   * done tasks in one atomic op each.
+   *
+   * The losing bulk row is rejected as a unit. Without a replacement its
+   * non-overlapping tasks would stay archived locally but never upload, so
+   * every other device would keep them active forever. Mirroring
+   * `_preservePartiallyRejectedLocalBulkDeletes`, this emits ONE scoped
+   * replacement per bulk row — narrowed to the tasks no remote archive in the
+   * batch covered, with a vector clock dominating every involved row. Tasks
+   * the remote archive DID cover stay with the remote winner: both sides
+   * agree those are archived, only the discarded local snapshot differs
+   * (standard remote-archive-wins precedence).
+   *
+   * Groups whose every row won locally are skipped: the pre-existing
+   * `_createArchiveWinOp` recreation already re-emits the full task set.
+   * When a group mixes winners (some tasks remote-archived, others winning
+   * against plain remote edits), the archive-win rows' full-set recreation is
+   * swapped for the scoped op so the replacement cannot re-assert the
+   * remote-archived tasks' stale local snapshots.
+   *
+   * Retained tasks that are back in the ACTIVE store (restored after the bulk
+   * archive was captured) are dropped from the replacement; when such a task's
+   * own row won locally, a current-state compensation op re-asserts the
+   * restore (the row rejection discards the raw restoreTask op with the row).
+   * Degenerate multi-bulk histories (two pending bulk archives, or a bulk
+   * archive plus a bulk delete, sharing a CONFLICTED task) never reach this
+   * method: `_assertMultiEntityPlansAreSafe` keeps the fail-closed stop for
+   * them. Overlaps confined to non-conflicted siblings still flow through
+   * per-op and can re-assert a stale snapshot — a pre-existing hazard of the
+   * whole preserve/recreate family, shared with `_createArchiveWinOp`.
+   */
+  private async _preservePartiallyRejectedLocalBulkArchives(
+    resolutions: LWWResolution[],
+  ): Promise<Operation[]> {
+    interface BulkArchiveResolutionGroup {
+      archiveOp: Operation;
+      resolutions: LWWResolution[];
+      remoteWinnerIds: Set<string>;
+    }
+
+    const groups = new Map<string, BulkArchiveResolutionGroup>();
+    for (const resolution of resolutions) {
+      for (const localOp of resolution.conflict.localOps) {
+        if (
+          localOp.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+          getOpEntityIds(localOp).length <= 1
+        ) {
+          continue;
+        }
+        const group = groups.get(localOp.id) ?? {
+          archiveOp: localOp,
+          resolutions: [],
+          remoteWinnerIds: new Set<string>(),
+        };
+        group.resolutions.push(resolution);
+        if (resolution.winner === 'remote') {
+          group.remoteWinnerIds.add(resolution.conflict.entityId);
+        }
+        groups.set(localOp.id, group);
+      }
+    }
+
+    const additionalOps: Operation[] = [];
+    for (const group of groups.values()) {
+      if (group.remoteWinnerIds.size === 0) {
+        continue;
+      }
+      const retainedEntityIds = getOpEntityIds(group.archiveOp).filter(
+        (entityId) => !group.remoteWinnerIds.has(entityId),
+      );
+
+      // A retained task that is back in the ACTIVE store was restored (or
+      // re-created) by a LATER local op — that op's own pending row is the
+      // authoritative representation. Re-asserting the stale archive snapshot
+      // with a dominating clock would silently override the restore on every
+      // other device (and on this one after a status-blind replay). Mirrors
+      // the later-local-delete guard in `_createLocalMultiReconciliationOps`.
+      const stillArchivedEntityIds: string[] = [];
+      for (const entityId of retainedEntityIds) {
+        const activeEntity = await this.getCurrentEntityState(
+          group.archiveOp.entityType,
+          entityId,
+        );
+        if (activeEntity === undefined || activeEntity === null) {
+          stillArchivedEntityIds.push(entityId);
+        }
+      }
+
+      // With nothing left to re-assert, the replacement is skipped entirely —
+      // any archive-win row still holding the FULL-SET recreation is handled
+      // per-row below.
+      const replacementOp =
+        stillArchivedEntityIds.length > 0
+          ? await this._createScopedBulkArchiveReplacement(group, stillArchivedEntityIds)
+          : undefined;
+      const stillArchivedEntityIdSet = new Set(stillArchivedEntityIds);
+      let assignedToLocalWinner = false;
+      for (const resolution of group.resolutions) {
+        if (
+          resolution.winner !== 'local' ||
+          resolution.localWinOp?.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+          // Provenance binding: only swap a recreation built from THIS
+          // group's op (`_createArchiveWinOp` reuses the payload reference).
+          // A recreation derived from a different pending archive op must
+          // stay untouched, or its group's replacement would be lost.
+          resolution.localWinOp.payload !== group.archiveOp.payload
+        ) {
+          continue;
+        }
+        if (replacementOp && stillArchivedEntityIdSet.has(resolution.conflict.entityId)) {
+          resolution.localWinOp = replacementOp;
+          assignedToLocalWinner = true;
+          continue;
+        }
+        // The row's own task was restored after the bulk archive: its archive
+        // intent is obsolete, but the row still resolves winner=local and ALL
+        // its raw local ops — including the pending restoreTask op — are
+        // rejected with it. A bare undefined localWinOp would lose the
+        // restore fleet-wide (nothing re-asserts the entity) and wedge the
+        // mixed-winner compensation when the row's remote loser is a
+        // multi-entity op, so re-assert the CURRENT active state — the
+        // restore's outcome — as the row's local-win op instead.
+        resolution.localWinOp = await this._createLocalWinUpdateOp(resolution.conflict);
+      }
+      if (replacementOp && !assignedToLocalWinner) {
+        additionalOps.push(replacementOp);
+      }
+    }
+    return additionalOps;
+  }
+
+  private async _createScopedBulkArchiveReplacement(
+    group: {
+      archiveOp: Operation;
+      resolutions: LWWResolution[];
+    },
+    retainedEntityIds: string[],
+  ): Promise<Operation> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      throw new Error(
+        'ConflictResolutionService: Cannot preserve partial bulk archive - no client ID',
+      );
+    }
+
+    const allClocks = group.resolutions.flatMap(({ conflict }) => [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ]);
+    const retainedEntityIdSet = new Set(retainedEntityIds);
+    const originalPayload = group.archiveOp.payload;
+    // extractActionPayload passes a null/undefined payload through — guard so
+    // a malformed row hits the clean throw below, not a raw TypeError.
+    const originalActionPayload = (extractActionPayload(originalPayload) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const originalTasks = originalActionPayload['tasks'];
+    if (!Array.isArray(originalTasks)) {
+      throw new Error(
+        `ConflictResolutionService: Cannot scope bulk archive ${group.archiveOp.actionType} - unsupported payload`,
+      );
+    }
+    const scopedActionPayload: Record<string, unknown> = {
+      ...originalActionPayload,
+      tasks: originalTasks.filter((task) => {
+        if (typeof task !== 'object' || task === null) {
+          return false;
+        }
+        const snapshot = task as Record<string, unknown>;
+        return (
+          typeof snapshot['id'] === 'string' && retainedEntityIdSet.has(snapshot['id'])
+        );
+      }),
+    };
+    const scopedPayload = isMultiEntityPayload(originalPayload)
+      ? {
+          ...originalPayload,
+          actionPayload: scopedActionPayload,
+          entityChanges: originalPayload.entityChanges.filter((change) =>
+            retainedEntityIdSet.has(change.entityId),
+          ),
+        }
+      : scopedActionPayload;
+
+    return {
+      ...group.archiveOp,
       id: uuidv7(),
       entityId: retainedEntityIds[0],
       entityIds: retainedEntityIds,

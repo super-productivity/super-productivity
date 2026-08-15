@@ -86,8 +86,11 @@
   pointer-events: none; // Disable interactions when closed or closing
 
   @include mq(sm, max) {
-    // NOTE: prevents overlapping with nav when open
-    max-width: 500px;
+    // NOTE: prevents overlapping with nav when open. Combined with the half-row
+    // cap above rather than replacing it: on its own, 500px is *looser* than
+    // 50% for every window under 1000px, so the cap quietly stopped applying in
+    // the band where the row can least afford it (#9480).
+    max-width: min(50%, 500px);
   }
 
   @include mq(xs, max) {

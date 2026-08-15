@@ -418,8 +418,8 @@ export const selectAllTasksWithSubTasks = createSelector(
 
 // selectOverdueTasks (rebased): decision reads only dueDay/dueWithTime from the
 // snapshot; public re-maps ids to live Task refs. Shares the overdue comparison
-// with the isTaskOverdue util (Shift+T path) via isTaskOverdueByThreshold so the
-// two definitions cannot drift; the threshold is computed once per recompute.
+// with the isTaskOverdue util via isTaskOverdueByThreshold so the two definitions
+// cannot drift; the threshold is computed once per recompute.
 export const selectOverdueTaskIds = createSelector(
   selectTaskSchedulingSnapshot,
   selectTodayStr,

@@ -131,6 +131,7 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
           useValue: {
             startApplyingRemoteOps: () => {},
             endApplyingRemoteOps: () => {},
+            setHydrationInProgress: () => {},
           },
         },
       ],

@@ -38,16 +38,34 @@ Deploy hosts need Docker with the Compose plugin, `curl`, `git`, and `jq`.
 The image revision check requires Docker Compose support for
 `docker compose config --format json`.
 
+> **There are no release tags.** `ghcr.io/super-productivity/supersync` publishes
+> only `latest` and `master-<sha>`, both built from `master`, so a default deploy
+> tracks upstream `master` rather than a released version. Pin `SUPERSYNC_IMAGE`
+> to a `master-<sha>` tag if you need a fixed one.
+
 ```bash
-# 1. Copy environment example
+# 1. Clone the repo (deploy.sh runs from this checkout) and enter this directory
+git clone https://github.com/super-productivity/super-productivity.git
+cd super-productivity/packages/super-sync-server
+
+# 2. Copy environment example
 cp env.example .env
 
-# 2. Configure .env (Set JWT_SECRET, DOMAIN, POSTGRES_PASSWORD)
+# 3. Configure .env (Set JWT_SECRET, DOMAIN, POSTGRES_PASSWORD)
 nano .env
 
-# 3. Deploy the stack and run database migrations
+# 4. Deploy the stack and run database migrations
 ./scripts/deploy.sh
 ```
+
+`./scripts/deploy.sh --build` builds the image locally instead of pulling it.
+That compiles the whole monorepo **on the deploy host**, beside the running
+stack: expect several minutes and a peak above 1.5 GB of RAM on top of the
+~2.5 GB the containers already reserve, plus a BuildKit cache that grows by
+~1.4 GB per build and is never pruned for you. On a small VPS, prefer the pull,
+or build elsewhere and set `SUPERSYNC_IMAGE` (passing the same `VCS_REF`, see
+below). `--build` also refuses to run if the image inputs have uncommitted or
+untracked changes; the error names the offending files.
 
 `docker compose up` is not a deployment substitute: container startup migrations
 are disabled by default so app restarts cannot race the deploy migrator.

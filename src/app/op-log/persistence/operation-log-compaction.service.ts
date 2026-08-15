@@ -18,6 +18,7 @@ import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -36,6 +37,7 @@ export class OperationLogCompactionService {
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
   private hydrationState = inject(HydrationStateService);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   async compact(): Promise<boolean> {
     return this._doCompact(COMPACTION_RETENTION_MS, false);
@@ -68,6 +70,19 @@ export class OperationLogCompactionService {
     if (this.operationCapture.hasUnrecoveredPersistFailure()) {
       OpLog.warn(
         'OperationLogCompactionService: Skipping compaction — an unrecovered persist failure left live state ahead of the op log (#8751)',
+      );
+      return false;
+    }
+    // Same fast-path rationale for the sticky #9438 divergence flag: it only
+    // clears on re-hydration/baseline install, compact() re-fires after every
+    // write once the counter sits at the threshold, and each attempt would
+    // otherwise pay the flush + cross-tab lock + state capture below before
+    // the in-lock guard skips anyway. The scalar frontier check stays in-lock
+    // (it needs getLastSeq()); only the sticky half can be hoisted. Emergency
+    // compaction is exempt from the #9438 guard, so it must not bail here.
+    if (!isEmergency && this.tabSeqFrontier.hasKnownForeignWrites()) {
+      OpLog.warn(
+        'OperationLogCompactionService: Skipping compaction — sticky concurrent-tab divergence (#9438)',
       );
       return false;
     }
@@ -133,6 +148,27 @@ export class OperationLogCompactionService {
         return false;
       }
 
+      // GUARD (#9084): hydration dispatches the snapshot's loadAllData and
+      // only later replays the tail ops on top of it (await boundaries, no
+      // lock in between). Compacting inside that gap would cache state
+      // missing the tail ops' effects under a lastAppliedOpSeq that covers
+      // them — and prune the very ops the next boot needs to recover them.
+      // The guards above don't see this: the tail ops are already terminal
+      // ('applied' in their original session), nothing pending or deferred.
+      // Reachable via re-entrant hydration (PluginAPI.reInitData()) in a
+      // session past the compaction threshold, or the legacy-snapshot
+      // compact() in RemoteOpsProcessingService; on a cold boot repair
+      // effects are held off by skipDuringSyncWindow() until after
+      // hydrateStore() resolves. Skipping is always safe: the op-log stays
+      // the source of truth and the next over-threshold write retriggers
+      // compaction once hydration completes.
+      if (this.hydrationState.isHydrationInProgress()) {
+        OpLog.warn(
+          `OperationLogCompactionService: Skipping ${label}compaction — hydration replay in progress (#9084)`,
+        );
+        return false;
+      }
+
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshotForOperationLog();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);
@@ -164,6 +200,28 @@ export class OperationLogCompactionService {
       // 3. Get lastSeq IMMEDIATELY before writing cache to minimize race window
       // This ensures new ops written after this point have seq > lastSeq
       const lastSeq = await this.opLogStore.getLastSeq();
+
+      // GUARD (#9438): lastSeq is the global max across the SHARED store — a
+      // concurrent tab's op is counted there while its effect is absent from
+      // this tab's state. Anchoring the cache past it would make the next
+      // boot's tail replay silently skip that op (and step 7 would prune ops
+      // behind the false anchor). Emergency compaction is exempt so quota
+      // recovery cannot wedge on a diverged tab — a real trade-off: a
+      // diverged emergency compact could still write the stale anchor this
+      // guard prevents (permanent op skip, NOT the bounded re-replay window
+      // the bare-lock note below accepts). Today that is unreachable in the
+      // quota path (the #8751 phantom guard skips deterministically there —
+      // see the reachability note in operation-log.effects.ts); re-evaluate
+      // this exemption if emergency compaction ever becomes completable.
+      if (!isEmergency && !this.tabSeqFrontier.isSaveSafeAt(lastSeq)) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — the op log ' +
+            "contains writes from a concurrent tab that are not in this tab's " +
+            'state (#9438)',
+          { lastSeq, frontier: this.tabSeqFrontier.frontierSeq },
+        );
+        return false;
+      }
 
       // 4. Extract entity keys for conflict detection after compaction
       // This allows us to distinguish between entities that existed at snapshot time

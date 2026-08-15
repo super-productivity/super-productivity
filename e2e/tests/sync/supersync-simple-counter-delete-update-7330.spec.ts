@@ -86,10 +86,11 @@ const createClickCounter = async (
 
 /** Increment the (single) click counter shown in the header by one. */
 const incrementCounter = async (client: SimulatedE2EClient): Promise<void> => {
+  // The action row scrolls when the header is narrow (#9480), so the counter
+  // may sit past the trailing edge — Playwright scrolls it back into view as
+  // part of the click's actionability check.
   const counter = client.page
-    .locator(
-      '.counters-action-group simple-counter-button, .mobile-dropdown simple-counter-button',
-    )
+    .locator('.counters-action-group simple-counter-button')
     .first();
   await counter.waitFor({ state: 'visible', timeout: 15000 });
   await counter.locator('.main-btn').click();
@@ -124,11 +125,7 @@ const deleteCounter = async (
 /** Number of counters visible in the header on this client. */
 const counterCount = async (client: SimulatedE2EClient): Promise<number> => {
   await client.page.waitForTimeout(500);
-  return client.page
-    .locator(
-      '.counters-action-group simple-counter-button, .mobile-dropdown simple-counter-button',
-    )
-    .count();
+  return client.page.locator('.counters-action-group simple-counter-button').count();
 };
 
 test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {

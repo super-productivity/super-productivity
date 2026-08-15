@@ -1,6 +1,11 @@
 import { WorkStartEnd } from 'src/app/features/work-context/work-context.model';
 import { WorklogGrouping } from '../worklog.model';
-import { createRows, formatRows, formatText } from './worklog-export.util';
+import {
+  createRows,
+  formatRows,
+  formatText,
+  getHeadlineCol,
+} from './worklog-export.util';
 import { DEFAULT_TASK, WorklogTask } from '../../tasks/task.model';
 import { DEFAULT_PROJECT } from '../../project/project.const';
 import { DEFAULT_TAG } from '../../tag/tag.const';
@@ -471,6 +476,13 @@ describe('worklog-export.util moment replacement', () => {
         expect(rounded).toBe(expected);
       });
     });
+  });
+});
+
+describe('getHeadlineCol', () => {
+  it('gives the two title columns distinct headers', () => {
+    expect(getHeadlineCol('TITLES')).toBe('Parent Titles');
+    expect(getHeadlineCol('TITLES_INCLUDING_SUB')).toBe('Titles');
   });
 });
 

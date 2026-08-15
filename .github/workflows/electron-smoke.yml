@@ -62,10 +62,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          # Retry electron's flaky postinstall binary download. Drop
-          # node_modules/electron between tries so npm re-runs the postinstall
-          # (a plain re-`npm i` skips scripts for an already-present package).
-          command: npm i || { rm -rf node_modules/electron; exit 1; }
+          # Retry to ride out transient npm registry flakiness. (Since
+          # Electron 42 `npm i` no longer downloads the Electron binary;
+          # electron-builder fetches its own copy at packaging time below.)
+          command: npm i
 
       - run: npm run env
 
@@ -81,7 +81,16 @@ jobs:
         # --linux dir produces linux-unpacked/ with the real app.asar but
         # skips AppImage/deb/snap/rpm — cheap and enough to exercise the
         # same packaging pipeline release uses.
-        run: npx electron-builder --linux dir --publish never
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          # Retry electron-builder's Electron zip download from GitHub
+          # releases, which fails transiently now and then (e.g. EOF mid
+          # download).
+          command: npx electron-builder --linux dir --publish never
 
       - name: Verify require() targets in app.asar
         run: |

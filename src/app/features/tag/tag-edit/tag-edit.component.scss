@@ -1,3 +1,5 @@
+@use '../../../../styles/globals' as *;
+
 :host {
   width: 100%;
 
@@ -18,6 +20,12 @@
     box-shadow: none;
     border: none;
     color: var(--text-color);
+    // matChipInput only inherits Material's form-field typography when it sits
+    // inside a mat-form-field; in the task detail panel it does not, so this
+    // input fell back to the UA default for form controls (~13px).
+    @include noIosFocusZoom();
+    // The UA `font` shorthand also forces its own family here; follow the app stack.
+    font-family: inherit;
     border-top: 1px solid transparent;
     border-bottom: 1px solid transparent;
     height: 40px;

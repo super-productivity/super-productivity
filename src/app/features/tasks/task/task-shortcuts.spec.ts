@@ -635,75 +635,141 @@ describe('TaskComponent shortcut handling', () => {
     }));
   });
 
-  describe('moveToToday overdue branch (#8851)', () => {
+  describe('scheduleForToday — Shift+T (#9563)', () => {
+    // Must match the GlobalTrackingIntervalService.todayDateStr signal above,
+    // which is what isScheduledToday() reads.
+    const TODAY = '2026-05-05';
     let dateService: jasmine.SpyObj<DateService>;
     let projectService: jasmine.SpyObj<ProjectService>;
+
+    const setTask = (task: Partial<TaskWithSubTasks>): void => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        dueDay: undefined,
+        dueWithTime: undefined,
+        ...task,
+      });
+      storeSpy.dispatch.calls.reset();
+      projectService.moveTaskToTodayList.calls.reset();
+    };
+
+    const expectScheduledForToday = (): void =>
+      expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['top-1'],
+          today: TODAY,
+          startOfNextDayDiffMs: 0,
+          // computed key: a quoted 'top-1' trips the naming-convention rule
+          parentTaskMap: { ['top-1']: undefined },
+        }),
+      );
 
     beforeEach(() => {
       dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
       projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
       (dateService as any).todayStr = jasmine
         .createSpy('todayStr')
-        .and.returnValue('2026-06-01');
+        .and.returnValue(TODAY);
       (dateService as any).getStartOfNextDayDiffMs = jasmine
         .createSpy('getStartOfNextDayDiffMs')
         .and.returnValue(0);
     });
 
-    it('schedules an overdue task for today instead of a position-only move', () => {
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Overdue'),
-        dueDay: '2026-05-30',
-      });
-      storeSpy.dispatch.calls.reset();
+    it('schedules an unscheduled task for today', () => {
+      // The #9563/#9567 regression: this did only a backlog→regular move, which
+      // the project reducer no-ops for a task already in the regular list — so
+      // the shortcut did nothing at all.
+      setTask({});
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(storeSpy.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.planTasksForToday({
-          taskIds: ['top-1'],
-          today: '2026-06-01',
-          startOfNextDayDiffMs: 0,
-          parentTaskMap: { ['top-1']: undefined },
-        }),
-      );
+      expectScheduledForToday();
+    });
+
+    it('schedules an overdue task for today (#8851)', () => {
+      setTask({ dueDay: '2026-04-30' });
+
+      component.scheduleForToday();
+
+      expectScheduledForToday();
+    });
+
+    it('never moves the task between the backlog and the regular list (#8592)', () => {
+      // #8592 reported Shift+T (advertised in the "Move to regular list" menu
+      // entry) changing the schedule as a side effect of a list move. The two
+      // intents stay separate: this shortcut schedules and never repositions.
+      setTask({});
+
+      component.scheduleForToday();
+
       expect(projectService.moveTaskToTodayList).not.toHaveBeenCalled();
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
     });
 
-    it('keeps the position-only move for a non-overdue task (#8592)', () => {
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Not overdue'),
-        dueDay: undefined,
-        dueWithTime: undefined,
-      });
-      storeSpy.dispatch.calls.reset();
+    it('leaves a task already scheduled for today untouched', () => {
+      setTask({ dueDay: TODAY });
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
-        'top-1',
-        'project-1',
-      );
       expect(storeSpy.dispatch).not.toHaveBeenCalled();
     });
 
-    it('keeps the position-only move for a done task with a stale past dueDay', () => {
-      // A done task can sit in the backlog with an old dueDay; it must take the
-      // backlog→regular position-only move, not be re-added to Today.
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Done + overdue'),
-        isDone: true,
-        dueDay: '2026-05-30',
+    it('keeps the reminder of a task due at a time today', () => {
+      // planTasksForToday clears remindAt unconditionally, so re-planning a task
+      // that is already on Today would silently drop its reminder.
+      // isToday is installed as a property on the DateService mock, so it has
+      // to be redefined rather than assigned.
+      Object.defineProperty(dateService, 'isToday', {
+        value: () => true,
+        configurable: true,
       });
-      storeSpy.dispatch.calls.reset();
+      setTask({ dueWithTime: 1746453600000, remindAt: 1746452000000 });
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
-        'top-1',
-        'project-1',
-      );
       expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does not put a done task on Today', () => {
+      // Completion never synthesizes a dueDay; done tasks reach Today's Done
+      // list via isDone. Dating one inflates the daily summary's done count.
+      setTask({ isDone: true, dueDay: '2026-04-30' });
+
+      component.scheduleForToday();
+
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    describe('scheduleForTodayWithFocus', () => {
+      it('keeps focus on the task instead of advancing to the next one', fakeAsync(() => {
+        // Both reports describe the caret moving on to the next task, because
+        // this used to call focusNext() unconditionally. Scheduling does not
+        // remove the row from a normal list, so focus must stay on the task;
+        // advancing is only the delayed fallback for a row that disappeared
+        // (the overdue panels).
+        // Asserted through the focus methods rather than document.activeElement:
+        // the TestBed host is a <div>, so focusSelfOrNextIfNotPossible's
+        // `tagName === 'task'` check can never pass here.
+        const focusSelfSpy = spyOn(component, 'focusSelf');
+        const focusNextSpy = spyOn(component, 'focusNext');
+        setTask({});
+
+        component.scheduleForTodayWithFocus();
+
+        expect(focusSelfSpy).toHaveBeenCalled();
+        expect(focusNextSpy).not.toHaveBeenCalled();
+        tick(200); // flush the fallback timer
+      }));
+
+      it('still schedules the task', fakeAsync(() => {
+        (fixture.nativeElement as HTMLElement).tabIndex = 0;
+        setTask({});
+
+        component.scheduleForTodayWithFocus();
+        tick(200);
+
+        expectScheduledForToday();
+      }));
     });
   });
 });

@@ -22,7 +22,6 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
     @if (isScheduleDayPanelEnabled()) {
       <button
         class="panel-btn e2e-toggle-schedule-day-panel"
-        [disabled]="!isRouteWithSidePanel()"
         [class.isActive]="isShowScheduleDayPanel()"
         (click)="layoutService.toggleScheduleDayPanel()"
         mat-icon-button
@@ -35,7 +34,6 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
     @if (isIssuesPanelEnabled()) {
       <button
         class="panel-btn e2e-toggle-issue-provider-panel"
-        [disabled]="!isRouteWithSidePanel()"
         [class.isActive]="isShowIssuePanel()"
         (click)="layoutService.toggleAddTaskPanel()"
         mat-icon-button
@@ -50,7 +48,6 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
     @if (isProjectNotesEnabled()) {
       <button
         class="panel-btn e2e-toggle-notes-btn"
-        [disabled]="!isRouteWithSidePanel()"
         [class.isActive]="isShowNotes()"
         (click)="layoutService.toggleNotes()"
         mat-icon-button
@@ -92,18 +89,8 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
           }
         }
 
-        &:hover:not(.isActive):not(:disabled) {
+        &:hover:not(.isActive) {
           background-color: var(--hover-color, rgba(0, 0, 0, 0.04));
-        }
-
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          background: transparent !important;
-        }
-
-        &:disabled::after {
-          background: transparent !important;
         }
       }
     `,
@@ -116,7 +103,6 @@ export class DesktopPanelButtonsComponent {
   private readonly _configService = inject(GlobalConfigService);
 
   readonly kb = input<KeyboardConfig | null>();
-  readonly isRouteWithSidePanel = input.required<boolean>();
   readonly isShowScheduleDayPanel = input.required<boolean>();
   readonly isShowIssuePanel = input.required<boolean>();
   readonly isShowNotes = input.required<boolean>();

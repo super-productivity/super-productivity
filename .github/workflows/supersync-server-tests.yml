@@ -23,8 +23,12 @@ jobs:
     name: SuperSync Server Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
+    # DATABASE_URL is set PER STEP, not here. Job-level it also reached the unit step, and
+    # the unit suite is written for a machine with no database: monitoring-db.ts adds a
+    # `datasources` override only when DATABASE_URL is set, so monitoring-scripts.spec.ts's
+    # exact-match assertion passed locally and failed on every CI run. That failure then
+    # skipped the two steps below, so the PostgreSQL integration suite never ran here at
+    # all while the check still reported on it.
     services:
       postgres:
         image: postgres:16-alpine
@@ -75,7 +79,11 @@ jobs:
         run: cd packages/super-sync-server && npm test
       - name: Apply PostgreSQL Test Schema
         working-directory: packages/super-sync-server
+        env:
+          DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
         run: npx prisma db push --skip-generate
       - name: Run SuperSync PostgreSQL Integration Tests
         working-directory: packages/super-sync-server
+        env:
+          DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
         run: npm run test:integration:postgres

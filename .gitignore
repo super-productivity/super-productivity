@@ -1,9 +1,14 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
 # environment files
+# Anything named .env* holds real secrets (JWT_SECRET, POSTGRES_PASSWORD,
+# SMTP_PASS) — the only exception is the checked-in example. The previous
+# rules listed .local variants one by one, which let hand-made backups such as
+# .env.bak.<timestamp> sit untracked in a production checkout, one `git add -A`
+# away from being committed.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # auto-generated environment constants
 src/app/config/env.generated.ts

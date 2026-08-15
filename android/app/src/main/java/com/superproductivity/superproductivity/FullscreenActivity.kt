@@ -328,7 +328,7 @@ class FullscreenActivity : AppCompatActivity() {
         if (!WebViewCompatibilityChecker.isLikelyWebViewInitFailure(error)) {
             throw error
         }
-        recoverOrShowWebViewInitFailure(message, error, null)
+        recoverOrShowWebViewInitFailure(message, error, compatibility = null)
     }
 
     /**
@@ -351,37 +351,31 @@ class FullscreenActivity : AppCompatActivity() {
             WebViewRecovery.scheduleRelaunch(this)
             return
         }
-        showWebViewInitFailure(message, error, compatibility)
+        blockForWebViewInitFailure(message, error, compatibility)
     }
 
-    private fun showWebViewInitFailure(
+    // Named to match CapacitorMainActivity's terminal presenter. Do not call it
+    // showWebViewInitFailure: that name is the *recovery* entry point over there, and a
+    // fix ported across by name would skip the one-shot relaunch. → issue #7518.
+    private fun blockForWebViewInitFailure(
         message: String,
-        error: Throwable? = null,
-        compatibility: WebViewCompatibilityChecker.Result? = null,
+        error: Throwable?,
+        compatibility: WebViewCompatibilityChecker.Result?,
     ) {
         if (error == null) {
             Log.e("SP-WebView", "$message - finishing activity")
         } else {
             Log.e("SP-WebView", "$message - finishing activity", error)
         }
-        WebViewBlockActivity.present(this, webViewInitFailureResult(compatibility))
+        // The block screen no longer shows the pre-flight version (it is misleading on
+        // this path), so log it — otherwise a user report carries no trace of it at all.
+        Log.w("SP-WebView", "WebView init failure preflight: $compatibility")
+        WebViewBlockActivity.present(
+            this,
+            WebViewCompatibilityChecker.initFailureResult(compatibility),
+        )
         finish()
     }
-
-    private fun webViewInitFailureResult(
-        compatibility: WebViewCompatibilityChecker.Result? = null,
-    ): WebViewCompatibilityChecker.Result =
-        (compatibility ?: WebViewCompatibilityChecker.Result(
-            status = WebViewCompatibilityChecker.Status.BLOCK,
-            majorVersion = null,
-            providerPackage = null,
-            providerVersionName = null,
-            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
-        )).copy(
-            status = WebViewCompatibilityChecker.Status.BLOCK,
-            source = WebViewCompatibilityChecker.VersionSource.INIT_FAILURE,
-        )
-
 
     private fun callJSInterfaceFunctionIfExists(fnName: String, objectPath: String, fnParam: String = "") {
         if (!::javaScriptInterface.isInitialized) {

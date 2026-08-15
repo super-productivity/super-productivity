@@ -92,10 +92,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          # Retry electron's flaky postinstall binary download. Drop
-          # node_modules/electron between tries so npm re-runs the postinstall
-          # (a plain re-`npm i` skips scripts for an already-present package).
-          command: npm i || { rm -rf node_modules/electron; exit 1; }
+          # Retry to ride out transient npm registry flakiness. (Since
+          # Electron 42 `npm i` no longer downloads the Electron binary;
+          # electron-builder fetches its own copy when packaging.)
+          command: npm i
 
       - name: Install Playwright Browsers
         run: |
@@ -219,10 +219,10 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       # @nx/nx-darwin-arm64 + dmg-license aren't in package.json (npm's
-      # optional-dep bug skips them), so install them explicitly. That install
-      # and `npm i` both run electron's flaky postinstall binary download, so
-      # retry the whole thing — dropping node_modules/electron between tries
-      # forces the postinstall to re-run (npm skips it for a present package).
+      # optional-dep bug skips them), so install them explicitly, and retry to
+      # ride out transient npm registry flakiness. (Since Electron 42 `npm i`
+      # no longer downloads the Electron binary; electron-builder fetches its
+      # own copy when packaging.)
       - name: Install npm Packages
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
@@ -230,7 +230,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i || { rm -rf node_modules/electron; exit 1; }
+          command: npm install @nx/nx-darwin-arm64 dmg-license && npm i
 
       - run: 'echo "$PROVISION_PROFILE" | base64 --decode > embedded.provisionprofile'
         shell: bash
@@ -248,10 +248,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test Unit
-        run: npm run test
-        env:
-          NODE_OPTIONS: '--max-old-space-size=4096'
+      # No unit tests here: the suite is platform-independent (Karma/ChromeHeadless,
+      # TZ pinned via cross-env) and already runs in PR CI and in the linux job of
+      # this same workflow. On macOS it only added ~8min and flaky 2s-timeout
+      # failures that blocked the release binary (v18.15.0).
 
       #      - uses: browser-actions/setup-chrome@v2
       #        id: setup-chrome
@@ -309,10 +309,10 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       # @nx/nx-win32-x64-msvc isn't in package.json (npm's optional-dep bug
-      # skips it), so install it explicitly. That install and `npm i` both run
-      # electron's flaky postinstall binary download, so retry the whole thing
-      # — dropping node_modules/electron between tries forces the postinstall
-      # to re-run (npm skips it for a present package).
+      # skips it), so install it explicitly, and retry to ride out transient
+      # npm registry flakiness. (Since Electron 42 `npm i` no longer downloads
+      # the Electron binary; electron-builder fetches its own copy when
+      # packaging.)
       - name: Install npm Packages
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
@@ -320,7 +320,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          command: npm install @nx/nx-win32-x64-msvc && npm i || { rm -rf node_modules/electron; exit 1; }
+          command: npm install @nx/nx-win32-x64-msvc && npm i
 
       - name: Setup Chrome
         id: setup-chrome

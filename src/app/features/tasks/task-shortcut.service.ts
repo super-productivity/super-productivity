@@ -90,11 +90,13 @@ export class TaskShortcutService {
     // Schedule for today (Shift+T). This is the one task shortcut wired to work
     // without a live <task> component, so it also fires from views that render
     // <planner-task> (the Planner overdue list). When a real <task> is focused
-    // we still delegate, so the backlog→regular position-only move (#8592/#8603)
-    // and the overdue branch in moveToToday() are preserved. (#8851)
+    // we delegate instead, because that path also keeps keyboard focus sane when
+    // scheduling removes the row from the current list. (#8851)
+    // Neither path changes the task's list position — that stays the context
+    // menu's job, so #8592 keeps holding. (#9563)
     if (checkKeyCombo(ev, keys.taskScheduleToday)) {
       if (focusedTaskId) {
-        this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus');
+        this._handleTaskShortcut(focusedTaskId, 'scheduleForTodayWithFocus');
         ev.preventDefault();
         ev.stopPropagation();
         return true;

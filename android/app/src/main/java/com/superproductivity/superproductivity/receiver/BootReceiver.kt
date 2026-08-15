@@ -36,7 +36,7 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         for (alarm in alarms) {
-            Log.d(TAG, "Re-scheduling alarm: id=${alarm.notificationId}, title=${alarm.title}")
+            Log.d(TAG, "Re-scheduling alarm: id=${alarm.notificationId}")
             ReminderNotificationHelper.scheduleReminder(
                 context,
                 alarm.notificationId,

@@ -7,6 +7,9 @@ export const ANI_SHARP_TIMING_ = 'cubic-bezier(.4, 0, .6, 1)';
 
 export const TRANSITION_DURATION_XS = '55ms';
 export const TRANSITION_DURATION_S = '150ms';
+// If this grows past ~400ms, revisit ACTION_ROW_REVEAL_PIN_MS in
+// main-header.component.ts: the header's reveal pin must outlive the right
+// panel's width animation (ANI_ENTER_TIMING), which is built from this.
 export const TRANSITION_DURATION_M = '225ms';
 export const TRANSITION_DURATION_L = '375ms';
 export const TRANSITION_DURATION_XL = '1s';

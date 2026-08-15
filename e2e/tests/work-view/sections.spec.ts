@@ -9,9 +9,9 @@ import { expect, test } from '../../fixtures/test.fixture';
  */
 test.describe('Sections', () => {
   /**
-   * Create a fresh project and navigate to it. Avoids
-   * `createAndGoToTestProject()` which hits a strict-mode `.nav-children`
-   * violation when both Projects and Tags trees are expanded.
+   * Create a fresh project and navigate to it. Takes a per-test project name,
+   * which `createAndGoToTestProject()` does not offer. (Its strict-mode
+   * `.nav-children` violation is fixed, so it is no longer a reason to avoid it.)
    */
   const setupTestProject = async (
     workViewPage: import('../../pages/work-view.page').WorkViewPage,

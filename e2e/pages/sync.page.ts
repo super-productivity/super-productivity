@@ -39,6 +39,16 @@ export class SyncPage extends BasePage {
     this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
   }
 
+  /**
+   * Click the header's sync button. The action row is a horizontal scroller
+   * (#9480), so on a narrow header the button can be past the trailing edge —
+   * Playwright's own actionability scroll brings it back into view, which is
+   * why this needs nothing beyond a click.
+   */
+  async clickSyncBtn(options?: Parameters<Locator['click']>[0]): Promise<void> {
+    await this.page.locator('button.sync-btn').first().click(options);
+  }
+
   async setupWebdavSync(
     config: {
       baseUrl: string;

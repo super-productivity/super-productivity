@@ -369,12 +369,22 @@ export const getPayloadKey = (entityType: EntityType): string | undefined =>
 
 /**
  * Whether an LWW action payload's top-level `id` selects the state that the
- * LWW meta-reducer applies. Only adapter-backed entities are addressed by that
- * field; singleton actions target their registered feature state as a whole.
+ * LWW meta-reducer applies. Adapter- and array-backed entities are addressed
+ * by that field (arrays since #9526: items are found by `id` in the feature
+ * array); singleton actions target their registered feature state as a whole.
+ *
+ * Lockstep contract: `assertDecryptedOpMetadataIntegrity` uses this to decide
+ * which encrypted LWW ops must carry an authenticated `payload.id` matching
+ * `op.entityId` (GHSA-8pxh-mgc7-gp3g) — widening the reducer's id-addressed
+ * patterns without widening this helper would reopen the retarget hole.
  */
-export const isLwwPayloadIdCanonical = (entityType: string | undefined): boolean =>
-  entityType !== undefined &&
-  ENTITY_CONFIGS[entityType as EntityType]?.storagePattern === 'adapter';
+export const isLwwPayloadIdCanonical = (entityType: string | undefined): boolean => {
+  const pattern =
+    entityType !== undefined
+      ? ENTITY_CONFIGS[entityType as EntityType]?.storagePattern
+      : undefined;
+  return pattern === 'adapter' || pattern === 'array';
+};
 
 /**
  * Sentinel `entityId` value denoting "the one and only" instance of an entity

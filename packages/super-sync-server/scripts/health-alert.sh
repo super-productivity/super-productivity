@@ -171,7 +171,14 @@ const main = async () => {
         `WITH pool_sessions AS (
        SELECT CASE
          WHEN state = 'active' THEN now() - query_start
-       END AS active_age
+       END AS active_age,
+       -- Long-running maintenance sessions are expected, so they must not page
+       -- anyone -- but they still occupy a real backend, which is the resource
+       -- the 2026-07-20 incident exhausted. Carrying the flag instead of
+       -- filtering the CTE is what keeps them out of "longQueryCount"/"longest"
+       -- while poolInUse below still counts every session.
+       application_name NOT LIKE 'supersync-migrator-%'
+         AND application_name <> 'supersync-monitor' AS pageable
        FROM pg_stat_activity
        WHERE state IN (
          'active',
@@ -182,13 +189,12 @@ const main = async () => {
          AND backend_type = 'client backend'
          AND datname = current_database()
          AND usename = current_user
-         AND application_name NOT LIKE 'supersync-migrator-%'
      )
      SELECT
        count(*) FILTER (
-         WHERE active_age > $1::integer * interval '1 second'
+         WHERE pageable AND active_age > $1::integer * interval '1 second'
        )::integer AS "longQueryCount",
-       COALESCE(round(extract(epoch FROM max(active_age))), 0)::integer AS "longest",
+       COALESCE(round(extract(epoch FROM max(active_age) FILTER (WHERE pageable))), 0)::integer AS "longest",
        count(*)::integer AS "poolInUse"
      FROM pool_sessions`,
         maxQuerySeconds,

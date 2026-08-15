@@ -541,6 +541,89 @@ describe('CaldavClientService._getCalendar', () => {
   });
 });
 
+// ─── _get_client – real cdav-library connect() ────────────────────────────────
+
+// Regression test for servers (e.g. Rustical) that omit <principal-collection-set>
+// from the principal PROPFIND response entirely instead of returning it empty.
+// @nextcloud/cdav-library reads that prop unguarded, so connect() throws
+// "Cannot read properties of undefined (reading 'map')" and _get_client surfaces
+// it as a generic CALDAV NETWORK ERROR.
+describe('CaldavClientService._get_client', () => {
+  let svc: TestableCaldavClientService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CaldavClientService, useClass: TestableCaldavClientService },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+      ],
+    });
+    svc = TestBed.inject(CaldavClientService) as TestableCaldavClientService;
+    svc.setIsNativePlatform(true);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const CURRENT_USER_PRINCIPAL_XML = `<?xml version="1.0" encoding="utf-8"?>
+<multistatus xmlns="DAV:">
+  <response>
+    <href>/caldav/principal/myuser/</href>
+    <propstat>
+      <prop>
+        <current-user-principal>
+          <href>/caldav/principal/myuser/</href>
+        </current-user-principal>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+  // Mirrors the real Rustical response from the bug report: displayname is
+  // returned, but principal-collection-set is only present inside the 404
+  // propstat block, so the multistatus parser drops it entirely.
+  const PRINCIPAL_PROPS_XML = `<?xml version="1.0" encoding="utf-8"?>
+<multistatus xmlns="DAV:" xmlns:CAL="urn:ietf:params:xml:ns:caldav">
+  <response>
+    <href>/caldav/principal/myuser/</href>
+    <propstat>
+      <prop>
+        <displayname>myuser</displayname>
+        <CAL:calendar-user-type>INDIVIDUAL</CAL:calendar-user-type>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+    <propstat>
+      <prop>
+        <principal-collection-set/>
+      </prop>
+      <status>HTTP/1.1 404 Not Found</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+  it('connects when the server omits principal-collection-set from the principal response', async () => {
+    let requestCount = 0;
+    svc.webDavRequestSpy.and.callFake(async () => {
+      requestCount++;
+      return {
+        status: 207,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        headers: { 'content-type': 'application/xml' },
+        data: requestCount === 1 ? CURRENT_USER_PRINCIPAL_XML : PRINCIPAL_PROPS_XML,
+      };
+    });
+
+    const clientCache = await (svc as any)._get_client(MOCK_CFG);
+
+    expect(clientCache.client.currentUserPrincipal).toBeTruthy();
+    expect(requestCount).toBe(2);
+  });
+});
+
 describe('CaldavClientService._getNativeXhrProvider – native platform', () => {
   let svc: TestableCaldavClientService;
 

@@ -25,6 +25,9 @@ import {
 } from '../../../features/simple-counter/simple-counter.model';
 import { convertOpToAction } from '../../../op-log/apply/operation-converter.util';
 import { ActionType, Operation, OpType } from '../../../op-log/core/operation.types';
+import { PLUGIN_USER_DATA_FEATURE_NAME } from '../../../plugins/store/plugin-user-data.reducer';
+import { BOARDS_FEATURE_NAME } from '../../../features/boards/store/boards.reducer';
+import { REMINDER_FEATURE_NAME } from '../../../features/reminder/store/reminder.reducer';
 
 describe('lwwUpdateMetaReducer', () => {
   const mockReducer = jasmine.createSpy('reducer');
@@ -4270,6 +4273,308 @@ describe('lwwUpdateMetaReducer', () => {
       const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
       const updatedTask = updatedState[TASK_FEATURE_NAME]?.entities[TASK_ID] as Task;
       expect(updatedTask.dueDay).toBeNull();
+    });
+  });
+
+  // Regression #9526: conflict resolution produces `[PLUGIN_USER_DATA] LWW Update`
+  // (and BOARD/REMINDER/PLUGIN_METADATA) ops since v18.10.0, but the reducer only
+  // supported singleton + adapter patterns — array-entity winners were silently
+  // dropped on every receiving client ("Unsupported storage pattern").
+  describe('array entity LWW Updates (#9526)', () => {
+    const PLUGIN_ID = 'sync-md';
+    const BOARD_ID = 'board1';
+    const REMINDER_ID = 'reminder1';
+
+    const createMockStateWithArrayEntities = (): Partial<RootState> =>
+      ({
+        ...createMockState(),
+        [PLUGIN_USER_DATA_FEATURE_NAME]: [
+          { id: PLUGIN_ID, data: '{"v":1}' },
+          { id: 'other-plugin', data: 'untouched' },
+        ],
+        [BOARDS_FEATURE_NAME]: {
+          boardCfgs: [
+            { id: BOARD_ID, title: 'Old Board', cols: 2, panels: [] },
+            { id: 'board2', title: 'Other Board', cols: 1, panels: [] },
+          ],
+        },
+        [REMINDER_FEATURE_NAME]: [
+          { id: REMINDER_ID, type: 'TASK', relatedId: TASK_ID, remindAt: 1000 },
+        ],
+      }) as unknown as Partial<RootState>;
+
+    beforeEach(() => {
+      // Prevent devError from throwing (it calls alert + confirm -> throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+    });
+
+    it('should replace an existing PLUGIN_USER_DATA item in place', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[PLUGIN_USER_DATA] LWW Update',
+        id: PLUGIN_ID,
+        data: '{"v":2}',
+        meta: {
+          isPersistent: true,
+          entityType: 'PLUGIN_USER_DATA',
+          entityId: PLUGIN_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const items = updatedState[PLUGIN_USER_DATA_FEATURE_NAME] as Array<
+        Record<string, unknown>
+      >;
+      expect(items).toEqual([
+        { id: PLUGIN_ID, data: '{"v":2}' },
+        { id: 'other-plugin', data: 'untouched' },
+      ]);
+    });
+
+    it('should append a missing item on replace (recreate after local delete)', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[PLUGIN_USER_DATA] LWW Update',
+        id: 'new-plugin',
+        data: '{"fresh":true}',
+        meta: {
+          isPersistent: true,
+          entityType: 'PLUGIN_USER_DATA',
+          entityId: 'new-plugin',
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const items = updatedState[PLUGIN_USER_DATA_FEATURE_NAME] as Array<
+        Record<string, unknown>
+      >;
+      expect(items.length).toBe(3);
+      expect(items[2]).toEqual({ id: 'new-plugin', data: '{"fresh":true}' });
+    });
+
+    it('should shallow-merge into an existing item in patch mode', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[BOARD] LWW Update',
+        id: BOARD_ID,
+        title: 'Patched Board',
+        meta: {
+          isPersistent: true,
+          entityType: 'BOARD',
+          entityId: BOARD_ID,
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const boards = updatedState[BOARDS_FEATURE_NAME] as {
+        boardCfgs: Array<Record<string, unknown>>;
+      };
+      expect(boards.boardCfgs[0]).toEqual({
+        id: BOARD_ID,
+        title: 'Patched Board',
+        cols: 2,
+        panels: [],
+      });
+      expect(boards.boardCfgs[1]).toEqual({
+        id: 'board2',
+        title: 'Other Board',
+        cols: 1,
+        panels: [],
+      });
+    });
+
+    it('should skip a replace-mode REMINDER recreate for an absent item (required `type` cannot survive the action envelope)', () => {
+      const state = createMockStateWithArrayEntities();
+      // A full replace snapshot as produced by conflict resolution — but the
+      // flat action envelope shadows the entity's `type` field, so appending
+      // this would create a Reminder that fails typia validation on the next
+      // hydration. The item must stay deleted instead.
+      const action = {
+        type: '[REMINDER] LWW Update',
+        id: 'deleted-reminder',
+        relatedId: TASK_ID,
+        remindAt: 2000,
+        title: 'recreated',
+        meta: {
+          isPersistent: true,
+          entityType: 'REMINDER',
+          entityId: 'deleted-reminder',
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      expect(mockReducer).toHaveBeenCalledWith(state, action);
+    });
+
+    it('should ignore a patch for an absent item instead of inserting a partial one', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[BOARD] LWW Update',
+        id: 'gone-board',
+        title: 'Partial Delta',
+        meta: {
+          isPersistent: true,
+          entityType: 'BOARD',
+          entityId: 'gone-board',
+          isRemote: true,
+          lwwUpdateMode: 'patch',
+        },
+      };
+
+      reducer(state, action);
+
+      expect(mockReducer).toHaveBeenCalledWith(state, action);
+    });
+
+    it('should replace an item inside a keyed array feature state (BOARD.boardCfgs)', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[BOARD] LWW Update',
+        id: BOARD_ID,
+        title: 'New Board',
+        cols: 3,
+        panels: [],
+        meta: {
+          isPersistent: true,
+          entityType: 'BOARD',
+          entityId: BOARD_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const boards = updatedState[BOARDS_FEATURE_NAME] as {
+        boardCfgs: Array<Record<string, unknown>>;
+      };
+      expect(boards.boardCfgs[0]).toEqual({
+        id: BOARD_ID,
+        title: 'New Board',
+        cols: 3,
+        panels: [],
+      });
+      expect(boards.boardCfgs.length).toBe(2);
+    });
+
+    it('should replace an item when the feature state IS the array (REMINDER)', () => {
+      const state = createMockStateWithArrayEntities();
+      // NOTE: the wire payload carries Reminder.type, but the action
+      // representation shadows it with the action type — the reducer must
+      // preserve the existing item's `type` rather than dropping the field.
+      const action = {
+        type: '[REMINDER] LWW Update',
+        id: REMINDER_ID,
+        relatedId: TASK_ID,
+        remindAt: 2000,
+        meta: {
+          isPersistent: true,
+          entityType: 'REMINDER',
+          entityId: REMINDER_ID,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const reminders = updatedState[REMINDER_FEATURE_NAME] as Array<
+        Record<string, unknown>
+      >;
+      expect(reminders.length).toBe(1);
+      expect(reminders[0]['remindAt']).toBe(2000);
+      expect(reminders[0]['id']).toBe(REMINDER_ID);
+      expect(reminders[0]['type']).toBe('TASK');
+    });
+
+    it('should pass through when the payload has no id', () => {
+      const state = createMockStateWithArrayEntities();
+      const action = {
+        type: '[PLUGIN_USER_DATA] LWW Update',
+        data: 'no id here',
+        meta: {
+          isPersistent: true,
+          entityType: 'PLUGIN_USER_DATA',
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      };
+
+      reducer(state, action);
+
+      expect(mockReducer).toHaveBeenCalledWith(state, action);
+    });
+
+    it('should apply a real PLUGIN_USER_DATA op end-to-end via convertOpToAction', () => {
+      const state = createMockStateWithArrayEntities();
+      // Exact op shape shipped producers emit (createLWWUpdateOp since v18.10.0)
+      const op: Operation = {
+        id: 'op-plugin-lww',
+        actionType: '[PLUGIN_USER_DATA] LWW Update' as ActionType,
+        opType: OpType.Update,
+        entityType: 'PLUGIN_USER_DATA',
+        entityId: PLUGIN_ID,
+        payload: {
+          actionPayload: { id: PLUGIN_ID, data: '{"v":9}' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+        clientId: 'clientB',
+        vectorClock: { clientB: 7 },
+        timestamp: 1700000000000,
+        schemaVersion: 1,
+      };
+
+      const action = convertOpToAction(op);
+      reducer(state, action as unknown as Action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Record<
+        string,
+        unknown
+      >;
+      const items = updatedState[PLUGIN_USER_DATA_FEATURE_NAME] as Array<
+        Record<string, unknown>
+      >;
+      expect(items[0]).toEqual({ id: PLUGIN_ID, data: '{"v":9}' });
     });
   });
 });

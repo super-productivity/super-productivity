@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { MONITORING_APPLICATION_NAME } from '../scripts/monitoring-db';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -305,6 +306,19 @@ describe('health-alert.sh service and database monitoring', () => {
     expect(result.dockerLog).toContain(
       "application_name NOT LIKE 'supersync-migrator-%'",
     );
+    // Monitoring reports run under their own, longer statement_timeout, so they
+    // routinely outlive MAX_QUERY_SECONDS. Without this the suite would page the
+    // operator about its own tooling. Interpolated rather than copied so the
+    // shell script and MONITORING_APPLICATION_NAME cannot drift apart silently.
+    expect(result.dockerLog).toContain(
+      `application_name <> '${MONITORING_APPLICATION_NAME}'`,
+    );
+    // ...but the suppression must reach only the pageable metrics. poolInUse is
+    // a plain count(*), so a monitoring session still shows up as the real
+    // backend it is -- the resource the 2026-07-20 pool exhaustion consumed.
+    expect(result.dockerLog).toContain('WHERE pageable AND active_age >');
+    expect(result.dockerLog).toContain('max(active_age) FILTER (WHERE pageable)');
+    expect(result.dockerLog).toContain('count(*)::integer AS "poolInUse"');
     expect(result.dockerLog).toContain('datname = current_database()');
     expect(result.dockerLog).toContain('usename = current_user');
     expect(result.dockerLog).toContain('pg_stat_progress_create_index');

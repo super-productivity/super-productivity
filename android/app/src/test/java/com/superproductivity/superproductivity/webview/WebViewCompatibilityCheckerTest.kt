@@ -279,6 +279,83 @@ class WebViewCompatibilityCheckerTest {
         assertFalse(config.showRetry)
     }
 
+    // initFailureResult ------------------------------------------------------
+
+    @Test
+    fun `initFailureResult drops the version carried over from the pre-flight check`() {
+        // Regression guard for #7229/#7518: the pre-flight version often comes from the
+        // PackageManager fallback (a disabled or never-updated package that is not the
+        // active provider). Rendering it made the block screen claim an outdated WebView
+        // on healthy devices, and users responded by removing their WebView updates.
+        val result = WebViewCompatibilityChecker.initFailureResult(
+            WebViewCompatibilityChecker.Result(
+                status = Status.WARN,
+                majorVersion = 99,
+                providerPackage = "com.google.android.webview",
+                providerVersionName = "99.0.4844.88",
+                source = VersionSource.PACKAGE,
+            ),
+        )
+
+        assertEquals(null, result.majorVersion)
+        assertEquals(null, result.providerVersionName)
+        assertEquals(Status.BLOCK, result.status)
+        assertEquals(VersionSource.INIT_FAILURE, result.source)
+    }
+
+    @Test
+    fun `initFailureResult keeps the provider package but drops its provenance`() {
+        // The package survives because it aims the "open WebView app settings" intent —
+        // dropping it would send that button at a package that may not be installed.
+        // providerPackageIsCurrent must NOT survive: it is a pre-flight claim about the
+        // version, and nothing on the init-failure screen may assert one.
+        val result = WebViewCompatibilityChecker.initFailureResult(
+            WebViewCompatibilityChecker.Result(
+                status = Status.OK,
+                majorVersion = 147,
+                providerPackage = "app.vanadium.webview",
+                providerVersionName = "147.0.7727.55",
+                source = VersionSource.PACKAGE,
+                providerPackageIsCurrent = true,
+            ),
+        )
+
+        assertEquals("app.vanadium.webview", result.providerPackage)
+        assertFalse(result.providerPackageIsCurrent)
+        // Still no version claim, even though this one was authoritative.
+        assertEquals(null, result.majorVersion)
+        assertEquals(null, result.providerVersionName)
+    }
+
+    @Test
+    fun `initFailureResult blocks with no provider details when evaluation itself failed`() {
+        val result = WebViewCompatibilityChecker.initFailureResult(null)
+
+        assertEquals(Status.BLOCK, result.status)
+        assertEquals(VersionSource.INIT_FAILURE, result.source)
+        assertEquals(null, result.majorVersion)
+        assertEquals(null, result.providerPackage)
+        assertEquals(null, result.providerVersionName)
+        assertFalse(result.providerPackageIsCurrent)
+    }
+
+    @Test
+    fun `initFailureResult stays terminal for a WebView that passed the version check`() {
+        // A healthy pre-flight status must not leak through: it would flip the screen
+        // out of BLOCK. (canBypassBlock(INIT_FAILURE) is covered separately above.)
+        val result = WebViewCompatibilityChecker.initFailureResult(
+            WebViewCompatibilityChecker.Result(
+                status = Status.OK,
+                majorVersion = WebViewCompatibilityChecker.RECOMMENDED_CHROMIUM_VERSION,
+                providerPackage = "com.google.android.webview",
+                providerVersionName = "147.0.7727.55",
+                source = VersionSource.USER_AGENT,
+            ),
+        )
+
+        assertTrue(result.isBlocked)
+    }
+
     // Intent helper data ------------------------------------------------------
 
     @Test

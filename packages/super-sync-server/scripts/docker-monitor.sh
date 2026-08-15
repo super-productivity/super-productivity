@@ -90,8 +90,9 @@ Basic Monitoring (uses compiled scripts):
   stats                         System vitals and DB status
   usage                         Top 20 users by storage
   usage-history [--tail N]      View usage trends
-  active-users [--threshold N]  Active user counts and engagement
-    [--limit N]
+  active-users [--limit N]      Active user counts and recent activity
+    [--engaged] [--threshold N]   --engaged adds engagement (reads 2 weeks of
+                                  operations); --threshold only applies with it
   active-users-quick [--limit N] Fast active-user listing (sync_devices only)
   ops [--user ID] [--tail N]    Recent operations analysis
   logs [--tail N] [--search X]  View server logs

@@ -3,174 +3,253 @@
     <page-title></page-title>
   }
 
-  <nav class="action-nav-right">
-    <div class="header-action-group primary-action-group">
-      @if (isDataLoaded() && isTimeTrackingEnabled()) {
-        <play-button
-          [currentTask]="currentTask()"
-          [currentTaskId]="currentTaskId()"
-          [currentTaskContext]="currentTaskContext()"
-          [hasTrackableTasks]="hasTrackableTasks()"
-        ></play-button>
-      }
+  <!-- The slack between the title and the actions, and the tracked task's
+       home. `flex: 1 1 0` makes this box exactly the leftover: it grows into
+       free space and is zero when there is none, so it can never take a pixel
+       from the action row. It also replaces the auto margin the nav used to
+       carry -- same job, and it works in RTL without a special case.
 
-      <!-- Not gated on isDataLoaded: the shell paints before op-log hydration
-           finishes, and the primary quick-capture entry point must not be
-           missing for that window. -->
-      @if (showDesktopButtons()) {
-        <button
-          emlDrop
-          (click)="layoutService.showAddTaskBar()"
-          matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
-            kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
-          }}"
-          class="tour-addBtn"
-          color="primary"
-          mat-icon-button
-        >
-          <mat-icon>add</mat-icon>
-        </button>
+       The pill inside is absolutely positioned, so it cannot move a button
+       even in principle, and a container query hides it once the leftover is
+       too small to be worth showing. See tracked-task-pill.
+
+       A child of the wrapper and NOT of the nav, which is two guarantees at
+       once. The pill is never inside `.action-nav-scroll`, the trap that
+       reverted `0a95482e64`. And it does not ride along when the nav teleports
+       into the 48px vertical rail, where a name has no room -- there it simply
+       stays here in the header, as it always has. -->
+  <div class="pill-slot">
+    @if (isDataLoaded()) {
+      <tracked-task-pill
+        [currentTask]="currentTask()"
+        [currentTaskContext]="currentTaskContext()"
+      ></tracked-task-pill>
+    }
+  </div>
+
+  <nav
+    class="action-nav-right"
+    [class.action-nav-right--can-scroll]="canScrollFurther()"
+    [class.action-nav-right--can-scroll-back]="canScrollBack()"
+  >
+    <!--
+      The action row scrolls rather than hiding anything (#9480). Every action
+      the app offers is rendered here at every width; when they stop fitting the
+      row becomes a horizontal scroller and the fade below says there is more.
+
+      That replaces a fit that moved actions into an overflow panel by
+      arithmetic over button counts. The panel worked, but it cost a solver, a
+      CSS-token reader, a second popup surface with its own dismissal and
+      focus-restore rules, and a duplicate mount point for every demotable
+      action -- to reach a worse end state than "scroll it": an action behind a
+      tap, with the trigger republishing sync's error state so collapsing sync
+      would not hide that it was broken.
+
+      Anchored at the inline START, and that direction is not a preference:
+      `justify-content: flex-end` would push the overflow off the start edge,
+      and left-of-origin overflow cannot be scrolled back (`scrollLeft` clamps
+      at 0). DOM order runs play -> add -> focus -> counters -> sync -> plugins
+      -> profile -> panels, so what scrolls out of view first is what used to
+      demote first.
+    -->
+    <div
+      class="action-nav-scroll"
+      cdkScrollable
+      #actionScroll
+      (scroll)="onActionScroll()"
+      (wheel)="onActionWheel($event)"
+    >
+      <div class="header-action-group primary-action-group">
+        @if (isDataLoaded() && isTimeTrackingEnabled()) {
+          <play-button
+            [currentTaskId]="currentTaskId()"
+            [hasTrackableTasks]="hasTrackableTasks()"
+          ></play-button>
+        }
+
+        <!-- Not gated on isDataLoaded: the shell paints before op-log hydration
+             finishes, and the primary quick-capture entry point must not be
+             missing for that window (#9420). Absent below 600px, where the
+             bottom nav's FAB is its home instead. -->
+        @if (!hasBottomNav()) {
+          <button
+            emlDrop
+            (click)="layoutService.showAddTaskBar()"
+            matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
+              kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
+            }}"
+            class="tour-addBtn"
+            color="primary"
+            mat-icon-button
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        }
+      </div>
+
+      @if (isDataLoaded()) {
+        <div class="header-action-group secondary-action-group counters-action-group">
+          <!-- Focus button: keep the entry point discoverable on desktop and
+               mobile (#8157). -->
+          @if (isFocusModeEnabled()) {
+            <focus-button></focus-button>
+          }
+          <!-- Inline while there is room for their readouts -- an elapsed time,
+               a count -- which is the whole point of a counter button and the
+               reason these are not behind a tray on desktop. Below 600px they
+               collapse into the single trigger pinned after this row, because
+               the user may define any number of them. -->
+          @if (!hasCounterDropdown()) {
+            @for (
+              simpleCounter of enabledSimpleCounters();
+              track trackById($index, simpleCounter)
+            ) {
+              @if (!simpleCounter.isHideButton) {
+                <simple-counter-button
+                  [matTooltip]="simpleCounter.title"
+                  [simpleCounter]="simpleCounter"
+                ></simple-counter-button>
+              }
+            }
+          }
+        </div>
+
+        @if (isSyncIconEnabled()) {
+          <!--
+            matBadgeHidden only hides the badge VISUALLY (CSS) — MatBadge keeps
+            an aria description active regardless of hidden state. So at count 0
+            the badge description must be empty (not a stale "0 conflicts"
+            announced to screen readers on every encounter). '' is the
+            type-correct "no description" value; MatBadge removes the
+            aria-describedby for it.
+          -->
+          <button
+            class="sync-btn secondary-header-action"
+            [class.is-error]="syncIsEnabledAndReady() && syncState() === 'ERROR'"
+            [class.is-offline]="syncIsEnabledAndReady() && !isOnline()"
+            [class.is-in-progress]="syncIsEnabledAndReady() && isSyncInProgress()"
+            [matBadge]="unreviewedConflictCount()"
+            [matBadgeHidden]="unreviewedConflictCount() === 0"
+            matBadgeColor="accent"
+            matBadgeSize="small"
+            matBadgeOverlap="true"
+            [matBadgeDescription]="
+              unreviewedConflictCount() > 0
+                ? (T.F.SYNC.CONFLICT_REVIEW.BADGE_TOOLTIP
+                  | translate: { count: unreviewedConflictCount() })
+                : ''
+            "
+            [attr.aria-label]="syncTooltip() | translate"
+            matTooltip="{{ syncTooltip() | translate }}"
+            (click)="onSyncButtonClick()"
+            (longPress)="setupSync()"
+            (contextmenu)="$event.preventDefault(); setupSync()"
+            mat-icon-button
+          >
+            @if (syncIsEnabledAndReady()) {
+              @if (isOnline()) {
+                @if (syncState() === 'ERROR') {
+                  <mat-icon>sync_problem</mat-icon>
+                } @else {
+                  <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
+                }
+                @if (hasNoPendingOps()) {
+                  @if (superSyncIsConfirmedInSync()) {
+                    <mat-icon class="sync-state-ico">done_all</mat-icon>
+                  } @else {
+                    <mat-icon class="sync-state-ico">check</mat-icon>
+                  }
+                }
+              } @else {
+                <mat-icon>wifi_off</mat-icon>
+              }
+            } @else {
+              <mat-icon>sync_disabled</mat-icon>
+            }
+          </button>
+        }
+
+        <plugin-work-context-header-btns
+          class="secondary-header-action"
+        ></plugin-work-context-header-btns>
+        <plugin-header-btns class="secondary-header-action"></plugin-header-btns>
+
+        @if (isUserProfilesEnabled()) {
+          <user-profile-button class="secondary-header-action"></user-profile-button>
+        }
+
+        <!-- One action, one home: below 600px the bottom nav's panels menu
+             lists these, so the header must not render them as well. Rendering
+             both put the same plugin button in two places on a phone at once. -->
+        @if (!hasBottomNav()) {
+          <plugin-side-panel-btns
+            class="secondary-header-action"
+          ></plugin-side-panel-btns>
+
+          <desktop-panel-buttons
+            class="secondary-header-action"
+            [kb]="kb"
+            [isShowScheduleDayPanel]="isShowScheduleDayPanel()"
+            [isShowIssuePanel]="isShowIssuePanel()"
+            [isShowNotes]="isShowNotes()"
+          ></desktop-panel-buttons>
+        }
       }
     </div>
 
-    @if (isDataLoaded()) {
-      <div class="header-action-group secondary-action-group counters-action-group">
-        <!-- Focus button: keep the entry point discoverable on desktop and mobile. -->
-        @if (isFocusButtonVisible()) {
-          <focus-button></focus-button>
-        }
-        @if (showDesktopButtons()) {
+    <!--
+      The collapsed counters, below 600px only.
+
+      Outside `.action-nav-scroll`, and that is structural rather than
+      cosmetic: the scroller is `overflow-x: auto`, which couples `overflow-y`
+      to a non-visible value, so a panel anchored inside it would be clipped to
+      the row's own height and never seen. Sitting here it also stays pinned
+      while the row scrolls -- which is what keeps a running counter's accent on
+      screen, the one thing this trigger has to say when it is closed.
+
+      Last in the row, exactly where master put it.
+
+      Real `simple-counter-button`s rather than flat menu rows, and a plain
+      absolutely-positioned box rather than a `mat-menu`: a menu instantiates
+      its content only while open, and these components own their
+      countdown-completion subscription, so a counter that existed only while
+      the tray was open would stop firing repeated-countdown reminders.
+      `inert` holds the closed tray out of the tab order and the a11y tree.
+    -->
+    @if (isDataLoaded() && hasCounterDropdown()) {
+      <div class="header-action-group secondary-action-group mobile-dropdown-wrapper">
+        <button
+          (click)="
+            isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
+          "
+          [color]="isAnyCounterRunning() ? 'accent' : ''"
+          aria-controls="mobile-simple-counter-menu"
+          [attr.aria-expanded]="isShowSimpleCounterBtnsDropdown()"
+          [attr.aria-label]="T.F.METRIC.CMP.SIMPLE_COUNTERS | translate"
+          mat-icon-button
+          type="button"
+        >
+          <mat-icon>{{ isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer' }}</mat-icon>
+        </button>
+        <div
+          id="mobile-simple-counter-menu"
+          class="mobile-dropdown"
+          [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
+          [attr.aria-hidden]="!isShowSimpleCounterBtnsDropdown()"
+          [attr.inert]="isShowSimpleCounterBtnsDropdown() ? null : ''"
+        >
           @for (
             simpleCounter of enabledSimpleCounters();
             track trackById($index, simpleCounter)
           ) {
             @if (!simpleCounter.isHideButton) {
               <simple-counter-button
-                [matTooltip]="simpleCounter.title"
                 [simpleCounter]="simpleCounter"
               ></simple-counter-button>
             }
           }
-        }
+        </div>
       </div>
-
-      @if (isSyncIconEnabled()) {
-        <!--
-          matBadgeHidden only hides the badge VISUALLY (CSS) — MatBadge keeps an
-          aria description active regardless of hidden state. So at count 0 the
-          badge description must be empty (not a stale "0 conflicts" announced to
-          screen readers on every encounter). '' is the type-correct
-          "no description" value; MatBadge removes the aria-describedby for it.
-        -->
-        <button
-          class="sync-btn secondary-header-action"
-          [class.is-error]="syncIsEnabledAndReady() && syncState() === 'ERROR'"
-          [class.is-offline]="syncIsEnabledAndReady() && !isOnline()"
-          [class.is-in-progress]="syncIsEnabledAndReady() && isSyncInProgress()"
-          [matBadge]="unreviewedConflictCount()"
-          [matBadgeHidden]="unreviewedConflictCount() === 0"
-          matBadgeColor="accent"
-          matBadgeSize="small"
-          matBadgeOverlap="true"
-          [matBadgeDescription]="
-            unreviewedConflictCount() > 0
-              ? (T.F.SYNC.CONFLICT_REVIEW.BADGE_TOOLTIP
-                | translate: { count: unreviewedConflictCount() })
-              : ''
-          "
-          [attr.aria-label]="syncTooltip() | translate"
-          matTooltip="{{ syncTooltip() | translate }}"
-          (click)="onSyncButtonClick()"
-          (longPress)="setupSync()"
-          (contextmenu)="$event.preventDefault(); setupSync()"
-          mat-icon-button
-        >
-          @if (syncIsEnabledAndReady()) {
-            @if (isOnline()) {
-              @if (syncState() === 'ERROR') {
-                <mat-icon>sync_problem</mat-icon>
-              } @else {
-                <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
-              }
-              @if (hasNoPendingOps()) {
-                @if (superSyncIsConfirmedInSync()) {
-                  <mat-icon class="sync-state-ico">done_all</mat-icon>
-                } @else {
-                  <mat-icon class="sync-state-ico">check</mat-icon>
-                }
-              }
-            } @else {
-              <mat-icon>wifi_off</mat-icon>
-            }
-          } @else {
-            <mat-icon>sync_disabled</mat-icon>
-          }
-        </button>
-      }
-
-      <plugin-work-context-header-btns
-        class="secondary-header-action"
-      ></plugin-work-context-header-btns>
-      <plugin-header-btns class="secondary-header-action"></plugin-header-btns>
-
-      @if (isUserProfilesEnabled()) {
-        <user-profile-button class="secondary-header-action"></user-profile-button>
-      }
-
-      <!-- Desktop: Show all buttons inline -->
-      @if (showDesktopButtons()) {
-        <plugin-side-panel-btns class="secondary-header-action"></plugin-side-panel-btns>
-
-        <desktop-panel-buttons
-          class="secondary-header-action"
-          [kb]="kb"
-          [isRouteWithSidePanel]="isRouteWithSidePanel()"
-          [isShowScheduleDayPanel]="isShowScheduleDayPanel()"
-          [isShowIssuePanel]="isShowIssuePanel()"
-          [isShowNotes]="isShowNotes()"
-        ></desktop-panel-buttons>
-      }
-
-      <!-- Simple Counter Dropdown (mobile only) -->
-      @if (isXs()) {
-        @if (enabledSimpleCounters().length) {
-          <div class="header-action-group secondary-action-group mobile-dropdown-wrapper">
-            <button
-              (click)="
-                isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
-              "
-              [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
-              aria-controls="mobile-simple-counter-menu"
-              [attr.aria-expanded]="isShowSimpleCounterBtnsDropdown()"
-              [attr.aria-label]="T.F.METRIC.CMP.SIMPLE_COUNTERS | translate"
-              mat-icon-button
-              type="button"
-            >
-              <mat-icon>{{
-                isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer'
-              }}</mat-icon>
-            </button>
-            <div
-              id="mobile-simple-counter-menu"
-              class="mobile-dropdown"
-              [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
-              [attr.aria-hidden]="!isShowSimpleCounterBtnsDropdown()"
-              [attr.inert]="isShowSimpleCounterBtnsDropdown() ? null : ''"
-            >
-              @for (
-                simpleCounter of enabledSimpleCounters();
-                track trackById($index, simpleCounter)
-              ) {
-                @if (!simpleCounter.isHideButton) {
-                  <simple-counter-button
-                    [simpleCounter]="simpleCounter"
-                  ></simple-counter-button>
-                }
-              }
-            </div>
-          </div>
-        }
-      }
     }
   </nav>
 </div>

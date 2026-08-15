@@ -12,6 +12,7 @@ import {
   ImportBackupRef,
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
+import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 import { BackupService } from '../backup/backup.service';
 import { OpLog } from '../../core/log';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
@@ -166,6 +167,7 @@ export class OperationLogSyncService {
   private schemaMigrationService = inject(SchemaMigrationService);
   private validateStateService = inject(ValidateStateService);
   private repairSyncContext = inject(RepairSyncContextService);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   // Extracted services
   private remoteOpsProcessingService = inject(RemoteOpsProcessingService);
@@ -2234,6 +2236,13 @@ export class OperationLogSyncService {
 
   private async _completeRawRebuild(backupRef?: ImportBackupRef): Promise<boolean> {
     this._assertNoCaptureRacedWithRebuild();
+    // #9438: every op the rebuild wrote inside this exclusive section is
+    // applied to live state by now (processRemoteOps, the snapshot
+    // materialization, and _restorePreservedLocalOps all throw on partial
+    // apply), so the tab frontier equals the store tail again. Re-arm the
+    // snapshot/compaction guard that the pre-rebuild ops wipe correctly left
+    // default-open.
+    this.tabSeqFrontier.establishFrontier(await this.opLogStore.getLastSeq());
     const hasDurableRecovery = await this.opLogStore.completeRawRebuild(backupRef);
     // The conflict journal describes conflicts in the op history that was JUST
     // replaced (documented contract: cleared whenever the full dataset is

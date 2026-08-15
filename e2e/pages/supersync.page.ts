@@ -108,6 +108,16 @@ export class SuperSyncPage extends BasePage {
   }
 
   /**
+   * Click the header's sync button. The action row is a horizontal scroller
+   * (#9480), so on a narrow header the button can be past the trailing edge —
+   * Playwright's own actionability scroll brings it back into view, which is
+   * why this needs nothing beyond a click.
+   */
+  async clickSyncBtn(options?: Parameters<Locator['click']>[0]): Promise<void> {
+    await this.page.locator('button.sync-btn').first().click(options);
+  }
+
+  /**
    * Click the provider dropdown and select "SuperSync" with retry logic.
    * Angular Material dropdowns can be flaky under load - the click may not register
    * or the dropdown may close immediately. This method retries up to 3 times.
@@ -284,7 +294,7 @@ export class SuperSyncPage extends BasePage {
     // Open sync settings via right-click (context menu)
     // This allows configuring sync even when already set up
     // Use noWaitAfter to prevent blocking on Angular hash navigation
-    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
 
     // Wait for the provider select (indicates dialog is open)
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
@@ -794,7 +804,7 @@ export class SuperSyncPage extends BasePage {
             '[SuperSyncPage] Sync check icon not visible after 60s — re-triggering sync once',
           );
           await this._handleSyncDialogs(config.syncImportChoice === 'local');
-          await this.syncBtn.click();
+          await this.clickSyncBtn();
           await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
         }
       }
@@ -1149,7 +1159,7 @@ export class SuperSyncPage extends BasePage {
         // (first-time setup) and sync completing with check icon (encryption already
         // configured — prompt was skipped).
         console.log('[SuperSyncPage] Triggering sync to flush encryption prompt...');
-        await this.syncBtn.click().catch(() => {});
+        await this.clickSyncBtn().catch(() => {});
 
         // Wait for sync to complete or encryption dialog (whichever first)
         const syncOrDialog = await Promise.race([
@@ -1229,7 +1239,7 @@ export class SuperSyncPage extends BasePage {
     // No encryption dialog open - open settings and enable encryption manually
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
-    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // CRITICAL: Select "SuperSync" from provider dropdown to load current configuration
@@ -1477,7 +1487,7 @@ export class SuperSyncPage extends BasePage {
   async disableEncryption(): Promise<void> {
     // Open sync settings via right-click
     // Use noWaitAfter to prevent waiting for navigation events
-    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // CRITICAL: Select "SuperSync" from provider dropdown to load current configuration
@@ -1550,7 +1560,7 @@ export class SuperSyncPage extends BasePage {
    */
   async triggerSync(): Promise<void> {
     // Allow uploads during explicit sync
-    await this.syncBtn.click();
+    await this.clickSyncBtn();
 
     const spinnerAppeared = await this.syncSpinner
       .waitFor({ state: 'visible', timeout: 3000 })
@@ -1852,7 +1862,7 @@ export class SuperSyncPage extends BasePage {
         .catch(() => false);
 
       // Click sync button to initiate the sync cycle.
-      await this.syncBtn.click();
+      await this.clickSyncBtn();
 
       if (checkVisibleBeforeClick) {
         // The check icon is stale from a previous sync. Wait for it to disappear
@@ -1995,7 +2005,7 @@ export class SuperSyncPage extends BasePage {
             `flushing (attempt ${flush + 1}/3).`,
         );
         await this._handleSyncDialogs(useLocal);
-        await this.syncBtn.click();
+        await this.clickSyncBtn();
         await this.syncSpinner
           .waitFor({ state: 'visible', timeout: 2000 })
           .catch(() => {});
@@ -2033,7 +2043,7 @@ export class SuperSyncPage extends BasePage {
   async changeEncryptionPassword(newPassword: string): Promise<void> {
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
-    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // Wait for the form to initialize and load the current configuration
@@ -2187,7 +2197,7 @@ export class SuperSyncPage extends BasePage {
   async disableSync(): Promise<void> {
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
-    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // Look for "Enable Syncing" toggle (appears when editing existing config)

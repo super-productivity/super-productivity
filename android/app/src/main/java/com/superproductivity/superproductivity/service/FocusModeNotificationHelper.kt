@@ -189,7 +189,7 @@ object FocusModeNotificationHelper {
         message: String,
         isBreak: Boolean
     ) {
-        Log.d(TAG, "Showing completion notification: title=$title, isBreak=$isBreak")
+        Log.d(TAG, "Showing completion notification: isBreak=$isBreak")
         createCompletionChannel(context)
 
         val contentIntent = Intent(context, CapacitorMainActivity::class.java).apply {

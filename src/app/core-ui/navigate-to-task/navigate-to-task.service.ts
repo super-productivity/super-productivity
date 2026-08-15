@@ -3,7 +3,7 @@ import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { devError } from '../../util/dev-error';
 import { TaskService } from '../../features/tasks/task.service';
 import { Router } from '@angular/router';
-import { Task } from '../../features/tasks/task.model';
+import { HideSubTasksMode, Task } from '../../features/tasks/task.model';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
@@ -15,7 +15,10 @@ import { LayoutService } from '../layout/layout.service';
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { Store } from '@ngrx/store';
 import { RootState } from '../../root-store/root-state';
-import { selectTaskEntities } from '../../features/tasks/store/task.selectors';
+import {
+  selectCurrentTaskId,
+  selectTaskEntities,
+} from '../../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../../features/project/store/project.selectors';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 
@@ -36,6 +39,7 @@ export class NavigateToTaskService {
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
+  private _currentTaskId = this._store.selectSignal(selectCurrentTaskId);
   private _projectState = this._store.selectSignal(selectProjectFeatureState);
 
   async navigate(taskId: string, isArchiveTask: boolean = false): Promise<void> {
@@ -70,6 +74,9 @@ export class NavigateToTaskService {
         projectId: task.projectId || null,
         firstTagId: task.tagIds?.[0] || null,
       });
+      // After the `start` record so a captured trace reads in causal order, and
+      // still well before the navigation below.
+      this._expandCollapsedParent(task, isArchiveTask);
 
       if (this._router.url.startsWith(location)) {
         recordSearchNavDebug('navigateToTask:sameContext', {
@@ -205,6 +212,52 @@ export class NavigateToTaskService {
     return isListed ? null : owningProject.id;
   }
 
+  /**
+   * A collapsed parent renders NO row for its subtasks — `filterDoneTasks`
+   * returns `[]` for `isHideAll` — so the reveal step would poll for an element
+   * that can never appear and give up silently after ~5s. Since
+   * `_hideSubTasksMode` is persisted (#8781), that made the search result
+   * permanently unreachable, which is what the reporter's trace shows. (#8780)
+   *
+   * Expand only when the target really is hidden, so navigating never emits a
+   * synced `updateTaskUi` op it doesn't need to.
+   */
+  private _expandCollapsedParent(task: Task, isArchiveTask: boolean): void {
+    // Navigating into the archive must never write live task UI state.
+    if (isArchiveTask || !task.parentId) {
+      return;
+    }
+    const parent = this._taskEntities()[task.parentId];
+    if (parent?.id !== task.parentId) {
+      return;
+    }
+    // Mirrors `filterDoneTasks` together with the bindings that feed it
+    // (`task.component.html`: isHideDone = mode === HideDone, isHideAll = !!mode,
+    // and isHideDone wins): HideDone drops only done subtasks, any OTHER truthy
+    // mode keeps just the currently TRACKED one. That exemption is why the
+    // tracked-task pill — which navigates to exactly that task — must not expand
+    // the parent on every device to reveal a row already on screen.
+    //
+    // Reading `!!mode` rather than `=== HideAll` matters for legacy or
+    // out-of-enum values: the template hides those rows, but a strict enum check
+    // would decide nothing was wrong and the reveal would fail exactly as it did
+    // before this fix.
+    const mode = parent._hideSubTasksMode;
+    const isHiddenByParent =
+      mode === HideSubTasksMode.HideDone
+        ? task.isDone
+        : !!mode && this._currentTaskId() !== task.id;
+    if (!isHiddenByParent) {
+      return;
+    }
+    recordSearchNavDebug('navigateToTask:expandParent', {
+      taskId: task.id,
+      parentId: parent.id,
+      hideSubTasksMode: parent._hideSubTasksMode ?? null,
+    });
+    this._taskService.showSubTasks(parent.id);
+  }
+
   private _repairProjectMembership(taskId: string, targetProjectId: string): void {
     const task = this._taskEntities()[taskId];
     if (task?.id !== taskId || task.parentId) {
@@ -251,6 +304,34 @@ export class NavigateToTaskService {
   }
 
   private _focusTaskElement(taskId: string): void {
+    // KNOWN GAP: this branch gets the collapsed-parent reveal above and nothing
+    // else. The other containers that can drop a row from the DOM — customizer
+    // group, section, and the done/overdue/later panels — are opened by
+    // WorkViewComponent off the `focusItem` query param, which only the
+    // route-change branch sets.
+    //
+    // (The backlog is a separate, pre-existing gap on BOTH branches: `isInBacklog`
+    // opens the split, but `#splitBottomEl` is a sibling of `#splitTopEl`, and both
+    // reveal loops require the row to live inside their container. A backlog task
+    // therefore becomes visible but is never scrolled to or focused.)
+    //
+    // This is NOT the reported bug: global search runs from `/search`, so it never
+    // matches the same-context check above and always routes. The cost lands on the
+    // in-app callers (tracked-task pill, notification actions, issue creation,
+    // calendar events), and it fails loudly through the snack below.
+    //
+    // Worst case there: a subtask whose parent is collapsed AND which sits inside
+    // a collapsed section. The parent reveal above has already written its synced
+    // op by then, so the user gets a cross-device write for a navigation that then
+    // visibly fails. Accepted rather than reordered, because running the parent
+    // reveal before the branch split is what makes it work on both paths.
+    //
+    // Re-routing here with `focusItem` is not the fix: the router default is
+    // `onSameUrlNavigation: 'ignore'` (see `provideRouter` in main.ts), so a second
+    // navigation to the same task would emit nothing at all. Closing this means one
+    // reveal path for both branches — consolidating the three retry loops that
+    // already compete here, rather than adding a fourth participant. (#8780)
+    //
     // Never swallow silently: if the task never becomes focusable in the current
     // context, surface the error instead of leaving the user on the wrong view.
     this._layoutService.focusTaskInViewWhenReady(taskId, undefined, () => {

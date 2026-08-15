@@ -11,6 +11,24 @@ const LOG_FILE_PATH = path.join(process.cwd(), 'logs', 'app.log');
 const USAGE_HISTORY_PATH = path.join(process.cwd(), 'logs', 'usage-history.jsonl');
 const USAGE_METRIC_VERSION = 2;
 const RECENT_OPS_PER_USER = 5;
+const ONE_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Widest window an operations-derived count can honestly claim.
+ *
+ * Cleanup deletes `sync_devices` rows unseen this long outright
+ * (`deleteStaleDevices`), while the old-ops sweep SKIPS any user whose snapshot
+ * predates the same cutoff (`deleteOldSyncedOpsForAllUsers`). The two are not
+ * merely asymmetric, they are inverted: the lapsed cohort keeps its operations
+ * and loses its heartbeat. So a window wider than this counts users the
+ * device-scoped driver cannot see, and would silently under-report.
+ *
+ * Mirrors `RETENTION_DAYS` in `src/sync/sync.types.ts`, deliberately not
+ * imported — these scripts stay independent of the server modules.
+ * monitoring-scripts.spec.ts pins the two together, so changing retention fails
+ * a test instead of quietly making a window lie.
+ */
+const RETENTION_WINDOW_DAYS = 45;
 
 const maskEmail = (email: string): string => {
   const [local, domain] = email.split('@');
@@ -55,7 +73,8 @@ interface TableSizeRow {
   size: string;
 }
 
-interface ActiveCountRow {
+interface ActivityWindowRow {
+  bucket: bigint;
   device_count: bigint;
   ops_count: bigint;
 }
@@ -104,6 +123,8 @@ interface EngagedUserRow {
   email: string;
   active_days: bigint;
   ops_count: bigint;
+  /** Matches before the page was cut; identical on every row. */
+  total_engaged: bigint;
 }
 
 interface ActiveCountsRow {
@@ -564,12 +585,84 @@ const showOps = async (args: string[]): Promise<void> => {
   }
 };
 
+interface EngagedUsersOptions {
+  readonly now: number;
+  /** Distinct active days in the window a user needs to qualify. */
+  readonly threshold: number;
+  readonly limit: number;
+  readonly displayEmail: (email: string) => string;
+}
+
+/**
+ * Users active on `threshold`+ distinct UTC days in the last two weeks.
+ *
+ * Split out of `showActiveUsers` because it is opt-in: see the call site for why
+ * it cannot sit in the default path until `operations` carries an index with
+ * `received_at` leading.
+ */
+const showEngagedUsers = async (options: EngagedUsersOptions): Promise<void> => {
+  const { now, threshold, limit, displayEmail } = options;
+  const twoWeeksAgo = BigInt(now - 14 * ONE_DAY);
+
+  // Paged like every other table in this report. Unpaged, this printed a row per
+  // matching account: 2,499 of them on the 3M-operation fixture, growing with
+  // the active fleet, which buries the number the section exists to show.
+  // `COUNT(*) OVER ()` is evaluated before LIMIT, so the headline count stays
+  // exact while only `limit` rows are carried back and rendered.
+  //
+  // The count rides on the rows, so at least one has to come back to carry it:
+  // `--limit 0` is a legal way to ask for counts without a table, and fetching
+  // literally zero rows would report "Count: 0" for a fleet of thousands. A
+  // wrong number is worse than no number. Fetch one, display none.
+  const pageSize = Math.max(1, limit);
+  const engagedUsers: EngagedUserRow[] = await prisma.$queryRaw`
+    WITH engaged AS (
+      SELECT
+        u.id,
+        u.email,
+        COUNT(DISTINCT (TO_TIMESTAMP(o.received_at::double precision / 1000) AT TIME ZONE 'UTC')::date) as active_days,
+        COUNT(*) as ops_count
+      FROM users u
+      INNER JOIN operations o ON u.id = o.user_id
+      WHERE o.received_at > ${twoWeeksAgo}
+      GROUP BY u.id, u.email
+      HAVING COUNT(DISTINCT (TO_TIMESTAMP(o.received_at::double precision / 1000) AT TIME ZONE 'UTC')::date) >= ${threshold}
+    )
+    SELECT
+      id,
+      email,
+      active_days,
+      ops_count,
+      COUNT(*) OVER () as total_engaged
+    FROM engaged
+    ORDER BY active_days DESC, ops_count DESC
+    LIMIT ${pageSize};
+  `;
+
+  const totalEngaged = Number(engagedUsers[0]?.total_engaged ?? 0);
+  const shown = engagedUsers.slice(0, limit);
+  console.log(`\n--- Engaged Users (${threshold}+ active days in last 2 weeks, UTC) ---`);
+  console.log(`Count: ${totalEngaged}`);
+  if (shown.length > 0) {
+    if (totalEngaged > shown.length) {
+      console.log(`(showing the top ${shown.length} of ${totalEngaged})`);
+    }
+    console.table(
+      shown.map((u) => ({
+        ID: u.id,
+        Email: displayEmail(u.email),
+        'Active Days': Number(u.active_days),
+        'Ops (2w)': Number(u.ops_count),
+      })),
+    );
+  }
+};
+
 const showActiveUsers = async (args: string[]): Promise<void> => {
   console.log('\n--- Active Users Report ---');
   try {
     const showFullEmails = args.includes('--unmask');
     const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
 
     const engagedThreshold = parseIntArg(args, '--threshold', 3);
     const recentLimit = parseIntArg(args, '--limit', 30);
@@ -591,20 +684,96 @@ const showActiveUsers = async (args: string[]): Promise<void> => {
       { label: 'Last 24 hours', ms: ONE_DAY },
       { label: 'Last 7 days', ms: 7 * ONE_DAY },
       { label: 'Last 30 days', ms: 30 * ONE_DAY },
-      { label: 'Last 90 days', ms: 90 * ONE_DAY },
-    ];
+      // Retention, not 90 days: both tables are pruned at this bound, so a
+      // wider window reports nothing a narrower one does not, and the operations
+      // side of it cannot be answered exactly. See RETENTION_WINDOW_DAYS.
+      {
+        label: `Last ${RETENTION_WINDOW_DAYS} days`,
+        ms: RETENTION_WINDOW_DAYS * ONE_DAY,
+      },
+    ].map((period) => ({ ...period, threshold: BigInt(now - period.ms) }));
+    // The widest window bounds the driver, so every narrower one is answered
+    // from the same pass.
+    const widestThreshold = periods[periods.length - 1].threshold;
 
-    console.log('\n--- Active Users (by device heartbeat / by sync operations) ---');
-    for (const period of periods) {
-      const threshold = BigInt(now - period.ms);
-      const result: ActiveCountRow[] = await prisma.$queryRaw`
+    console.log(
+      `\n--- Active Users (by device heartbeat / by sync operations, ${RETENTION_WINDOW_DAYS}d retention) ---`,
+    );
+    // One statement for all four windows, driven from the users that hold a
+    // device heartbeat inside the widest one.
+    //
+    // What this replaced ran `COUNT(DISTINCT user_id) FROM operations WHERE
+    // received_at > $1` once per window. `received_at` is the NON-leading column
+    // of the only index covering it, (user_id, received_at), so each of those
+    // walks essentially the whole index: on a 3M-operation fixture even the 24h
+    // window touched 20,034 buffers of a 36k-buffer index, and the four windows
+    // together cost 110,047. That price is set by the size of `operations`, not
+    // by the size of the answer, and it was paid four times per report.
+    //
+    // Scoping the probe to device-active users is what bounds it, and the bound
+    // is exact FOR WINDOWS AT OR BELOW RETENTION_WINDOW_DAYS: sync.service.ts
+    // upserts `sync_devices.last_seen_at` INSIDE the upload transaction, so a
+    // user with an operation in such a window necessarily still has a heartbeat
+    // in it. Above that bound the guarantee inverts and this would under-report,
+    // which is why the widest window is retention -- see RETENTION_WINDOW_DAYS
+    // for the retention asymmetry that causes it.
+    //
+    // Each user's MAX(received_at) is then one backwards descent of
+    // (user_id, received_at). Same fixture: 11,165 buffers in a single round
+    // trip, identical counts in every window, and flat as `operations` grows.
+    //
+    // A per-user probe was tried once before and reverted, driven from `users`
+    // rather than from `sync_devices` -- that pays a descent for every registered
+    // account, including every one that never synced at all (7,061 of the
+    // fixture's 10,561). The driver is the whole point; do not widen it back to
+    // `users`. monitoring-scripts.spec.ts asserts the driver table, because
+    // widening it is a cost regression that produces identical output and so
+    // cannot be caught by checking the numbers.
+    const activity: ActivityWindowRow[] = await prisma.$queryRaw`
+      WITH active_devices AS MATERIALIZED (
+        SELECT user_id, MAX(last_seen_at) AS last_seen
+        FROM sync_devices
+        WHERE last_seen_at > ${widestThreshold}
+        GROUP BY user_id
+      ),
+      activity AS MATERIALIZED (
         SELECT
-          (SELECT COUNT(DISTINCT user_id) FROM sync_devices WHERE last_seen_at > ${threshold}) as device_count,
-          (SELECT COUNT(DISTINCT user_id) FROM operations WHERE received_at > ${threshold}) as ops_count;
-      `;
-      const devices = Number(result[0]?.device_count ?? 0);
-      const ops = Number(result[0]?.ops_count ?? 0);
-      console.log(`  ${period.label}: ${devices} connected / ${ops} syncing`);
+          a.last_seen,
+          (
+            SELECT MAX(o.received_at)
+            FROM operations o
+            WHERE o.user_id = a.user_id
+          ) AS last_op
+        FROM active_devices a
+      ),
+      windows (bucket) AS (
+        VALUES ${Prisma.join(
+          periods.map((period) => Prisma.sql`(${period.threshold}::bigint)`),
+        )}
+      )
+      SELECT
+        w.bucket AS bucket,
+        COUNT(*) FILTER (WHERE a.last_seen > w.bucket) AS device_count,
+        COUNT(*) FILTER (WHERE a.last_op > w.bucket) AS ops_count
+      FROM windows w
+      CROSS JOIN activity a
+      GROUP BY w.bucket
+    `;
+
+    const countsByBucket = new Map(
+      activity.map((row) => [
+        String(row.bucket),
+        {
+          devices: Number(row.device_count ?? 0),
+          ops: Number(row.ops_count ?? 0),
+        },
+      ]),
+    );
+    for (const period of periods) {
+      const counts = countsByBucket.get(String(period.threshold));
+      console.log(
+        `  ${period.label}: ${counts?.devices ?? 0} connected / ${counts?.ops ?? 0} syncing`,
+      );
     }
 
     // New users by time period
@@ -634,23 +803,41 @@ const showActiveUsers = async (args: string[]): Promise<void> => {
     `;
     const totalActiveCount = Number(totalActive[0]?.count ?? 0);
 
+    // Pick the page from sync_devices first, then count operations for those
+    // rows only. Joining operations before the LIMIT aggregated every operation
+    // of the last 7 days across every active user (~5k) to display 30 of them;
+    // counting after it is `recentLimit` bounded range scans on
+    // (user_id, received_at) instead. The DISTINCT that used to guard ops_7d is
+    // gone with the fan-out that made it necessary -- no device join remains to
+    // multiply the rows, so COUNT(*) is both correct and cheaper here.
     const recentUsers: RecentUserRow[] = await prisma.$queryRaw`
+      WITH recent AS MATERIALIZED (
+        SELECT
+          u.id,
+          u.email,
+          u.created_at,
+          MAX(d.last_seen_at) as last_active,
+          COUNT(DISTINCT d.client_id) as device_count
+        FROM users u
+        INNER JOIN sync_devices d ON u.id = d.user_id
+        WHERE d.last_seen_at > ${sevenDaysAgo}
+        GROUP BY u.id, u.email, u.created_at
+        ORDER BY last_active DESC
+        LIMIT ${recentLimit}
+      )
       SELECT
-        u.id,
-        u.email,
-        u.created_at,
-        MAX(d.last_seen_at) as last_active,
-        COUNT(DISTINCT d.client_id) as device_count,
-        -- DISTINCT is load-bearing: the sync_devices join multiplies every
-        -- operation row by the user's device count before this counts it.
-        COALESCE(COUNT(DISTINCT o.id), 0) as ops_7d
-      FROM users u
-      INNER JOIN sync_devices d ON u.id = d.user_id
-      LEFT JOIN operations o ON u.id = o.user_id AND o.received_at > ${sevenDaysAgo}
-      WHERE d.last_seen_at > ${sevenDaysAgo}
-      GROUP BY u.id, u.email, u.created_at
-      ORDER BY last_active DESC
-      LIMIT ${recentLimit};
+        r.id,
+        r.email,
+        r.created_at,
+        r.last_active,
+        r.device_count,
+        (
+          SELECT COUNT(*)
+          FROM operations o
+          WHERE o.user_id = r.id AND o.received_at > ${sevenDaysAgo}
+        ) as ops_7d
+      FROM recent r
+      ORDER BY r.last_active DESC;
     `;
 
     if (recentUsers.length > 0) {
@@ -671,35 +858,36 @@ const showActiveUsers = async (args: string[]): Promise<void> => {
       );
     }
 
-    // Engaged users: active on N+ distinct days (UTC) in the last 2 weeks
-    const twoWeeksAgo = BigInt(now - 14 * ONE_DAY);
-    const engagedUsers: EngagedUserRow[] = await prisma.$queryRaw`
-      SELECT
-        u.id,
-        u.email,
-        COUNT(DISTINCT (TO_TIMESTAMP(o.received_at::double precision / 1000) AT TIME ZONE 'UTC')::date) as active_days,
-        COUNT(*) as ops_count
-      FROM users u
-      INNER JOIN operations o ON u.id = o.user_id
-      WHERE o.received_at > ${twoWeeksAgo}
-      GROUP BY u.id, u.email
-      HAVING COUNT(DISTINCT (TO_TIMESTAMP(o.received_at::double precision / 1000) AT TIME ZONE 'UTC')::date) >= ${engagedThreshold}
-      ORDER BY active_days DESC, ops_count DESC;
-    `;
-
-    console.log(
-      `\n--- Engaged Users (${engagedThreshold}+ active days in last 2 weeks, UTC) ---`,
-    );
-    console.log(`Count: ${engagedUsers.length}`);
-    if (engagedUsers.length > 0) {
-      console.table(
-        engagedUsers.map((u) => ({
-          ID: u.id,
-          Email: displayEmail(u.email),
-          'Active Days': Number(u.active_days),
-          'Ops (2w)': Number(u.ops_count),
-        })),
+    // Engaged users: active on N+ distinct days (UTC) in the last 2 weeks.
+    //
+    // Opt-in, because it is the one section of this report whose cost is set by
+    // the size of `operations` rather than by the number of active users, and no
+    // rewrite removes that: counting DISTINCT active days has to visit every
+    // operation in the window. On the 3M-operation fixture it cost 25,644
+    // buffers -- 28% MORE than the 20,034-buffer window query that was hitting
+    // statement_timeout on the hosted instance -- so leaving it in the default
+    // path means the report still cannot finish, just one section later.
+    //
+    // Giving `operations` an index with `received_at` leading would fix it
+    // properly (the same fixture: 20,034 -> 255 buffers for a windowed count).
+    // Until that index exists, the default report stays answerable from the
+    // active-user set alone and an operator asks for the expensive question.
+    if (args.includes('--engaged')) {
+      await showEngagedUsers({
+        now,
+        threshold: engagedThreshold,
+        limit: recentLimit,
+        displayEmail,
+      });
+    } else {
+      console.log(
+        '\n--- Engaged Users: skipped (pass --engaged; reads 2 weeks of operations) ---',
       );
+      // `--threshold` tunes only this section. Silently ignoring it would let an
+      // operator read the numbers above as filtered when they are not.
+      if (args.includes('--threshold')) {
+        console.log('  (--threshold applies only with --engaged; ignored)');
+      }
     }
 
     // Users who never synced (no device ever registered)
@@ -729,7 +917,6 @@ const showActiveUsersQuick = async (args: string[]): Promise<void> => {
       showFullEmails ? email : maskEmail(email);
 
     const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
     const since24h = BigInt(now - ONE_DAY);
     const since7d = BigInt(now - 7 * ONE_DAY);
     const since30d = BigInt(now - 30 * ONE_DAY);
@@ -818,8 +1005,13 @@ const main = async (): Promise<void> => {
         console.log('  usage-history  Show usage over time');
         console.log('    --tail <n>     Show last n snapshots (default 10)');
         console.log('  active-users   Show active user counts and recent activity');
+        console.log(
+          '    --engaged      Add the engaged-users section (reads 2 weeks of ops)',
+        );
         console.log('    --threshold <n> Engaged users day threshold (default 3)');
-        console.log('    --limit <n>    Recently active users limit (default 30)');
+        console.log(
+          '    --limit <n>    Rows per user table; counts stay exact (default 30)',
+        );
         console.log(
           '  active-users-quick  Fast active-user listing (sync_devices only; skips operations)',
         );

@@ -9,14 +9,14 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { NavigationEnd, Router, RouterModule } from '@angular/router';
+import { RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { TranslateModule } from '@ngx-translate/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map, startWith } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { LayoutService } from '../layout/layout.service';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
@@ -54,7 +54,6 @@ let _hasFiredColdStartEntrance = false;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MobileBottomNavComponent {
-  private readonly _router = inject(Router);
   private readonly _layoutService = inject(LayoutService);
   private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _store = inject(Store);
@@ -114,28 +113,32 @@ export class MobileBottomNavComponent {
     this._workContextService.activeWorkContext$.pipe(map((ac) => ac.isEnableBacklog)),
   );
 
-  // Route-based computed properties
-  readonly isRouteWithSidePanel = toSignal(
-    this._router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map((event) => true), // Always true since right-panel is now global
-      startWith(true), // Always true since right-panel is now global
-    ),
-    { initialValue: true },
-  );
-
   // Panel state signals from layout service
   readonly isShowNotes = this._layoutService.isShowNotes;
   readonly isShowIssuePanel = this._layoutService.isShowIssuePanel;
+  readonly isShowScheduleDayPanel = this._layoutService.isShowScheduleDayPanel;
   readonly isIssuesPanelEnabled = computed(
     () => this._globalConfigService.appFeatures().isIssuesPanelEnabled,
   );
   readonly isProjectNotesEnabled = computed(
     () => this._globalConfigService.appFeatures().isProjectNotesEnabled,
   );
+  readonly isScheduleDayPanelEnabled = computed(
+    () => this._globalConfigService.appFeatures().isScheduleDayPanelEnabled,
+  );
+
+  /**
+   * Below 600px this menu is the *only* route to every right-panel toggle --
+   * `desktop-panel-buttons` is not rendered there at all. So every enabled
+   * panel must be listed here and must count towards showing the button:
+   * schedule was in neither, and `toggleScheduleDayPanel()` has no other
+   * caller and no keyboard shortcut, so the panel was simply unreachable on a
+   * phone.
+   */
   readonly hasSidePanelMenuItems = computed(
     () =>
       this.sidePanelButtons().length > 0 ||
+      this.isScheduleDayPanelEnabled() ||
       this.isIssuesPanelEnabled() ||
       this.isProjectNotesEnabled(),
   );
@@ -169,5 +172,9 @@ export class MobileBottomNavComponent {
 
   toggleNotes(): void {
     this._layoutService.toggleNotes();
+  }
+
+  toggleScheduleDayPanel(): void {
+    this._layoutService.toggleScheduleDayPanel();
   }
 }

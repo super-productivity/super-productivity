@@ -78,6 +78,28 @@ test.describe.serial('Plugin Iframe', () => {
     await expect(iframe).toBeVisible();
   });
 
+  // #9526: the API bridge script must be injected in <head> so that classic
+  // (non-defer) plugin scripts see window.PluginAPI at parse time. The bundled
+  // API Test Plugin records `typeof window.PluginAPI` at the top of its inline
+  // body script; before the fix the bridge was appended before </body> and this
+  // read 'undefined', pushing plugins into local fallbacks that bypass sync.
+  test('PluginAPI is available to parse-time plugin scripts', async ({ page }) => {
+    await page.goto('/#/plugins/api-test-plugin/index');
+
+    const iframe = page.locator(PLUGIN_IFRAME);
+    await iframe.waitFor({ state: 'visible' });
+
+    const frameLocator = page.frameLocator(PLUGIN_IFRAME);
+    await frameLocator.locator('body').waitFor({ state: 'visible' });
+
+    const typeAtParseTime = await frameLocator
+      .locator('body')
+      .evaluate(
+        () => (window as unknown as Record<string, unknown>).__pluginApiTypeAtParseTime,
+      );
+    expect(typeAtParseTime).toBe('object');
+  });
+
   test('verify iframe loads with correct content', async ({ page }) => {
     // Navigate directly to plugin page
     await page.goto('/#/plugins/api-test-plugin/index');

@@ -44,7 +44,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val isOngoing = intent.getBooleanExtra(EXTRA_IS_ONGOING, false)
         val triggerAtMs = intent.getLongExtra(EXTRA_TRIGGER_AT_MS, 0L)
 
-        Log.d(TAG, "Alarm triggered: id=$notificationId, title=$title, triggerAt=$triggerAtMs")
+        Log.d(TAG, "Alarm triggered: id=$notificationId, triggerAt=$triggerAtMs")
 
         val pendingResult = goAsync()
 

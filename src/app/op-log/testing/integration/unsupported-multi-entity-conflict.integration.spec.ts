@@ -253,12 +253,15 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
   describe('reachability of the guard beyond bulk actions', () => {
     // The report reads as a recurring-task problem, but the guard is not
     // scoped to one. Every action below carries >1 entityId and is neither an
-    // independent multi-delete, decomposable, nor a resolvable Today-list op,
-    // so one pending local op plus one concurrent remote edit of the same task
-    // is enough to stop sync. This pins the REMAINING blocked surface; the
-    // formerly-pinned Today-list cases (moveTaskInTodayTagList,
+    // independent multi-delete, decomposable, a resolvable Today-list op, nor
+    // a bulk archive, so one pending local op plus one concurrent remote edit
+    // of the same task is enough to stop sync. This pins the REMAINING blocked
+    // surface; the formerly-pinned Today-list cases (moveTaskInTodayTagList,
     // planTasksForToday, removeTasksFromTodayTag) resolve since #9426 and are
-    // covered by today-plan-conflict-resolution.integration.spec.ts.
+    // covered by today-plan-conflict-resolution.integration.spec.ts, and the
+    // formerly-pinned finish-day archive-vs-archive race resolves via the
+    // scoped-replacement path (#9537) covered by
+    // archive-conflict-resolution.integration.spec.ts.
     //
     // Each case notes its production dispatcher, because "an action creator
     // exists" is not the same claim as "a user can trigger it".

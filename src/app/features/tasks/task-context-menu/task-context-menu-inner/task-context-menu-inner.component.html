@@ -258,7 +258,9 @@
         <mat-icon>arrow_upward</mat-icon>
         {{ T.F.TASK.CMP.MOVE_TO_REGULAR | translate }}
       </span>
-      <span class="key-i">{{ kb.taskScheduleToday }}</span>
+      <!-- No shortcut hint: taskScheduleToday (Shift+T) schedules for today and
+      does NOT move between lists. Advertising it here is what made #8592's
+      reporter expect the two to be equivalent. -->
     </button>
   }
 

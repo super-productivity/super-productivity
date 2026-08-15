@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { detectConflictForEntity } from '../src/sync/conflict';
 import { isEntityArrayBranchQuery } from './sync.service.test-state';
+import { explainGeneric } from './explain-plan.helper';
 import type { Operation } from '../src/sync/sync.types';
 
 /**
@@ -18,17 +19,11 @@ import type { Operation } from '../src/sync/sync.types';
  * to the aggregate (MAX -> MIN), the fence (dropping MATERIALIZED) or the CTE shape
  * fail here instead of passing against a stale copy.
  *
- * MEASURE WITH `force_generic_plan`, NEVER WITH LITERALS. Prisma sends parameterized
- * prepared statements; under the default `auto` Postgres plans the first ~5 executions as
- * CUSTOM, then compares the generic cost against the average custom cost and MAY switch to
- * a generic plan — a cost comparison, not an automatic switch, so a statement can stay on
- * custom plans indefinitely. THIS one was observed going generic on production, and a
- * generic plan cannot see parameter values, so that is the mode this file covers.
- * Production also serves custom plans and this file does NOT cover them (a
- * custom-plan-only regression is possible; see the rejected `server_seq >` narrowing in
- * conflict.ts). `EXPLAIN` with literal constants is a third thing again, and is the trap:
- * this file once tested that way and the blind spot passed two designs that were
- * catastrophic in production. EVERYTHING here — including the shim — goes through
+ * MEASURE WITH `force_generic_plan`, NEVER WITH LITERALS — the reasoning lives with the
+ * harness, in explain-plan.helper.ts. THIS lookup is the one that was observed going
+ * generic on production. Production also serves custom plans and this file does NOT cover
+ * them (a custom-plan-only regression is possible; see the rejected `server_seq >`
+ * narrowing in conflict.ts). EVERYTHING here — including the shim — goes through
  * explainGeneric. If you add a shape, use explainGeneric.
  *
  * WHY THE SEED SHAPE IS WHAT IT IS — do not "simplify" it:
@@ -125,90 +120,26 @@ const INSERT_COLS =
 
 type PlanStats = {
   blocks: number;
+  rowsTouched: number;
   rowsFiltered: number;
+  rowsJoinFiltered: number;
+  tempBlocks: number;
   sql: string[];
   rawSql: string[];
   /** Plan node types + index names, per measured query, parallel to `sql`. */
   nodes: string[];
 };
-type PlanNode = Record<string, unknown>;
-type Measured = { blocks: number; rowsFiltered: number; nodes: string };
 
 const newStats = (): PlanStats => ({
   blocks: 0,
+  rowsTouched: 0,
   rowsFiltered: 0,
+  rowsJoinFiltered: 0,
+  tempBlocks: 0,
   sql: [],
   rawSql: [],
   nodes: [],
 });
-
-/**
- * Walks the plan tree for node names and filtered-row counts.
- *
- * Blocks are deliberately NOT summed here: `Shared Hit/Read Blocks` are CUMULATIVE,
- * so a parent already includes everything its children read. Summing every node
- * double-counts the same buffers once per level of nesting, inflating deep plans
- * (the CTE form nests one level deeper than the flat one) and biasing the budgets
- * against the new code. The ROOT node's value is the true total.
- */
-const accumulatePlan = (node: PlanNode, stats: PlanStats, nodes: string[]): void => {
-  stats.rowsFiltered += (node['Rows Removed by Filter'] as number) ?? 0;
-  nodes.push(
-    `${node['Node Type']}${node['Scan Direction'] ? ' ' + node['Scan Direction'] : ''}` +
-      `${node['Index Name'] ? ' on ' + node['Index Name'] : ''}`,
-  );
-  for (const child of (node.Plans as PlanNode[]) ?? []) {
-    accumulatePlan(child, stats, nodes);
-  }
-};
-
-const rootBlocks = (node: PlanNode): number =>
-  ((node['Shared Hit Blocks'] as number) ?? 0) +
-  ((node['Shared Read Blocks'] as number) ?? 0);
-
-const toSqlLiteral = (value: unknown): string => {
-  if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
-  if (Array.isArray(value)) {
-    return `ARRAY[${value.map(toSqlLiteral).join(',')}]::text[]`;
-  }
-  return `'${String(value).replace(/'/g, "''")}'`;
-};
-
-/**
- * EXPLAIN through PREPARE/EXECUTE under `force_generic_plan` — the ONLY faithful way
- * to see what production gets. The params are rendered as literals for EXECUTE, but
- * the PLAN is built at PREPARE time with the values invisible, which is exactly the
- * situation Prisma puts Postgres in.
- */
-let preparedCounterId = 0;
-const explainGeneric = async (
-  db: PGlite,
-  sql: string,
-  params: readonly unknown[],
-): Promise<Measured> => {
-  const name = `plan_probe_${preparedCounterId++}`;
-  const args = params.map(toSqlLiteral).join(', ');
-  await db.exec(`SET plan_cache_mode = force_generic_plan`);
-  await db.exec(`PREPARE ${name} AS ${sql}`);
-  try {
-    const res = await db.query<Record<string, unknown>>(
-      `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE ${name}${args ? `(${args})` : ''}`,
-    );
-    const plan = (res.rows[0]['QUERY PLAN'] as PlanNode[])[0].Plan as PlanNode;
-    const stats = newStats();
-    const nodes: string[] = [];
-    accumulatePlan(plan, stats, nodes);
-    return {
-      blocks: rootBlocks(plan),
-      rowsFiltered: stats.rowsFiltered,
-      nodes: nodes.join(' -> '),
-    };
-  } finally {
-    await db.exec(`DEALLOCATE ${name}`);
-    await db.exec(`SET plan_cache_mode = auto`);
-  }
-};
 
 const incomingOp = (
   entityId: string,
@@ -294,7 +225,10 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
   ): Promise<Record<string, unknown>[]> => {
     const measured = await explainGeneric(db, sql, params);
     stats.blocks += measured.blocks;
+    stats.rowsTouched += measured.rowsTouched;
     stats.rowsFiltered += measured.rowsFiltered;
+    stats.rowsJoinFiltered += measured.rowsJoinFiltered;
+    stats.tempBlocks += measured.tempBlocks;
     stats.sql.push(sql);
     stats.nodes.push(measured.nodes);
     return (await db.query<Record<string, unknown>>(sql, params)).rows;
@@ -372,9 +306,24 @@ const makeMeasuringTx = (db: PGlite, stats: PlanStats): unknown => {
 // the seed ever stops reproducing the mis-plan at all.
 const MAX_BLOCKS = 300;
 
-const expectWithinBudget = (measured: { blocks: number; rowsFiltered: number }): void => {
-  expect(measured.rowsFiltered).toBe(0);
-  expect(measured.blocks).toBeLessThan(MAX_BLOCKS);
+/**
+ * Both lookups touch only what actually matches: the scalar top-1 plus, for a deep
+ * entity, the winning row's re-fetch. Measured 3 on this seed; the ceiling is loose
+ * because it is a fan-out guard, not a pin.
+ */
+const MAX_ROWS_TOUCHED = 100;
+
+const expectWithinBudget = (stats: PlanStats): void => {
+  expect(stats.rowsFiltered).toBe(0);
+  // A regression that moves the discarded work into a JOIN is reported under a
+  // DIFFERENT key, and this spec scored such rows as 0 until the walker was shared with
+  // the batch spec. Assert both counters, never just one.
+  expect(stats.rowsJoinFiltered).toBe(0);
+  // ...and neither counter sees a node that EMITS its rows rather than discarding them,
+  // which is what a fan-out does. The batch spec learned this the expensive way.
+  expect(stats.rowsTouched).toBeLessThanOrEqual(MAX_ROWS_TOUCHED);
+  expect(stats.tempBlocks).toBe(0);
+  expect(stats.blocks).toBeLessThan(MAX_BLOCKS);
 };
 
 describe('detectConflictForEntity does not scan the history (PGlite)', () => {

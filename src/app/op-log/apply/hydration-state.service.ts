@@ -64,6 +64,7 @@ const SYNC_WINDOW_FAILSAFE_MS = 2000;
 export class HydrationStateService implements RemoteApplyWindowPort {
   private _isApplyingRemoteOps = signal(false);
   private _isHydrationFallbackActive = false;
+  private _isHydrationInProgress = false;
   private _isDirectApplyActive = false;
   private _applyingRemoteOpsHoldCount = 0;
   private _isInPostSyncCooldown = signal(false);
@@ -125,6 +126,21 @@ export class HydrationStateService implements RemoteApplyWindowPort {
 
   setHydrationFallbackActive(isActive: boolean): void {
     this._isHydrationFallbackActive = isActive;
+  }
+
+  /**
+   * #9084: true for the full duration of OperationLogHydratorService's
+   * hydrateStore() run, covering the gap between the snapshot's loadAllData
+   * dispatch and the tail-op replay on top of it. Compaction must not run in
+   * that gap — see the guard in OperationLogCompactionService._doCompact for
+   * the full reasoning. Set/cleared by the hydrator around each run.
+   */
+  isHydrationInProgress(): boolean {
+    return this._isHydrationInProgress;
+  }
+
+  setHydrationInProgress(isInProgress: boolean): void {
+    this._isHydrationInProgress = isInProgress;
   }
 
   /**

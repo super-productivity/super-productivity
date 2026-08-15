@@ -10,6 +10,7 @@ import {
   SchemaMigrationService,
 } from './schema-migration.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
@@ -76,6 +77,7 @@ export class OperationLogHydratorService {
   private hydrationStateService = inject(HydrationStateService);
   private injector = inject(Injector);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   // Extracted services
   private snapshotService = inject(OperationLogSnapshotService);
@@ -122,6 +124,13 @@ export class OperationLogHydratorService {
     let snapshotPersistedDuringHydration = false;
 
     try {
+      // #9084: held for the whole run so compaction cannot capture the gap
+      // between the loadAllData dispatch and the tail replay — see the guard
+      // in OperationLogCompactionService._doCompact. Inside the try so a
+      // throw still reaches the recovery path below; the finally always
+      // clears it.
+      this.hydrationStateService.setHydrationInProgress(true);
+
       // PERF: Parallel startup operations - all access different IndexedDB stores
       // and don't depend on each other's results, so they can run concurrently.
       const [pendingRemoteOps, , hasBackup] = await Promise.all([
@@ -412,6 +421,8 @@ export class OperationLogHydratorService {
         });
         throw recoveryErr;
       }
+    } finally {
+      this.hydrationStateService.setHydrationInProgress(false);
     }
   }
 
@@ -490,11 +501,22 @@ export class OperationLogHydratorService {
     lastAppliedOpSeq: number,
     pendingRemoteOps: OperationLogEntry[],
   ): Promise<boolean> {
-    const tailOps = (await this.opLogStore.getOpsAfterSeq(lastAppliedOpSeq)).filter(
+    const allTailEntries = await this.opLogStore.getOpsAfterSeq(lastAppliedOpSeq);
+    // #9438: every entry read here is covered by this hydration pass —
+    // including reducer-rejected ones, which replay deliberately skips
+    // forever. Ops a concurrent tab appends AFTER this read lie beyond this
+    // frontier, which is what arms the snapshot/compaction guard against
+    // anchoring past them.
+    const coveredSeq =
+      allTailEntries.length > 0
+        ? allTailEntries[allTailEntries.length - 1].seq
+        : lastAppliedOpSeq;
+    const tailOps = allTailEntries.filter(
       (entry) => entry.reducerRejectedAt === undefined,
     );
 
     if (tailOps.length === 0) {
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       return false;
     }
 
@@ -535,6 +557,7 @@ export class OperationLogHydratorService {
           appDataComplete: appData as unknown as AppDataComplete,
         }),
       );
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       // No snapshot save needed - full state ops already contain complete state
       // Snapshot will be saved after next batch of regular operations
       return false;
@@ -564,6 +587,10 @@ export class OperationLogHydratorService {
       localClientId,
       pendingRemoteOps.filter((entry) => tailOpIds.has(entry.op.id)),
     );
+
+    // #9438: establish BEFORE the async validation below so a concurrent
+    // tab's append during it cannot end up inside the save's anchor.
+    this.tabSeqFrontier.establishFrontier(coveredSeq);
 
     // CHECKPOINT C: Validate state after replaying tail operations.
     // If invalid, we keep the data on screen but skip the snapshot save so
@@ -614,9 +641,12 @@ export class OperationLogHydratorService {
     // legacy data. Replay ALL operations from the beginning of the log.
     // Status-blind except for durable reducer rejections — see the replay
     // policy note on _replayTailOps.
-    const allOps = (await this.opLogStore.getOpsAfterSeq(0)).filter(
-      (entry) => entry.reducerRejectedAt === undefined,
-    );
+    const allEntries = await this.opLogStore.getOpsAfterSeq(0);
+    // #9438: see _replayTailOps — the frontier covers everything read here,
+    // reducer-rejected entries included. Not established in fallback mode
+    // (partial state; the #9140 guards keep every save path skipped there).
+    const coveredSeq = allEntries.length > 0 ? allEntries[allEntries.length - 1].seq : 0;
+    const allOps = allEntries.filter((entry) => entry.reducerRejectedAt === undefined);
 
     if (allOps.length === 0) {
       if (fallbackCause !== undefined) {
@@ -629,6 +659,7 @@ export class OperationLogHydratorService {
       OpLog.normal(
         'OperationLogHydratorService: Fresh install detected. No data to load.',
       );
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       return false;
     }
 
@@ -659,6 +690,9 @@ export class OperationLogHydratorService {
           appDataComplete: appData as unknown as AppDataComplete,
         }),
       );
+      if (fallbackCause === undefined) {
+        this.tabSeqFrontier.establishFrontier(coveredSeq);
+      }
       // No snapshot save needed - full state ops already contain complete state
       OpLog.normal('OperationLogHydratorService: Full replay complete.');
       return false;
@@ -697,6 +731,10 @@ export class OperationLogHydratorService {
       );
       return false;
     }
+
+    // #9438: establish BEFORE the async validation below so a concurrent
+    // tab's append during it cannot end up inside the save's anchor.
+    this.tabSeqFrontier.establishFrontier(coveredSeq);
 
     // CHECKPOINT C: Validate state after replaying all operations.
     // If invalid, we still proceed but skip the snapshot save so we don't

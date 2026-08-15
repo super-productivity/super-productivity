@@ -51,6 +51,7 @@ import {
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { CompactOperation } from './compact/compact-operation.types';
 import {
   isCompactOperation,
@@ -397,6 +398,14 @@ const rebaseLocalClockOnDurable = (
 export class OperationLogStoreService implements RemoteOperationApplyStorePort<Operation> {
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private readonly _lockService = inject(LockService);
+  // #9438 INVARIANT: every method that adds rows to STORE_NAMES.OPS must
+  // report the committed seqs after its transaction commits — observeOwnWrite
+  // for plain appends, establishFrontier only when the method also installs
+  // the state cache the live store will match. A missed observe makes the
+  // next observed write look like a foreign gap and silently disables
+  // snapshot saves + compaction for the session (all platforms) — see the
+  // TabSeqFrontierService doc.
+  private readonly _tabSeqFrontier = inject(TabSeqFrontierService);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
   // Phase A migration seam: methods migrated off direct `idb` route through
@@ -773,22 +782,23 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   ): Promise<number> {
     await this._ensureInit();
     try {
-      if (isFullStateOpType(op.opType)) {
-        return await this._adapter.transaction(
-          [STORE_NAMES.OPS, STORE_NAMES.META],
-          'readwrite',
-          async (tx) => {
-            const entry = this._buildStoredEntry(op, source, options);
-            const seq = await tx.add(STORE_NAMES.OPS, entry);
-            await this._recordFullStateOpInTx(tx, entry.op, seq);
-            return seq;
-          },
-        );
-      }
-      return await this._adapter.add(
-        STORE_NAMES.OPS,
-        this._buildStoredEntry(op, source, options),
-      );
+      const seq = isFullStateOpType(op.opType)
+        ? await this._adapter.transaction(
+            [STORE_NAMES.OPS, STORE_NAMES.META],
+            'readwrite',
+            async (tx) => {
+              const entry = this._buildStoredEntry(op, source, options);
+              const writtenSeq = await tx.add(STORE_NAMES.OPS, entry);
+              await this._recordFullStateOpInTx(tx, entry.op, writtenSeq);
+              return writtenSeq;
+            },
+          )
+        : await this._adapter.add(
+            STORE_NAMES.OPS,
+            this._buildStoredEntry(op, source, options),
+          );
+      this._tabSeqFrontier.observeOwnWrite(seq);
+      return seq;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -887,6 +897,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       });
       this._vectorClockCache = { ...committedClock };
       this._invalidateUnsyncedCache();
+      // The cache installed above IS the state the caller hydrates from, so
+      // the tab's applied frontier is exactly this seq (#9438).
+      this._tabSeqFrontier.establishFrontier(seq);
       return seq;
     } catch (e) {
       this._handleAppendError(e);
@@ -923,16 +936,24 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       if (ops.some((op) => isFullStateOpType(op.opType))) {
         storeNames.push(STORE_NAMES.META);
       }
-      return await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        const seqs: number[] = [];
-        for (const op of ops) {
-          const entry = this._buildStoredEntry(op, source, options);
-          const seq = await tx.add(STORE_NAMES.OPS, entry);
-          await this._recordFullStateOpInTx(tx, entry.op, seq);
-          seqs.push(seq);
-        }
-        return seqs;
-      });
+      const seqs = await this._adapter.transaction(
+        storeNames,
+        'readwrite',
+        async (tx) => {
+          const writtenSeqs: number[] = [];
+          for (const op of ops) {
+            const entry = this._buildStoredEntry(op, source, options);
+            const seq = await tx.add(STORE_NAMES.OPS, entry);
+            await this._recordFullStateOpInTx(tx, entry.op, seq);
+            writtenSeqs.push(seq);
+          }
+          return writtenSeqs;
+        },
+      );
+      for (const seq of seqs) {
+        this._tabSeqFrontier.observeOwnWrite(seq);
+      }
+      return seqs;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -1113,13 +1134,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             } satisfies ArchiveStoreEntry);
           }
 
-          return { seqs, writtenOps, skippedCount };
+          return { seqs, writtenOps, skippedCount, snapshotFrontier };
         }),
       );
 
       this._vectorClockCache = { ...prunedVectorClock };
       this._invalidateAppliedAndUnsyncedCaches();
-      return result;
+      // The committed baseline replaces this tab's live state (dispatched by
+      // the caller inside the same locked section), so its frontier is the
+      // tab's applied frontier (#9438).
+      this._tabSeqFrontier.establishFrontier(result.snapshotFrontier);
+      return {
+        seqs: result.seqs,
+        writtenOps: result.writtenOps,
+        skippedCount: result.skippedCount,
+      };
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -1220,6 +1249,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         );
       }
 
+      for (const seq of seqs) {
+        this._tabSeqFrontier.observeOwnWrite(seq);
+      }
       return { seqs, writtenOps, skippedCount };
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -1364,6 +1396,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     }
     if (rejectOpIds.length > 0) {
       this._invalidateUnsyncedCache();
+    }
+    for (const writtenOp of written) {
+      this._tabSeqFrontier.observeOwnWrite(writtenOp.seq);
     }
     return { written, skippedCount };
   }
@@ -2301,6 +2336,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     });
     this._invalidateAppliedAndUnsyncedCaches();
     this._vectorClockCache = null;
+    this._tabSeqFrontier.resetToUnestablished();
   }
 
   // ============================================================
@@ -2413,6 +2449,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       },
     );
     this._invalidateAppliedAndUnsyncedCaches();
+    // Frontier seqs are meaningless after an ops wipe (#9438).
+    this._tabSeqFrontier.resetToUnestablished();
   }
 
   /**
@@ -2517,6 +2555,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
       this._invalidateAppliedAndUnsyncedCaches();
       this._vectorClockCache = { ...opts.vectorClock };
+      // Ops were wiped and the remote replay has not run yet — the frontier is
+      // unknown until the follow-up hydration/baseline commit (#9438).
+      this._tabSeqFrontier.resetToUnestablished();
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         throw new StorageQuotaExceededError();
@@ -2894,27 +2935,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       if (isFullStateOpType(op.opType)) {
         storeNames.push(STORE_NAMES.META);
       }
-      return await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        // 1. Append operation to ops store (encoded to compact format)
-        const entry = this._buildStoredEntry(op, source, options);
-        const seq = await tx.add(STORE_NAMES.OPS, entry);
-        await this._recordFullStateOpInTx(tx, entry.op, seq);
+      const writtenSeq = await this._adapter.transaction(
+        storeNames,
+        'readwrite',
+        async (tx) => {
+          // 1. Append operation to ops store (encoded to compact format)
+          const entry = this._buildStoredEntry(op, source, options);
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+          await this._recordFullStateOpInTx(tx, entry.op, seq);
 
-        // 2. Update vector clock to match the operation's clock (only for
-        // local ops). The op.vectorClock already contains the incremented
-        // value from the caller; we store it as the current clock so
-        // subsequent operations can build on it.
-        if (source === 'local') {
-          await tx.put(
-            STORE_NAMES.VECTOR_CLOCK,
-            { clock: op.vectorClock, lastUpdate: Date.now() },
-            SINGLETON_KEY,
-          );
-          this._vectorClockCache = op.vectorClock;
-        }
+          // 2. Update vector clock to match the operation's clock (only for
+          // local ops). The op.vectorClock already contains the incremented
+          // value from the caller; we store it as the current clock so
+          // subsequent operations can build on it.
+          if (source === 'local') {
+            await tx.put(
+              STORE_NAMES.VECTOR_CLOCK,
+              { clock: op.vectorClock, lastUpdate: Date.now() },
+              SINGLETON_KEY,
+            );
+            this._vectorClockCache = op.vectorClock;
+          }
 
-        return seq;
-      });
+          return seq;
+        },
+      );
+      this._tabSeqFrontier.observeOwnWrite(writtenSeq);
+      return writtenSeq;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -2993,6 +3040,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     this._vectorClockCache = committedClock ?? null;
     this._invalidateUnsyncedCache();
+    // The repaired state written above becomes this tab's live state, with
+    // the replacement op as its replay anchor (#9438).
+    this._tabSeqFrontier.establishFrontier(seq);
     return seq;
   }
 
@@ -3055,7 +3105,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // tests (#7709) spy on the shared connection's `transaction` and poison
       // `opsStore.add`; that still fires here because the adapter operates on
       // that same adopted connection.
-      await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+      const committedSeq = await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
         this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
           if (opts.requiredImportBackupId !== undefined) {
             const currentBackup = await tx.get<{ backupId?: string }>(
@@ -3127,12 +3177,17 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
               lastModified: compactedAt,
             });
           }
+
+          return seq;
         }),
       );
 
       // Reached only on a committed transaction.
       this._invalidateAppliedAndUnsyncedCaches();
       this._vectorClockCache = newVectorClock;
+      // The committed baseline becomes this tab's live state (the caller
+      // dispatches it), anchored at the SYNC_IMPORT op's seq (#9438).
+      this._tabSeqFrontier.establishFrontier(committedSeq);
       // The clientId rotated atomically with the stores above. Invalidate the
       // ClientIdService cache so the next read sees the rotated value. On
       // abort the transaction() above throws, so this is not reached and the

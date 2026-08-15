@@ -128,7 +128,10 @@
       overflow-wrap: break-word;
       display: block;
       resize: none;
+      // Sits beside .markdown-preview at the same size, so only raise it where
+      // the zoom actually happens rather than desyncing the two on desktop.
       font-size: 14px;
+      @include noIosFocusZoomOnTouch();
       // Allow proper flex shrinking
       min-height: 0;
 

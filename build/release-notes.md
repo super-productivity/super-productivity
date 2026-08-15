@@ -2,9 +2,11 @@ For all current downloads, package links, and platform-specific notes: [check th
 
 ### Fixes
 
-- **Plugins:** Load translations from uploaded plugin ZIPs (#9474)
-- **GitLab:** Restore the finish-day worklog dialog (#9466, #9468)
-- **Calendar:** Prevent deleted events from reappearing (#9470)
-- **Tasks:** Keep the global add-task bar above the system navigation bar (#9471)
-- **Subtasks:** Show “Move to top” and “Move to bottom” in the context menu (#9469)
-- **Planner:** Make the schedule dialog fit small phone screens (#9467)
+- Workday recurrences no longer start on a weekend selected from the add-task menu (#9404).
+- Plugin `addTask` and `updateTask` behavior now matches the local REST API (#9490).
+- Restored macOS release builds (#9487).
+- Improved monitoring report accuracy and capped report scope and database usage.
+
+### Notices
+
+- Added a warning that User Profiles will be removed in the next release (#9491).

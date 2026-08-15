@@ -2347,7 +2347,7 @@
     "NONE": "无",
     "OK": "确定",
     "OPEN_IN_BROWSER": "在浏览器中打开",
-    "OVERDUE": "逾期",
+    "OVERDUE": "来自前几天",
     "PASSWORD_STRENGTH_FAIR": "一般",
     "PASSWORD_STRENGTH_STRONG": "强",
     "PASSWORD_STRENGTH_WEAK": "弱",

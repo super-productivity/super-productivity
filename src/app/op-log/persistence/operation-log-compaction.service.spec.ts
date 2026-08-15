@@ -154,6 +154,27 @@ describe('OperationLogCompactionService', () => {
       expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
     });
 
+    // #9084: compaction must skip while hydration is between the snapshot's
+    // loadAllData dispatch and the tail-op replay — see the guard in _doCompact.
+    it('should skip compaction while hydration replay is in progress (#9084)', async () => {
+      TestBed.inject(HydrationStateService).setHydrationInProgress(true);
+
+      const result = await service.compact();
+
+      expect(result).toBe(false);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+    });
+
+    it('should also block emergency compaction while hydration replay is in progress', async () => {
+      TestBed.inject(HydrationStateService).setHydrationInProgress(true);
+
+      const result = await service.emergencyCompact();
+
+      expect(result).toBe(false);
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+    });
+
     it('should log metrics if compaction is slow', async () => {
       // Use jasmine.clock to control Date.now() without actual delays
       jasmine.clock().install();

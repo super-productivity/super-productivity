@@ -122,12 +122,12 @@
         "EISENHAUER_MATRIX": "アイゼンハウアーマトリックス",
         "IN_PROGRESS": "進行中で",
         "KANBAN": "カンバン",
-        "NOT_URGENT_IMPORTANT": "緊急性がなく、重要ではありません",
-        "NOT_URGENT_NOT_IMPORTANT": "緊急ではない、重要ではない",
+        "NOT_URGENT_IMPORTANT": "緊急ではないが重要",
+        "NOT_URGENT_NOT_IMPORTANT": "緊急でも重要でもない",
         "TO_DO": "やるべきこと",
         "URGENT": "緊急",
         "URGENT_IMPORTANT": "緊急かつ重要",
-        "URGENT_NOT_IMPORTANT": "緊急 & 重要ではない"
+        "URGENT_NOT_IMPORTANT": "緊急だが重要ではない"
       },
       "FORM": {
         "ADD_NEW_PANEL": "新しいパネルを追加",
@@ -2381,7 +2381,7 @@
     "NO_CON": "現在オフラインです。インターネットに再接続してください。",
     "NONE": "無し",
     "OK": "OK",
-    "OVERDUE": "遅れた",
+    "OVERDUE": "過去の日から",
     "REMOVE": "削除する",
     "SAVE": "保存する",
     "SUBMIT": "投稿する",

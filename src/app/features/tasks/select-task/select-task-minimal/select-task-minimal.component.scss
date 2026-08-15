@@ -10,7 +10,9 @@ input {
   border: 1px solid var(--border-color);
   border-radius: var(--card-border-radius);
   padding: var(--s) 12px;
-  font-size: 14px;
+  // Schedule's create-task field: a plain input with no display counterpart,
+  // so raising it cannot desync anything (#9556).
+  @include noIosFocusZoom();
   line-height: 1.4;
   background: transparent;
   color: inherit;

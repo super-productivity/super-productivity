@@ -339,17 +339,24 @@ You can set up cron jobs for regular monitoring:
 
 ### "PostgreSQL canceled this query because it exceeded statement_timeout"
 
-The reports run over the server's own `DATABASE_URL`, so they inherit whatever
-`statement_timeout` the deployment sets — a budget sized for user-facing sync
-requests, not for reports.
+The reports no longer inherit the deployment's `statement_timeout`. `monitoring-db.ts`
+appends its own to the connection string (`MONITOR_STATEMENT_TIMEOUT_MS`, default
+300000ms) because the deployment's value is sized for user-facing sync requests,
+where a slow query means someone is waiting — the wrong budget for a report.
 
-Note the bundled deployment sets **none**: `statement_timeout` is an opt-in
-recovery guardrail in `env.example`, and `docker-compose.yml` deliberately leaves
-it off. So on a stock instance a slow report is not cancelled at all — it holds a
-connection from the app's pool until someone kills it, which is the shape of the
-2026-07-20 incident. If a report hangs rather than erroring, find it with
-`SELECT pid, query_start, left(query, 80) FROM pg_stat_activity WHERE state = 'active'`
-and end it with `SELECT pg_cancel_backend(<pid>)`.
+This also means monitoring is capped on a stock instance, which sets **none**
+(`statement_timeout` is an opt-in recovery guardrail in `env.example`, and
+`docker-compose.yml` deliberately leaves it off). That retires the old failure
+shape here — a slow report holding a pool connection until someone killed it, the
+shape of the 2026-07-20 incident — at the cost that a stock-instance report which
+used to grind on for 400s now gets cancelled. Raise the variable when that is the
+one you want.
+
+The app's own sessions are still uncapped on a stock instance. To end one, find it
+with `SELECT pid, query_start, left(query, 80) FROM pg_stat_activity WHERE state = 'active'`
+and stop it with `SELECT pg_cancel_backend(<pid>)`. Monitoring sessions identify
+themselves as `application_name = 'supersync-monitor'`, which is also how
+`health-alert.sh` knows not to page about a long-running report.
 
 - **Check the `payload_bytes` backfill first.** Rows still at 0 make every size
   expression read the payload itself, an out-of-line TOAST fetch per row and by
@@ -358,6 +365,13 @@ and end it with `SELECT pg_cancel_backend(<pid>)`.
 WHERE payload_bytes = 0)` answers it through a partial index in one probe.
   `npm run migrate-payload-bytes` fixes it; it is safe to run online (batched,
   primary-key updates, no table lock) but it is a long backfill, not a quick fix.
+- **Raise `MONITOR_STATEMENT_TIMEOUT_MS` before shrinking the sample.** These
+  scripts do not inherit the operator's request-path timeout: `monitoring-db.ts`
+  appends its own (default 300000ms) to the connection string, because a budget
+  sized so a user is not left waiting on a sync is the wrong budget for a
+  fleet-wide report. If a report cancels anyway, the honest question is whether
+  it needs longer or is genuinely pathological — raise this first, and only then
+  cut the sample, so you find out which.
 - Lower `MONITOR_SCOPE_USERS`; it is what bounds these reports' cost
   (`MONITOR_SCOPE_USERS=25 npm run monitor:all`).
 - Scope to one account with `--user <id>` — supported by `operation-sizes`,

@@ -33,6 +33,10 @@
 
 .markdown-unparsed,
 .markdown-parsed {
+  // The textarea (unparsed) is the focusable half and sat at 14px via
+  // .mat-body-2, so it triggered the iOS zoom. Both halves are raised together
+  // so the description does not change size when the editor opens (#9556).
+  @include noIosFocusZoomOnTouch();
   //transition: height 1.3s;
   border: 0;
   padding: var(--s) var(--s2);
