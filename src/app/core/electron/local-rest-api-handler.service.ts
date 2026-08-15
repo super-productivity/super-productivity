@@ -9,7 +9,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
-import { isDBDateStr } from '../../util/get-db-date-str';
+import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
@@ -131,8 +131,14 @@ const validateDeadlineFields = (
   if (fields.deadlineDay != null && fields.deadlineWithTime != null) {
     return 'deadlineDay and deadlineWithTime cannot both be set';
   }
-  if (typeof fields.deadlineDay === 'string' && !isDBDateStr(fields.deadlineDay)) {
-    return 'deadlineDay must use YYYY-MM-DD format';
+  if (typeof fields.deadlineDay === 'string' && !isValidDBDateStr(fields.deadlineDay)) {
+    return 'deadlineDay must be a valid YYYY-MM-DD date';
+  }
+  if (fields.deadlineWithTime != null && fields.deadlineWithTime <= 0) {
+    return 'deadlineWithTime must be a positive timestamp';
+  }
+  if (fields.deadlineRemindAt != null && fields.deadlineRemindAt <= 0) {
+    return 'deadlineRemindAt must be a positive timestamp';
   }
   return undefined;
 };
@@ -150,6 +156,8 @@ const resolveDeadlineChange = (
 
   const requestedDay = fields.deadlineDay ?? undefined;
   const requestedTime = fields.deadlineWithTime ?? undefined;
+  const isDeadlineValueSupplied =
+    requestedDay !== undefined || requestedTime !== undefined;
   let deadlineDay = hasDay ? requestedDay : (existingTask?.deadlineDay ?? undefined);
   let deadlineWithTime = hasTime
     ? requestedTime
@@ -164,7 +172,15 @@ const resolveDeadlineChange = (
     if (fields.deadlineRemindAt != null) {
       return { ok: false, message: 'deadlineRemindAt requires a deadline' };
     }
-    return { ok: true, change: hasDay || hasTime ? { type: 'remove' } : undefined };
+    const hasExistingDeadline = Boolean(
+      existingTask?.deadlineDay ||
+      existingTask?.deadlineWithTime ||
+      existingTask?.deadlineRemindAt,
+    );
+    return {
+      ok: true,
+      change: hasExistingDeadline && (hasDay || hasTime) ? { type: 'remove' } : undefined,
+    };
   }
 
   // Updating the deadline without explicitly supplying a reminder clears the
@@ -172,9 +188,18 @@ const resolveDeadlineChange = (
   // preserves the existing deadline and supplies its explicit new value.
   const deadlineRemindAt = hasReminder
     ? (fields.deadlineRemindAt ?? undefined)
-    : hasDay || hasTime
+    : isDeadlineValueSupplied
       ? undefined
       : (existingTask?.deadlineRemindAt ?? undefined);
+
+  if (
+    existingTask &&
+    deadlineDay === (existingTask.deadlineDay ?? undefined) &&
+    deadlineWithTime === (existingTask.deadlineWithTime ?? undefined) &&
+    deadlineRemindAt === (existingTask.deadlineRemindAt ?? undefined)
+  ) {
+    return { ok: true };
+  }
 
   return {
     ok: true,
@@ -590,7 +615,7 @@ export class LocalRestApiHandlerService {
         title,
         ...additionalFields,
       });
-      if (deadlineResolution.change) {
+      if (deadlineResolution.change?.type === 'set') {
         this._dispatchDeadlineChange(subTaskId, deadlineResolution.change);
       }
       const createdSubTask = await this._getTaskById(subTaskId);
@@ -598,7 +623,7 @@ export class LocalRestApiHandlerService {
     }
 
     const taskId = this._taskService.add(title, false, additionalFields);
-    if (deadlineResolution.change) {
+    if (deadlineResolution.change?.type === 'set') {
       this._dispatchDeadlineChange(taskId, deadlineResolution.change);
     }
     const createdTask = await this._getTaskById(taskId);

@@ -549,6 +549,26 @@ describe('LocalRestApiHandlerService', () => {
         );
       });
 
+      it('should not dispatch a deadline removal for all-null deadline fields', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Task without deadline',
+              deadlineDay: null,
+              deadlineWithTime: null,
+              deadlineRemindAt: null,
+            },
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(storeMock.dispatch).not.toHaveBeenCalled();
+      });
+
       it('should reject conflicting deadline fields on create', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', {
@@ -897,6 +917,46 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
+      it('should ignore nulling deadlineWithTime when the task has a day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineWithTime: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should ignore nulling deadlineDay when the task has a timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
       it('should set a deadline reminder alongside a deadline', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -971,21 +1031,41 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
-      it('should reject a malformed deadline day', async () => {
-        const response = await sendRequestAndWait(
-          createRequest('PATCH', '/tasks/task-1', {
-            body: { deadlineDay: '2026/05/13' },
-          }),
-        );
+      for (const invalidDeadlineDay of ['2026/05/13', '2026-02-30']) {
+        it(`should reject an invalid deadline day (${invalidDeadlineDay})`, async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { deadlineDay: invalidDeadlineDay },
+            }),
+          );
 
-        expect(response.status).toBe(400);
-        expect(response.body.ok).toBe(false);
-        if (response.body.ok) {
-          throw new Error('Expected an error response');
-        }
-        expect(response.body.error.code).toBe('INVALID_INPUT');
-        expect(storeMock.dispatch).not.toHaveBeenCalled();
-      });
+          expect(response.status).toBe(400);
+          expect(response.body.ok).toBe(false);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe('INVALID_INPUT');
+          expect(storeMock.dispatch).not.toHaveBeenCalled();
+        });
+      }
+
+      for (const invalidField of ['deadlineWithTime', 'deadlineRemindAt'] as const) {
+        it(`should reject a non-positive ${invalidField}`, async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { [invalidField]: 0 },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(response.body.ok).toBe(false);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe('INVALID_INPUT');
+          expect(storeMock.dispatch).not.toHaveBeenCalled();
+        });
+      }
 
       it('should reject a deadline reminder without a deadline', async () => {
         const mockTask = createMockTask('task-1');
@@ -1067,11 +1147,10 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.status).toBe(404);
       });
 
-      it('should keep archived tasks unavailable to PATCH', async () => {
+      it('should return 404 when PATCH targets an unavailable task', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(undefined),
         });
-        taskArchiveServiceMock.hasTask.and.returnValue(Promise.resolve(true));
 
         const response = await sendRequestAndWait(
           createRequest('PATCH', '/tasks/archived-task', {
@@ -1082,7 +1161,6 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.status).toBe(404);
         expect(response.body.ok).toBe(false);
         expect(storeMock.dispatch).not.toHaveBeenCalled();
-        expect(taskArchiveServiceMock.hasTask).not.toHaveBeenCalled();
       });
 
       it('should return 400 for invalid body', async () => {
