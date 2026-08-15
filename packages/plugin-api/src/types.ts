@@ -14,6 +14,28 @@ export interface PluginMenuEntryCfg {
   onClick: () => void;
 }
 
+export type PluginTaskContextMenuTarget = 'TASK' | 'SUBTASK';
+
+export interface PluginTaskContextMenuContext {
+  readonly taskId: string;
+}
+
+/**
+ * A plugin action shown in the task context menu's dedicated plugin submenu.
+ * Register from plugin.js; callback registrations are not supported in iframe
+ * index.html files.
+ */
+export interface PluginTaskContextMenuEntryCfg {
+  /** Unique within this plugin. */
+  id: string;
+  label: string;
+  /** Material icon name. */
+  icon?: string;
+  /** Defaults to both regular tasks and subtasks. */
+  showFor?: readonly PluginTaskContextMenuTarget[];
+  onClick: (context: PluginTaskContextMenuContext) => void | Promise<void>;
+}
+
 export enum PluginHooks {
   TASK_CREATED = 'taskCreated',
   TASK_COMPLETE = 'taskComplete',
@@ -532,6 +554,12 @@ export interface PluginAPI {
   registerHeaderButton(headerBtnCfg: Omit<PluginHeaderBtnCfg, 'pluginId'>): void;
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void;
+
+  /**
+   * Register an action in the task context menu's plugin submenu.
+   * Requires `"taskContextMenu"` in the plugin manifest permissions.
+   */
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void;
 
   registerConfigHandler(handler: () => void): void;
 

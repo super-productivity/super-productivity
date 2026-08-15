@@ -7,6 +7,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginManifest, PluginBaseCfg } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
+import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 
 describe('PluginRunner', () => {
   let service: PluginRunner;
@@ -16,6 +17,7 @@ describe('PluginRunner', () => {
   let mockCleanupService: jasmine.SpyObj<PluginCleanupService>;
   let mockI18nService: jasmine.SpyObj<PluginI18nService>;
   let registerSidePanelButtonSpy: jasmine.Spy;
+  let taskContextMenuRegistry: PluginTaskContextMenuRegistryService;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -74,6 +76,7 @@ describe('PluginRunner', () => {
       ],
     });
     service = TestBed.inject(PluginRunner);
+    taskContextMenuRegistry = TestBed.inject(PluginTaskContextMenuRegistryService);
   });
 
   describe('Plugin variable injection', () => {
@@ -216,6 +219,71 @@ describe('PluginRunner', () => {
       const result = service.unloadPlugin('unknown-plugin');
 
       expect(result).toBe(false);
+    });
+
+    it('removes task context menu registrations when unloading', async () => {
+      const manifest = {
+        ...mockManifest,
+        permissions: ['taskContextMenu'],
+      };
+      await service.loadPlugin(
+        manifest,
+        `plugin.registerTaskContextMenuEntry({
+          id: 'action',
+          label: 'Run action',
+          onClick: () => undefined,
+        });`,
+        mockBaseCfg,
+      );
+      expect(taskContextMenuRegistry.entriesFor('TASK')).toHaveSize(1);
+
+      service.unloadPlugin(manifest.id);
+
+      expect(taskContextMenuRegistry.entriesFor('TASK')).toEqual([]);
+    });
+
+    it('removes registrations left by a plugin that fails during activation', async () => {
+      const manifest = {
+        ...mockManifest,
+        permissions: ['taskContextMenu'],
+      };
+
+      await service.loadPlugin(
+        manifest,
+        `plugin.registerTaskContextMenuEntry({
+          id: 'action',
+          label: 'Run action',
+          onClick: () => undefined,
+        });
+        throw new Error('activation failed');`,
+        mockBaseCfg,
+      );
+
+      expect(taskContextMenuRegistry.entriesFor('TASK')).toEqual([]);
+    });
+
+    it('ignores registrations from a stale API instance after unload', async () => {
+      const globalKey = '__pluginRunnerSpec_taskContextApi__';
+      const manifest = {
+        ...mockManifest,
+        permissions: ['taskContextMenu'],
+      };
+      await service.loadPlugin(
+        manifest,
+        `globalThis['${globalKey}'] = plugin;`,
+        mockBaseCfg,
+      );
+      service.unloadPlugin(manifest.id);
+
+      const staleApi = (globalThis as unknown as Record<string, PluginAPI>)[globalKey];
+      staleApi.registerTaskContextMenuEntry({
+        id: 'stale-action',
+        label: 'Stale action',
+        onClick: () => undefined,
+      });
+
+      expect(taskContextMenuRegistry.entriesFor('TASK')).toEqual([]);
+      delete (globalThis as unknown as Record<string, unknown>)[globalKey];
     });
   });
 

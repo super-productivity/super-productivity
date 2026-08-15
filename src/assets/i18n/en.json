@@ -3074,6 +3074,7 @@
     "MENU_ENTRY_ICON_STRING": "Menu entry icon must be a string",
     "MENU_ENTRY_LABEL_REQUIRED": "Menu entry label is required",
     "MENU_ENTRY_ONCLICK_REQUIRED": "Menu entry onClick handler is required",
+    "TASK_CONTEXT_MENU_ACTIONS": "Plugin actions",
     "MIN_VERSION": "Min. Version:",
     "NO_ADDITIONAL_INFO": "No additional information available",
     "NO_CONTENT_PROVIDED": "No content provided",

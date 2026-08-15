@@ -7,7 +7,9 @@ import {
   DialogCfg,
   DialogResult,
   NotifyCfg,
+  PluginManifest,
 } from '@super-productivity/plugin-api';
+import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 
 describe('PluginAPI', () => {
   let pluginAPI: PluginAPI;
@@ -17,6 +19,7 @@ describe('PluginAPI', () => {
   let requestSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
+  let taskContextMenuRegistry: jasmine.SpyObj<PluginTaskContextMenuRegistryService>;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -44,6 +47,10 @@ describe('PluginAPI', () => {
     getFocusedTaskSpy = jasmine
       .createSpy('getFocusedTask')
       .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
+    taskContextMenuRegistry = jasmine.createSpyObj<PluginTaskContextMenuRegistryService>(
+      'PluginTaskContextMenuRegistryService',
+      ['register'],
+    );
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -93,6 +100,17 @@ describe('PluginAPI', () => {
       'test-plugin',
       mockBridge as unknown as PluginBridgeService,
       mockI18nService,
+      {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        manifestVersion: 1,
+        version: '1.0.0',
+        minSupVersion: '1.0.0',
+        hooks: [],
+        permissions: ['taskContextMenu'],
+      } as PluginManifest,
+      undefined,
+      taskContextMenuRegistry,
     );
   });
 
@@ -100,6 +118,22 @@ describe('PluginAPI', () => {
     it('should delegate to the bridge method', () => {
       pluginAPI.showIndexHtmlAsView();
       expect(showIndexHtmlAsViewSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('registerTaskContextMenuEntry()', () => {
+    it('registers the entry with plugin identity and manifest permissions', () => {
+      const onClick = jasmine.createSpy('onClick');
+      const cfg = { id: 'set-color', label: 'Set color', onClick };
+
+      pluginAPI.registerTaskContextMenuEntry(cfg);
+
+      expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
+        'test-plugin',
+        'Test Plugin',
+        ['taskContextMenu'],
+        cfg,
+      );
     });
   });
 

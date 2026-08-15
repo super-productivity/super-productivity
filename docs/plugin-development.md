@@ -453,6 +453,29 @@ PluginAPI.registerMenuEntry({
 });
 ```
 
+#### Task Context Menu Entry
+
+Task context-menu entries require the `taskContextMenu` permission in
+`manifest.json` and can only be registered from host-side `plugin.js` code. The
+callback receives only the selected task ID; use the task API to read or update
+the task when needed.
+
+```javascript
+PluginAPI.registerTaskContextMenuEntry({
+  id: 'copy-external-link', // Unique within this plugin
+  label: 'Copy external link',
+  icon: 'link', // Optional Material icon name
+  showFor: ['TASK'], // Optional: TASK, SUBTASK, or both when omitted
+  onClick: ({ taskId }) => {
+    console.log('Selected task:', taskId);
+  },
+});
+```
+
+Entries appear under **Plugin actions** in the task's context menu. Re-registering
+the same `id` replaces the previous entry, and all entries are removed when the
+plugin unloads.
+
 #### Side Panel Button
 
 ```javascript
@@ -787,8 +810,8 @@ Iframe plugins receive a filtered `window.PluginAPI` object injected into `index
 The iframe can use the injected task/project/tag APIs, dialog and notification APIs,
 navigation helpers, persistence helpers, counters, action dispatch, `registerHook()`,
 and `registerWorkContextHeaderButton()`. Callback-heavy registration methods such as
-`registerHeaderButton()`, `registerMenuEntry()`, `registerSidePanelButton()`,
-`registerShortcut()`, and `registerConfigHandler()` must be registered from
+`registerHeaderButton()`, `registerMenuEntry()`, `registerTaskContextMenuEntry()`,
+`registerSidePanelButton()`, `registerShortcut()`, and `registerConfigHandler()` must be registered from
 host-side `plugin.js` code. APIs not injected into the iframe are unavailable, even if
 they exist on the host-side plugin bridge.
 

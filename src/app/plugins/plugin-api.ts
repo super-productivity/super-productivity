@@ -17,6 +17,7 @@ import {
   PluginHooks,
   PluginManifest,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -41,6 +42,7 @@ import {
   taskCopyToTaskData,
   taskDataToPartialTaskCopy,
 } from './plugin-api-mapper';
+import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 
 /**
  * PluginAPI implementation that uses direct bridge service injection
@@ -54,6 +56,8 @@ export class PluginAPI implements PluginAPIInterface {
   #manifest?: PluginManifest;
   #onReadyRegister?: (fn: () => void | Promise<void>) => void;
   #onUnloadRegister?: (fn: () => void | Promise<void>) => void;
+  #isActive?: () => boolean;
+  #taskContextMenuRegistry?: PluginTaskContextMenuRegistryService;
   #hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
   #messageHandler?: (message: unknown) => Promise<unknown>;
   #boundMethods: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
@@ -77,7 +81,9 @@ export class PluginAPI implements PluginAPIInterface {
     lifecycleRegisters?: {
       onReady?: (fn: () => void | Promise<void>) => void;
       onUnload?: (fn: () => void | Promise<void>) => void;
+      isActive?: () => boolean;
     },
+    taskContextMenuRegistry?: PluginTaskContextMenuRegistryService,
   ) {
     this.#pluginId = pluginId;
     this.#pluginBridge = pluginBridge;
@@ -85,6 +91,8 @@ export class PluginAPI implements PluginAPIInterface {
     this.#manifest = manifest;
     this.#onReadyRegister = lifecycleRegisters?.onReady;
     this.#onUnloadRegister = lifecycleRegisters?.onUnload;
+    this.#isActive = lifecycleRegisters?.isActive;
+    this.#taskContextMenuRegistry = taskContextMenuRegistry;
 
     // Get bound methods for this plugin
     this.#boundMethods = this.#pluginBridge.createBoundMethods(
@@ -126,6 +134,22 @@ export class PluginAPI implements PluginAPIInterface {
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
     PluginLog.log(`Plugin ${this.#pluginId} registered menu entry`);
     this.#boundMethods.registerMenuEntry(menuEntryCfg);
+  }
+
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void {
+    if (this.#isActive && !this.#isActive()) {
+      return;
+    }
+    if (!this.#taskContextMenuRegistry || !this.#manifest) {
+      throw new Error('Task context menu registration is unavailable');
+    }
+
+    this.#taskContextMenuRegistry.register(
+      this.#pluginId,
+      this.#manifest.name,
+      this.#manifest.permissions,
+      cfg,
+    );
   }
 
   registerConfigHandler(handler: () => void): void {
