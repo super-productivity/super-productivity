@@ -402,8 +402,12 @@ export class ScheduleComponent {
   // horizontally back by the sticky time column's width (+ a bit extra) so
   // the target doesn't end up sitting under the time column.
   private _scrollIntoViewWithTimeColumnOffset(elementId: string): void {
-    const element = document.getElementById(elementId);
     const scrollContainer = this._scrollWrapper()?.nativeElement;
+    // Scoped to the wrapper, not the document: `schedule-day-panel` renders its
+    // own `schedule-week`, so a second `#work-start` can be in the DOM while the
+    // Schedule route is open. The old `closest('.scroll-wrapper')` walk bailed
+    // on the panel's copy; resolving the container separately gave that up.
+    const element = scrollContainer?.querySelector(`#${elementId}`);
     if (!element || !scrollContainer) return;
 
     const timeCol = scrollContainer.querySelector(

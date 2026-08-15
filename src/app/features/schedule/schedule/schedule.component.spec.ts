@@ -920,6 +920,30 @@ describe('ScheduleComponent', () => {
       expect(opts.left).toBe(0);
     });
 
+    // schedule-day-panel renders its own schedule-week, so a second
+    // `#work-start` can exist outside this component's scroll wrapper. Resolving
+    // it through the document would scroll to whichever came first.
+    it('should ignore a work-start element outside its own scroll wrapper', () => {
+      const stray = document.createElement('div');
+      stray.id = 'work-start';
+      document.body.insertBefore(stray, document.body.firstChild);
+
+      try {
+        // Month view, so the only #work-start in the document is the stray one:
+        // this component renders schedule-month, which has none.
+        mockLayoutService.selectedTimeView.set('month');
+        fixture.detectChanges();
+        jasmine.clock().tick(1);
+
+        const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+        component['_scrollIntoViewWithTimeColumnOffset']('work-start');
+
+        expect(scrollToSpy).not.toHaveBeenCalled();
+      } finally {
+        stray.remove();
+      }
+    });
+
     it('should not reset the wrapper while staying in month view', () => {
       mockLayoutService.selectedTimeView.set('month');
       fixture.detectChanges();
@@ -927,6 +951,16 @@ describe('ScheduleComponent', () => {
 
       const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
 
+      // A *different* array, not just a navigation: the mock returns one fixed
+      // reference, and a computed that yields the same reference is treated as
+      // unchanged, so dependents never re-run. Without this the test only rules
+      // out a reset wired to every change-detection pass.
+      mockScheduleService.getMonthDaysToShow.and.returnValue([
+        '2026-02-01',
+        '2026-02-02',
+        '2026-02-03',
+      ]);
+      component.goToNextPeriod();
       fixture.detectChanges();
       jasmine.clock().tick(1);
 

@@ -13,9 +13,6 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { fromEvent } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -59,6 +56,7 @@ export class PlannerCalendarNavComponent {
   private _elRef = inject(ElementRef);
   private _destroyRef = inject(DestroyRef);
   private _gesture!: CalendarGestureHandler;
+  private _resizeObserver?: ResizeObserver;
 
   private _firstDayOfWeek = computed(() => {
     const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
@@ -148,13 +146,17 @@ export class PlannerCalendarNavComponent {
     return Math.min(WEEKS_SHOWN, Math.max(1, fits));
   });
 
+  private _parentEl(): HTMLElement | null {
+    return this._elRef.nativeElement.parentElement as HTMLElement | null;
+  }
+
   private _measureAvailableForRows(): void {
     const el = this._weeksEl()?.nativeElement;
     if (!el) return;
     // Bounded by the route content, not the window: on XS the bottom nav takes
     // the last ~44px, so measuring against window.innerHeight reserves space
     // that the plan list never gets.
-    const container = this._elRef.nativeElement.parentElement as HTMLElement | null;
+    const container = this._parentEl();
     const bottom = container
       ? container.getBoundingClientRect().bottom
       : window.innerHeight;
@@ -253,16 +255,24 @@ export class PlannerCalendarNavComponent {
     this._destroyRef.onDestroy(() => this._gesture.destroy());
 
     effect(() => {
-      // Re-measure once the rows exist, and again whenever the expanded state
-      // settles (the rows' offset can shift with the surrounding layout).
-      this._weeksEl();
-      this.isExpanded();
-      untracked(() => this._measureAvailableForRows());
+      // Observe the box the measurement is taken against, rather than the
+      // window: the route content also shrinks when a banner appears above it
+      // (`<banner>` sits above `.route-wrapper`), which fires no resize event.
+      // Expanding moves neither input, so it is deliberately not a trigger.
+      const el = this._weeksEl()?.nativeElement;
+      if (!el) return;
+      untracked(() => this._observeAvailableForRows());
     });
+  }
 
-    fromEvent(window, 'resize')
-      .pipe(debounceTime(50), takeUntilDestroyed())
-      .subscribe(() => this._measureAvailableForRows());
+  private _observeAvailableForRows(): void {
+    const container = this._parentEl();
+    this._measureAvailableForRows();
+    if (!container || this._resizeObserver) return;
+
+    this._resizeObserver = new ResizeObserver(() => this._measureAvailableForRows());
+    this._resizeObserver.observe(container);
+    this._destroyRef.onDestroy(() => this._resizeObserver?.disconnect());
   }
 
   private _handleVerticalSwipe(isDown: boolean): void {

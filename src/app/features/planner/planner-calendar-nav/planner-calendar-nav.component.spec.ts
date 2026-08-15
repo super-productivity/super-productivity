@@ -9,7 +9,10 @@ import {
   ROW_HEIGHT,
   WEEKS_SHOWN,
 } from './planner-calendar-gesture-handler';
-import { PlannerCalendarNavComponent } from './planner-calendar-nav.component';
+import {
+  HANDLE_HEIGHT,
+  PlannerCalendarNavComponent,
+} from './planner-calendar-nav.component';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { getWeekRange } from '../../../util/get-week-range';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -253,6 +256,67 @@ describe('PlannerCalendarNavComponent', () => {
     });
   });
 
+  // The measurement itself, which nothing else exercises: both setRoom() helpers
+  // below write _availableForRows directly. Stubbing the two rects pins the
+  // arithmetic, HANDLE_HEIGHT against `.handle`'s own CSS, and the assumption
+  // that the nav's parentElement is the box the plan list shares.
+  describe('_measureAvailableForRows', () => {
+    const stubGeometry = (weeksTop: number, parentBottom: number): void => {
+      const weeksEl = component['_weeksEl']()!.nativeElement;
+      const parentEl = fixture.nativeElement.parentElement as HTMLElement;
+      spyOn(weeksEl, 'getBoundingClientRect').and.returnValue({
+        top: weeksTop,
+      } as DOMRect);
+      spyOn(parentEl, 'getBoundingClientRect').and.returnValue({
+        bottom: parentBottom,
+      } as DOMRect);
+    };
+
+    // Literals, not the constants: expressing the expectation in terms of
+    // HANDLE_HEIGHT/MIN_PLAN_VIEW_HEIGHT would just restate the implementation
+    // and hold for any value of them.
+    it('should reserve the handle and a row of plan list below the grid', () => {
+      stubGeometry(110, 356);
+      component['_measureAvailableForRows']();
+
+      expect(component['_availableForRows']()).toBe(178);
+    });
+
+    // HANDLE_HEIGHT restates `.handle`'s own CSS (padding 12px 0 + a 4px
+    // ::after). Nothing else notices if one side changes.
+    it('should keep HANDLE_HEIGHT in step with the rendered handle', () => {
+      const handle = fixture.nativeElement.querySelector('.handle') as HTMLElement;
+
+      expect(handle.getBoundingClientRect().height).toBe(HANDLE_HEIGHT);
+    });
+
+    // The XS case from the #9463 review: 400px viewport, route content ending
+    // at 356 because the bottom nav owns the rest.
+    it('should allow four rows at the reported XS geometry', () => {
+      stubGeometry(110, 356);
+      component['_measureAvailableForRows']();
+      component.isExpanded.set(true);
+
+      expect(component.maxHeight()).toBe(4 * ROW_HEIGHT);
+    });
+
+    it('should allow all six rows when the route content is tall', () => {
+      stubGeometry(110, 800);
+      component['_measureAvailableForRows']();
+      component.isExpanded.set(true);
+
+      expect(component.maxHeight()).toBe(MAX_HEIGHT);
+    });
+
+    it('should not expand when the route content leaves room for one row', () => {
+      stubGeometry(110, 220);
+      component['_measureAvailableForRows']();
+      component.isExpanded.set(true);
+
+      expect(component.maxHeight()).toBe(MIN_HEIGHT);
+    });
+  });
+
   describe('maxHeight computed', () => {
     // Stated explicitly rather than inherited from the Karma iframe: the
     // expanded height is clamped by the room actually below the rows, so
@@ -316,8 +380,8 @@ describe('PlannerCalendarNavComponent', () => {
       fixture.componentRef.setInput('visibleDayDate', weeks[WEEKS_SHOWN - 1][0].dateStr);
       component.isExpanded.set(true);
       fixture.detectChanges();
-      // After the last change detection: the component re-measures the real
-      // available room on every expand, which would overwrite this.
+      // Last, so the ResizeObserver's initial callback cannot land on top of it
+      // with the runner's real geometry.
       setRoom(ROOM_FOR_FOUR_ROWS);
 
       const rows = component.maxHeight() / ROW_HEIGHT;
