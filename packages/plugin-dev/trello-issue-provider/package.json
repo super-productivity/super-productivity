@@ -4,6 +4,7 @@
   "description": "Trello issue provider plugin",
   "scripts": {
     "build": "node scripts/build.js",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
