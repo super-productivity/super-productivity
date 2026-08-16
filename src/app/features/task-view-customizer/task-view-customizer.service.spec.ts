@@ -214,6 +214,69 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  describe('multi-tag filter (OR / AND)', () => {
+    const tagFilter = { type: FILTER_OPTION_TYPE.tag, preset: null, label: 'Tag' };
+
+    it('should filter by multiple tags with OR logic (default)', (done) => {
+      service.setFilter({ ...tagFilter, tagIds: ['Tag A', 'Tag B'] });
+      const result$ = TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      );
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          // Alpha(Tag A), Beta(Tag B), Third Task(Tag A + Tag B) all match; Zebra(-) does not
+          expect(result.list!.map((t) => t.id).sort()).toEqual(
+            ['Alpha(Tag A)', 'Beta(Tag B)', 'Third Task(Tag A, Tag B)'].sort(),
+          );
+          done();
+        });
+      });
+    });
+
+    it('should filter by multiple tags with AND logic', (done) => {
+      service.setFilter({ ...tagFilter, tagIds: ['Tag A', 'Tag B'], tagFilterMode: 'AND' });
+      const result$ = TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      );
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          // Only Third Task has BOTH Tag A and Tag B
+          expect(result.list!.length).toBe(1);
+          expect(result.list![0].id).toBe('Third Task(Tag A, Tag B)');
+          done();
+        });
+      });
+    });
+
+    it('should treat a single tagId as an OR filter', (done) => {
+      service.setFilter({ ...tagFilter, tagIds: ['Tag A'] });
+      const result$ = TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      );
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          expect(result.list!.map((t) => t.id).sort()).toEqual(
+            ['Alpha(Tag A)', 'Third Task(Tag A, Tag B)'].sort(),
+          );
+          done();
+        });
+      });
+    });
+
+    it('should return no tasks when tagIds is empty (treated as no filter)', (done) => {
+      service.setFilter({ ...tagFilter, tagIds: [] });
+      const result$ = TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      );
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          expect(result.list!.length).toBe(mockTasks.length);
+          done();
+        });
+      });
+    });
+  });
+
   it('should filter by project name', () => {
     const filtered = service['applyFilter'](
       mockTasks,

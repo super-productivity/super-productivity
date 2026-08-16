@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -9,6 +15,7 @@ import { MatMenuModule, MatMenu } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { TaskViewCustomizerService } from '../task-view-customizer.service';
+import { TagService } from '../../tag/tag.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import {
@@ -22,6 +29,7 @@ import {
   PRESETS,
 } from '../types';
 import { TaskViewCustomizerMenuItemComponent } from './menu-item/menu-item.component';
+import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 
 @Component({
   selector: 'task-view-customizer-panel',
@@ -42,10 +50,12 @@ import { TaskViewCustomizerMenuItemComponent } from './menu-item/menu-item.compo
     MatDividerModule,
     TranslatePipe,
     TaskViewCustomizerMenuItemComponent,
+    ChipListInputComponent,
   ],
 })
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
+  private _tagService = inject(TagService);
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
@@ -55,6 +65,51 @@ export class TaskViewCustomizerPanelComponent {
   readonly OPTIONS = OPTIONS;
   readonly PRESETS = PRESETS;
   readonly FILTER_COMMON = FILTER_COMMON;
+
+  allTags = this._tagService.tagsInTreeOrder;
+
+  tagFilterIds = computed(() => {
+    const f = this.customizerService.selectedFilter();
+    return f.type === FILTER_OPTION_TYPE.tag ? (f.tagIds ?? []) : [];
+  });
+
+  tagFilterMode = computed(
+    () => this.customizerService.selectedFilter().tagFilterMode ?? 'OR',
+  );
+
+  addTagFilter(tagId: string): void {
+    const current = this.customizerService.selectedFilter();
+    const currentIds =
+      current.type === FILTER_OPTION_TYPE.tag ? (current.tagIds ?? []) : [];
+    if (currentIds.includes(tagId)) return;
+    const tagFilter = OPTIONS.filter.list.find((x) => x.type === FILTER_OPTION_TYPE.tag)!;
+    this.customizerService.setFilter({
+      ...tagFilter,
+      tagIds: [...currentIds, tagId],
+      tagFilterMode: current.tagFilterMode ?? 'OR',
+    });
+  }
+
+  removeTagFilter(tagId: string): void {
+    const current = this.customizerService.selectedFilter();
+    const newIds = (current.tagIds ?? []).filter((id) => id !== tagId);
+    if (!newIds.length) {
+      this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
+      return;
+    }
+    const tagFilter = OPTIONS.filter.list.find((x) => x.type === FILTER_OPTION_TYPE.tag)!;
+    this.customizerService.setFilter({
+      ...tagFilter,
+      tagIds: newIds,
+      tagFilterMode: current.tagFilterMode ?? 'OR',
+    });
+  }
+
+  setTagFilterMode(mode: 'OR' | 'AND'): void {
+    const current = this.customizerService.selectedFilter();
+    if (current.type !== FILTER_OPTION_TYPE.tag) return;
+    this.customizerService.setFilter({ ...current, tagFilterMode: mode });
+  }
 
   onFilterSelect(filter: FilterOption): void {
     this.customizerService.setFilter(filter);
