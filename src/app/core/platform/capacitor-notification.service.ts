@@ -5,7 +5,9 @@ import {
   LocalNotifications,
   ScheduleOptions,
 } from '@capacitor/local-notifications';
+import { TranslateService } from '@ngx-translate/core';
 import { Log } from '../log';
+import { T } from '../../t.const';
 import { CapacitorPlatformService } from './capacitor-platform.service';
 import { Subject } from 'rxjs';
 
@@ -69,6 +71,7 @@ export interface NotificationActionEvent {
 })
 export class CapacitorNotificationService {
   private _platformService = inject(CapacitorPlatformService);
+  private _translateService = inject(TranslateService);
   private _actionsRegistered = false;
 
   /**
@@ -94,27 +97,18 @@ export class CapacitorNotificationService {
 
     try {
       // Register action types with Done, Snooze 10m, and Snooze 1h buttons
-      await LocalNotifications.registerActionTypes({
-        types: [
-          {
-            id: REMINDER_ACTION_TYPE_ID,
-            actions: [
-              {
-                id: NOTIFICATION_ACTION.DONE,
-                title: 'Done',
-                destructive: true,
-              },
-              {
-                id: NOTIFICATION_ACTION.SNOOZE_10M,
-                title: 'Snooze 10m',
-              },
-              {
-                id: NOTIFICATION_ACTION.SNOOZE_1H,
-                title: 'Snooze 1h',
-              },
-            ],
-          },
-        ],
+      await this._registerActionTypes();
+
+      // Re-register whenever the language changes so the buttons pick up the
+      // translations for the newly active language (registerActionTypes simply
+      // overwrites the previous registration).
+      this._translateService.onLangChange.subscribe(() => {
+        this._registerActionTypes().catch((error) => {
+          Log.err(
+            'CapacitorNotificationService: Failed to re-register actions on language change',
+            error,
+          );
+        });
       });
 
       // Listen for action events
@@ -349,5 +343,34 @@ export class CapacitorNotificationService {
     }
 
     await LocalNotifications.removeAllListeners();
+  }
+
+  /**
+   * Register (or overwrite) the reminder action types with button titles in
+   * the currently active language.
+   */
+  private async _registerActionTypes(): Promise<void> {
+    await LocalNotifications.registerActionTypes({
+      types: [
+        {
+          id: REMINDER_ACTION_TYPE_ID,
+          actions: [
+            {
+              id: NOTIFICATION_ACTION.DONE,
+              title: this._translateService.instant(T.F.REMINDER.N_ACTION_DONE),
+              destructive: true,
+            },
+            {
+              id: NOTIFICATION_ACTION.SNOOZE_10M,
+              title: this._translateService.instant(T.F.REMINDER.N_ACTION_SNOOZE_10M),
+            },
+            {
+              id: NOTIFICATION_ACTION.SNOOZE_1H,
+              title: this._translateService.instant(T.F.REMINDER.N_ACTION_SNOOZE_1H),
+            },
+          ],
+        },
+      ],
+    });
   }
 }

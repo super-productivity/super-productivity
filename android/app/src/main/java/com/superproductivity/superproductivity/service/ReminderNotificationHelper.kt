@@ -222,16 +222,13 @@ object ReminderNotificationHelper {
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(title)
-            .setContentText(when (reminderType) {
-                "TASK" -> "Task reminder"
-                "DUE_DATE" -> "Due date reminder"
-                else -> "Task reminder"
-            })
+            // Localized texts pushed from the frontend (English fallback)
+            .setContentText(ReminderNotificationTexts.getBody(context, reminderType))
             .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
-            .addAction(0, "Done", donePendingIntent)
-            .addAction(0, "Snooze 10m", snoozePendingIntent)
-            .addAction(0, "Snooze 1h", snooze1hPendingIntent)
+            .addAction(0, ReminderNotificationTexts.getActionDone(context), donePendingIntent)
+            .addAction(0, ReminderNotificationTexts.getActionSnooze10m(context), snoozePendingIntent)
+            .addAction(0, ReminderNotificationTexts.getActionSnooze1h(context), snooze1hPendingIntent)
             .setGroup(GROUP_KEY)
             .setOngoing(isOngoing)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

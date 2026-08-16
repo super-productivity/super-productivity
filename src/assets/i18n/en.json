@@ -1130,6 +1130,11 @@
           "OTHER": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other tasks are due)"
         }
       },
+      "N_ACTION_DONE": "Done",
+      "N_ACTION_SNOOZE_10M": "Snooze 10m",
+      "N_ACTION_SNOOZE_1H": "Snooze 1h",
+      "N_BODY_DUE_DATE": "Due date reminder",
+      "N_BODY_TASK": "Task reminder",
       "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
       "S_REMINDER_ERR": "Error for reminder interface"
     },

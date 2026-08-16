@@ -79,6 +79,17 @@ export interface AndroidInterface {
   // Returns a JSON string, or 'null' when no focus session is running.
   getFocusModeElapsed?(): string;
 
+  // Hand the localized notification texts (body + action buttons) over to the
+  // native side, which builds reminder notifications at alarm-fire time.
+  // Persisted natively so snoozed and rebooted reminders keep them too.
+  updateReminderNotificationTexts?(
+    bodyTask: string,
+    bodyDueDate: string,
+    actionDone: string,
+    actionSnooze10m: string,
+    actionSnooze1h: string,
+  ): void;
+
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(
     notificationId: number,

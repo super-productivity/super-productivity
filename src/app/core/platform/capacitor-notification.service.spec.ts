@@ -1,6 +1,15 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
+import { Subject } from 'rxjs';
+import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorNotificationService } from './capacitor-notification.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
+import { T } from '../../t.const';
+
+const mockTranslateService = {
+  instant: (key: string): string => key,
+  onLangChange: new Subject<unknown>(),
+};
 
 describe('CapacitorNotificationService', () => {
   let service: CapacitorNotificationService;
@@ -31,6 +40,7 @@ describe('CapacitorNotificationService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        { provide: TranslateService, useValue: mockTranslateService },
         CapacitorNotificationService,
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
       ],
@@ -58,6 +68,7 @@ describe('CapacitorNotificationService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
+          { provide: TranslateService, useValue: mockTranslateService },
           CapacitorNotificationService,
           { provide: CapacitorPlatformService, useValue: nativeServiceSpy },
         ],
@@ -141,6 +152,82 @@ describe('CapacitorNotificationService', () => {
   describe('removeAllListeners', () => {
     it('should not throw when not available', async () => {
       await expectAsync(service.removeAllListeners()).toBeResolved();
+    });
+  });
+
+  describe('registerReminderActions (localized, issue #9344)', () => {
+    let availableService: CapacitorNotificationService;
+    let registerActionTypesSpy: jasmine.Spy;
+    let onLangChange$: Subject<unknown>;
+
+    beforeEach(() => {
+      onLangChange$ = new Subject<unknown>();
+      const availablePlatformSpy = jasmine.createSpyObj(
+        'CapacitorPlatformService',
+        ['hasCapability', 'isIOS'],
+        {
+          platform: 'ios',
+          isNative: true,
+          capabilities: { scheduledNotifications: true },
+        },
+      );
+
+      registerActionTypesSpy = spyOn(
+        LocalNotificationsWeb.prototype,
+        'registerActionTypes',
+      ).and.returnValue(Promise.resolve());
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          // The mock's `instant` returns the key itself, so asserting on the
+          // T.* constants below proves the titles went through the translator.
+          {
+            provide: TranslateService,
+            useValue: {
+              instant: (key: string): string => key,
+              onLangChange: onLangChange$,
+            },
+          },
+          CapacitorNotificationService,
+          { provide: CapacitorPlatformService, useValue: availablePlatformSpy },
+        ],
+      });
+      availableService = TestBed.inject(CapacitorNotificationService);
+    });
+
+    it('registers the action buttons with translated titles', async () => {
+      await availableService.registerReminderActions();
+
+      expect(registerActionTypesSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          types: [
+            jasmine.objectContaining({
+              actions: [
+                jasmine.objectContaining({ title: T.F.REMINDER.N_ACTION_DONE }),
+                jasmine.objectContaining({ title: T.F.REMINDER.N_ACTION_SNOOZE_10M }),
+                jasmine.objectContaining({ title: T.F.REMINDER.N_ACTION_SNOOZE_1H }),
+              ],
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('re-registers the action types when the language changes', async () => {
+      await availableService.registerReminderActions();
+      expect(registerActionTypesSpy).toHaveBeenCalledTimes(1);
+
+      onLangChange$.next({});
+      // The Capacitor plugin proxy dispatches asynchronously; give the
+      // re-registration a macrotask to go through.
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(registerActionTypesSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not re-register on language change before the initial registration', () => {
+      onLangChange$.next({});
+      expect(registerActionTypesSpy).not.toHaveBeenCalled();
     });
   });
 });

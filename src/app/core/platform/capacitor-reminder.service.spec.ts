@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
+import { Subject } from 'rxjs';
 import { provideMockStore } from '@ngrx/store/testing';
 import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
@@ -8,6 +10,12 @@ import {
   REMINDER_ACTION_TYPE_ID,
 } from './capacitor-notification.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { T } from '../../t.const';
+
+const mockTranslateService = {
+  instant: (key: string): string => key,
+  onLangChange: new Subject<unknown>(),
+};
 
 describe('CapacitorReminderService', () => {
   let service: CapacitorReminderService;
@@ -52,6 +60,7 @@ describe('CapacitorReminderService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        { provide: TranslateService, useValue: mockTranslateService },
         CapacitorReminderService,
         provideMockStore(),
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
@@ -82,6 +91,7 @@ describe('CapacitorReminderService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
+          { provide: TranslateService, useValue: mockTranslateService },
           CapacitorReminderService,
           provideMockStore(),
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
@@ -109,6 +119,7 @@ describe('CapacitorReminderService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
+          { provide: TranslateService, useValue: mockTranslateService },
           CapacitorReminderService,
           provideMockStore(),
           { provide: CapacitorPlatformService, useValue: platformSpy },
@@ -222,6 +233,7 @@ describe('CapacitorReminderService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
+          { provide: TranslateService, useValue: mockTranslateService },
           CapacitorReminderService,
           provideMockStore(),
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
@@ -293,6 +305,7 @@ describe('CapacitorReminderService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
+          { provide: TranslateService, useValue: mockTranslateService },
           CapacitorReminderService,
           provideMockStore(),
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
@@ -394,6 +407,44 @@ describe('CapacitorReminderService', () => {
                 reminderType: 'DEADLINE',
               }),
             }),
+          ],
+        }),
+      );
+    });
+
+    it('uses the translated body for task reminders (issue #9344)', async () => {
+      // The mock translator returns the key itself, so a body equal to the
+      // T.* constant proves the text went through ngx-translate.
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'TASK',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [jasmine.objectContaining({ body: T.F.REMINDER.N_BODY_TASK })],
+        }),
+      );
+    });
+
+    it('uses the translated due-date body for due-date reminders (issue #9344)', async () => {
+      await nativeService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'DUE_DATE',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          notifications: [
+            jasmine.objectContaining({ body: T.F.REMINDER.N_BODY_DUE_DATE }),
           ],
         }),
       );
