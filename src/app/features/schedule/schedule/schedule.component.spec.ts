@@ -860,35 +860,111 @@ describe('ScheduleComponent', () => {
       expect(daysToShowCount).toBe(7);
     });
 
-    it('should return a value between MIN_WEEKS and MAX_WEEKS in month view', () => {
+    it('should return the full week count in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
 
       // Act
       const daysToShowCount = component['_daysToShowCount']();
 
-      // Assert - should be bounded by constants
-      expect(daysToShowCount).toBeGreaterThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS,
-      );
-      expect(daysToShowCount).toBeLessThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS,
-      );
+      // Assert
+      expect(daysToShowCount).toBe(SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS);
     });
 
-    it('should use MONTH_VIEW constants for calculation', () => {
-      // This test verifies the constants are being used by checking
-      // that the result is consistent with the constant values
+    it('should not shrink the month grid on a short window (#9449)', () => {
+      // The month grid used to be sized from the viewport, so a short window
+      // dropped the tail of the month (a task on Mon 31 Aug 2026 had no cell
+      // and therefore no events computed at all). Height must not influence it.
       mockLayoutService.selectedTimeView.set('month');
 
-      const daysToShowCount = component['_daysToShowCount']();
+      // One signal, mutated with .set(): replacing the field instead would not
+      // invalidate the computed, so the second read would return the first
+      // read's cached value and the test could not fail.
+      const windowSize = signal({ width: 1280, height: 1400 });
+      component['_windowSize'] = windowSize;
+      const onTallWindow = component['_daysToShowCount']();
 
-      // The result must be an integer (whole number of weeks)
-      expect(Number.isInteger(daysToShowCount)).toBe(true);
+      windowSize.set({ width: 1280, height: 500 });
+      const onShortWindow = component['_daysToShowCount']();
 
-      // Must be within the defined bounds
-      expect(daysToShowCount).toBeGreaterThanOrEqual(3); // MIN_WEEKS
-      expect(daysToShowCount).toBeLessThanOrEqual(6); // MAX_WEEKS
+      expect(onShortWindow).toBe(onTallWindow);
+      expect(onShortWindow).toBe(SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS);
+    });
+  });
+
+  describe('scroll position on view change', () => {
+    // Six rows overflow the wrapper on a short window, so a scroll position
+    // carried over from week view clamped to the bottom and opened the month
+    // with its first row above the viewport (#9463 review).
+    const scrollWrapper = (): HTMLElement =>
+      fixture.nativeElement.querySelector('.scroll-wrapper');
+
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('should reset the wrapper to the top when entering month view', () => {
+      mockLayoutService.selectedTimeView.set('week');
+      fixture.detectChanges();
+
+      // Cast because Element.scrollTo is overloaded; we always call the
+      // options form.
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).toHaveBeenCalled();
+      const [opts] = scrollToSpy.calls.mostRecent().args as [ScrollToOptions];
+      expect(opts.top).toBe(0);
+      expect(opts.left).toBe(0);
+    });
+
+    // schedule-day-panel renders its own schedule-week, so a second
+    // `#work-start` can exist outside this component's scroll wrapper. Resolving
+    // it through the document would scroll to whichever came first.
+    it('should ignore a work-start element outside its own scroll wrapper', () => {
+      const stray = document.createElement('div');
+      stray.id = 'work-start';
+      document.body.insertBefore(stray, document.body.firstChild);
+
+      try {
+        // Month view, so the only #work-start in the document is the stray one:
+        // this component renders schedule-month, which has none.
+        mockLayoutService.selectedTimeView.set('month');
+        fixture.detectChanges();
+        jasmine.clock().tick(1);
+
+        const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+        component['_scrollIntoViewWithTimeColumnOffset']('work-start');
+
+        expect(scrollToSpy).not.toHaveBeenCalled();
+      } finally {
+        stray.remove();
+      }
+    });
+
+    it('should not reset the wrapper while staying in month view', () => {
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      // A *different* array, not just a navigation: the mock returns one fixed
+      // reference, and a computed that yields the same reference is treated as
+      // unchanged, so dependents never re-run. Without this the test only rules
+      // out a reset wired to every change-detection pass.
+      mockScheduleService.getMonthDaysToShow.and.returnValue([
+        '2026-02-01',
+        '2026-02-02',
+        '2026-02-03',
+      ]);
+      component.goToNextPeriod();
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).not.toHaveBeenCalled();
     });
   });
 

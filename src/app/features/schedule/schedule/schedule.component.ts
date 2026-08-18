@@ -4,8 +4,10 @@ import {
   Component,
   computed,
   effect,
+  ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -101,6 +103,8 @@ export class ScheduleComponent {
     this._hiddenCalendarProviders.toggle(providerId);
   }
 
+  private _scrollWrapper = viewChild<ElementRef<HTMLElement>>('scrollWrapper');
+
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
   isDayView = computed(() => this._currentTimeViewMode() === 'day');
@@ -138,28 +142,19 @@ export class ScheduleComponent {
   });
 
   private _daysToShowCount = computed(() => {
-    const size = this._windowSize();
     const selectedView = this._currentTimeViewMode();
-    const width = size.width;
-    const height = size.height;
 
     if (selectedView === 'day') return 1;
 
+    // Month view: a fixed grid of weeks, never a function of the window height.
+    // Deriving the row count from available space used to drop the tail of the
+    // month whenever the window was short (#9449): a month whose 1st falls late
+    // in the week needs 6 rows (Aug 2026 starts on a Saturday), and a day left
+    // out of `daysToShow` gets no events computed at all, so the task vanished
+    // rather than merely being clipped. 6 rows covers every month/firstDayOfWeek
+    // combination and matches the 6 row tracks the grid already reserves.
     if (selectedView === 'month') {
-      const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
-      const minHeightPerWeek =
-        width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET
-          ? SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_MOBILE
-          : SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_DESKTOP;
-      const maxWeeks = Math.floor(availableHeight / minHeightPerWeek);
-
-      if (maxWeeks < SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS;
-      } else if (maxWeeks > SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS;
-      } else {
-        return maxWeeks;
-      }
+      return SCHEDULE_CONSTANTS.MONTH_VIEW.NR_OF_WEEKS;
     }
 
     // Week view: always 7 days
@@ -392,12 +387,27 @@ export class ScheduleComponent {
     this.isHScrolled.set(el.scrollLeft > 0);
   }
 
+  // The month grid is taller than the wrapper on a short window, so a scroll
+  // position carried over from week view clamps to the bottom and opens the
+  // month with its first row above the viewport (#9463 review).
+  private _resetScrollWrapper(): void {
+    this._scrollWrapper()?.nativeElement.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  }
+
   // Scroll a target element into view inside the scroll-wrapper, but pull
   // horizontally back by the sticky time column's width (+ a bit extra) so
   // the target doesn't end up sitting under the time column.
   private _scrollIntoViewWithTimeColumnOffset(elementId: string): void {
-    const element = document.getElementById(elementId);
-    const scrollContainer = element?.closest('.scroll-wrapper') as HTMLElement | null;
+    const scrollContainer = this._scrollWrapper()?.nativeElement;
+    // Scoped to the wrapper, not the document: `schedule-day-panel` renders its
+    // own `schedule-week`, so a second `#work-start` can be in the DOM while the
+    // Schedule route is open. The old `closest('.scroll-wrapper')` walk bailed
+    // on the panel's copy; resolving the container separately gave that up.
+    const element = scrollContainer?.querySelector(`#${elementId}`);
     if (!element || !scrollContainer) return;
 
     const timeCol = scrollContainer.querySelector(
@@ -444,6 +454,8 @@ export class ScheduleComponent {
       if (this.isMonthView() === false) {
         // scroll to work start whenever view is switched to work-week
         setTimeout(() => this._scrollIntoViewWithTimeColumnOffset('work-start'));
+      } else {
+        setTimeout(() => this._resetScrollWrapper());
       }
     });
   }
