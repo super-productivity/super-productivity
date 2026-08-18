@@ -46,6 +46,13 @@
   }
 }
 
+.empty {
+  padding: var(--s2);
+  text-align: center;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
 .schedule-nav-controls {
   display: flex;
   align-items: center;
