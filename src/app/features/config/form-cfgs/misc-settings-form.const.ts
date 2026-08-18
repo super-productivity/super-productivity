@@ -112,6 +112,7 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       type: 'checkbox',
       templateOptions: {
         label: T.GCF.MISC.IS_DISABLE_ANIMATIONS,
+        description: T.GCF.MISC.IS_DISABLE_ANIMATIONS_HINT,
       },
     },
     {

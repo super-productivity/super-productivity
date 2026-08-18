@@ -2642,6 +2642,7 @@
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirm before exiting the app without finishing day first",
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
+      "IS_DISABLE_ANIMATIONS_HINT": "Animations are also turned off automatically while your operating system requests reduced motion, even when this is unchecked.",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
       "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Requests require the access token shown below; keep it private and regenerate it if it may have been exposed. Any application running as you on this computer can read the token and modify your tasks.",

@@ -76,6 +76,7 @@ import { openWorkContextSettingsDialog } from './features/work-context/dialog-wo
 import { isInputElement } from './util/dom-element';
 import { getDroppedUrl } from './core/drop-paste-input/drop-paste-input';
 import { readableUrl } from './util/readable-url';
+import { prefersReducedMotion } from './util/prefers-reduced-motion';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
@@ -192,7 +193,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   private _isDisableAnimations = computed(() => {
     const misc = this._globalConfigService.misc();
-    return misc?.isDisableAnimations ?? false;
+    return (misc?.isDisableAnimations ?? false) || prefersReducedMotion();
   });
 
   // Experimental: vertical action strip on the right edge instead of the

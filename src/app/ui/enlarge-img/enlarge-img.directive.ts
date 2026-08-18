@@ -37,19 +37,34 @@ export class EnlargeImgDirective {
     }
   }
 
+  /**
+   * Runs `fn` on `transitionend` or after `ms`, whichever comes first.
+   * Safety fallback: `transitionend` never fires when transitions are off
+   * (body.isDisableAnimations / prefers-reduced-motion → transition: none),
+   * which would otherwise leave the full-viewport lightbox in the DOM
+   * swallowing every pointer event. 500ms > --transition-leave (225ms).
+   */
+  private _afterTransition(el: HTMLElement, fn: () => void, ms = 500): void {
+    let isDone = false;
+    const run = (): void => {
+      if (!isDone) {
+        isDone = true;
+        fn();
+      }
+    };
+    el.addEventListener('transitionend', run, { once: true });
+    setTimeout(run, ms);
+  }
+
   private _hideImg(): void {
-    this._setOriginCoordsForImageAni();
-    this._renderer.addClass(this.enlargedImgWrapperEl, 'ani-remove');
-    this._renderer.removeClass(this.enlargedImgWrapperEl, 'ani-enter');
-    if (!this.enlargedImgWrapperEl) {
+    const wrapperEl = this.enlargedImgWrapperEl;
+    if (!wrapperEl) {
       throw new Error();
     }
-    this.enlargedImgWrapperEl.addEventListener('transitionend', () => {
-      if (!this.enlargedImgWrapperEl) {
-        throw new Error();
-      }
-      this.enlargedImgWrapperEl.remove();
-    });
+    this._setOriginCoordsForImageAni();
+    this._renderer.addClass(wrapperEl, 'ani-remove');
+    this._renderer.removeClass(wrapperEl, 'ani-enter');
+    this._afterTransition(wrapperEl, () => wrapperEl.remove());
   }
 
   private _setOriginCoordsForImageAni(): void {
@@ -108,7 +123,7 @@ export class EnlargeImgDirective {
       if (this.zoomMode === 0) {
         this._hideImg();
       } else {
-        (this.newImageEl as HTMLElement).addEventListener('transitionend', () => {
+        this._afterTransition(this.newImageEl as HTMLElement, () => {
           setTimeout(() => {
             this._hideImg();
           });
@@ -122,7 +137,7 @@ export class EnlargeImgDirective {
       if (this.zoomMode === 0) {
         this._zoomImg();
       } else {
-        (this.newImageEl as HTMLElement).addEventListener('transitionend', () => {
+        this._afterTransition(this.newImageEl as HTMLElement, () => {
           setTimeout(() => {
             this._hideImg();
           });

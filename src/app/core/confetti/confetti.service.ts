@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { ConfettiConfig, ConfettiInstance } from './confetti.model';
+import { prefersReducedMotion } from '../../util/prefers-reduced-motion';
 
 @Injectable({
   providedIn: 'root',
@@ -41,9 +42,6 @@ export class ConfettiService {
     const misc = this._configService.misc();
     // Honor the OS "reduce motion" setting for every confetti caller (not just
     // the in-app animations toggle) — intentional, app-wide a11y behavior.
-    return (
-      !!misc?.isDisableAnimations ||
-      !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-    );
+    return !!misc?.isDisableAnimations || prefersReducedMotion();
   }
 }
