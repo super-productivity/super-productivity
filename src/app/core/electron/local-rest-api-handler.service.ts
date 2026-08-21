@@ -9,6 +9,10 @@ import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
+import { isValidDBDateStr } from '../../util/get-db-date-str';
+import { Store } from '@ngrx/store';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -29,6 +33,9 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'dueDay',
   'dueWithTime',
   'plannedAt',
+  'deadlineDay',
+  'deadlineWithTime',
+  'deadlineRemindAt',
 ]);
 
 /**
@@ -76,6 +83,9 @@ interface WritableTaskFields {
   dueDay?: string | null;
   dueWithTime?: number | null;
   plannedAt?: number;
+  deadlineDay?: string | null;
+  deadlineWithTime?: number | null;
+  deadlineRemindAt?: number | null;
 }
 
 type FieldTypeError = { path: string; expected: string };
@@ -96,6 +106,111 @@ const validateWritableFields = (
   return {
     ok: false,
     errors: result.errors.map((e) => ({ path: e.path, expected: e.expected })),
+  };
+};
+
+const DEADLINE_FIELDS = ['deadlineDay', 'deadlineWithTime', 'deadlineRemindAt'] as const;
+
+type DeadlineChange =
+  | {
+      type: 'set';
+      fields: {
+        deadlineDay?: string;
+        deadlineWithTime?: number;
+        deadlineRemindAt?: number;
+      };
+    }
+  | { type: 'remove' };
+
+const hasOwn = (value: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
+const validateDeadlineFields = (
+  fields: Partial<WritableTaskFields>,
+): string | undefined => {
+  if (fields.deadlineDay != null && fields.deadlineWithTime != null) {
+    return 'deadlineDay and deadlineWithTime cannot both be set';
+  }
+  if (typeof fields.deadlineDay === 'string' && !isValidDBDateStr(fields.deadlineDay)) {
+    return 'deadlineDay must be a valid YYYY-MM-DD date';
+  }
+  if (fields.deadlineWithTime != null && fields.deadlineWithTime <= 0) {
+    return 'deadlineWithTime must be a positive timestamp';
+  }
+  if (fields.deadlineRemindAt != null && fields.deadlineRemindAt <= 0) {
+    return 'deadlineRemindAt must be a positive timestamp';
+  }
+  return undefined;
+};
+
+const resolveDeadlineChange = (
+  fields: Partial<WritableTaskFields>,
+  existingTask?: Task,
+): { ok: true; change?: DeadlineChange } | { ok: false; message: string } => {
+  const hasDay = hasOwn(fields, 'deadlineDay');
+  const hasTime = hasOwn(fields, 'deadlineWithTime');
+  const hasReminder = hasOwn(fields, 'deadlineRemindAt');
+  if (!hasDay && !hasTime && !hasReminder) {
+    return { ok: true };
+  }
+
+  const requestedDay = fields.deadlineDay ?? undefined;
+  const requestedTime = fields.deadlineWithTime ?? undefined;
+  const isDeadlineValueSupplied =
+    requestedDay !== undefined || requestedTime !== undefined;
+  let deadlineDay = hasDay ? requestedDay : (existingTask?.deadlineDay ?? undefined);
+  let deadlineWithTime = hasTime
+    ? requestedTime
+    : (existingTask?.deadlineWithTime ?? undefined);
+
+  // A newly supplied deadline type replaces the other type, matching the
+  // mutual-exclusivity behavior of the deadline meta-reducer.
+  if (requestedDay !== undefined) deadlineWithTime = undefined;
+  if (requestedTime !== undefined) deadlineDay = undefined;
+
+  if (deadlineDay === undefined && deadlineWithTime === undefined) {
+    if (fields.deadlineRemindAt != null) {
+      return { ok: false, message: 'deadlineRemindAt requires a deadline' };
+    }
+    const hasExistingDeadline = Boolean(
+      existingTask?.deadlineDay ||
+      existingTask?.deadlineWithTime ||
+      existingTask?.deadlineRemindAt,
+    );
+    return {
+      ok: true,
+      change: hasExistingDeadline && (hasDay || hasTime) ? { type: 'remove' } : undefined,
+    };
+  }
+
+  // Updating the deadline without explicitly supplying a reminder clears the
+  // old reminder, just like the UI's setDeadline action. A reminder-only PATCH
+  // preserves the existing deadline and supplies its explicit new value.
+  const deadlineRemindAt = hasReminder
+    ? (fields.deadlineRemindAt ?? undefined)
+    : isDeadlineValueSupplied
+      ? undefined
+      : (existingTask?.deadlineRemindAt ?? undefined);
+
+  if (
+    existingTask &&
+    deadlineDay === (existingTask.deadlineDay ?? undefined) &&
+    deadlineWithTime === (existingTask.deadlineWithTime ?? undefined) &&
+    deadlineRemindAt === (existingTask.deadlineRemindAt ?? undefined)
+  ) {
+    return { ok: true };
+  }
+
+  return {
+    ok: true,
+    change: {
+      type: 'set',
+      fields: {
+        ...(deadlineDay !== undefined ? { deadlineDay } : {}),
+        ...(deadlineWithTime !== undefined ? { deadlineWithTime } : {}),
+        ...(deadlineRemindAt !== undefined ? { deadlineRemindAt } : {}),
+      },
+    },
   };
 };
 
@@ -178,7 +293,30 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
+  private readonly _store = inject(Store);
   private _isInitialized = false;
+
+  private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
+    if (change.type === 'remove') {
+      this._store.dispatch(
+        TaskSharedActions.removeDeadline({ taskId, isSkipSnack: true }),
+      );
+      return;
+    }
+
+    this._store.dispatch(
+      TaskSharedActions.setDeadline({
+        taskId,
+        ...change.fields,
+        ...getDeadlineAutoPlanFields(
+          this._dateService,
+          change.fields.deadlineDay,
+          change.fields.deadlineWithTime,
+        ),
+        isSkipSnack: true,
+      }),
+    );
+  }
 
   init(): void {
     if (this._isInitialized || !window.ea?.onLocalRestApiRequest) {
@@ -405,6 +543,35 @@ export class LocalRestApiHandlerService {
       );
     }
 
+    const deadlineValidationError = validateDeadlineFields(additionalFields);
+    if (deadlineValidationError) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        deadlineValidationError,
+      );
+    }
+
+    const deadlineFields = Object.fromEntries(
+      DEADLINE_FIELDS.filter((field) => hasOwn(additionalFields, field)).map((field) => [
+        field,
+        additionalFields[field],
+      ]),
+    ) as Partial<WritableTaskFields>;
+    const deadlineResolution = resolveDeadlineChange(deadlineFields);
+    if (!deadlineResolution.ok) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        deadlineResolution.message,
+      );
+    }
+    for (const field of DEADLINE_FIELDS) {
+      delete additionalFields[field];
+    }
+
     if ('parentId' in body) {
       if (typeof body.parentId !== 'string' || !body.parentId) {
         return createErrorResponse(
@@ -448,11 +615,17 @@ export class LocalRestApiHandlerService {
         title,
         ...additionalFields,
       });
+      if (deadlineResolution.change?.type === 'set') {
+        this._dispatchDeadlineChange(subTaskId, deadlineResolution.change);
+      }
       const createdSubTask = await this._getTaskById(subTaskId);
       return createSuccessResponse(requestId, 201, createdSubTask);
     }
 
     const taskId = this._taskService.add(title, false, additionalFields);
+    if (deadlineResolution.change?.type === 'set') {
+      this._dispatchDeadlineChange(taskId, deadlineResolution.change);
+    }
     const createdTask = await this._getTaskById(taskId);
 
     return createSuccessResponse(requestId, 201, createdTask);
@@ -507,9 +680,38 @@ export class LocalRestApiHandlerService {
           );
         }
 
+        const deadlineValidationError = validateDeadlineFields(changes);
+        if (deadlineValidationError) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            deadlineValidationError,
+          );
+        }
+
         const task = await this._getTaskById(taskId);
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
+        }
+
+        const deadlineFields = Object.fromEntries(
+          DEADLINE_FIELDS.filter((field) => hasOwn(changes, field)).map((field) => [
+            field,
+            changes[field],
+          ]),
+        ) as Partial<WritableTaskFields>;
+        const deadlineResolution = resolveDeadlineChange(deadlineFields, task);
+        if (!deadlineResolution.ok) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            deadlineResolution.message,
+          );
+        }
+        for (const field of DEADLINE_FIELDS) {
+          delete changes[field];
         }
 
         if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
@@ -552,7 +754,12 @@ export class LocalRestApiHandlerService {
           }
         }
 
-        this._taskService.update(taskId, changes);
+        if (Object.keys(changes).length > 0) {
+          this._taskService.update(taskId, changes);
+        }
+        if (deadlineResolution.change) {
+          this._dispatchDeadlineChange(taskId, deadlineResolution.change);
+        }
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
 
