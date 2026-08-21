@@ -7,7 +7,6 @@ import { PluginI18nService } from './plugin-i18n.service';
 import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLog } from '../core/log';
-import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 
 /**
  * Simplified plugin runner following KISS principles.
@@ -22,7 +21,6 @@ export class PluginRunner {
   private _pluginI18nService = inject(PluginI18nService);
   private _snackService = inject(SnackService);
   private _cleanupService = inject(PluginCleanupService);
-  private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
 
   private _loadedPlugins = new Map<string, PluginInstance>();
   private _pluginApis = new Map<string, PluginAPI>();
@@ -39,9 +37,6 @@ export class PluginRunner {
     isEnabled: boolean = true,
   ): Promise<PluginInstance> {
     try {
-      this._taskContextMenuRegistry.unregisterPlugin(manifest.id);
-      let isRuntimeActive = true;
-
       // Create plugin API
       const pluginAPI = new PluginAPI(
         baseCfg,
@@ -64,10 +59,7 @@ export class PluginRunner {
               this._unloadCallbacks.set(manifest.id, fn);
             }
           },
-          isActive: () =>
-            isRuntimeActive && this._pluginApis.get(manifest.id) === pluginAPI,
         },
-        this._taskContextMenuRegistry,
       );
 
       // executeNodeScript is now automatically bound if permitted via createBoundMethods
@@ -133,8 +125,7 @@ export class PluginRunner {
           });
         }
       } catch (error) {
-        isRuntimeActive = false;
-        this._taskContextMenuRegistry.unregisterPlugin(manifest.id);
+        this._pluginBridge.unregisterPluginHooks(manifest.id);
         pluginInstance.error =
           error instanceof Error ? error.message : 'Failed to load plugin';
         PluginLog.err(`Plugin ${manifest.id} error:`, error);
@@ -143,7 +134,7 @@ export class PluginRunner {
       this._loadedPlugins.set(manifest.id, pluginInstance);
       return pluginInstance;
     } catch (error) {
-      this._taskContextMenuRegistry.unregisterPlugin(manifest.id);
+      this._pluginBridge.unregisterPluginHooks(manifest.id);
       PluginLog.err(`Failed to load plugin ${manifest.id}:`, error);
       throw error;
     }
@@ -214,7 +205,6 @@ export class PluginRunner {
     // service already fired it. Outside the loaded-check so a plugin whose
     // loadPlugin threw after API creation still gets cleaned up.
     this.triggerUnload(pluginId);
-    this._taskContextMenuRegistry.unregisterPlugin(pluginId);
 
     const plugin = this._loadedPlugins.get(pluginId);
     if (plugin) {

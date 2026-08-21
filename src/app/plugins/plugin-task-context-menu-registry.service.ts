@@ -1,10 +1,12 @@
-import { Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import {
   PluginTaskContextMenuContext,
   PluginTaskContextMenuEntryCfg,
   PluginTaskContextMenuTarget,
 } from '@super-productivity/plugin-api';
+import { TranslateService } from '@ngx-translate/core';
 import { PluginLog } from '../core/log';
+import { T } from '../t.const';
 
 const ENTRY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ICON_PATTERN = /^[a-z0-9_]{1,64}$/;
@@ -33,39 +35,48 @@ export interface PluginTaskContextMenuEntryView {
 @Injectable({ providedIn: 'root' })
 export class PluginTaskContextMenuRegistryService {
   private readonly _entries = signal<RegisteredTaskContextMenuEntry[]>([]);
+  private readonly _translateService = inject(TranslateService);
 
   register(
     pluginId: string,
     pluginName: string,
-    permissions: readonly string[],
     cfg: PluginTaskContextMenuEntryCfg,
   ): void {
-    if (!permissions.includes('taskContextMenu')) {
-      throw new Error(
-        'registerTaskContextMenuEntry requires the "taskContextMenu" manifest permission',
-      );
-    }
-
-    const id = cfg.id?.trim();
-    const label = cfg.label?.trim();
+    const id = typeof cfg.id === 'string' ? cfg.id.trim() : '';
+    const label = typeof cfg.label === 'string' ? cfg.label.trim() : '';
     if (!ENTRY_ID_PATTERN.test(id)) {
-      throw new Error('Task context menu entry id must match [a-z0-9][a-z0-9_-]{0,63}');
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_ID_INVALID),
+      );
     }
     if (!label || label.length > MAX_LABEL_LENGTH) {
       throw new Error(
-        `Task context menu entry label must be 1-${MAX_LABEL_LENGTH} characters`,
+        this._translateService.instant(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_LABEL_INVALID, {
+          maxLength: MAX_LABEL_LENGTH,
+        }),
       );
     }
-    if (cfg.icon !== undefined && !ICON_PATTERN.test(cfg.icon)) {
-      throw new Error('Task context menu entry icon must be a Material icon name');
+    if (
+      cfg.icon !== undefined &&
+      (typeof cfg.icon !== 'string' || !ICON_PATTERN.test(cfg.icon))
+    ) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_ICON_INVALID),
+      );
     }
     if (typeof cfg.onClick !== 'function') {
-      throw new Error('Task context menu entry onClick handler is required');
+      throw new Error(
+        this._translateService.instant(
+          T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_ONCLICK_REQUIRED,
+        ),
+      );
     }
 
     const showFor = cfg.showFor?.length ? [...new Set(cfg.showFor)] : DEFAULT_TARGETS;
     if (showFor.some((target) => !VALID_TARGETS.has(target))) {
-      throw new Error('Task context menu entry showFor contains an unknown target');
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID),
+      );
     }
 
     const newEntry: RegisteredTaskContextMenuEntry = {
@@ -107,12 +118,16 @@ export class PluginTaskContextMenuRegistryService {
 
     try {
       await entry.onClick(Object.freeze({ taskId }));
-    } catch {
-      PluginLog.err('Plugin task context menu action failed', {
-        pluginId,
-        entryId,
-        taskId,
-      });
+    } catch (error) {
+      PluginLog.err(
+        'Plugin task context menu action failed',
+        {
+          pluginId,
+          entryId,
+          taskId,
+        },
+        error,
+      );
     }
   }
 

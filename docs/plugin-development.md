@@ -455,10 +455,9 @@ PluginAPI.registerMenuEntry({
 
 #### Task Context Menu Entry
 
-Task context-menu entries require the `taskContextMenu` permission in
-`manifest.json` and can only be registered from host-side `plugin.js` code. The
-callback receives only the selected task ID; use the task API to read or update
-the task when needed.
+Task context-menu entries can only be registered from host-side `plugin.js` code.
+The callback receives only the selected task ID; use the task API to read or
+update the task when needed.
 
 ```javascript
 PluginAPI.registerTaskContextMenuEntry({

@@ -9,7 +9,6 @@ import {
   NotifyCfg,
   PluginManifest,
 } from '@super-productivity/plugin-api';
-import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 
 describe('PluginAPI', () => {
   let pluginAPI: PluginAPI;
@@ -19,7 +18,7 @@ describe('PluginAPI', () => {
   let requestSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
-  let taskContextMenuRegistry: jasmine.SpyObj<PluginTaskContextMenuRegistryService>;
+  let registerTaskContextMenuEntrySpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -47,10 +46,7 @@ describe('PluginAPI', () => {
     getFocusedTaskSpy = jasmine
       .createSpy('getFocusedTask')
       .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
-    taskContextMenuRegistry = jasmine.createSpyObj<PluginTaskContextMenuRegistryService>(
-      'PluginTaskContextMenuRegistryService',
-      ['register'],
-    );
+    registerTaskContextMenuEntrySpy = jasmine.createSpy('registerTaskContextMenuEntry');
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -68,6 +64,7 @@ describe('PluginAPI', () => {
       getSelectedTask: getSelectedTaskSpy,
       getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
+      registerTaskContextMenuEntry: registerTaskContextMenuEntrySpy,
       log: {
         critical: jasmine.createSpy(),
         err: jasmine.createSpy(),
@@ -107,10 +104,9 @@ describe('PluginAPI', () => {
         version: '1.0.0',
         minSupVersion: '1.0.0',
         hooks: [],
-        permissions: ['taskContextMenu'],
+        permissions: [],
       } as PluginManifest,
       undefined,
-      taskContextMenuRegistry,
     );
   });
 
@@ -122,18 +118,13 @@ describe('PluginAPI', () => {
   });
 
   describe('registerTaskContextMenuEntry()', () => {
-    it('registers the entry with plugin identity and manifest permissions', () => {
+    it('delegates the entry registration to the bound bridge method', () => {
       const onClick = jasmine.createSpy('onClick');
       const cfg = { id: 'set-color', label: 'Set color', onClick };
 
       pluginAPI.registerTaskContextMenuEntry(cfg);
 
-      expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
-        'test-plugin',
-        'Test Plugin',
-        ['taskContextMenu'],
-        cfg,
-      );
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledOnceWith(cfg);
     });
   });
 

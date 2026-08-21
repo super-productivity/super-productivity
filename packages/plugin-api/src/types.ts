@@ -555,10 +555,7 @@ export interface PluginAPI {
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void;
 
-  /**
-   * Register an action in the task context menu's plugin submenu.
-   * Requires `"taskContextMenu"` in the plugin manifest permissions.
-   */
+  /** Register an action in the task context menu's plugin submenu. */
   registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void;
 
   registerConfigHandler(handler: () => void): void;
