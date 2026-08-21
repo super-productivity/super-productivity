@@ -16,6 +16,7 @@ import { OPEN_PROJECT_ISSUE_CONTENT_CONFIG } from '../providers/open-project/ope
 // Azure DevOps is now a plugin — content config lives in the plugin's issueDisplay
 import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
 import { PLAINSPACE_ISSUE_CONTENT_CONFIG } from '../providers/plainspace/plainspace-issue-content.const';
+import { OUTLOOK_TASKS_ISSUE_CONTENT_CONFIG } from '../providers/outlook-tasks/outlook-tasks.const';
 
 // Re-export types for backwards compatibility
 export { IssueFieldType, IssueFieldConfig, IssueCommentConfig, IssueContentConfig };
@@ -31,6 +32,7 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,
   NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
   PLAINSPACE: PLAINSPACE_ISSUE_CONTENT_CONFIG,
+  OUTLOOK_TASKS: OUTLOOK_TASKS_ISSUE_CONTENT_CONFIG,
   ICAL: {
     issueType: 'ICAL',
     fields: [],

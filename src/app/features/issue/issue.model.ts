@@ -30,6 +30,11 @@ import {
   PluginIssue,
   PluginSearchResult,
 } from '../../plugins/issue-provider/plugin-issue-provider.model';
+import { OutlookTasksCfg } from './providers/outlook-tasks/outlook-tasks.model';
+import {
+  OutlookTasksIssue,
+  OutlookTasksIssueReduced,
+} from './providers/outlook-tasks/outlook-tasks-issue.model';
 
 export interface BaseIssueProviderCfg {
   isEnabled: boolean;
@@ -48,7 +53,8 @@ export type BuiltInIssueProviderKey =
   | 'OPEN_PROJECT'
   | 'REDMINE'
   | 'NEXTCLOUD_DECK'
-  | 'PLAINSPACE';
+  | 'PLAINSPACE'
+  | 'OUTLOOK_TASKS';
 
 // Keys migrated from built-in to plugin — still valid as IssueProviderKey
 export type MigratedIssueProviderKey =
@@ -83,6 +89,7 @@ const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'REDMINE',
   'NEXTCLOUD_DECK',
   'PLAINSPACE',
+  'OUTLOOK_TASKS',
 ]);
 
 const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
@@ -106,7 +113,8 @@ export type IssueIntegrationCfg =
   | OpenProjectCfg
   | RedmineCfg
   | NextcloudDeckCfg
-  | PlainspaceCfg;
+  | PlainspaceCfg
+  | OutlookTasksCfg;
 
 export enum IssueLocalState {
   OPEN = 'OPEN',
@@ -124,6 +132,7 @@ export interface IssueIntegrationCfgs {
   REDMINE?: RedmineCfg;
   NEXTCLOUD_DECK?: NextcloudDeckCfg;
   PLAINSPACE?: PlainspaceCfg;
+  OUTLOOK_TASKS?: OutlookTasksCfg;
 }
 
 export type IssueData =
@@ -135,6 +144,7 @@ export type IssueData =
   | RedmineIssue
   | NextcloudDeckIssue
   | PlainspaceIssue
+  | OutlookTasksIssue
   | PluginIssue;
 
 export type IssueDataReduced =
@@ -146,6 +156,7 @@ export type IssueDataReduced =
   | RedmineIssue
   | NextcloudDeckIssueReduced
   | PlainspaceIssue
+  | OutlookTasksIssueReduced
   | PluginSearchResult;
 
 export type IssueDataReducedMap = {
@@ -165,11 +176,13 @@ export type IssueDataReducedMap = {
                 ? NextcloudDeckIssueReduced
                 : K extends 'PLAINSPACE'
                   ? PlainspaceIssue
-                  : K extends MigratedIssueProviderKey
-                    ? PluginSearchResult
-                    : K extends PluginIssueProviderKey
+                  : K extends 'OUTLOOK_TASKS'
+                    ? OutlookTasksIssueReduced
+                    : K extends MigratedIssueProviderKey
                       ? PluginSearchResult
-                      : never;
+                      : K extends PluginIssueProviderKey
+                        ? PluginSearchResult
+                        : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -277,6 +290,10 @@ export interface IssueProviderPlainspace extends IssueProviderBase, PlainspaceCf
   issueProviderKey: 'PLAINSPACE';
 }
 
+export interface IssueProviderOutlookTasks extends IssueProviderBase, OutlookTasksCfg {
+  issueProviderKey: 'OUTLOOK_TASKS';
+}
+
 export interface IssueProviderPluginType extends IssueProviderBase {
   issueProviderKey: PluginIssueProviderKey | MigratedIssueProviderKey;
   pluginId: string;
@@ -297,6 +314,7 @@ export type IssueProvider =
   | IssueProviderAzureDevOps
   | IssueProviderNextcloudDeck
   | IssueProviderPlainspace
+  | IssueProviderOutlookTasks
   | IssueProviderPluginType;
 
 export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
@@ -325,8 +343,10 @@ export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
                         ? IssueProviderNextcloudDeck
                         : T extends 'PLAINSPACE'
                           ? IssueProviderPlainspace
-                          : T extends PluginIssueProviderKey
-                            ? IssueProviderPluginType
-                            : T extends MigratedIssueProviderKey
+                          : T extends 'OUTLOOK_TASKS'
+                            ? IssueProviderOutlookTasks
+                            : T extends PluginIssueProviderKey
                               ? IssueProviderPluginType
-                              : never;
+                              : T extends MigratedIssueProviderKey
+                                ? IssueProviderPluginType
+                                : never;
