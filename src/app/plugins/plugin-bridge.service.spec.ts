@@ -43,6 +43,7 @@ import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.componen
 import { T } from '../t.const';
 import { INBOX_PROJECT } from '../features/project/project.const';
 import { Project } from '../features/project/project.model';
+import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { PluginManifest } from '@super-productivity/plugin-api';
 
 describe('PluginBridgeService - Counter Methods', () => {
@@ -50,6 +51,7 @@ describe('PluginBridgeService - Counter Methods', () => {
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let dataInitService: jasmine.SpyObj<DataInitService>;
+  let taskContextMenuRegistry: jasmine.SpyObj<PluginTaskContextMenuRegistryService>;
 
   const mockExistingCounter: SimpleCounter = {
     ...EMPTY_SIMPLE_COUNTER,
@@ -63,6 +65,10 @@ describe('PluginBridgeService - Counter Methods', () => {
   beforeEach(() => {
     const dataInitServiceSpy = jasmine.createSpyObj('DataInitService', ['reInit']);
     dataInitServiceSpy.reInit.and.resolveTo();
+    taskContextMenuRegistry = jasmine.createSpyObj(
+      'PluginTaskContextMenuRegistryService',
+      ['register', 'unregisterPlugin'],
+    );
 
     TestBed.configureTestingModule({
       providers: [
@@ -107,6 +113,10 @@ describe('PluginBridgeService - Counter Methods', () => {
         },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: dataInitServiceSpy },
+        {
+          provide: PluginTaskContextMenuRegistryService,
+          useValue: taskContextMenuRegistry,
+        },
       ],
     });
 
@@ -332,6 +342,38 @@ describe('PluginBridgeService - Counter Methods', () => {
       service.createBoundMethods('other-plugin').unregisterShortcut('rule-1');
 
       expect(service.shortcuts().length).toBe(1);
+    });
+  });
+
+  describe('task context menu registrations', () => {
+    const manifest = {
+      id: 'test-plugin',
+      name: 'Test Plugin',
+    } as PluginManifest;
+    const entry = {
+      id: 'set-color',
+      label: 'Set color',
+      onClick: () => undefined,
+    };
+
+    it('binds the plugin identity and manifest name when registering an entry', () => {
+      service
+        .createBoundMethods(manifest.id, manifest)
+        .registerTaskContextMenuEntry(entry);
+
+      expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
+        manifest.id,
+        manifest.name,
+        entry,
+      );
+    });
+
+    it('removes task context menu entries during central plugin cleanup', () => {
+      service.unregisterPluginHooks(manifest.id);
+
+      expect(taskContextMenuRegistry.unregisterPlugin).toHaveBeenCalledOnceWith(
+        manifest.id,
+      );
     });
   });
 
