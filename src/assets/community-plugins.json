@@ -40,6 +40,14 @@
     "stars": 0
   },
   {
+    "name": "Auto-Fill Time Spent",
+    "shortDescription": "Automatically sets Time Spent equal to Time Estimate when completing a task that has no tracked time. Perfect for off-computer activities.",
+    "url": "https://github.com/MazenMohamed203/auto-fill-time-spent",
+    "author": "MazenMohamed203",
+    "authorUrl": "https://github.com/MazenMohamed203",
+    "stars": 2
+  },
+  {
     "name": "Obsidian Integration",
     "shortDescription": "Provides 2-way sync between SP tasks and Obsidian tasks.",
     "url": "https://codeberg.org/sinenomine/sp-obsidian/",
