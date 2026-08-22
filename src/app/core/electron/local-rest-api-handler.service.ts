@@ -120,6 +120,7 @@ type DeadlineChange =
         deadlineRemindAt?: number;
       };
     }
+  | { type: 'clearReminder' }
   | { type: 'remove' };
 
 const hasOwn = (value: object, key: string): boolean =>
@@ -156,8 +157,6 @@ const resolveDeadlineChange = (
 
   const requestedDay = fields.deadlineDay ?? undefined;
   const requestedTime = fields.deadlineWithTime ?? undefined;
-  const isDeadlineValueSupplied =
-    requestedDay !== undefined || requestedTime !== undefined;
   let deadlineDay = hasDay ? requestedDay : (existingTask?.deadlineDay ?? undefined);
   let deadlineWithTime = hasTime
     ? requestedTime
@@ -183,20 +182,36 @@ const resolveDeadlineChange = (
     };
   }
 
+  const existingDeadlineDay = existingTask?.deadlineDay ?? undefined;
+  const existingDeadlineWithTime = existingTask?.deadlineWithTime ?? undefined;
+  const existingDeadlineRemindAt = existingTask?.deadlineRemindAt ?? undefined;
+  const isDeadlineValueChanged =
+    deadlineDay !== existingDeadlineDay || deadlineWithTime !== existingDeadlineWithTime;
+
+  if (
+    existingTask &&
+    hasReminder &&
+    fields.deadlineRemindAt == null &&
+    !isDeadlineValueChanged &&
+    existingDeadlineRemindAt !== undefined
+  ) {
+    return { ok: true, change: { type: 'clearReminder' } };
+  }
+
   // Updating the deadline without explicitly supplying a reminder clears the
   // old reminder, just like the UI's setDeadline action. A reminder-only PATCH
   // preserves the existing deadline and supplies its explicit new value.
   const deadlineRemindAt = hasReminder
     ? (fields.deadlineRemindAt ?? undefined)
-    : isDeadlineValueSupplied
+    : isDeadlineValueChanged
       ? undefined
-      : (existingTask?.deadlineRemindAt ?? undefined);
+      : existingDeadlineRemindAt;
 
   if (
     existingTask &&
-    deadlineDay === (existingTask.deadlineDay ?? undefined) &&
-    deadlineWithTime === (existingTask.deadlineWithTime ?? undefined) &&
-    deadlineRemindAt === (existingTask.deadlineRemindAt ?? undefined)
+    deadlineDay === existingDeadlineDay &&
+    deadlineWithTime === existingDeadlineWithTime &&
+    deadlineRemindAt === existingDeadlineRemindAt
   ) {
     return { ok: true };
   }
@@ -297,6 +312,11 @@ export class LocalRestApiHandlerService {
   private _isInitialized = false;
 
   private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
+    if (change.type === 'clearReminder') {
+      this._store.dispatch(TaskSharedActions.clearDeadlineReminder({ taskId }));
+      return;
+    }
+
     if (change.type === 'remove') {
       this._store.dispatch(
         TaskSharedActions.removeDeadline({ taskId, isSkipSnack: true }),
@@ -714,7 +734,7 @@ export class LocalRestApiHandlerService {
           delete changes[field];
         }
 
-        if (Object.prototype.hasOwnProperty.call(changes, 'projectId')) {
+        if (hasOwn(changes, 'projectId')) {
           const targetProjectId = changes.projectId;
           if (typeof targetProjectId !== 'string' || !targetProjectId.trim()) {
             return createErrorResponse(

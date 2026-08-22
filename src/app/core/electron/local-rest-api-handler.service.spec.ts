@@ -957,6 +957,90 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
+      it('should keep the reminder when re-sending the unchanged day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12' },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should keep the reminder when re-sending the unchanged timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineWithTime: 1_778_582_400_000 },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should clear only the reminder without re-planning a day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.clearDeadlineReminder({ taskId: 'task-1' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should clear only the reminder without re-planning a timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(storeMock.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.clearDeadlineReminder({ taskId: 'task-1' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
       it('should set a deadline reminder alongside a deadline', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
