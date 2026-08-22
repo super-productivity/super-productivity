@@ -520,6 +520,49 @@ describe('WebSocketConnectionService', () => {
   });
 
   describe('startHeartbeat', () => {
+    it('touches the device row of a live socket, throttled to the shared interval', () => {
+      const touch = vi.fn();
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+
+      service.startHeartbeat(touch);
+
+      // First tick is inside the throttle window measured from accept.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).not.toHaveBeenCalled();
+
+      // Crossing DEVICE_TOUCH_THROTTLE_MS (2 min) yields exactly one write...
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+      expect(touch).toHaveBeenCalledWith(1, 'client-a');
+
+      // ...and the next ticks are throttled again rather than one per heartbeat.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps pinging when no touch fn is injected', () => {
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+      ws.send.mockClear();
+
+      service.startHeartbeat();
+      vi.advanceTimersByTime(30_000);
+
+      expect(parseSendCalls(ws)).toContainEqual(
+        expect.objectContaining({ type: 'ping' }),
+      );
+    });
+
     it('should send ping at interval', () => {
       const ws = createMockWs();
       service.addConnection(1, 'client-a', ws as any);

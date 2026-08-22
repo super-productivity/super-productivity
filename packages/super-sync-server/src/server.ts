@@ -491,8 +491,11 @@ export const createServer = (
       // Start cleanup jobs
       startCleanupJobs();
 
-      // Start WebSocket heartbeat
-      getWsConnectionService().startHeartbeat();
+      // Start WebSocket heartbeat. It also refreshes the device row of every live
+      // socket, so a long-lived read-only connection is not pruned as stale.
+      getWsConnectionService().startHeartbeat((userId, clientId) =>
+        getSyncService().touchDevice(userId, clientId),
+      );
 
       try {
         const address = await fastifyServer.listen(createListenOptions(fullConfig));

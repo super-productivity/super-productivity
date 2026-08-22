@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import { Logger } from '../../logger';
+import { DEVICE_TOUCH_THROTTLE_MS } from '../sync.types';
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -8,6 +9,13 @@ interface ConnectedClient {
   lastPong: number;
   /** Wall-clock ms when this socket was accepted (used for the storm summary). */
   connectedAt: number;
+  /**
+   * Wall-clock ms of the last device touch issued for this socket. Purely an
+   * in-memory throttle so a long-lived connection costs ~one write per
+   * DEVICE_TOUCH_THROTTLE_MS rather than one per heartbeat tick; the statement
+   * itself is throttled again in SQL, so a stale value here is harmless.
+   */
+  lastTouchedAt: number;
   /**
    * Wall-clock ms at which the reconnect cooldown expires. Set on accept and
    * extended forward on each refused challenger so a sustained storm cannot
@@ -37,6 +45,12 @@ interface ConnectedClient {
 export class WebSocketConnectionService {
   private connections = new Map<number, Set<ConnectedClient>>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Injected rather than imported so this service stays free of persistence:
+   * it knows when a client is demonstrably alive, not how a device row is
+   * written. Fire-and-forget by contract — the callee must not reject.
+   */
+  private touchDevice: ((userId: number, clientId: string) => void) | null = null;
 
   /** 30s ping interval - keeps connection alive through proxies (most: 60-120s timeout) */
   private static readonly PING_INTERVAL_MS = 30_000;
@@ -161,6 +175,7 @@ export class WebSocketConnectionService {
       userId,
       lastPong: nowMs,
       connectedAt: nowMs,
+      lastTouchedAt: nowMs,
       cooldownUntil: nowMs + WebSocketConnectionService.RECONNECT_COOLDOWN_MS,
       refusedChallengers: 0,
       summaryLogged: false,
@@ -310,8 +325,9 @@ export class WebSocketConnectionService {
     }
   }
 
-  startHeartbeat(): void {
+  startHeartbeat(touchDevice?: (userId: number, clientId: string) => void): void {
     if (this.heartbeatInterval) return;
+    this.touchDevice = touchDevice ?? null;
 
     this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
@@ -330,6 +346,18 @@ export class WebSocketConnectionService {
             );
             toRemove.push({ userId, client });
             continue;
+          }
+
+          // A socket that still answers pings is in active use, so keep its device
+          // row fresh: a connection held open past the retention window without
+          // uploading would otherwise be pruned mid-use. Touching only on accept
+          // would not cover that case.
+          if (
+            this.touchDevice &&
+            now - client.lastTouchedAt >= DEVICE_TOUCH_THROTTLE_MS
+          ) {
+            client.lastTouchedAt = now;
+            this.touchDevice(userId, client.clientId);
           }
 
           // Send app-level ping

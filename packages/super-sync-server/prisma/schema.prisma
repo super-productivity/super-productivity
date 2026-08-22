@@ -147,6 +147,7 @@ model SyncDevice {
   deviceName   String? @map("device_name")
   userAgent    String? @map("user_agent")
   lastSeenAt   BigInt  @map("last_seen_at")
+  /// Reserved: written once at device registration, never read or updated.
   lastAckedSeq Int     @default(0) @map("last_acked_seq")
   createdAt    BigInt  @map("created_at")
 
