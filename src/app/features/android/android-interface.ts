@@ -105,6 +105,9 @@ export interface AndroidInterface {
   // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
   getWidgetDoneQueue?(): string | null;
 
+  // Project ID selected by the most recent project-widget row tap
+  getWidgetProjectToOpen?(): string | null;
+
   // Re-render the home screen widget from the current widget_data snapshot
   updateWidget?(): void;
 
@@ -149,6 +152,11 @@ export interface AndroidInterface {
   // start/resume drains are triggered by onResume$ instead)
   onWidgetDoneDrainRequest$: Subject<void>;
 
+  // Contentless native signal after a project-widget row tap. Angular pulls the
+  // project ID from the native queue so cold and warm starts share one path.
+  onWidgetProjectOpenDrainRequest$: Subject<void>;
+  onWidgetProjectOpen$: ReplaySubject<string>;
+
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
   clearSuperSyncCredentials?(): void;
@@ -187,6 +195,8 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onWidgetDoneDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpenDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpen$ = new ReplaySubject(1);
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
@@ -272,6 +282,17 @@ if (IS_ANDROID_WEB_VIEW) {
     }
   } catch (e) {
     DroidLog.err('Failed to parse reminder tap queue', e);
+  }
+
+  // Pull-based: retrieve the selected project from a cold-start widget row tap.
+  try {
+    const projectId = androidInterface.getWidgetProjectToOpen?.();
+    if (projectId) {
+      DroidLog.log('Pulled project-widget open queue from SharedPreferences');
+      androidInterface.onWidgetProjectOpen$.next(projectId);
+    }
+  } catch (e) {
+    DroidLog.err('Failed to process project-widget open queue', e);
   }
 
   // Pull-based: retrieve queued "Done" task IDs from notification actions
