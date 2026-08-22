@@ -39,6 +39,17 @@ PluginAPI.registerHeaderButton({
   },
 });
 
+// Add an action to task and subtask context menus
+PluginAPI.registerTaskContextMenuEntry({
+  id: 'copy-external-link',
+  label: 'Copy external link',
+  icon: 'link',
+  showFor: ['TASK'],
+  onClick: ({ taskId }) => {
+    console.log('Selected task:', taskId);
+  },
+});
+
 // Register a keyboard shortcut
 PluginAPI.registerShortcut({
   id: 'my_shortcut',
@@ -78,6 +89,9 @@ PluginAPI.registerShortcut({
 - `PluginManifest` - Plugin configuration
 - `PluginHooks` - Available hook types
 - `PluginBaseCfg` - Runtime configuration
+- `PluginTaskContextMenuEntryCfg` - Task context-menu action configuration
+- `PluginTaskContextMenuContext` - Context passed to a task action
+- `PluginTaskContextMenuTarget` - Supported task-menu targets
 
 ### Data Types
 

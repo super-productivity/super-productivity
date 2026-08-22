@@ -430,6 +430,9 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
     );
+    expect(script).toContain(
+      "registerTaskContextMenuEntry: unsupportedIframeRegistration('registerTaskContextMenuEntry')",
+    );
   });
 
   // allow-same-origin is required: an opaque-origin iframe does not paint on

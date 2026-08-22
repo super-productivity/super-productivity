@@ -125,6 +125,7 @@ export class PluginRunner {
           });
         }
       } catch (error) {
+        this._pluginBridge.unregisterPluginHooks(manifest.id);
         pluginInstance.error =
           error instanceof Error ? error.message : 'Failed to load plugin';
         PluginLog.err(`Plugin ${manifest.id} error:`, error);
@@ -133,6 +134,7 @@ export class PluginRunner {
       this._loadedPlugins.set(manifest.id, pluginInstance);
       return pluginInstance;
     } catch (error) {
+      this._pluginBridge.unregisterPluginHooks(manifest.id);
       PluginLog.err(`Failed to load plugin ${manifest.id}:`, error);
       throw error;
     }
