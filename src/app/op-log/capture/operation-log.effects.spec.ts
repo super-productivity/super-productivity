@@ -23,6 +23,7 @@ import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
+import { _resetDevErrorState } from '../../util/dev-error';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -739,6 +740,36 @@ describe('OperationLogEffects', () => {
     // behind it. The effect must mark that divergence so compaction stops
     // snapshotting the live store (which would bake the phantom change into
     // state_cache as permanent, silent cross-device divergence).
+
+    afterEach(() => {
+      // window.confirm is a spy installed once globally in test.ts, not per
+      // spec — a returnValue set here would otherwise leak into every later
+      // test in the run and silently change how devError behaves there.
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+      _resetDevErrorState();
+    });
+
+    it('should mark the divergence on a non-throwing invalid-identifier skip', (done) => {
+      // devError is the only thing between the skip and the return, and it
+      // throws only when confirm says so; with it declining, the effect takes
+      // the silent-skip path a production build would take.
+      _resetDevErrorState();
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      (action.meta as { entityId?: string }).entityId = '';
+      actions$ = of(action);
+
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).toHaveBeenCalledTimes(1);
+          expect(mockOperationCaptureService.decrementPending).toHaveBeenCalledTimes(1);
+          done();
+        },
+      });
+    });
 
     it('should mark the divergence when the append fails for good', (done) => {
       mockOpLogStore.appendWithVectorClockOverwrite.and.rejectWith(

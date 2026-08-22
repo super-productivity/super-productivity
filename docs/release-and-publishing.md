@@ -2,7 +2,7 @@
 
 > **Status:** Maintained
 >
-> **Last verified against workflows:** 2026-07-29
+> **Last verified against workflows:** 2026-08-06
 
 The GitHub Actions workflows are the executable source of truth. Update this
 runbook in the same change whenever their triggers, channels, artifacts, or secret
@@ -135,7 +135,9 @@ for secret names. The main operational groups are:
 - Apple signing and App Store Connect: see
   [Apple release automation](apple-release-automation.md),
   [Mac App Store signing](mac-app-store-code-signing-guide.md), and
-  [certificate renewal](update-mac-certificates.md).
+  [certificate renewal](update-mac-certificates.md). The iOS home-screen widget
+  requires separate app and extension provisioning profiles; see the
+  [widget signing setup](../ios/App/SupWidget/README.md#one-time-manual-setup-requires-apple-developer-portal--xcode).
 - Windows signing: `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID`; the
   project, signing-policy, and artifact-configuration slugs are fixed in
   `.github/workflows/build.yml`.
