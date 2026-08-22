@@ -208,20 +208,11 @@ PluginAPI.registerIssueProvider({
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
-    // `priority_repo_id` is the only reliable way to scope the global issue
-    // search to the configured repository, so look it up first.
-    const repo = await http.get<GiteaRepositoryReduced>(
-      `${base}/repos/${cfg.repoFullname}`,
-    );
-
     const params: Record<string, string> = {
       limit: '100',
       state: 'open',
       q: searchTerm,
     };
-    if (repo?.id) {
-      params['priority_repo_id'] = String(repo.id);
-    }
     if (cfg.scope === SCOPE_CREATED_BY_ME) {
       params['created'] = 'true';
     } else if (cfg.scope === SCOPE_ASSIGNED_TO_ME) {
@@ -312,24 +303,38 @@ PluginAPI.registerIssueProvider({
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
-    const params: Record<string, string> = { limit: '100', state: 'open' };
-    if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
-      const user = await http.get<GiteaUser>(`${base}/user`);
-      if (cfg.scope === SCOPE_CREATED_BY_ME) {
-        params['created_by'] = user.username;
-      } else {
-        params['assigned_by'] = user.username;
+    const pageLimit = 20;
+    let page = 1;
+    let allIssues: GiteaIssue[] = [];
+    let issues: GiteaIssue[] = [];
+    const user = await http.get<GiteaUser>(`${base}/user`);
+    while ((page === 1 || issues.length !== 0) && page <= pageLimit) {
+      const params: Record<string, string> = {
+        limit: '100',
+        state: 'open',
+        page: page.toString(),
+      };
+      if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
+        if (cfg.scope === SCOPE_CREATED_BY_ME) {
+          params['created_by'] = user.username;
+        } else {
+          params['assigned_by'] = user.username;
+        }
       }
-    }
-    if (includedLabels.length > 0) {
-      params['labels'] = includedLabels.join(',');
-    }
+      if (includedLabels.length > 0) {
+        params['labels'] = includedLabels.join(',');
+      }
 
-    const opts: PluginHttpOptions = { params };
-    const issues =
-      (await http.get<GiteaIssue[]>(`${base}/repos/${cfg.repoFullname}/issues`, opts)) ||
-      [];
-    return issues
+      const opts: PluginHttpOptions = { params };
+      issues =
+        (await http.get<GiteaIssue[]>(
+          `${base}/repos/${cfg.repoFullname}/issues`,
+          opts,
+        )) || [];
+      allIssues = allIssues.concat(issues);
+      page += 1;
+    }
+    return allIssues
       .filter((issue) => hasAllLabels(issue, includedLabels))
       .filter((issue) => isIssueIncludedByLabels(issue, excludedLabels))
       .map(mapSearchResult);
