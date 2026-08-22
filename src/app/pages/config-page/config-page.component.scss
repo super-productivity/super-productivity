@@ -65,7 +65,7 @@
     }
 
     ::ng-deep .mat-mdc-tab {
-      flex-grow: 0 !important;
+      flex-grow: 1 !important;
       min-width: 120px;
       border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
       transition: background-color var(--transition-fast);
