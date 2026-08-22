@@ -1,3 +1,5 @@
+@use '../../../styles/globals' as *;
+
 :host {
   pointer-events: none;
 }
@@ -8,16 +10,32 @@
   pointer-events: auto;
   animation: hint-appear var(--transition-duration-l) var(--ani-enter-timing);
 
+  // The un-anchored variant (the closing "explore" hint has no target element).
+  // It used to sit dead centre of the viewport, where it reads as a modal with
+  // no backdrop and covers whatever is underneath — settings rows, the task
+  // list. Park it in the bottom-end corner like a toast instead: out of the
+  // centred content column, clear of the side nav and the header.
   &.floating {
-    top: 50%;
-    left: 50%;
-    bottom: auto;
-    transform: translate(-50%, -50%);
-    animation-name: hint-appear-floating;
+    top: auto;
+    left: auto;
+    inset-inline-end: var(--s2);
+    inset-block-end: calc(var(--s2) + var(--safe-area-bottom));
+    transform: none;
 
     .hint-chip {
-      max-width: 340px;
+      max-width: min(340px, calc(100vw - var(--s4)));
     }
+  }
+}
+
+// Clear the mobile bottom nav, the same way snack bars do
+// (see src/styles/components/_overwrite-material.scss).
+@include mq(xs, max) {
+  :host-context(body.hasMobileBottomNav) .hint-container.floating {
+    inset-block-end: calc(
+      var(--s2) + var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+        var(--bottom-nav-extra-offset)
+    );
   }
 }
 
@@ -155,18 +173,6 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes hint-appear-floating {
-  from {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 4px));
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%);
   }
 }
 

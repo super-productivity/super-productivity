@@ -65,18 +65,25 @@
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
   // Bottom clearance reserved by the mobile bottom nav and everything stacked
-  // above it (scroll content, snackbars). Half the inset by default: iOS's home
-  // indicator is thin and translucent, so a full inset reads as an oversized gap.
-  // Native Android's system bars (3-button / gesture) are opaque and must be
-  // cleared in full or the nav buttons draw under them (#8792) — overridden to
-  // the full inset for native Android in styles.scss. Reads through the shared
-  // --safe-area-bottom (not raw env()) so this tracks the same source as the
-  // header/side-nav/body insets and all bottom-inset UI behaves uniformly across
-  // SystemBars WebView bands. Caveat: on the narrow API >= 35 / WebView < 140
-  // band the shared source can double-count vs SystemBars' native padding (a
-  // cosmetic gap, not an overlap — see the device-matrix risks in
+  // above it (scroll content, snackbars). The FULL inset, on every platform.
+  //
+  // This used to be half the inset on iOS on the theory that the home indicator
+  // is thin and translucent, so a full inset would read as an oversized gap.
+  // It doesn't: the nav's background fills the reserved band (see
+  // mobile-bottom-nav.component.scss), so there is no gap to see — only the
+  // 44px button row moves up out of the band. At half of a 34pt iOS inset the
+  // icons and the active-item pill still land inside the home-indicator band
+  // (#5563), which is also why native Android already needed the full inset
+  // (#8792). One rule for both is simpler and correct in both places.
+  //
+  // Reads through the shared --safe-area-bottom (not raw env()) so this tracks
+  // the same source as the header/side-nav/body insets and all bottom-inset UI
+  // behaves uniformly across SystemBars WebView bands. Caveat: on the narrow
+  // API >= 35 / WebView < 140 band the shared source can double-count vs
+  // SystemBars' native padding (a cosmetic gap, not an overlap — see the
+  // device-matrix risks in
   // docs/plans/2026-06-22-android-systembars-migration-corrected.md).
-  --bottom-nav-safe-area: calc(var(--safe-area-bottom) / 2);
+  --bottom-nav-safe-area: var(--safe-area-bottom);
 
   // Keyboard height (set dynamically via JS)
   --keyboard-height: 0px;
