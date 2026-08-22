@@ -143,6 +143,22 @@
     "authorUrl": "https://codeberg.org/fpindado",
     "stars": 0
   },
+   {
+  "name": "Magic ToDo",
+  "shortDescription": "Break tasks into subtasks with an OpenAI-compatible AI endpoint. Up to 3 levels: task, subtasks, and checklist sub-subtasks.",
+  "url": "https://github.com/FlourishLifeTech/sp-magic-todo",
+  "author": "Ranjit Singh",
+  "authorUrl": "https://github.com/1nsp1r3rnzt",
+  "stars": 0
+},
+{
+  "name": "Task Color",
+  "shortDescription": "Set background colors on tasks, with tag-based coloring, search/filter/sort in the side panel, a palette-style color picker with favorites/last-picked, and a task picker dialog for fast color assignment.",
+  "url": "https://github.com/FlourishLifeTech/sp-task-color-plugin",
+  "author": "Ranjit Singh",
+  "authorUrl": "https://github.com/1nsp1r3rnzt",
+  "stars": 0
+},
   {
     "name": "JSON to Tasks",
     "shortDescription": "Create tasks and subtasks from pasted JSON, with project/tag resolution and optional creation of missing projects and tags.",
