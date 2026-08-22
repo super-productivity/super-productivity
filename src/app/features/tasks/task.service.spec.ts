@@ -311,6 +311,76 @@ describe('TaskService', () => {
     });
   });
 
+  // The Shift+T fallback for rows that are not rendered by a live <task>
+  // (e.g. <planner-task> in the Planner overdue list). It has to apply the same
+  // two guards TaskComponent.scheduleForToday() applies, or the same keypress
+  // behaves differently based on the DOM host. (#9577)
+  describe('scheduleForTodayById', () => {
+    it('should dispatch planTasksForToday for a task that is not on today', () => {
+      const task = createMockTask('task-1', { dueDay: '2026-01-04' });
+      store.overrideSelector(selectTaskEntities, { ['task-1']: task });
+      store.refreshState();
+
+      service.scheduleForTodayById('task-1');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['task-1'],
+          today: '2026-01-05',
+          startOfNextDayDiffMs: 0,
+          // computed key: a quoted 'task-1' trips the naming-convention rule
+          parentTaskMap: { ['task-1']: undefined },
+        }),
+      );
+    });
+
+    it('should not re-plan a task whose dueDay is already today', () => {
+      const task = createMockTask('task-1', { dueDay: '2026-01-05' });
+      store.overrideSelector(selectTaskEntities, { ['task-1']: task });
+      store.refreshState();
+
+      service.scheduleForTodayById('task-1');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not drop the reminder of a task due at a time today', () => {
+      // planTasksForToday applies `remindAt: undefined` unconditionally, so
+      // re-planning this task would silently clear its reminder.
+      const task = createMockTask('task-1', {
+        dueWithTime: new Date(2026, 0, 5, 14, 30).getTime(),
+        remindAt: new Date(2026, 0, 5, 14, 0).getTime(),
+      });
+      store.overrideSelector(selectTaskEntities, { ['task-1']: task });
+      store.refreshState();
+
+      service.scheduleForTodayById('task-1');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not date a done task', () => {
+      // Completion never synthesizes a dueDay; dating a done task instead
+      // inflates the daily summary's done count for today.
+      const task = createMockTask('task-1', { isDone: true });
+      store.overrideSelector(selectTaskEntities, { ['task-1']: task });
+      store.refreshState();
+
+      service.scheduleForTodayById('task-1');
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should still dispatch for an unknown id, leaving the reducer to drop it', () => {
+      store.overrideSelector(selectTaskEntities, {});
+      store.refreshState();
+
+      service.scheduleForTodayById('missing');
+
+      expect(store.dispatch).toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('should dispatch deleteTask', () => {
       const task = createMockTaskWithSubTasks(createMockTask('task-1'));
