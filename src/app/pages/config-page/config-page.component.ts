@@ -487,7 +487,14 @@ export class ConfigPageComponent implements OnInit {
   goToSearchResult(target: SettingsSearchTarget): void {
     this.onSearchChange('');
     this.selectedTabIndex = target.tabIndex;
-    this.expandedSection = target.sectionKey ?? null;
+    const sectionKey = target.sectionKey ?? null;
+    if (sectionKey !== null && sectionKey === this.expandedSection) {
+      // A collapsible can be closed locally while this key remains selected.
+      // Clear the binding for one change-detection pass so navigation reopens it.
+      this.expandedSection = null;
+      this._cd.detectChanges();
+    }
+    this.expandedSection = sectionKey;
     this._cd.detectChanges();
     // The tab body swaps in over `animationDuration`, so the element doesn't
     // exist yet; wait it out before scrolling.

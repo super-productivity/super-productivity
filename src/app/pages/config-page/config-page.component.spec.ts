@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ConfigPageComponent } from './config-page.component';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -16,6 +16,9 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { T } from '../../t.const';
+import { By } from '@angular/platform-browser';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -23,10 +26,12 @@ describe('ConfigPageComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockLocalBackupService: jasmine.SpyObj<LocalBackupService>;
+  let fixture: ComponentFixture<ConfigPageComponent>;
 
   const setup = async (
     isAndroidWebView: boolean = false,
     lastBackupTime: number | null = null,
+    renderCollapsible: boolean = false,
   ): Promise<void> => {
     const mockSyncConfigService = jasmine.createSpyObj(
       'SyncConfigService',
@@ -58,6 +63,7 @@ describe('ConfigPageComponent', () => {
     mockTranslateService.instant.and.callFake((key: string) => key);
 
     await TestBed.configureTestingModule({
+      imports: renderCollapsible ? [NoopAnimationsModule] : [],
       providers: [
         { provide: SyncConfigService, useValue: mockSyncConfigService },
         { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: isAndroidWebView },
@@ -87,11 +93,21 @@ describe('ConfigPageComponent', () => {
       ],
     })
       .overrideComponent(ConfigPageComponent, {
-        set: { imports: [], template: '' },
+        set: renderCollapsible
+          ? {
+              imports: [CollapsibleComponent],
+              template: `
+                <collapsible
+                  [isExpanded]="isSectionExpanded(generalFormCfg[0])"
+                ></collapsible>
+              `,
+            }
+          : { imports: [], template: '' },
       })
       .compileComponents();
 
-    component = TestBed.createComponent(ConfigPageComponent).componentInstance;
+    fixture = TestBed.createComponent(ConfigPageComponent);
+    component = fixture.componentInstance;
   };
 
   beforeEach(async () => {
@@ -157,5 +173,30 @@ describe('ConfigPageComponent', () => {
     await setup(true, null);
 
     expect(findLastBackupLine()).toBeUndefined();
+  });
+
+  it('reopens the same search result section after a manual collapse (#9643)', async () => {
+    TestBed.resetTestingModule();
+    await setup(false, null, true);
+    fixture.detectChanges();
+
+    const collapsible = fixture.debugElement.query(By.directive(CollapsibleComponent))
+      .componentInstance as CollapsibleComponent;
+    const target = {
+      labelKey: 'Language',
+      tabLabelKey: T.PS.TABS.GENERAL,
+      tabIndex: 0,
+      sectionKey: 'localization',
+      scrollSelector: '.localization',
+    };
+
+    component.goToSearchResult(target);
+    expect(collapsible.isExpanded).toBe(true);
+
+    collapsible.toggleExpand();
+    expect(collapsible.isExpanded).toBe(false);
+
+    component.goToSearchResult(target);
+    expect(collapsible.isExpanded).toBe(true);
   });
 });
