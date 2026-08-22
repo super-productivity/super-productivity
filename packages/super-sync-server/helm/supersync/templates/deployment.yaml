@@ -148,9 +148,13 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 30
+          # Liveness must not depend on the database: a restart cannot fix a downed
+          # DB, and it would drop every live-sync websocket on the way. Readiness
+          # and startup stay on /health so the pod still leaves the Service
+          # endpoints while the database is unreachable.
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live
               port: http
             periodSeconds: 30
             timeoutSeconds: 5

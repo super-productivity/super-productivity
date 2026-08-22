@@ -467,6 +467,17 @@ export const createServer = (
         }
       });
 
+      // Liveness - process health only, deliberately free of dependency checks.
+      // Restarting the process cannot fix a database that is down, and the restart
+      // lands a cold start exactly when the database comes back; on this chart it
+      // also drops every client's live-sync websocket, since replicaCount > 1 is
+      // rejected and there is no failover. Answering here still proves the event
+      // loop is responsive. Exempt from rate limiting like /health, as probes are
+      // frequent.
+      fastifyServer.get('/live', { config: { rateLimit: false } }, async () => ({
+        status: 'ok',
+      }));
+
       // API Routes
       await fastifyServer.register(apiRoutes, {
         prefix: '/api',

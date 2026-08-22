@@ -75,6 +75,11 @@ jobs:
             echo 'connectionLimit=0 unexpectedly passed Helm validation' >&2
             exit 1
           fi
+          # Liveness must stay off the DB-gated endpoint; readiness and startup keep it.
+          rendered=$(helm template "${chart_args[@]}")
+          printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -q 'path: /live'
+          printf '%s\n' "$rendered" | grep -A3 'readinessProbe:' | grep -q 'path: /health'
+          printf '%s\n' "$rendered" | grep -A3 'startupProbe:' | grep -q 'path: /health'
       - name: Run SuperSync Server Tests
         run: cd packages/super-sync-server && npm test
       - name: Apply PostgreSQL Test Schema
