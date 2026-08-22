@@ -72,6 +72,7 @@ import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.co
 import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
+import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
 
 type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
@@ -300,6 +301,7 @@ export class DialogEditIssueProviderComponent {
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.ISSUE.S.CONNECTION_FAILED,
+          translateParams: { errorMsg: 'Unknown error' },
         });
       }
     } catch (error) {
@@ -307,6 +309,7 @@ export class DialogEditIssueProviderComponent {
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.ISSUE.S.CONNECTION_FAILED,
+        translateParams: { errorMsg: getErrorTxt(error) },
       });
     }
   }

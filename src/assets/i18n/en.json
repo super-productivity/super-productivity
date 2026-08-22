@@ -516,7 +516,7 @@
       },
       "S": {
         "AUTO_CREATE_FAILED": "Auto-create issue failed: {{errorMsg}}",
-        "CONNECTION_FAILED": "Connection failed",
+        "CONNECTION_FAILED": "Connection failed: {{errorMsg}}",
         "CONNECTION_SUCCESS": "Connection works!",
         "ERR_GENERIC": "{{issueProviderName}} Error: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Request failed because of a client side network error",
