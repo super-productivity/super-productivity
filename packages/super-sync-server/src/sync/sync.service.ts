@@ -24,6 +24,7 @@ import {
   type PreparedSnapshotCache,
   type CacheSnapshotResult,
   type SnapshotDedupResponse,
+  type OldOpsSweepResult,
 } from './services';
 import type { ValidationResult } from './services/validation.service';
 const getPrismaP2002TargetTokens = (
@@ -850,9 +851,7 @@ export class SyncService {
 
   // === Cleanup ===
 
-  async deleteOldSyncedOpsForAllUsers(
-    cutoffTime: number,
-  ): Promise<{ totalDeleted: number; affectedUserIds: number[] }> {
+  async deleteOldSyncedOpsForAllUsers(cutoffTime: number): Promise<OldOpsSweepResult> {
     return this.storageQuotaService.deleteOldSyncedOpsForAllUsers(cutoffTime);
   }
 

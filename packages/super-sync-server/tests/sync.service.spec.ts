@@ -877,6 +877,7 @@ describe('SyncService', () => {
   afterEach(() => {
     delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
     delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
+    delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN;
   });
 
   describe('filterValidOpsForQuota', () => {
@@ -3020,6 +3021,89 @@ describe('SyncService', () => {
       });
     };
 
+    const seedUser = (targetUserId: number): void => {
+      testState.users.set(targetUserId, {
+        id: targetUserId,
+        email: `test${targetUserId}@test.com`,
+        storageQuotaBytes: BigInt(100 * 1024 * 1024),
+        storageUsedBytes: BigInt(0),
+      });
+    };
+
+    /**
+     * Seeds `count` sweepable ops (all older than `cutoffTime`), the causal
+     * full-state op at `count + 1` that authorizes deleting them, and the sync
+     * state the sweep selects on. `snapshotAt` decides the sweep order —
+     * `orderBy: snapshotAt asc`, so the smaller value is served first.
+     */
+    const seedSweepableUser = (
+      targetUserId: number,
+      count: number,
+      cutoffTime: number,
+      snapshotAt: number,
+    ): void => {
+      for (let i = 1; i <= count; i++) {
+        testState.operations.set(`u${targetUserId}-op-${i}`, {
+          id: `u${targetUserId}-op-${i}`,
+          userId: targetUserId,
+          clientId,
+          serverSeq: i,
+          actionType: 'ADD',
+          opType: 'CRT',
+          entityType: 'TASK',
+          entityId: `t${i}`,
+          payload: {},
+          vectorClock: {},
+          schemaVersion: 1,
+          clientTimestamp: BigInt(Date.now()),
+          receivedAt: BigInt(cutoffTime - 1),
+          isPayloadEncrypted: false,
+          syncImportReason: null,
+        });
+      }
+      seedFullStateOp(targetUserId, count + 1, BigInt(cutoffTime - 1));
+      testState.userSyncStates.set(targetUserId, {
+        userId: targetUserId,
+        lastSeq: count + 1,
+        lastSnapshotSeq: count + 1,
+        snapshotAt: BigInt(snapshotAt),
+      });
+    };
+
+    /**
+     * Runs `fn` with the batch candidate selection throwing `error`. Only that
+     * query carries `receivedAt` (the boundary lookups are `findFirst`), so this
+     * fails exactly the query #9692 saw the database cancel. `failingUserId`
+     * null fails it for every user.
+     */
+    const withCancelledBatchSelect = async (
+      failingUserId: number | null,
+      error: Error,
+      fn: () => Promise<void>,
+    ): Promise<void> => {
+      // Swapped by hand rather than with `vi.spyOn`: the prisma mock's methods
+      // are plain `vi.fn()`s, and spying on one leaves it stripped of its
+      // implementation after `mockRestore`, breaking every later test.
+      const findMany = prisma.operation.findMany as (a: unknown) => Promise<unknown>;
+      const target = prisma.operation as { findMany: unknown };
+      target.findMany = async (args: unknown): Promise<unknown> => {
+        const where = (args as { where?: { userId?: number; receivedAt?: unknown } })
+          ?.where;
+        if (
+          where?.receivedAt &&
+          (failingUserId === null || where.userId === failingUserId)
+        ) {
+          throw error;
+        }
+        return findMany(args);
+      };
+      try {
+        await fn();
+      } finally {
+        target.findMany = findMany;
+      }
+    };
+
     it('should not delete old operations when no full-state base exists', async () => {
       const service = getSyncService();
       const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
@@ -3312,6 +3396,9 @@ describe('SyncService', () => {
       const service = getSyncService();
       process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
       process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      // Raised above the batch size: the cap now defaults to one batch per
+      // user per run, and this test is about draining across several.
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN = '250';
       const totalOps = 255;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
@@ -3359,6 +3446,9 @@ describe('SyncService', () => {
       const service = getSyncService();
       process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
       process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      // Raised above the batch size: the cap now defaults to one batch per
+      // user per run, and this test is about draining across several.
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN = '250';
       const totalOps = 120;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
@@ -3423,64 +3513,180 @@ describe('SyncService', () => {
       expect(testState.operations.size).toBe(totalOps + 1 - 50);
     });
 
+    it('skips a user whose batch query the database cancels and sweeps the rest', async () => {
+      // #9692: a PostgreSQL statement_timeout (57014) on ONE account's batch
+      // selection aborted the whole daily sweep, so cleanup was off fleet-wide
+      // and both summary warnings died with the throw.
+      const service = getSyncService();
+      const user2Id = 2;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      const opsPerUser = 3;
+
+      seedUser(user2Id);
+      seedSweepableUser(userId, opsPerUser, cutoffTime, Date.now() - 1000);
+      seedSweepableUser(user2Id, opsPerUser, cutoffTime, Date.now());
+
+      const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+      try {
+        await withCancelledBatchSelect(
+          userId,
+          // The message shape a real cancellation carries; the guard matches on
+          // it, not on the error class alone.
+          new Prisma.PrismaClientUnknownRequestError(
+            'Error occurred during query execution: ERROR: canceling statement due to statement timeout (57014)',
+            { clientVersion: '5.22.0' },
+          ),
+          async () => {
+            const { totalDeleted, affectedUserIds, failedUserIds } =
+              await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+            expect(failedUserIds).toEqual([userId]);
+            expect(affectedUserIds).toEqual([user2Id]);
+            expect(totalDeleted).toBe(opsPerUser);
+            // The cancelled user keeps its history; the rest of the fleet is swept.
+            expect(testState.operations.has(`u${userId}-op-1`)).toBe(true);
+            expect(testState.operations.has(`u${user2Id}-op-1`)).toBe(false);
+          },
+        );
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('were skipped mid-sweep'),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('aborts the sweep on an engine panic instead of skipping the user', async () => {
+      // The per-user catch is deliberately narrow: a panicked query engine
+      // leaves the client in an undefined state, so continuing to issue
+      // per-user queries after it is not "one user failed".
+      const service = getSyncService();
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      seedSweepableUser(userId, 3, cutoffTime, Date.now());
+
+      await withCancelledBatchSelect(
+        null,
+        new Prisma.PrismaClientRustPanicError('engine panic', '5.22.0'),
+        async () => {
+          await expect(service.deleteOldSyncedOpsForAllUsers(cutoffTime)).rejects.toThrow(
+            'engine panic',
+          );
+        },
+      );
+    });
+
+    it('aborts on an unknown request error that is not a statement cancellation', async () => {
+      // PrismaClientUnknownRequestError is Prisma's catch-all for engine
+      // failures it could not map to a P#### code — an empty engine response
+      // means the client is unusable, not that this one user is slow.
+      const service = getSyncService();
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      seedSweepableUser(userId, 3, cutoffTime, Date.now());
+
+      await withCancelledBatchSelect(
+        null,
+        new Prisma.PrismaClientUnknownRequestError('Response from the Engine was empty', {
+          clientVersion: '5.22.0',
+        }),
+        async () => {
+          await expect(service.deleteOldSyncedOpsForAllUsers(cutoffTime)).rejects.toThrow(
+            'Response from the Engine was empty',
+          );
+        },
+      );
+      expect(testState.operations.has(`u${userId}-op-1`)).toBe(true);
+    });
+
+    it('caps how much of the per-run budget a single user can consume', async () => {
+      // Without a per-user cap the drain loop runs until the GLOBAL budget is
+      // gone, and `orderBy: snapshotAt asc` puts the largest (lapsed) histories
+      // first — so the head of the list starves everyone behind it for months.
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN = '100';
+      const user2Id = 2;
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      const opsPerUser = 200;
+
+      seedUser(user2Id);
+      seedSweepableUser(userId, opsPerUser, cutoffTime, Date.now() - 1000);
+      seedSweepableUser(user2Id, opsPerUser, cutoffTime, Date.now());
+
+      const { totalDeleted, affectedUserIds } =
+        await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+      // Uncapped this would be 200 + 50; capped both users get serviced.
+      expect(totalDeleted).toBe(200);
+      expect(affectedUserIds).toEqual([userId, user2Id]);
+      expect(testState.operations.size).toBe(2 * (opsPerUser + 1 - 100));
+    });
+
+    it('honours a batch size raised above the compile-time default', async () => {
+      // The per-user cap defaults to the RESOLVED batch size. Tying it to the
+      // 5000 constant instead made `OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=7000`
+      // delete 5000 and silently drop the rest — a documented knob that had
+      // stopped working.
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '7000';
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      seedSweepableUser(userId, 7_000, cutoffTime, Date.now());
+
+      const { totalDeleted } = await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+      expect(totalDeleted).toBe(7_000);
+    });
+
+    it('warns when the per-user cap, not the run budget, stopped a sweep', async () => {
+      // The cap binds long before the run budget for a concentrated backlog, so
+      // without this the run ends far under budget, the "budget exhausted"
+      // warning never fires, and nothing says why throughput stalled.
+      const service = getSyncService();
+      process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '5000';
+      const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
+      seedSweepableUser(userId, 200, cutoffTime, Date.now());
+
+      const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+      try {
+        const { totalDeleted } = await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
+
+        expect(totalDeleted).toBe(50);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining(
+            'still have deletable ops after reaching the 50/user cap',
+          ),
+        );
+        // The run budget was nowhere near exhausted, so that warning must not fire.
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('per-run budget exhausted'),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
     it('shares the per-run budget across users; tail users wait for next pass', async () => {
       const service = getSyncService();
       process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = '50';
       process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = '250';
+      // Raised above the batch size on purpose: this is the case the drain loop
+      // exists for. Left at its default the cap IS the batch size, so each user
+      // would get exactly one batch and the budget would never be exhausted.
+      process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN = '200';
       const user2Id = 2;
       const cutoffTime = Date.now() - 50 * 24 * 60 * 60 * 1000;
 
-      testState.users.set(user2Id, {
-        id: user2Id,
-        email: 'test2@test.com',
-        storageQuotaBytes: BigInt(100 * 1024 * 1024),
-        storageUsedBytes: BigInt(0),
-      });
-
       // Each user has 200 stale ops — more than the 250 per-run budget combined.
+      // The stalest `snapshotAt` wins the budget first, so user1 goes first.
       const opsPerUser = 200;
-      for (const uid of [userId, user2Id]) {
-        for (let i = 1; i <= opsPerUser; i++) {
-          testState.operations.set(`u${uid}-op-${i}`, {
-            id: `u${uid}-op-${i}`,
-            userId: uid,
-            clientId,
-            serverSeq: i,
-            actionType: 'ADD',
-            opType: 'CRT',
-            entityType: 'TASK',
-            entityId: `t${i}`,
-            payload: {},
-            vectorClock: {},
-            schemaVersion: 1,
-            clientTimestamp: BigInt(Date.now()),
-            receivedAt: BigInt(cutoffTime - 1),
-            isPayloadEncrypted: false,
-            syncImportReason: null,
-          });
-        }
-        seedFullStateOp(uid, opsPerUser + 1, BigInt(cutoffTime - 1));
-      }
-
-      // userSyncStates are processed by `orderBy: snapshotAt asc`, so the
-      // stalest snapshot wins the budget first. user1 here is staler.
-      testState.userSyncStates.set(userId, {
-        userId,
-        lastSeq: opsPerUser + 1,
-        lastSnapshotSeq: opsPerUser + 1,
-        snapshotAt: BigInt(Date.now() - 1000),
-      });
-      testState.userSyncStates.set(user2Id, {
-        userId: user2Id,
-        lastSeq: opsPerUser + 1,
-        lastSnapshotSeq: opsPerUser + 1,
-        snapshotAt: BigInt(Date.now()),
-      });
+      seedUser(user2Id);
+      seedSweepableUser(userId, opsPerUser, cutoffTime, Date.now() - 1000);
+      seedSweepableUser(user2Id, opsPerUser, cutoffTime, Date.now());
 
       const { totalDeleted, affectedUserIds } =
         await service.deleteOldSyncedOpsForAllUsers(cutoffTime);
-      delete process.env.OLD_OPS_CLEANUP_DELETE_BATCH_SIZE;
-      delete process.env.OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN;
 
       // user1 drains fully, user2 only gets the remaining budget.
       expect(totalDeleted).toBe(250);

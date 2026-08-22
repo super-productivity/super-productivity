@@ -8,6 +8,7 @@
  * and reconcile the cached storage counter.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import { Logger } from '../../logger';
 import { parsePositiveIntegerEnv } from '../../util/env';
@@ -55,6 +56,103 @@ const getOldOpsCleanupMaxDeletedPerRun = (): number =>
     OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN,
     OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX,
   );
+
+/**
+ * Head-of-line mitigation: the drain loop runs until the GLOBAL budget is gone,
+ * and `orderBy: snapshotAt asc` puts the largest (long-lapsed) histories first —
+ * so without a per-user ceiling the front of the list absorbs the whole run
+ * (#9692, and predicted in #9670's own review). It bounds how MUCH each head
+ * user takes, not WHICH users a run reaches: a lapsed `snapshotAt` never
+ * advances, so the same accounts lead every run until a resume cursor exists.
+ *
+ * The default is the RESOLVED batch size, not the compile-time constant: tying
+ * it to the constant silently capped an operator who raised
+ * OLD_OPS_CLEANUP_DELETE_BATCH_SIZE above 5000, so a documented knob stopped
+ * working. One batch per user per run is therefore the default — the semantics
+ * helm/supersync/values.yaml already documents for the batch size — and the
+ * drain loop spans batches only when an operator raises this var above it.
+ */
+const getOldOpsCleanupMaxDeletedPerUserPerRun = (deleteBatchSize: number): number =>
+  parsePositiveIntegerEnv(
+    'OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN',
+    deleteBatchSize,
+    OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX,
+  );
+
+/**
+ * A PostgreSQL `statement_timeout` cancellation, as it reaches the Prisma client.
+ *
+ * The full phrase, not a bare `57014` or `canceling statement due to` prefix:
+ * SQLSTATE 57014 is generic query cancellation, and the prefix also covers
+ * `user request` (an operator's `pg_cancel_backend`), `lock timeout` — which
+ * scripts/migrate-deploy.sh:329 shows this deployment does produce — and
+ * `conflict with recovery`. None of those are a permanent per-user defect, so
+ * none may be contained as one. Matches the phrase `isPrismaStatementTimeout`
+ * (scripts/monitoring-db.ts) requires for the `$queryRaw` shape; keep the two in
+ * step, and see tests/monitoring-db.spec.ts for why the distinction matters.
+ */
+const STATEMENT_TIMEOUT_MESSAGE = 'canceling statement due to statement timeout';
+
+/**
+ * True when a per-user sweep failure may be skipped so the rest of the fleet is
+ * still cleaned.
+ *
+ * Deliberately narrow: only a PostgreSQL `statement_timeout` (57014) is
+ * contained, the single failure this sweep has been observed to produce (#9692).
+ * The class alone is NOT a sufficient test — `PrismaClientUnknownRequestError`
+ * is Prisma's catch-all for every engine failure it could not map to a `P####`
+ * code, including "Response from the Engine was empty", so matching on it alone
+ * would swallow a client left in an undefined state as "one bad user". Pairing
+ * class with a message condition follows the convention already used for
+ * retryable errors in sync.service.ts.
+ *
+ * Everything else still aborts the run: pool/connection errors are not
+ * attributable to the user they would be logged against, and a plain TypeError
+ * from a future refactor of the DELETE-authorising boundary block must stay loud
+ * rather than become a silent per-user skip. If a Prisma upgrade changes the
+ * message this stops matching and the run aborts loudly again — the safe
+ * direction to fail in.
+ */
+const isSkippablePerUserSweepError = (
+  error: unknown,
+): error is Prisma.PrismaClientUnknownRequestError =>
+  error instanceof Prisma.PrismaClientUnknownRequestError &&
+  error.message.includes(STATEMENT_TIMEOUT_MESSAGE);
+
+/** The subset of `user_sync_state` the sweep selects for each eligible user. */
+interface EligibleSweepState {
+  userId: number;
+  lastSnapshotSeq: number | null;
+  latestFullStateSeq: number | null;
+}
+
+/** How much one user's sweep may delete, and in what batch size. */
+interface UserSweepBudget {
+  maxDeleted: number;
+  deleteBatchSize: number;
+}
+
+interface UserSweepOutcome {
+  /** Ops removed. Any non-zero count also means the storage counter needs reconciling. */
+  deleted: number;
+  /** Eligible, but no causal full-state op could authorize a delete. */
+  noReplayBase?: true;
+  /** The database cancelled a query for this user; the rest of the run went on. */
+  failed?: true;
+  /** Stopped on `budget.maxDeleted`, so deletable ops remain for the next run. */
+  hitBudget?: true;
+}
+
+export interface OldOpsSweepResult {
+  totalDeleted: number;
+  affectedUserIds: number[];
+  /**
+   * Users the database cancelled a query for, so their sweep stopped early. A
+   * user that had already committed batches appears in `affectedUserIds` too —
+   * the lists overlap, they do not partition.
+   */
+  failedUserIds: number[];
+}
 
 export class StorageQuotaService {
   /**
@@ -408,9 +506,7 @@ export class StorageQuotaService {
     }
   }
 
-  async deleteOldSyncedOpsForAllUsers(
-    cutoffTime: number,
-  ): Promise<{ totalDeleted: number; affectedUserIds: number[] }> {
+  async deleteOldSyncedOpsForAllUsers(cutoffTime: number): Promise<OldOpsSweepResult> {
     // S1: order stalest first so when affectedUserIds.length exceeds the
     // cleanup reconcile budget (RECONCILE_INTERVAL_MS * maxScheduled per
     // hour), the most-drifted users are reconciled before fresher ones.
@@ -431,15 +527,95 @@ export class StorageQuotaService {
 
     let totalDeleted = 0;
     const affectedUserIds: number[] = [];
-    const deleteBatchSize = getOldOpsCleanupDeleteBatchSize();
+    const failedUserIds: number[] = [];
     let remainingDeleteBudget = getOldOpsCleanupMaxDeletedPerRun();
     let eligibleUsersWithoutReplayBase = 0;
+    // Read once per run, not once per user: parsePositiveIntegerEnv warns on
+    // every invalid or clamped read, so a single typo would emit one line per
+    // eligible account.
+    const deleteBatchSize = getOldOpsCleanupDeleteBatchSize();
+    const maxDeletedPerUser = getOldOpsCleanupMaxDeletedPerUserPerRun(deleteBatchSize);
+    let usersCutOffByPerUserCap = 0;
 
     for (const state of states) {
       if (remainingDeleteBudget <= 0) break;
 
-      const lastSnapshotSeq = state.lastSnapshotSeq ?? 0;
+      // Which of the two bounds binds decides which knob an operator should
+      // raise, so record it before the global budget is decremented.
+      const perUserCapBinds = maxDeletedPerUser <= remainingDeleteBudget;
+      const outcome = await this.sweepOldOpsForUser(state, cutoffTime, {
+        maxDeleted: Math.min(remainingDeleteBudget, maxDeletedPerUser),
+        deleteBatchSize,
+      });
 
+      if (outcome.noReplayBase) eligibleUsersWithoutReplayBase++;
+      if (outcome.deleted > 0) affectedUserIds.push(state.userId);
+      if (outcome.failed) failedUserIds.push(state.userId);
+      if (outcome.hitBudget && perUserCapBinds) usersCutOffByPerUserCap++;
+      totalDeleted += outcome.deleted;
+      remainingDeleteBudget -= outcome.deleted;
+    }
+
+    if (eligibleUsersWithoutReplayBase > 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: skipped ${eligibleUsersWithoutReplayBase} eligible user(s) ` +
+          'without a full-state replay base; their operation histories were left intact.',
+      );
+    }
+
+    if (remainingDeleteBudget <= 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: per-run budget exhausted after ${totalDeleted} ops; ` +
+          `some users may still have retained old ops. ` +
+          `Raise OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN if this happens repeatedly.`,
+      );
+    }
+
+    // Without this the per-user cap binds silently: one heavy account deletes
+    // its 5000 and the run ends far under the global budget, so the warning
+    // above never fires and nothing says why throughput stalled.
+    if (usersCutOffByPerUserCap > 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: ${usersCutOffByPerUserCap} user(s) still have deletable ops ` +
+          `after reaching the ${maxDeletedPerUser}/user cap. Raise ` +
+          `OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN (and the per-run budget with ` +
+          `it) if this happens repeatedly.`,
+      );
+    }
+
+    // Count only: every one of these users already produced its own warning
+    // above, carrying its id and the driver message.
+    if (failedUserIds.length > 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: ${failedUserIds.length} user(s) were skipped mid-sweep ` +
+          `because the database cancelled a query; see the per-user warnings above. ` +
+          `Anything they had already deleted stands.`,
+      );
+    }
+
+    return { totalDeleted, affectedUserIds, failedUserIds };
+  }
+
+  /**
+   * Sweep one user's superseded prefix, bounded by both the caller's remaining
+   * per-run budget and the per-user cap.
+   *
+   * Failures are contained here on purpose. Until #9692 the only try/catch sat
+   * at run level (`cleanup.ts`), so a single account whose batch query the
+   * database cancelled took the whole fleet's cleanup down with it — along with
+   * both summary warnings and the deferred reconcile scheduling, which is why
+   * the outage left no diagnostic behind. Only the classes named by
+   * {@link isSkippablePerUserSweepError} are contained; the rest still abort.
+   */
+  private async sweepOldOpsForUser(
+    state: EligibleSweepState,
+    cutoffTime: number,
+    budget: UserSweepBudget,
+  ): Promise<UserSweepOutcome> {
+    const lastSnapshotSeq = state.lastSnapshotSeq ?? 0;
+    let deleted = 0;
+
+    try {
       // The cached snapshot is only exposed by restore endpoints; normal sync
       // clients still bootstrap from the operation log. Therefore cleanup may
       // only remove the superseded prefix before the newest full-state op and
@@ -451,7 +627,7 @@ export class StorageQuotaService {
       // unconditionally — so lapsed accounts accumulated operations forever.
       // Safety comes from protectedFromSeq (validated causal full-state op,
       // ≤ lastSnapshotSeq), not from snapshot recency.
-      if (lastSnapshotSeq <= 0) continue;
+      if (lastSnapshotSeq <= 0) return { deleted: 0 };
       let protectedFromSeq =
         typeof state.latestFullStateSeq === 'number' &&
         state.latestFullStateSeq <= lastSnapshotSeq
@@ -505,26 +681,25 @@ export class StorageQuotaService {
       }
 
       if (protectedFromSeq === null) {
-        eligibleUsersWithoutReplayBase++;
-        continue;
+        return { deleted: 0, noReplayBase: true };
       }
-      if (protectedFromSeq <= 1) continue;
+      if (protectedFromSeq <= 1) return { deleted: 0 };
 
-      // Drain this user across multiple batches until either they're empty or
-      // the global per-run budget is exhausted. Without this, a single user
-      // with a large backlog would only lose `deleteBatchSize` ops per day
-      // even when budget remains — leaving small-backlog users behind it
-      // unserviced when their snapshotAt is fresher.
-      let userDeleted = 0;
-      while (remainingDeleteBudget > 0) {
-        const batchLimit = Math.min(deleteBatchSize, remainingDeleteBudget);
+      // Drain this user across batches until they're empty or `budget.maxDeleted`
+      // — the smaller of what's left of the global per-run budget and the
+      // per-user cap — is spent. At the default cap that is exactly one batch;
+      // the loop spans batches only when an operator raises the cap above the
+      // batch size (see OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN).
+      let remainingUserBudget = budget.maxDeleted;
+      while (remainingUserBudget > 0) {
+        const batchLimit = Math.min(budget.deleteBatchSize, remainingUserBudget);
         const deletedCount = await this.deleteOldSyncedOpsBatch(
           state.userId,
           protectedFromSeq,
           cutoffTime,
           batchLimit,
         );
-        if (deletedCount === 0) break;
+        if (deletedCount === 0) return { deleted };
 
         // Mark on the *first* successful batch (not after the loop) so that
         // if a later batch throws, the counter still self-heals. Without
@@ -542,36 +717,34 @@ export class StorageQuotaService {
         // TODO: persist the reconcile marker in a DB column so it survives
         // restarts of a single-instance deployment and works correctly across
         // a multi-instance deployment behind a load balancer.
-        if (userDeleted === 0) {
-          affectedUserIds.push(state.userId);
-          this.markNeedsReconcile(state.userId);
-        }
+        if (deleted === 0) this.markNeedsReconcile(state.userId);
 
-        userDeleted += deletedCount;
-        totalDeleted += deletedCount;
-        remainingDeleteBudget -= deletedCount;
+        deleted += deletedCount;
+        remainingUserBudget -= deletedCount;
         // Short-circuit when the batch returned fewer rows than asked for: the
         // user is empty and another findMany would only confirm zero rows.
-        if (deletedCount < batchLimit) break;
+        if (deletedCount < batchLimit) return { deleted };
       }
-    }
-
-    if (eligibleUsersWithoutReplayBase > 0) {
+      // Fell out on the budget with a full last batch, so rows remain.
+      return { deleted, hitBudget: true };
+    } catch (error) {
+      if (!isSkippablePerUserSweepError(error)) throw error;
+      // Rows deleted by earlier batches are already committed (no transaction
+      // wraps the drain), so the partial count and the reconcile marker both
+      // stand and are reported to the caller.
+      //
+      // The skip is NOT transient: the candidate scan is unbounded when few rows
+      // below the boundary are deletable, and it only grows with the history, so
+      // the same accounts are skipped again every night until that scan is
+      // bounded (#9692). The catch also covers the two boundary lookups, so the
+      // message deliberately does not name which query the database cancelled.
       Logger.warn(
-        `Cleanup [old-ops]: skipped ${eligibleUsersWithoutReplayBase} eligible user(s) ` +
-          'without a full-state replay base; their operation histories were left intact.',
+        `Cleanup [old-ops] user=${state.userId}: the database cancelled a query, so ` +
+          `this user was skipped after ${deleted} ops and will be skipped again ` +
+          `until the candidate scan is bounded: ${error.message}`,
       );
+      return { deleted, failed: true };
     }
-
-    if (remainingDeleteBudget <= 0) {
-      Logger.warn(
-        `Cleanup [old-ops]: per-run budget exhausted after ${totalDeleted} ops; ` +
-          `some users may still have retained old ops. ` +
-          `Raise OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN if this happens repeatedly.`,
-      );
-    }
-
-    return { totalDeleted, affectedUserIds };
   }
 
   private async deleteOldSyncedOpsBatch(

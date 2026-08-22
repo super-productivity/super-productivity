@@ -23,6 +23,7 @@ export { DeviceService } from './device.service';
 export { OperationDownloadService } from './operation-download.service';
 export { OperationUploadService } from './operation-upload.service';
 export { StorageQuotaService } from './storage-quota.service';
+export type { OldOpsSweepResult } from './storage-quota.service';
 export { SnapshotGenerationService } from './snapshot-generation.service';
 export { SnapshotService } from './snapshot.service';
 export type {

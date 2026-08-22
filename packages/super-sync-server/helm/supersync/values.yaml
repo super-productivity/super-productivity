@@ -48,6 +48,10 @@ supersync:
     oldOpsDeleteBatchSize: 5000
     # -- Max old operations deleted across all users in one cleanup pass.
     oldOpsMaxDeletedPerRun: 25000
+    # -- Max old operations deleted for ONE user in one cleanup pass. Users are
+    # swept stalest-snapshot-first, so this stops a single long-lapsed account
+    # from absorbing the whole per-run budget.
+    oldOpsMaxDeletedPerUserPerRun: 5000
   batchUpload:
     # -- Enable the batched upload implementation. Requires payloadBytesBackfillComplete=true.
     enabled: false

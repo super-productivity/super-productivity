@@ -11,13 +11,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { startCleanupJobs, stopCleanupJobs } from '../src/sync/cleanup';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from '../src/sync/sync.types';
 import { Logger } from '../src/logger';
+import type { OldOpsSweepResult } from '../src/sync/services';
+
+/** An empty sweep result; spread to override only the fields a test cares about. */
+const sweepResult = (overrides: Partial<OldOpsSweepResult> = {}): OldOpsSweepResult => ({
+  totalDeleted: 0,
+  affectedUserIds: [],
+  failedUserIds: [],
+  ...overrides,
+});
 
 // Mock the sync service
 const mockSyncService = {
-  deleteOldSyncedOpsForAllUsers: vi.fn().mockResolvedValue({
-    totalDeleted: 0,
-    affectedUserIds: [],
-  }),
+  deleteOldSyncedOpsForAllUsers: vi.fn().mockResolvedValue(sweepResult()),
   deleteStaleDevices: vi.fn().mockResolvedValue(0),
   cleanupExpiredRateLimitCounters: vi.fn().mockReturnValue(0),
   cleanupExpiredRequestDedupEntries: vi.fn().mockReturnValue(0),
@@ -62,6 +68,48 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.cleanupExpiredRequestDedupEntries).toHaveBeenCalled();
     });
 
+    it('logs the old-ops summary even when the sweep removed nothing', async () => {
+      // A sweep that removes nothing for anyone is exactly the state #9692 left
+      // the fleet in. The old `if (totalDeleted > 0)` guard made that
+      // indistinguishable from "nothing was due", so the outage was invisible.
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce(
+        sweepResult({ failedUserIds: [7, 9] }),
+      );
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(Logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Cleanup [old-ops]: removed 0 entries from 0 users'),
+      );
+      expect(Logger.info).toHaveBeenCalledWith(expect.stringContaining('2 user(s)'));
+    });
+
+    it('skips a tick while the previous run is still in progress', async () => {
+      // Without this guard a sweep that overruns the 24h interval gets a second
+      // run stacked on top of it, doubling the load on the same pool.
+      let release: (() => void) | undefined;
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve(sweepResult());
+          }),
+      );
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(mockSyncService.deleteOldSyncedOpsForAllUsers).toHaveBeenCalledTimes(1);
+
+      // The daily tick fires while the first run is still awaiting the sweep.
+      await vi.advanceTimersByTimeAsync(MS_PER_DAY);
+      expect(mockSyncService.deleteOldSyncedOpsForAllUsers).toHaveBeenCalledTimes(1);
+      expect(Logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('previous run is still in progress'),
+      );
+
+      release?.();
+    });
+
     it('should use retentionMs for cutoff calculation', async () => {
       startCleanupJobs();
 
@@ -101,10 +149,9 @@ describe('Cleanup Jobs', () => {
       // affected user, which forced a full-payload TOAST scan and caused the
       // production disk-I/O DoS. The cached counter is deliberately left
       // stale-high until a quota miss reconciles that user's exact usage.
-      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
-        totalDeleted: 100,
-        affectedUserIds: [1, 2, 3],
-      });
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce(
+        sweepResult({ totalDeleted: 100, affectedUserIds: [1, 2, 3] }),
+      );
 
       startCleanupJobs();
       await vi.advanceTimersByTimeAsync(10_000);
@@ -120,10 +167,9 @@ describe('Cleanup Jobs', () => {
       const totalUsers = 1000;
       // Stalest first, mimicking what the service now returns.
       const userIds = Array.from({ length: totalUsers }, (_, i) => i + 1);
-      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
-        totalDeleted: totalUsers,
-        affectedUserIds: userIds,
-      });
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce(
+        sweepResult({ totalDeleted: totalUsers, affectedUserIds: userIds }),
+      );
 
       startCleanupJobs();
       await vi.advanceTimersByTimeAsync(10_000);
@@ -144,10 +190,9 @@ describe('Cleanup Jobs', () => {
     });
 
     it('should not warn or shuffle when affected users fit in the budget', async () => {
-      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce({
-        totalDeleted: 3,
-        affectedUserIds: [10, 20, 30],
-      });
+      mockSyncService.deleteOldSyncedOpsForAllUsers.mockResolvedValueOnce(
+        sweepResult({ totalDeleted: 3, affectedUserIds: [10, 20, 30] }),
+      );
 
       startCleanupJobs();
       await vi.advanceTimersByTimeAsync(10_000);

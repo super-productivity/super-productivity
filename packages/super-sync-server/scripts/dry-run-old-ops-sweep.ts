@@ -24,7 +24,30 @@ import { RETENTION_MS } from '../src/sync/sync.types';
 
 const TOP_N = 25;
 const DEFAULT_DAILY_BUDGET = 25_000;
+/** Default OLD_OPS_CLEANUP_MAX_DELETED_PER_USER_PER_RUN (= the batch size). */
+const DEFAULT_PER_USER_BUDGET = 5_000;
 const VERIFY_CHUNK = 1000;
+
+/**
+ * Simulates the sweep's two budgets to project how many daily runs the current
+ * backlog needs. Each run gives every user at most `DEFAULT_PER_USER_BUDGET`
+ * and stops once `DEFAULT_DAILY_BUDGET` is spent, so a backlog concentrated in
+ * a few accounts drains far slower than `total / DEFAULT_DAILY_BUDGET`.
+ */
+const projectDailyRuns = (backlogs: readonly number[]): number => {
+  const remaining = backlogs.filter((n) => n > 0);
+  let runs = 0;
+  while (remaining.some((n) => n > 0)) {
+    let budget = DEFAULT_DAILY_BUDGET;
+    for (let i = 0; i < remaining.length && budget > 0; i++) {
+      const take = Math.min(remaining[i], DEFAULT_PER_USER_BUDGET, budget);
+      remaining[i] -= take;
+      budget -= take;
+    }
+    runs++;
+  }
+  return runs;
+};
 
 // Must stay in lockstep with CAUSAL_FULL_STATE_OPERATION_WHERE
 // (src/sync/sync.types.ts) — the predicate that authorizes deletion.
@@ -222,9 +245,14 @@ const main = async (): Promise<void> => {
   console.log(`  via stale-marker fallback:    ${staleMarkers.length}`);
   console.log(`  skipped (no causal base):     ${skippedNoBase.length}`);
   console.log(`total rows the sweep would delete: ${totalWouldDelete}`);
+  // A run is bounded by BOTH budgets, and for a concentrated backlog the
+  // per-user cap is the binding one — projecting off the global budget alone
+  // understates the number of runs, badly (#9692).
+  const runs = projectDailyRuns(withBoundary.map((r) => n(r.would_delete)));
   console.log(
-    `  ≈ ${Math.ceil(totalWouldDelete / DEFAULT_DAILY_BUDGET)} daily runs at the ` +
-      `default ${DEFAULT_DAILY_BUDGET}/run budget (OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN)`,
+    `  ≈ ${runs} daily runs at the default ${DEFAULT_DAILY_BUDGET}/run and ` +
+      `${DEFAULT_PER_USER_BUDGET}/user budgets ` +
+      `(OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN, ..._PER_USER_PER_RUN)`,
   );
 
   const top = [...affected]
