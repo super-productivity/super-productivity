@@ -85,6 +85,68 @@ describe('File-Based Sync Integration - Edge Cases', () => {
     });
   });
 
+  describe('Corrupt-primary recovery (#9627)', () => {
+    /**
+     * The cross-client data-loss shape the unit tests can only approximate: the
+     * STORED primary is healthy, but ONE response for it is mangled (a proxy or
+     * captive-portal page, a WebDAV 207 body, a JSON error envelope — the WebDAV
+     * layer's `isHtmlResponse` only filters three narrow shapes). The `.bak` is a
+     * SEPARATE request and reads fine, one generation behind.
+     *
+     * Adopting it would heal the intact primary at its real rev and drop the ops
+     * committed since the last backup — from a device that already considers them
+     * synced and will never re-push. The re-read gate must refuse.
+     */
+    it("does not lose another client's ops when ONE primary response is mangled", async () => {
+      const clientA = harness.createClient('client-a');
+      const clientB = harness.createClient('client-b');
+      const provider = harness.getProvider();
+
+      // Two separate uploads, so .bak lags the primary by exactly one generation:
+      // primary holds task-1 + task-2, .bak holds only task-1.
+      await clientA.uploadOps([
+        clientA.createOp('Task', 'task-1', 'CRT', 'TaskActionTypes.ADD_TASK', {
+          title: 'first',
+        }),
+      ]);
+      await clientA.uploadOps([
+        clientA.createOp('Task', 'task-2', 'CRT', 'TaskActionTypes.ADD_TASK', {
+          title: 'second',
+        }),
+      ]);
+
+      const healthyPrimary = provider.getFileContent(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(healthyPrimary!.data).toContain('task-2');
+      const bak = provider.getFileContent(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE);
+      expect(bak!.data).not.toContain('task-2'); // .bak really is one behind
+
+      // Mangle only the FIRST read of the primary, and only for this client.
+      const realDownload = provider.downloadFile.bind(provider);
+      let primaryReads = 0;
+      spyOn(provider, 'downloadFile').and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE && ++primaryReads === 1) {
+          return { dataStr: '<?xml version="1.0"?><d:error/>', rev: healthyPrimary!.rev };
+        }
+        return realDownload(path);
+      });
+
+      // The cycle must fail rather than silently recover from the stale .bak.
+      await expectAsync(clientB.downloadOps(0)).toBeRejected();
+      expect(primaryReads).toBe(2); // the confirming re-read happened
+
+      // The remote primary was never rewritten: same rev, still holds task-2.
+      const afterFailure = provider.getFileContent(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(afterFailure!.rev).toBe(healthyPrimary!.rev);
+      expect(afterFailure!.data).toContain('task-2');
+
+      // And the next cycle converges normally — A's ops both survive.
+      const recovered = await clientB.downloadOps(0);
+      const entityIds = recovered.ops.map((o) => o.op.entityId);
+      expect(entityIds).toContain('task-1');
+      expect(entityIds).toContain('task-2');
+    });
+  });
+
   describe('Provider Error Handling', () => {
     it('should propagate provider download errors', async () => {
       const clientA = harness.createClient('client-a');

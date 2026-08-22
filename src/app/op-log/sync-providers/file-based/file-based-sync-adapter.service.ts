@@ -36,6 +36,7 @@ import {
   DecryptError,
   FileSyncTargetChangedError,
   InvalidDataSPError,
+  InvalidFilePrefixError,
   JsonParseError,
   LegacySyncFormatDetectedError,
   PlaintextWhenEncryptionExpectedError,
@@ -1114,7 +1115,17 @@ export class FileBasedSyncAdapterService {
           latestSeq: 0,
         };
       }
-      if (this._isRecoverableCorruption(e)) {
+      if (
+        this._isRecoverableCorruption(e) &&
+        // #9627: prove a prefix failure belongs to the stored file, not to one
+        // response, before letting .bak overwrite a possibly-intact primary.
+        (!(e instanceof InvalidFilePrefixError) ||
+          (await this._isPrefixFailurePersistent(
+            provider,
+            FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+            (e as { primaryRev?: string }).primaryRev,
+          )))
+      ) {
         // Primary sync-data.json is corrupt/empty/unparseable (e.g. interrupted
         // write). Try to recover from the .bak artifact before failing.
         const recovered = await this._readBakFile<FileBasedSyncData>(
@@ -2625,7 +2636,16 @@ export class FileBasedSyncAdapterService {
         // (migration WRITES happen on the upload path).
         return this._tryLegacyReadOnlyDownload(provider, cfg, encryptKey, sinceSeq);
       }
-      if (this._isRecoverableCorruption(e)) {
+      if (
+        this._isRecoverableCorruption(e) &&
+        // #9627: same persistence gate as the single-file path.
+        (!(e instanceof InvalidFilePrefixError) ||
+          (await this._isPrefixFailurePersistent(
+            provider,
+            FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+            (e as { primaryRev?: string }).primaryRev,
+          )))
+      ) {
         // Corrupt/torn sync-ops.json (the hot file, rewritten every op-bearing
         // sync): recover from .bak — same SPAP-8 semantics as the single-file
         // path, including seeding the heal cache with the CORRUPT primary's rev
@@ -3185,8 +3205,63 @@ export class FileBasedSyncAdapterService {
       // clients. Mixed-fleet caveat: a pre-fix client's snapshot still leaves a
       // stale-key .bak behind until its first op-bearing sync refreshes it.
       e instanceof DecryptError ||
-      e instanceof DecompressError
+      e instanceof DecompressError ||
+      // #9627: the prefix is parsed FIRST, so a primary whose head is mangled
+      // (or that is not a sync file at all) throws here and never reaches the
+      // stages above — leaving the most basic corruption shape as the only one
+      // without .bak recovery.
+      //
+      // UNLIKE every other member of this list, this one can fire on a body we
+      // never wrote: the others all prove the object at the path IS a sync file
+      // that failed to decode, this one proves it is NOT — which is also what a
+      // bad RESPONSE looks like (a proxy/captive-portal page, a WebDAV 207 body,
+      // a JSON error envelope; note `isHtmlResponse` only filters three narrow
+      // shapes). The .bak is a SEPARATE request that can succeed while the
+      // primary's response is mangled, and adopting it then heals an intact
+      // primary with one-generation-old data — silently dropping ops another
+      // device already committed and will never re-push.
+      //
+      // So this class alone is gated on `_isPrefixFailurePersistent()`, which
+      // re-reads the primary to prove the failure belongs to the STORED file
+      // rather than to one response. Do not enroll a future error class here
+      // without asking which of the two it proves.
+      e instanceof InvalidFilePrefixError
     );
+  }
+
+  /**
+   * Confirms an `InvalidFilePrefixError` is a property of the stored file, not of
+   * a single response, by re-reading the primary once.
+   *
+   * Costs one extra GET on an already-failing path, and buys the distinction that
+   * makes `.bak` adoption safe for this error class: a transient/mangled response
+   * will not reproduce, a genuinely bad file will. Any other outcome (network
+   * error, 404, a body that now parses, or a rev that moved) is treated as NOT
+   * persistent — recovery is skipped and the original error surfaces, exactly as
+   * before #9627.
+   *
+   * This is a heuristic, not a proof: a DETERMINISTIC mangler (a captive portal, a
+   * proxy that always rewrites, a size-keyed transfer bug) reproduces on the second
+   * read and still reaches `.bak`. It buys "not a one-off response", which is the
+   * distinction the cheap round-trip can actually make.
+   */
+  private async _isPrefixFailurePersistent(
+    provider: GuardedFileSyncProvider,
+    path: string,
+    primaryRev: string | undefined,
+  ): Promise<boolean> {
+    try {
+      const retry = await provider.downloadFile(path);
+      // A moved rev means another client rewrote the file mid-cycle, so everything
+      // concluded from the first read is stale. Re-read next cycle rather than
+      // recovering against a remote that is no longer the one we failed on.
+      if (primaryRev !== undefined && retry.rev !== primaryRev) return false;
+      extractSyncFileStateFromPrefix(retry.dataStr);
+      // Second read has a valid prefix → the first response was the problem.
+      return false;
+    } catch (e) {
+      return e instanceof InvalidFilePrefixError;
+    }
   }
 
   /**
