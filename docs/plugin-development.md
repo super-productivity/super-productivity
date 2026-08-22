@@ -306,6 +306,7 @@ Iframe plugins automatically receive:
 - `getAllProjects()` - Get all projects
 - `addProject(project)` - Create new project
 - `updateProject(projectId, updates)` - Update project
+- `deleteProject(projectId)` - Delete a project **and the tasks it contains** (backlog and subtasks included), the same cascade the UI's "Delete project" applies. Deleting the Inbox is rejected, and if the deleted project is the active one the app falls back to the Today context.
 
 #### Tags
 

@@ -669,6 +669,14 @@ export interface PluginAPI {
 
   updateProject(projectId: string, updates: Partial<Project>): Promise<void>;
 
+  /**
+   * Deletes a project AND the tasks it contains, matching what the UI's own
+   * "Delete project" does — the cascade lives in ProjectService.remove().
+   * Deleting the Inbox is refused. If the deleted project is the active work
+   * context, the app falls back to Today.
+   */
+  deleteProject(projectId: string): Promise<void>;
+
   // tags
   getAllTags(): Promise<Tag[]>;
 

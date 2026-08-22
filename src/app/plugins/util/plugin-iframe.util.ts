@@ -50,6 +50,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAllProjects',
   'addProject',
   'updateProject',
+  'deleteProject',
   'getAllTags',
   'addTag',
   'updateTag',
@@ -422,6 +423,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           getAllProjects: () => callApi('getAllProjects'),
           addProject: (projectData) => callApi('addProject', [projectData]),
           updateProject: (projectId, updates) => callApi('updateProject', [projectId, updates]),
+          deleteProject: (projectId) => callApi('deleteProject', [projectId]),
 
           // Tag methods
           getAllTags: () => callApi('getAllTags'),

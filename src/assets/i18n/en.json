@@ -3054,6 +3054,7 @@
     "ALLOWED_HOSTS": "Network access",
     "ALREADY_INITIALIZED": "Plugin is already initialized",
     "AUTHORED_BY": "by {{author}}",
+    "CANNOT_DELETE_INBOX": "The Inbox project cannot be deleted",
     "CANNOT_NEST_SUBTASKS": "Cannot nest subtasks: parent task is itself a subtask",
     "CHOOSE_PLUGIN_FILE": "Choose Plugin File",
     "CLEAR_PLUGIN_CACHE": "Clear Plugin Cache",
