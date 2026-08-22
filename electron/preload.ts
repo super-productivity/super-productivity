@@ -48,6 +48,7 @@ const ea: ElectronAPI = {
     _invoke('BACKUP_IS_AVAILABLE') as Promise<false | LocalBackupMeta>,
   loadBackupData: (backupPath) =>
     _invoke('BACKUP_LOAD_DATA', backupPath) as Promise<string>,
+  pickBackupFolder: () => _invoke('PICK_BACKUP_FOLDER') as Promise<string | undefined>,
   fileSyncSave: (args) => _invoke('FILE_SYNC_SAVE', args) as Promise<string | Error>,
   fileSyncLoad: (args) =>
     _invoke('FILE_SYNC_LOAD', args) as Promise<{

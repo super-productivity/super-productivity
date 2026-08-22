@@ -1,5 +1,6 @@
-import { app, ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
+import { randomBytes } from 'crypto';
 import {
   existsSync,
   mkdirSync,
@@ -15,12 +16,18 @@ import * as path from 'path';
 import { error, log } from 'electron-log/main';
 import type { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import type { AppDataComplete } from '../src/app/op-log/model/model-config';
-import { getBackupTimestamp } from './shared-with-frontend/get-backup-timestamp';
-import { isPathInsideDir } from './file-path-guard';
+import {
+  getBackupTimestamp,
+  isAutoBackupFilename,
+} from './shared-with-frontend/get-backup-timestamp';
+import { assertPathOutside, isPathInsideDir } from './file-path-guard';
 import {
   DEFAULT_MAX_BACKUP_FILES,
   selectBackupFilesToDelete,
 } from './shared-with-frontend/backup-file-cleanup.util';
+import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import { loadSimpleStoreAll, saveSimpleStore } from './simple-store';
+import { getWin } from './main-window';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
 
@@ -54,35 +61,106 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
  * recovery is affected. Upgrade path: probe for the newest filename in
  * BACKUP_DIR (timestamps sort lexically) instead of for the directory.
  */
-export const getBackupDirForDisplay = (): string =>
-  process.windowsStore && existsSync(BACKUP_DIR_WINSTORE)
+export const getBackupDirForDisplay = async (): Promise<string> => {
+  const backupDir = await getBackupDir();
+  // Redirection is a property of the package's own virtualized userData, so it
+  // can only ever apply to the default dir — a folder the user picked lives
+  // outside the package and is written exactly where it says.
+  return backupDir === BACKUP_DIR &&
+    process.windowsStore &&
+    existsSync(BACKUP_DIR_WINSTORE)
     ? BACKUP_DIR_WINSTORE
-    : BACKUP_DIR;
+    : backupDir;
+};
+
+/**
+ * Where automatic backups are written to and restored from: the folder the user
+ * picked via `IPC.PICK_BACKUP_FOLDER`, or BACKUP_DIR while none is configured.
+ * The picked path is main-owned (like the sync folder path, #8228) for two
+ * reasons: the renderer runs untrusted plugin code and must not be able to
+ * redirect backup writes, and the folder is device-specific so it must not
+ * travel in the synced globalConfig.
+ */
+export const getBackupDir = async (): Promise<string> => {
+  const all = await loadSimpleStoreAll();
+  const raw = all[SimpleStoreKey.BACKUP_FOLDER_PATH];
+  return typeof raw === 'string' && raw.length > 0 ? raw : BACKUP_DIR;
+};
+
+// Path-free (the offending path never goes back to the untrusted renderer) and
+// distinct from PathNotAllowedError only in name, so the two pick-time refusals
+// stay tellable apart in logs.
+const folderNotWritable = (): Error => {
+  const e = new Error('Backup folder is not writable');
+  e.name = 'FolderNotWritableError';
+  delete (e as { stack?: string }).stack;
+  return e;
+};
+
+/**
+ * Prove the folder can actually be written to, at pick time, before it becomes
+ * the backup folder.
+ *
+ * Nothing downstream can report this: `backupData` catches every write error and
+ * only logs, so the pick would succeed, the UI would show the new path, and
+ * automatic backups would stop with nothing the user could ever see. Ordinary
+ * picks land there. Snap is `confinement: strict` with `home` + `removable-media`
+ * and `home` excludes dot-directories; Flatpak has `--filesystem=home` only;
+ * macOS prompts for Documents/Desktop/Downloads on first access, which is the
+ * backup timer minutes later rather than the pick, and a dismissal is permanent;
+ * read-only folders and disconnected network shares exist everywhere.
+ *
+ * A probe write is what proves it: the folder can be listable and still refuse
+ * writes, and `access()` answers a different question than "did a write work".
+ */
+const assertFolderWritable = (folder: string): void => {
+  const probePath = path.join(
+    folder,
+    `.sp-backup-probe.${process.pid}.${randomBytes(8).toString('hex')}.tmp`,
+  );
+  try {
+    writeFileSync(probePath, '');
+  } catch (e) {
+    error(e);
+    throw folderNotWritable();
+  }
+  try {
+    unlinkSync(probePath);
+  } catch (e) {
+    // Written but not removable is still a usable backup folder, and cleanup
+    // only ever touches backup-shaped filenames, so this is worth a log and
+    // nothing more.
+    error(e);
+  }
+};
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 export function initBackupAdapter(): void {
-  console.log('Saving backups to', BACKUP_DIR);
-  log('Saving backups to', BACKUP_DIR);
+  void getBackupDir().then((backupDir) => {
+    console.log('Saving backups to', backupDir);
+    log('Saving backups to', backupDir);
+  });
 
   // BACKUP
   ipcMain.handle(IPC.BACKUP, backupData);
 
   // IS_BACKUP_AVAILABLE
-  ipcMain.handle(IPC.BACKUP_IS_AVAILABLE, (): LocalBackupMeta | false => {
-    if (!existsSync(BACKUP_DIR)) {
+  ipcMain.handle(IPC.BACKUP_IS_AVAILABLE, async (): Promise<LocalBackupMeta | false> => {
+    const backupDir = await getBackupDir();
+    if (!existsSync(backupDir)) {
       return false;
     }
 
-    const files = readdirSync(BACKUP_DIR);
+    const files = readdirSync(backupDir).filter(isAutoBackupFilename);
     if (!files.length) {
       return false;
     }
     const filesWithMeta: LocalBackupMeta[] = files.map(
       (fileName: string): LocalBackupMeta => ({
         name: fileName,
-        path: path.join(BACKUP_DIR, fileName),
-        folder: BACKUP_DIR,
-        created: statSync(path.join(BACKUP_DIR, fileName)).mtime.getTime(),
+        path: path.join(backupDir, fileName),
+        folder: backupDir,
+        created: statSync(path.join(backupDir, fileName)).mtime.getTime(),
       }),
     );
 
@@ -95,22 +173,73 @@ export function initBackupAdapter(): void {
   });
 
   // RESTORE_BACKUP
-  ipcMain.handle(IPC.BACKUP_LOAD_DATA, (ev, backupPath: string): string => {
-    // `backupPath` comes from the renderer, which runs untrusted plugin code,
-    // so it must be constrained to the backup directory. Otherwise any plugin
-    // (or XSS payload) could read arbitrary files via window.ea.loadBackupData.
-    // See GHSA-x937-wf3j-88q3. Both the regular and the Windows-Store backup
-    // dirs are accepted; the legitimate caller only ever passes paths built
-    // from BACKUP_DIR (see IPC.BACKUP_IS_AVAILABLE above).
-    if (
-      !isPathInsideDir(BACKUP_DIR, backupPath) &&
-      !isPathInsideDir(BACKUP_DIR_WINSTORE, backupPath)
-    ) {
-      throw new Error('BACKUP_LOAD_DATA: refused path outside backup directory');
+  ipcMain.handle(
+    IPC.BACKUP_LOAD_DATA,
+    async (ev, backupPath: string): Promise<string> => {
+      // `backupPath` comes from the renderer, which runs untrusted plugin code,
+      // so it must be constrained to the backup directory. Otherwise any plugin
+      // (or XSS payload) could read arbitrary files via window.ea.loadBackupData.
+      // See GHSA-x937-wf3j-88q3. Only the live backup dir (the default one or a
+      // user-picked one, which is main-owned and always outside userData, see
+      // below) and its Windows-Store redirection are accepted; the legitimate
+      // caller only ever passes paths built from the live backup dir (see
+      // IPC.BACKUP_IS_AVAILABLE above), so a stale default-dir path is never
+      // produced and allow-listing one would only widen the read surface.
+      const backupDir = await getBackupDir();
+      const isAllowedRoot =
+        isPathInsideDir(backupDir, backupPath) ||
+        // Same narrowing as getBackupDirForDisplay: the Store redirection is a
+        // property of the package's own userData, so it can only ever apply
+        // while the default dir is in use.
+        (backupDir === BACKUP_DIR && isPathInsideDir(BACKUP_DIR_WINSTORE, backupPath));
+      if (!isAllowedRoot) {
+        throw new Error('BACKUP_LOAD_DATA: refused path outside backup directory');
+      }
+      if (!isAutoBackupFilename(path.basename(backupPath))) {
+        throw new Error('BACKUP_LOAD_DATA: refused non-backup filename');
+      }
+      const resolved = path.resolve(backupPath);
+      log('Reading backup file: ', resolved);
+      return readFileSync(resolved, { encoding: 'utf8' });
+    },
+  );
+
+  // PICK_BACKUP_FOLDER
+  ipcMain.handle(IPC.PICK_BACKUP_FOLDER, async (): Promise<string | undefined> => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getWin(), {
+      title: 'Select backup folder',
+      buttonLabel: 'Select Folder',
+      // Open where the backups currently are, so "which folder am I on now" and
+      // "put it back to the default" are both reachable without hunting down a
+      // hidden path inside userData.
+      defaultPath: await getBackupDirForDisplay(),
+      properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
+    });
+    if (canceled || !filePaths[0]) {
+      return undefined;
     }
-    const resolved = path.resolve(backupPath);
-    log('Reading backup file: ', resolved);
-    return readFileSync(resolved, { encoding: 'utf8' });
+    const picked = path.resolve(filePaths[0]);
+    // Picking the default folder means "use the default again": it lives inside
+    // userData, which the guard below refuses. On a virtualized Store package
+    // the folder the user sees (and that getBackupDirForDisplay hands to the
+    // picker above) is the LocalCache one, so that has to count as the default
+    // too, or picking back the very path we displayed either gets refused or
+    // pins a "custom" folder to LocalCache.
+    if (
+      picked === path.resolve(BACKUP_DIR) ||
+      (process.windowsStore && picked === path.resolve(BACKUP_DIR_WINSTORE))
+    ) {
+      await saveSimpleStore(SimpleStoreKey.BACKUP_FOLDER_PATH, null);
+      return picked;
+    }
+    // Keep the folder out of the app's private dir: it is written to on a timer
+    // and, more importantly, whitelisted for reads by BACKUP_LOAD_DATA above,
+    // which the renderer can call. Throws a path-free PathNotAllowedError.
+    assertPathOutside(app.getPath('userData'), picked);
+    assertFolderWritable(picked);
+    await saveSimpleStore(SimpleStoreKey.BACKUP_FOLDER_PATH, picked);
+    log('New backup folder picked');
+    return picked;
   });
 }
 
@@ -126,23 +255,31 @@ const isBackupDataArgs = (arg: unknown): arg is BackupDataArgs =>
   typeof (arg as { data?: unknown }).data === 'object';
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function backupData(
+async function backupData(
   ev: IpcMainInvokeEvent,
   dataOrArgs: AppDataCompleteLegacy | BackupDataArgs,
-): void {
-  if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR);
-  }
-  const filePath = `${BACKUP_DIR}/${getBackupTimestamp()}.json`;
+): Promise<void> {
+  const backupDir = await getBackupDir();
   const data = isBackupDataArgs(dataOrArgs) ? dataOrArgs.data : dataOrArgs;
   const maxBackupFiles = isBackupDataArgs(dataOrArgs)
     ? dataOrArgs.maxBackupFiles
     : DEFAULT_MAX_BACKUP_FILES;
 
   try {
+    // Inside the try because a picked folder can be gone by now (removed drive,
+    // deleted folder), and that must be logged like a failed write rather than
+    // rejected back into the renderer's backup interval. Deliberately not
+    // recursive: the only case a missing parent can mean is that the folder the
+    // user picked has gone away, and re-creating it (an uninstalled Dropbox, an
+    // ejected volume) would fill a resurrected directory with backups nothing
+    // syncs, or leave a phantom dir sitting on a mount point. userData always
+    // exists for the default dir, and a picked folder exists at pick time.
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir);
+    }
     const backup = JSON.stringify(data);
-    writeFileSync(filePath, backup);
-    cleanupOldBackups(maxBackupFiles);
+    writeFileSync(path.join(backupDir, `${getBackupTimestamp()}.json`), backup);
+    cleanupOldBackups(backupDir, maxBackupFiles);
   } catch (e) {
     log('Error while backing up');
     error(e);
@@ -150,15 +287,15 @@ function backupData(
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function cleanupOldBackups(maxBackupFiles?: number | null): void {
-  if (!existsSync(BACKUP_DIR)) {
+function cleanupOldBackups(backupDir: string, maxBackupFiles?: number | null): void {
+  if (!existsSync(backupDir)) {
     return;
   }
 
   try {
-    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
+    const files = readdirSync(backupDir).filter(isAutoBackupFilename);
     const filesWithMtime = files.map((fileName) => {
-      const filePath = path.join(BACKUP_DIR, fileName);
+      const filePath = path.join(backupDir, fileName);
       return { fileName, filePath, mtime: statSync(filePath).mtime.getTime() };
     });
 

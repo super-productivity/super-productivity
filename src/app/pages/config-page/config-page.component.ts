@@ -228,13 +228,7 @@ export class ConfigPageComponent implements OnInit {
         ),
       ];
     } else if (IS_ELECTRON) {
-      window.ea.getBackupPath().then((backupPath) => {
-        this.globalImexFormCfg = [
-          ...this.globalImexFormCfg,
-          getAutomaticBackUpFormCfg(backupPath),
-        ];
-        this._cd.detectChanges();
-      });
+      this._updateAutomaticBackUpCfg();
     }
 
     // Use effect to react to plugin shortcuts changes for live updates
@@ -242,6 +236,39 @@ export class ConfigPageComponent implements OnInit {
       const shortcuts = this._pluginBridgeService.shortcuts();
       Log.log('Plugin shortcuts changed:', { shortcuts });
       this._updateKeyboardFormWithPluginShortcuts(shortcuts);
+    });
+  }
+
+  /**
+   * (Re)builds the Electron auto-backups section from the backup folder main
+   * reports. Called again after a folder pick so the displayed path and the
+   * folder the next backup lands in cannot drift apart.
+   */
+  private _updateAutomaticBackUpCfg(): void {
+    window.ea.getBackupPath().then((backupPath) => {
+      this.globalImexFormCfg = [
+        ...GLOBAL_IMEX_FORM_CONFIG,
+        getAutomaticBackUpFormCfg(backupPath, [
+          {
+            label: T.GCF.AUTO_BACKUPS.CHANGE_LOCATION,
+            icon: 'folder_open',
+            onClick: async () => {
+              try {
+                if (await window.ea.pickBackupFolder()) {
+                  this._updateAutomaticBackUpCfg();
+                }
+              } catch (err) {
+                Log.err(err);
+                this._snackService.open({
+                  type: 'ERROR',
+                  msg: T.GCF.AUTO_BACKUPS.S_FOLDER_NOT_USABLE,
+                });
+              }
+            },
+          },
+        ]),
+      ];
+      this._cd.detectChanges();
     });
   }
 
